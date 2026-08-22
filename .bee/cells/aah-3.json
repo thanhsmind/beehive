@@ -1,0 +1,113 @@
+{
+  "id": "aah-3",
+  "feature": "agent-activity-hook",
+  "title": "Derive signal live|no_signal for sessions in session list and status, document the activity record",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+    "docs/knowledge/areas/hook-runtime/index.md",
+    "docs/knowledge/index.md"
+  ],
+  "read_first": [
+    "docs/history/agent-activity-hook/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/hook-runtime/index.md"
+  ],
+  "action": "Per D4 add one pure helper (put it in state_group/sessions.rs, pub(crate)) `fn session_signal(record: &Map, now: DateTime) -> Option<&'static str>`: None when record.status is dead or closed; \"no_signal\" when record.activity is absent or activity.at is older than 90 s; \"live\" otherwise. In run_session_list emit a `signal` field on every record in --json (do not persist it) and show it in the text line; in status_full/cells.rs active_workers add `activity` (the recorded object, or null) and `signal` to the projected worker row. Unit tests: 89 s -> live, 91 s -> no_signal, absent -> no_signal, dead -> None. Docs per D2/D4: write docs/knowledge/areas/hook-runtime/agent-activity-record.md describing the activity object fields, the five states, the D3 mapping and sticky rules, the jsonl transition log (last 50), the 90 s read-time signal, and the D5 waiting_on coupling, citing decision ids b17bfa89, 2f782f51, 40c707ba, 2d4e3900, b4f21f29; add a row to the hook-runtime index and to the catalog concept's hook table; run `bee knowledge index` if the repo index is generated, else add the row by hand; finish with `bee knowledge check` green. Commit with trailer `cell: aah-3`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_signal sessions && .bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "bee state session list --json carries signal on every record and never writes it to disk",
+      "status --json worker rows carry activity and signal",
+      "bee knowledge check is green with the new concept indexed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "substantive": "session_signal helper with tests, wired into session list"
+      },
+      {
+        "path": "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+        "substantive": "the activity record concept: fields, states, mapping, sticky rules, signal rule, waiting_on coupling"
+      }
+    ],
+    "key_links": [
+      "status active_workers rows read the same activity object the hook writes"
+    ],
+    "prohibitions": [
+      "no change to heartbeat staleness constants",
+      "signal is never persisted"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+  ],
+  "behavior_change": true,
+  "trace": {
+    "worker": "w-aah-3",
+    "outcome": "session list and status worker rows now carry a derived live/no_signal answer, and the activity record is documented as a knowledge concept",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+      "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/hook-runtime/index.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/index.md"
+    ],
+    "deviations": [
+      "the cell verify line `cargo test ... session_signal sessions` is malformed — cargo takes one positional TESTNAME and refused `sessions`; ran the same filters after `--` instead",
+      "the cell asked for the helper signature `(record, now: DateTime)`; this crate carries no DateTime in its session paths, so it takes `now_ms: f64` like every sibling staleness helper (date_parse_val/heartbeat_stale)",
+      "unit tests live in a new `#[cfg(test)] mod tests` inside sessions.rs (the workers.rs/ledger.rs sibling pattern) rather than state_group/tests.rs, which the cell did not name",
+      "`bee knowledge index` also regenerated docs/knowledge/areas/index.md (a concept count); reserved it under w-aah-3 before the write",
+      "capped with --sync-ack: affects_skills is empty and no owned skill describes session liveness",
+      "sync-ack: the cell declares affects_skills: [] — the change adds two read-only projection fields and one knowledge concept; no bee-planning/swarming/reviewing/capturing skill states how a session's liveness is read, so there is no skill sentence this makes stale"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T13:18:10.434Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "48e1abb8-07f6-4058-8db3-383af16fba58",
+    "claimed_at": "2026-08-22T13:06:49.226Z",
+    "sync_ack": "the cell declares affects_skills: [] — the change adds two read-only projection fields and one knowledge concept; no bee-planning/swarming/reviewing/capturing skill states how a session's liveness is read, so there is no skill sentence this makes stale",
+    "report": {
+      "outcome": "session list and status worker rows now carry a derived live/no_signal answer, and the activity record is documented as a knowledge concept",
+      "commit": "d7aa2341",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+        "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/knowledge/areas/hook-runtime/index.md",
+        "docs/knowledge/areas/index.md",
+        "docs/knowledge/index.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- active_workers workers_derive_from_heartbeat session_signal + bee knowledge check + bee knowledge index --check — green — 6 passed covering the new signal helper and both projection readers I touched; knowledge check 0 errors and 49 warnings, unchanged from baseline, with the new concept indexed and its indexes fresh",
+      "deviations": [
+        "the cell verify line `cargo test ... session_signal sessions` is malformed — cargo takes one positional TESTNAME and refused `sessions`; ran the same filters after `--` instead",
+        "the cell asked for the helper signature `(record, now: DateTime)`; this crate carries no DateTime in its session paths, so it takes `now_ms: f64` like every sibling staleness helper (date_parse_val/heartbeat_stale)",
+        "unit tests live in a new `#[cfg(test)] mod tests` inside sessions.rs (the workers.rs/ledger.rs sibling pattern) rather than state_group/tests.rs, which the cell did not name",
+        "`bee knowledge index` also regenerated docs/knowledge/areas/index.md (a concept count); reserved it under w-aah-3 before the write",
+        "capped with --sync-ack: affects_skills is empty and no owned skill describes session liveness"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 358 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

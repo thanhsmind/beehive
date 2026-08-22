@@ -1,0 +1,104 @@
+{
+  "id": "aah-1",
+  "feature": "agent-activity-hook",
+  "title": "Add the bee hook activity verb that records per-session agent state",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/agent-activity-hook/CONTEXT.md",
+    "docs/history/agent-activity-hook/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/tools_logger.rs",
+    "packages/bee-rs/crates/bee/src/hooks/adapter.rs",
+    "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs"
+  ],
+  "action": "Create packages/bee-rs/crates/bee/src/hooks/activity.rs and register it: in hooks/mod.rs add `pub mod activity;` beside the other hook modules (the `pub mod tools_logger;` block near the top), add \"activity\" to HOOK_NAMES (the array is typed `[&str; 9]` — bump the length), and add the match arm next to the tools-logger arm in the dispatcher; add \"hook activity\" to router.rs PORTED (the list that starts with \"hook tools-logger\"). Model the handler on tools_logger.rs `pub fn run(argv: &[String], stdin: &str) -> Outcome`: read_hook_context(\"activity\", argv, stdin); no root -> exit 0; bee_installed(root) and hook_enabled(root, \"activity\") gates; any error -> log_crash(...) AND one line appended to <root>/.bee/logs/hook-activity.log (cap the log at 256 KiB by truncating to the last half when it exceeds); always ExitCode::SUCCESS (per D1). Read session_id, hook_event_name, cwd, tool_name, tool_use_id, notification_type, message, reason from ctx.payload; read HERDR_PANE_ID from the environment as pane. Mapping per D3: UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure -> working; PermissionRequest -> blocked (record tool_name and tool_use_id); Notification: notification_type permission_prompt -> blocked, agent_needs_input -> waiting_input, idle_prompt or agent_completed -> idle, anything else -> no transition; Stop -> idle; SessionEnd with reason not clear/resume -> exited (clear/resume -> no transition). Any other hook_event_name (SubagentStop included) -> no transition, exit 0. Sticky rule per D3: when the recorded state is blocked, a PreToolUse/PostToolUse/PostToolUseFailure changes it only if the payload tool_use_id equals the recorded one, or — when no tool_use_id was recorded — the tool_name equals; otherwise the blocked state stays and the event is NOT appended as a transition. When the recorded state is waiting_input, only UserPromptSubmit or Stop (turn boundaries) or an exited/blocked event change it. Store per D2: the session record is <control_root>/.bee/sessions/<session_id>.json (control_root from ctx, fall back to root); load it fail-open like state_sync.rs read_session_failopen; if absent create a minimal record {id, started_at: now, transcript_path (from payload if present), workspace_id from ctx if cheap else \"main\", source: \"activity\"}; set record.activity = {state, event, tool_name?, tool_use_id?, at: now_iso(), pane?, cwd}; write with the state_sync write_json_atomic_retry helper (use the sessions store lock the same way heartbeat_session does, single attempt, fail-open). Append the same object plus session_id to <sessions dir>/<session_id>.activity.jsonl with fsutil::append_jsonl, then if the file has more than 50 lines rewrite it atomically to the last 50. Only a real state change (or a blocked->blocked with a different tool_use_id) is a transition; a working->working repeat refreshes activity.at and activity.event in the json but is NOT appended to the jsonl. waiting_on per D5: on a transition INTO waiting_input call the workflow_store set function (kind \"question\", subject = message or \"agent needs input\") and INTO blocked (kind \"gate\", subject = tool_name or message); resolve the target with resolve_waiting_on_target(root, \"hook activity\", None, false, Some(session_id)) and run rebuild_lane_projection + rebuild_state_projection after a lane write exactly as waiting_on.rs does; record a marker field activity.waiting_on_set_by_hook = true. Never overwrite a live mark whose kind is gate or question that the hook did not set (check waiting_on_is_live and the marker). On a turn boundary (UserPromptSubmit or Stop) clear the mark only when the marker is set, then drop the marker. Tests: unit tests inside activity.rs over a tempdir for every row of the plan.md test matrix (happy, sticky blocked vs different tool_use_id, SessionEnd clear/resume no-op, 51st transition trims to 50, missing record created, agent-set mark survives a hook blocked); add \"activity\" to the HOOKS list in tests/hook_contracts.rs so the adversarial-stdin matrix covers it. Commit with subject in imperative mood and trailer `cell: aah-1`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml activity hook_contracts",
+  "must_haves": {
+    "truths": [
+      "bee hook activity with a PermissionRequest payload writes activity.state=blocked into .bee/sessions/<id>.json and one row into <id>.activity.jsonl",
+      "a PostToolUse payload with a different tool_use_id leaves state=blocked and appends nothing",
+      "empty, garbage, and 2 MB stdin exit 0 with a line in .bee/logs/hook-activity.log",
+      "a hook-set waiting_on mark is cleared at the next UserPromptSubmit; an agent-set mark is never touched by the hook"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "substantive": "the activity handler: payload parse, D3 state machine with sticky rules, D2 store writes with atomic trim, D5 waiting_on set/clear, unit tests"
+      }
+    ],
+    "key_links": [
+      "hooks/mod.rs dispatches \"activity\" to activity::run",
+      "activity.rs writes through the same atomic session write path state_sync uses"
+    ],
+    "prohibitions": [
+      "no change to any other hook's behavior",
+      "no SubagentStop handling",
+      "never a non-zero exit from this hook",
+      "no hand-rolled JSON writer — use fsutil"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "behavior_change": true,
+  "trace": {
+    "worker": "w-aah-1",
+    "outcome": "bee hook activity records per-session agent state (D1/D2/D3/D5) with sticky blocked/waiting_input and a hook-owned waiting mark",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+    ],
+    "deviations": [
+      "The cell's verify string chained two filters in one cargo invocation, which cargo rejects; ran cargo test ... hooks::activity and cargo test ... --test hook_contracts, then the wider `hook` filter, all green.",
+      "Widened `mod store` and `mod waiting_on` to pub(crate) in verbs/state_group/mod.rs (one word each, no behavior) so the hook can call the SAME waiting_on setters the CLI verb uses instead of becoming a second writer; file reserved under w-aah-1.",
+      "Blocked->blocked counts as a transition only when the NEW payload carries a tool_use_id that differs — an id-less Notification right after a PermissionRequest would otherwise append a duplicate row for one block.",
+      "sync-ack: The workflow-state touch is a two-word visibility widening (mod store / mod waiting_on -> pub(crate)) so the new hook calls the existing waiting_on setters instead of becoming a second writer — no verb, contract, or agent-facing behavior of that area changes, so none of its skills has anything to say. The new behavior lives in the hook-runtime area (docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md), which cells aah-2/aah-3 own."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T13:19:58.800Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "48e1abb8-07f6-4058-8db3-383af16fba58",
+    "claimed_at": "2026-08-22T13:06:49.152Z",
+    "sync_ack": "The workflow-state touch is a two-word visibility widening (mod store / mod waiting_on -> pub(crate)) so the new hook calls the existing waiting_on setters instead of becoming a second writer — no verb, contract, or agent-facing behavior of that area changes, so none of its skills has anything to say. The new behavior lives in the hook-runtime area (docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md), which cells aah-2/aah-3 own.",
+    "report": {
+      "outcome": "bee hook activity records per-session agent state (D1/D2/D3/D5) with sticky blocked/waiting_input and a hook-owned waiting mark",
+      "commit": "2fda0a76",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+        "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml hook — green — 497 hook-named tests incl. the 21 new activity units and the 10 hook_contracts rows; full-suite run also green except a pre-existing environment red in tests/opencode_plugin_contracts.rs (reads the locally installed opencode binary, untouched by this cell)",
+      "deviations": [
+        "The cell's verify string chained two filters in one cargo invocation, which cargo rejects; ran cargo test ... hooks::activity and cargo test ... --test hook_contracts, then the wider `hook` filter, all green.",
+        "Widened `mod store` and `mod waiting_on` to pub(crate) in verbs/state_group/mod.rs (one word each, no behavior) so the hook can call the SAME waiting_on setters the CLI verb uses instead of becoming a second writer; file reserved under w-aah-1.",
+        "Blocked->blocked counts as a transition only when the NEW payload carries a tool_use_id that differs — an id-less Notification right after a PermissionRequest would otherwise append a duplicate row for one block."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

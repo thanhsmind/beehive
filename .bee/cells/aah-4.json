@@ -1,0 +1,86 @@
+{
+  "id": "aah-4",
+  "feature": "agent-activity-hook",
+  "title": "Stamp feature and cell onto the activity record so a session file answers what is being worked on",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "aah-1"
+  ],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+  ],
+  "read_first": [
+    "docs/history/agent-activity-hook/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs"
+  ],
+  "action": "Extend the activity object written by hooks/activity.rs (per D2, additive) with two optional fields resolved at every write, fail-open (absent when unknown, never an error): `feature` — the session record's own `lane` field when present, else the `feature` of <control_root>/.bee/state.json; `cell` — the cell id of the ACTIVE claim held by this session_id: scan <control_root>/.bee/claims/*.json the way status_full/cells.rs active_workers does (read_claim + is_claim_active around its lines 743-765; claims_dir there; prompt_context.rs has a lenient reader near its line 1023/1726 you may reuse), pick the claim whose `session` equals the session_id, take its `cell`. Keep both reads cheap: one readdir of claims, no cell files opened. Write them into both the json `activity` object and each jsonl transition row. A feature/cell change alone (state unchanged) refreshes the json but is not a transition. Unit tests in the existing tests module: lane-bound session yields feature from lane; unbound yields state.json feature; an active claim yields cell, an expired or foreign claim yields no cell; no claims dir is fine. Update docs/knowledge/areas/hook-runtime/agent-activity-record.md field table with the two fields and their sources. Commit with trailer `cell: aah-4`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml hooks::activity",
+  "must_haves": {
+    "truths": [
+      "a session bound to a lane writes activity.feature = that lane",
+      "a session holding an active claim writes activity.cell = that cell id",
+      "a missing claims dir or unreadable claim never changes the exit code or blocks the state write"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "substantive": "feature and cell resolution wired into the activity write, with tests"
+      }
+    ],
+    "key_links": [
+      "the claim scan uses the same activity rule status active_workers uses (is_claim_active)"
+    ],
+    "prohibitions": [
+      "no change to the state machine or sticky rules",
+      "no new session-record fields outside activity",
+      "never a non-zero exit"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+  ],
+  "behavior_change": true,
+  "trace": {
+    "worker": "w-aah-4",
+    "outcome": "The activity record now stamps the session's feature and held cell, fail-open on both",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+    ],
+    "deviations": [
+      "status_full::cells::is_claim_active is private to its module, so the same rule is re-stated locally in activity.rs (a hook has no Ctx anyway); the orchestrator note allowed a direct fail-open read"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T14:12:28.891Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "48e1abb8-07f6-4058-8db3-383af16fba58",
+    "claimed_at": "2026-08-22T14:07:08.609Z",
+    "report": {
+      "outcome": "The activity record now stamps the session's feature and held cell, fail-open on both",
+      "commit": "27f82e4987c67e9e7e5dd9c8f89183917f2f12c9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml hooks::activity — green (29 passed, 8 new) — the only module changed; bee knowledge check also OK (0 errors) for the edited concept",
+      "deviations": [
+        "status_full::cells::is_claim_active is private to its module, so the same rule is re-stated locally in activity.rs (a hook has no Ctx anyway); the orchestrator note allowed a direct fail-open read"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 297 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

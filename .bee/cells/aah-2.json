@@ -1,0 +1,110 @@
+{
+  "id": "aah-2",
+  "feature": "agent-activity-hook",
+  "title": "Wire the activity hook into the Claude hook manifests and repo settings",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "aah-1"
+  ],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee/hooks/claude-hooks.json",
+    "packages/bee/hooks/hooks.json",
+    ".codex/hooks.json",
+    ".claude/settings.json"
+  ],
+  "read_first": [
+    "docs/history/agent-activity-hook/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+  ],
+  "action": "Per D1 declare the activity hook in BOTH renderers. (1) devtools/hook_manifests.rs CATALOG: add a CLAUDE_ONLY group (\"bee-activity.mjs\", \"bee: activity\") to the existing UserPromptSubmit, PreToolUse (a matcher-less group so every tool counts), PostToolUse, Stop, and SessionEnd events, and add new Event rows for PostToolUseFailure, PermissionRequest, and Notification each carrying only that group. Never add it to SubagentStop. Update the ALLOWED_DIFFERENCES comment block and the projections_differ_only_where_approved test so the Claude-only rows are the approved asymmetry; keep .codex/hooks.json byte-stable. (2) onboard/hooks_wiring.rs render_repo_hook_entries: add the same event/verb rows to the hard-coded list so .claude/settings.json carries them; extend the key-order test; keep the Codex event-key test unchanged. Then run `bee dev render-hook-manifests --write` and `bee onboard --repo-root . --apply` from the worktree and commit the regenerated packages/bee/hooks/claude-hooks.json, packages/bee/hooks/hooks.json and .claude/settings.json. Run `bee dev release-manifest --check`; if the manifest lists those hook files, run `bee dev regen` and commit its output in the same commit. Commit with trailer `cell: aah-2`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml hook_manifests hooks_wiring && .bee/bin/bee dev render-hook-manifests --check && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "render-hook-manifests --check is clean after the write",
+      "the rendered .claude/settings.json has a bee hook activity command under UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, Notification, SessionEnd and none under SubagentStop",
+      ".codex/hooks.json is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+        "substantive": "CATALOG rows for the activity hook on eight Claude events, three of them new Event rows, with the approved-asymmetry test updated"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+        "substantive": "matching repo-settings rows"
+      }
+    ],
+    "key_links": [
+      "both renderers emit the identical bee hook activity command string"
+    ],
+    "prohibitions": [
+      "no SubagentStop row",
+      "no change to any existing hook row",
+      "no edit to settings.local.json"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "behavior_change": true,
+  "regen_obligation_ack": "aah-2 runs bee dev regen itself when release-manifest --check names a touched file",
+  "trace": {
+    "worker": "w-aah-2",
+    "outcome": "Activity hook declared in both Claude renderers on eight events, never SubagentStop; Codex projections byte-unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+      "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee/hooks/claude-hooks.json",
+      ".claude/settings.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "cargo test refuses two filters in one call: ran hook_manifests and hooks_wiring as separate invocations, plus onboard/doctor/plugin_distribution for fallout",
+      "ran the freshly built packages/bee-rs/target/release/bee for render-hook-manifests and release-manifest: .bee/bin/bee symlinks to the main checkout binary, which carries the pre-change catalog",
+      "reserved and edited packages/bee-rs/crates/bee/src/onboard/tests.rs (not in cell files): two hook-count assertions went red purely from the new rows",
+      "reserved and committed docs/history/codex-harness-hardening/release-manifest.json (not in cell files): bee dev regen output, per the cell regen obligation",
+      "reverted .bee/onboarding.json — onboard/regen only rewrote its updated_at timestamp",
+      "affects_specs docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md needs no edit: it names no per-event list, only the module and ALLOWED_DIFFERENCES by name"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T13:31:05.707Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "48e1abb8-07f6-4058-8db3-383af16fba58",
+    "claimed_at": "2026-08-22T13:20:38.027Z",
+    "report": {
+      "outcome": "Activity hook declared in both Claude renderers on eight events, never SubagentStop; Codex projections byte-unchanged",
+      "commit": "f80734ba",
+      "files": [
+        "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+        "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee/hooks/claude-hooks.json",
+        ".claude/settings.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release hook_manifests (7 passed) + hooks_wiring (18 passed) + onboard (137 passed) + doctor (16) + plugin_distribution (19); bee dev render-hook-manifests --check; bee dev release-manifest --check — green — the two renderers, their merge callers and the two drift gates are exactly what this cell changes",
+      "deviations": [
+        "cargo test refuses two filters in one call: ran hook_manifests and hooks_wiring as separate invocations, plus onboard/doctor/plugin_distribution for fallout",
+        "ran the freshly built packages/bee-rs/target/release/bee for render-hook-manifests and release-manifest: .bee/bin/bee symlinks to the main checkout binary, which carries the pre-change catalog",
+        "reserved and edited packages/bee-rs/crates/bee/src/onboard/tests.rs (not in cell files): two hook-count assertions went red purely from the new rows",
+        "reserved and committed docs/history/codex-harness-hardening/release-manifest.json (not in cell files): bee dev regen output, per the cell regen obligation",
+        "reverted .bee/onboarding.json — onboard/regen only rewrote its updated_at timestamp",
+        "affects_specs docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md needs no edit: it names no per-event list, only the module and ALLOWED_DIFFERENCES by name"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

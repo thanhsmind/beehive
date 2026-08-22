@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Prune would also remove another session's worktree. I remove only mine.",
-    "asked_at": "2026-08-22T06:29:23.579Z",
-    "session": "15dafcf0-9d77-49a6-aefe-e79b8f894e8d"
+    "subject": "Now I record it as a backlog item so it does not get lost.",
+    "asked_at": "2026-08-22T12:57:10.490Z",
+    "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
   },
   "route": {
     "class": "feature",
