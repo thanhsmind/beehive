@@ -56,6 +56,7 @@ definition.
 | runtime's own belt | OpenCode's hand-authored equivalent of a projection: one project file translating OpenCode's own before-tool events into the same helper calls every projection makes, held to the catalog's coverage guarantee by a derived registry check rather than by shared generation. |
 | allowed difference | A named, exported exception explaining why one projection — or OpenCode's own belt — carries or omits a checkpoint the others do not. Any un-named difference is a defect. |
 | reviewed definition | The exact command definition the owner has inspected and trusted. A new or changed non-managed definition does not run until it is reviewed again. |
+| activity checkpoint set | The Claude-only group of lifecycle checkpoints that record what a session is doing rather than judging it: prompt, before-tool, after-tool and after-tool-failure, permission request, stop, notification, session end — one handler behind all of them. It carries no equivalent on the other runtimes today, so its absence there is a named difference under R1, not drift. What it writes and what readers make of it is `agent-activity-record.md`'s subject (decision b17bfa89). |
 
 ## Behaviors & Operations
 

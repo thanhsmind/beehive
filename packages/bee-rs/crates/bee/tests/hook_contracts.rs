@@ -37,6 +37,7 @@ use std::process::{Command, Output, Stdio};
 /// Every hook `bee hook <name>` serves, in hooks/mod.rs dispatch order.
 const HOOKS: &[&str] = &[
     "tools-logger",
+    "activity",
     "codex-subagent-audit",
     "chain-nudge",
     "state-sync",

@@ -25,6 +25,7 @@ use std::time::Instant;
 pub const PORTED: &[&str] = &[
     "status --brief",
     "hook tools-logger",
+    "hook activity",
     "hook codex-subagent-audit",
     "hook chain-nudge",
     "hook state-sync",

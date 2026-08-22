@@ -602,7 +602,9 @@ fn repo_hooks_wires_both_projections_and_preserves_foreign_entries() {
     assert_eq!(settings["permissions"]["allow"][0], "Bash(ls:*)");
     // Foreign hook entries survive, bee entries are appended after them.
     assert_eq!(settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"], "node ./tools/my-guard.mjs");
-    assert_eq!(settings["hooks"]["PreToolUse"].as_array().unwrap().len(), 3);
+    // 1 foreign + bee's three PreToolUse rows (write guard, model guard,
+    // activity).
+    assert_eq!(settings["hooks"]["PreToolUse"].as_array().unwrap().len(), 4);
     assert_eq!(settings["hooks"]["Notification"][0]["hooks"][0]["command"], "say hi");
     // A .bak was taken.
     assert!(fx.repo.join(".claude").join("settings.json.bak").exists());
@@ -715,8 +717,9 @@ fn hook_wiring_does_not_depend_on_a_vendored_binary_and_never_stacks() {
     .unwrap();
     assert_eq!(
         settings["hooks"]["UserPromptSubmit"].as_array().unwrap().len(),
-        1,
-        "the node-shaped entry is REPLACED, never stacked beside the binary one"
+        2,
+        "the node-shaped entry is REPLACED, never stacked beside the two bee rows \
+(prompt context, activity)"
     );
 }
 
