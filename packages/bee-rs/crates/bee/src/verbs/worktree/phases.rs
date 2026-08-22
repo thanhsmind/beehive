@@ -471,6 +471,12 @@ pub(crate) fn merge_stage(
 /// never silently un-suppress cleanup.
 struct CloseLaneOutcome {
     next_action: String,
+    /// merge-ready-fact D2: did this call WRITE to the feature's record —
+    /// the lane rewrite itself, or the `merge_ready` clear alone? The caller
+    /// commits the tracked lane file on either, so a merge whose only lane
+    /// change was dropping the merge-ready fact still lands that change in
+    /// its own bookkeeping commit instead of leaving it as dirt in main.
+    changed: bool,
 }
 
 /// mcl-2 (R1) / uat-stop-placement D4.2: the merge-time half of "a shipped
@@ -498,10 +504,19 @@ fn close_the_lane_on_merge(
     merge_commit_sha: &str,
     uat_stop: UatStop,
 ) -> Result<CloseLaneOutcome, String> {
+    // merge-ready-fact D2: a merged feature is no longer WAITING to be
+    // merged, so the stored fact goes away with the merge — in this same
+    // lane-closing mutation, on BOTH branches below (the merge is what ends
+    // the wait, whatever `uat_stop` does to `waiting_on`). FAIL-OPEN:
+    // `clear` never throws and never turns this green merge red; its answer
+    // only tells the caller whether the record was written at all.
+    let merge_ready_cleared = crate::verbs::workflow_store::merge_ready::clear(main_root, feature);
     if uat_stop == UatStop::Close {
         let precheck = uat_merge_precheck(main_root, Some(feature));
         if precheck.lane_applies && !precheck.gate_approved {
-            return set_lane_uat_wait_on_merge(main_root, feature, merge_commit_sha);
+            let mut outcome = set_lane_uat_wait_on_merge(main_root, feature, merge_commit_sha)?;
+            outcome.changed = outcome.changed || merge_ready_cleared;
+            return Ok(outcome);
         }
     }
     crate::verbs::state_group::clear_lane_waiting_on_pair(main_root, feature)
@@ -509,7 +524,9 @@ fn close_the_lane_on_merge(
     let Some(mut lane) =
         crate::verbs::workflow_store::read_lane_strict(main_root, feature).map_err(lane_write_err_text)?
     else {
-        return Ok(CloseLaneOutcome { next_action: String::new() });
+        // No lane file to rewrite — but the clear above may still have
+        // written the fact off the DEFAULT record, so `changed` reports it.
+        return Ok(CloseLaneOutcome { next_action: String::new(), changed: merge_ready_cleared });
     };
     let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
     let next_action = format!(
@@ -517,7 +534,7 @@ fn close_the_lane_on_merge(
     );
     lane.insert("next_action".into(), json!(next_action.clone()));
     crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;
-    Ok(CloseLaneOutcome { next_action })
+    Ok(CloseLaneOutcome { next_action, changed: true })
 }
 
 /// uat-stop-placement D4.2's SET branch: under `uat_stop: "close"`, a merge
@@ -541,7 +558,7 @@ fn set_lane_uat_wait_on_merge(
     let Some(mut lane) =
         crate::verbs::workflow_store::read_lane_strict(main_root, feature).map_err(lane_write_err_text)?
     else {
-        return Ok(CloseLaneOutcome { next_action: String::new() });
+        return Ok(CloseLaneOutcome { next_action: String::new(), changed: false });
     };
     let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
     lane.insert(
@@ -558,7 +575,7 @@ fn set_lane_uat_wait_on_merge(
     );
     lane.insert("next_action".into(), json!(next_action.clone()));
     crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;
-    Ok(CloseLaneOutcome { next_action })
+    Ok(CloseLaneOutcome { next_action, changed: true })
 }
 
 /// `Err2`'s two shapes, rendered as one warn-line message —
@@ -746,9 +763,16 @@ pub(crate) fn merge_finish(
             *uat_stop == UatStop::Close && precheck.lane_applies && !precheck.gate_approved;
         if let Some(feature) = feature.as_deref() {
             match close_the_lane_on_merge(main_root, feature, &merge_commit_sha, *uat_stop) {
-                Ok(outcome) if !outcome.next_action.is_empty() => {
+                // mrf-2: `|| outcome.changed` is the second door into this
+                // same commit — a lane whose ONLY change was the
+                // `merge_ready` clear carries no new `next_action`, and
+                // would otherwise leave a modified TRACKED lane file
+                // uncommitted in main (exactly the dirt mct-1 closed).
+                Ok(outcome) if !outcome.next_action.is_empty() || outcome.changed => {
                     let next_action = outcome.next_action;
-                    result.insert("next_action".into(), json!(next_action));
+                    if !next_action.is_empty() {
+                        result.insert("next_action".into(), json!(next_action));
+                    }
                     // mct-1: the lane rewrite just above landed a TRACKED
                     // file (`.bee/lanes/<feature>.json`) modified-but-
                     // uncommitted in main — dirt indistinguishable from any

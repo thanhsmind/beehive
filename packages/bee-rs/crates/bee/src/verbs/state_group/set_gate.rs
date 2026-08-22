@@ -958,6 +958,29 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         durable_stamp_unreachable = true;
     }
     drop(locks);
+    // merge-ready-fact D2: `bee gate --name uat` is the one verb that flips
+    // the stored `merge_ready.uat` between "pending" and "approved". It
+    // writes onto the SAME record the approval above just landed on —
+    // `routed_feature`, `write_through_projection`'s own routing, never
+    // `scope.feature` — so the fact and the gate can never disagree about
+    // whose uat this was.
+    //
+    // Placed after `drop(locks)` deliberately: `set_uat` goes through the
+    // ledger mutation seam and takes the very locks held just above, so
+    // calling it any earlier would find them busy and fail-open into
+    // silence. It is still strictly after the `approved_gates` write, which
+    // is all the ordering the fact needs.
+    //
+    // FAIL-OPEN and result-neutral: it never CREATES the fact (a feature
+    // that is not merge-ready has no `uat` to flip), never throws, and its
+    // answer is dropped — this verb's text, JSON, and exit code are
+    // byte-identical either way. D3: the uat gate itself never READS the
+    // fact; this is a write-only projection.
+    if !merge && name == "uat" {
+        if let Some(feature) = routed_feature.as_deref() {
+            let _ = crate::verbs::workflow_store::merge_ready::set_uat(root, feature, approved);
+        }
+    }
     let text = if merge {
         format!("Gates \"shape\" and \"execution\" set to {approved}.{lane_note}")
     } else {

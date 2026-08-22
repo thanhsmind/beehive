@@ -2753,3 +2753,105 @@ use std::time::Instant;
     fn the_verdict_vocabulary_is_exactly_three_values() {
         assert_eq!(CONFLICT_VERDICTS, ["compatible", "conflicts", "retires-prior"]);
     }
+
+    // ── merge-ready-fact D2: the uat gate flips the stored fact ────────────
+    //
+    // `bee gate --name uat` is the ONE writer of `merge_ready.uat`. It flips
+    // an existing fact and never creates one — a feature that is not
+    // merge-ready has no `uat` field to flip. D3 keeps this one-way: the
+    // gate writes the fact, the gate never reads it, and its own refusals
+    // and text are untouched either way. The fact is seeded by writing the
+    // lane record directly (test setup; production seeds it from the last
+    // cap — verbs/workflow_store/merge_ready.rs `set_after_cap`).
+
+    fn seed_uat_lane(root: &Path, feature: &str, uat: &str) {
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("lanes").join(format!("{feature}.json")),
+            format!(
+                r#"{{"feature":"{feature}","phase":"execution","mode":"feature",
+                     "merge_ready":{{"since":"2026-01-01T00:00:00.000Z","branch":"wt/{feature}",
+                     "worktree_id":"wt-{feature}","uat":"{uat}","blocked_by":[]}}}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    fn lane_on_disk(root: &Path, feature: &str) -> Value {
+        let raw = std::fs::read_to_string(
+            root.join(".bee").join("lanes").join(format!("{feature}.json")),
+        )
+        .unwrap();
+        serde_json::from_str(&raw).unwrap()
+    }
+
+    fn gate_flags(args: &[&str]) -> Flags {
+        parse_flags(args).expect("well-formed fixture argv").0
+    }
+
+    /// Approving uat flips the stored fact to "approved"; revoking it flips
+    /// it back to "pending". Both directions, on the same record the
+    /// approval itself lands on.
+    #[test]
+    fn the_uat_gate_flips_the_stored_merge_ready_fact_both_ways() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_uat_lane(root, "demo", "pending");
+
+        let out = run_gate_body(
+            root,
+            &gate_flags(&["--lane", "demo", "--name", "uat", "--approved", "true"]),
+        );
+        let Ok(Out::Emit(..)) = out else {
+            panic!("the uat approval must land, not refuse")
+        };
+        let lane = lane_on_disk(root, "demo");
+        assert_eq!(lane["approved_gates"]["uat"], json!(true), "{lane}");
+        assert_eq!(lane["merge_ready"]["uat"], json!("approved"), "{lane}");
+        assert_eq!(lane["merge_ready"]["blocked_by"], json!([]), "the rest of the fact is untouched");
+
+        let out = run_gate_body(
+            root,
+            &gate_flags(&["--lane", "demo", "--name", "uat", "--approved", "false"]),
+        );
+        let Ok(Out::Emit(..)) = out else {
+            panic!("the revocation must land, not refuse")
+        };
+        let lane = lane_on_disk(root, "demo");
+        assert_eq!(lane["approved_gates"]["uat"], json!(false), "{lane}");
+        assert_eq!(lane["merge_ready"]["uat"], json!("pending"), "{lane}");
+    }
+
+    /// A gate that is NOT uat never touches the fact, and a feature with no
+    /// fact is never given one by a uat approval — the gate is a flipper,
+    /// never a creator.
+    #[test]
+    fn a_non_uat_gate_and_a_factless_feature_both_leave_merge_ready_alone() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_uat_lane(root, "demo", "pending");
+        let out = run_gate_body(
+            root,
+            &gate_flags(&["--lane", "demo", "--name", "context", "--approved", "true"]),
+        );
+        assert!(matches!(out, Ok(Out::Emit(..))), "the context approval must land");
+        assert_eq!(
+            lane_on_disk(root, "demo")["merge_ready"]["uat"],
+            json!("pending"),
+            "only the uat gate writes the uat field"
+        );
+
+        std::fs::write(
+            root.join(".bee").join("lanes").join("bare.json"),
+            r#"{"feature":"bare","phase":"execution","mode":"feature"}"#,
+        )
+        .unwrap();
+        let out = run_gate_body(
+            root,
+            &gate_flags(&["--lane", "bare", "--name", "uat", "--approved", "true"]),
+        );
+        assert!(matches!(out, Ok(Out::Emit(..))), "the uat approval must land");
+        let lane = lane_on_disk(root, "bare");
+        assert_eq!(lane["approved_gates"]["uat"], json!(true), "the approval itself still lands");
+        assert!(lane.get("merge_ready").is_none(), "no fact was invented: {lane}");
+    }

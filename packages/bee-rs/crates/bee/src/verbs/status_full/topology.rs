@@ -331,6 +331,17 @@ pub(crate) fn build_lane_rows(ctx: &mut Ctx) -> R<Vec<JMap>> {
             let key = lane.get("feature").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let bound = bound_by.get(&key).cloned().unwrap_or_default();
             lane.insert("bound_sessions".into(), Value::Array(bound));
+            // merge-ready-fact D3: the stored fact rides the lane row
+            // VERBATIM — whatever the record carries, uninterpreted — and an
+            // explicit `null` when the record carries none, so a reader
+            // never has to tell "key absent" apart from "not merge-ready".
+            // Additive projection only: this is the surface, never a source
+            // any bee gate or door reads back.
+            let fact = lane
+                .get(crate::verbs::workflow_store::merge_ready::KEY)
+                .cloned()
+                .unwrap_or(Value::Null);
+            lane.insert(crate::verbs::workflow_store::merge_ready::KEY.into(), fact);
             lane
         })
         .collect())

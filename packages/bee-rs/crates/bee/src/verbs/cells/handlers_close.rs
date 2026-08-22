@@ -557,8 +557,30 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         Ok(cell_value)
     })();
     guard.release();
-    let saved = saved?;
+    let mut saved = saved?;
     release_claim_file_best_effort(root, id); // D1 Δ2: cap clears the claim
+    // merge-ready-fact D1: the cap that leaves NOTHING outstanding for this
+    // feature is the one moment bee can know the feature is finished in its
+    // worktree, so this is where the stored fact is written. Everything about
+    // it is fail-open (`set_after_cap` never returns an error): the cap above
+    // is already committed to disk, and no failure to record a board-facing
+    // convenience may turn a landed cap into a refusal.
+    //
+    // The answer rides the cap RESULT under `merge_ready` — `null` on every
+    // arm that wrote nothing (an open sibling, no worktree grant, no record
+    // for the feature), so the key's presence is stable and only its value
+    // moves. The cell FILE is untouched: `write_cell` already ran above, and
+    // this fact belongs to the feature, not the cell.
+    let merge_ready = match saved.get("feature") {
+        Some(Value::String(feature)) => {
+            let feature = feature.clone();
+            crate::verbs::workflow_store::merge_ready::set_after_cap(root, &feature, &utc_now())
+        }
+        _ => None,
+    };
+    if let Value::Object(map) = &mut saved {
+        map.insert("merge_ready".into(), merge_ready.unwrap_or(Value::Null));
+    }
     Ok(saved)
 }
 
@@ -949,7 +971,20 @@ pub(crate) fn unclaim_cell(
             cell_map.insert("trace".into(), Value::Object(release_trace(trace)));
             Ok(())
         })?;
+        // merge-ready-fact D2: the feature just grew an open cell again, so
+        // it is no longer finished. Fail-open, and after the status flip —
+        // the next last-cap re-sets the fact with a fresh `since`.
+        clear_merge_ready_for(&root, &cell);
         Ok(cell)
+    }
+}
+
+/// merge-ready-fact D2's one shared line for the reopen paths: drop the
+/// feature's stored merge-ready fact once a cell of it is open again. Never
+/// returns anything — a reopen's own result and exit code are untouched.
+pub(crate) fn clear_merge_ready_for(root: &Path, cell: &Value) {
+    if let Some(Value::String(feature)) = cell.get("feature") {
+        crate::verbs::workflow_store::merge_ready::clear(root, feature);
     }
 }
 
@@ -1000,6 +1035,8 @@ pub(crate) fn run_reopen(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
             cell_map.insert("trace".into(), Value::Object(trace));
             Ok(())
         })?;
+        // merge-ready-fact D2 — same reason as `unclaim_cell` above.
+        clear_merge_ready_for(&root, &cell);
         let text = format!("Reopened {} — back to open.", js_string_or_undefined(cell.get("id")));
         Ok(Out::Emit(cell, text, 0))
     })

@@ -1783,6 +1783,28 @@ fn proof_door_detail(proof: &crate::verbs::cells::ProofCheck) -> String {
     format!("{} capped cell(s) all carry a proof line", proof.proven_count)
 }
 
+/// merge-ready-fact D2: record WHY this close is still standing, onto the
+/// feature's stored `merge_ready` fact — the names of every BLOCKING door
+/// except `"uat"`, in the same order the result's own `doors` array carries
+/// them, and `[]` on a green close. `"uat"` is left out because the fact
+/// carries the uat answer as its own `uat` field (`bee gate --name uat`
+/// writes it), never twice.
+///
+/// Called the MOMENT a full doors vector exists and BEFORE any early-return
+/// refusal arm, so a close that stops at a door still records the door it
+/// stopped at rather than leaving the last green answer standing.
+///
+/// FAIL-OPEN and result-neutral, by construction: `set_blocked_by` never
+/// creates the fact (a feature that is not merge-ready has nothing to
+/// write), never throws, and its answer is deliberately dropped here — D3
+/// makes this an additive projection nothing in bee ever reads back, so
+/// there is no failure for close to report and no door it could change.
+fn record_merge_ready_blocked_by(root: &Path, feature: &str, doors: &[Door]) {
+    let names: Vec<&str> =
+        doors.iter().filter(|d| d.blocking && d.door != "uat").map(|d| d.door).collect();
+    let _ = crate::verbs::workflow_store::merge_ready::set_blocked_by(root, feature, &names);
+}
+
 /// provenance: bee.mjs handleClose (~7643). `worktree` is provably null here
 /// (see the file header), so the merge-back line never renders natively.
 pub(crate) fn close_handler(
@@ -1839,6 +1861,7 @@ pub(crate) fn close_handler(
         doors.push(build_impact_door(root, feature)?);
         doors.push(build_routing_door(root, feature)?);
         doors.push(build_doc_deferral_door(root, feature, true)?);
+        record_merge_ready_blocked_by(root, feature, &doors);
         let next_line = if proof.blocking {
             format!(
                 "next: re-cap the cell(s) above with a real proof line (\"<command> — <result> — <scope reason>\"), then re-run bee close --feature {feature}"
@@ -1886,6 +1909,14 @@ pub(crate) fn close_handler(
         doors.push(impact_door);
         doors.push(routing_door);
         doors.push(doc_deferral_door);
+        // NAMED DEVIATION (mrf-2): the cell named two full-doors vectors —
+        // the dry-run one and the green-path one below. There are THREE:
+        // this proof-debt refusal arm assembles its own complete vector and
+        // returns before the green path is ever reached. Wiring it too is
+        // what the cell's own rule ("before any early-return refusal arm, so
+        // a blocked close still records why") actually asks for — a close
+        // stopped at the tests door would otherwise record nothing.
+        record_merge_ready_blocked_by(root, feature, &doors);
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
@@ -1928,6 +1959,7 @@ pub(crate) fn close_handler(
     doors.push(impact_door);
     doors.push(routing_door);
     doors.push(doc_deferral_door);
+    record_merge_ready_blocked_by(root, feature, &doors);
 
     // ── D1: refuse on uncaptured behavior_change cells ──────────────────────
     //

@@ -290,6 +290,10 @@ pub(crate) fn run_judge_record(flags: rsv::Flags, use_json: bool, t0: Instant) -
         let cell = saved?;
         if reopened {
             release_claim_file_best_effort(&root, &id);
+            // merge-ready-fact D2: a NEEDS_REVISION verdict that flips a
+            // capped cell back to open is a reopen like any other — the
+            // feature stops being finished, so the stored fact goes.
+            clear_merge_ready_for(&root, &cell);
         }
         let entries = cell.get("trace").and_then(|t| t.get("semantic_judge"));
         let latest = match entries {
