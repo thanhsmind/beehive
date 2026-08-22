@@ -15,7 +15,7 @@ metadata:
       kind: command
       command: herdr
       missing_effect: unavailable
-      reason: Every pane/tab/agent action in either role goes through the herdr binary directly — there is no other way to reach a pane.
+      reason: Required when `herding.transport` is `herdr` — the default, and the transport both cockpit roles use today: every pane/tab/agent action goes through the herdr binary directly. Set `herding.transport` to `tmux` (tmux-herding-transport D1) and `bee herding run` reaches its panes through `tmux` on PATH instead, with herdr unneeded; the choice is that one config key, never an auto-detect from `$TMUX` or `$HERDR_ENV`.
 ---
 
 # Herding — the unattended cockpit

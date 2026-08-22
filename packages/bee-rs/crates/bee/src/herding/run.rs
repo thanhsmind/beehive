@@ -36,11 +36,11 @@
 //      every outcome.
 //
 // `--dry-run` stops after writing `job.json` and rendering the brief —
-// nothing in `Herdr` is ever called on that path (proven below by handing
+// nothing in `PaneTransport` is ever called on that path (proven below by handing
 // dry-run execution a fake that panics if any of its methods fire).
 //
 // STRUCTURAL SPLIT, same shape `control_loop.rs` and `wave.rs` already use:
-// every herdr-shaped operation lives behind the `Herdr` trait so a test
+// every herdr-shaped operation lives behind the `PaneTransport` trait so a test
 // drives the spawn sequence and the pane-lifecycle decision with a fake —
 // no real `herdr` on PATH anywhere in this crate's test suite (D7's seam,
 // "FakeBackend pattern" per the cell). The poll loop's own decision logic
@@ -58,7 +58,9 @@ use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
 use super::split_lock;
+use super::tmux::{RealTmux, TmuxSettings};
 use super::wave::{resolve_agent_command, WorkspaceTrust};
+use super::TransportKind;
 use super::wave_ledger::{self, WaveRow, WorkerRow};
 
 const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900; // 15 minutes of no heartbeat
@@ -377,11 +379,11 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// the Herdr seam — every herdr-shaped operation, real or faked
+// the PaneTransport seam — every herdr-shaped operation, real or faked
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Liveness {
+pub(crate) enum Liveness {
     Alive { pid: u32 },
     Absent,
     Unknown,
@@ -391,17 +393,20 @@ enum Liveness {
 /// character-cell rect. hps-12: the split-parent choice is a pure function
 /// over a `Vec` of these, never over a live herdr call.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PaneGeom {
-    pane_id: String,
-    width: u64,
-    height: u64,
+pub(crate) struct PaneGeom {
+    pub(crate) pane_id: String,
+    pub(crate) width: u64,
+    pub(crate) height: u64,
 }
 
 /// Every herdr operation `bee herding run` needs, isolated behind a trait so
 /// tests inject a fake instead of a real `herdr` on PATH (D7's seam, no
 /// process anywhere in this crate's test suite). `RealHerdr` below is the
 /// only production implementer.
-trait Herdr {
+///
+/// The split lock (`split_lock::acquire`) sits OUTSIDE this trait, so D2's
+/// spawn serialization is transport-neutral and every implementer inherits it.
+pub(crate) trait PaneTransport {
     /// `herdr pane current --current` — the caller's OWN pane id, the pane
     /// this verb splits from.
     fn pane_current(&self) -> Result<String, String>;
@@ -493,6 +498,15 @@ trait Herdr {
     /// `herdr pane process-info --pane <id>` (D1/D2) — liveness of the agent
     /// process inside the pane. Fails OPEN to `Unknown` on any trouble.
     fn process_info(&self, pane_id: &str) -> Liveness;
+    /// The transport's own name, as `herding.transport` spells it
+    /// (tmux-herding-transport D1) — carried into `--dry-run`'s JSON so a
+    /// caller can see WHICH multiplexer the run would have reached for
+    /// without spawning anything. Defaults to `"herdr"`, so every
+    /// herdr-shaped implementer (including the test fakes) inherits the
+    /// pre-tmux answer and only `RealTmux` overrides it.
+    fn name(&self) -> &'static str {
+        "herdr"
+    }
 }
 
 struct RealHerdr;
@@ -571,7 +585,7 @@ fn extract_tab_create_root_pane(v: &Value) -> Option<String> {
     v.get("result")?.get("root_pane")?.get("pane_id")?.as_str().map(str::to_string)
 }
 
-impl Herdr for RealHerdr {
+impl PaneTransport for RealHerdr {
     fn pane_current(&self) -> Result<String, String> {
         let v = self.call(&["pane", "current", "--current"])?;
         v.get("result")
@@ -962,7 +976,7 @@ const SPLIT_LOCK_WAIT: Duration = Duration::from_secs(120);
 /// budget-spent fail-open branch is provable in a test that takes
 /// milliseconds instead of two minutes.
 fn split_worker_pane(
-    herdr: &dyn Herdr,
+    herdr: &dyn PaneTransport,
     own_pane: &str,
     cwd: &Path,
     job_id: &str,
@@ -1470,14 +1484,14 @@ fn now_ms() -> i64 {
 
 /// The last few lines of a pane's capture, for a blocked-pane error's
 /// remedy text — enough to show WHAT is being asked without dumping a full
-/// screen (reuses `Herdr::pane_read`).
+/// screen (reuses `PaneTransport::pane_read`).
 fn pane_tail_from_text(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
     let start = lines.len().saturating_sub(8);
     lines[start..].join("\n")
 }
 
-fn pane_tail(herdr: &dyn Herdr, pane_id: &str) -> String {
+fn pane_tail(herdr: &dyn PaneTransport, pane_id: &str) -> String {
     let text = herdr.pane_read(pane_id).unwrap_or_default();
     pane_tail_from_text(&text)
 }
@@ -1517,7 +1531,7 @@ asking so the agent stops asking\npane tail:\n{tail}"
 /// uses; no match appends `pane_tail`; a failing `pane_read` returns `generic` UNCHANGED,
 /// byte for byte — a `pane_read` failure must never turn a real timeout into
 /// a different error.
-fn diagnose_giveup(herdr: &dyn Herdr, job_id: &str, pane_id: &str, generic: String) -> String {
+fn diagnose_giveup(herdr: &dyn PaneTransport, job_id: &str, pane_id: &str, generic: String) -> String {
     let Ok(text) = herdr.pane_read(pane_id) else { return generic };
     let tail = pane_tail_from_text(&text);
     match find_prompt_diagnosis(&text) {
@@ -1608,7 +1622,7 @@ fn preflight_workspace_trust(trust: &WorkspaceTrust, cwd: &Path) -> TrustPreflig
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// The three typed refusals `--continue` can hit before it ever touches
-/// `Herdr` for real (D3's "refuses typed when…" clause). Each names the
+/// `PaneTransport` for real (D3's "refuses typed when…" clause). Each names the
 /// job id so the caller can tell which job it asked about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ContinueRefusal {
@@ -1651,7 +1665,7 @@ impl std::fmt::Display for ContinueRefusal {
 enum RunOutcome {
     /// `--dry-run`: the rendered brief, for inspection — nothing spawned.
     DryRun(String),
-    /// `--continue` refused before touching `Herdr` for real: the job dir,
+    /// `--continue` refused before touching `PaneTransport` for real: the job dir,
     /// prior result, or recorded pane was missing (D3).
     ContinueRefused(ContinueRefusal),
     /// Could not even start: agent-command resolution, a pane operation, or
@@ -1750,13 +1764,13 @@ fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) 
     }
 }
 
-/// The whole verb, generic over `Herdr` so tests drive it with a fake
+/// The whole verb, generic over `PaneTransport` so tests drive it with a fake
 /// (production's only caller, `run()` below, passes `&RealHerdr`). Branches
 /// on `--continue` (D3) right at the top: a fresh spawn and a follow-up
 /// round share the poll loop (`wait_for_round`) and pane lifecycle, but
 /// nothing else — a fresh spawn never reuses a pane, and `--continue` never
 /// splits one.
-fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
+fn execute(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     if opts.is_continue {
         execute_continue(opts, herdr)
     } else {
@@ -1764,7 +1778,7 @@ fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     }
 }
 
-fn stamp_paused_limit(bee_dir: &Path, job_id: &str, herdr: &dyn Herdr, pane_id: &str) {
+fn stamp_paused_limit(bee_dir: &Path, job_id: &str, herdr: &dyn PaneTransport, pane_id: &str) {
     let raw_text = herdr.pane_read(pane_id).unwrap_or_default();
     let limit_reset_hint = find_limit_match(&raw_text).unwrap_or_default();
     let job_file_path = mailbox::job_path(bee_dir, job_id);
@@ -1803,7 +1817,7 @@ fn wait_for_round(
     started_at_ms: i64,
     idle_timeout_secs: u64,
     ceiling_secs: u64,
-    herdr: &dyn Herdr,
+    herdr: &dyn PaneTransport,
 ) -> PollDecision {
     let log_file_path = mailbox::log_path(bee_dir, job_id);
     let ack_file_path = mailbox::ack_path(bee_dir, job_id, min_round);
@@ -1874,7 +1888,7 @@ fn wait_for_round(
 
 /// A fresh spawn: split a pane off the caller's own, `agent start` into it,
 /// then wait for round 1.
-fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
+fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     let bee_dir = opts.main_root.join(".bee");
     let files: Vec<String> = Vec::new();
     let spec = BriefSpec {
@@ -1914,11 +1928,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         return ExecResult { outcome: RunOutcome::DryRun(brief), pane_id: None, closed_pane: false };
     }
 
-    let cfg_path = opts.main_root.join(".bee").join("config.json");
-    let cfg: Value = std::fs::read_to_string(&cfg_path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or(Value::Null);
+    let cfg = read_main_config(&opts.main_root);
     let (kind, args, env, workspace_trust) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
         Ok(quad) => quad,
         Err(e) => {
@@ -2138,7 +2148,7 @@ fn parse_brief_filename(name: &str) -> Option<u32> {
 /// When the job carries a `paused_limit_at` stamp, `--continue` takes the
 /// same-round resume branch (herding-limit-pause D3) instead of advancing
 /// to round N+1.
-fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
+fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     let bee_dir = opts.main_root.join(".bee");
     let job_id = &opts.job_id;
     let mailbox_path = mailbox::mailbox_dir(&bee_dir, job_id);
@@ -2325,7 +2335,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     let brief = mailbox::render_brief(&spec);
 
     if opts.dry_run {
-        // Renders the round N+1 brief and sends nothing — no `Herdr` call
+        // Renders the round N+1 brief and sends nothing — no `PaneTransport` call
         // of any kind, the same contract a fresh spawn's `--dry-run` keeps.
         return ExecResult { outcome: RunOutcome::DryRun(brief), pane_id: None, closed_pane: false };
     }
@@ -2460,7 +2470,38 @@ fn exit_code_for(o: &RunOutcome) -> ExitCode {
     }
 }
 
-fn emit_result(opts: &Options, result: &ExecResult) {
+/// `<main_root>/.bee/config.json`, parsed — `Value::Null` when the file is
+/// absent or unparseable. This is the fail-open read `execute_new` has always
+/// done for the agent registry; `run`'s transport selection reads the SAME
+/// file for `herding.tmux.*`, so the two share one helper instead of two
+/// drifting copies.
+fn read_main_config(main_root: &Path) -> Value {
+    let cfg_path = main_root.join(".bee").join("config.json");
+    std::fs::read_to_string(&cfg_path).ok().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or(Value::Null)
+}
+
+/// tmux-herding-transport D1: the already-decided transport kind, built into
+/// the one object `execute` runs against. Pure over `(kind, cfg)` — no config
+/// read, no environment sniff, no process — so a test names a kind and reads
+/// the answer back through `name()`.
+fn select_transport(kind: TransportKind, cfg: &Value) -> Box<dyn PaneTransport> {
+    match kind {
+        TransportKind::Herdr => Box::new(RealHerdr),
+        TransportKind::Tmux => Box::new(RealTmux::new(TmuxSettings::from_config(cfg))),
+    }
+}
+
+/// `run`'s whole transport decision: read `herding.transport` out of the main
+/// checkout's config, then build it. An illegal value comes back `Err` with
+/// the message `transport_kind` wrote (it names both legal spellings), and
+/// `run` refuses on it BEFORE the job file, the mailbox, or any pane split —
+/// a typo'd transport must never half-start a worker.
+fn transport_for_run(main_root: &Path) -> Result<Box<dyn PaneTransport>, String> {
+    let kind = crate::herding::transport_kind_at(main_root)?;
+    Ok(select_transport(kind, &read_main_config(main_root)))
+}
+
+fn emit_result(opts: &Options, result: &ExecResult, transport: &str) {
     if opts.json {
         let mut m = Map::new();
         m.insert("job_id".into(), Value::String(opts.job_id.clone()));
@@ -2499,6 +2540,9 @@ fn emit_result(opts: &Options, result: &ExecResult) {
             }
             RunOutcome::DryRun(brief) => {
                 m.insert("brief".into(), Value::String(brief.clone()));
+                // tmux-herding-transport D1: additive, dry-run only — which
+                // multiplexer the real run would have reached for.
+                m.insert("transport".into(), Value::String(transport.to_string()));
                 m.insert(
                     "job_path".into(),
                     Value::String(
@@ -2535,9 +2579,19 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let result = execute(&opts, &RealHerdr);
+    // tmux-herding-transport D1: the transport is chosen from config here,
+    // before ANY side effect — an illegal `herding.transport` refuses with no
+    // job file written and no pane split.
+    let transport = match transport_for_run(&opts.main_root) {
+        Ok(t) => t,
+        Err(msg) => {
+            eprintln!("bee herding run: {msg}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let result = execute(&opts, transport.as_ref());
     let exit = exit_code_for(&result.outcome);
-    emit_result(&opts, &result);
+    emit_result(&opts, &result, transport.name());
     exit
 }
 
@@ -3059,7 +3113,7 @@ mod tests {
         assert!(parse_herdr_body("agent wait", b"not json").is_err());
     }
 
-    // ─── the Herdr seam ─────────────────────────────────────────────────
+    // ─── the PaneTransport seam ─────────────────────────────────────────
 
     struct FakeHerdr {
         own_pane: &'static str,
@@ -3162,7 +3216,7 @@ mod tests {
         }
     }
 
-    impl Herdr for FakeHerdr {
+    impl PaneTransport for FakeHerdr {
         fn pane_current(&self) -> Result<String, String> {
             Ok(self.own_pane.to_string())
         }
@@ -3236,7 +3290,7 @@ mod tests {
 
     // ─── hss-2: the pane split, serialized across processes ─────────────
 
-    /// A `Herdr` whose pane list is SHARED and MUTABLE — the stand-in for
+    /// A `PaneTransport` whose pane list is SHARED and MUTABLE — the stand-in for
     /// the one real terminal layout that concurrent `bee herding run`
     /// processes all read and all change. `pane_split` pushes the pane it
     /// creates into that list, so the NEXT `pane_layout` read counts it;
@@ -3284,7 +3338,7 @@ mod tests {
         }
     }
 
-    impl Herdr for SharedLayoutHerdr {
+    impl PaneTransport for SharedLayoutHerdr {
         fn pane_current(&self) -> Result<String, String> {
             Ok("w1:p1".to_string())
         }
@@ -3514,24 +3568,24 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// Every method panics — proves a code path never touches `Herdr` at
+    /// Every method panics — proves a code path never touches `PaneTransport` at
     /// all (used for `--dry-run`: D1's "spawns no process" claim).
     struct PanicHerdr;
-    impl Herdr for PanicHerdr {
+    impl PaneTransport for PanicHerdr {
         fn pane_current(&self) -> Result<String, String> {
-            panic!("dry-run must never call Herdr::pane_current")
+            panic!("dry-run must never call PaneTransport::pane_current")
         }
         fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
-            panic!("dry-run must never call Herdr::pane_layout")
+            panic!("dry-run must never call PaneTransport::pane_layout")
         }
         fn pane_split(&self, _pane_id: &str, _direction: &str, _ratio: f64, _cwd: &Path) -> Result<String, String> {
-            panic!("dry-run must never call Herdr::pane_split")
+            panic!("dry-run must never call PaneTransport::pane_split")
         }
         fn tab_create(&self, _workspace: &str, _cwd: &Path, _label: &str) -> Result<String, String> {
-            panic!("dry-run must never call Herdr::tab_create")
+            panic!("dry-run must never call PaneTransport::tab_create")
         }
         fn pane_run(&self, _pane_id: &str, _command: &str) -> Result<(), String> {
-            panic!("dry-run must never call Herdr::pane_run")
+            panic!("dry-run must never call PaneTransport::pane_run")
         }
         fn agent_start(
             &self,
@@ -3540,28 +3594,28 @@ mod tests {
             _pane_id: &str,
             _args: &[String],
         ) -> Result<(), String> {
-            panic!("dry-run must never call Herdr::agent_start")
+            panic!("dry-run must never call PaneTransport::agent_start")
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
-            panic!("dry-run must never call Herdr::agent_status")
+            panic!("dry-run must never call PaneTransport::agent_status")
         }
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
-            panic!("dry-run must never call Herdr::pane_close")
+            panic!("dry-run must never call PaneTransport::pane_close")
         }
         fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
-            panic!("dry-run must never call Herdr::agent_prompt")
+            panic!("dry-run must never call PaneTransport::agent_prompt")
         }
         fn agent_wait(&self, _job_id: &str, _timeout_ms: u64) -> Option<String> {
-            panic!("dry-run must never call Herdr::agent_wait")
+            panic!("dry-run must never call PaneTransport::agent_wait")
         }
         fn pane_alive(&self, _pane_id: &str) -> bool {
-            panic!("dry-run must never call Herdr::pane_alive")
+            panic!("dry-run must never call PaneTransport::pane_alive")
         }
         fn pane_read(&self, _pane_id: &str) -> Result<String, String> {
-            panic!("dry-run must never call Herdr::pane_read")
+            panic!("dry-run must never call PaneTransport::pane_read")
         }
         fn process_info(&self, _pane_id: &str) -> Liveness {
-            panic!("dry-run must never call Herdr::process_info")
+            panic!("dry-run must never call PaneTransport::process_info")
         }
     }
 
@@ -3670,6 +3724,49 @@ mod tests {
         assert_eq!(job["job_id"], "job-1");
         assert_eq!(job["task"], "do the thing");
         assert_eq!(job["round"], 1);
+    }
+
+    // ─── tmux-herding-transport D1: which transport `run` builds ─────────
+
+    #[test]
+    fn transport_select_herdr_kind_builds_the_herdr_transport() {
+        // The absent-key default. `herding.tmux.*` may even be present —
+        // the KIND decides, nothing else.
+        let cfg = serde_json::json!({"herding": {"tmux": {"quiet_cycles": 9}}});
+        assert_eq!(select_transport(TransportKind::Herdr, &cfg).name(), "herdr");
+        assert_eq!(select_transport(TransportKind::Herdr, &Value::Null).name(), "herdr");
+    }
+
+    #[test]
+    fn transport_select_tmux_kind_builds_the_tmux_transport() {
+        let cfg = serde_json::json!({"herding": {"transport": "tmux"}});
+        assert_eq!(select_transport(TransportKind::Tmux, &cfg).name(), "tmux");
+    }
+
+    #[test]
+    fn transport_select_run_refuses_an_illegal_value_before_any_split() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"nope"}}"#).unwrap();
+
+        // The message `run` prints on stderr, read through the same helper
+        // `run` calls: it names BOTH legal spellings so the typo is fixable
+        // from the refusal alone.
+        let msg = match transport_for_run(tmp.path()) {
+            Err(m) => m,
+            Ok(t) => panic!("an illegal transport must refuse, got {}", t.name()),
+        };
+        assert!(msg.contains("herdr"), "refusal must name herdr: {msg}");
+        assert!(msg.contains("tmux"), "refusal must name tmux: {msg}");
+
+        // And the verb itself fails before ANY side effect — no job file, no
+        // mailbox, and (by construction, since `execute` never runs) no split.
+        let root = tmp.path().display().to_string();
+        let exit = run(&["--task", "do the thing", "--job-id", "job-1", "--main-root", &root, "--json"]);
+        assert_eq!(exit, ExitCode::FAILURE);
+        assert!(!bee_dir.join("mailbox").exists(), "the refusal must not create the mailbox tree");
+        assert!(!mailbox::job_path(&bee_dir, "job-1").exists(), "the refusal must not write job.json");
     }
 
     #[test]
@@ -4773,7 +4870,7 @@ mod tests {
         // herd-registry D2: `--continue` ignores `--agent` because the pane
         // already exists — proven below by `execute_continue` running to
         // completion with `opts.agent` set and never needing to resolve an
-        // agent command at all (a fake `Herdr` with no `agent_start` wiring
+        // agent command at all (a fake `PaneTransport` with no `agent_start` wiring
         // would panic if it were ever called on this path).
         let opts = parse_options(&[
             "--task",
@@ -5340,7 +5437,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         seed_job(tmp.path(), "job-1", "w1:p2", 1);
         let opts = continue_options(tmp.path(), true);
-        // PanicHerdr: proves --continue --dry-run touches no Herdr method,
+        // PanicHerdr: proves --continue --dry-run touches no PaneTransport method,
         // including pane_alive — the same "spawns no process" contract a
         // fresh --dry-run keeps.
         let result = execute(&opts, &PanicHerdr);

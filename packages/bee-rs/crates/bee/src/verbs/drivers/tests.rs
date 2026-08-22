@@ -1320,6 +1320,142 @@ use std::time::Instant;
         assert_eq!(payload.get("fallback"), None);
     }
 
+    // ── tmux-herding-transport D1: the probe's tmux arm and the config key ──
+
+    #[test]
+    fn transport_probe_tmux_arm_reports_ready_when_both_vars_set() {
+        let env_map = HashMap::from([
+            ("TMUX", "/tmp/tmux-1000/default,42,0".to_string()),
+            ("TMUX_PANE", "%3".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe_for(
+            crate::herding::TransportKind::Tmux,
+            &|k| env_map.get(k).cloned(),
+        );
+        assert!(ready);
+        assert_eq!(reason, "TMUX and TMUX_PANE=%3 are set");
+        assert_eq!(pane_id, Some("%3".to_string()));
+    }
+
+    #[test]
+    fn transport_probe_tmux_arm_reports_not_ready_when_either_var_missing() {
+        // TMUX set, TMUX_PANE missing.
+        let env_map = HashMap::from([("TMUX", "/tmp/tmux-1000/default,42,0".to_string())]);
+        let (ready, reason, pane_id) = herding_transport_probe_for(
+            crate::herding::TransportKind::Tmux,
+            &|k| env_map.get(k).cloned(),
+        );
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "TMUX_PANE is not set — this session is not inside a tmux pane"
+        );
+        assert_eq!(pane_id, None);
+
+        // TMUX set, TMUX_PANE empty.
+        let env_map = HashMap::from([
+            ("TMUX", "/tmp/tmux-1000/default,42,0".to_string()),
+            ("TMUX_PANE", "".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe_for(
+            crate::herding::TransportKind::Tmux,
+            &|k| env_map.get(k).cloned(),
+        );
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "TMUX_PANE is not set — this session is not inside a tmux pane"
+        );
+        assert_eq!(pane_id, None);
+
+        // TMUX missing: the pane id still rides along.
+        let env_map = HashMap::from([("TMUX_PANE", "%3".to_string())]);
+        let (ready, reason, pane_id) = herding_transport_probe_for(
+            crate::herding::TransportKind::Tmux,
+            &|k| env_map.get(k).cloned(),
+        );
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "TMUX is not set — this session is not inside a tmux pane"
+        );
+        assert_eq!(pane_id, Some("%3".to_string()));
+    }
+
+    #[test]
+    fn transport_probe_herdr_arm_never_reads_the_tmux_vars() {
+        // D1: no auto-detect. A session inside BOTH tools with the key absent
+        // stays on herdr and reports the herdr reason.
+        let env_map = HashMap::from([
+            ("TMUX", "/tmp/tmux-1000/default,42,0".to_string()),
+            ("TMUX_PANE", "%3".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_ENV is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, None);
+    }
+
+    #[test]
+    fn transport_payload_reason_follows_the_configured_transport() {
+        // herding.transport=tmux routes the payload probe onto the tmux arm.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding"}}},"herding":{"transport":"tmux"}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let reason = v
+            .get("payload")
+            .and_then(|p| p.get("transport_reason"))
+            .and_then(Value::as_str)
+            .unwrap()
+            .to_string();
+        // The real env decides ready/not-ready here; the ARM is what this
+        // asserts — every tmux-arm reason names TMUX, no herdr reason does.
+        assert!(reason.contains("TMUX"), "got {reason}");
+        assert!(!reason.contains("HERDR"), "got {reason}");
+    }
+
+    #[test]
+    fn transport_payload_reports_not_ready_on_an_unknown_transport_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding"}}},"herding":{"transport":"nope"}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("transport_ready"), Some(&Value::Bool(false)));
+        let reason = payload.get("transport_reason").and_then(Value::as_str).unwrap();
+        assert!(reason.contains("herding.transport is \"nope\""), "got {reason}");
+        assert!(reason.contains("\"herdr\""), "got {reason}");
+        assert!(reason.contains("\"tmux\""), "got {reason}");
+    }
+
     // ── herding-reach D5: recorded cell tier resolution ─────────────────────
 
     #[test]

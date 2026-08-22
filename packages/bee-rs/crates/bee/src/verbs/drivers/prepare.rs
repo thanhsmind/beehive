@@ -7,6 +7,7 @@ use super::*;
 use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
+use crate::herding::{transport_kind_at, TransportKind};
 use crate::state::read_config_raw;
 use crate::verbs::knowledge;
 use crate::verbs::reservations::{
@@ -550,35 +551,77 @@ pub(crate) enum Prepared {
 }
 
 /// herding-reach D1: dispatch prepare reports herding transport reachability.
-/// Probes HERDR_ENV (must be '1') and HERDR_PANE_ID (non-empty).
+/// Probes HERDR_ENV (must be '1') and HERDR_PANE_ID (non-empty). The herdr-only
+/// spelling every pre-tmux caller and test uses. Production reaches the probe
+/// through `herding_transport_probe_for` with the configured kind, so this name
+/// survives for its callers' sake (tests, and any herdr-only caller later).
+#[allow(dead_code)]
 pub(crate) fn herding_transport_probe(
     env: &dyn Fn(&str) -> Option<String>,
 ) -> (bool, String, Option<String>) {
-    let pane_id = env("HERDR_PANE_ID").filter(|s| !s.is_empty());
-    let herdr_env = env("HERDR_ENV");
-    match herdr_env.as_deref() {
-        Some("1") => match pane_id {
-            Some(pane) => (
-                true,
-                format!("HERDR_ENV=1 and HERDR_PANE_ID={pane} are set"),
-                Some(pane),
-            ),
-            None => (
-                false,
-                "HERDR_PANE_ID is not set — this session is not inside a herdr pane".into(),
-                None,
-            ),
-        },
-        Some("") | None => (
-            false,
-            "HERDR_ENV is not set — this session is not inside a herdr pane".into(),
-            pane_id,
-        ),
-        Some(_) => (
-            false,
-            "HERDR_ENV is not 1 — this session is not inside a herdr pane".into(),
-            pane_id,
-        ),
+    herding_transport_probe_for(TransportKind::Herdr, env)
+}
+
+/// tmux-herding-transport D1: the same probe for a KNOWN transport. `kind`
+/// comes from `herding.transport`, never from the environment — with the key
+/// absent this is the herdr arm and the tmux variables are never read.
+pub(crate) fn herding_transport_probe_for(
+    kind: TransportKind,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> (bool, String, Option<String>) {
+    match kind {
+        TransportKind::Herdr => {
+            let pane_id = env("HERDR_PANE_ID").filter(|s| !s.is_empty());
+            let herdr_env = env("HERDR_ENV");
+            match herdr_env.as_deref() {
+                Some("1") => match pane_id {
+                    Some(pane) => (
+                        true,
+                        format!("HERDR_ENV=1 and HERDR_PANE_ID={pane} are set"),
+                        Some(pane),
+                    ),
+                    None => (
+                        false,
+                        "HERDR_PANE_ID is not set — this session is not inside a herdr pane".into(),
+                        None,
+                    ),
+                },
+                Some("") | None => (
+                    false,
+                    "HERDR_ENV is not set — this session is not inside a herdr pane".into(),
+                    pane_id,
+                ),
+                Some(_) => (
+                    false,
+                    "HERDR_ENV is not 1 — this session is not inside a herdr pane".into(),
+                    pane_id,
+                ),
+            }
+        }
+        TransportKind::Tmux => {
+            // tmux exports $TMUX to every pane and $TMUX_PANE as the pane id —
+            // both non-empty is "inside a pane".
+            let pane_id = env("TMUX_PANE").filter(|s| !s.is_empty());
+            match env("TMUX").filter(|s| !s.is_empty()) {
+                Some(_) => match pane_id {
+                    Some(pane) => (
+                        true,
+                        format!("TMUX and TMUX_PANE={pane} are set"),
+                        Some(pane),
+                    ),
+                    None => (
+                        false,
+                        "TMUX_PANE is not set — this session is not inside a tmux pane".into(),
+                        None,
+                    ),
+                },
+                None => (
+                    false,
+                    "TMUX is not set — this session is not inside a tmux pane".into(),
+                    pane_id,
+                ),
+            }
+        }
     }
 }
 
@@ -922,11 +965,18 @@ pub(crate) fn prepare_dispatch(
                 payload.insert("command".into(), Value::String(command));
                 payload.insert("stdin".into(), Value::String(prompt_body.clone()));
                 // herding-reach D1: dispatch prepare reports herding transport
-                // reachability. Probes HERDR_ENV and HERDR_PANE_ID in the caller's
-                // environment and writes transport_ready and transport_reason into
-                // the payload.
-                let (transport_ready, transport_reason, _) =
-                    herding_transport_probe(&|k| std::env::var(k).ok());
+                // reachability. Probes the caller's environment and writes
+                // transport_ready and transport_reason into the payload.
+                // tmux-herding-transport D1: WHICH variables get probed comes
+                // from `herding.transport` in the main checkout's config
+                // (`root` here is always the MAIN checkout — see
+                // `worktree_location` above), never from sniffing the env. A
+                // bad value is reported as not-ready with the refusal text,
+                // never a panic.
+                let (transport_ready, transport_reason, _) = match transport_kind_at(root) {
+                    Ok(kind) => herding_transport_probe_for(kind, &|k| std::env::var(k).ok()),
+                    Err(reason) => (false, reason, None),
+                };
                 payload.insert("transport_ready".into(), Value::Bool(transport_ready));
                 payload.insert("transport_reason".into(), Value::String(transport_reason));
                 // herding-review-slots D3: `fallback:"default"` on the slot

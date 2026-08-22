@@ -88,17 +88,21 @@ a silent edit.
 
 - none
 
-### Deferred To Planning
+### Resolved In Planning
 
-- [ ] Does `bee herding run`'s private seam merge into `WorkerBackend` (grow it by split/close/alive) or stay a second, renamed trait? — read `run.rs:400-515` against `backend.rs` and pick the smaller diff.
-- [ ] Does the bootstrap cockpit (control panes) get a tmux form in this feature, or does tmux ship for `run` + `wave` first with the cockpit as a follow-up? — count the bootstrap script's herdr calls and their tmux equivalents.
-- [ ] Pane env twin: is `$TMUX_PANE` alone enough for `transport_ready`, or must bee also confirm the pane belongs to the caller's window?
-- [ ] Live proof: an owner-run tmux spawn round trip (like `skills/bee-herding/references/spawn-proof.md`) before the transport is called done — WSL is the only Windows path.
+<!-- bee:not-a-deferral: these questions were answered by plan.md and the phase-1 cells; recorded here as settled facts, not promises -->
+- Seam: `bee herding run` keeps its own trait, renamed `PaneTransport` (tht-2); `WorkerBackend` stays the wave seam. Smaller diff.
+- Cockpit: phase 1 ships the transport for `run`; the cockpit's bootstrap and control-pane allowlist are phase 2 of plan.md.
+- Pane env twin: `$TMUX` plus `$TMUX_PANE` is the readiness probe (tht-1); window membership is not checked.
+- Live proof: phase 3 of plan.md is an owner-run tmux spawn round trip; WSL is the only Windows path.
+<!-- /bee:not-a-deferral -->
 
-## Deferred Ideas
+## Out Of Scope
 
+<!-- bee:not-a-deferral: rejected ideas, recorded so they are not re-proposed; nothing here is promised -->
 - Orchestrator HANDOFF / successor session (upstream Phase 7) — our control loop is cold per iteration; not needed.
 - Fleet broadcast script — `bee herding wave` already covers it.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
