@@ -101,6 +101,15 @@ macro_rules! group {
     };
 }
 
+/// The agent-activity probe (agent-activity-hook D1). Claude-only in this
+/// slice: Codex exposes no PostToolUseFailure / PermissionRequest /
+/// Notification event, and the three events it does share carry no session
+/// activity record on that runtime yet. Matcher-less everywhere it appears —
+/// on PreToolUse/PostToolUse EVERY tool is activity, and on Notification the
+/// verb itself filters on `notification_type`. Never on SubagentStop: a
+/// subagent's stop is not the session's state (D1, "Never SubagentStop").
+const ACTIVITY: Group = group!(CLAUDE_ONLY, None, [("bee-activity.mjs", "bee: activity")]);
+
 /// One entry per lifecycle event bee wires. Runtime differences are explicit
 /// data, never hand-maintained projection drift — see ALLOWED_DIFFERENCES.
 const CATALOG: &[Event] = &[
@@ -114,7 +123,10 @@ const CATALOG: &[Event] = &[
     },
     Event {
         name: "UserPromptSubmit",
-        groups: &[group!(BOTH, None, [("bee-prompt-context.mjs", "bee: phase reminder")])],
+        groups: &[
+            group!(BOTH, None, [("bee-prompt-context.mjs", "bee: phase reminder")]),
+            ACTIVITY,
+        ],
     },
     Event {
         name: "PreToolUse",
@@ -138,6 +150,7 @@ const CATALOG: &[Event] = &[
                 Some("spawn_agent"),
                 [("bee-model-guard.mjs", "bee: model-tier guard")]
             ),
+            ACTIVITY,
         ],
     },
     Event {
@@ -153,8 +166,14 @@ const CATALOG: &[Event] = &[
             // No matcher = every tool. Passive measurement only; this hook can
             // never deny or block.
             group!(BOTH, None, [("bee-tools-logger.mjs", "bee: tools logger")]),
+            ACTIVITY,
         ],
     },
+    // Claude-only, activity-only: these three events exist to tell "working"
+    // from "waiting for the human" from "blocked", and only Claude Code emits
+    // them.
+    Event { name: "PostToolUseFailure", groups: &[ACTIVITY] },
+    Event { name: "PermissionRequest", groups: &[ACTIVITY] },
     Event {
         name: "SubagentStart",
         groups: &[group!(
@@ -191,23 +210,30 @@ const CATALOG: &[Event] = &[
     },
     Event {
         name: "Stop",
-        groups: &[group!(
-            BOTH,
-            None,
-            [
-                ("bee-state-sync.mjs", "bee: state sync"),
-                ("bee-session-close.mjs", "bee: session close check"),
-            ]
-        )],
+        groups: &[
+            group!(
+                BOTH,
+                None,
+                [
+                    ("bee-state-sync.mjs", "bee: state sync"),
+                    ("bee-session-close.mjs", "bee: session close check"),
+                ]
+            ),
+            ACTIVITY,
+        ],
     },
+    Event { name: "Notification", groups: &[ACTIVITY] },
     // Claude-only: Codex exposes no SessionEnd event to wire this against.
     Event {
         name: "SessionEnd",
-        groups: &[group!(
-            CLAUDE_ONLY,
-            None,
-            [("bee-session-close.mjs", "bee: session end close")]
-        )],
+        groups: &[
+            group!(
+                CLAUDE_ONLY,
+                None,
+                [("bee-session-close.mjs", "bee: session end close")]
+            ),
+            ACTIVITY,
+        ],
     },
 ];
 
@@ -385,12 +411,25 @@ pub fn run(flags: &[&str]) -> Option<ExitCode> {
 //   subagent-start-audit-codex-only  SubagentStart  bee-codex-subagent-audit
 //   subagent-stop-audit-codex-only   SubagentStop   bee-codex-subagent-audit
 //   session-end-claude-only          SessionEnd     bee-session-close
+//   activity-claude-only             UserPromptSubmit / PreToolUse (no
+//                                    matcher) / PostToolUse (no matcher) /
+//                                    PostToolUseFailure / PermissionRequest /
+//                                    Stop / Notification / SessionEnd
+//                                                   bee-activity
 //
 // The first two are one capability on two tool names. The next two exist
 // because SubagentStart/Stop are events only Codex exposes today; bee records
-// bounded audit evidence there and claims no pre-spawn authority. The last
+// bounded audit evidence there and claims no pre-spawn authority. The next
 // exists because SessionEnd is an event only Claude Code exposes; Codex has
 // nothing to wire it against.
+//
+// The last is the agent-activity probe (agent-activity-hook D1). It is
+// claude-only on all EIGHT of its events, not just the three Claude alone
+// exposes: the slice wires the Claude Code hook set and nothing else, so a
+// Codex row would render a projection no reader consumes. Three of those
+// events (PostToolUseFailure, PermissionRequest, Notification) carry the
+// activity hook and nothing else. SubagentStop is deliberately absent — a
+// subagent stopping is not the session changing state.
 
 #[cfg(test)]
 mod tests {
@@ -561,6 +600,16 @@ mod tests {
             ("SubagentStart", "*", "codex-subagent-audit"),
             ("SubagentStop", "*", "codex-subagent-audit"),
             ("SessionEnd", "*", "session-close"),
+            // agent-activity-hook D1 — the probe is Claude-only on every
+            // event it touches.
+            ("UserPromptSubmit", "*", "activity"),
+            ("PreToolUse", "*", "activity"),
+            ("PostToolUse", "*", "activity"),
+            ("PostToolUseFailure", "*", "activity"),
+            ("PermissionRequest", "*", "activity"),
+            ("Stop", "*", "activity"),
+            ("Notification", "*", "activity"),
+            ("SessionEnd", "*", "activity"),
         ];
         let is_approved = |t: &(String, String, String)| {
             approved.iter().any(|(e, m, s)| *e == t.0 && *m == t.1 && *s == t.2)
@@ -570,6 +619,65 @@ mod tests {
         }
         for t in codex.iter().filter(|t| !claude.contains(t)) {
             assert!(is_approved(t), "unapproved codex-only row: {t:?}");
+        }
+    }
+
+    /// agent-activity-hook D1 — the probe's event set is the decision, so it
+    /// is pinned here rather than left to the drift byte-compare: exactly
+    /// eight Claude events carry it, SubagentStop carries none, and the Codex
+    /// projection carries none at all.
+    #[test]
+    fn the_activity_hook_covers_the_eight_decided_events_and_never_subagent_stop() {
+        let claude = render_projection(Runtime::Claude, Target::Plugin);
+        let mut carrying: Vec<String> = Vec::new();
+        for (event, groups) in claude["hooks"].as_object().unwrap() {
+            for g in groups.as_array().unwrap() {
+                for h in g["hooks"].as_array().unwrap() {
+                    if h["command"].as_str().unwrap().contains(" hook activity;") {
+                        assert!(
+                            g.get("matcher").is_none(),
+                            "{event}: the activity row must stay matcher-less"
+                        );
+                        carrying.push(event.clone());
+                    }
+                }
+            }
+        }
+        carrying.sort();
+        assert_eq!(
+            carrying,
+            vec![
+                "Notification",
+                "PermissionRequest",
+                "PostToolUse",
+                "PostToolUseFailure",
+                "PreToolUse",
+                "SessionEnd",
+                "Stop",
+                "UserPromptSubmit",
+            ]
+        );
+        for target in [Target::Plugin, Target::Repo] {
+            let text = render_projection_text(Runtime::Codex, target);
+            assert!(
+                !text.contains(" hook activity"),
+                "the activity hook leaked into a Codex projection"
+            );
+        }
+    }
+
+    /// The two CLAUDE renderers — this catalog (plugin manifest) and
+    /// onboard's repo projection (`.claude/settings.json`) — are separate by
+    /// design: one resolves against the plugin root, the other against the
+    /// project dir. What may NEVER diverge is the verb they launch, because
+    /// that is the hook. Pinned on the activity row, the newest pair.
+    #[test]
+    fn both_claude_renderers_launch_the_same_activity_verb() {
+        let from_catalog = plugin_command("bee-activity.mjs");
+        let from_onboard =
+            crate::onboard::hooks_wiring::repo_hook_command("bee-activity.mjs", None);
+        for command in [&from_catalog, &from_onboard] {
+            assert!(command.contains("exec \"$b\" hook activity;"), "{command}");
         }
     }
 

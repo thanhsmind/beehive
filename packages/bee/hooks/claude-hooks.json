@@ -21,6 +21,15 @@
             "statusMessage": "bee: phase reminder"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -43,6 +52,15 @@
             "statusMessage": "bee: model-tier guard"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -62,6 +80,37 @@
             "type": "command",
             "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook tools-logger; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook tools-logger; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
             "statusMessage": "bee: tools logger"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
           }
         ]
       }
@@ -107,6 +156,26 @@
             "statusMessage": "bee: session close check"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
+          }
+        ]
       }
     ],
     "SessionEnd": [
@@ -116,6 +185,15 @@
             "type": "command",
             "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook session-close; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook session-close; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
             "statusMessage": "bee: session end close"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "statusMessage": "bee: activity"
           }
         ]
       }

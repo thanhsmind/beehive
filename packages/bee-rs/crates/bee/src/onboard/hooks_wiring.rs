@@ -57,7 +57,7 @@ do [ -x \"$b\" ] && exec \"$b\" hook {hook_name}{args}; done"
 /// runner can fall past — it is a command that does not exist, so no fallback
 /// could ever run behind it. Probing costs two `[ -x ]` tests against a
 /// process spawn; the fast path was never worth what it cost here.
-fn repo_hook_command(file_name: &str, _repo_root: Option<&Path>) -> String {
+pub(crate) fn repo_hook_command(file_name: &str, _repo_root: Option<&Path>) -> String {
     let hook_name =
         file_name.strip_prefix("bee-").unwrap_or(file_name).strip_suffix(".mjs").unwrap_or(file_name);
     let arm = main_checkout_arm(hook_name, "\"$CLAUDE_PROJECT_DIR\"", "");
@@ -74,6 +74,12 @@ fn repo_entry(file_name: &str, repo_root: Option<&Path>) -> Value {
 
 /// renderRepoHookEntries (l. 2258) — event order is the literal's, which
 /// drives the merged object's key order for a fresh settings.json.
+///
+/// This list and `devtools::hook_manifests`'s CATALOG are two renderers of
+/// one wiring: the catalog owns the shipped PLUGIN manifests, this owns a
+/// host repo's `.claude/settings.json`. A row added to one belongs in the
+/// other — `repo_settings_carry_the_activity_hook_on_the_decided_events`
+/// pins the activity set on this side.
 pub fn render_repo_hook_entries(repo_root: &Path) -> Vec<(&'static str, Value)> {
     let r = Some(repo_root);
     vec![
@@ -81,21 +87,34 @@ pub fn render_repo_hook_entries(repo_root: &Path) -> Vec<(&'static str, Value)> 
             "SessionStart",
             json!([{ "matcher": "startup|resume|clear|compact", "hooks": [repo_entry("bee-session-init.mjs", r)] }]),
         ),
-        ("UserPromptSubmit", json!([{ "hooks": [repo_entry("bee-prompt-context.mjs", r)] }])),
+        (
+            "UserPromptSubmit",
+            json!([
+                { "hooks": [repo_entry("bee-prompt-context.mjs", r)] },
+                { "hooks": [repo_entry("bee-activity.mjs", r)] }
+            ]),
+        ),
         (
             "PreToolUse",
             json!([
                 { "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion", "hooks": [repo_entry("bee-write-guard.mjs", r)] },
-                { "matcher": "Agent|Task", "hooks": [repo_entry("bee-model-guard.mjs", r)] }
+                { "matcher": "Agent|Task", "hooks": [repo_entry("bee-model-guard.mjs", r)] },
+                { "hooks": [repo_entry("bee-activity.mjs", r)] }
             ]),
         ),
         (
             "PostToolUse",
             json!([
                 { "matcher": "update_plan|TaskCreate|TaskUpdate|TodoWrite", "hooks": [repo_entry("bee-state-sync.mjs", r)] },
-                { "hooks": [repo_entry("bee-tools-logger.mjs", r)] }
+                { "hooks": [repo_entry("bee-tools-logger.mjs", r)] },
+                { "hooks": [repo_entry("bee-activity.mjs", r)] }
             ]),
         ),
+        // agent-activity-hook D1: PostToolUseFailure / PermissionRequest /
+        // Notification carry the activity probe and nothing else. Mirrors the
+        // catalog rows in devtools::hook_manifests — same events, same verb.
+        ("PostToolUseFailure", json!([{ "hooks": [repo_entry("bee-activity.mjs", r)] }])),
+        ("PermissionRequest", json!([{ "hooks": [repo_entry("bee-activity.mjs", r)] }])),
         (
             "SubagentStop",
             json!([{ "hooks": [repo_entry("bee-state-sync.mjs", r), repo_entry("bee-chain-nudge.mjs", r)] }]),
@@ -103,11 +122,21 @@ pub fn render_repo_hook_entries(repo_root: &Path) -> Vec<(&'static str, Value)> 
         ("PreCompact", json!([{ "hooks": [repo_entry("bee-session-close.mjs", r)] }])),
         (
             "Stop",
-            json!([{ "hooks": [repo_entry("bee-state-sync.mjs", r), repo_entry("bee-session-close.mjs", r)] }]),
+            json!([
+                { "hooks": [repo_entry("bee-state-sync.mjs", r), repo_entry("bee-session-close.mjs", r)] },
+                { "hooks": [repo_entry("bee-activity.mjs", r)] }
+            ]),
         ),
+        ("Notification", json!([{ "hooks": [repo_entry("bee-activity.mjs", r)] }])),
         // SessionEnd: Claude-only (see render_codex_hook_entries — the Codex
         // runtime has no equivalent event to wire this against).
-        ("SessionEnd", json!([{ "hooks": [repo_entry("bee-session-close.mjs", r)] }])),
+        (
+            "SessionEnd",
+            json!([
+                { "hooks": [repo_entry("bee-session-close.mjs", r)] },
+                { "hooks": [repo_entry("bee-activity.mjs", r)] }
+            ]),
+        ),
     ]
 }
 
@@ -700,9 +729,18 @@ mod tests {
         // Foreign hook entries survive, bee entries are appended after them.
         let pre = &v["hooks"]["PreToolUse"];
         assert_eq!(pre[0]["hooks"][0]["command"], "node ./my-own.mjs");
-        assert_eq!(pre.as_array().unwrap().len(), 3);
-        // The unrelated event is untouched.
+        // 1 foreign + bee's three PreToolUse rows (write guard, model guard,
+        // activity).
+        assert_eq!(pre.as_array().unwrap().len(), 4);
+        // A foreign entry on an event bee ALSO wires keeps its place and its
+        // command; the bee entry joins behind it (agent-activity-hook D1 put
+        // the activity probe on Notification).
         assert_eq!(v["hooks"]["Notification"][0]["hooks"][0]["command"], "notify");
+        assert_eq!(v["hooks"]["Notification"].as_array().unwrap().len(), 2);
+        assert!(v["hooks"]["Notification"][1]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .contains(" hook activity"));
         // Second pass is a no-op.
         std::fs::write(&settings, &merged.text).unwrap();
         let again = merge_repo_settings(&settings).unwrap();
@@ -762,11 +800,76 @@ mod tests {
         .unwrap();
         let merged = merge_repo_settings(&settings).unwrap();
         let v: Value = serde_json::from_str(&merged.text).unwrap();
-        assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 1);
-        assert!(!v["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
-            .as_str()
-            .unwrap()
-            .contains("--old"));
+        // The two rows bee renders for this event (prompt context, activity)
+        // — the stale one was REPLACED, so nothing stacked behind them.
+        let entries = v["hooks"]["UserPromptSubmit"].as_array().unwrap();
+        assert_eq!(entries.len(), 2);
+        for entry in entries {
+            assert!(
+                !entry["hooks"][0]["command"].as_str().unwrap().contains("--old"),
+                "the stale entry survived: {entry}"
+            );
+        }
+    }
+
+    /// agent-activity-hook D1 — the repo projection's event ORDER (it drives
+    /// the key order of a fresh settings.json) and the activity probe's exact
+    /// event set. SubagentStop is the load-bearing absence: a subagent
+    /// stopping is not the session changing state.
+    #[test]
+    fn repo_settings_carry_the_activity_hook_on_the_decided_events() {
+        let dir = tempfile::tempdir().unwrap();
+        let rendered = render_repo_hook_entries(dir.path());
+        let events: Vec<&str> = rendered.iter().map(|(e, _)| *e).collect();
+        assert_eq!(
+            events,
+            vec![
+                "SessionStart",
+                "UserPromptSubmit",
+                "PreToolUse",
+                "PostToolUse",
+                "PostToolUseFailure",
+                "PermissionRequest",
+                "SubagentStop",
+                "PreCompact",
+                "Stop",
+                "Notification",
+                "SessionEnd",
+            ]
+        );
+        let mut carrying: Vec<&str> = Vec::new();
+        for (event, entries) in &rendered {
+            for entry in entries.as_array().unwrap() {
+                assert!(
+                    !(*event == "SubagentStop"
+                        && jsjson::stringify(entry).contains(" hook activity")),
+                    "SubagentStop must never carry the activity hook"
+                );
+                for command in entry_hook_commands(entry) {
+                    if command.contains(" hook activity;") {
+                        assert!(
+                            entry.get("matcher").is_none(),
+                            "{event}: the activity row must stay matcher-less"
+                        );
+                        carrying.push(event);
+                    }
+                }
+            }
+        }
+        carrying.sort();
+        assert_eq!(
+            carrying,
+            vec![
+                "Notification",
+                "PermissionRequest",
+                "PostToolUse",
+                "PostToolUseFailure",
+                "PreToolUse",
+                "SessionEnd",
+                "Stop",
+                "UserPromptSubmit",
+            ]
+        );
     }
 
     #[test]
