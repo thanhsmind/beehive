@@ -1742,7 +1742,7 @@ mod tests {
         );
         assert!(
             text.contains(
-                "- Tier slots (claude): generation=session default | extraction=session default | review=session default | advisor=none"
+                "- Tier slots (claude): generation=sonnet | extraction=haiku | review=opus | advisor=none"
             ),
             "{text}"
         );

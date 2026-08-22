@@ -322,67 +322,52 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
     }
 }
 
-fn parse_runtime_slots(models_raw: Option<&Value>, runtime: &str) -> Slots {
-    let mut slots = Slots {
-        extraction: Slot::Unset,
-        generation: Slot::Unset,
-        review: Slot::Unset,
-        advisor: Slot::Unset,
-    };
-    let Some(Value::Object(raw)) = models_raw else { return slots };
-    let Some(Value::Object(src)) = raw.get(runtime) else { return slots };
-    for slot in ["extraction", "generation", "review", "advisor"] {
-        let Some(value) = src.get(slot) else { continue };
-        if let Some(v) = normalize_tier_value(value) {
-            match slot {
-                "extraction" => slots.extraction = v,
-                "generation" => slots.generation = v,
-                "review" => slots.review = v,
-                _ => slots.advisor = v,
-            }
-        }
-    }
-    slots
-}
-
-fn format_slot_display(slot: &Slot, is_advisor: bool) -> String {
-    match slot {
-        Slot::Name(m) => m.clone(),
-        Slot::Herding { agent, .. } => match agent {
-            Some(a) => format!("herding ({a})"),
-            None => "herding".to_string(),
-        },
-        Slot::Cli(_) => "cli".to_string(),
-        Slot::Native(m) => format!("native:{m}"),
-        Slot::Null | Slot::Unset => {
-            if is_advisor {
-                "none".to_string()
-            } else {
-                "session default".to_string()
-            }
-        }
-    }
-}
-
 pub(crate) fn tier_slot_display(
     models_raw: Option<&Value>,
     runtime: &str,
 ) -> Vec<(&'static str, String)> {
-    let slots = parse_runtime_slots(models_raw, runtime);
-    let gen_disp = format_slot_display(&slots.generation, false);
-    let ext_disp = format_slot_display(&slots.extraction, false);
-    let rev_slot = if matches!(slots.review, Slot::Null | Slot::Unset) {
-        &slots.generation
-    } else {
-        &slots.review
-    };
-    let rev_disp = format_slot_display(rev_slot, false);
-    let adv_disp = format_slot_display(&slots.advisor, true);
+    let map = crate::verbs::drivers::normalize_models(models_raw);
+    let gen_res = crate::verbs::drivers::resolve_tier(&map, "generation", runtime, "gather");
+    let ext_res = crate::verbs::drivers::resolve_tier(&map, "extraction", runtime, "gather");
+    let rev_res = crate::verbs::drivers::resolve_tier(&map, "review", runtime, "reviewer");
+    let adv_res = crate::verbs::drivers::resolve_advisor(&map, runtime);
+
+    fn render_resolved(resolved: &crate::verbs::drivers::Resolved) -> String {
+        use crate::verbs::drivers::Resolved;
+        match resolved {
+            Resolved::Model { model, effort } => match effort {
+                Some(e) => format!("{model}:{e}"),
+                None => model.clone(),
+            },
+            Resolved::Herding { agent, fallback } => {
+                let mut s = match agent {
+                    Some(a) => format!("herding ({a})"),
+                    None => "herding".to_string(),
+                };
+                if let Some(fb) = fallback {
+                    s.push_str(&format!(" fallback={fb}"));
+                }
+                s
+            }
+            Resolved::Cli { .. } => "cli".to_string(),
+            Resolved::Native { model, .. } => format!("native:{model}"),
+            Resolved::Inherit => "session default".to_string(),
+            Resolved::Budget => "session default".to_string(),
+            Resolved::Refused { .. } => "cli".to_string(),
+        }
+    }
+
     vec![
-        ("generation", gen_disp),
-        ("extraction", ext_disp),
-        ("review", rev_disp),
-        ("advisor", adv_disp),
+        ("generation", render_resolved(&gen_res)),
+        ("extraction", render_resolved(&ext_res)),
+        ("review", render_resolved(&rev_res)),
+        (
+            "advisor",
+            match adv_res {
+                Some(r) => render_resolved(&r),
+                None => "none".to_string(),
+            },
+        ),
     ]
 }
 
@@ -410,16 +395,23 @@ fn normalize_models(raw: Option<&Value>) -> Models {
     };
     let Some(Value::Object(raw)) = raw else { return out };
     for rt in ["claude", "codex", "opencode"] {
-        let parsed = parse_runtime_slots(Some(&Value::Object(raw.clone())), rt);
+        let Some(Value::Object(src)) = raw.get(rt) else { continue };
         let dst = match rt {
             "claude" => &mut out.claude,
             "codex" => &mut out.codex,
             _ => &mut out.opencode,
         };
-        if parsed.extraction != Slot::Unset { dst.extraction = parsed.extraction; }
-        if parsed.generation != Slot::Unset { dst.generation = parsed.generation; }
-        if parsed.review != Slot::Unset { dst.review = parsed.review; }
-        if parsed.advisor != Slot::Unset { dst.advisor = parsed.advisor; }
+        for slot in ["extraction", "generation", "review", "advisor"] {
+            let Some(value) = src.get(slot) else { continue };
+            if let Some(v) = normalize_tier_value(value) {
+                match slot {
+                    "extraction" => dst.extraction = v,
+                    "generation" => dst.generation = v,
+                    "review" => dst.review = v,
+                    _ => dst.advisor = v,
+                }
+            }
+        }
     }
     out
 }

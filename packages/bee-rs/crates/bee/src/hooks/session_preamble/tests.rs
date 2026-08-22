@@ -1314,10 +1314,11 @@ use crate::version::BEE_VERSION;
     #[test]
     fn dispatch_door_renders_herding_generation_slot_and_prepare_line() {
         let tmp = minimal_repo();
+        let models_obj = json!({"claude":{"generation":{"kind":"herding","agent":"agy-flash"}}});
         write(
             tmp.path(),
             ".bee/config.json",
-            r#"{"models":{"claude":{"generation":{"kind":"herding","agent":"agy-flash"}}}}"#,
+            &json!({"models": models_obj}).to_string(),
         );
         let text = render(tmp.path());
         assert!(text.contains("### Dispatch door"), "{text}");
@@ -1329,10 +1330,24 @@ use crate::version::BEE_VERSION;
         );
         assert!(
             text.contains(
-                "- Tier slots (claude): generation=herding (agy-flash) | extraction=session default | review=herding (agy-flash) | advisor=none"
+                "- Tier slots (claude): generation=herding (agy-flash) | extraction=haiku | review=opus | advisor=none"
             ),
             "{text}"
         );
+
+        // Same-source proof: rendered generation string matches what drivers resolve_tier returns for that map
+        let map = crate::verbs::drivers::normalize_models(Some(&models_obj));
+        let resolved = crate::verbs::drivers::resolve_tier(&map, "generation", "claude", "gather");
+        assert_eq!(
+            resolved,
+            crate::verbs::drivers::Resolved::Herding {
+                agent: Some("agy-flash".into()),
+                fallback: None,
+            }
+        );
+        let slots = crate::hooks::model_guard::tier_slot_display(Some(&models_obj), "claude");
+        let gen_str = slots.iter().find(|(k, _)| *k == "generation").map(|(_, v)| v.as_str());
+        assert_eq!(gen_str, Some("herding (agy-flash)"));
     }
 
     #[test]
@@ -1353,13 +1368,13 @@ use crate::version::BEE_VERSION;
     }
 
     #[test]
-    fn dispatch_door_renders_session_default_when_no_models_key_present() {
+    fn dispatch_door_renders_defaults_when_no_models_key_present() {
         let tmp = minimal_repo();
         let text = render(tmp.path());
         assert!(text.contains("### Dispatch door"), "{text}");
         assert!(
             text.contains(
-                "- Tier slots (claude): generation=session default | extraction=session default | review=session default | advisor=none"
+                "- Tier slots (claude): generation=sonnet | extraction=haiku | review=opus | advisor=none"
             ),
             "{text}"
         );
