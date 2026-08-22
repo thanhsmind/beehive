@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"herding-reach\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 04b1dc9; capture what settled, then bee close --feature herding-reach.",
+  "next_action": "bee close finished \"herding-reach\" — feature is closed.",
   "created_at": "2026-08-22T04:09:17.657Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "✓ Merged into main. Now I verify on main: the related tests, and the merge in the log.",
+    "asked_at": "2026-08-22T04:35:01.260Z",
+    "session": "15dafcf0-9d77-49a6-aefe-e79b8f894e8d"
+  },
   "route": {
     "class": "feature",
     "lane": "small",

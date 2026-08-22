@@ -3,7 +3,7 @@
   "feature": "knowledge-one-home",
   "title": "Home three inventoried rules with ids and applied_at",
   "lane": "standard",
-  "status": "open",
+  "status": "claimed",
   "deps": [
     "koh-2"
   ],
@@ -57,7 +57,7 @@
     ]
   },
   "trace": {
-    "worker": null,
+    "worker": "w-koh-4",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -67,6 +67,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
-  }
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T04:40:17.452Z"
+  },
+  "tier": "generation"
 }

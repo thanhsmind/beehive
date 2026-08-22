@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "One test is red. I check if it is ours or already red on main.",
-    "asked_at": "2026-08-22T04:28:55.043Z",
+    "subject": "While the re-read runs, I record one learning: two herding workers skipped the commit trailer and the finish step.",
+    "asked_at": "2026-08-22T04:39:04.056Z",
     "session": "183cb71e-55d3-47c9-8dae-9225ec998bbf"
   },
   "route": {

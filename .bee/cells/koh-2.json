@@ -3,7 +3,7 @@
   "feature": "knowledge-one-home",
   "title": "Grade owns, applied_at, and rule markers in knowledge check",
   "lane": "standard",
-  "status": "claimed",
+  "status": "capped",
   "deps": [
     "koh-1"
   ],
@@ -52,17 +52,42 @@
   },
   "trace": {
     "worker": "w-koh-2",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Grade owns, applied_at, and rule markers in knowledge check",
+    "files_changed": [
+      "docs/knowledge/areas/okf-profile/conformance-check.md",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-22T04:39:20.808Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
-    "claimed_at": "2026-08-22T04:29:04.590Z"
+    "claimed_at": "2026-08-22T04:29:04.590Z",
+    "report": {
+      "outcome": "Grade owns, applied_at, and rule markers in knowledge check",
+      "commit": "9a99c60ab3e9df7dd00a8f26b4503b3b803efebb",
+      "files": [
+        "docs/knowledge/areas/okf-profile/conformance-check.md",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs"
+      ],
+      "tests": "cargo test --release -p bee knowledge — green — touched check.rs, routing.rs, walk.rs, bootstrap.rs, tests.rs",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
   },
   "tier": "generation"
 }
