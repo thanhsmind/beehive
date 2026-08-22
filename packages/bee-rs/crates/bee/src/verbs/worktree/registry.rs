@@ -805,6 +805,113 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     Some(CellsSync::Ran { pruned })
 }
 
+/// srg-2: link `<main_store_root>/bin/bee` into a worktree store as
+/// `<worktree>/.bee/bin/bee`. The binary is gitignored, so `git worktree
+/// add` cannot carry it — without this a fresh worktree has no
+/// `.bee/bin/bee` at all and every AGENTS.md-shaped `.bee/bin/bee …` call
+/// from inside it dies with `No such file or directory`.
+///
+/// A SYMLINK, never a copy, whenever the platform allows one: a rebuilt
+/// main binary is then instantly live in every worktree, which a copy
+/// cannot promise and which `bee doctor`'s binary_freshness row would
+/// otherwise start reporting stale per worktree. `link_worktree_binary`'s
+/// failure — Windows without Developer Mode or admin is the real case —
+/// falls back to `copy_worktree_binary`.
+#[cfg(unix)]
+fn link_worktree_binary(src: &Path, dest: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(src, dest)
+}
+
+#[cfg(windows)]
+fn link_worktree_binary(src: &Path, dest: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(src, dest)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn link_worktree_binary(_src: &Path, _dest: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "no symlink support on this platform",
+    ))
+}
+
+/// The fallback half of `provision_worktree_binary`: a plain copy, with the
+/// source's mode re-asserted on unix rather than assumed — a destination
+/// that is not executable is exactly as useless as no destination at all.
+fn copy_worktree_binary(src: &Path, dest: &Path) -> std::io::Result<()> {
+    std::fs::copy(src, dest)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(src)?.permissions().mode();
+        std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode))?;
+    }
+    Ok(())
+}
+
+/// srg-2: provision `<worktree>/.bee/bin/bee` from the main store's own
+/// binary. Reports `{provisioned, method, reason?}` and NEVER fails the
+/// bootstrap: a host that never installed a binary still gets its worktree,
+/// and so does one whose filesystem refuses both a link and a copy.
+///
+/// Deliberately a sibling of `bootstrap_worktree_store`'s `copy_if_absent`
+/// rather than a widening of it — that closure is file-in-store-root shaped
+/// and reports `{copied}`.
+fn provision_worktree_binary(
+    worktree_store_root: &Path,
+    main_store_root: &Path,
+) -> Map<String, Value> {
+    let refused = |reason: String| -> Map<String, Value> {
+        let mut m = Map::new();
+        m.insert("provisioned".into(), Value::Bool(false));
+        m.insert("method".into(), Value::Null);
+        m.insert("reason".into(), json!(reason));
+        m
+    };
+    let provisioned = |method: &str| -> Map<String, Value> {
+        let mut m = Map::new();
+        m.insert("provisioned".into(), Value::Bool(true));
+        m.insert("method".into(), json!(method));
+        m
+    };
+
+    // The same pair, in the same order, the repo's own hook shim probes
+    // (onboard/hooks_wiring.rs): `bin/bee` first, then Windows' `bin/bee.exe`.
+    let src_dir = main_store_root.join("bin");
+    let Some(src) = ["bee", "bee.exe"].iter().map(|n| src_dir.join(n)).find(|c| c.exists()) else {
+        return refused("main store has no bin/bee".into());
+    };
+    let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+
+    // `symlink_metadata`, not `exists()`: a dest link whose TARGET is gone —
+    // an earlier link into a main checkout since moved or rebuilt elsewhere,
+    // while the current main still has its binary — reads as absent to
+    // `exists()`, which follows links. The copy below would then write
+    // THROUGH the stale link, landing main's binary at the old target path
+    // instead of in this worktree. `symlink_metadata` sees the link itself.
+    let dest_dir = worktree_store_root.join("bin");
+    let dest = dest_dir.join(&name);
+    if std::fs::symlink_metadata(&dest).is_ok() {
+        // `worktree register` re-runs the whole bootstrap against an
+        // already-adopted worktree, so this must stay idempotent.
+        return refused(format!("bin/{name} already exists"));
+    }
+    if let Err(e) = std::fs::create_dir_all(&dest_dir) {
+        return refused(e.to_string());
+    }
+
+    // An absolute target: the link is read from the worktree, never from
+    // main, so a relative `main_store_root` would otherwise dangle.
+    let target = std::fs::canonicalize(&src).unwrap_or(src);
+    if link_worktree_binary(&target, &dest).is_ok() {
+        return provisioned("symlink");
+    }
+    match copy_worktree_binary(&target, &dest) {
+        Ok(()) => provisioned("copy"),
+        Err(e) => refused(e.to_string()),
+    }
+}
+
 /// worktree-store.mjs bootstrapWorktreeStore. `None` = an fs failure Node
 /// would surface with a V8 message (delegate; every step so far is
 /// idempotent, see the module header).
@@ -837,6 +944,9 @@ pub(crate) fn bootstrap_worktree_store(
 
     let onboarding = copy_if_absent("onboarding.json")?;
     let config = copy_if_absent("config.json")?;
+    // srg-2: never `?` — a binary that could not be provisioned is reported,
+    // not a bootstrap failure.
+    let binary = provision_worktree_binary(&worktree_store_root, main_store_root);
     let identity = write_creation_identity(&worktree_store_root, feature);
     if identity.get("reason") == Some(&Value::Null) {
         return None; // V8-worded fs error in the identity write
@@ -878,6 +988,7 @@ pub(crate) fn bootstrap_worktree_store(
         out.insert("worktreeStoreRoot".into(), json!(p(&worktree_store_root)));
         out.insert("onboarding".into(), Value::Object(onboarding));
         out.insert("config".into(), Value::Object(config));
+        out.insert("binary".into(), Value::Object(binary));
         out.insert("identity".into(), Value::Object(identity));
         return Some(out);
     }
@@ -911,7 +1022,183 @@ pub(crate) fn bootstrap_worktree_store(
     out.insert("worktreeStoreRoot".into(), json!(p(&worktree_store_root)));
     out.insert("onboarding".into(), Value::Object(onboarding));
     out.insert("config".into(), Value::Object(config));
+    out.insert("binary".into(), Value::Object(binary));
     out.insert("identity".into(), Value::Object(identity));
     out.insert("state".into(), fresh_state);
     Some(out)
+}
+
+// srg-2: the binary-provisioning tests live in this module's own block, the
+// way prune.rs's do, with a local fixture — `worktree/tests.rs` carries the
+// bootstrap's cross-cutting shapes and this is one narrow concern. The one
+// edit that file did take is its exact-key-order assertion, which the new
+// `binary` key forces to move.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A main store holding a fake `bin/bee`. Contents are arbitrary — the
+    /// provisioner never reads them, only links or copies them.
+    fn main_store_with_binary(tmp: &Path) -> PathBuf {
+        let main_store = tmp.join("main").join(".bee");
+        std::fs::create_dir_all(main_store.join("bin")).unwrap();
+        std::fs::write(main_store.join("onboarding.json"), "{\"bee_version\":\"x\"}").unwrap();
+        let bin = main_store.join("bin").join("bee");
+        std::fs::write(&bin, "#!/bin/sh\necho bee\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        main_store
+    }
+
+    /// (a) + (b): a fresh bootstrap carries the binary into the worktree and
+    /// says so on the fresh-state return path.
+    #[test]
+    fn bootstrap_provisions_the_bee_binary_into_a_fresh_worktree_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = main_store_with_binary(tmp.path());
+        let wt = tmp.path().join("wt-a");
+        std::fs::create_dir_all(&wt).unwrap();
+
+        let report = bootstrap_worktree_store(&wt, &main_store, "demo").unwrap();
+
+        let dest = wt.join(".bee").join("bin").join("bee");
+        assert!(dest.exists(), "a fresh worktree must have a runnable .bee/bin/bee");
+        assert_eq!(
+            std::fs::read(&dest).unwrap(),
+            std::fs::read(main_store.join("bin").join("bee")).unwrap(),
+            "the worktree's binary must resolve to main's own bytes"
+        );
+
+        let binary = report.get("binary").expect("the report must carry the binary key");
+        assert_eq!(binary["provisioned"], Value::Bool(true), "{binary:?}");
+        assert_eq!(binary.get("reason"), None, "a provisioned binary carries no reason");
+        let method = binary["method"].as_str().unwrap();
+
+        // On unix the link ALWAYS succeeds, so `copy` here is a regression,
+        // not an alternative: it would forfeit the whole point of linking —
+        // that a rebuilt main binary is instantly live in every worktree.
+        // The either/or is honest only on Windows, where the fallback is a
+        // real outcome.
+        #[cfg(unix)]
+        {
+            assert_eq!(method, "symlink", "unix must never fall back to a copy");
+            assert!(
+                std::fs::symlink_metadata(&dest).unwrap().file_type().is_symlink(),
+                "the provisioned binary must be a link, not a snapshot"
+            );
+        }
+        #[cfg(not(unix))]
+        assert!(method == "symlink" || method == "copy", "unexpected method {method:?}");
+    }
+
+    /// The `symlink_metadata`-not-`exists()` guard. A dest link whose target
+    /// is gone reads as absent to `exists()`; provisioning through it would
+    /// write main's binary out to that stale target instead of into this
+    /// worktree. Test (c)'s regular file would not catch this — plain
+    /// `exists()` sees that one.
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_destination_link_is_refused_and_never_written_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = main_store_with_binary(tmp.path());
+        let wt = tmp.path().join("wt-a");
+        let dest_dir = wt.join(".bee").join("bin");
+        std::fs::create_dir_all(&dest_dir).unwrap();
+
+        // A link into a main checkout that has since moved away. Its parent
+        // dir EXISTS on purpose: without it a write-through would merely
+        // fail on ENOENT, and the fence would pass for the wrong reason.
+        let stale_dir = tmp.path().join("old-main").join(".bee").join("bin");
+        std::fs::create_dir_all(&stale_dir).unwrap();
+        let stale_target = stale_dir.join("bee");
+        let dest = dest_dir.join("bee");
+        std::os::unix::fs::symlink(&stale_target, &dest).unwrap();
+        assert!(!dest.exists(), "the fixture must really dangle");
+
+        let report = bootstrap_worktree_store(&wt, &main_store, "demo").unwrap();
+
+        let binary = report.get("binary").expect("the report must carry the binary key");
+        assert_eq!(binary["provisioned"], Value::Bool(false), "{binary:?}");
+        assert_eq!(binary["method"], Value::Null);
+        assert_eq!(binary["reason"], json!("bin/bee already exists"));
+
+        // Nothing written: the link is untouched and its target never made.
+        assert!(std::fs::symlink_metadata(&dest).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read_link(&dest).unwrap(), stale_target);
+        assert!(!dest.exists(), "the link must still dangle — never written through");
+        assert!(!stale_target.exists(), "main's binary must never land at the stale target");
+    }
+
+    /// (c) idempotence — the rule `worktree register` depends on, since it
+    /// re-runs the whole bootstrap against an already-adopted worktree. Also
+    /// covers the EARLY (`state.json already exists`) return path's key.
+    #[test]
+    fn a_second_bootstrap_never_replaces_an_existing_worktree_binary() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = main_store_with_binary(tmp.path());
+        let wt = tmp.path().join("wt-a");
+        std::fs::create_dir_all(&wt).unwrap();
+        bootstrap_worktree_store(&wt, &main_store, "demo").unwrap();
+
+        // Stand a DISTINCT file where the first bootstrap put its entry: if
+        // the re-run touched it at all, the bytes below would change.
+        let dest = wt.join(".bee").join("bin").join("bee");
+        std::fs::remove_file(&dest).unwrap();
+        std::fs::write(&dest, "hand-placed").unwrap();
+
+        let second = bootstrap_worktree_store(&wt, &main_store, "demo").unwrap();
+
+        assert_eq!(second.get("created"), Some(&Value::Bool(false)), "the early return path");
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), "hand-placed");
+        let binary = second.get("binary").expect("the early return path carries the binary key");
+        assert_eq!(binary["provisioned"], Value::Bool(false), "{binary:?}");
+        assert_eq!(binary["method"], Value::Null);
+        assert_eq!(binary["reason"], json!("bin/bee already exists"));
+    }
+
+    /// (d) a host that never installed a binary still gets its worktree —
+    /// the bootstrap must NEVER fail on a missing `bin/bee`.
+    #[test]
+    fn a_main_store_with_no_binary_still_bootstraps_green() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        std::fs::create_dir_all(&main_store).unwrap();
+        let wt = tmp.path().join("wt-a");
+        std::fs::create_dir_all(&wt).unwrap();
+
+        let report = bootstrap_worktree_store(&wt, &main_store, "demo").unwrap();
+
+        assert_eq!(report.get("created"), Some(&Value::Bool(true)), "the bootstrap still ran");
+        assert!(wt.join(".bee").join("state.json").exists());
+        let binary = report.get("binary").expect("the report must carry the binary key");
+        assert_eq!(binary["provisioned"], Value::Bool(false), "{binary:?}");
+        assert_eq!(binary["method"], Value::Null);
+        assert_eq!(binary["reason"], json!("main store has no bin/bee"));
+        assert!(!wt.join(".bee").join("bin").join("bee").exists());
+    }
+
+    /// (e) the fallback half, driven directly — the copy path is only ever
+    /// reached when the platform refuses a symlink, which unix does not, so
+    /// the helper is called head-on rather than through a faked refusal.
+    #[cfg(unix)]
+    #[test]
+    fn the_copy_fallback_leaves_an_executable_destination() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = main_store_with_binary(tmp.path());
+        let src = main_store.join("bin").join("bee");
+        let dest_dir = tmp.path().join("wt-a").join(".bee").join("bin");
+        std::fs::create_dir_all(&dest_dir).unwrap();
+        let dest = dest_dir.join("bee");
+
+        copy_worktree_binary(&src, &dest).unwrap();
+
+        assert!(!std::fs::symlink_metadata(&dest).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read(&dest).unwrap(), std::fs::read(&src).unwrap());
+        let mode = std::fs::metadata(&dest).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "a copied binary must stay executable, got {mode:o}");
+    }
 }
