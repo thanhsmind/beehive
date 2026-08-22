@@ -1145,7 +1145,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(
             v.get("payload").unwrap().get("fallback"),
-            Some(&json!({"model": "sonnet"}))
+            Some(&json!({"model": "sonnet", "fallback_when": "transport_ready is false"}))
         );
     }
 
@@ -1216,6 +1216,307 @@ use std::time::Instant;
             panic!()
         };
         assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
+    // ── herding-reach D1: transport reachability probe & payload fields ─────
+
+    #[test]
+    fn herding_transport_probe_reports_ready_when_both_vars_set() {
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "1".to_string()),
+            ("HERDR_PANE_ID", "w4:p7".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(ready);
+        assert_eq!(reason, "HERDR_ENV=1 and HERDR_PANE_ID=w4:p7 are set");
+        assert_eq!(pane_id, Some("w4:p7".to_string()));
+    }
+
+    #[test]
+    fn herding_transport_probe_reports_not_ready_when_either_var_missing() {
+        // Missing HERDR_ENV
+        let env_map = HashMap::from([
+            ("HERDR_PANE_ID", "w4:p7".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_ENV is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, Some("w4:p7".to_string()));
+
+        // HERDR_ENV is not "1"
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "0".to_string()),
+            ("HERDR_PANE_ID", "w4:p7".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_ENV is not 1 — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, Some("w4:p7".to_string()));
+
+        // Missing HERDR_PANE_ID
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "1".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_PANE_ID is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, None);
+
+        // Empty HERDR_PANE_ID
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "1".to_string()),
+            ("HERDR_PANE_ID", "".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_PANE_ID is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, None);
+
+        // Both missing
+        let env_map = HashMap::<&str, String>::new();
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_ENV is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, None);
+    }
+
+    #[test]
+    fn herding_dispatch_payload_carries_transport_ready_and_transport_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let payload = v.get("payload").unwrap();
+        assert!(payload.get("transport_ready").is_some());
+        assert!(payload.get("transport_ready").unwrap().is_boolean());
+        assert!(payload.get("transport_reason").is_some());
+        assert!(payload.get("transport_reason").unwrap().is_string());
+        // Fallback is omitted when not configured
+        assert_eq!(payload.get("fallback"), None);
+    }
+
+    // ── herding-reach D5: recorded cell tier resolution ─────────────────────
+
+    #[test]
+    fn recorded_generation_carries_tier_source_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"some work","tier":"generation","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), Some(&json!("sonnet")));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation]\n"));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+        assert_eq!(econ.get("channel"), Some(&json!("claude-agent")));
+    }
+
+    #[test]
+    fn recorded_ceiling_emits_session_model_payload_and_channel() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"critical ceiling fix","tier":"ceiling","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        // Claude runtime: Agent tool, no model param, [bee-tier: ceiling] marker, session-model channel
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), None, "ceiling dispatch must have no model param");
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(payload.get("description"), Some(&json!("c-1: critical ceiling fix (ceiling)")));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling]\n"));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("logical_tier"), Some(&json!("ceiling")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+        assert_eq!(econ.get("channel"), Some(&json!("session-model")));
+        assert_eq!(econ.get("enforcement"), Some(&json!("session-model")));
+        assert_eq!(econ.get("requested_model"), Some(&Value::Null));
+        assert_eq!(econ.get("effective_model"), Some(&Value::Null));
+
+        // Codex runtime: spawn_agent tool, no model, [bee-tier: ceiling] marker, session-model channel
+        let Prepared::Value(v_codex) = prepare_dispatch(
+            &root,
+            "codex",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v_codex.get("tool"), Some(&json!("spawn_agent")));
+        let codex_payload = v_codex.get("payload").unwrap();
+        assert_eq!(codex_payload.get("model"), None);
+        assert_eq!(codex_payload.get("task_name"), Some(&json!("c-1: critical ceiling fix")));
+        assert!(codex_payload.get("message").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling]\n"));
+        let codex_econ = v_codex.get("economics").unwrap();
+        assert_eq!(codex_econ.get("channel"), Some(&json!("session-model")));
+        assert_eq!(codex_econ.get("tier_source"), Some(&json!("cell")));
+    }
+
+    #[test]
+    fn cell_with_no_tier_field_has_tier_source_default_and_unchanged_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"some work","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), Some(&json!("sonnet")));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation]\n"));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("default")));
+        assert_eq!(econ.get("channel"), Some(&json!("claude-agent")));
+    }
+
+    #[test]
+    fn unconfigured_recorded_tier_is_a_typed_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet","extraction":null}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"extract things","tier":"extraction","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected a value")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)));
+        assert_eq!(v.get("type"), Some(&json!("refused")));
+        assert_eq!(v.get("reason"), Some(&json!("tier_not_configured")));
+        assert_eq!(v.get("tier"), Some(&json!("extraction")));
+        assert!(v.get("fix").unwrap().as_str().unwrap().contains("set models.claude.extraction"));
+
+        // Arbitrary unknown tier
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"f","title":"unknown tier work","tier":"quantum","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v2) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-2"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected a value")
+        };
+        assert_eq!(v2.get("ok"), Some(&json!(false)));
+        assert_eq!(v2.get("type"), Some(&json!("refused")));
+        assert_eq!(v2.get("reason"), Some(&json!("tier_not_configured")));
+        assert_eq!(v2.get("tier"), Some(&json!("quantum")));
+        assert!(v2.get("fix").unwrap().as_str().unwrap().contains("set models.claude.quantum"));
     }
 
     // ── hrv-1: herding-review-slots D1/D2 — reviewer/advisor purposes ──────
