@@ -1,0 +1,66 @@
+{
+  "id": "ddu-3",
+  "feature": "dispatch-door-upfront",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Render Dispatch door slots from the resolver dispatch prepare uses",
+  "behavior_change": true,
+  "judge_obligation_ack": "Fix cell from an independent bee-review read (P1: block rendered raw config, not prepare's resolution); the same reviewer re-reads at cap.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "action": "Review finding P1/P2 on commit 37f3cc38: `tier_slot_display` in hooks/model_guard.rs parses raw config with the hook's own parser and applies no defaults, so with no `models` key it prints `session default` for every slot while `dispatch prepare` resolves sonnet/haiku/opus (see verbs/drivers/tests.rs:285-294), and it falls review back to generation whenever review is absent in config, while drivers::resolve_tier only falls back on an explicit `review: null`. FIX: rewrite `pub(crate) fn tier_slot_display(models_raw: Option<&Value>, runtime: &str) -> Vec<(&'static str, String)>` to build the map with `crate::verbs::drivers::models::normalize_models(models_raw)` and resolve each of generation/extraction/review with `crate::verbs::drivers::models::resolve_tier(&map, slot, runtime, kind)` (kind \"reviewer\" for review, \"gather\" for generation/extraction) and advisor with `resolve_advisor(&map, runtime)`. Render that Resolved: Model{model,effort} -> model (append `:<effort>` when Some); Herding{agent,fallback} -> `herding (<agent>)` or `herding`, plus ` fallback=<fallback>` when fallback is Some; Cli{..} -> `cli`; Native{model,..} -> `native:<model>`; Inherit -> `session default`; Budget -> `session default`; Refused{..} -> `cli`; advisor None -> `none`. Delete the now-unused `parse_runtime_slots` and `format_slot_display`, and restore `normalize_models` to its pre-37f3cc38 borrowing loop (no `raw.clone()` per runtime; `git show 37f3cc38^:packages/bee-rs/crates/bee/src/hooks/model_guard.rs` has the original) — the guard's own refusal logic must not change. Update the tests in session_preamble/tests.rs and compaction.rs to the true strings: no models key -> `generation=sonnet | extraction=haiku | review=opus | advisor=none`; herding on generation only -> `generation=herding (agy-flash) | extraction=haiku | review=opus | advisor=none`; keep the all-four-configured test. Add one assertion that the rendered generation string for `{\"claude\":{\"generation\":{\"kind\":\"herding\",\"agent\":\"agy-flash\"}}}` matches what drivers resolve_tier returns for that map (same-source proof). Run the three test filters model_guard, session_preamble, compaction (separately) plus the drivers tests. Commit once; the commit body's LAST line must be exactly `cell: ddu-3`; then cap the cell with the finish verb as the contract says — do not skip it.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_preamble",
+  "must_haves": {
+    "truths": [
+      "tier_slot_display reads the same normalize_models/resolve_tier the dispatch prepare door reads",
+      "No models key renders sonnet/haiku/opus",
+      "Guard refusal logic unchanged in behavior; normalize_models no longer clones per runtime",
+      "Tests assert the true strings"
+    ]
+  },
+  "decisions": [
+    "D2"
+  ],
+  "deps": [
+    "ddu-2"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-ddu-3",
+    "outcome": "Render dispatch door slots from shared models resolver and update tests with same-source proof",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-22T04:38:14.440Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "374324c6-7065-4c42-8897-a86870abcf6c",
+    "claimed_at": "2026-08-22T04:32:37.443Z",
+    "report": {
+      "outcome": "Render dispatch door slots from shared models resolver and update tests with same-source proof",
+      "commit": "3bcdaccad03a63d37a70ef3555cea77c0e411628",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_preamble — green — touched model_guard.rs, compaction.rs, session_preamble/tests.rs",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

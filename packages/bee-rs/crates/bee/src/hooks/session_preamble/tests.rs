@@ -1308,3 +1308,74 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(!text.contains("Open discovery map(s)"), "{text}");
     }
+
+    // ── dispatch-door-upfront D2 ──────────────────────────────────────────
+
+    #[test]
+    fn dispatch_door_renders_herding_generation_slot_and_prepare_line() {
+        let tmp = minimal_repo();
+        let models_obj = json!({"claude":{"generation":{"kind":"herding","agent":"agy-flash"}}});
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            &json!({"models": models_obj}).to_string(),
+        );
+        let text = render(tmp.path());
+        assert!(text.contains("### Dispatch door"), "{text}");
+        assert!(
+            text.contains(
+                "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "- Tier slots (claude): generation=herding (agy-flash) | extraction=haiku | review=opus | advisor=none"
+            ),
+            "{text}"
+        );
+
+        // Same-source proof: rendered generation string matches what drivers resolve_tier returns for that map
+        let map = crate::verbs::drivers::normalize_models(Some(&models_obj));
+        let resolved = crate::verbs::drivers::resolve_tier(&map, "generation", "claude", "gather");
+        assert_eq!(
+            resolved,
+            crate::verbs::drivers::Resolved::Herding {
+                agent: Some("agy-flash".into()),
+                fallback: None,
+            }
+        );
+        let slots = crate::hooks::model_guard::tier_slot_display(Some(&models_obj), "claude");
+        let gen_str = slots.iter().find(|(k, _)| *k == "generation").map(|(_, v)| v.as_str());
+        assert_eq!(gen_str, Some("herding (agy-flash)"));
+    }
+
+    #[test]
+    fn dispatch_door_renders_model_slot_name() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":"claude-3-5-sonnet-20241022","extraction":"claude-3-5-haiku-20241022","review":"claude-3-opus-20240229","advisor":"claude-3-7-sonnet-20250219"}}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(
+            text.contains(
+                "- Tier slots (claude): generation=claude-3-5-sonnet-20241022 | extraction=claude-3-5-haiku-20241022 | review=claude-3-opus-20240229 | advisor=claude-3-7-sonnet-20250219"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn dispatch_door_renders_defaults_when_no_models_key_present() {
+        let tmp = minimal_repo();
+        let text = render(tmp.path());
+        assert!(text.contains("### Dispatch door"), "{text}");
+        assert!(
+            text.contains(
+                "- Tier slots (claude): generation=sonnet | extraction=haiku | review=opus | advisor=none"
+            ),
+            "{text}"
+        );
+    }

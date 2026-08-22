@@ -1,0 +1,111 @@
+{
+  "id": "koh-4",
+  "feature": "knowledge-one-home",
+  "title": "Home three inventoried rules with ids and applied_at",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "koh-2"
+  ],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "AGENTS.md",
+    "docs/knowledge/areas/doctrine-layer/delegation-threshold.md",
+    "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-shaping/references/mini-brief-template.md",
+    "skills/bee-shaping/references/implement-plan-template.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "docs/discovery/knowledge-one-home/tickets/004-rule-home-inventory.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "action": "Per D4, give three rules from the inventory (ticket 004, rows 1, 2, 4) one home each, a marker, an applied_at list, and pointer copies. Rule 1 (delegation threshold): home is docs/knowledge/areas/doctrine-layer/delegation-threshold.md — wrap the live rule in `<!-- rule: doctrine-layer-delegation-threshold -->` … `<!-- /rule -->`; the contradicting '>3 files' sentence in skills/bee-hive/references/gates-and-delegation.md (rg -n 'more than three|>3 files|3 files' there) becomes one line citing `(rule: doctrine-layer-delegation-threshold)` with the number removed, as the knowledge concept already retired it. Rule 2 (write-guard docs-lane allowlist): home is docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md — add the two allowlists exactly as packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs states them (rg -n 'docs/history/\\|\"docs/\"' guards.rs), marked `hook-runtime-docs-lane-allowlist`; the blanket `docs/` line in skills/bee-hive/references/routing-and-contracts.md becomes a one-line pointer. Rule 4 (cap proof line; close/merge check, run nothing): a discipline rule, so its home is AGENTS.md 'Prove, then say so' — mark it `agents-proof-at-cap`; every other restatement listed in ticket 004 row 4 (the skill and template sites, plus cells-completion-judge-and-archive.md) shrinks to at most one line carrying `(rule: agents-proof-at-cap)`. Each home concept's frontmatter gets `applied_at:` listing every file that still carries its pointer. The AGENTS.md home has no frontmatter; record its applied_at on docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md (the concept that owns the duplication boundary) under a short 'AGENTS.md rule homes' section plus its own applied_at key. Do not touch the other nine inventoried rules — they are Phase 4. Exit: `bee knowledge check` on the bundle reports zero duplicate_rule_home, unknown_rule_ref, applied_at_unlinked, dangling_applied_at, and `rg -n '\\(rule: '` shows every pointer resolving to a marker. Skill trees are release-manifest roots: after the edits run the regen chain in this cell (`bee dev regen`: render-skill-trees, onboard --repo-root . --apply, release-manifest --write) so the manifest record moves with the skills.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo run --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge check && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Each of the three rules has exactly one opening marker in the repo and every other site carries at most one line plus a (rule: id) pointer",
+      "bee knowledge check reports zero findings for the four rule/applied_at codes on the live bundle"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/delegation-threshold.md",
+        "substantive": "marked rule block plus applied_at frontmatter"
+      },
+      {
+        "path": "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+        "substantive": "the two allowlists as the crate states them, marked, with applied_at"
+      }
+    ],
+    "key_links": [
+      "gates-and-delegation.md cites the delegation-threshold rule id instead of a number",
+      "routing-and-contracts.md cites the allowlist rule id instead of a blanket docs/ line"
+    ],
+    "prohibitions": [
+      "No edit to the other nine inventoried rules",
+      "No change to guards.rs"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-4",
+    "outcome": "Home three inventoried rules with ids and applied_at; pointer copies at every other site; skill trees re-rendered",
+    "files_changed": [
+      "AGENTS.md",
+      "docs/knowledge/areas/doctrine-layer/delegation-threshold.md",
+      "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-shaping/references/mini-brief-template.md",
+      "skills/bee-shaping/references/implement-plan-template.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "worker pane idled out after finishing the edits and the regen chain; orchestrator committed its tree and capped from inspection"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T05:01:36.136Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T04:40:17.452Z",
+    "report": {
+      "outcome": "Home three inventoried rules with ids and applied_at; pointer copies at every other site; skill trees re-rendered",
+      "commit": "d3cc9c7a",
+      "files": [
+        "AGENTS.md",
+        "docs/knowledge/areas/doctrine-layer/*",
+        "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "skills/**",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo run -p bee -- knowledge check, then bee dev release-manifest --check — green — 0 profile errors incl. the four rule/applied_at codes; 270 files match manifest; docs-only cell so the bundle check and manifest check are the proof",
+      "deviations": [
+        "worker pane idled out after finishing the edits and the regen chain; orchestrator committed its tree and capped from inspection"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 485 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

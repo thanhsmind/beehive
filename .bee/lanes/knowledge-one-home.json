@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-one-home",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"knowledge-one-home\" started at phase \"planning\" (lane).",
+  "next_action": "Present knowledge-one-home for uat; merge after approval",
+  "created_at": "2026-08-22T04:10:18.355Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": "cap and gate refusals change asserted behavior; frontmatter schema and CLI output are public; spans knowledge, cells, gate, decisions, skills",
+    "updated_at": "2026-08-22T04:11:04.724Z",
+    "feature": "knowledge-one-home"
+  },
+  "last_scribing_run": {
+    "feature": "knowledge-one-home",
+    "date": "2026-08-22",
+    "at": "2026-08-22T07:24:57.301Z",
+    "areas_synced": [
+      "okf-profile",
+      "workflow-state",
+      "decision-memory",
+      "doctrine-layer",
+      "hook-runtime"
+    ],
+    "next_action": "Present knowledge-one-home for uat; merge after approval"
+  }
+}

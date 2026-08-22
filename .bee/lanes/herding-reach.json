@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-reach",
+  "mode": "feature",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"herding-reach\" started at phase \"planning\" (lane).",
+  "next_action": "bee close finished \"herding-reach\" — feature is closed.",
+  "created_at": "2026-08-22T04:09:17.657Z",
+  "run_state": "shaping",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "cross-platform"
+    ],
+    "product_files": 7,
+    "rationale": null,
+    "updated_at": "2026-08-22T04:10:25.260Z",
+    "feature": "herding-reach"
+  }
+}

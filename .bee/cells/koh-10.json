@@ -1,0 +1,140 @@
+{
+  "id": "koh-10",
+  "feature": "knowledge-one-home",
+  "title": "Make the rule scanner fence-aware and fix the stale cap help text",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/okf-profile/conformance-check.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/knowledge/areas/okf-profile/conformance-check.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "docs/discovery/knowledge-one-home/tickets/004-rule-home-inventory.md"
+  ],
+  "action": "Two fixes that Phase 4's migration needs first. (1) Per D4, the rule marker/reference scanner must not read a QUOTED marker as a home: check.rs:465 `extract_rule_markers` and :484 `extract_rule_refs` are plain text scans; route both through check.rs:237 `strip_code_regions` (fenced blocks and inline backticks stripped) before matching, so conformance-check.md's literal `<!-- rule: <id> -->` and `(rule: <id>)` examples inside backticks stop registering as a home and a reference. Keep ownership.rs's callers working (it reuses extract_rule_markers). Tests: a file whose only marker is inside backticks or a fence yields no home and no ref; a real marker beside a quoted one yields exactly one. (2) The inventoried stale copy: the `cells cap` help text in src/generated/registry_payload.json still says 'Tests prove at the boundary — `bee close` runs commands.test when the feature has no worktree, `bee worktree merge` runs it when it does' (rg -n 'Tests prove at the boundary' there) — that rule was retired (caps record a proof line; close/merge check it and run nothing, rule id agents-proof-at-cap homed in AGENTS.md). Rewrite that sentence to one line stating the live rule plus `(rule: agents-proof-at-cap)`; check `cells finish` and `close` descriptions for the same stale phrasing and fix them the same way. Catalog count only if the drift test moves. Sync conformance-check.md: state that markers and refs are read outside code regions.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "A rule marker or (rule: id) reference inside backticks or a fenced block is neither a home nor a reference to knowledge check",
+      "No command description in registry_payload.json says bee close or bee worktree merge runs commands.test"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "substantive": "extract_rule_markers and extract_rule_refs scan stripped text"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "cap/finish/close help carry the live proof-line rule with the rule pointer"
+      }
+    ],
+    "key_links": [
+      "conformance-check.md states the code-region exclusion",
+      "ownership.rs still loads the three existing rule homes (knowledge tests green)"
+    ],
+    "prohibitions": [
+      "No change to the six code names or their error grade",
+      "No regen chain needed (no skills/ file touched)"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-10",
+    "outcome": "Rule markers and refs now scan code-stripped text; retired boundary-test help rewritten in the registry payload",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/okf-profile/conformance-check.md"
+    ],
+    "deviations": [
+      "Extended the payload fix past cells cap/finish to cells reopen and state handoff write: both carried the same retired claim that a cap or the finish door runs commands.test",
+      "Left docs/specs/test-simple.md and the two stale comments in verbs/cells/tests.rs alone — outside the cell files, exempt tree / comment-only",
+      "Pre-existing and untouched: skills/bee-planning/SKILL.md line 79 spells (rule: R138, ...), which no marker homes, so bee knowledge check still reports one unknown_rule_ref; fixing a skills/ file would pull in the regen chain this cell forbids"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T06:42:00.747Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T06:36:05.398Z",
+    "report": {
+      "outcome": "Rule markers and refs now scan code-stripped text; retired boundary-test help rewritten in the registry payload",
+      "commit": "1a4a1870",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/okf-profile/conformance-check.md"
+      ],
+      "tests": "cargo test --release -p bee knowledge && cargo test --release -p bee --test registry_contracts --test registry_dispatch --test installer_invocations --test front_door — green — knowledge suite covers the fence-aware extractors (2 new tests named in output); the payload-consuming suites cover the help-text edit",
+      "deviations": [
+        "Extended the payload fix past cells cap/finish to cells reopen and state handoff write: both carried the same retired claim that a cap or the finish door runs commands.test",
+        "Left docs/specs/test-simple.md and the two stale comments in verbs/cells/tests.rs alone — outside the cell files, exempt tree / comment-only",
+        "Pre-existing and untouched: skills/bee-planning/SKILL.md line 79 spells (rule: R138, ...), which no marker homes, so bee knowledge check still reports one unknown_rule_ref; fixing a skills/ file would pull in the regen chain this cell forbids"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "extractors-scan-stripped-text",
+            "status": "PASS",
+            "evidence": "check.rs:469 and :493 strip_code_regions first"
+          },
+          {
+            "id": "quoted-yields-nothing-real-beside-quoted-yields-one",
+            "status": "PASS",
+            "evidence": "tests.rs:1887 and :1932"
+          },
+          {
+            "id": "three-homes-still-load",
+            "status": "PASS",
+            "evidence": "ownership.rs:118 unchanged; live homes resolve"
+          },
+          {
+            "id": "payload-no-stale-boundary-claim-live-rule-present",
+            "status": "PASS",
+            "evidence": "rg 'runs commands.test|Tests prove at the boundary' registry_payload.json -> 0; cap/finish/reopen/close carry (rule: agents-proof-at-cap)"
+          },
+          {
+            "id": "conformance-doc-and-codes-unchanged",
+            "status": "PASS",
+            "evidence": "conformance-check.md:56-58, :67-68; check.rs +11 -0"
+          },
+          {
+            "id": "no-skills-touched-tests-green",
+            "status": "PASS",
+            "evidence": "name-only: 4 files; knowledge 111 passed; registry_contracts 10"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T06:44:40.590Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

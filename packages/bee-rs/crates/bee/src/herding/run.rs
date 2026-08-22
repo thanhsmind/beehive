@@ -1471,11 +1471,15 @@ fn now_ms() -> i64 {
 /// The last few lines of a pane's capture, for a blocked-pane error's
 /// remedy text — enough to show WHAT is being asked without dumping a full
 /// screen (reuses `Herdr::pane_read`).
-fn pane_tail(herdr: &dyn Herdr, pane_id: &str) -> String {
-    let text = herdr.pane_read(pane_id).unwrap_or_default();
+fn pane_tail_from_text(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
     let start = lines.len().saturating_sub(8);
     lines[start..].join("\n")
+}
+
+fn pane_tail(herdr: &dyn Herdr, pane_id: &str) -> String {
+    let text = herdr.pane_read(pane_id).unwrap_or_default();
+    pane_tail_from_text(&text)
 }
 
 /// D3: the one message every blocked wait point returns — names the job,
@@ -1507,18 +1511,36 @@ asking so the agent stops asking\npane tail:\n{tail}"
     )
 }
 
-/// hps-7 (D5): the one call every give-up wait point makes on its way out,
+/// hps-7 (D5), hrc-3 (D3): the one call every give-up wait point makes on its way out,
 /// through the existing `pane_read` seam. A match upgrades `generic` via
 /// `diagnosis_message`, carrying the same `pane_tail` (hps-9) `blocked_message`
-/// uses; no match, or a failing `pane_read`, returns `generic` UNCHANGED,
+/// uses; no match appends `pane_tail`; a failing `pane_read` returns `generic` UNCHANGED,
 /// byte for byte — a `pane_read` failure must never turn a real timeout into
 /// a different error.
 fn diagnose_giveup(herdr: &dyn Herdr, job_id: &str, pane_id: &str, generic: String) -> String {
     let Ok(text) = herdr.pane_read(pane_id) else { return generic };
+    let tail = pane_tail_from_text(&text);
     match find_prompt_diagnosis(&text) {
-        Some(line) => diagnosis_message(job_id, pane_id, &line, &generic, &pane_tail(herdr, pane_id)),
-        None => generic,
+        Some(line) => diagnosis_message(job_id, pane_id, &line, &generic, &tail),
+        None => format!("{generic}\npane tail:\n{tail}"),
     }
+}
+
+/// Builds the remedy string emitted in JSON output on `RunOutcome::SpawnFailed` (hrc-3, D4).
+/// Names how to inspect the forensics pane and unwind claims/reservations.
+fn spawn_failed_remedy(cell_id: Option<&str>, agent: Option<&str>, pane_id: Option<&str>) -> String {
+    let inspect = match pane_id {
+        Some(p) => format!("inspect pane {p} (herdr pane read {p}); "),
+        None => String::new(),
+    };
+    let unwind = match cell_id {
+        Some(cell) => match agent {
+            Some(a) => format!("unwind: bee cells unclaim --id {cell}; bee reservations release --agent {a} --cell {cell}"),
+            None => format!("unwind: bee cells unclaim --id {cell}; bee reservations release --cell {cell}"),
+        },
+        None => "unwind: no --cell-id was given, release any claim you took by hand".to_string(),
+    };
+    format!("{inspect}{unwind}")
 }
 
 /// hps-8 (D5): the resolved outcome of one workspace-trust pre-flight
@@ -2458,7 +2480,18 @@ fn emit_result(opts: &Options, result: &ExecResult) {
                 );
                 m.insert("proof".into(), Value::String(r.proof.clone()));
             }
-            RunOutcome::SpawnFailed(msg) | RunOutcome::Malformed(msg) | RunOutcome::PaneBlocked(msg) => {
+            RunOutcome::SpawnFailed(msg) => {
+                m.insert("error".into(), Value::String(msg.clone()));
+                m.insert(
+                    "remedy".into(),
+                    Value::String(spawn_failed_remedy(
+                        opts.cell_id.as_deref(),
+                        opts.agent.as_deref(),
+                        result.pane_id.as_deref(),
+                    )),
+                );
+            }
+            RunOutcome::Malformed(msg) | RunOutcome::PaneBlocked(msg) => {
                 m.insert("error".into(), Value::String(msg.clone()));
             }
             RunOutcome::ContinueRefused(refusal) => {
@@ -4500,7 +4533,51 @@ mod tests {
         *fake.pane_text.borrow_mut() = Some("compiling…\nall green\n".to_string());
         let generic = "generic timeout text".to_string();
         let msg = diagnose_giveup(&fake, "job-1", "w1:p2", generic.clone());
-        assert_eq!(msg, generic);
+        assert!(msg.starts_with(&generic), "generic text dropped: {msg}");
+        assert!(msg.contains("pane tail:"), "pane tail label missing: {msg}");
+        assert!(msg.contains("all green"), "pane content missing from tail: {msg}");
+    }
+
+    #[test]
+    fn spawn_failed_remedy_formats_inspect_unclaim_and_release() {
+        let msg = spawn_failed_remedy(Some("hrc-3"), Some("w-hrc-3"), Some("w5:pS"));
+        assert_eq!(
+            msg,
+            "inspect pane w5:pS (herdr pane read w5:pS); unwind: bee cells unclaim --id hrc-3; bee reservations release --agent w-hrc-3 --cell hrc-3"
+        );
+    }
+
+    #[test]
+    fn spawn_failed_remedy_without_cell_id_reports_no_cell_id_given() {
+        let msg = spawn_failed_remedy(None, Some("w-hrc-3"), Some("w5:pS"));
+        assert_eq!(
+            msg,
+            "inspect pane w5:pS (herdr pane read w5:pS); unwind: no --cell-id was given, release any claim you took by hand"
+        );
+    }
+
+    #[test]
+    fn spawn_failed_remedy_without_pane_id_omits_inspect_prefix() {
+        let msg = spawn_failed_remedy(Some("hrc-3"), Some("w-hrc-3"), None);
+        assert_eq!(
+            msg,
+            "unwind: bee cells unclaim --id hrc-3; bee reservations release --agent w-hrc-3 --cell hrc-3"
+        );
+    }
+
+    #[test]
+    fn spawn_failed_remedy_without_agent_omits_agent_flag() {
+        let msg = spawn_failed_remedy(Some("hrc-3"), None, Some("w5:pS"));
+        assert_eq!(
+            msg,
+            "inspect pane w5:pS (herdr pane read w5:pS); unwind: bee cells unclaim --id hrc-3; bee reservations release --cell hrc-3"
+        );
+    }
+
+    #[test]
+    fn spawn_failed_remedy_with_all_none_fields() {
+        let msg = spawn_failed_remedy(None, None, None);
+        assert_eq!(msg, "unwind: no --cell-id was given, release any claim you took by hand");
     }
 
     #[test]

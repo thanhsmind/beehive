@@ -1,0 +1,138 @@
+{
+  "id": "koh-2",
+  "feature": "knowledge-one-home",
+  "title": "Grade owns, applied_at, and rule markers in knowledge check",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "koh-1"
+  ],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/knowledge/areas/okf-profile/conformance-check.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "docs/knowledge/areas/okf-profile/conformance-check.md"
+  ],
+  "action": "Per D4: add six finding codes to check.rs:279 `check_bundle`, graded as profile ERRORS in the default run (not warnings; the plan names why). Codes and their rule: `dangling_applied_at` and `dangling_owns` — a listed path (trailing-`*` glob allowed) that resolves to nothing, resolved bundle-first then repo-root exactly like check.rs:543-570 `dangling_required_context`; with no repo root, out-of-bundle targets are skipped and the report carries a one-line note. `duplicate_rule_home` — the same `<!-- rule: <id> -->` opening marker in two files. `unknown_rule_ref` — a `(rule: <id>)` reference whose id no marker opens. `applied_at_unlinked` — a file listed in some concept's applied_at that contains no `(rule: <id>)` for any rule that concept homes. `owns_missing` — an area `overview.md` (a bee.area concept at areas/<area>/overview.md) carrying none of the owns.* keys; this is a separate walk over area overviews, never an entry in frame.rs:164 PROFILE_REQUIRED. The marker/reference scan reads the bundle plus AGENTS.md and skills/**, and skips docs/history/, docs/discovery/, docs/specs/, .bee/. Reuse the report shape of the existing dangling_* findings (path, code, message). Update the `knowledge check` help text in src/generated/registry_payload.json (rg -n 'knowledge' there) and any catalog count in src/catalog.rs the registry drift test pins (see the precedent note near catalog.rs:328). Sync docs/knowledge/areas/okf-profile/conformance-check.md with the six codes and their grade — the spec is this check's home. Tests: one case per code plus the exempt-tree and no-repo-root cases; cite tests.rs:1242 `dangling_required_context_warns_only_for_the_unresolvable_target` as the fixture pattern.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check exits non-zero on a fixture bundle that marks one rule id in two files, without --strict",
+      "A (rule: x) reference with no opening marker is reported as unknown_rule_ref",
+      "A stale copy under docs/history/ produces no finding"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "substantive": "six new codes wired into check_bundle and the report"
+      },
+      {
+        "path": "docs/knowledge/areas/okf-profile/conformance-check.md",
+        "substantive": "the six codes documented with their grade and exempt trees"
+      }
+    ],
+    "key_links": [
+      "registry_payload.json help text for knowledge check names the new codes",
+      "conformance-check.md lists every code check_bundle emits"
+    ],
+    "prohibitions": [
+      "No change to OKF-level error codes",
+      "No new warning-only code"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-2",
+    "outcome": "Grade owns, applied_at, and rule markers in knowledge check",
+    "files_changed": [
+      "docs/knowledge/areas/okf-profile/conformance-check.md",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-22T04:39:20.808Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T04:29:04.590Z",
+    "report": {
+      "outcome": "Grade owns, applied_at, and rule markers in knowledge check",
+      "commit": "9a99c60ab3e9df7dd00a8f26b4503b3b803efebb",
+      "files": [
+        "docs/knowledge/areas/okf-profile/conformance-check.md",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs"
+      ],
+      "tests": "cargo test --release -p bee knowledge — green — touched check.rs, routing.rs, walk.rs, bootstrap.rs, tests.rs",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "six-codes-profile-errors-default-run",
+            "status": "PASS",
+            "evidence": "check.rs:855,874,890,947,963,995 profile_errors.push; check.rs:1007 ok requires profile_errors empty; tests.rs:1836 asserts !report.ok"
+          },
+          {
+            "id": "exempt-trees-skipped-agents-skills-scanned",
+            "status": "PASS",
+            "evidence": "check.rs:279 is_exempt_tree; check.rs:913-921; tests.rs:1936"
+          },
+          {
+            "id": "no-repo-root-note",
+            "status": "PASS",
+            "evidence": "check.rs:422-427; tests.rs:1985"
+          },
+          {
+            "id": "conformance-doc-and-registry-help-updated",
+            "status": "PASS",
+            "evidence": "conformance-check.md:50-67; registry_payload.json knowledge check description"
+          },
+          {
+            "id": "verify-green",
+            "status": "PASS",
+            "evidence": "knowledge 107 passed; registry_contracts 10 passed"
+          },
+          {
+            "id": "undeclared-files-justified",
+            "status": "PASS",
+            "evidence": "walk.rs:347 notes field, routing.rs:77 note output, bootstrap.rs:205 owns.code on generated overviews - coherent, deviation unrecorded"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T04:45:24.838Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

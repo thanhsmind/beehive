@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "08bc67bb67cf9677e5dccd80912d935b411a1fe65fd26c55388bf35430117663",
+      "sha256": "6f22ed18bdb81f7fb5e274aece9b9b66def38882d44fc2f9aa211bca41eebb28",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -325,7 +325,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "1e036a2831fdf40983a880a843bfae2bb29e1f8374b0f23b9f4c6e2d0020bbee",
+      "sha256": "e2f2094f5b8ce3d2e7c9d0c8b6569b18ab1097e8e18aa1c3dec27deaeb6dce35",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -514,7 +514,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "6b92588592e6009ab54544b6c5f72155f68b9939cedeb2bc023b1f28123ee72d",
+      "sha256": "2138e4b44446dc01c95933b2b8ddac0d853defad4f485544bd1bada35609c581",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -647,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "96ffab52c3da2e82933aded6fd3100d7f2b9c515a8081a3ad2a86f3ebedb7258",
+      "sha256": "88338c4e36636f7275c941fcc36990203c342d262b34255c5eb69975d246216b",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -836,7 +836,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "43ed12b2c24d9204d1da41af26333d58ab2e7430ce11db4b0c8e2ebf0f58e65e",
+      "sha256": "e3477dcf28ae9d4e471778493d88694e263d3a212b84353087ef46f50814f185",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -1025,7 +1025,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "d24078566e42cd83211bce8ef6f21bf7a91f1f5866a2de720fdb1da6952b0b97",
+      "sha256": "3bb7b1afcec87c1db6a86249d5379d9edd9068225489a6bceb0f9850401de943",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -1266,7 +1266,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "62614e424a1a20d093c8884210fea730644e4ab9a3a6535791f1aa43b516f3cb",
+      "sha256": "c69708592e9f1d7384bff3e7403fab611cd15e9f2f8d7adba387287fe73c3a88",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -1280,7 +1280,7 @@
     },
     {
       "path": "packages/bee/agents/bee-build.md.tmpl",
-      "sha256": "03899e5a6d10b94d69c8a4478c57612838f33cdfdee599cc0f31d93bb2e99e13",
+      "sha256": "a38e4fcea2623d9d9e0b1659446c872884eb23c10cc650031c71c0b37c6b2d22",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-build.md.tmpl"
@@ -1551,7 +1551,7 @@
     },
     {
       "path": "skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "bf5417851d5c1a69bfa5717de65bf2c6849afdc46743a090a1dc47160891fec9",
+      "sha256": "9dedd3cd4fca7a589d9ff9d862ca1ffb983ab26056571d2b8a6e4c5dd13dea9d",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/gates-and-delegation.md"
@@ -1740,7 +1740,7 @@
     },
     {
       "path": "skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "d4235e685196b3bc9e656b31c8a4777b289f4b2233788ac2ac5f282e1e4ba851",
+      "sha256": "dfc5dc91119fddc7718d7e16669b49ff99310619218d963de671a8081f8fe071",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/swarming-reference.md"

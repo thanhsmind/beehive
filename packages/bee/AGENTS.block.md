@@ -124,13 +124,13 @@ context before planning or executing.
   turns where no skill is running. Decide-altitude never delegates:
   gates, synthesis, state writes, and the human conversation stay on
   the session model.
-- Every dispatch carries its tier: bee's rendered agents ARE their tier —
-  `bee-build` executes a cell, `bee-gather` reads (both generation),
-  `bee-extract`, `bee-review` — and the model-guard hook repairs or
-  refuses the rest; a `model` param or a
-  leading `[bee-tier: <tier>]` marker are the manual spellings. A
-  cli-shaped gather tier runs the configured external command per the
-  Delegation contract's cli gather branch, not an Agent dispatch.
+- The ONE door for any dispatch is `.bee/bin/bee dispatch prepare
+  --runtime <rt> --kind cell|gather|reviewer|advisor --json` — run it
+  first, then run exactly the tool and payload it returns (an Agent
+  call naming a rendered bee agent, or a Bash `bee herding run` / cli
+  call). Never hand-pick `subagent_type`, a `model` param, or a
+  leading `[bee-tier: …]` marker: those are what prepare RETURNS, and
+  the model-guard hook refuses or rewrites anything else.
 <!-- rule: agents-never-zero-execution-workers -->
 - From `small` up, cells run through dispatched workers — never zero
   *execution* workers; a tiny cell may run inline. This rule counts

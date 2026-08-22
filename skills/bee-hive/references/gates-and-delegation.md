@@ -146,7 +146,7 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
   bookkeeping this branch owes — `cells finish`, the proof line, reservations, the dispatch-log row —
   is done by the orchestrator after it reads the result back, exactly the D4 split gather workers
   never needed in the first place (`bee-herding/references/operational-invariants.md`, "`bee
-  herding run` — one foreign agent as a cell-execution worker").
+  herding run` — one foreign agent as a cell-execution worker"). prepare's transport_ready is the reachability fact; the fallback model applies only when it is false — never guess from channel.
 
 ### Judgment contract — rails for workers, boundaries for the orchestrator
 

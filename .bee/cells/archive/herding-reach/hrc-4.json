@@ -1,0 +1,65 @@
+{
+  "id": "hrc-4",
+  "feature": "herding-reach",
+  "lane": "small",
+  "title": "dispatch prepare resolves a cell's payload from its recorded tier",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "action": "In prepare.rs prepare_dispatch: for kind == \"cell\", load the cell record BEFORE computing tier_token (the cell is already loaded for prompt context; move that load up if needed) and read its `tier` field. tier_token = the cell's tier when it is a non-empty string, else slot_for_kind(kind). Record tier_source: \"cell\" or \"default\" in the economics object. When the cell's tier is \"ceiling\": do NOT call resolve_tier — build the claude Agent-tool payload exactly like the native arm but with no `model` param and the prompt opening with `[bee-tier: ceiling]`, channel = \"session-model\", enforcement = \"session-model\"; for runtime codex, the spawn_agent arm likewise with no model. When the cell's tier names a tier with no configured slot in models.<runtime> (e.g. \"extraction\" missing), return a typed refusal {ok:false, type:\"refused\", reason:\"tier_not_configured\", tier, fix} — never fall back to generation. Cells with no tier field render byte-identically to before (tier_source \"default\"). Add tests in tests.rs: recorded generation → same payload as before plus tier_source cell; recorded ceiling → tool Agent, no model, [bee-tier: ceiling] marker, channel session-model; no tier → tier_source default, payload unchanged; unconfigured tier → refusal. Reuse the fixture style already in tests.rs for prepare.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+  "verify_owner": "worker",
+  "acceptance": "A ceiling cell's prepare result carries channel session-model and an Agent payload with no herding command; economics carries tier_source; an unconfigured recorded tier is a typed refusal; drivers tests green.",
+  "deps": [
+    "hrc-1"
+  ],
+  "decisions": [
+    "herding-reach D5"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:33-45",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:615-700",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1115-1130",
+    "docs/discovery/herding-orchestration/evidence/20260822-herding-transport-bypassed.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrc-4",
+    "outcome": "dispatch prepare resolves a cell's payload from its recorded tier; ceiling cells report channel session-model; unconfigured recorded tier is a typed refusal; economics carries tier_source",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+    ],
+    "deviations": [
+      "worker also edited guard.rs (not in the cell's file list) so derive_economics knows the session-model channel — required for the economics record; orchestrator re-ran drivers tests: 203 passed",
+      "guard.rs edited beyond the listed files (economics channel)"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T04:26:25.980Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "15dafcf0-9d77-49a6-aefe-e79b8f894e8d",
+    "claimed_at": "2026-08-22T04:17:33.904Z",
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "prepare resolves from the recorded cell tier",
+      "commit": "e3a357b2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers — 203 passed, 0 failed — drivers module owns prepare and economics",
+      "deviations": [
+        "guard.rs edited beyond the listed files (economics channel)"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

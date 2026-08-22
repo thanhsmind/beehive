@@ -242,7 +242,7 @@ enum Slot {
     /// the flag `dispatch prepare` reads to publish this slot's default model
     /// as the failed-herding re-dispatch target — so the guard must admit that
     /// same model into `configured_model_set`.
-    Herding { fallback: bool },
+    Herding { agent: Option<String>, fallback: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -295,7 +295,8 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
             // the field; absent, empty, mistyped, or non-string is false.
             if kind == Some("herding") {
                 let fallback = obj.get("fallback").and_then(Value::as_str) == Some("default");
-                return Some(Slot::Herding { fallback });
+                let agent = str_field("agent");
+                return Some(Slot::Herding { agent, fallback });
             }
             // Explicit-fallback composite: {primary:{kind:'native', model}, ...}.
             if let Some(Value::Object(primary)) = obj.get("primary") {
@@ -319,6 +320,55 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
         }
         _ => None,
     }
+}
+
+pub(crate) fn tier_slot_display(
+    models_raw: Option<&Value>,
+    runtime: &str,
+) -> Vec<(&'static str, String)> {
+    let map = crate::verbs::drivers::normalize_models(models_raw);
+    let gen_res = crate::verbs::drivers::resolve_tier(&map, "generation", runtime, "gather");
+    let ext_res = crate::verbs::drivers::resolve_tier(&map, "extraction", runtime, "gather");
+    let rev_res = crate::verbs::drivers::resolve_tier(&map, "review", runtime, "reviewer");
+    let adv_res = crate::verbs::drivers::resolve_advisor(&map, runtime);
+
+    fn render_resolved(resolved: &crate::verbs::drivers::Resolved) -> String {
+        use crate::verbs::drivers::Resolved;
+        match resolved {
+            Resolved::Model { model, effort } => match effort {
+                Some(e) => format!("{model}:{e}"),
+                None => model.clone(),
+            },
+            Resolved::Herding { agent, fallback } => {
+                let mut s = match agent {
+                    Some(a) => format!("herding ({a})"),
+                    None => "herding".to_string(),
+                };
+                if let Some(fb) = fallback {
+                    s.push_str(&format!(" fallback={fb}"));
+                }
+                s
+            }
+            Resolved::Cli { .. } => "cli".to_string(),
+            Resolved::Native { model, .. } => format!("native:{model}"),
+            Resolved::Inherit => "session default".to_string(),
+            Resolved::Budget => "session default".to_string(),
+            Resolved::Refused { .. } => "cli".to_string(),
+        }
+    }
+
+    vec![
+        ("generation", render_resolved(&gen_res)),
+        ("extraction", render_resolved(&ext_res)),
+        ("review", render_resolved(&rev_res)),
+        (
+            "advisor",
+            match adv_res {
+                Some(r) => render_resolved(&r),
+                None => "none".to_string(),
+            },
+        ),
+    ]
 }
 
 fn normalize_models(raw: Option<&Value>) -> Models {
@@ -471,7 +521,7 @@ fn configured_model_set(models: &Models) -> BTreeSet<String> {
             // default_models("claude")["review"], not the generation one.
             raw = &models.claude.generation;
         }
-        if matches!(raw, Slot::Herding { fallback: true }) {
+        if matches!(raw, Slot::Herding { fallback: true, .. }) {
             if let Some(Value::String(m)) =
                 crate::verbs::drivers::default_models("claude").get(slot)
             {

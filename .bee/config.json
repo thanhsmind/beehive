@@ -19,16 +19,8 @@
   "staging_before_merge": false,
   "models": {
     "claude": {
-      "extraction": {
-        "kind": "herding",
-        "agent": "pi-agy-flash-3.7",
-        "fallback": "default"
-      },
-      "generation": {
-        "kind": "herding",
-        "agent": "pi-agy-flash-3.7",
-        "fallback": "default"
-      },
+           "extraction": "sonnet",
+      "generation": "opus",
       "review": "opus",
       "advisor": "fable"
     },

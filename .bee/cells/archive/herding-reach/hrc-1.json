@@ -1,0 +1,61 @@
+{
+  "id": "hrc-1",
+  "feature": "herding-reach",
+  "lane": "small",
+  "title": "dispatch prepare reports herding transport readiness",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "action": "In prepare.rs Resolved::Herding arm: add fn herding_transport_probe(env: &dyn Fn(&str)->Option<String>) -> (bool, String, Option<String>) reading HERDR_ENV (must be '1') and HERDR_PANE_ID (non-empty). Insert payload fields transport_ready (bool), transport_reason (string, e.g. 'HERDR_ENV=1 and HERDR_PANE_ID=w4:p7 are set' or 'HERDR_ENV is not set — this session is not inside a herdr pane'), and when a fallback object is emitted add fallback_when: 'transport_ready is false' inside it. Keep every other byte of the payload identical. Add unit tests in tests.rs: ready when both vars set; not ready when either missing; fallback_when present only with fallback. In gates-and-delegation.md herding execution branch bullet, add two sentences: prepare's transport_ready is the reachability fact; the fallback model applies only when it is false — never guess from channel.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers",
+  "verify_owner": "worker",
+  "acceptance": "dispatch prepare --json against a herding slot carries transport_ready and transport_reason; fallback carries fallback_when; drivers tests green; the doc bullet names transport_ready.",
+  "deps": [],
+  "decisions": [
+    "herding-reach D1"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:781-835",
+    "docs/discovery/herding-orchestration/evidence/20260822-herding-transport-bypassed.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrc-1",
+    "outcome": "dispatch prepare payload carries transport_ready/transport_reason; fallback carries fallback_when; Delegation contract names the rule",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "skills/bee-hive/references/gates-and-delegation.md"
+    ],
+    "deviations": [
+      "worker commit bb47fac6 swept in hrc-2's in-progress herding.rs edits (git add -A in a shared worktree); hrc-2's own commit carries the rest — no conflict, noted for the pattern miner",
+      "commit swept in sibling hrc-2 edits from the shared worktree"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T04:17:22.042Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "15dafcf0-9d77-49a6-aefe-e79b8f894e8d",
+    "claimed_at": "2026-08-22T04:10:13.211Z",
+    "report": {
+      "outcome": "dispatch prepare reports herding transport readiness",
+      "commit": "bb47fac6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "skills/bee-hive/references/gates-and-delegation.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers — ok, 198 passed, 0 failed — drivers module owns prepare",
+      "deviations": [
+        "commit swept in sibling hrc-2 edits from the shared worktree"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

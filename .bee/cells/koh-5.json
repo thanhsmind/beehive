@@ -1,0 +1,143 @@
+{
+  "id": "koh-5",
+  "feature": "knowledge-one-home",
+  "title": "Require affects_skills and affects_specs on every cell",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md"
+  ],
+  "action": "Per D3 (the plan records predicted affected skills/specs per cell) and the plan's discretion value: every cell carries two flat arrays, `affects_skills` and `affects_specs` (repo-relative paths; an empty array means 'none'), required on `cells add` for EVERY lane. Anchors (rg -n in src/verbs/cells/validate.rs): line 265 `for key in [\"deps\", \"decisions\", \"files\", \"read_first\"] {` is the array-shape loop — add the two keys to the same shape check, and add a presence check beside line 301 `match cell.get(\"files\") {` that refuses a missing key by name with a FIX line naming both keys and the `[]` spelling. `cells update` keeps accepting the keys without requiring them (existing cells predate the field). Update the `cells add` help text in src/generated/registry_payload.json (rg -n '\"cells add\"' there) and the catalog counts in src/catalog.rs if the registry drift test moves. Sync the home spec docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md (cell field table) and the planning skill's cell quality rules at skills/bee-planning/references/planning-reference.md:112 `## Cell quality rules` + the example JSON at `## Example cell JSON` — then run the regen chain (`bee dev regen`) because skills/ is a release-manifest root. Tests: add refuses a cell missing either key (names the key); add accepts `[]`; update without the keys still succeeds; cite the existing add-validation cases in src/verbs/cells/tests.rs (rg -n 'fn add_cell' there) as the fixture pattern.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "cells add refuses a cell that lacks affects_skills or affects_specs, naming the missing key, on every lane",
+      "cells add accepts affects_skills: [] and affects_specs: []; cells update does not require them"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "substantive": "presence + array-shape validation for the two keys"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "substantive": "the two fields in the cell field table with their meaning"
+      }
+    ],
+    "key_links": [
+      "planning-reference.md example cell JSON carries both keys",
+      "registry_payload.json cells add help names both keys"
+    ],
+    "prohibitions": [
+      "No change to existing cell files under .bee/cells",
+      "No lane exemption"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-5",
+    "outcome": "Require affects_skills and affects_specs on every cell",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "worker did not run finish; orchestrator capped from its result form"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T05:15:36.672Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T05:05:06.094Z",
+    "report": {
+      "outcome": "Require affects_skills and affects_specs on every cell",
+      "commit": "b305b202",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "skills/bee-planning/references/planning-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells, registry_contracts, bee dev release-manifest --check — green — cells validation is the touched scope; registry and manifest pin the help text and skill tree",
+      "deviations": [
+        "worker did not run finish; orchestrator capped from its result form"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "add-refuses-missing-key-every-lane",
+            "status": "PASS",
+            "evidence": "validate.rs:96-110 presence loop runs before the lane branch at :133; both add doors call validate_new_cell (handlers_write.rs:173, :328)"
+          },
+          {
+            "id": "empty-array-accepted",
+            "status": "PASS",
+            "evidence": "validate.rs:103 refuses only non-arrays; test add_cell_requires_affects_skills_and_affects_specs_on_every_lane asserts [] ok per lane"
+          },
+          {
+            "id": "update-does-not-require",
+            "status": "PASS",
+            "evidence": "validate_new_cell called only from add; run_update uses UPDATE_FIELDS (handlers_write.rs:348)"
+          },
+          {
+            "id": "existing-cell-files-untouched",
+            "status": "PASS",
+            "evidence": "git show --stat b305b202 -- .bee/cells prints nothing"
+          },
+          {
+            "id": "registry-help-names-both-keys",
+            "status": "PASS",
+            "evidence": "registry_payload.json cells.add description names affects_skills and affects_specs"
+          },
+          {
+            "id": "planning-reference-and-home-spec-updated",
+            "status": "PASS",
+            "evidence": "planning-reference.md example JSON + rule 9; cells-authoring-and-revision.md:25-44 field table"
+          },
+          {
+            "id": "verify-green",
+            "status": "PASS",
+            "evidence": "cargo test -p bee cells: 233 passed; registry_contracts: 10 passed; release-manifest --check: 270 match"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T05:18:54.758Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

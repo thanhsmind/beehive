@@ -107,6 +107,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     match *name {
         "classify-lane" => Some(classify_lane(rest)),
         "interlock" => Some(interlock(rest)),
+        "status" => Some(status(rest)),
         "command-template" => Some(command_template(rest)),
         "herdr-result" => Some(herdr_result(rest)),
         "herdr-pane-id" => Some(herdr_pane_id(rest)),
@@ -507,26 +508,14 @@ pub(crate) fn resolve_main_root(explicit: Option<&str>) -> Option<PathBuf> {
     Path::new(&s).parent().map(Path::to_path_buf)
 }
 
-fn interlock(flags: &[&str]) -> ExitCode {
-    let mut explicit: Option<&str> = None;
-    let mut i = 0usize;
-    while i < flags.len() {
-        if flags[i] == "--main-root" {
-            explicit = flags.get(i + 1).copied();
-            i += 2;
-            continue;
-        }
-        i += 1;
-    }
-
+pub(crate) fn enable_marker_state(explicit: Option<&str>) -> Map<String, Value> {
     let Some(main_root) = resolve_main_root(explicit) else {
-        emit(interlock_object(
+        return interlock_object(
             false,
             None,
             None,
             "could not resolve the MAIN checkout root (no --main-root given and `git rev-parse --git-common-dir` failed) — refusing to enable dispatch".to_string(),
-        ));
-        return ExitCode::from(1);
+        );
     };
 
     let marker = main_root.join(".bee").join("tmp").join(ENABLE_BASENAME);
@@ -543,22 +532,124 @@ fn interlock(flags: &[&str]) -> ExitCode {
     let main_root_str = main_root.display().to_string();
 
     if marker.exists() {
-        emit(interlock_object(
+        interlock_object(
             true,
             Some(&marker_str),
             Some(&main_root_str),
             format!("owner enable marker present ({marker_str}) — dispatch may build a dispatchable set this iteration"),
-        ));
-        return ExitCode::SUCCESS;
+        )
+    } else {
+        interlock_object(
+            false,
+            Some(&marker_str),
+            Some(&main_root_str),
+            format!("no owner enable marker at {marker_str} — dispatch MUST NOT build a dispatchable set (D10). The owner enables the loop with: touch {marker_str}"),
+        )
+    }
+}
+
+fn interlock(flags: &[&str]) -> ExitCode {
+    let mut explicit: Option<&str> = None;
+    let mut i = 0usize;
+    while i < flags.len() {
+        if flags[i] == "--main-root" {
+            explicit = flags.get(i + 1).copied();
+            i += 2;
+            continue;
+        }
+        i += 1;
     }
 
-    emit(interlock_object(
-        false,
-        Some(&marker_str),
-        Some(&main_root_str),
-        format!("no owner enable marker at {marker_str} — dispatch MUST NOT build a dispatchable set (D10). The owner enables the loop with: touch {marker_str}"),
-    ));
-    ExitCode::from(3)
+    let obj = enable_marker_state(explicit);
+    let enabled = obj.get("enabled").and_then(Value::as_bool) == Some(true);
+    let main_root_missing = obj.get("main_root").map(Value::is_null).unwrap_or(true);
+    emit(obj);
+
+    if main_root_missing {
+        ExitCode::from(1)
+    } else if enabled {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(3)
+    }
+}
+
+pub(crate) fn transport_state_with(lookup: impl Fn(&str) -> Option<String>) -> Map<String, Value> {
+    let herdr_env = lookup("HERDR_ENV");
+    let pane_id = lookup("HERDR_PANE_ID").filter(|s| !s.trim().is_empty());
+
+    let (ready, reason, pane_val) = match (herdr_env.as_deref(), pane_id) {
+        (Some("1"), Some(pid)) => (
+            true,
+            format!("HERDR_ENV=1 and HERDR_PANE_ID={pid} are set"),
+            Value::String(pid),
+        ),
+        (Some("1"), None) => (
+            false,
+            "HERDR_ENV=1 is set but HERDR_PANE_ID is empty or not set".to_string(),
+            Value::Null,
+        ),
+        (Some(other), pid) => (
+            false,
+            format!("HERDR_ENV is {other:?} (expected '1')"),
+            pid.map(Value::String).unwrap_or(Value::Null),
+        ),
+        (None, pid) => (
+            false,
+            "HERDR_ENV is not set — this session is not inside a herdr pane".to_string(),
+            pid.map(Value::String).unwrap_or(Value::Null),
+        ),
+    };
+
+    let mut m = Map::new();
+    m.insert("ready".into(), Value::Bool(ready));
+    m.insert("reason".into(), Value::String(reason));
+    m.insert("pane_id".into(), pane_val);
+    m
+}
+
+fn transport_state() -> Map<String, Value> {
+    transport_state_with(|k| std::env::var(k).ok())
+}
+
+fn status(flags: &[&str]) -> ExitCode {
+    let mut explicit: Option<&str> = None;
+    let mut json = false;
+    let mut i = 0usize;
+    while i < flags.len() {
+        if flags[i] == "--main-root" {
+            explicit = flags.get(i + 1).copied();
+            i += 2;
+            continue;
+        }
+        if flags[i] == "--json" {
+            json = true;
+            i += 1;
+            continue;
+        }
+        i += 1;
+    }
+
+    let mut obj = enable_marker_state(explicit);
+    let transport = transport_state();
+    let enabled = obj.get("enabled").and_then(Value::as_bool).unwrap_or(false);
+    let transport_ready = transport.get("ready").and_then(Value::as_bool).unwrap_or(false);
+    let transport_ready_str = if transport_ready { "ready" } else { "not ready" };
+    let transport_reason = transport
+        .get("reason")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    obj.insert("transport".into(), Value::Object(transport));
+
+    if json {
+        emit(obj);
+    } else {
+        println!("herding: enabled={enabled} transport={transport_ready_str} ({transport_reason})");
+    }
+
+    ExitCode::SUCCESS
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -798,5 +889,49 @@ mod tests {
         assert!(try_native(&args).is_none());
         let other: Vec<OsString> = ["status"].iter().map(OsString::from).collect();
         assert!(try_native(&other).is_none());
+    }
+
+    #[test]
+    fn transport_state_probe_with_both_env_states() {
+        // Ready state: HERDR_ENV == 1 and HERDR_PANE_ID is non-empty
+        let ready = transport_state_with(|k| match k {
+            "HERDR_ENV" => Some("1".to_string()),
+            "HERDR_PANE_ID" => Some("w4:p7".to_string()),
+            _ => None,
+        });
+        assert_eq!(ready.get("ready"), Some(&Value::Bool(true)));
+        assert_eq!(ready.get("pane_id"), Some(&Value::String("w4:p7".to_string())));
+        assert!(ready.get("reason").and_then(Value::as_str).unwrap().contains("HERDR_ENV=1 and HERDR_PANE_ID=w4:p7"));
+
+        // Not ready state: HERDR_ENV missing
+        let not_ready_missing = transport_state_with(|k| match k {
+            "HERDR_PANE_ID" => Some("w4:p7".to_string()),
+            _ => None,
+        });
+        assert_eq!(not_ready_missing.get("ready"), Some(&Value::Bool(false)));
+        assert!(not_ready_missing.get("reason").and_then(Value::as_str).unwrap().contains("HERDR_ENV is not set"));
+
+        // Not ready state: HERDR_ENV != 1
+        let not_ready_other = transport_state_with(|k| match k {
+            "HERDR_ENV" => Some("0".to_string()),
+            "HERDR_PANE_ID" => Some("w4:p7".to_string()),
+            _ => None,
+        });
+        assert_eq!(not_ready_other.get("ready"), Some(&Value::Bool(false)));
+
+        // Not ready state: HERDR_PANE_ID empty
+        let not_ready_empty_pane = transport_state_with(|k| match k {
+            "HERDR_ENV" => Some("1".to_string()),
+            "HERDR_PANE_ID" => Some("".to_string()),
+            _ => None,
+        });
+        assert_eq!(not_ready_empty_pane.get("ready"), Some(&Value::Bool(false)));
+        assert_eq!(not_ready_empty_pane.get("pane_id"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn herding_status_subcommand_dispatches_in_try_native() {
+        let args: Vec<OsString> = ["herding", "status", "--json"].iter().map(OsString::from).collect();
+        assert_eq!(try_native(&args), Some(ExitCode::SUCCESS));
     }
 }

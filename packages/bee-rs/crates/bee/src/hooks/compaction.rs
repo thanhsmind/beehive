@@ -1494,7 +1494,8 @@ pub fn build_compact_capsule(
     sections.push(status);
 
     // ── item 10: the recorded standard commands.
-    let commands = config_commands(&read_config_failopen(root));
+    let config = read_config_failopen(root);
+    let commands = config_commands(&config);
     let recorded: Vec<&str> =
         COMMAND_KEYS.iter().copied().filter(|key| truthy(commands.get(*key))).collect();
     if !recorded.is_empty() {
@@ -1508,11 +1509,24 @@ pub fn build_compact_capsule(
     // ── item 10b: the doc-viewer prefix (decision 4205835b) — the same
     // fact the preamble carries, re-injected so a long session does not
     // silently revert to bare paths the moment it compacts.
-    if let Some(prefix) = crate::state::doc_viewer_prefix(&read_config_failopen(root)) {
+    if let Some(prefix) = crate::state::doc_viewer_prefix(&config) {
         sections.push(vec![format!(
             "- Doc viewer: {prefix} — when you point the user at a doc, give this URL with the repo-relative path appended, never the bare path."
         )]);
     }
+
+    // ── item 10c: the dispatch door (dispatch-door-upfront D2).
+    let config_val = Value::Object(config);
+    let slots = crate::hooks::model_guard::tier_slot_display(config_val.get("models"), "claude");
+    let slots_line = slots
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join(" | ");
+    sections.push(vec![
+        "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker.".to_string(),
+        format!("- Tier slots (claude): {slots_line}"),
+    ]);
 
     // ── item 11: the survival count and, when it applies, the D9 advisory.
     // Silent on a repo with no records at all (D15).
@@ -1713,5 +1727,24 @@ mod tests {
         assert!(frontmatter_type("---\ntype: 'concept'\n---\n").is_none(), "single-quoted");
         assert!(frontmatter_type("---\n  indented: x\n---\n").is_none(), "stray indent");
         assert!(frontmatter_type("---\nnote: x\n---\n").is_none(), "no type key");
+    }
+
+    #[test]
+    fn capsule_renders_dispatch_door_item_10c() {
+        let tmp = tempfile::tempdir().unwrap();
+        repo(tmp.path());
+        let text = build_compact_capsule(tmp.path(), Some("s1"), None);
+        assert!(
+            text.contains(
+                "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "- Tier slots (claude): generation=sonnet | extraction=haiku | review=opus | advisor=none"
+            ),
+            "{text}"
+        );
     }
 }

@@ -1,0 +1,176 @@
+{
+  "id": "koh-6",
+  "feature": "knowledge-one-home",
+  "title": "Refuse a cap that skips an owned skill or an applied_at file",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "koh-5",
+    "koh-7"
+  ],
+  "decisions": [
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs"
+  ],
+  "action": "Per D3 and D4, the cap door. New module src/verbs/cells/sync_door.rs (register in cells/mod.rs) with `pub(crate) fn sync_refusal(root, cell, touched: &[String]) -> Option<String>` modelled on obligation.rs:160 `regen_obligation_refusal`. Touched set: the union of finish_support.rs:663 `head_commit_numstat` rows (run at the root finish_support.rs:237 `commit_trailer_history_root` resolves — this adds one git call to the plain cap path, named in the plan) and the `--files` list; with no resolvable commit, `--files` alone. Three checks, each refusing with a remedy line: (a) ownership — for every area from knowledge::ownership::load_ownership whose owns.code matches a touched path and whose owns.skills is non-empty, at least one owns.skills path must be touched, else refuse naming the area and its skills; (b) applied_at — for every rule whose home is touched, every applied_at file must be touched, else refuse naming the rule and the untouched files; (c) prediction — the cell's affects_skills (koh-5) must equal the set of touched skills/** paths as a set, else refuse naming the difference. LEGACY CELLS (judge finding on koh-5): a cell with no affects_skills key predates koh-5 — check (c) is skipped for it and a `sync: no prediction on legacy cell` line is appended to trace.deviations so the skip is visible; and add `affects_skills` / `affects_specs` to `UPDATE_FIELDS` at handlers_write.rs:348 (array-shape validated like files) so an old cell can be backfilled with `cells update`. Escape: a new `--sync-ack \"<reason>\"` flag on cap and finish (handlers_close.rs:79 `struct CapFlags`, :491 `cap_flags_from`) — blank refuses like `--deviation` does; a non-blank ack stores to trace.sync_ack AND appends a `sync-ack: <reason>` line to trace.deviations so knowledge promote mines it. Wire the call inside handlers_close.rs:148 `cap_cell_from_flags` after the existing report validation and before the write. Help text for cells cap, cells finish and cells update in src/generated/registry_payload.json gains the flag / fields and the three refusals; catalog count if the drift test moves. Sync the home spec docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md (this is a refusing door, unlike derived-check-hardening E1's warn-only doors — say so, citing D3) and skills/bee-swarming/references/worker-details.md (finish refusals list); then run the regen chain because skills/ is a manifest root. Tests (cite src/verbs/cells/tests.rs:896 `regen_obligation_fires_refuses_and_can_be_acked` as the pattern): owned code touched + skill untouched → refused naming the skill; same with --sync-ack → capped, ack on trace; home touched + applied_at file untouched → refused; prediction mismatch → refused naming the diff; legacy cell without the key → check (c) skipped with the deviation line; update sets affects_skills on an old cell; no resolvable commit → --files alone; blank --sync-ack → refused; a cell touching no owned path → unchanged behavior.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A cap whose touched set hits an area's owns.code but none of its owns.skills is refused, naming the area and skills, unless --sync-ack carries a reason",
+      "A cap whose touched set includes a rule home but not every applied_at file is refused naming the untouched files",
+      "A cap whose affects_skills differs from the touched skills/** set is refused naming the difference",
+      "Existing cap tests stay green; a cell touching no owned path caps exactly as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+        "substantive": "the three checks and the ack path"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "substantive": "the sync door documented as refusing, with the ack escape and its trace fields"
+      }
+    ],
+    "key_links": [
+      "cap_cell_from_flags calls sync_refusal before the write",
+      "worker-details.md lists the sync refusals and --sync-ack"
+    ],
+    "prohibitions": [
+      "No warning-only mode (D3)",
+      "No change to the regen obligation",
+      "No change to judge or proof-line doors"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-6",
+    "outcome": "Sync door (D3/D4): cap-time ownership/applied_at/prediction checks refuse, with --sync-ack escape and legacy-cell skip; docs and regen chain synced",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "fixed a pre-existing KNOWN RED: the legacy-cell deviation line was unconditional and broke 9 existing deviation-pipeline tests; scoped it to fire only when the touched set actually carries a skills/** path"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T06:04:20.485Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T05:25:15.924Z",
+    "tier_reason": "generation worker idled out once and failed to ack on resume; rescue ladder rung 2",
+    "report": {
+      "outcome": "Sync door (D3/D4) implemented: sync_refusal runs ownership/applied_at/prediction checks at cap, escaped by --sync-ack, legacy cells skip prediction with a visible deviation line only when it mattered; docs and regen chain updated",
+      "commit": "e8a0732557841153ba2134981ec3cf9939f5af7a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells — green — 241 cells tests incl. 8 new sync_door tests, plus registry_contracts (10) and catalog (9) green; full -p bee suite 2361 passed, only a pre-existing unrelated opencode_plugin_contracts failure present on the clean tree too",
+      "deviations": [
+        "fixed a pre-existing KNOWN RED: the legacy-cell deviation line was unconditional and broke 9 existing deviation-pipeline tests; scoped it to fire only when the touched set actually carries a skills/** path"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "refuses-never-warns",
+            "status": "PASS",
+            "evidence": "sync_door.rs:32,57,102-105 return refusals; handlers_close.rs:531-533 Err(Fail::Thrown); no warnings push on the cap path"
+          },
+          {
+            "id": "sync-ack-trace-and-deviation-blank-refused",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:433-442, :194-199; tests.rs:6707-6718"
+          },
+          {
+            "id": "touched-set-union-with-files-fallback",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:513-530; tests.rs:6834"
+          },
+          {
+            "id": "legacy-skip-narrowing-acceptable",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:542-544 gates the line on skills/** touched; vacuous compare otherwise; recorded on koh-6 trace, commit body, B50/R101, worker-details.md"
+          },
+          {
+            "id": "door-before-write",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:506 precedes :554-556 write_cell"
+          },
+          {
+            "id": "update-fields-accept-affects",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:348 UPDATE_FIELDS 15 entries; tests.rs:6852"
+          },
+          {
+            "id": "docs-and-help-synced",
+            "status": "PASS",
+            "evidence": "cells-completion-judge-and-archive.md B50+R101; worker-details.md:115-127; registry_payload commands[5]/[12]/[13]"
+          },
+          {
+            "id": "existing-tests-unchanged-green",
+            "status": "PASS",
+            "evidence": "tests.rs 253 insertions 0 deletions; cells 241 passed; registry_contracts 10; release-manifest --check 270 match"
+          },
+          {
+            "id": "no-change-to-regen-judge-proof-doors",
+            "status": "PASS",
+            "evidence": "obligation.rs, proof.rs, judge files absent from the 22 changed paths"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T06:08:23.928Z"
+      }
+    ]
+  },
+  "tier": "ceiling"
+}

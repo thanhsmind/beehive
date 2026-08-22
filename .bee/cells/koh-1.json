@@ -1,0 +1,115 @@
+{
+  "id": "koh-1",
+  "feature": "knowledge-one-home",
+  "title": "Accept and emit owns.* and applied_at frontmatter keys",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frontmatter.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/frontmatter.rs"
+  ],
+  "action": "Per D4 and the plan's frontmatter spelling: add the four flat keys `owns.code`, `owns.skills`, `owns.tests`, `applied_at` under `bee:` to the profile. Anchors (rg -n over src/verbs/knowledge): frame.rs:148 `pub(crate) const BEE_KEY_ORDER: [&str; 13] = [` — extend the array (and its size) so the new keys emit in a fixed position after `superseded_by`; frame.rs:166 `key_re_ok` already admits dotted keys, so no parser grammar change — confirm with a test that `owns.code: [a, b]` parses to a flat key and round-trips byte-identically through frontmatter.rs:66 `emit_entries` (the not_canonical guard; see tests.rs:1634 `round-trip guard: not_canonical (D12)` for the existing fixture shape). Values are flow lists of repo-relative paths; a trailing-`*` glob is a plain string here (resolution is koh-2's job). Do NOT add any of the four to frame.rs:164 `PROFILE_REQUIRED`. Author only the tests that the existing round-trip cases do not already pin: parse of each new key, emit order, and a concept carrying all four.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge",
+  "must_haves": {
+    "truths": [
+      "A concept whose bee block carries owns.code / owns.skills / owns.tests / applied_at parses with zero findings and re-emits byte-identically",
+      "Existing knowledge tests stay green; PROFILE_REQUIRED is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+        "substantive": "BEE_KEY_ORDER carries the four new keys at a fixed position"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "substantive": "parse + round-trip cases for the four keys"
+      }
+    ],
+    "key_links": [
+      "emit_entries emits the new keys in BEE_KEY_ORDER order"
+    ],
+    "prohibitions": [
+      "No change to PROFILE_REQUIRED",
+      "No change to required_context resolution"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-1",
+    "outcome": "Accept and emit owns.* and applied_at frontmatter keys under bee: block",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [
+      "worker commit lacked the cell trailer; orchestrator amended it in place"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T04:28:55.659Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T04:21:30.761Z",
+    "report": {
+      "outcome": "Accept and emit owns.* and applied_at frontmatter keys under bee: block",
+      "commit": "2baaf3ea",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge — green — 99 passed 0 failed, knowledge module is the touched scope",
+      "deviations": [
+        "worker commit lacked the cell trailer; orchestrator amended it in place"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "keys-parse-and-round-trip",
+            "status": "PASS",
+            "evidence": "tests.rs:1678 parse_each_new_frontmatter_key_individually; tests.rs:1725 concept_carrying_all_four_new_keys_parses_cleanly_and_round_trips"
+          },
+          {
+            "id": "knowledge-tests-green",
+            "status": "PASS",
+            "evidence": "cargo test -p bee knowledge: 107 passed"
+          },
+          {
+            "id": "bee-key-order-carries-four-keys",
+            "status": "PASS",
+            "evidence": "frame.rs:148 [&str; 17]"
+          },
+          {
+            "id": "profile-required-and-resolution-unchanged",
+            "status": "PASS",
+            "evidence": "git show 2baaf3ea: only frame.rs and tests.rs"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T04:45:23.241Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

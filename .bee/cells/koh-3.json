@@ -1,0 +1,106 @@
+{
+  "id": "koh-3",
+  "feature": "knowledge-one-home",
+  "title": "Write the ownership map for all fifteen areas",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "koh-2"
+  ],
+  "decisions": [
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "docs/knowledge/areas/*/overview.md",
+    "docs/knowledge/areas/feedback-digest/index.md",
+    "docs/knowledge/areas/performance-log/index.md",
+    "docs/knowledge/areas/verify-pipeline/index.md",
+    "docs/knowledge/index.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "docs/knowledge/areas/okf-profile/concept-model-and-authoring.md",
+    "docs/knowledge/areas/workflow-state/overview.md"
+  ],
+  "action": "Per D3 and D4's ownership map: on every area's `overview.md` add `owns.code`, `owns.skills`, `owns.tests` under `bee:` — the code paths (crate modules under packages/bee-rs/crates/bee/src/), skill paths (skills/<name>/ trees), and test files the area governs. Derive each list from the area's existing prose 'Pointers (implementation)' sections and from rg over the crate for the area's verbs; prefer explicit module paths or trailing-`*` patterns, never mid-path globs. Three areas have no overview.md (feedback-digest, performance-log, verify-pipeline carry only the generated, reserved index.md): author a bee.area `overview.md` for each following the frontmatter of an existing overview (workflow-state/overview.md is the model), with title, description, bee.id, lifecycle, areas, authoritative_for, and the owns.* keys; then regenerate the indexes with `bee knowledge index` so the generated index.md files list the new concepts. Exit: `bee knowledge check` reports zero owns_missing and zero dangling_owns over docs/knowledge/ — run it through the freshly built binary from koh-2 (`cargo run --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge check`).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo run --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo run --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge index --check",
+  "must_haves": {
+    "truths": [
+      "Every one of the fifteen area directories has an overview.md carrying owns.code, owns.skills, owns.tests",
+      "bee knowledge check reports zero owns_missing and zero dangling_owns on the live bundle"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/feedback-digest/overview.md",
+        "substantive": "a real bee.area concept with purpose prose and the owns.* map, no stub"
+      },
+      {
+        "path": "docs/knowledge/areas/rust-runtime/overview.md",
+        "substantive": "owns.* map naming the crate modules the area governs"
+      }
+    ],
+    "key_links": [
+      "bee knowledge index --check is clean after the new concepts"
+    ],
+    "prohibitions": [
+      "No edit to concept bodies beyond frontmatter except the three new overview files",
+      "No path in owns.* that resolves to nothing"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-3",
+    "outcome": "Write ownership maps for all fifteen areas",
+    "files_changed": [
+      "docs/knowledge/areas/advisor-protocol/overview.md",
+      "docs/knowledge/areas/bee-herding/overview.md",
+      "docs/knowledge/areas/decision-memory/overview.md",
+      "docs/knowledge/areas/discovery-wayfinding/overview.md",
+      "docs/knowledge/areas/doctrine-layer/overview.md",
+      "docs/knowledge/areas/feedback-digest/index.md",
+      "docs/knowledge/areas/feedback-digest/overview.md",
+      "docs/knowledge/areas/hook-runtime/overview.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/areas/okf-profile/overview.md",
+      "docs/knowledge/areas/onboarding/overview.md",
+      "docs/knowledge/areas/performance-log/index.md",
+      "docs/knowledge/areas/performance-log/overview.md",
+      "docs/knowledge/areas/product-backlog/overview.md",
+      "docs/knowledge/areas/rust-runtime/overview.md",
+      "docs/knowledge/areas/verify-pipeline/index.md",
+      "docs/knowledge/areas/verify-pipeline/overview.md",
+      "docs/knowledge/areas/workflow-state/overview.md",
+      "docs/knowledge/areas/worktree-parallelism/overview.md",
+      "docs/knowledge/index.md"
+    ],
+    "deviations": [
+      "worker did not run finish; orchestrator capped from its result form"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T04:46:22.069Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T04:39:52.450Z",
+    "report": {
+      "outcome": "Write ownership maps for all fifteen areas",
+      "commit": "ab051ce8",
+      "files": [
+        "docs/knowledge/areas/*/overview.md",
+        "docs/knowledge/areas/*/index.md",
+        "docs/knowledge/index.md"
+      ],
+      "tests": "cargo run --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- knowledge check, then knowledge index --check — green — zero owns_missing, zero dangling_owns, clean index; docs-only cell so the bundle check is the proof",
+      "deviations": [
+        "worker did not run finish; orchestrator capped from its result form"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 235 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}
