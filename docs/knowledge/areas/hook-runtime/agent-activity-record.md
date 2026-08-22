@@ -65,6 +65,8 @@ The activity record's fields (decision 2f782f51):
 | `at` | The ISO-8601 UTC instant the checkpoint observed the event. The only input the signal rule reads. |
 | `pane` | The terminal pane the session runs in, when known — so an operator can go look at it. |
 | `cwd` | The working directory the session runs in — which, for a worktree session, is how a reader tells two sessions of the same project apart. |
+| `feature` | The work the session is on, when it is known: the session record's own bound lane, or the default state's feature when the session is unbound. Absent when neither is known. |
+| `cell` | The unit of work the session holds, when it is known: the cell of the one active claim recorded against this session. Absent when the session holds none. |
 | `waiting_on_set_by_hook` | The marker that makes the waiting-on rule below safe: it records that the current mark came from a checkpoint, not from the agent. |
 
 ## Behaviors & Operations
@@ -74,7 +76,10 @@ handler maps the event to a state, writes the whole `activity` object onto
 `.bee/sessions/<session_id>.json`, and appends the transition beside it. A
 session record that does not exist yet is created minimally rather than
 skipped: an agent whose very first observed event is a permission prompt is
-still a session somebody needs to see (decision 2f782f51).
+still a session somebody needs to see (decision 2f782f51). The same write stamps
+what the session is working on — its feature and its held cell — so one
+session file answers both "what is this agent doing" and "what is it doing it
+to".
 
 **B19 — Five states, and each one is a claim about the agent, not about the
 process.**
@@ -167,6 +172,12 @@ guess.
   never prompt text, tool input, tool output, or credentials. It inherits the
   same content-free discipline the passive usage log runs under (see
   `child-agent-attribution-and-audit.md`).
+- R22 — The work stamp is resolved fresh at every write and is never
+  guessed. `feature` reads the session's own bound lane first and the default
+  state's feature only for an unbound session; `cell` reads the one active
+  claim recorded against this session, under the same claim-activity rule the
+  status reader's worker rows use. Both are best-effort: unknown is an absent
+  field, never a stale or inferred one.
 
 ## Edge Cases Settled
 
@@ -189,6 +200,14 @@ guess.
 - **The fifty-first transition.** The log is trimmed atomically, so a
   concurrent reader sees either the pre-trim or the post-trim file, never a
   half-written one.
+- **The work stamp is unknown.** No lane, no default feature, no claim, no
+  claims directory, or a claim record that cannot be read — each leaves the
+  field simply absent. The stamp is a convenience for a reader, so no part of
+  it may ever fail a checkpoint or hold up the state write.
+- **The session changed lane or picked up a cell without changing state.**
+  The record is refreshed with the new stamp, but nothing is appended to the
+  transition log. The log is a history of *states*, and a new cell under the
+  same state is not a state change.
 
 ## Open Gaps
 

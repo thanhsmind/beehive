@@ -177,6 +177,9 @@ struct Prior {
     tool_name: Option<String>,
     tool_use_id: Option<String>,
     marker: bool,
+    /// The record's own `lane` — the session's bound feature, when it has one.
+    /// Read here so the work stamp costs no second read of the same file.
+    lane: Option<String>,
 }
 
 fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
@@ -255,6 +258,18 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
         activity.insert("pane".into(), Value::String(pane.trim().to_string()));
     }
     activity.insert("cwd".into(), Value::String(ctx.cwd.to_string_lossy().into_owned()));
+    // WHAT this session is working on (D2, additive). Both fields are
+    // resolved fresh on every write and are fail-open: unknown means the key
+    // is simply absent — never an error, never a non-zero exit. Neither takes
+    // part in the transition test, so a session that changes lane or picks up
+    // a new cell without changing state refreshes the record and appends
+    // nothing to the sidecar; the sidecar stays a state history.
+    if let Some(feature) = resolve_feature(&ctrl, prior.lane.as_deref()) {
+        activity.insert("feature".into(), Value::String(feature));
+    }
+    if let Some(cell) = resolve_cell(&ctrl, &session_id) {
+        activity.insert("cell".into(), Value::String(cell));
+    }
     if marker {
         activity.insert("waiting_on_set_by_hook".into(), Value::Bool(true));
     }
@@ -335,11 +350,19 @@ fn read_prior(ctrl: &Path, session_id: &str) -> Prior {
             .filter(|s| !s.trim().is_empty())
             .map(str::to_string)
     };
+    let lane = record
+        .as_ref()
+        .and_then(|r| r.get("lane"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
     Prior {
         state: str_of("state").as_deref().and_then(State::parse),
         tool_name: str_of("tool_name"),
         tool_use_id: str_of("tool_use_id"),
         marker: activity.and_then(|a| a.get("waiting_on_set_by_hook")) == Some(&Value::Bool(true)),
+        lane,
     }
 }
 
@@ -469,6 +492,98 @@ fn with_transient_fs_retry<T>(mut f: impl FnMut() -> std::io::Result<T>) -> std:
 fn write_json_atomic_retry(file: &Path, value: &Value) -> Result<(), String> {
     with_transient_fs_retry(|| crate::fsutil::write_json_atomic(file, value))
         .map_err(|e| format!("write {}: {e}", file.display()))
+}
+
+// ── what this session is working on (D2, additive) ──────────────────────────
+
+/// The feature this session is on: its OWN bound lane first — a lane-bound
+/// session is working on that lane whatever the shared default says — and the
+/// control root's default `state.json` feature only when it has none. A
+/// missing or corrupt `state.json` reads as "unknown", the same fail-open
+/// collapse every other display read here makes.
+fn resolve_feature(ctrl: &Path, lane: Option<&str>) -> Option<String> {
+    if let Some(lane) = lane.map(str::trim).filter(|s| !s.is_empty()) {
+        return Some(lane.to_string());
+    }
+    let ReadJson::Parsed(Value::Object(state)) = read_json(&ctrl.join(".bee").join("state.json"))
+    else {
+        return None;
+    };
+    state
+        .get("feature")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// The cell this session is executing: the first ACTIVE claim in
+/// `<control_root>/.bee/claims/` whose `session` is ours. Same shape and same
+/// activity rule the worker rows of `bee status` use (`activeWorkers` /
+/// `isClaimActive` in `verbs/status_full/cells.rs`), re-stated here because
+/// those readers take a `Ctx` no hook has.
+///
+/// Cost is one readdir plus one small read per claim file — a claim record
+/// already carries the cell id, so no cell file is ever opened.
+fn resolve_cell(ctrl: &Path, session_id: &str) -> Option<String> {
+    let Ok(entries) = std::fs::read_dir(ctrl.join(".bee").join("claims")) else {
+        return None; // no claims directory at all: nothing is claimed, not an error
+    };
+    let now = now_ms();
+    for entry in entries.filter_map(|e| e.ok()) {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(stem) = name.strip_suffix(".json") else { continue };
+        if !well_formed_id(stem) {
+            continue; // a filename readClaim's requireId would refuse
+        }
+        let ReadJson::Parsed(Value::Object(claim)) = read_json(&entry.path()) else {
+            continue; // missing or corrupt: reads as no claim, never a failure
+        };
+        if claim.get("session").and_then(Value::as_str).map(str::trim) != Some(session_id) {
+            continue;
+        }
+        if !claim_is_active(&claim, now) {
+            continue; // expired: the session no longer holds this cell
+        }
+        return claim
+            .get("cell")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+    }
+    None
+}
+
+/// `isClaimActive`: a claim without a usable TTL, or without a usable
+/// `claimed_at`, is active — only a claim whose own numbers say it expired is
+/// dropped.
+fn claim_is_active(claim: &Map<String, Value>, now_ms: f64) -> bool {
+    let Some(ttl) = claim.get("ttl_seconds").and_then(Value::as_f64) else {
+        return true;
+    };
+    if !ttl.is_finite() || ttl <= 0.0 {
+        return true;
+    }
+    let Some(claimed) = claim.get("claimed_at").and_then(Value::as_str).and_then(iso_to_ms) else {
+        return true;
+    };
+    claimed + ttl * 1000.0 > now_ms
+}
+
+fn now_ms() -> f64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(f64::NAN)
+}
+
+/// Date.parse for the ISO shape bee's own writers emit.
+fn iso_to_ms(s: &str) -> Option<f64> {
+    chrono::DateTime::parse_from_rfc3339(s.trim())
+        .ok()
+        .map(|dt| dt.timestamp_millis() as f64)
 }
 
 // ── the waiting mark (D5) ───────────────────────────────────────────────────
@@ -1055,6 +1170,167 @@ mod tests {
             text.lines().all(|l| !l.is_empty()),
             "the cut lands on a line boundary, never mid-line"
         );
+    }
+
+    // ── what this session is working on (D2, additive) ─────────────────────
+
+    /// Put a session record on disk before the hook ever sees the session.
+    fn seed_session(repo: &Repo, session: &str, record: Value) {
+        let dir = sessions_dir(&repo.root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{session}.json")), record.to_string()).unwrap();
+    }
+
+    fn seed_claim(repo: &Repo, cell: &str, claim: Value) {
+        let dir = repo.root.join(".bee").join("claims");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{cell}.json")), claim.to_string()).unwrap();
+    }
+
+    fn iso_ago(seconds: i64) -> String {
+        let then = chrono::Utc::now() - chrono::Duration::seconds(seconds);
+        then.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    }
+
+    #[test]
+    fn a_lane_bound_session_stamps_its_lane_as_the_feature() {
+        let repo = repo();
+        std::fs::write(
+            repo.root.join(".bee").join("state.json"),
+            serde_json::json!({ "feature": "the-default-feature" }).to_string(),
+        )
+        .unwrap();
+        seed_session(&repo, "s1", serde_json::json!({ "id": "s1", "lane": "my-lane" }));
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        assert_eq!(
+            activity(&repo, "s1").get("feature"),
+            Some(&Value::String("my-lane".into())),
+            "the session's own lane outranks the shared default"
+        );
+        assert_eq!(
+            transitions(&repo, "s1")[0]["feature"],
+            Value::String("my-lane".into()),
+            "the sidecar row carries the same stamp"
+        );
+    }
+
+    #[test]
+    fn an_unbound_session_falls_back_to_the_default_states_feature() {
+        let repo = repo();
+        std::fs::write(
+            repo.root.join(".bee").join("state.json"),
+            serde_json::json!({ "feature": "the-default-feature" }).to_string(),
+        )
+        .unwrap();
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        assert_eq!(
+            activity(&repo, "s1").get("feature"),
+            Some(&Value::String("the-default-feature".into()))
+        );
+    }
+
+    #[test]
+    fn no_lane_and_no_state_file_stamps_no_feature_at_all() {
+        let repo = repo();
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        assert!(
+            !activity(&repo, "s1").contains_key("feature"),
+            "unknown is an absent key, never a guess"
+        );
+    }
+
+    #[test]
+    fn an_active_claim_held_by_this_session_stamps_its_cell() {
+        let repo = repo();
+        seed_claim(
+            &repo,
+            "aah-4",
+            serde_json::json!({
+                "cell": "aah-4", "session": "s1",
+                "claimed_at": iso_ago(10), "ttl_seconds": 3600
+            }),
+        );
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        assert_eq!(activity(&repo, "s1").get("cell"), Some(&Value::String("aah-4".into())));
+        assert_eq!(transitions(&repo, "s1")[0]["cell"], Value::String("aah-4".into()));
+    }
+
+    #[test]
+    fn an_expired_or_foreign_claim_stamps_no_cell() {
+        let repo = repo();
+        seed_claim(
+            &repo,
+            "aah-9",
+            serde_json::json!({
+                "cell": "aah-9", "session": "s1",
+                "claimed_at": iso_ago(7200), "ttl_seconds": 60
+            }),
+        );
+        seed_claim(
+            &repo,
+            "aah-8",
+            serde_json::json!({
+                "cell": "aah-8", "session": "someone-else",
+                "claimed_at": iso_ago(10), "ttl_seconds": 3600
+            }),
+        );
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        assert!(
+            !activity(&repo, "s1").contains_key("cell"),
+            "an expired claim is not work in flight, and another session's claim is not ours"
+        );
+    }
+
+    #[test]
+    fn a_claim_without_a_ttl_still_counts_as_held() {
+        let repo = repo();
+        seed_claim(
+            &repo,
+            "aah-4",
+            serde_json::json!({ "cell": "aah-4", "session": "s1" }),
+        );
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        assert_eq!(activity(&repo, "s1").get("cell"), Some(&Value::String("aah-4".into())));
+    }
+
+    #[test]
+    fn a_missing_claims_dir_or_an_unreadable_claim_never_blocks_the_state_write() {
+        let repo = repo();
+        // No claims directory at all.
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        assert_eq!(state_of(&repo, "s1"), "working");
+        assert!(!activity(&repo, "s1").contains_key("cell"));
+
+        // A corrupt claim, and a filename no plain-id check would accept.
+        let dir = repo.root.join(".bee").join("claims");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("broken.json"), "{ not json at all").unwrap();
+        std::fs::write(dir.join("..odd.json"), "{}").unwrap();
+        ok(fire(&repo, event("Stop", "s2")));
+        assert_eq!(state_of(&repo, "s2"), "idle", "the activity write still lands");
+        assert!(!activity(&repo, "s2").contains_key("cell"));
+    }
+
+    #[test]
+    fn picking_up_a_cell_without_changing_state_refreshes_but_is_not_a_transition() {
+        let repo = repo();
+        ok(fire(&repo, event("UserPromptSubmit", "s1")));
+        seed_claim(
+            &repo,
+            "aah-4",
+            serde_json::json!({
+                "cell": "aah-4", "session": "s1",
+                "claimed_at": iso_ago(1), "ttl_seconds": 3600
+            }),
+        );
+        ok(fire(
+            &repo,
+            serde_json::json!({
+                "hook_event_name": "PreToolUse", "session_id": "s1", "tool_name": "Read"
+            }),
+        ));
+        assert_eq!(activity(&repo, "s1").get("cell"), Some(&Value::String("aah-4".into())));
+        assert_eq!(transitions(&repo, "s1").len(), 1, "working -> working is still not history");
     }
 
     // ── the waiting mark (D5) ──────────────────────────────────────────────
