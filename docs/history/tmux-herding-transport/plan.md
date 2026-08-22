@@ -1,7 +1,7 @@
 ---
 artifact_contract: bee-plan/v1
 mode: standard
-# approved_gate2: <unset until approval; then a date stamp — the only permitted post-approval write>
+approved_gate2: 2026-08-22
 ---
 
 # Plan: tmux Herding Transport
@@ -32,7 +32,7 @@ cells' `lane` field instead.
 - The transport probe is two pure functions reading env:
   `herding.rs:577 transport_state_with`, `prepare.rs:553 herding_transport_probe`.
 - Occupancy reads live pane ids through one exec: `wave.rs:764 live_pane_ids_via_herdr`.
-- Wave briefing goes through `fleet::backend::WorkerBackend` (`wave.rs:543`) — a `TmuxBackend` is a later slice; `run` is the walking skeleton.
+- Wave briefing goes through `fleet::backend::WorkerBackend` (`wave.rs:543`) — a `TmuxBackend` belongs to phase 2 of the shape table below; `run` is the walking skeleton.
 - Test pattern for a shelled-out binary: `crates/fleet/tests/herdr_backend.rs` — PATH-prepended stub script.
 - Full matrix and sweep: `docs/history/research/tmux-herding-transport.md`.
 
