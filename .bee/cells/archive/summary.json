@@ -768,5 +768,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-22T00:04:42.447Z"
+  },
+  "deviation-one-list": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-22T01:24:46.443Z"
   }
 }
