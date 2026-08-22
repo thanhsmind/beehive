@@ -276,14 +276,269 @@ pub(crate) fn wiki_link_resolves(target: &str, stems: &[&str]) -> bool {
     }
 }
 
+pub(crate) fn is_exempt_tree(path: &str) -> bool {
+    let p = path.trim_start_matches('/');
+    p.starts_with("docs/history/")
+        || p.starts_with("docs/discovery/")
+        || p.starts_with("docs/specs/")
+        || p.starts_with(".bee/")
+        || p == "docs/history"
+        || p == "docs/discovery"
+        || p == "docs/specs"
+        || p == ".bee"
+        || p.starts_with("history/")
+        || p.starts_with("discovery/")
+        || p.starts_with("specs/")
+}
+
+pub(crate) fn match_glob_segment(segment: &str, name: &str) -> bool {
+    if segment == "*" || segment == "**" {
+        return true;
+    }
+    if !segment.contains('*') {
+        return segment == name;
+    }
+    if segment.starts_with('*') && segment.ends_with('*') && segment.len() > 2 {
+        let sub = &segment[1..segment.len() - 1];
+        return name.contains(sub);
+    }
+    if let Some(rest) = segment.strip_prefix('*') {
+        return name.ends_with(rest);
+    }
+    if let Some(prefix) = segment.strip_suffix('*') {
+        return name.starts_with(prefix);
+    }
+    if let Some(star_pos) = segment.find('*') {
+        let prefix = &segment[..star_pos];
+        let suffix = &segment[star_pos + 1..];
+        return name.starts_with(prefix)
+            && name.ends_with(suffix)
+            && name.len() >= prefix.len() + suffix.len();
+    }
+    false
+}
+
+pub(crate) fn collect_dirs_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
+    out.push(dir.to_path_buf());
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_dirs_recursive(&path, out);
+            }
+        }
+    }
+}
+
+pub(crate) fn resolve_glob_paths(base: &Path, pattern: &str) -> Vec<PathBuf> {
+    let mut current_paths = vec![base.to_path_buf()];
+    let segments: Vec<&str> = pattern
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty() && *s != ".")
+        .collect();
+
+    for (i, &segment) in segments.iter().enumerate() {
+        let is_last = i + 1 == segments.len();
+        let mut next_paths = Vec::new();
+
+        if segment == "**" {
+            let mut all_dirs = Vec::new();
+            for p in current_paths {
+                if p.is_dir() {
+                    collect_dirs_recursive(&p, &mut all_dirs);
+                }
+            }
+            if is_last {
+                let mut found = Vec::new();
+                for d in all_dirs {
+                    if let Ok(entries) = std::fs::read_dir(&d) {
+                        for entry in entries.flatten() {
+                            found.push(entry.path());
+                        }
+                    }
+                }
+                return found;
+            } else {
+                current_paths = all_dirs;
+                continue;
+            }
+        }
+
+        for p in current_paths {
+            if !p.is_dir() {
+                continue;
+            }
+            if let Ok(entries) = std::fs::read_dir(&p) {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name();
+                    let name_str = file_name.to_string_lossy();
+                    if match_glob_segment(segment, &name_str) {
+                        let path = entry.path();
+                        if is_last || path.is_dir() {
+                            next_paths.push(path);
+                        }
+                    }
+                }
+            }
+        }
+        current_paths = next_paths;
+        if current_paths.is_empty() {
+            return Vec::new();
+        }
+    }
+    current_paths
+}
+
+pub(crate) fn glob_resolves(base: &Path, pattern: &str) -> bool {
+    !resolve_glob_paths(base, pattern).is_empty()
+}
+
+pub(crate) fn target_resolves(
+    dir: &Path,
+    repo_root: Option<&Path>,
+    target: &str,
+    notes: &mut Vec<String>,
+) -> bool {
+    // 1. Bundle-first
+    if target.contains('*') {
+        if glob_resolves(dir, target) {
+            return true;
+        }
+    } else if let Ok(Some(p)) = resolve_inside_bundle(dir, target) {
+        if p.exists() {
+            return true;
+        }
+    }
+    // 2. Repo-root
+    if let Some(root) = repo_root {
+        if target.contains('*') {
+            if glob_resolves(root, target) {
+                return true;
+            }
+        } else if root.join(target).exists() {
+            return true;
+        }
+        false
+    } else {
+        let note = "out-of-bundle targets skipped (no repo root)".to_string();
+        if !notes.contains(&note) {
+            notes.push(note);
+        }
+        true
+    }
+}
+
+pub(crate) fn resolve_target_files(
+    dir: &Path,
+    repo_root: Option<&Path>,
+    target: &str,
+) -> Vec<PathBuf> {
+    if target.contains('*') {
+        let bundle_matches: Vec<PathBuf> = resolve_glob_paths(dir, target)
+            .into_iter()
+            .filter(|p| p.is_file())
+            .collect();
+        if !bundle_matches.is_empty() {
+            return bundle_matches;
+        }
+    } else if let Ok(Some(p)) = resolve_inside_bundle(dir, target) {
+        if p.is_file() {
+            return vec![p];
+        }
+    }
+    if let Some(root) = repo_root {
+        if target.contains('*') {
+            return resolve_glob_paths(root, target)
+                .into_iter()
+                .filter(|p| p.is_file())
+                .collect();
+        } else {
+            let p = root.join(target);
+            if p.is_file() {
+                return vec![p];
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// A rule marker inside a code region is quotation, not a home: docs that
+/// teach the marker syntax spell `<!-- rule: <id> -->` inside backticks or a
+/// fence, and reading those as homes invents duplicate homes out of examples
+/// (D4). Strip code regions first, then scan.
+pub(crate) fn extract_rule_markers(text: &str) -> Vec<String> {
+    let scannable = strip_code_regions(text);
+    let text: &str = &scannable;
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(rel_start) = text[cursor..].find("<!--") {
+        let start = cursor + rel_start + 4;
+        let Some(rel_end) = text[start..].find("-->") else { break };
+        let end = start + rel_end;
+        let inner = text[start..end].trim();
+        if let Some(rest) = inner.strip_prefix("rule:") {
+            let id = rest.trim();
+            if !id.is_empty() && !id.starts_with('/') {
+                out.push(id.to_string());
+            }
+        }
+        cursor = end + 3;
+    }
+    out
+}
+
+/// Same exclusion as `extract_rule_markers`: a `(rule: <id>)` spelled inside
+/// backticks or a fence is an example of the syntax, not a reference to a
+/// rule, so it must not register as one (D4).
+pub(crate) fn extract_rule_refs(text: &str) -> Vec<String> {
+    let scannable = strip_code_regions(text);
+    let text: &str = &scannable;
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(rel_start) = text[cursor..].find("(rule:") {
+        let start = cursor + rel_start + 6;
+        let Some(rel_end) = text[start..].find(')') else { break };
+        let end = start + rel_end;
+        let id = text[start..end].trim();
+        if !id.is_empty() && !id.contains('\n') && !id.contains(' ') {
+            out.push(id.to_string());
+        }
+        cursor = end + 1;
+    }
+    out
+}
+
+pub(crate) fn collect_files_recursive(dir: &Path, root: &Path, out: &mut Vec<(String, PathBuf)>) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_files_recursive(&path, root, out);
+            } else if path.is_file() {
+                if let Ok(rel) = path.strip_prefix(root) {
+                    let rel_str = rel.to_string_lossy().replace('\\', "/");
+                    if !is_exempt_tree(&rel_str) {
+                        out.push((rel_str, path));
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
     let mut errors: Vec<Value> = Vec::new();
     let mut warnings: Vec<Value> = Vec::new();
     let mut profile_errors: Vec<Value> = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
     // bundle_dir always builds `dir` as `root/docs/knowledge` — the two
     // parents recover the repo root that `sources` paths are relative to
     // (unlike `required_context`, which is bundle-relative, D19).
-    let repo_root = dir.parent().and_then(Path::parent);
+    let repo_root = if dir.ends_with("docs/knowledge") {
+        dir.parent().and_then(Path::parent)
+    } else {
+        None
+    };
     let files = list_bundle_markdown(dir)?;
     // Wiki-link resolution target set: every `.md` file's bare stem, reserved
     // files (index.md/log.md) included — "any .md in the bundle" (not just
@@ -296,6 +551,7 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         })
         .collect();
     let mut parsed_concepts: Vec<Concept> = Vec::new();
+    let mut concept_bodies: Vec<String> = Vec::new();
     let mut concept_count = 0usize;
 
     for rel in &files {
@@ -463,6 +719,7 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         }
 
         parsed_concepts.push(Concept { path: rel.clone(), data });
+        concept_bodies.push(body);
     }
 
     // ── bundle-level profile checks (D31 uniqueness, D4 dangling targets) ──
@@ -597,6 +854,167 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         }
     }
 
+    // ── D4: owns_missing (area overview carrying none of the owns.* keys) ──
+    for concept in &parsed_concepts {
+        let is_area_overview = concept.path.starts_with("areas/")
+            && concept.path.ends_with("/overview.md")
+            && concept.path.matches('/').count() == 2;
+        if is_area_overview {
+            let bee = bee_of(&concept.data);
+            let has_owns = bee.keys().any(|k| k.starts_with("owns."));
+            if !has_owns {
+                profile_errors.push(finding(
+                    &concept.path,
+                    "owns_missing",
+                    format!(
+                        "area overview \"{}\" carries none of the owns.* keys (D3/D4)",
+                        concept.path
+                    ),
+                ));
+            }
+        }
+    }
+
+    // ── D4: dangling_applied_at and dangling_owns ──
+    for concept in &parsed_concepts {
+        let bee = bee_of(&concept.data);
+        if let Some(Value::Array(targets)) = bee.get("applied_at") {
+            for target in targets {
+                let Value::String(s) = target else { continue };
+                if !target_resolves(dir, repo_root, s, &mut notes) {
+                    profile_errors.push(finding(
+                        &concept.path,
+                        "dangling_applied_at",
+                        format!(
+                            "applied_at target \"{}\" does not resolve inside the bundle or at the repo root (D4)",
+                            jsjson::js_to_string(target)
+                        ),
+                    ));
+                }
+            }
+        }
+        for (key, val) in &bee {
+            if key.starts_with("owns.") {
+                if let Value::Array(targets) = val {
+                    for target in targets {
+                        let Value::String(s) = target else { continue };
+                        if !target_resolves(dir, repo_root, s, &mut notes) {
+                            profile_errors.push(finding(
+                                &concept.path,
+                                "dangling_owns",
+                                format!(
+                                    "owns target \"{}\" does not resolve inside the bundle or at the repo root (D4)",
+                                    jsjson::js_to_string(target)
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── D4: rule markers & references (duplicate_rule_home, unknown_rule_ref) ──
+    let mut scanned_files: Vec<(String, PathBuf)> = Vec::new();
+    for rel in &files {
+        if !is_exempt_tree(rel) {
+            scanned_files.push((rel.clone(), join_rel(dir, rel)));
+        }
+    }
+    if let Some(root) = repo_root {
+        let agents_md = root.join("AGENTS.md");
+        if agents_md.is_file() && !is_exempt_tree("AGENTS.md") {
+            scanned_files.push(("AGENTS.md".to_string(), agents_md));
+        }
+        let skills_dir = root.join("skills");
+        if skills_dir.is_dir() {
+            collect_files_recursive(&skills_dir, root, &mut scanned_files);
+        }
+    }
+
+    let mut homed_rules_by_id: Vec<(String, Vec<String>)> = Vec::new();
+    let mut all_rule_refs: Vec<(String, String)> = Vec::new();
+
+    for (display_path, abs_path) in &scanned_files {
+        if let Ok(text) = read_file_lossy(abs_path) {
+            for marker_id in extract_rule_markers(&text) {
+                match homed_rules_by_id.iter_mut().find(|(k, _)| *k == marker_id) {
+                    Some((_, holders)) => {
+                        if !holders.contains(display_path) {
+                            holders.push(display_path.clone());
+                        }
+                    }
+                    None => homed_rules_by_id.push((marker_id, vec![display_path.clone()])),
+                }
+            }
+            for ref_id in extract_rule_refs(&text) {
+                all_rule_refs.push((display_path.clone(), ref_id));
+            }
+        }
+    }
+
+    for (id, holders) in &homed_rules_by_id {
+        if holders.len() > 1 {
+            profile_errors.push(finding(
+                &holders[0],
+                "duplicate_rule_home",
+                format!(
+                    "rule marker \"<!-- rule: {id} -->\" is homed in {} files ({}) — rules must have exactly one home (D4)",
+                    holders.len(),
+                    holders.join(", ")
+                ),
+            ));
+        }
+    }
+
+    let mut seen_unknown = HashSet::new();
+    for (display_path, ref_id) in &all_rule_refs {
+        let homed = homed_rules_by_id.iter().any(|(k, _)| k == ref_id);
+        if !homed && seen_unknown.insert((display_path.clone(), ref_id.clone())) {
+            profile_errors.push(finding(
+                display_path,
+                "unknown_rule_ref",
+                format!(
+                    "rule reference \"(rule: {ref_id})\" matches no homed rule marker in the bundle or AGENTS.md (D4)"
+                ),
+            ));
+        }
+    }
+
+    // ── D4: applied_at_unlinked ──
+    for (concept, body) in parsed_concepts.iter().zip(concept_bodies.iter()) {
+        let homed = extract_rule_markers(body);
+        let bee = bee_of(&concept.data);
+        if let Some(Value::Array(targets)) = bee.get("applied_at") {
+            for target in targets {
+                let Value::String(s) = target else { continue };
+                let target_files = resolve_target_files(dir, repo_root, s);
+                if target_files.is_empty() {
+                    continue; // handled by dangling_applied_at
+                }
+                let mut linked = false;
+                for f in &target_files {
+                    if let Ok(content) = read_file_lossy(f) {
+                        let refs = extract_rule_refs(&content);
+                        if refs.iter().any(|r| homed.contains(r)) {
+                            linked = true;
+                            break;
+                        }
+                    }
+                }
+                if !linked {
+                    profile_errors.push(finding(
+                        &concept.path,
+                        "applied_at_unlinked",
+                        format!(
+                            "file \"{s}\" listed in applied_at contains no (rule: <id>) reference for any rule homed in this concept (D4)"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
     let ok = errors.is_empty() && profile_errors.is_empty() && (!strict || warnings.is_empty());
     Some(CheckReport {
         okf_errors: errors,
@@ -605,5 +1023,6 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         files: files.len(),
         concepts: concept_count,
         ok,
+        notes,
     })
 }

@@ -1782,3 +1782,103 @@ use std::time::Instant;
         assert!(event.get("feature").is_none());
         assert!(!capture_queue_path(tmp.path()).exists());
     }
+
+    #[test]
+    fn log_update_obligations_populates_when_tag_or_scope_matches_homed_rule() {
+        let tmp = fixture_root();
+        let kn_dir = tmp.path().join("docs").join("knowledge").join("areas").join("auth");
+        std::fs::create_dir_all(&kn_dir).unwrap();
+        std::fs::write(
+            kn_dir.join("overview.md"),
+            "---\ntype: bee.area\ntitle: Auth\ntags: []\nbee:\n  id: auth-overview\n  areas: [auth]\n  owns.code: [\"src/auth/*\"]\n---\nOverview\n",
+        )
+        .unwrap();
+        std::fs::write(
+            kn_dir.join("token.md"),
+            "---\ntype: bee.area\ntitle: Token\ntags: []\nbee:\n  id: auth-token\n  areas: [auth]\n  applied_at: [\"skills/auth/SKILL.md\"]\n---\n<!-- rule: auth-token -->\nToken rule\n<!-- /rule -->\n",
+        )
+        .unwrap();
+
+        let p = LogParams {
+            decision: "Require 256-bit token entropy".into(),
+            rationale: "security".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["auth".to_string()]),
+            relation: Some("none".to_string()),
+            trigger: None,
+        };
+        let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        let obligations = event["update_obligations"]
+            .as_array()
+            .expect("update_obligations must be an array");
+        assert_eq!(obligations.len(), 1);
+        assert_eq!(obligations[0]["rule"], "auth-token");
+        assert_eq!(
+            obligations[0]["home"],
+            "docs/knowledge/areas/auth/token.md"
+        );
+        assert_eq!(
+            obligations[0]["applied_at"],
+            json!(["skills/auth/SKILL.md"])
+        );
+        assert!(text.contains("update obligation: auth-token (docs/knowledge/areas/auth/token.md) — applied at: skills/auth/SKILL.md"));
+
+        // When logged with scope matching instead of tag
+        let p_scope = LogParams {
+            decision: "Require 256-bit token entropy scoped".into(),
+            rationale: "security".into(),
+            alternatives: None,
+            scope: "auth".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+        };
+        let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), p_scope, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(
+            event2["update_obligations"],
+            json!([{
+                "rule": "auth-token",
+                "home": "docs/knowledge/areas/auth/token.md",
+                "applied_at": ["skills/auth/SKILL.md"]
+            }])
+        );
+        assert!(text2.contains("update obligation: auth-token"));
+    }
+
+    #[test]
+    fn log_update_obligations_empty_when_no_tag_or_scope_matches() {
+        let tmp = fixture_root();
+        let kn_dir = tmp.path().join("docs").join("knowledge").join("areas").join("auth");
+        std::fs::create_dir_all(&kn_dir).unwrap();
+        std::fs::write(
+            kn_dir.join("overview.md"),
+            "---\ntype: bee.area\ntitle: Auth\ntags: []\nbee:\n  id: auth-overview\n  areas: [auth]\n  owns.code: [\"src/auth/*\"]\n---\nOverview\n",
+        )
+        .unwrap();
+
+        let p = LogParams {
+            decision: "Unrelated decision".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "billing".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["payments".to_string()]),
+            relation: Some("none".to_string()),
+            trigger: None,
+        };
+        let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["update_obligations"], json!([]));
+        assert!(!text.contains("update obligation:"));
+    }

@@ -44,6 +44,24 @@ grades meaning where the checker can only grade form.
 - A nested `bee:` object carries `id`, `lifecycle` (`draft`\|`active`\|`superseded`\|`archived`),
   `areas`, `required_context` (bundle-relative **paths**), `decisions`, `sources`, and — per type —
   `lane`, `polarity`, `critical`, `authoritative_for`, `review_status`, `supersedes`/`superseded_by`.
+- **Ownership and outbound-list fields (knowledge-one-home D4, cell koh-1, 2026-08-22).** Four
+  further keys live inside the `bee:` block, and all four are **flat keys**, never a nested map —
+  the parser accepts no nested object other than `bee:` itself, so the ownership map is spelled
+  `owns.code`, `owns.skills`, `owns.tests` rather than as an `owns:` object:
+
+  | Key | Carried by | Holds |
+  |---|---|---|
+  | `owns.code` | an area's `overview.md` only | the repo-relative code paths the area governs |
+  | `owns.skills` | an area's `overview.md` only | the skill paths the area governs |
+  | `owns.tests` | an area's `overview.md` only | the test paths the area governs |
+  | `applied_at` | any concept that homes a rule | every file that restates or enforces that concept's rules |
+
+  Values are flow lists of repo-relative paths; a trailing `*` is allowed as a glob and resolves
+  the way a `required_context` target does — bundle first, then the repo root. One ownership map
+  per area, on the area's front-door concept, because two maps for one area is two owners for one
+  set of paths. All four join the fixed emit order **last**, after `superseded_by`, so a concept
+  carrying them still round-trips byte-identically; none of them is profile-required, so a concept
+  that owns nothing simply omits them. `bee knowledge check` grades them (`conformance-check.md`).
 - **Id/path direction (D32 — corrects D19's original wording, which had it backwards):** an id is
   **never** computed from a file's path. Instead the path segments `areas/<slug>/` and `work/<id>/`
   are **derived from the id**. `bee.id` is identity; the file **path is the link target** an OKF
@@ -156,6 +174,10 @@ gate.
 - Identity is `bee.id`, globally unique; authority is `bee.authoritative_for`, unique per subject —
   never "one concept per directory" (D31).
 - An id is never derived from a path; a path is derived from an id (D32).
+- The ownership map (`owns.code` / `owns.skills` / `owns.tests`) lives on the area's front-door
+  `overview.md` concept and nowhere else; `applied_at` lives on the concept that HOMES a rule,
+  never on one that merely restates it. Both are flat keys under `bee:` and both emit last, after
+  `superseded_by` (knowledge-one-home D4).
 - `docs/decisions/index.md` is permanently exempt from generation and from this profile's reach —
   it already sits outside the bundle (D11, D17).
 - `title`/`description` (and any profile-required field) are never fabricated; an absence is a

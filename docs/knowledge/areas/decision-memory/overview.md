@@ -10,6 +10,9 @@ bee:
   decisions: ["decision-propagation GH #32/#33/#34 (2026-07-21)", D1 b9b9fee3 (backlog CoS-gated done-flip), D2 b9b9fee3 (reversal citation sweep), D3 b9b9fee3 (citation discipline), "D4c b9b9fee3 (bounded store, archive verb)", "D5 b9b9fee3 (no stored graph, no daemon)", D6 b9b9fee3 (reversals inherit place), D7 c81c6795 (write-time classification + retro-tag reclassification), D8 1cea7713 (derived index recall surface), "D11b (scribing-skill copy of the done-flip rule, since consolidated into bee-capturing)", "compounding-skill fallback (identical, never-looser; same consolidation)", "supersession-is-an-edge 252102b5 (2026-08-08, decision-supersede-hygiene dsh-1 d2c0a33e)"]
   sources: ["docs/specs/decision-memory.md#R1", "docs/specs/decision-memory.md#R2", "docs/specs/decision-memory.md#R3", "docs/specs/decision-memory.md#R4", "docs/specs/decision-memory.md#R5", "docs/specs/decision-memory.md#R6", "docs/specs/decision-memory.md#R7", "docs/specs/decision-memory.md#R8", "docs/specs/decision-memory.md#R9", docs/history/decision-propagation/reports/e2e-supersede.md, test_decisions_propagation.mjs (84 checks incl. worker-thread log-vs-archive race), "backfill: 406/406 legacy events classified via extraction batches; --untagged --all returns zero; 5-event recall spot check green", "judge-record-tags cells jrt-1, jrt-2 (five internal callers swept; the census derives its sites by scanning source, and was itself widened by measurement after its first scope hid a live instance; traces in `.bee/cells/`, 2026-07-23)", "dsh-1-supersedes-edge (capped, d2c0a33e; packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, verbs_read.rs, tests.rs)"]
   authoritative_for: "decision-memory: what the system remembers about its own decisions"
+  owns.code: ["packages/bee-rs/crates/bee/src/verbs/decisions/*", "packages/bee-rs/crates/bee/src/verbs/triggers/*"]
+  owns.skills: []
+  owns.tests: [packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs]
 ---
 
 # Decision Memory (what the system remembers about its own decisions)
@@ -197,6 +200,18 @@ Three field failures (reported against a host repo, fixed generically):
   body; `--check` mode exits non-zero on drift.
 - **Delivered subset** — the evidenced portion of a row's CoS at a refused
   flip (R7 annotation).
+- **Update obligations** — `update_obligations: [{rule, home, applied_at: [..]}]` emitted in
+  `decisions log` output (knowledge-one-home D1), listing the applied_at files of homed rules whose area matches a tag or the scope.
+  This is the PUSH half of the obligation and nothing more: it tells the author, at the moment the
+  decision settles, which files the rule already reaches. The enforcement half is the cap-time sync
+  door (`areas/workflow-state/cells-completion-judge-and-archive.md`), which refuses a cap that left
+  one of those files untouched. A settled rule that never reaches a cap therefore obliges nobody —
+  by design, because the obligation belongs to the change, not to the decision (koh-7).
+- **Owned-path matching** — an ownership pattern ending in a single `*` matches at ANY depth below
+  its prefix, not just the immediate children: `foo/*` and `foo/**` are one and the same test. This
+  is the intended reading for an ownership map, where an area owns a subtree rather than one
+  directory level, but it is a deliberate widening of the usual glob meaning and is stated here
+  because no test pins the deep case (koh-7).
 
 ## Proven behavior (evidence anchors)
 
@@ -223,3 +238,12 @@ Three field failures (reported against a host repo, fixed generically):
 - **The archive** — receives superseded/redacted and aged-out events at an
   explicit cutoff; union reads (`--all`) reach both the active store and the
   archive and de-duplicate by id.
+
+## Open Gaps
+
+- **The ownership map is re-read from disk on every logged decision.** The
+  update-obligation list walks the whole knowledge bundle each time
+  `decisions log` runs, with no cache between calls. At today's bundle size the
+  cost is invisible, so nothing was built; it is stated here rather than
+  discovered as a slow log verb once the bundle grows (koh-7,
+  knowledge-one-home D1).

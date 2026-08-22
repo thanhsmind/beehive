@@ -93,6 +93,21 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             ));
         }
     }
+    for key in ["affects_skills", "affects_specs"] {
+        match map.get(key) {
+            None => {
+                problems.push(format!(
+                    "addCell: cell is missing required field \"{key}\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none)."
+                ));
+            }
+            Some(v) if !is_string_array(v) => {
+                problems.push(format!(
+                    "addCell: \"{key}\" must be an array of strings."
+                ));
+            }
+            _ => {}
+        }
+    }
     if nonblank_string(map.get("verify")) {
         match assert_verify_sentinel_allowed(root, "addCell", map.get("verify").unwrap()) {
             Ok(()) => {}
@@ -252,7 +267,7 @@ pub(crate) fn arms_behavior_door(change_class: Option<&Value>, explicit_behavior
 }
 
 /// lib/cells.mjs normalizeNewCell — key order: existing keys keep position,
-/// the literal's fields (status, deps, decisions, files, read_first, trace)
+/// the literal's fields (status, deps, decisions, files, read_first, affects_skills, affects_specs, trace)
 /// append where absent.
 pub(crate) fn normalize_new_cell(cell: &Value) -> MR<Value> {
     let Value::Object(map) = cell else { return Err(Fail::Delegate) };
@@ -262,7 +277,7 @@ pub(crate) fn normalize_new_cell(cell: &Value) -> MR<Value> {
         _ => Value::String("open".into()),
     };
     out.insert("status".into(), status);
-    for key in ["deps", "decisions", "files", "read_first"] {
+    for key in ["deps", "decisions", "files", "read_first", "affects_skills", "affects_specs"] {
         let value = match map.get(key) {
             Some(Value::Array(a)) => Value::Array(a.clone()),
             _ => Value::Array(vec![]),

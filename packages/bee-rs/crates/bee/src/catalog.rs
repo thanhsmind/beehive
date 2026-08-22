@@ -439,7 +439,40 @@ mod tests {
         // — `--task`/`--task-file` name the assignment itself, `--read-first`
         // on cells names cell planning dependencies, not CLI brief entries.
         // `--expertise` is new.
-        const PINNED_FLAG_COUNT: usize = 178;
+        // 178 -> 179 (knowledge-one-home koh-6): `cells.cap`/`cells.finish`/
+        // `finish` gained `--sync-ack`, the escape reason for the cap sync door
+        // (ownership, applied_at, and prediction checks). Checked first:
+        // `--override-judge`, `--inline-reason`, and `--commit-pending` name
+        // specific other escapes (judge rework, execution worker dispatch,
+        // commit trailer); none carries "reason for sync door divergence" —
+        // `--sync-ack` is new.
+        // 179 -> 180 (knowledge-one-home koh-8): `state.plan-conflicts.derive`
+        // and `state.plan-conflicts.verdict` land D5's plan-time conflict
+        // check. Checked first: `--lane`/`--no-lane`/`--json` are the lane
+        // selector every other state mutation already spells this way,
+        // `--id` names a bee entity's id exactly as it does on cells/
+        // decisions/triggers, and `--note` already means "free text stored
+        // beside a recorded fact" (cells.block/drop, perf.stop/section) —
+        // all four reused unchanged, no count cost. `--verdict` is the one
+        // new spelling: no existing flag names a recorded judgement over a
+        // prior decision, and the closest neighbours are different concepts
+        // (`--outcome` is a worker's own result line, `--relation` is a
+        // decision's structural link to another, `--reason` is retrospective
+        // why-text). `--verdict` is new.
+        // 180 -> 180 (knowledge-one-home koh-9): the merged gate's D5
+        // conflict precondition is a REFUSAL and an extra output field
+        // (`conflicts_acknowledged`), not a flag — `gate`/`state gate` gained
+        // no parameter, so the count is deliberately unchanged.
+        // 180 -> 181 (knowledge-one-home koh-11): `capture.add` gained
+        // `--skill-answer`, the stub's answer to "did the area's owned skill
+        // change?" (D4 item 5). Checked first: `--outcome` is what settled,
+        // `--files` is what the settlement touched (a list of paths, not a
+        // yes/no with a reason), `--note`/`--reason` name retrospective
+        // free text about an action bee itself took, and `--sync-ack` is the
+        // cap door's ESCAPE from a skill obligation, not the answer to one —
+        // none of them carries "whether the owned skill changed", so
+        // `--skill-answer` is new.
+        const PINNED_FLAG_COUNT: usize = 181;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

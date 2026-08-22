@@ -148,7 +148,7 @@ If none: "No blocking open questions. Ready for review.">
 5. **Never claim validation ran** unless a test-result record (`.bee/logs/test-results.json`) exists; the Validation Plan links evidence, it does not assert green.
 6. **Status mirrors the gate.** Never `Approved` before the gate fires; flip to `Needs Revision` when a source changes after approval.
 
-**Not restated here because bee enforces them elsewhere** (do not re-add): "do not modify files before approval" (the write-guard denies source writes before the merged Gate 2 approves execution), "inspect the codebase first" (shaping/planning own that), "always include validation steps" (the agent owns test scope and records its proof on the cap — `bee close`/`bee worktree merge` check that recorded proof, they run nothing themselves).
+**Not restated here because bee enforces them elsewhere** (do not re-add): "do not modify files before approval" (the write-guard denies source writes before the merged Gate 2 approves execution), "inspect the codebase first" (shaping/planning own that), "always include validation steps" (the agent owns test scope, rule: agents-proof-at-cap).
 
 ## Rendering procedure (concise)
 

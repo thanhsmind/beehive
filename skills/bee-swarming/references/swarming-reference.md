@@ -22,10 +22,10 @@ registry (`state worker add`), validates the claim it was handed (against
 the inlined cell JSON in its prompt — never `cells claim`)
 and takes reservations under its own nickname,
 reads its `read_first`, implements within its `files`, commits, and
-finishes it (`cells finish` — required `--report` carrying the proof
-line, caps and releases the reservations in the same verb; `bee close`
-and `bee worktree merge` check that recorded proof at the boundary, they
-run nothing themselves). Then it returns exactly one status token.
+finishes it — `cells finish` requires the `--report` proof line, caps the
+cell, and releases the reservations in the same verb, and the boundary
+doors check that recorded proof (rule: agents-proof-at-cap). Then it
+returns exactly one status token.
 
 **Default — parallel:** a `small` lane's cells (1-3) fan out to
 concurrent execution workers whenever every cell's *product* file set is
@@ -234,12 +234,7 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
 `13ce1858`, and the proof-economy tier system, decision `412e9b3a`,
 `docs/knowledge/areas/verify-pipeline/`, 2026-07-31).
 
-> Proof-per-change-type, not a fixed table: code → related tests green;
-> docs → parity/pointer checks; behavior → judge verdict. Run the chosen
-> proof yourself and record it on the cap as `<command> — <result> —
-> <scope reason>`. `bee close` and `bee worktree merge` CHECK that
-> recorded proof; neither runs `commands.test` itself. CI runs the full
-> declared command on every push — the one deterministic net.
+> The agent owns test scope: pick proof, record on cap, doors check and run nothing (rule: agents-proof-at-cap).
 
 - **Declaration:** `.bee/config.json` `commands.test` still names the
   project's one declared suite — what CI runs on every push, and the
@@ -270,11 +265,7 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
 - **Merge:** `bee worktree merge` runs the same proof check against the
   staged merge's capped cells — the last local net before CI, which runs
   the full declared command on every push.
-- **Never build on red:** survives as a principle, not a pre-claim
-  full-suite order — a red proof result refuses its own cap, and a
-  scoped-green cap whose CI later goes red is a fix-first cell in the
-  SAME feature, PLUS a mandatory captured learning on why the chosen
-  scope missed (D6).
+- **Never build on red** (rule: agents-never-build-on-red).
 
 <!-- bee:only claude -->
 ## Native worktree integration
@@ -519,7 +510,7 @@ On each result: update the cell if the worker could not (`block` with reason), c
 
 ## Handoff JSON
 
-Near 65% context, write `.bee/HANDOFF.json`: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, written_at }`. Include the resume commands:
+Near 65% context, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, written_at }`. Include the resume commands:
 
 ```text
 .bee/bin/bee status --json

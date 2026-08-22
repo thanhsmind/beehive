@@ -50,14 +50,24 @@ OKF-error codes (each finding also carries `file` and a human `message`):
 | `log_heading_not_iso` | A `## `-level heading inside `log.md` is not an ISO 8601 date (OKF §7 MUST). |
 
 Profile-**error** codes — reported in `profile.errors` and **chain-failing on their own**, with no
-`--strict` (G14 layer 3). The chain runs `knowledge check` non-strict by design, so a finding that
-guards the anti-fork invariant cannot live in `warnings`: a backstop that never blocks is not a
-backstop. Both codes guard one invariant — *one subject, exactly one readable authority*:
+`--strict` (G14 layer 3, D4). The chain runs `knowledge check` non-strict by design, so a finding that
+guards single-home rules and anti-fork invariants cannot live in `warnings`: a backstop that never
+blocks is not a backstop. Exempt trees (`docs/history/`, `docs/discovery/`, `docs/specs/`, `.bee/`)
+are skipped during rule marker and copy scans. Markers and references are read **outside code
+regions only**: a fenced block (` ``` ` / `~~~`) or an inline backtick span is stripped before the
+scan (`strip_code_regions`), so a doc that *teaches* the `<!-- rule: <id> -->` or `(rule: <id>)`
+spelling quotes it without homing a rule or pointing at one.
 
 | Code | Fires when |
 |---|---|
 | `duplicate_authoritative_for` | Two or more concepts claim the same `bee.authoritative_for` subject (D31). Grouped by the **hardened subject skeleton** (NFKC + lowercase + accent strip + confusable fold + punctuation/whitespace collapse), not the raw string — so claims differing only by a trailing period, case, or a Cyrillic homoglyph are one subject with two authorities, not two subjects. |
 | `malformed_authoritative_for` | A concept's `bee.authoritative_for` is present but is not one non-empty string (a list, a boolean, an empty or blank string). A claim bee cannot read is an owner the anti-fork gate cannot see, so it is never silently skipped. |
+| `dangling_applied_at` (knowledge-one-home koh-2, D4) | A `bee.applied_at` path (trailing-`*` glob allowed) does not resolve to an existing file inside the bundle or at the repo root. With no repo root, out-of-bundle targets are skipped and noted. |
+| `dangling_owns` (knowledge-one-home koh-2, D4) | A `bee.owns.*` path (trailing-`*` glob allowed) does not resolve to an existing file or directory inside the bundle or at the repo root. With no repo root, out-of-bundle targets are skipped and noted. |
+| `duplicate_rule_home` (knowledge-one-home koh-2, D4) | The same `<!-- rule: <id> -->` opening marker appears in two or more files across the bundle, `AGENTS.md`, and `skills/**`. Exempt trees are skipped, and so are code regions — a backticked or fenced marker is quotation, never a home. |
+| `unknown_rule_ref` (knowledge-one-home koh-2, D4) | A `(rule: <id>)` reference appears in a scanned file whose `<id>` is homed by no `<!-- rule: <id> -->` marker in the bundle or `AGENTS.md`. Exempt trees are skipped, and so are code regions — a backticked or fenced reference is quotation, never a pointer. |
+| `applied_at_unlinked` (knowledge-one-home koh-2, D4) | A file listed in a concept's `bee.applied_at` contains no `(rule: <id>)` reference for any rule homed in that concept. |
+| `owns_missing` (knowledge-one-home koh-2, D4) | An area overview concept (`areas/<area>/overview.md` of type `bee.area`) carries none of the `owns.*` keys (`owns.code`, `owns.skills`, `owns.tests`). |
 
 Profile-warning codes — reported always, failing only under `--strict`:
 
@@ -69,7 +79,7 @@ Profile-warning codes — reported always, failing only under `--strict`:
 | `duplicate_id` | Two or more concepts share one `bee.id` (D31). |
 | `dangling_required_context` (knowledge-distill-trigger kdt-1) | A `bee.required_context` entry does not resolve to a real file inside the bundle OR against the repo root (same two-step order `dangling source` uses) — a promote-generated `docs/history/<feature>/...` pointer that exists on disk is not dangling. Both dangling codes also feed the knowledge-freshness close door: findings scoped to a closing feature's touched areas plus its `work/<feature>/` files block `bee close` unless a recorded deferral decision names the feature. |
 | `dangling_supersedes` | A `bee.supersedes` id matches no concept's `bee.id` in the bundle. |
-| dangling source (knowledge-usable U2, cell ku-2, 2026-08-10) | A `bee.sources` entry that names an in-repo file path resolving to no file on disk is reported, so a concept citing code a later port retired degrades visibly instead of silently. |
+| `dangling_source` (knowledge-usable U2, cell ku-2, 2026-08-10) | A `bee.sources` entry that names an in-repo file path resolving to no file on disk is reported, so a concept citing code a later port retired degrades visibly instead of silently. |
 | `dangling_md_link` (knowledge-link-check klc-1, 2026-08-11) | A relative body link ending in `.md` (external `http(s)`/`mailto`, absolute paths, and anchor-only links are skipped) resolved against the containing file's directory does not exist or escapes the bundle. |
 | `dangling_wiki_link` (knowledge-link-check klc-1, 2026-08-11) | A `[[target]]` body reference where neither `target` nor `target` minus an optional `pattern-` prefix matches the stem of any `.md` in the bundle. Code fences and inline backtick spans are stripped first — quoted syntax never warns. A host-repo integration test keeps the shipped bundle clean of both link codes. |
 | `invalid_evidence_state` (evidence-ladder el-1, 2026-08-11) | A `bee.evidence` value outside present/wired/exercised, named by file and value. Absent stays valid and reads as present; `bee.evidence_ref` names the enforcing hook/guard/doctor check/test. `bee knowledge report` surfaces the ladder — per-state counts over patterns plus the present-only list — so a doc-only pattern is visible risk, never a silent default. |
@@ -88,12 +98,26 @@ runtime state, though reads from it are permitted.
 ## Business Rules
 
 - The checker never leaves `docs/knowledge/` (D23) and never writes anything, anywhere (D2).
+- The pointer form a copy carries names a **marker-homed rule id and nothing else**
+  (knowledge-one-home D4, koh-10/koh-12). An area concept's own numbered rule (`R138`, `B50`) lives
+  in a different namespace: it is cited in prose, never through the pointer form, because no
+  `<!-- rule: … -->` marker homes a rule number. A pointer naming one is exactly what
+  `unknown_rule_ref` is for.
 
 ## Edge Cases Settled
 
 - A hand-edited frontmatter block that still parses but does not re-emit byte-identically is a
   `not_canonical` warning naming the file, not a silent pass — the class of error a colon in an
   unquoted title, a `#` mid-value, or CRLF line endings would otherwise cause.
+- **A generated area overview carries its own ownership map, so `bee knowledge bootstrap` cannot
+  trip `owns_missing` on its own output** (koh-2). The bootstrap path writes `areas/<area>/overview.md`,
+  which is exactly the shape `owns_missing` grades, so the generator emits an `owns.code` entry
+  with the overview. A check added over a shape some generator produces is tried against that
+  generator in the same cell, or the generator's next run is the first violation.
+- **A document that TEACHES the marker or pointer spelling does not home a rule or point at one.**
+  Both extractors strip fenced blocks and inline backtick spans first, so quoting the syntax is
+  quotation. Before that stripping landed, this very concept read as a second home for every rule
+  id it names (koh-2, closed by koh-10).
 
 ## Pointers (implementation)
 

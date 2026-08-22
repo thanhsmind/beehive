@@ -23,18 +23,16 @@ believes it is isolated when it is not.
 
 ## Routing rule (D9 — prose, not a hook)
 
-**Code-touching feature work branches at feature start (worktree-first —
-docs/specs/worktree-first.md, 2026-07-31, owner-approved).** Recording a route with any
+**Code-touching feature work branches at feature start (rule: agents-worktree-first)** —
+worktree-first, docs/specs/worktree-first.md, 2026-07-31, owner-approved. Recording a route with any
 code-touching lane in the main checkout makes the worktree the loud, machine-named next action —
 `bee worktree new --feature <slug>`, sibling dir `<repo>--wt--<slug>` on branch
 `wt/<slug>` — and the session opens there. An occupied checkout is no longer the trigger;
-the worktree is the default home for the feature, occupied or not. The MAIN checkout takes
-only integration, docs-lane work, release machinery, merges, and reading (release always
-runs in main). Docs-lane work and a `tiny` fix may stay in main only while no other live session is
-present (heartbeat + non-idle phase, D9a); with one, each takes a worktree like any feature. The
+the worktree is the default home for the feature, occupied or not. The main checkout's
+exemption list is the rule's own (release always runs in main), and the liveness test behind
+"no other live session" is a heartbeat plus a non-idle phase (D9a). The
 explicit owner override is `--in-main` at feature start, recorded as a decision — never
-silent. Landing stays `bee worktree merge` from main. The rule lives in bee-hive's Session
-Scout and the AGENTS.md boundary list; the existing guards (holds, live-owner lanes,
+silent. Landing stays `bee worktree merge` from main. The existing guards (holds, live-owner lanes,
 gates, the main-checkout write guard) keep enforcing the hard parts.
 
 **Visibility (worktree-ux, 2026-07-21, GH #30/#31):** `bee status` inside an UNGRANTED

@@ -707,10 +707,12 @@ use std::time::Instant;
              addCell: cell is missing required field \"title\" (non-empty string). \
              addCell: cell is missing required field \"action\" (non-empty string). \
              addCell: cell is missing required field \"verify\" (non-empty string). \
+             addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
+             addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike."
         );
         let base = |lane: &str| {
-            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane})
+            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "affects_skills": [], "affects_specs": []})
         };
         assert_eq!(
             thrown(validate_new_cell(root, &base("mega"))),
@@ -742,7 +744,7 @@ use std::time::Instant;
         // normalize: literal-order appends + trace defaults
         let normalized = normalize_new_cell(&json!({"id": "n-1", "title": "t"})).unwrap();
         let keys: Vec<&String> = normalized.as_object().unwrap().keys().collect();
-        assert_eq!(keys, vec!["id", "title", "status", "deps", "decisions", "files", "read_first", "trace"]);
+        assert_eq!(keys, vec!["id", "title", "status", "deps", "decisions", "files", "read_first", "affects_skills", "affects_specs", "trace"]);
         assert_eq!(normalized["status"], json!("open"));
         let trace_keys: Vec<&String> = normalized["trace"].as_object().unwrap().keys().collect();
         assert_eq!(
@@ -770,16 +772,16 @@ use std::time::Instant;
     fn validate_new_cell_problems_collects_every_problem_in_one_call() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        // Missing id, feature, action, verify — title present so it does not
-        // fire — plus an invalid lane: five independent problems, none of
-        // them a dependent-check side effect (id absent skips id
-        // pattern/already-exists; lane invalid skips must_haves.truths).
+        // Missing id, feature, action, verify, affects_skills, affects_specs —
+        // title present so it does not fire — plus an invalid lane.
         let broken = json!({"title": "t", "lane": "nope"});
         let expected = vec![
             "addCell: cell is missing required field \"id\" (non-empty string).".to_string(),
             "addCell: cell is missing required field \"feature\" (non-empty string).".to_string(),
             "addCell: cell is missing required field \"action\" (non-empty string).".to_string(),
             "addCell: cell is missing required field \"verify\" (non-empty string).".to_string(),
+            "addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
+            "addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
                 .to_string(),
         ];
@@ -1991,6 +1993,7 @@ use std::time::Instant;
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
+            sync_ack: None,
         }
     }
 
@@ -3370,7 +3373,91 @@ use std::time::Instant;
         json!({
             "id": id, "feature": "batch", "title": format!("title {id}"),
             "action": "do the thing", "verify": "echo ok", "lane": "tiny",
+            "affects_skills": [], "affects_specs": [],
         })
+    }
+
+    #[test]
+    fn add_cell_requires_affects_skills_and_affects_specs_on_every_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        for lane in LANES {
+            let mut base = json!({
+                "id": format!("cell-{lane}"),
+                "feature": "feat",
+                "title": "title",
+                "action": "action",
+                "verify": "cargo test",
+                "lane": lane,
+            });
+            if lane == "standard" || lane == "high-risk" {
+                base["must_haves"] = json!({"truths": ["something true"]});
+            }
+
+            // Missing both
+            let thrown_both = thrown(validate_new_cell(root, &base));
+            assert!(
+                thrown_both.contains("addCell: cell is missing required field \"affects_skills\""),
+                "lane {lane} must refuse missing affects_skills: {thrown_both}"
+            );
+            assert!(
+                thrown_both.contains("addCell: cell is missing required field \"affects_specs\""),
+                "lane {lane} must refuse missing affects_specs: {thrown_both}"
+            );
+
+            // Missing affects_skills only
+            let mut missing_skills = base.clone();
+            missing_skills["affects_specs"] = json!([]);
+            let thrown_skills = thrown(validate_new_cell(root, &missing_skills));
+            assert!(
+                thrown_skills.contains("addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none)."),
+                "lane {lane} must name missing affects_skills with FIX: {thrown_skills}"
+            );
+            assert!(!thrown_skills.contains("missing required field \"affects_specs\""));
+
+            // Missing affects_specs only
+            let mut missing_specs = base.clone();
+            missing_specs["affects_skills"] = json!([]);
+            let thrown_specs = thrown(validate_new_cell(root, &missing_specs));
+            assert!(
+                thrown_specs.contains("addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none)."),
+                "lane {lane} must name missing affects_specs with FIX: {thrown_specs}"
+            );
+            assert!(!thrown_specs.contains("missing required field \"affects_skills\""));
+
+            // Non-array value
+            let mut non_array = base.clone();
+            non_array["affects_skills"] = json!("not-an-array");
+            non_array["affects_specs"] = json!([]);
+            let thrown_non_array = thrown(validate_new_cell(root, &non_array));
+            assert!(
+                thrown_non_array.contains("addCell: \"affects_skills\" must be an array of strings."),
+                "lane {lane} must refuse non-array affects_skills: {thrown_non_array}"
+            );
+
+            // Both present as [] -> valid
+            let mut valid = base.clone();
+            valid["affects_skills"] = json!([]);
+            valid["affects_specs"] = json!([]);
+            assert!(
+                validate_new_cell(root, &valid).is_ok(),
+                "lane {lane} accepts [] for affects_skills and affects_specs"
+            );
+        }
+
+        // Updating an existing cell that lacks the keys still succeeds
+        let legacy_cell = json!({
+            "id": "legacy-1",
+            "feature": "feat",
+            "title": "old title",
+            "action": "action",
+            "verify": "cargo test",
+            "lane": "tiny",
+            "status": "open",
+        });
+        write_cell_fixture(root, "legacy-1", &legacy_cell);
+        assert!(update_field_problem("title", &json!("updated title")).is_none());
     }
 
     #[test]
@@ -3707,6 +3794,7 @@ use std::time::Instant;
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
+            sync_ack: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -3775,6 +3863,7 @@ use std::time::Instant;
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
+            sync_ack: None,
         }
     }
 
@@ -3869,6 +3958,7 @@ use std::time::Instant;
             commit_pending: None,
             inline_reason: None,
             report: Some(report.to_string()),
+            sync_ack: None,
         }
     }
 
@@ -4116,6 +4206,7 @@ use std::time::Instant;
             commit_pending: None,
             inline_reason: None,
             report: report.map(str::to_string),
+            sync_ack: None,
         }
     }
 
@@ -4398,6 +4489,7 @@ use std::time::Instant;
             commit_pending: commit_pending.map(str::to_string),
             inline_reason: None,
             report: Some(default_test_report_json()),
+            sync_ack: None,
         }
     }
 
@@ -4512,6 +4604,7 @@ use std::time::Instant;
             commit_pending: None,
             inline_reason: inline_reason.map(str::to_string),
             report: Some(default_test_report_json()),
+            sync_ack: None,
         }
     }
 
@@ -5358,6 +5451,7 @@ use std::time::Instant;
             commit_pending: None,
             inline_reason: None,
             report: Some(default_test_report_json()),
+            sync_ack: None,
         }
     }
 
@@ -6434,6 +6528,8 @@ use std::time::Instant;
             "verify": "echo ok",
             "lane": lane,
             "files": ["packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"],
+            "affects_skills": [],
+            "affects_specs": [],
         });
         if lane == "standard" || lane == "high-risk" {
             c["must_haves"] = json!({"truths": ["the guard still refuses the bad case"]});
@@ -6529,4 +6625,249 @@ use std::time::Instant;
             read_cell_norm(root, "jo2-tripped").unwrap().is_none(),
             "the tripping cell must not be written: {stdout}"
         );
+    }
+
+    // ═══ sync door (koh-6, D3/D4) ═══════════════════════════════════════════
+    //
+    // Three cap-time checks over the touched set (last commit's numstat rows
+    // union `--files`, or `--files` alone with no resolvable commit):
+    // (a) ownership, (b) applied_at, (c) affects_skills prediction — every
+    // one a hard refusal, escaped only by a non-blank `--sync-ack`. A cell
+    // predating `affects_skills` skips (c) alone.
+
+    fn write_area_overview(root: &Path, area: &str, code: &[&str], skills: &[&str]) {
+        let dir = root.join("docs/knowledge/areas").join(area);
+        std::fs::create_dir_all(&dir).unwrap();
+        let code_list = code.join(", ");
+        let skills_list = skills.join(", ");
+        let text = format!(
+            "---\ntype: bee.area\ntitle: {area}\ntags: []\nbee:\n  id: area-{area}\n  areas: [{area}]\n  owns.code: [{code_list}]\n  owns.skills: [{skills_list}]\n  owns.tests: []\n---\n{area} overview.\n"
+        );
+        std::fs::write(dir.join("overview.md"), text).unwrap();
+    }
+
+    fn write_rule_home(root: &Path, area: &str, file: &str, rule_id: &str, applied_at: &[&str]) {
+        let dir = root.join("docs/knowledge/areas").join(area);
+        std::fs::create_dir_all(&dir).unwrap();
+        let applied_list = applied_at.join(", ");
+        let text = format!(
+            "---\ntype: bee.area\ntitle: {rule_id}\ntags: []\nbee:\n  id: {rule_id}-home\n  areas: [{area}]\n  applied_at: [{applied_list}]\n---\n<!-- rule: {rule_id} -->\nRule text.\n<!-- /rule -->\n"
+        );
+        std::fs::write(dir.join(file), text).unwrap();
+    }
+
+    fn cap_flags_sync(id: &str, files_changed: Vec<&str>, sync_ack: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: files_changed.into_iter().map(|f| json!(f)).collect(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: Some(default_test_report_json()),
+            sync_ack: sync_ack.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn owned_code_touched_without_its_skill_is_refused_and_sync_ack_escapes_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_area_overview(root, "demo", &["src/demo/*"], &["skills/demo/SKILL.md"]);
+        write_cell_fixture(root, "sd-1", &cell("sd-1", "claimed", "f", json!([])));
+
+        let flags = cap_flags_sync("sd-1", vec!["src/demo/thing.rs"], None);
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(refusal.contains("demo"), "must name the area: {refusal}");
+        assert!(
+            refusal.contains("skills/demo/SKILL.md"),
+            "must name the untouched owned skill: {refusal}"
+        );
+        assert_eq!(
+            read_cell_norm(root, "sd-1").unwrap().unwrap()["status"],
+            json!("claimed"),
+            "a refused cap writes nothing"
+        );
+
+        // --sync-ack escapes it: capped, the reason lands on trace.sync_ack
+        // AND as a trace.deviations line.
+        let acked = cap_flags_sync(
+            "sd-1",
+            vec!["src/demo/thing.rs"],
+            Some("skill update deferred to a follow-up cell"),
+        );
+        let capped = cap_cell_from_flags(root, &acked, false).unwrap();
+        assert_eq!(
+            capped["trace"]["sync_ack"],
+            json!("skill update deferred to a follow-up cell")
+        );
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!(["sync-ack: skill update deferred to a follow-up cell"])
+        );
+    }
+
+    #[test]
+    fn blank_sync_ack_is_refused_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_area_overview(root, "demo", &["src/demo/*"], &["skills/demo/SKILL.md"]);
+        write_cell_fixture(root, "sd-2", &cell("sd-2", "claimed", "f", json!([])));
+        let before = std::fs::read_to_string(cell_file(root, "sd-2")).unwrap();
+
+        for bad in ["", "   ", "\t\n "] {
+            let flags = cap_flags_sync("sd-2", vec!["src/demo/thing.rs"], Some(bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains("--sync-ack") && refusal.contains("non-empty"),
+                "refusal must name the flag: {refusal}"
+            );
+        }
+        let after = std::fs::read_to_string(cell_file(root, "sd-2")).unwrap();
+        assert_eq!(before, after, "nothing was written on refusal");
+    }
+
+    #[test]
+    fn rule_home_touched_without_every_applied_at_file_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_rule_home(
+            root,
+            "demo",
+            "rule.md",
+            "demo-rule-1",
+            &["skills/demo/SKILL.md", "docs/specs/demo.md"],
+        );
+        write_cell_fixture(root, "sd-3", &cell("sd-3", "claimed", "f", json!([])));
+
+        // Only the home is touched — neither applied_at file is.
+        let flags = cap_flags_sync("sd-3", vec!["docs/knowledge/areas/demo/rule.md"], None);
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(refusal.contains("demo-rule-1"), "must name the rule: {refusal}");
+        assert!(refusal.contains("skills/demo/SKILL.md"), "{refusal}");
+        assert!(refusal.contains("docs/specs/demo.md"), "{refusal}");
+
+        // Touching both applied_at files alongside the home clears it.
+        let flags_ok = cap_flags_sync(
+            "sd-3",
+            vec![
+                "docs/knowledge/areas/demo/rule.md",
+                "skills/demo/SKILL.md",
+                "docs/specs/demo.md",
+            ],
+            None,
+        );
+        let capped = cap_cell_from_flags(root, &flags_ok, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn affects_skills_prediction_mismatch_is_refused_naming_the_diff() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("sd-4", "claimed", "f", json!([]));
+        c["affects_skills"] = json!(["skills/predicted/SKILL.md"]);
+        write_cell_fixture(root, "sd-4", &c);
+
+        // Touches a DIFFERENT skills/** path than predicted.
+        let flags = cap_flags_sync("sd-4", vec!["skills/other/SKILL.md"], None);
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("SYNC_DOOR"), "{refusal}");
+        assert!(
+            refusal.contains("skills/other/SKILL.md") && refusal.contains("skills/predicted/SKILL.md"),
+            "must name both sides of the diff: {refusal}"
+        );
+
+        // Touching exactly the predicted path clears it.
+        let flags_ok = cap_flags_sync("sd-4", vec!["skills/predicted/SKILL.md"], None);
+        let capped = cap_cell_from_flags(root, &flags_ok, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn legacy_cell_without_affects_skills_skips_prediction_and_notes_the_skip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        // No affects_skills key at all — predates koh-5.
+        write_cell_fixture(root, "sd-5", &cell("sd-5", "claimed", "f", json!([])));
+
+        let flags = cap_flags_sync("sd-5", vec!["skills/whatever/SKILL.md"], None);
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"), "legacy cell is never refused on (c)");
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!(["sync: no prediction on legacy cell"]),
+            "the skip is made visible when the touched set actually carried a skills/** path"
+        );
+    }
+
+    #[test]
+    fn a_cell_touching_no_owned_path_caps_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_area_overview(root, "demo", &["src/demo/*"], &["skills/demo/SKILL.md"]);
+        write_cell_fixture(root, "sd-6", &cell("sd-6", "claimed", "f", json!([])));
+
+        // Touches neither the area's code nor any skills/** path — the door
+        // has nothing to say, and no legacy line appears either (nothing
+        // predicted, nothing touched under skills/).
+        let flags = cap_flags_sync("sd-6", vec!["src/unrelated/thing.rs"], None);
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["deviations"], json!([]));
+    }
+
+    #[test]
+    fn no_resolvable_commit_falls_back_to_files_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // No git repo at all in this tempdir — head_commit_numstat must
+        // return None, so the touched set is --files alone.
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_area_overview(root, "demo", &["src/demo/*"], &["skills/demo/SKILL.md"]);
+        write_cell_fixture(root, "sd-7", &cell("sd-7", "claimed", "f", json!([])));
+
+        let flags = cap_flags_sync("sd-7", vec!["src/demo/thing.rs"], None);
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("SYNC_DOOR") && refusal.contains("skills/demo/SKILL.md"),
+            "the refusal must still fire off --files alone: {refusal}"
+        );
+    }
+
+    #[test]
+    fn update_can_backfill_affects_skills_on_an_old_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        // `cells_update_behavior_child` (above) hardcodes `--id c-1` — the
+        // fixture id must match it, same as every other test on this child.
+        write_cell_fixture(root, "c-1", &cell("c-1", "open", "f", json!([])));
+
+        let out = cells_update_behavior_run(
+            root,
+            &json!({"affects_skills": ["skills/demo/SKILL.md"], "affects_specs": []}),
+        );
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let updated = read_cell(root, "c-1").unwrap().unwrap();
+        assert_eq!(updated["affects_skills"], json!(["skills/demo/SKILL.md"]));
+        assert_eq!(updated["affects_specs"], json!([]));
     }

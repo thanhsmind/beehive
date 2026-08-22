@@ -12,6 +12,9 @@ bee:
   decisions: [a7d7b3d5]
   sources: [docs/history/rust-port/CONTEXT.md, docs/history/rust-port/reports/rust-port-13.md, docs/history/rust-port/reports/rust-port-14.md, docs/history/rust-port/reports/rust-port-17.md, docs/history/rust-port/reports/rust-port-20.md]
   authoritative_for: "rust-runtime: purpose, guarantees, and the artifacts of the ported runtime"
+  owns.code: [packages/bee-rs/crates/bee/src/main.rs, packages/bee-rs/crates/bee/src/catalog.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/fsutil.rs, packages/bee-rs/crates/bee/src/jsjson.rs, packages/bee-rs/crates/bee/src/lease_store.rs, packages/bee-rs/crates/bee/src/link_invalid.rs, packages/bee-rs/crates/bee/src/lock.rs, packages/bee-rs/crates/bee/src/nested_checkout.rs, packages/bee-rs/crates/bee/src/path_identity.rs, packages/bee-rs/crates/bee/src/registry.rs, packages/bee-rs/crates/bee/src/roots.rs, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/shell.rs, packages/bee-rs/crates/bee/src/state.rs, packages/bee-rs/crates/bee/src/textutil.rs, packages/bee-rs/crates/bee/src/uat.rs, packages/bee-rs/crates/bee/src/version.rs, "packages/bee-rs/crates/bee/src/devtools/*", "packages/bee-rs/crates/bee/src/verbs/status_full/*", packages/bee-rs/crates/bee/src/verbs/status_brief.rs, packages/bee-rs/crates/bee/src/verbs/help.rs]
+  owns.skills: []
+  owns.tests: [packages/bee-rs/crates/bee/src/doctor/tests.rs, packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs, packages/bee-rs/crates/bee/tests/front_door.rs, packages/bee-rs/crates/bee/tests/registry_contracts.rs, packages/bee-rs/crates/bee/tests/registry_dispatch.rs]
 ---
 
 ## Purpose

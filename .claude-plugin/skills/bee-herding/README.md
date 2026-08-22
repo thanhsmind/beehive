@@ -31,7 +31,7 @@ git -C <main-root> rm --cached .bee/logs/*.jsonl
 git -C <main-root> commit -m "chore: untrack bee session logs"
 ```
 
-**2. `gate_bypass` must be `full` or `total`.** Dispatch refuses to operate below that and says so every cycle. Check with `bee status --json`. This is deliberate: an agent working unattended must not inherit `normal`'s latitude for hard-gate work.
+**2. `gate_bypass` must be `full` or `total`.** Dispatch refuses to operate below that and says so every cycle. Check with `bee status --json`. This is deliberate: an agent working unattended must not inherit `normal`'s latitude for hard-gate work. The switch is the one recorded exception to gates never being self-approved, and this cockpit is that exception in use (rule: agents-gates-never-self-approved).
 
 **3. You must explicitly enable dispatch — it will not run on its own.** Dispatch refuses to build *any* dispatchable set until you create an owner enable marker:
 

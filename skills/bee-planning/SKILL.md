@@ -42,8 +42,7 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 Record: `bee route --set --class <c> --lane <l> --flags <f> --files <n>`;
 re-route upward on new evidence any time, de-escalate only on cited evidence.
 A code-touching route's next action includes creating the feature worktree
-and opening the session there (worktree-first — AGENTS.md; `docs` and a solo
-`tiny` stay in main). Code truth changes only in the feature worktree, the
+and opening the session there (rule: agents-worktree-first). Code truth changes only in the feature worktree, the
 user tests at staging once the slice is ready, and main receives the branch
 only after its uat gate.
 
@@ -73,6 +72,11 @@ decision?* FAIL → redraft. Standard/high-risk add the review wave before the g
 
 ## Gate
 
+Before the question, on a lane: `bee state plan-conflicts derive`, then one
+`bee state plan-conflicts verdict` per candidate — the gate refuses an
+execution approval while any candidate is unverdicted or the review is stale
+by `plan_rev` (see `docs/knowledge/areas/workflow-state/gates.md` R138).
+
 Standard/high-risk: present the shape in plain language — what will be built,
 why this size, cost if the shape is wrong — link the plan, then ask verbatim:
 "Work shape is ready. Approve before current-work preparation?" and stop. On
@@ -96,12 +100,8 @@ end-to-end, real behavior, no stubs.
 
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap
-(`.bee/expertise/tests.md`). The agent owns test scope: pick the proof
-each cap's change type needs (code → related tests green; docs →
-parity/pointer checks; behavior → judge verdict), run it, and record it
-as the cap's proof line. `bee close` and `bee worktree merge` check that
-recorded proof; CI runs the full declared command on every push
-(`references/planning-reference.md` ("Test scoping")). Then
+(`.bee/expertise/tests.md`). The agent owns test scope (rule: agents-proof-at-cap) —
+scoping detail in `references/planning-reference.md` ("Test scoping"). Then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 
 ## Scope integrity

@@ -82,9 +82,9 @@ checkout at all, nothing about this behavior changes today's write.
   ONE coordination store and one feature's single gate — an orchestrator
   performance device the swarm may opt into for an eligible multi-worker
   wave, never a new default. A second, independent-feature model (default
-  since worktree-first doctrine, AGENTS.md) runs each feature in its OWN
-  worktree with its own phase, gates, and store from the start — an
-  isolation device, not a performance one. The two models coexist and never
+  since worktree-first doctrine) runs each feature in its OWN
+  worktree with its own phase, gates, and store from the start
+  (rule: agents-worktree-first) — an isolation device, not a performance one. The two models coexist and never
   substitute for each other; see `worktree-parallelism/overview.md` for the
   full distinction and boundary.
 - R33 — All linked worktrees share exactly one validated main coordination

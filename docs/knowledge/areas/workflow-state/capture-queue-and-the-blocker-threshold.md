@@ -11,6 +11,7 @@ bee:
   decisions: ["c8e25271 (a settlement is stubbed the moment it settles; the flush is offered, never forced)", c2a7bd4f item 2 (prose-rule-audit batch A — the capture-queue offer gains blocker teeth past a count and an age threshold), "counter-teeth D2 (thresholds are ten pending stubs or an oldest stub older than seven days; constants in code for this batch, config keys deferred)", counter-teeth D6 (a test proving the counter computes correctly lands before the flip to refusal)]
   sources: ["counter-teeth cell ct-3 (trace .bee/cells/ct-3.json, 2026-08-04 — escalation reuses the existing pending membership; status_full 49 passed, 0 failed)", docs/history/counter-teeth/CONTEXT.md, "packages/bee-rs/crates/bee/src/state.rs (DEFAULT_CAPTURE_QUEUE_THRESHOLD + capture_queue_threshold — the two constants, moved here from the retired status_full/orient.rs:134-181 during the rust-port split)", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs (capture_queue_door_detail — the escalation predicate; capture_queue_pending — pending membership, stub rows minus flush rows; moved here from the retired status_full/records.rs:215)"]
   authoritative_for: "workflow-state: the capture queue's pending membership and its escalation from offer to blocker"
+  applied_at: [skills/bee-capturing/SKILL.md, packages/bee-rs/crates/bee/src/verbs/capture.rs]
 ---
 
 # Workflow State — the capture queue, its pending membership, and the threshold that turns an offer into a blocker
@@ -42,7 +43,33 @@ routes to draining it. Both thresholds are constants in the build for now:
 counter-teeth scoped config keys out deliberately, and that remains open work
 rather than an oversight.
 
+**B51 — A stub filed against an area that owns a skill answers whether the skill
+changed, or it is not filed (knowledge-one-home D4 item 5, 2026-08-22).**
+Trigger: the moment a settlement is queued against a named area. What happens:
+the queue reads that area's ownership; when the area owns one or more skills, the
+stub must carry a **skill answer** — either the skill it changed, or the reason
+it changed none. Without one the stub is refused before anything is written, and
+the refusal names the area's owned skills and both accepted spellings, so the
+answer costs one re-run and no searching. An area that owns no skill, and a
+settlement filed against no area at all, are asked nothing. What each actor
+observes: the agent answers a one-line question while the settlement is still
+fresh in the turn, instead of the reviewer discovering months later that the
+skill text and the behavior it describes parted ways at this stub. The answer
+travels with the stub into the flush, where it tells the scribe which skill to
+open.
+
 ## Business Rules
+
+<!-- rule: workflow-state-capture-skill-answer -->
+- R102 — A capture stub whose area owns at least one skill carries a **skill
+  answer** in one of exactly two spellings — `changed: <skill path>` or
+  `not: <why>` — and is refused, by name and with the area's owned skills
+  listed, when the answer is missing or blank. The obligation is the area's
+  ownership, not the stub's content: an area whose owned-skill list is empty,
+  an area no ownership map knows, and a stub with no area at all each owe
+  nothing. The answer is stored on the stub as its `skill_answer` field and is
+  never re-derived (knowledge-one-home D4 item 5, cell koh-11, 2026-08-22).
+<!-- /rule -->
 
 - R101 — The capture queue's pending set is stubs minus flushes, and it escalates
   from an offer to a blocker at ten or more pending entries, or an oldest pending
@@ -60,6 +87,12 @@ rather than an oversight.
 - The thresholds decide how the queue is *reported*; nothing about them drains,
   reorders, or expires a stub. A stub leaves the pending set only by being
   flushed into a spec.
+- The skill answer is checked for presence, not for truth: `not: <why>` queues
+  the stub exactly as `changed: <path>` does. The door buys the question being
+  asked at the cheap moment, not a verified answer — the cap-time ownership
+  door is what checks whether an owned skill was actually touched.
+- The skill answer travels only on the stub. A stub already queued is never
+  re-asked, and the pending listing renders the same fields it always did.
 
 ## Pointers (implementation)
 
@@ -74,3 +107,14 @@ rather than an oversight.
   rendered at `status_full/render.rs:246-252`. Red-first per counter-teeth D6.
   Evidence: trace `.bee/cells/ct-3.json` (status_full 49 passed, 0 failed,
   2026-08-04).
+- The skill answer (B51/R102): `--skill-answer` is declared on `capture add` in
+  `packages/bee-rs/crates/bee/src/generated/registry_payload.json` (hand-edited —
+  no generator exists) and pinned by `PINNED_FLAG_COUNT` 181 in
+  `packages/bee-rs/crates/bee/src/catalog.rs`. The door itself is
+  `skill_answer_refusal` in
+  `packages/bee-rs/crates/bee/src/verbs/capture.rs`, called from `run_add`
+  after the store-root preamble (the ownership read needs the root) and before
+  the stub is built; it reads `owns.skills` through
+  `knowledge::ownership::load_ownership`, the same map the cap-time sync door
+  uses, so one ownership statement drives both. Proof: the four
+  `skill_answer`/`skill_owning_area` rows in that file's own test module.

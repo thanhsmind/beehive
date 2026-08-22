@@ -205,6 +205,10 @@ fn build_area_concept(slug: &str, title: &str, description: &str, spec_name: &st
         "authoritative_for".to_string(),
         Value::String(format!("{slug}: {title}")),
     );
+    bee.insert(
+        "owns.code".to_string(),
+        Value::Array(vec![Value::String(format!("docs/specs/{spec_name}"))]),
+    );
 
     let mut data = Map::new();
     data.insert("type".to_string(), Value::String("bee.area".to_string()));

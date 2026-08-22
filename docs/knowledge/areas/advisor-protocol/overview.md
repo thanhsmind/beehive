@@ -10,6 +10,9 @@ bee:
   decisions: [advisor D1-D3, "72f3d6dd (AO5 — config is the authority, no strength test, same-model no-op only)", AO8 (advice-class slots read-only), "AO2(b)/AO3/AO13 (one orchestrator trigger; execution-gate precondition; event-based staleness, never a TTL)", AO4 (call paths split by trigger class), f1ca79b9 (AO15 — attribution fields), 0019 + 2A-iv GO (external gather proven through config), AO14 (execution-worker class), "126412b9 (precondition keys on the selected record's mode)", "codex-native-transport D1-D3, D5, D7 (3ceba8f5, cnt advisor conditions 69513d80, D3a c0cba64e)"]
   sources: ["advisor cells adv-1..adv-3 (worker consult loop, 2026-07-13)", "advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", dogfood run .bee/spikes/advisor-and-orchestration/2aiv-cli-gather-dogfood.md, first live orchestrator consult digest .bee/spikes/advisor-and-orchestration/slice5-advisor-digest.txt, "codex-native-transport cells cnt-1/cnt-2/cnt-3 (resolver + config native slot shape, capability classification, dispatch-prepare native branch + honest economics; traces in .bee/cells/, reports docs/history/codex-native-transport/reports/, 2026-07-19)", "codex-native-transport cell cnt-7 (Claude guard allowlist folds the adviser slot, closing a live adviser-dispatch refusal; trace in .bee/cells/, report docs/history/codex-native-transport/reports/cnt-7.md, 2026-07-19)"]
   authoritative_for: "advisor-protocol: purpose, vocabulary, actors"
+  owns.code: [packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs, "packages/bee-rs/crates/bee/src/verbs/drivers/*"]
+  owns.skills: []
+  owns.tests: [packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs]
 ---
 
 # Advisor Protocol — Purpose, Vocabulary, and Actors

@@ -192,6 +192,15 @@ pub(crate) fn base_workflow_defaults() -> Map<String, Value> {
     m.insert("mode".into(), Value::Null);
     m.insert("phase".into(), json!("idle"));
     m.insert("plan_rev".into(), json!(0));
+    // knowledge-one-home D5 (koh-8): `conflict_review` rides BESIDE
+    // `plan_rev` on this record — `{plan_rev, derived_at, candidates: [{id,
+    // kind, title, verdict, note}]}`, written only by `state plan-conflicts
+    // derive` / `verdict` (state_group/plan_conflicts.rs). It is deliberately
+    // NOT seeded here: absent is a meaningful value. "Never derived against
+    // this plan" and "derived and came back empty" are different facts, and
+    // only the second one makes "0 conflicts" a true statement — a default
+    // `{candidates: []}` would erase that difference at every reader. A
+    // record that has never been derived says so by carrying no field at all.
     m.insert("summary".into(), json!(""));
     m.insert("next_action".into(), json!(""));
     m.insert("status".into(), json!("active"));

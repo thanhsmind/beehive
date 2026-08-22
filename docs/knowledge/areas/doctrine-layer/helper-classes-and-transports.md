@@ -45,9 +45,10 @@ never registers, never reserves, never caps — it returns a digest and vanishes
 An **execution worker** implements exactly one assigned unit of work: it
 registers in the worker registry, reserves the files it will touch, and its
 result feeds a cap — and since the smallest lanes also execute through one such
-dispatched worker, "zero subagents" for a small piece of work means zero
-*ceremony* helpers (reviewers, panels), never zero I/O helpers and never zero
-execution workers. Independent reviewers and checkers are neither class: they
+dispatched worker, "zero subagents" for a small piece of work caps *ceremony*
+helpers only (reviewers, panels): I/O helpers stay exempt from that count, and
+the execution worker is owed regardless
+(rule: agents-never-zero-execution-workers). Independent reviewers and checkers are neither class: they
 are review-class dispatches with no execution authority. The class is defined
 by what the dispatch may *do*, never by which mechanism launched it. The
 orchestrator authors the smallest lanes' completion report itself, from the

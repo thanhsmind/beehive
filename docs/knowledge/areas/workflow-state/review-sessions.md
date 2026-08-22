@@ -82,7 +82,8 @@ this door (see the bypass ladder in `gates.md`, R25).
 
 ## Business Rules
 
-- R4 — Full independent review starts only after an explicit user request;
+- R4 — Full independent review starts only after an explicit user request
+  (rule: agents-review-user-invoked);
   completing a cell, slice, or feature never spends reviewer tokens by itself,
   and a merge/ship/release request is answered with the review status plus one
   explicit question, never a silent review dispatch (decision

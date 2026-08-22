@@ -127,20 +127,23 @@ None.
 
 ### Deferred To Planning
 
-- [ ] Does the cap-time ownership check run on `git diff` of the cell's
-  commit or on `--files`? — read handlers_close.rs; prefer the commit
-  diff (the `--files` list is self-reported).
-- [ ] Where does the plan store conflict verdicts so `plan-rev bump` can
-  reset them — plan.md section or a state field? — read set_gate.rs and
-  plan-rev handling.
-- [ ] Lane order: schema + check first, then cap door, then gate
-  precondition, then migration — confirm nothing needs the migration
-  earlier.
+<!-- bee:not-a-deferral: these three questions were answered by planning and execution (plan.md Approach; koh-6, koh-8, slice order) — kept as the record of what planning had to settle, not as open promises -->
+- [x] Does the cap-time ownership check run on `git diff` of the cell's
+  commit or on `--files`? — Answered (koh-6): the union of the commit's
+  numstat and `--files`; `--files` alone when no commit resolves.
+- [x] Where does the plan store conflict verdicts so `plan-rev bump` can
+  reset them? — Answered (koh-8/koh-9): `conflict_review` on the workflow
+  record, stamped with `plan_rev`; a bump makes it stale, no reset needed.
+- [x] Lane order: schema + check, cap door, gate precondition, migration —
+  Answered: that order held; nothing needed the migration earlier.
+<!-- /bee:not-a-deferral -->
 
 ## Deferred Ideas
 
+<!-- bee:not-a-deferral: out-of-scope lines carried from the map; neither is a promise to act later -->
 - Smarter `knowledge context` ranking — explicitly out of scope (map).
 - Release checklist gaps — already fixed as its own example (map).
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 

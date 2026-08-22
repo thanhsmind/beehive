@@ -138,8 +138,7 @@ history.
 3. **Testable exit.** The cell's outcome is provable by the proof its
    writer will run and record at cap time (related tests for code, a
    parity/pointer check for docs, a judge verdict for behavior) — plan the
-   cell so that proof exists by cap time; `bee close`/`bee worktree merge`
-   check the recorded proof, never run anything themselves.
+   cell so that proof exists by cap time (rule: agents-proof-at-cap).
    "Manually check" is not an exit.
 4. **must_haves are contracts:** `truths` (observable behavior),
    `artifacts` (path + substantive description — no stub counts),
@@ -156,6 +155,9 @@ history.
    `artifacts` are the product the cell builds (a source file, a spec, a
    migration), never a report that the cell ran; verification evidence
    belongs in the cell trace, its single source.
+9. **Predicted affects_skills and affects_specs.** Every cell carries flat arrays
+   `affects_skills` and `affects_specs` (repo-relative paths; `[]` when none are
+   affected) required on every lane (per D3).
 
 ## Example cell JSON
 
@@ -170,6 +172,8 @@ history.
   "decisions": ["D2", "D4"],
   "files": ["src/api/router.ts", "src/auth/middleware.ts"],
   "read_first": ["src/api/router.ts"],
+  "affects_skills": [],
+  "affects_specs": [],
   "action": "Mount the session middleware from auth-2 onto all /api/* routes (per D2). Preserve the existing public response envelope (per D4). Follow the error-handler registration pattern already used in router.ts.",
   "must_haves": {
     "truths": ["Unauthenticated /api/* requests return 401"],
@@ -194,8 +198,9 @@ stays the source of truth:
    `<feature-slug-abbrev>-<n>` convention (e.g. `auth-3`); collide with no
    existing cell id — list current ids first: `bee cells list`.
 2. **Required fields.** `id`, `feature`, `title`, `action`, `verify` are all
-   non-empty strings; `verify: "none"` is legal only in a repo whose
-   `commands.test` declares itself no-test (the `"none"` sentinel).
+   non-empty strings; `affects_skills` and `affects_specs` are required flat
+   arrays (`[]` when none are affected); `verify: "none"` is legal only in a
+   repo whose `commands.test` declares itself no-test (the `"none"` sentinel).
 3. **Lane.** One of `tiny`/`small`/`standard`/`high-risk`/`spike`;
    `standard`/`high-risk` cells carry non-empty `must_haves.truths`.
 4. **Scope-derived obligations.** Any `files` path under a release-manifest
@@ -226,14 +231,7 @@ never downgrade the lane to dodge validation.
 
 ## Test scoping
 
-The agent owns test scope end to end, including at the close/merge
-boundary: pick the proof each cell's change type needs (code → related
-tests green; docs → parity/pointer checks; behavior → judge verdict), run
-it, and record it as the cap's proof line, `<command> — <result> —
-<scope reason>`. `bee close` and `bee worktree merge` CHECK that recorded
-proof; neither runs `commands.test` itself — that's the project's ONE
-declared test command, and it stays what CI runs on every push, the one
-deterministic net. `commands.verify` is retired. A host keeps CI fast by
+The agent owns test scope end to end (rule: agents-proof-at-cap). `commands.test` is the project's ONE declared test command, and it stays what CI runs on every push, the one deterministic net. `commands.verify` is retired. A host keeps CI fast by
 pointing `commands.test` at a suite it is willing to run there. In a
 repo that has declared itself no-test (`commands.test` set to the
 sentinel `"none"`), cells prove with the command segment `none` and the

@@ -10,6 +10,9 @@ bee:
   decisions: [55ff17ef (release-version parity is fail-closed across every distributed projection), 09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), cf511ff3 (plugin/package and repo-copy sources are mutually exclusive), 4cc1c355 (Codex plugin-first distribution), "3318374a (installer hardening: per-project skills default, global opt-in, default instructions import)"]
   sources: ["installer-hardening ih-1..ih-6 (cells, 2026-07-13; flushed capture stub 92c9bcf6)", "installer-version-parity-1-3-1 locked rules (fail-closed release tuple, full projection parity, greenfield/brownfield end-to-end success contract)", "codex-sandbox-baseline cells codex-sandbox-baseline-1/codex-sandbox-baseline-2 (real onboarding entrypoint through the shared isolated test runner; full onboarding suite green, 2026-07-16)"]
   authoritative_for: "onboarding: purpose, run modes, and actors"
+  owns.code: ["packages/bee-rs/crates/bee/src/onboard/*"]
+  owns.skills: []
+  owns.tests: [packages/bee-rs/crates/bee/src/onboard/tests.rs, packages/bee-rs/crates/bee/tests/installer_contracts.rs, packages/bee-rs/crates/bee/tests/installer_invocations.rs, packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs]
 ---
 
 # Onboarding (purpose, run modes, and actors)

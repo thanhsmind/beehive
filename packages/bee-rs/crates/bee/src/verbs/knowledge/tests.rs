@@ -895,6 +895,7 @@ use std::time::Instant;
                 r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
                     .to_string(),
             ),
+            sync_ack: None,
         };
         // decision 13ce1858 (test-cadence-boundary D1): `cap_cell_from_flags`
         // dropped its `test_root` parameter with the per-cap test run.
@@ -1241,7 +1242,13 @@ use std::time::Instant;
     #[test]
     fn dangling_required_context_warns_only_for_the_unresolvable_target() {
         let (_tmp, dir) = bundle();
-        put(&dir, "areas/demo/overview.md", Cx::new("demo-overview").ty("bee.area"));
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["areas/demo/overview.md"])),
+        );
         put(
             &dir,
             "patterns/linked.md",
@@ -1674,6 +1681,409 @@ use std::time::Instant;
         assert!(report.ok);
     }
 
+    // ═══ owns.* and applied_at frontmatter keys (koh-1 / D4) ═════════════════
+
+    #[test]
+    fn parse_each_new_frontmatter_key_individually() {
+        for (key, val) in [
+            ("owns.code", "[crates/bee/src/verbs/knowledge/*, crates/bee/src/verbs/knowledge.rs]"),
+            ("owns.skills", "[skills/bee-hive/SKILL.md]"),
+            ("owns.tests", "[tests/registry_contracts.rs, tests/hook_contracts.rs]"),
+            ("applied_at", "[docs/history/knowledge-one-home/CONTEXT.md]"),
+        ] {
+            let text = format!("---\ntype: bee.pattern\ntitle: Demo\ntags: []\nbee:\n  id: p-1\n  lifecycle: active\n  {key}: {val}\n---\nbody\n");
+            let Fm::Parsed { data, block, .. } = parse_frontmatter(&text) else {
+                panic!("failed to parse {key}");
+            };
+            let bee = data["bee"].as_object().unwrap();
+            assert!(bee.contains_key(key), "bee block must contain {key}");
+            assert_eq!(emit_frontmatter(&data).unwrap(), block, "round-trip for {key}");
+        }
+    }
+
+    #[test]
+    fn owns_and_applied_at_keys_emit_in_fixed_bee_key_order() {
+        let mut data = Map::new();
+        data.insert("type".into(), json!("bee.area"));
+        data.insert("title".into(), json!("Demo Area"));
+        data.insert("tags".into(), json!([]));
+        let mut bee = Map::new();
+        // Insert in reverse / mixed order
+        bee.insert("applied_at".into(), json!(["docs/history/CONTEXT.md"]));
+        bee.insert("custom_unknown_key".into(), json!("tail"));
+        bee.insert("owns.tests".into(), json!(["tests/a.rs"]));
+        bee.insert("id".into(), json!("area-demo"));
+        bee.insert("owns.skills".into(), json!(["skills/a/SKILL.md"]));
+        bee.insert("superseded_by".into(), json!("next-id"));
+        bee.insert("owns.code".into(), json!(["crates/a/*", "crates/b.rs"]));
+        bee.insert("lifecycle".into(), json!("active"));
+        data.insert("bee".into(), Value::Object(bee));
+
+        let emitted = emit_frontmatter(&data).unwrap();
+        let expected = "---\ntype: bee.area\ntitle: Demo Area\ntags: []\nbee:\n  id: area-demo\n  lifecycle: active\n  superseded_by: next-id\n  owns.code: [crates/a/*, crates/b.rs]\n  owns.skills: [skills/a/SKILL.md]\n  owns.tests: [tests/a.rs]\n  applied_at: [docs/history/CONTEXT.md]\n  custom_unknown_key: tail\n---\n";
+        assert_eq!(emitted, expected);
+    }
+
+    #[test]
+    fn concept_carrying_all_four_new_keys_parses_cleanly_and_round_trips() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("crates/bee/src/verbs/knowledge")).unwrap();
+        std::fs::write(root.join("crates/bee/src/verbs/knowledge/a.rs"), "pub fn foo() {}\n").unwrap();
+        std::fs::write(root.join("crates/bee/src/verbs/knowledge.rs"), "pub fn bar() {}\n").unwrap();
+        std::fs::create_dir_all(root.join("skills/bee-hive")).unwrap();
+        std::fs::write(root.join("skills/bee-hive/SKILL.md"), "skill info (rule: rule-demo)\n").unwrap();
+        std::fs::create_dir_all(root.join("tests")).unwrap();
+        std::fs::write(root.join("tests/registry_contracts.rs"), "test\n").unwrap();
+        std::fs::create_dir_all(root.join("docs/history/knowledge-one-home")).unwrap();
+        std::fs::write(root.join("docs/history/knowledge-one-home/CONTEXT.md"), "ctx (rule: rule-demo)\n").unwrap();
+        std::fs::create_dir_all(root.join("crates/bee/src/verbs/cells")).unwrap();
+        std::fs::write(root.join("crates/bee/src/verbs/cells/obligation.rs"), "ob (rule: rule-demo)\n").unwrap();
+
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("area-demo")
+                .ty("bee.area")
+                .title("Demo Area")
+                .description("Area description")
+                .bee("owns.code", json!(["crates/bee/src/verbs/knowledge/*", "crates/bee/src/verbs/knowledge.rs"]))
+                .bee("owns.skills", json!(["skills/bee-hive/SKILL.md"]))
+                .bee("owns.tests", json!(["tests/registry_contracts.rs"]))
+                .bee("applied_at", json!(["docs/history/knowledge-one-home/CONTEXT.md", "crates/bee/src/verbs/cells/obligation.rs"]))
+                .body("<!-- rule: rule-demo -->\nDemo rule\n<!-- /rule -->"),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.okf_errors.is_empty(), "okf errors: {:?}", report.okf_errors);
+        assert!(report.profile_errors.is_empty(), "profile errors: {:?}", report.profile_errors);
+        assert!(report.warnings.is_empty(), "warnings: {:?}", report.warnings);
+        assert!(report.ok, "concept with all four keys must pass bundle check");
+    }
+
+    // ═══ profile ERRORS (D4 single-home rules and ownership) ═════════════════
+
+    #[test]
+    fn dangling_applied_at_errors_only_for_the_unresolvable_target() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("skills/demo")).unwrap();
+        std::fs::write(root.join("skills/demo/SKILL.md"), "Rule copy (rule: demo-rule)\n").unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "fn main() {}\n").unwrap();
+
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/*"]))
+                .bee(
+                    "applied_at",
+                    json!(["skills/demo/SKILL.md", "skills/ghost/SKILL.md"]),
+                )
+                .body("<!-- rule: demo-rule -->\nRule body\n<!-- /rule -->"),
+        );
+
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.profile_errors, "dangling_applied_at");
+        assert_eq!(dangling.len(), 1, "only the ghost path may error: {:?}", report.profile_errors);
+        assert_eq!(dangling[0]["file"], "areas/demo/overview.md");
+        assert!(
+            msg(dangling[0]).contains("skills/ghost/SKILL.md"),
+            "the unresolved target must be named: {}",
+            msg(dangling[0])
+        );
+        assert!(!report.ok, "profile errors fail the check non-strict");
+    }
+
+    #[test]
+    fn dangling_owns_errors_only_for_the_unresolvable_glob() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src/cli")).unwrap();
+        std::fs::write(root.join("src/cli/main.rs"), "fn main() {}\n").unwrap();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/cli/*", "src/ghost/*"]))
+                .bee("owns.skills", json!(["skills/ghost/**"])),
+        );
+
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.profile_errors, "dangling_owns");
+        assert_eq!(dangling.len(), 2, "only unresolvable owns paths may error: {:?}", report.profile_errors);
+        assert!(dangling.iter().all(|f| f["file"] == "areas/demo/overview.md"));
+        assert!(
+            dangling.iter().any(|f| msg(f).contains("src/ghost/*")),
+            "src/ghost/* must be named: {:?}",
+            report.profile_errors
+        );
+        assert!(
+            dangling.iter().any(|f| msg(f).contains("skills/ghost/**")),
+            "skills/ghost/** must be named: {:?}",
+            report.profile_errors
+        );
+        assert!(!report.ok);
+    }
+
+    #[test]
+    fn duplicate_rule_home_errors_when_one_rule_id_is_marked_in_two_files() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::write(
+            root.join("AGENTS.md"),
+            "# AGENTS\n<!-- rule: discipline-proof -->\nDiscipline text\n<!-- /rule -->\n",
+        )
+        .unwrap();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/*"]))
+                .body("<!-- rule: discipline-proof -->\nDuplicated rule home\n<!-- /rule -->"),
+        );
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "code\n").unwrap();
+
+        let report = check_bundle(&dir, false).unwrap();
+        let dups = of_code(&report.profile_errors, "duplicate_rule_home");
+        assert_eq!(dups.len(), 1, "duplicate rule id must be flagged as profile error: {:?}", report.profile_errors);
+        assert!(msg(dups[0]).contains("discipline-proof"), "{}", msg(dups[0]));
+        assert!(!report.ok, "duplicate rule home fails without --strict");
+    }
+
+    #[test]
+    fn unknown_rule_ref_errors_for_unhomed_rule_reference() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("skills/demo")).unwrap();
+        std::fs::write(
+            root.join("skills/demo/SKILL.md"),
+            "Follow rule (rule: phantom-rule) and (rule: homed-rule)\n",
+        )
+        .unwrap();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/*"]))
+                .body("<!-- rule: homed-rule -->\nHomed rule text\n<!-- /rule -->"),
+        );
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "code\n").unwrap();
+
+        let report = check_bundle(&dir, false).unwrap();
+        let unk = of_code(&report.profile_errors, "unknown_rule_ref");
+        assert_eq!(unk.len(), 1, "only unhomed rule ref must error: {:?}", report.profile_errors);
+        assert_eq!(unk[0]["file"], "skills/demo/SKILL.md");
+        assert!(msg(unk[0]).contains("phantom-rule"), "{}", msg(unk[0]));
+        assert!(!report.ok);
+    }
+
+    /// D4: quoted rule syntax is documentation, not a home. A marker or a
+    /// `(rule: id)` inside an inline backtick span or a fenced block is an
+    /// example of the spelling — the doc that teaches the syntax must not
+    /// register as a second home for every rule id it names.
+    #[test]
+    fn code_quoted_rule_marker_is_never_a_home_or_a_reference() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::write(
+            root.join("AGENTS.md"),
+            "# AGENTS\n<!-- rule: discipline-proof -->\nDiscipline text\n<!-- /rule -->\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("skills/demo")).unwrap();
+        std::fs::write(
+            root.join("skills/demo/SKILL.md"),
+            "Spell a home as `<!-- rule: discipline-proof -->` and a pointer as `(rule: phantom-rule)`.\n\n```\n<!-- rule: fenced-rule -->\n(rule: fenced-ref)\n```\n",
+        )
+        .unwrap();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/*"]))
+                .body("Teaching doc: `<!-- rule: discipline-proof -->` is the marker form."),
+        );
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "code\n").unwrap();
+
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(
+            of_code(&report.profile_errors, "duplicate_rule_home").is_empty(),
+            "a backticked marker is quotation, not a second home: {:?}",
+            report.profile_errors
+        );
+        assert!(
+            of_code(&report.profile_errors, "unknown_rule_ref").is_empty(),
+            "a backticked or fenced (rule: id) is not a reference: {:?}",
+            report.profile_errors
+        );
+    }
+
+    /// The control pair for the test above: a real marker standing beside a
+    /// quoted one still yields exactly one home, and a real reference beside
+    /// a quoted one still yields exactly one reference.
+    #[test]
+    fn a_real_rule_marker_beside_a_quoted_one_yields_exactly_one() {
+        let quoted_only = "Only quotation here: `<!-- rule: quoted-home -->` and `(rule: quoted-ref)`.\n\n```\n<!-- rule: fenced-home -->\n(rule: fenced-ref)\n```\n";
+        assert!(
+            extract_rule_markers(quoted_only).is_empty(),
+            "quoted markers must not register: {:?}",
+            extract_rule_markers(quoted_only)
+        );
+        assert!(
+            extract_rule_refs(quoted_only).is_empty(),
+            "quoted refs must not register: {:?}",
+            extract_rule_refs(quoted_only)
+        );
+
+        let mixed = "The form is `<!-- rule: quoted-home -->`.\n\n<!-- rule: real-home -->\nBody\n<!-- /rule -->\n\nPointer forms: `(rule: quoted-ref)` versus the live (rule: real-ref).\n";
+        assert_eq!(
+            extract_rule_markers(mixed),
+            vec!["real-home".to_string()],
+            "exactly the unquoted marker registers"
+        );
+        assert_eq!(
+            extract_rule_refs(mixed),
+            vec!["real-ref".to_string()],
+            "exactly the unquoted reference registers"
+        );
+    }
+
+    #[test]
+    fn applied_at_unlinked_errors_when_target_contains_no_matching_rule_reference() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("skills/demo")).unwrap();
+        std::fs::write(
+            root.join("skills/demo/SKILL.md"),
+            "This skill does not cite the homed rule.\n",
+        )
+        .unwrap();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/*"]))
+                .bee("applied_at", json!(["skills/demo/SKILL.md"]))
+                .body("<!-- rule: demo-rule -->\nDemo rule\n<!-- /rule -->"),
+        );
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "code\n").unwrap();
+
+        let report = check_bundle(&dir, false).unwrap();
+        let unlinked = of_code(&report.profile_errors, "applied_at_unlinked");
+        assert_eq!(unlinked.len(), 1, "unlinked applied_at target must error: {:?}", report.profile_errors);
+        assert_eq!(unlinked[0]["file"], "areas/demo/overview.md");
+        assert!(msg(unlinked[0]).contains("skills/demo/SKILL.md"), "{}", msg(unlinked[0]));
+        assert!(!report.ok);
+    }
+
+    #[test]
+    fn owns_missing_errors_when_area_overview_carries_no_owns_keys() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview").ty("bee.area"),
+        );
+        put(
+            &dir,
+            "patterns/plain.md",
+            Cx::new("plain-one").title("Plain pattern"),
+        );
+
+        let report = check_bundle(&dir, false).unwrap();
+        let missing = of_code(&report.profile_errors, "owns_missing");
+        assert_eq!(missing.len(), 1, "area overview missing owns.* must error: {:?}", report.profile_errors);
+        assert_eq!(missing[0]["file"], "areas/demo/overview.md");
+        assert!(!report.ok);
+    }
+
+    #[test]
+    fn exempt_tree_produces_no_rule_findings() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        // Place stale copies / duplicate rule markers under exempt trees
+        std::fs::create_dir_all(root.join("docs/history/old-feature")).unwrap();
+        std::fs::write(
+            root.join("docs/history/old-feature/plan.md"),
+            "<!-- rule: active-rule -->\n(rule: ghost-rule-not-homed)\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("docs/discovery/old-idea")).unwrap();
+        std::fs::write(
+            root.join("docs/discovery/old-idea/MAP.md"),
+            "<!-- rule: active-rule -->\n(rule: ghost-rule-not-homed)\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("docs/specs")).unwrap();
+        std::fs::write(
+            root.join("docs/specs/spec.md"),
+            "<!-- rule: active-rule -->\n(rule: ghost-rule-not-homed)\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee/state.json"),
+            "<!-- rule: active-rule -->\n(rule: ghost-rule-not-homed)\n",
+        )
+        .unwrap();
+
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/*"]))
+                .body("<!-- rule: active-rule -->\nHomed rule\n<!-- /rule -->"),
+        );
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "code\n").unwrap();
+
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(
+            report.profile_errors.is_empty(),
+            "exempt trees must produce zero rule findings: {:?}",
+            report.profile_errors
+        );
+        assert!(report.ok);
+    }
+
+    #[test]
+    fn no_repo_root_skips_out_of_bundle_targets_and_notes() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Standalone directory with no parent repo root
+        let dir = tmp.path().to_path_buf();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/outside/*"]))
+                .bee("applied_at", json!(["skills/demo/SKILL.md"]))
+                .body("<!-- rule: demo-rule -->\nBody\n<!-- /rule -->"),
+        );
+
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(
+            report.profile_errors.is_empty(),
+            "out-of-bundle targets must be skipped when no repo root exists: {:?}",
+            report.profile_errors
+        );
+        assert!(!report.notes.is_empty(), "report must carry note: {:?}", report.notes);
+        assert!(report.notes[0].contains("out-of-bundle targets skipped"));
+        assert!(report.ok);
+    }
+
     // ═══ knowledge index (D21) ═════════════════════════════════════════════
 
     /// makeIndexFixture (test_knowledge.mjs l.573): nested dirs, one critical,
@@ -1687,7 +2097,8 @@ use std::time::Instant;
                 .title("Demo overview")
                 .description("Overview of the demo area")
                 .areas(&["routing"])
-                .bee("authoritative_for", json!("demo-overview")),
+                .bee("authoritative_for", json!("demo-overview"))
+                .bee("owns.code", json!(["areas/demo/overview.md"])),
         );
         put(
             dir,
@@ -2324,4 +2735,118 @@ use std::time::Instant;
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+    }
+
+    // ═══ ownership loader and glob matching (D1/D4) ═════════════════════════
+
+    #[test]
+    fn load_ownership_collects_areas_and_homed_rules_including_agents_md() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+
+        put(
+            &dir,
+            "areas/auth/overview.md",
+            Cx::new("auth-overview")
+                .ty("bee.area")
+                .bee("areas", json!(["auth"]))
+                .bee("owns.code", json!(["src/auth/*", "src/login.rs"]))
+                .bee("owns.skills", json!(["skills/auth/**"]))
+                .bee("owns.tests", json!(["tests/auth_tests.rs"]))
+                .body("Auth overview"),
+        );
+
+        put(
+            &dir,
+            "areas/auth/token.md",
+            Cx::new("auth-token")
+                .ty("bee.area")
+                .bee("areas", json!(["auth"]))
+                .bee("applied_at", json!(["skills/auth/SKILL.md", "src/auth/token.rs"]))
+                .body("<!-- rule: auth-token-entropy -->\nToken entropy rule\n<!-- /rule -->"),
+        );
+
+        put(
+            &dir,
+            "areas/doctrine/router.md",
+            Cx::new("doctrine-router")
+                .ty("bee.area")
+                .bee("areas", json!(["doctrine"]))
+                .body(
+                    "## AGENTS.md rule homes\n\n- `agents-discipline-rule` (AGENTS.md § Test):\n  - applied_at:\n    - `skills/demo/SKILL.md`\n    - `docs/specs/demo.md`\n",
+                ),
+        );
+
+        let ownership = load_ownership(root);
+
+        // Check area
+        let auth_area = ownership.areas.get("auth").expect("auth area must be present");
+        assert_eq!(auth_area.area, "auth");
+        assert_eq!(auth_area.code, vec!["src/auth/*", "src/login.rs"]);
+        assert_eq!(auth_area.skills, vec!["skills/auth/**"]);
+        assert_eq!(auth_area.tests, vec!["tests/auth_tests.rs"]);
+
+        // Check homed rule in concept
+        let token_rule = ownership
+            .rules
+            .iter()
+            .find(|r| r.rule == "auth-token-entropy")
+            .expect("auth-token-entropy must be found");
+        assert_eq!(token_rule.home, "docs/knowledge/areas/auth/token.md");
+        assert_eq!(token_rule.areas, vec!["auth"]);
+        assert_eq!(
+            token_rule.applied_at,
+            vec!["skills/auth/SKILL.md", "src/auth/token.rs"]
+        );
+
+        // Check AGENTS.md homed rule
+        let agents_rule = ownership
+            .rules
+            .iter()
+            .find(|r| r.rule == "agents-discipline-rule")
+            .expect("agents-discipline-rule must be found");
+        assert_eq!(agents_rule.home, "AGENTS.md");
+        assert_eq!(agents_rule.areas, vec!["doctrine"]);
+        assert_eq!(
+            agents_rule.applied_at,
+            vec!["skills/demo/SKILL.md", "docs/specs/demo.md"]
+        );
+    }
+
+    #[test]
+    fn matches_owned_evaluates_exact_trailing_and_glob_patterns() {
+        let code_patterns = vec![
+            "packages/bee-rs/crates/bee/src/verbs/decisions/*".to_string(),
+            "packages/bee-rs/crates/bee/src/main.rs".to_string(),
+            "skills/**".to_string(),
+            "crates/*/src/lib.rs".to_string(),
+        ];
+
+        // Exact match
+        assert!(matches_owned(
+            &code_patterns,
+            "packages/bee-rs/crates/bee/src/main.rs"
+        ));
+
+        // Trailing /* match
+        assert!(matches_owned(
+            &code_patterns,
+            "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs"
+        ));
+
+        // Trailing /** match
+        assert!(matches_owned(
+            &code_patterns,
+            "skills/bee-hive/references/gates.md"
+        ));
+
+        // Wildcard segment match
+        assert!(matches_owned(&code_patterns, "crates/foo/src/lib.rs"));
+
+        // Negative cases
+        assert!(!matches_owned(
+            &code_patterns,
+            "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+        ));
+        assert!(!matches_owned(&code_patterns, "docs/knowledge/overview.md"));
     }

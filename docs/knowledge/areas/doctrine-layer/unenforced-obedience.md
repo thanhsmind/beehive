@@ -48,8 +48,8 @@ governs (guard-hardening E5). The recorded set:
   difference is intent, which lives where no guard looks.
 
 Not in the set, though for a narrower reason than it once had: *never build
-on a red base* keeps no prose home because the cap door refuses a proof line
-whose recorded result is red. That is a check on what the worker REPORTS, not
+on a red base* (rule: agents-never-build-on-red) keeps no prose home here
+because the cap door refuses a proof line whose recorded result is red. That is a check on what the worker REPORTS, not
 a test run — the door runs nothing itself, and the worker picks and runs the
 proof. So the enforcement is real but partial: a worker that runs no proof at
 all is caught, and a worker that misreports one is not. The remaining gap is

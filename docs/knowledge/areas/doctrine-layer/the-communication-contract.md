@@ -45,7 +45,7 @@ smallest thing this contract governs and the one it makes unconditional.
 | Element | Meaning |
 |---|---|
 | **Reader facts** | The five standing truths about the person on the other side of the conversation that every rule below is derived from: they supervise rather than execute; they drop in and out of long sessions and remember only the last message; they think in outcomes, not mechanism; their rare high-stakes moments must read as visibly different from routine progress; and they trust fresh evidence, never bare assurance. |
-| **Turn shape** | The three-part shape of every user-facing turn: an opening state line naming what finished, what is running, and what remains; a body that is the work itself, kept short, with the full record linked rather than pasted in; and a close naming exactly one next action. |
+| **Turn shape** | The three-part shape of every user-facing turn: an opening state line naming what finished, what is running, and what remains; a body that is the work itself, kept short, with the full record linked rather than pasted in; and a close naming exactly one next action (rule: agents-one-next-action). |
 | **The seven rules** | The standing checklist a turn is written against: purpose-first content, concrete estimates, a runnable win, cause-plus-fix-plus-actor on any error, one unmistakable question at a time, a tangent surviving as one closing line instead of a mid-task detour, and evidence beside every claim of completion. |
 | **Break conditions** | The three situations where the contract deliberately trades brevity for depth: a destructive or irreversible action, an explicit request to explain, and genuine ambiguity — which still earns only one short question, never a guess. |
 | **Pre-send litmus** | The check applied before any user-facing message is sent: the first and last line alone must answer what just happened and what happens next, and every internal term should be strippable without losing anything the reader needed. |
@@ -120,7 +120,7 @@ where more words are warranted, never elsewhere.
    the fresh output that proves it, in the same message (ec9a60ae).
 9. **High-stakes moments break the brevity rule on purpose.** A destructive action, an explicit
    request to explain, or genuine ambiguity earns full clarity instead of the usual short form —
-   still with exactly one next action at the close (ec9a60ae).
+   still with exactly one next action at the close (rule: agents-one-next-action), ec9a60ae.
 10. **The pre-send litmus is the acceptance test.** A message whose first and last line fail to
     answer what happened and what happens next is rewritten before it is sent, and every internal
     term strippable without losing meaning is stripped (ec9a60ae).

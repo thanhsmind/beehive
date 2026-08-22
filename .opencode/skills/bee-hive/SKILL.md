@@ -44,21 +44,21 @@ current stop. Out-of-band requests, by flow:
 |---|---|---|
 | `bee-wayfinding` | Discovery | A fog-state idea, no nameable outcome yet, or an open discovery map with frontier tickets — chart or resume `docs/discovery/<effort>/MAP.md` before shaping. |
 | `bee-shaping` | Main | Gray areas or unlocked decisions — lock them (also backlog triage, parking, the implement-plan brief). |
-| `bee-planning` | Main | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (worktree-first — AGENTS.md). |
+| `bee-planning` | Main | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (rule: agents-worktree-first). |
 | `bee-swarming` | Main | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. A `tiny` cell may run inline; `small` and up runs through a dispatched execution worker. |
 | `bee-capturing` | Main | Execution done, an area needs documenting, or something just settled — sync specs, record learnings. |
-| `bee-reviewing` | Main | Only on an explicit review request — never automatic. Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
+| `bee-reviewing` | Main | Only on an explicit review request — never automatic (rule: agents-review-user-invoked). Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
 | `bee-researching` | Both | Research a topic, library, or approach — standalone, or from planning discovery. |
 | `bee-grooming` | — | The user asks to clean up, audit, or hunt tech debt. |
 | `bee-herding` | — | The user invokes the cockpit: bootstrap, dispatch, or merge. |
-| docs-only change | — | No pipeline: announce, write, format-check, close with a capture line or "nothing settled". |
+| docs-only change | — | No pipeline: announce, write, format-check, close with a capture line or "nothing settled" (rule: agents-capture-line-at-close). |
 
 ## Gates
 
 Three gates, and only three: **Gate 1** (exploring — approve CONTEXT.md), **Gate 2**
 (planning — shape AND execution in one `bee gate --merge` call), **Gate 3** (reviewing —
 merge approval, only inside a review session the user invoked). Gates 1-2 are the default
-chain; Gate 3 is additive and never automatic ("The three gates"). A separate stop,
+chain; Gate 3 is additive and never automatic (rule: agents-review-user-invoked). A separate stop,
 `uat`, sits later still, at `bee worktree merge` — the user's acceptance of the
 finished work, required for standard/high-risk features, never auto-approved at any
 `gate_bypass` level ("The three gates", `gates-and-delegation.md`).
@@ -99,15 +99,16 @@ A headless run proceeds without asking: ambiguities, unanswered decisions, and g
 questions become `Outstanding Questions` entries in the run's report, each carrying
 the evidence a later human pass would start from — deferred, never guessed, never
 self-answered. A headless run never self-approves a gate: every gate still stops and
-reports awaiting approval (bypass is the separate, recorded exception — "Gate bypass mode").
+reports awaiting approval (rule: agents-gates-never-self-approved) — bypass is the separate,
+recorded exception ("Gate bypass mode").
 Still make recommendations where the evidence supports one, labeled with confidence.
 Full contract: `references/gates-and-delegation.md` ("Headless mode").
 
 ## Hard rules
 
-- P1 review findings always block; never build on a red base.
-- Locked decisions (cite, never reinterpret), the pre-execution-gate edit boundary, and the 65%-context handoff hold as written (AGENTS.md).
-- "done/green/fixed" only beside fresh command output in the same message; every close carries a capture line or an explicit "nothing settled".
+- P1 review findings always block; never build on a red base (rule: agents-never-build-on-red).
+- Locked decisions (cite, never reinterpret), the pre-execution-gate edit boundary, and the 65%-context handoff hold as written (rule: agents-context-handoff-65).
+- "done/green/fixed" only beside fresh command output in the same message; every close carries a capture line or an explicit "nothing settled" (rule: agents-capture-line-at-close).
 - The agent runs every bee command ("The agent runs the machinery"); work language only, one tick line per visible step ("Progress ticks", "Communication contract"); a red line is never silenced.
 - Form rules bend out loud with a recorded reason; boundary rules never bend ("Judgment contract"). Lanes scale ceremony, never memory ("Re-lane checkpoint", "Capture discipline").
 

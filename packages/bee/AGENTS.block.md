@@ -13,31 +13,43 @@ Main flow, idea to ship; a separate Discovery flow carries a
 fog-state ask from an open question to a locked decision before
 handing into it. The skill routes by size and risk — a typo fix takes
 one cell and one merged question; an auth change takes the full
-chain. Independent review is a separate, user-invoked pass, never an
+chain.
+
+<!-- rule: agents-review-user-invoked -->
+Independent review is a separate, user-invoked pass, never an
 automatic stage of that chain.
+<!-- /rule -->
 
 Four boundaries hold in every mode:
 
 - Do not edit source before the merged shape+execution gate is
   approved in `.bee/state.json`. An unblocked write is not an approved
   write — the hooks are a safety net, never the authority.
+<!-- rule: agents-gates-never-self-approved -->
 - Never approve a gate yourself (the opt-in `gate_bypass` switch is
-  the one recorded exception). Gates, decision answers, and privacy
+  the one recorded exception; bee-herding's unattended control loop is
+  that exception in use — it requires `gate_bypass` at `full` or
+  `total`). Gates, decision answers, and privacy
   approvals belong to the user; every bee command belongs to the
   agent, run the moment the workflow calls for it — never printed for
   the user to run.
+<!-- /rule -->
 - Modify bee state only through the CLI (`.bee/bin/bee …`),
   never by hand-editing `.bee/*.json(l)`. Log agreements with
   `bee decisions log --relation supersedes:<id>|touches:<id>|none`
   (the relation is required); `docs/history/<feature>/CONTEXT.md` holds
   the locked ones — cite them, never reinterpret them.
+<!-- rule: agents-worktree-first -->
 - Code-touching feature work lives in its feature worktree from the
   start (`bee worktree new --feature <slug>`); the main checkout takes
   integration and release work, plus docs-lane and a solo `tiny` fix
   when no other session is live — land through `bee worktree merge`.
+  That exemption list is the whole list: with another live session
+  present, docs-lane and `tiny` take a worktree like any feature.
   The user tests at staging (`bee staging add`), the disposable ground
   between a feature worktree and main; the `uat` gate is the door
   through to main.
+<!-- /rule -->
 
 `bee --help --json` prints the porcelain flow surface; `--names` adds a
 one-line-per-command index (plain `bee --help` / `bee --help --all` are the
@@ -79,16 +91,23 @@ context before planning or executing.
 
 ## Prove, then say so
 
+<!-- rule: agents-proof-at-cap -->
 - The agent owns test scope: pick the proof your change type needs
   (code → related tests green; docs → parity/pointer checks; behavior
   → judge verdict), run it yourself, and record it on the cap as a
   proof line `<command> — <result> — <scope reason>`. `bee close` and
   `bee worktree merge` check that recorded proof; they run nothing
   themselves — CI runs the full declared command on every push, the
-  one deterministic net. A red proof refuses the cap — never build on
-  a red base, still as a principle, never a pre-claim full-suite
-  order. A scoped-green cap whose CI later goes red is a fix-first
-  cell plus a captured learning on why the scope missed.
+  one deterministic net.
+<!-- /rule -->
+<!-- rule: agents-never-build-on-red -->
+- A red proof refuses the cap — never build on a red base, in every
+  scope the rule reaches: at claim time (a known-red base is its own
+  fix-first cell), at review (a P1 finding blocks), and at cap. It
+  holds as a principle, never as a pre-claim full-suite order. A
+  scoped-green cap whose CI later goes red is a fix-first cell plus a
+  captured learning on why the scope missed.
+<!-- /rule -->
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.
 - Evidence is what the build already emits — red test output, a diff,
@@ -105,15 +124,19 @@ context before planning or executing.
   turns where no skill is running. Decide-altitude never delegates:
   gates, synthesis, state writes, and the human conversation stay on
   the session model.
-- Every dispatch carries its tier: bee's rendered agents ARE their tier —
-  `bee-build` executes a cell, `bee-gather` reads (both generation),
-  `bee-extract`, `bee-review` — and the model-guard hook repairs or
-  refuses the rest; a `model` param or a
-  leading `[bee-tier: <tier>]` marker are the manual spellings. From
-  `small` up, cells run through dispatched workers (never zero
-  *execution* workers); a tiny cell may run inline. A cli-shaped
-  gather tier runs the configured external command per the Delegation
-  contract's cli gather branch, not an Agent dispatch.
+- The ONE door for any dispatch is `.bee/bin/bee dispatch prepare
+  --runtime <rt> --kind cell|gather|reviewer|advisor --json` — run it
+  first, then run exactly the tool and payload it returns (an Agent
+  call naming a rendered bee agent, or a Bash `bee herding run` / cli
+  call). Never hand-pick `subagent_type`, a `model` param, or a
+  leading `[bee-tier: …]` marker: those are what prepare RETURNS, and
+  the model-guard hook refuses or rewrites anything else.
+<!-- rule: agents-never-zero-execution-workers -->
+- From `small` up, cells run through dispatched workers — never zero
+  *execution* workers; a tiny cell may run inline. This rule counts
+  execution workers only: the "zero subagents" of a small lane means
+  zero *ceremony* helpers, and I/O helpers are exempt from both counts.
+<!-- /rule -->
 - Reserve files before write-heavy swarm work and prefix write-heavy
   shell commands with `BEE_AGENT_NAME=<name>`. On a reservation or
   hold conflict, stop and report it — never write through it. A worker
@@ -143,14 +166,19 @@ the user only when the deferred set is the entire explicit ask.
 
 ## Capture what settles
 
+<!-- rule: agents-capture-line-at-close -->
 Lanes scale ceremony, never memory. The moment a rule, behavior, or
 value settles, record it — a decision log line or a capture stub — and
 close every task with a capture line or an explicit "nothing settled".
+A close with neither is not a close, in every lane, the docs lane and
+non-cell quick work included.
 `docs/knowledge/` is the state layer: read it first, sync it when
 behavior changes.
+<!-- /rule -->
 
 ## Communication
 
+<!-- rule: agents-one-next-action -->
 The user hears the work in their own terms, never bee mechanics. Open
 with one line of state; keep narration under five lines; link records
 instead of pasting them — name a doc by its bare repo-relative path
@@ -161,6 +189,7 @@ default — `▸` started, `✓` green, `⚡` auto-approved, `✗` red — and a
 red or refusal line is never silenced, composited, or delayed by any
 switch or bypass level. The work is the subject of every line; ids and
 counts trail it, never lead.
+<!-- /rule -->
 
 A turn that ends waiting on the human — a gate question or a freeform
 one — marks the wait before it ends: `bee state waiting-on set
@@ -195,11 +224,17 @@ skill ("Communication contract").
 
 ## Care for the session
 
+<!-- rule: agents-context-handoff-65 -->
 - At roughly 65% context, write `.bee/HANDOFF.json` and pause cleanly.
+  It holds mid-wave too — never push through it. The record's schema
+  lives in `bee-swarming/references/swarming-reference.md`.
+<!-- /rule -->
+<!-- rule: agents-one-commit-per-cell -->
 - One commit per cell. The subject line describes the change in
   imperative mood — never the process, the counts, or the cell; the
-  cell id rides the last line of the body as a trailer, and the diff
-  carries the numbers.
+  cell id rides the last line of the body as a trailer (`cell: <id>`),
+  and the diff carries the numbers.
+<!-- /rule -->
 - Before ending substantial work: cap or release every claimed cell,
   release reservations, leave `.bee/state.json` honest, run
   `commands.test` over what changed when one is recorded, and name the
@@ -226,4 +261,4 @@ in `bee-swarming` ("Execute") — including native-Codex subagent tending on
 a Codex runtime — the capture discipline in
 `bee-capturing` ("Capture the moment it settles"), and the question
 craft in `bee-shaping` ("Interview craft"). Independent review runs
-on user request: `bee-reviewing`, never as an automatic stage.
+on user request via `bee-reviewing` (rule: agents-review-user-invoked).

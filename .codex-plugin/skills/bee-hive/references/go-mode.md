@@ -42,20 +42,7 @@ User: "/go [feature]"
 DONE — verified, unreviewed, development continues
 ```
 
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Independent review is a SEPARATE, user-invoked flow, not a pipeline     │
-│ step. Go mode never dispatches it automatically — not after the final   │
-│ slice, not at DONE. When the user explicitly asks for review (any time, │
-│ any scope: this feature, a named batch, a commit range), invoke         │
-│ bee-reviewing over that immutable scope: P1/P2/P3 findings, artifact    │
-│ verification, UAT, then [GATE 3] ← HARD STOP (never auto-merge) inside  │
-│ that session, followed by bee-shaping's walkthrough (Brief) for         │
-│ standard/high-risk. A merge/ship/release request while candidates       │
-│ sit unreviewed/stale reports the count + risk level and asks ONE        │
-│ question before ever spending a reviewer token.                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+Go mode never dispatches review automatically — not after the final slice, not at DONE (rule: agents-review-user-invoked). When the user explicitly asks for review (any time, any scope: this feature, a named batch, a commit range), invoke `bee-reviewing` over that immutable scope: P1/P2/P3 findings, artifact verification, UAT, then Gate 3 (a hard stop — never auto-merge) inside that session, followed by `bee-shaping`'s walkthrough (Brief) for standard/high-risk. A merge/ship/release request while candidates sit unreviewed/stale reports the count + risk level and asks ONE question before ever spending a reviewer token.
 
 Separately, `standard`/`high-risk` swarming waves also run a semantic checklist judge once per slice at slice close over its capped `behavior_change` cells (table in `bee-hive/references/gates-and-delegation.md`, "Goal-check judge tier") — that is verification of the cells, not the boxed review flow above, and never triggers Gate 3 on its own.
 
@@ -106,7 +93,7 @@ Work shape is ready. Approve before current-work preparation? (yes / revise / sh
 
 Approval flips `approved_gates.shape` AND `approved_gates.execution` together (`bee gate --merge`) and covers the **current slice only**; later slices of the same feature build on it without a re-ask (a `plan-rev bump` is what revokes it). Revise → return to the shape pass, update `plan.md` content (unapproved — pre-Gate-2 content edits are allowed; frozen only once `approved_gates.shape` is set), re-present.
 
-**GATE 3** — inside a user-invoked `bee-reviewing` session only (never at the end of go mode's default chain):
+**GATE 3** — inside a user-invoked `bee-reviewing` session only (rule: agents-review-user-invoked):
 
 ```text
 What was built: [the shipped change in one plain sentence].
@@ -130,7 +117,7 @@ After each slice's swarm completes: later approved work remains → return to St
 - **Spike returns NO** (opt-in by change class — migration, security, external side effect, or no in-repo precedent): STOP before Gate 2. Present "Spike [id] failed: [reason]. Current work is blocked." Options: revise approach / descope the risky part / change mode or boundaries. A workaround that "probably works" is not a path — plausibility is not evidence.
 - **SMALLER PATH check fails:** default is to redraft the shape before presenting Gate 2, rather than persist-then-preview.
 - **Review-wave BLOCKER still open after the second pass** (bee-planning's Review Wave): escalate — present both positions to the user and ask "Return to planning with these specific concerns?". A third pass needs a recorded reason.
-- **Context hits ~65% mid-swarm:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully.
+- **Context hits ~65% mid-swarm** (rule: agents-context-handoff-65)**:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully.
 - **User rejects at any gate:** identify what feels wrong, return to the owning stage, update the artifact in place, re-present the same gate.
 
 ## Close-out

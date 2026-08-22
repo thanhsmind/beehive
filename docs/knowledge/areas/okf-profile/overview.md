@@ -10,6 +10,9 @@ bee:
   decisions: [D2, D10, D13, D15, D20, D21, D23, D24, D27, D29, D30, D34, D37, D38]
   sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", "okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "okf-switchover-f3 cell f3-5 (G6 — this spec migrated into the bundle it describes; trace in `.bee/cells/`, 2026-07-22)", "docs/specs/okf-profile.md#P4", "docs/specs/okf-profile.md#P6", "docs/specs/okf-profile.md#P7"]
   authoritative_for: "okf-profile: purpose, entry points, and actors"
+  owns.code: ["packages/bee-rs/crates/bee/src/verbs/knowledge/*"]
+  owns.skills: []
+  owns.tests: [packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs, packages/bee-rs/crates/bee/tests/specs_fence.rs, packages/bee-rs/crates/bee/tests/pointer_integrity.rs]
 ---
 
 # Bee OKF Profile (purpose, entry points, and actors)

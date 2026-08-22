@@ -115,6 +115,18 @@ on.
 - **An outcome summary** on `high-risk`.
 - **A `NEEDS_REVISION` semantic-judge verdict** without an audited
   `--override-judge` reason.
+- **The sync door (D3/D4)** — the touched set (the last commit's changed
+  files, union `--files`) must not: touch an area's owned code while
+  leaving every one of its owned skills untouched; touch a rule's home
+  file while leaving one of its `applied_at` files untouched; or carry a
+  set of touched `skills/**` paths that differs from the cell's own
+  `affects_skills` prediction. Each of the three names the area/rule/diff
+  it found. Escape with `--sync-ack "<reason>"` (blank is refused) — it
+  is recorded to `trace.sync_ack` and appended to `trace.deviations` as
+  `sync-ack: <reason>`. A cell that predates `affects_skills` skips the
+  prediction check alone, with `sync: no prediction on legacy cell`
+  appended to `trace.deviations` when the touched set actually carried a
+  `skills/**` path (nothing to say otherwise).
 
 ## Friction Triggers (verbatim — record friction only when one fires)
 
@@ -144,10 +156,7 @@ Fix the root cause and finish again (or run `bee test` alone to see the fresh re
 
 ## Atomic Commit
 
-One commit per cell. The subject describes the change — imperative
-mood, no process narration, no counts, no cell id; the cell id rides
-the last line of the body as a trailer (ids live in records, not in
-subjects — Communication contract rule 8):
+One commit per cell (rule: agents-one-commit-per-cell):
 
 ```bash
 BEE_AGENT_NAME="<name>" git add <files>
@@ -169,7 +178,7 @@ authority, and do not ask the orchestrator to trust a worker-supplied value.
 
 - `[DONE]` — cell finished (a proof line `<command> — <result> — <scope reason>` recorded on the cap, checked — not re-run — at close/merge), one commit made, reservations released.
 - `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.
-- `[HANDOFF]` — `.bee/HANDOFF.json` written; include progress, active reservations, and the resume point.
+- `[HANDOFF]` — `.bee/HANDOFF.json` written (rule: agents-context-handoff-65); include progress, active reservations, and the resume point.
 - `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
 
 Ambiguities you deferred go in an `Outstanding Questions` section of the report.

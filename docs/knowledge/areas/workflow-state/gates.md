@@ -398,6 +398,60 @@ a malformed record has earned none.
   actor is refused outright, so the approval can only carry the user's own
   word. It becomes visible in the preamble only once the execution gate is
   approved.
+- R136 — Plan-time conflict candidates are DERIVED, never guessed, and they
+  live on the workflow record beside `plan_rev` as
+  `conflict_review: {plan_rev, derived_at, candidates: [{id, kind, title,
+  verdict, note}]}` (knowledge-one-home D5, cell koh-8, 2026-08-22).
+  `bee state plan-conflicts derive` builds the candidate list from the
+  feature's own open and capped cells — their titles plus the stems of every
+  path in `files`, `affects_skills` and `affects_specs` — and selects two
+  kinds against it: every ACTIVE decision the `decisions log` conflict-hint
+  scorer picks, widened to every decision scoring two or more term hits, and
+  every homed knowledge rule whose home or `applied_at` patterns intersect
+  those same paths. The verb is lane-targeted and takes the same two locks in
+  the same order `plan-rev bump` takes; resolution landing on the default
+  (non-lane) record is refused, because `conflict_review` is as
+  lane-scoped as `plan_rev` itself. The field is seeded ABSENT: a record that
+  was never derived against carries no field at all, which is a different
+  fact from a record that was derived and came back empty. Zero candidates is
+  a valid derive, and it is the ONLY state in which "0 conflicts" is a true
+  statement about a plan revision.
+- R137 — Each derived candidate carries exactly one recorded verdict out of a
+  closed three: `compatible`, `conflicts`, or `retires-prior`
+  (knowledge-one-home D5, cell koh-8, 2026-08-22). `bee state plan-conflicts
+  verdict --id <candidate> --verdict <value> [--note <text>]` sets one
+  candidate and leaves every other candidate — and the derived list itself —
+  as it stands; an id no candidate carries, or a value outside the three, is
+  refused by name and writes nothing. Re-deriving REPLACES the whole list
+  rather than patching it, which is how a re-derive (and therefore a
+  `plan-rev bump` followed by one) clears every verdict already recorded. A
+  recorded `conflicts` verdict does not refuse anything by itself — it is a
+  contradiction taken on with eyes open, and the `--note` is where the prior
+  id a `retires-prior` verdict replaces is named.
+- R138 — The merged gate never opens on a lane whose plan-time conflict check
+  does not stand behind it (knowledge-one-home D2/D5, cell koh-9,
+  2026-08-22). An approval that includes the execution component — `bee gate
+  --merge --approved true`, or `--name execution --approved true` — targeting
+  a LANE is refused, before any lock or write, on exactly three causes:
+  the lane's workflow record carries no `conflict_review` at all (the check
+  has never run against this plan); the recorded review's `plan_rev` differs
+  from the lane's current `plan_rev`; or any derived candidate still carries
+  no verdict, in which case the refusal NAMES the unverdicted ids. Each
+  refusal names the fix — `bee state plan-conflicts derive`, then `bee state
+  plan-conflicts verdict` per candidate. The plan-rev cause is the reset:
+  a `plan-rev bump` invalidates the review by itself, so there is no separate
+  clear step, only a fresh derive. The precondition is the advisor
+  precondition's twin in shape and placement — same pre-lock peek, same
+  post-lock recompute against the locked read, same fail-closed reading (a
+  workflow store that cannot be read is an error, never a pass) — and it is
+  LANE-ONLY: `conflict_review` is as lane-scoped as `plan_rev`, so the
+  default (non-lane) record's gate behaviour is unchanged, and so is an
+  unapprove (`--approved false`), which never carries the check. A recorded
+  `conflicts` verdict is the deliberate exception (R137): it does not refuse.
+  The approval succeeds and names those candidates on a second output line
+  and under `conflicts_acknowledged` on the JSON result — present only when
+  non-empty — so the contradiction is approved with eyes open rather than
+  discovered later.
 - R104 — An approvals map merges over the gate defaults only when it is stored as
   an object; every other shape yields the defaults untouched, and no shape is
   read partially or refused (js-parity-cleanup D2, cell jp-4, 2026-08-04).
@@ -588,6 +642,17 @@ a malformed record has earned none.
   nothing declared there is no overlap to find.
 - Refused starts are proven side-effect-free: the record is byte-identical
   after a refusal.
+- **The candidate scorer reads a NORMALIZED term set, and without it "zero
+  candidates" is unreachable** (R136, knowledge-one-home D5, koh-8). Before a
+  plan's titles and paths are scored against the decision store, every term is
+  lowercased, stripped of surrounding punctuation, dropped when shorter than
+  four characters, and filtered against a 24-word stop list. Unnormalized, an
+  ordinary cell title contributes its articles and prepositions, those clear the
+  two-hit threshold against nearly every decision in the store, and the derive
+  returns an unusable list every time. Since R136 makes "0 conflicts" a true
+  statement only when the derive genuinely returned nothing, a list that can
+  never be empty is not a check — it is noise wearing a verdict field. The
+  scorers themselves are untouched; only what is handed to them changed.
 
 ## Open Gaps
 
@@ -623,6 +688,26 @@ a malformed record has earned none.
   verb is itself high-risk work, so it deadlocks against the door it would
   repair (decision 20969403). What shipped instead was the honesty, never the
   unblock.
+
+- **Starting a feature on the default record closes other live workflow
+  records, which can leave a lane whose conflict derive also refuses.** The
+  default start path closes the live records it finds; a lane whose record was
+  closed that way has nothing for `bee state plan-conflicts derive` to write to,
+  so the derive refuses and the merged gate's precondition (R138) then refuses
+  for the absent-review cause. The behaviour predates this door — the door only
+  makes it visible, because a closed record used to cost nothing until a gate
+  started reading one. Named rather than repaired: reworking what a default
+  start does to sibling records is a change to the workflow store's own write
+  path, not to the gate (knowledge-one-home D5, koh-9).
+
+- **The plan-revision bump's transaction is COPIED into the lane path rather
+  than shared with it.** The lane-targeted conflict verbs take the same two
+  locks in the same order as `plan-rev bump`, but by carrying their own copy of
+  that transaction rather than calling one shared helper. Both are correct
+  today; nothing keeps them correct together, so a future change to one lock
+  order silently leaves the other behind. Recorded as drift risk, not repaired —
+  factoring the shared transaction out is a change to the bump path itself
+  (koh-8).
 
 ## Pointers (implementation)
 
@@ -691,6 +776,42 @@ a malformed record has earned none.
   `docs/history/<slug>/promote-proposals.md`. Evidence: trace
   `.bee/cells/kl-3.json`, commit `384587a1`; trace `.bee/cells/kl-5.json`,
   commit `c8d25dff`.
+- Plan-time conflict check (R136/R137, knowledge-one-home D5):
+  `packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs` — the
+  two handlers plus `derive_candidates` / `build_conflict_review` /
+  `apply_conflict_verdict`, routed from `set_gate.rs`'s `try_native` table
+  beside `plan-rev bump` and sharing its lock order verbatim. Nothing here is
+  a new scorer: it calls `decisions::read`'s own `conflict_candidates` and
+  `count_term_hits` for the decision half and
+  `knowledge::ownership::load_ownership` + `matches_owned` for the rule half.
+  The record field is documented beside `plan_rev` in
+  `verbs/workflow_store/record.rs` (`base_workflow_defaults`), deliberately
+  unseeded. Help text for both spellings lives in
+  `src/generated/registry_payload.json` (hand-edited — no generator exists in
+  this repo, decision `3358743e`), with `catalog.rs`'s `PINNED_FLAG_COUNT` at
+  180 for the one new flag name `--verdict`. Proof: the six
+  `plan-conflicts` rows in `verbs/state_group/tests.rs`, plus
+  `tests/registry_contracts.rs` and `tests/registry_dispatch.rs`. Hygiene note:
+  `plan_conflicts.rs` carries a file-wide `allow(unused_imports)` taken from the
+  module it was split out of — it hides a real unused import from the compiler
+  and is worth narrowing whenever the file is next touched (koh-8).
+- The merged gate's conflict precondition (R138, knowledge-one-home D2/D5):
+  `conflict_review_refusal` + `lane_conflict_review` /
+  `unverdicted_candidate_ids` / `acknowledged_conflicts` in
+  `packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs`, wired into
+  `run_gate_body` at BOTH `high_risk_advisor_refusal` call sites (the
+  pre-lock peek and the post-lock recompute). It reads the LIVE WORKFLOW
+  RECORD, never the lane record the gate mutates, because the lane
+  projection does not copy `conflict_review` down — which also takes the
+  review and the `plan_rev` it is compared against from one read. A lane
+  with no live workflow record is the same C1 shape
+  `write_through_projection` and the durable gate stamp already take: there
+  is no `plan_rev` to compare and no record a derive could have written to,
+  so the precondition does not apply. Help text for both `gate` spellings is
+  hand-edited in `src/generated/registry_payload.json`; koh-9 adds no flag
+  name, so `catalog.rs`'s `PINNED_FLAG_COUNT` stays 180. Proof: the ten
+  `koh9-*` rows in `verbs/state_group/set_gate.rs`'s own test module, beside
+  the advisor-precondition cases they are modelled on.
 - Approvals-map shape coercion (B53/R104): `spread_gates` in
   `packages/bee-rs/crates/bee/src/state.rs:100-121` — one match arm for an
   object, one wildcard arm returning `default_gates()`; re-exported for

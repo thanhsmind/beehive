@@ -11,6 +11,7 @@ bee:
   decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)"]
   sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
+  applied_at: [skills/bee-hive/references/routing-and-contracts.md]
 ---
 
 # Hook Runtime — governed paths, the always-writable set, and the intake gate
@@ -153,11 +154,9 @@ not by design.
 
 ## Business Rules
 
-- R33 — The always-writable set at a gated phase (`exploring`/`planning`,
-  execution unapproved) is `.bee/`, `docs/history/`, `plans/`, `AGENTS.md` —
-  no blanket `docs/`; the always-writable set at idle or a terminal phase
-  keeps blanket `docs/` unchanged; the worktree-first exemption is
-  unaffected either way (traceable-runs trun-5, D1/D6, 2026-08-14).
+<!-- rule: hook-runtime-docs-lane-allowlist -->
+- R33 — The write-guard allowlist has two prefix sets: `GATE_ALLOWED_PREFIXES_GATED` (`[".bee/", "docs/history/", "plans/", "AGENTS.md"]`) at a gated phase (`exploring`/`planning`, execution unapproved) with no blanket `docs/`; and `GATE_ALLOWED_PREFIXES_INTAKE` (`[".bee/", "docs/", "plans/", "AGENTS.md"]`) at idle or a terminal phase keeping blanket `docs/` (traceable-runs trun-5, D1/D6, 2026-08-14).
+<!-- /rule -->
 
 - R11 — The write guard's always-writable set no longer includes the
   repo-root disposable-experiment location; that work now lives inside the

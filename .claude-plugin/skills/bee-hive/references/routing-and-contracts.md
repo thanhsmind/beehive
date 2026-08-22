@@ -45,7 +45,7 @@ feature worktree itself stands in for the mixing ground; the `uat` gate is unaff
 | Research inside a scoped feature | `bee-planning` | Discovery L2/L3 invokes `bee-researching` in-chain |
 | "Just fix this" / small change, and it writes a file | `bee-shaping` (Lock) | Lock writes a SHORT `CONTEXT.md` first — the brief D1 requires before any source edit — then `bee-planning` routes in tiny or small mode; no added plan ceremony (D1) |
 | "Just fix this" / small change, and it writes nothing (a pure question) | `bee-planning` | Route in tiny or small mode; D6 — no file write, no brief, no record |
-| Review code | `bee-reviewing` | Load directly — only on an explicit review request; never automatic after execution completes |
+| Review code | `bee-reviewing` | Load directly — only on an explicit review request (rule: agents-review-user-invoked) |
 | Document a screen/API/job/area; keep a settled outcome (rule agreed, behavior confirmed, value tuned); spec a legacy area; capture learnings | `bee-capturing` | Load directly, any phase — capture never waits for feature close |
 | Clean up / tech debt / audit | `bee-grooming` | Load directly |
 | Drive the cockpit (bootstrap/dispatch/merge) | `bee-herding` | Load directly |
@@ -53,7 +53,7 @@ feature worktree itself stands in for the mixing ground; the `uat` gate is unaff
 | Turn gate-bypass on/off, widen it, or check it | `bee-hive` (Gates) | Any phase; the agent sets `.bee/config.json` `gate_bypass` on the user's instruction |
 | Resume session | Resume logic | Check `HANDOFF.json` first — kind-aware: pause waits, planned-next adopts only at a fresh-session boundary |
 | Explicit request to run the automatic backlog-triage pass on a `docs/backlog.md` row (a human or an external caller invoking the pipeline path directly — no auto-trigger exists yet) | `bee-shaping` (Qualify) | Pipeline path, explicit invocation only |
-| Docs/spec/README/sample-only change, and it writes a file | docs lane | "Docs lane" under Lane ceremony in full — short brief, Gate 1 approval, announce, write, format-check, capture or "nothing settled" (D1); no pipeline |
+| Docs/spec/README/sample-only change, and it writes a file | docs lane | "Docs lane" under Lane ceremony in full — short brief, Gate 1 approval, announce, write, format-check, capture or "nothing settled" (rule: agents-capture-line-at-close); no pipeline |
 | A question about docs/spec content that writes nothing | direct answer, no lane | D6 — no file write, no brief, no record |
 | Merge/ship/release request while unreviewed or stale candidates exist | Report the candidate count + risk level, then ask ONE question: "Create a review session for this scope?" | Only an explicit yes dispatches `bee-reviewing` — never spawn a reviewer silently |
 
@@ -113,9 +113,8 @@ first yes wins:
    into a lossy summary, and compaction's failure mode is a fresh
    session confidently wrong about a decision the summary flattened.
 
-This is the procedure behind the 65%-context handoff rule (AGENTS.md,
-"Care for the session"): that rule says when to stop, this tree says
-which move to make.
+This is the procedure behind the 65%-context handoff rule (rule: agents-context-handoff-65):
+that rule says when to stop, this tree says which move to make.
 
 ## Scout Contract (just-enough reading)
 
@@ -154,7 +153,7 @@ No added plan ceremony rides along with any of this (D1): `tiny`/`small`/`docs` 
 
 **THE ONLY LEGAL REASONS FOR SERIAL, exhaustive:** a declared file-set overlap (including a shared generated artifact not deferred by a wave barrier), a true data dependency (`deps`), a single scarce external resource, or an explicit human instruction. Nothing else is a reason — anything else fans out.
 
-**LANES, FIRST-CLASS:** before every feature start, check whether other ready feature work has disjoint declared paths — if so, the paved road is a lane, not a queue, whether or not another feature is already live — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>`; lane-scoped mutations take `--lane`. Lanes classify and coordinate; they no longer keep code in main — a code-touching feature branches into its own worktree at feature start regardless (worktree-first — `docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md`), its declared paths still coordinating through the shared store; only docs-lane and tiny work runs directly in the main checkout, and each only while no other session is live — with a live peer, both take a worktree like any feature. A lane refusal (holder + expiry) means the paths were not disjoint after all — pick other ready work or wait for the hold to lapse — never work around it.
+**LANES, FIRST-CLASS:** before every feature start, check whether other ready feature work has disjoint declared paths — if so, the paved road is a lane, not a queue, whether or not another feature is already live — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>`; lane-scoped mutations take `--lane`. Lanes classify and coordinate; they no longer keep code in main — a code-touching feature branches into its own worktree at feature start regardless (rule: agents-worktree-first) — mechanism in `docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md` — its declared paths still coordinating through the shared store. A lane refusal (holder + expiry) means the paths were not disjoint after all — pick other ready work or wait for the hold to lapse — never work around it.
 
 **TICK:** the concurrency plan emits its own progress line per the Progress ticks catalog (`scout-and-ticks.md`, "Progress ticks — worked examples") — same silent-bookkeeping rule as every other tick, never suppressed by bypass.
 
@@ -164,7 +163,7 @@ Full doctrine for the cell/wave tier — the wave-barrier regen protocol and the
 
 Before the write (D1, D6): Lock writes a short brief — `docs/history/<feature>/CONTEXT.md`, the same file full lanes use, in a short form — naming what was asked, what was found, and what will be written; then Gate 1 asks a one-line approval ("Brief: about to write X, because Y. Approve?"), recorded even when `gate_bypass` auto-approves it (D2). Only a request that writes no file skips this — a pure question is not a docs-lane change (D6).
 
-Then the change is knowledge upkeep, same class as capture — announce one line ("docs lane: writing X"), write it, run a format check when one exists (JSON parses, markdown lints), then close by logging a decision/capture stub when the content encodes a settled outcome, or stating "nothing settled" when it does not — a docs-lane close with neither is not a close. No cells, no separate execution gate, no reviewers — the brief and its Gate 1 approval are the only ceremony this lane gains. If the target path is outside the write-guard allowlist (`.bee/, docs/, plans/, AGENTS.md`) the hook will block the idle write — fall back to the tiny fast path instead of fighting the guard. And the docs lane holds main only while solo: with another live session present, worktree-first denies the main write — take the worktree it names, never wait out the peer.
+Then the change is knowledge upkeep, same class as capture — announce one line ("docs lane: writing X"), write it, run a format check when one exists (JSON parses, markdown lints), then close with a capture line or an explicit "nothing settled" (rule: agents-capture-line-at-close). No cells, no separate execution gate, no reviewers — the brief and its Gate 1 approval are the only ceremony this lane gains. If the target path is outside the write-guard allowlist (rule: hook-runtime-docs-lane-allowlist) the hook will block the idle write — fall back to the tiny fast path instead of fighting the guard. And the docs lane holds main only while solo (rule: agents-worktree-first) — take the worktree it names, never wait out the peer.
 
 ### Tiny/small fast path
 
@@ -172,7 +171,7 @@ Before any of this (D1): Lock writes the brief first — a short `CONTEXT.md` na
 
 ### Capture discipline
 
-Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-cell quick work included: a feature whose capped cells include `behavior_change` owes ONE `bee-capturing` spec sync covering all of them — tiny lanes included — recorded as PENDING at close and run deferred, at the owner's pace, batching several closed features into one session when cheaper (decision c8e25271; `bee orient` carries the reminder until it runs). A settled discussion outcome (rule, behavior, tuned value; backend or frontend alike) is still captured the moment it settles — deferral applies to the close-time sync, never to same-turn settlement capture. Every task close carries either a decision-log/capture-stub line or an explicit "nothing settled" statement — a close with neither is not a close. **Settlement detection is the agent's duty, unprompted:** the routing row "user asks to document" is the fallback, not the norm — the norm is the agent noticing "this just settled", announcing it in one line, and capturing in the same turn without being asked. What same-turn capture costs is lane-scaled: high-risk = full spec sync inline; every other lane = decision log + a one-line capture stub (`bee capture add`), with the full merge at a flush point (wrap-up, PreCompact warning, or next session's offer). Capture writes only `docs/` + `.bee/` — no gate applies.
+Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-cell quick work included: a feature whose capped cells include `behavior_change` owes ONE `bee-capturing` spec sync covering all of them — tiny lanes included — recorded as PENDING at close and run deferred, at the owner's pace, batching several closed features into one session when cheaper (decision c8e25271; `bee orient` carries the reminder until it runs). A settled discussion outcome (rule, behavior, tuned value; backend or frontend alike) is still captured the moment it settles — deferral applies to the close-time sync, never to same-turn settlement capture. Every task close carries a capture line or an explicit "nothing settled" (rule: agents-capture-line-at-close). **Settlement detection is the agent's duty, unprompted:** the routing row "user asks to document" is the fallback, not the norm — the norm is the agent noticing "this just settled", announcing it in one line, and capturing in the same turn without being asked. What same-turn capture costs is lane-scaled: high-risk = full spec sync inline; every other lane = decision log + a one-line capture stub (`bee capture add`), with the full merge at a flush point (wrap-up, PreCompact warning, or next session's offer). Capture writes only `docs/` + `.bee/` — no gate applies.
 
 ## Chaining Contract
 
@@ -219,8 +218,7 @@ chatter. They trust fresh output, not assurance.
   Progress ticks are not prose and do not count against that budget — they are one
   fixed-format line per step ("Progress ticks"). The complete record (reports,
   findings, matrices) lives in a linked file, never pasted into chat.
-- **Close** with exactly one next action: the agent's own next move, or the one
-  thing only the user can decide. Never a menu of maybes.
+- **Close** with exactly one next action (rule: agents-one-next-action).
 
 **Five rules.** These are the ones a message can actually violate:
 

@@ -734,8 +734,35 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     let mut text = format!("Logged decision {new_id}.{warning}");
     text.push_str(&conflict_candidate_lines(&candidates));
 
+    let ownership = crate::verbs::knowledge::load_ownership(root);
+    let mut update_obligations: Vec<Value> = Vec::new();
+    let mut obligation_lines: Vec<String> = Vec::new();
+
+    for rule in &ownership.rules {
+        let matches = rule.areas.iter().any(|area| {
+            area == &p.scope || candidate_tags.iter().any(|tag| tag == area)
+        });
+        if matches {
+            update_obligations.push(json!({
+                "rule": rule.rule,
+                "home": rule.home,
+                "applied_at": rule.applied_at,
+            }));
+            let applied_str = rule.applied_at.join(", ");
+            obligation_lines.push(format!(
+                "update obligation: {} ({}) — applied at: {}",
+                rule.rule, rule.home, applied_str
+            ));
+        }
+    }
+
+    for line in &obligation_lines {
+        text.push_str(&format!("\n{line}"));
+    }
+
     if let Value::Object(m) = &mut event {
         m.insert("conflict_candidates".into(), Value::Array(candidates));
+        m.insert("update_obligations".into(), Value::Array(update_obligations));
     }
     Ok(Out::Emit(event, text, 0))
 }
