@@ -3,7 +3,7 @@
   "feature": "knowledge-one-home",
   "title": "Home three inventoried rules with ids and applied_at",
   "lane": "standard",
-  "status": "claimed",
+  "status": "capped",
   "deps": [
     "koh-2"
   ],
@@ -58,17 +58,54 @@
   },
   "trace": {
     "worker": "w-koh-4",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Home three inventoried rules with ids and applied_at; pointer copies at every other site; skill trees re-rendered",
+    "files_changed": [
+      "AGENTS.md",
+      "docs/knowledge/areas/doctrine-layer/delegation-threshold.md",
+      "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-shaping/references/mini-brief-template.md",
+      "skills/bee-shaping/references/implement-plan-template.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "worker pane idled out after finishing the edits and the regen chain; orchestrator committed its tree and capped from inspection"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-22T05:01:36.136Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
-    "claimed_at": "2026-08-22T04:40:17.452Z"
+    "claimed_at": "2026-08-22T04:40:17.452Z",
+    "report": {
+      "outcome": "Home three inventoried rules with ids and applied_at; pointer copies at every other site; skill trees re-rendered",
+      "commit": "d3cc9c7a",
+      "files": [
+        "AGENTS.md",
+        "docs/knowledge/areas/doctrine-layer/*",
+        "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "skills/**",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo run -p bee -- knowledge check, then bee dev release-manifest --check — green — 0 profile errors incl. the four rule/applied_at codes; 270 files match manifest; docs-only cell so the bundle check and manifest check are the proof",
+      "deviations": [
+        "worker pane idled out after finishing the edits and the regen chain; orchestrator committed its tree and capped from inspection"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 485 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   },
   "tier": "generation"
 }

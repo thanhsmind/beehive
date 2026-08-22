@@ -74,7 +74,42 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "keys-parse-and-round-trip",
+            "status": "PASS",
+            "evidence": "tests.rs:1678 parse_each_new_frontmatter_key_individually; tests.rs:1725 concept_carrying_all_four_new_keys_parses_cleanly_and_round_trips"
+          },
+          {
+            "id": "knowledge-tests-green",
+            "status": "PASS",
+            "evidence": "cargo test -p bee knowledge: 107 passed"
+          },
+          {
+            "id": "bee-key-order-carries-four-keys",
+            "status": "PASS",
+            "evidence": "frame.rs:148 [&str; 17]"
+          },
+          {
+            "id": "profile-required-and-resolution-unchanged",
+            "status": "PASS",
+            "evidence": "git show 2baaf3ea: only frame.rs and tests.rs"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T04:45:23.241Z"
+      }
+    ]
   },
   "tier": "generation"
 }

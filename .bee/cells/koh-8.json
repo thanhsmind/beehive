@@ -1,0 +1,156 @@
+{
+  "id": "koh-8",
+  "feature": "knowledge-one-home",
+  "title": "Derive plan conflict candidates and record verdicts on the workflow record",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D5"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/gates.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/knowledge/areas/workflow-state/gates.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs"
+  ],
+  "action": "Per D5, the derivation and the verdict record. New verb pair under the state group, registered in the dispatch table of set_gate.rs (pattern: set_gate.rs:59 `[\"plan-rev\", \"bump\", ..] => (\"plan-rev.bump\", 2),` and :93 `\"plan-rev.bump\" => run_plan_rev_bump(flags, use_json, t0),`): `bee state plan-conflicts derive` and `bee state plan-conflicts verdict --id <candidate> --verdict compatible|conflicts|retires-prior [--note <text>]`, both lane-targeted like plan-rev bump (set_gate.rs:857 `mutation_lane_selector`), implemented in a new src/verbs/state_group/plan_conflicts.rs (register in state_group/mod.rs). DERIVE: read the feature's open and capped cells from .bee/cells/<id>.json (feature match) — titles, files, affects_skills, affects_specs; build the term set from cell titles and path stems; candidates are (1) every active decision that `conflict_candidates` (decisions/read.rs:454) or a `count_term_hits` (:436) score of >=2 selects for that term set, and (2) every rule home from knowledge::ownership::load_ownership whose home or applied_at intersects the cells' files or affects_*; write `conflict_review: {plan_rev: <current>, derived_at, candidates: [{id, kind: decision|rule, title, verdict: null, note: null}]}` onto the workflow record (record.rs:194 is where plan_rev lives; add the field beside it, seeded absent) under the same locks plan-rev bump takes (set_gate.rs:845 `run_plan_rev_bump`); re-deriving replaces the list and clears verdicts. VERDICT: set one candidate's verdict and note; an unknown id or verdict value refuses by name; the JSON output is the whole conflict_review. Zero candidates is a valid derive (empty list) — that is the only state in which '0 conflicts' is true (D5). Help text for both spellings in src/generated/registry_payload.json and the catalog count in src/catalog.rs (the registry drift test pins them). Sync the home spec docs/knowledge/areas/workflow-state/gates.md with the new record field and the two verbs (Business Rules + Pointers). Tests in state_group/tests.rs (pattern: tests.rs:1392 `a_plan_rev_bump_flips_the_stamped_gate_in_the_same_projection`): derive on a fixture with one matching decision and one matching rule home yields two null-verdict candidates; derive with nothing matching yields []; verdict sets exactly one; re-derive clears verdicts; unknown id refuses.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee state_group && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "bee state plan-conflicts derive writes conflict_review with the current plan_rev and one null-verdict candidate per matching active decision and per matching rule home; [] when nothing matches",
+      "bee state plan-conflicts verdict sets one candidate's verdict and refuses an unknown id or verdict value by name"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+        "substantive": "derive and verdict handlers with the workflow-record write"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/gates.md",
+        "substantive": "conflict_review field and the two verbs documented"
+      }
+    ],
+    "key_links": [
+      "derive reuses decisions::read::conflict_candidates / count_term_hits and knowledge::ownership::load_ownership",
+      "registry_payload.json carries both verbs"
+    ],
+    "prohibitions": [
+      "No gate refusal in this cell (koh-9 owns it)",
+      "No change to conflict_candidates scoring",
+      "No change to plan-rev bump"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-8",
+    "outcome": "state plan-conflicts derive/verdict land D5's plan-time conflict check on the workflow record",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "docs/knowledge/areas/workflow-state/gates.md"
+    ],
+    "deviations": [
+      "Term-set normalization: terms are lowercased, punctuation-trimmed, filtered to length >= 4 and a 24-word stop list before scoring. Without it a title s the/a alone reach count_term_hits >= 2 against nearly every decision, so 0 conflicts becomes unreachable. The scorers themselves are untouched.",
+      "gates.md rules numbered R136/R137 (next free); the spec Pointers bullet records the hand-edited registry payload per decision 3358743e."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T06:22:48.097Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T06:07:00.213Z",
+    "report": {
+      "outcome": "state plan-conflicts derive/verdict land D5 plan-time conflict candidates and verdicts on the workflow record",
+      "commit": "f0bbf5b140be3307b2f1ec2a7296c35c090fa841",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "docs/knowledge/areas/workflow-state/gates.md"
+      ],
+      "tests": "cargo test --release -p bee state_group (162) + --test registry_contracts (10) + --test registry_dispatch (8) + bee knowledge check (0 errors) — green — the cell verify command plus the dispatch/help nets and the edited spec bundle",
+      "deviations": [
+        "Term-set normalization: terms are lowercased, punctuation-trimmed, filtered to length >= 4 and a 24-word stop list before scoring. Without it a title s the/a alone reach count_term_hits >= 2 against nearly every decision, so 0 conflicts becomes unreachable. The scorers themselves are untouched.",
+        "gates.md rules numbered R136/R137 (next free); the spec Pointers bullet records the hand-edited registry payload per decision 3358743e."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "derive-writes-conflict-review-shape-under-bump-locks",
+            "status": "PASS",
+            "evidence": "plan_conflicts.rs:310-316, :451-456; :378-434 same lock order as run_plan_rev_bump"
+          },
+          {
+            "id": "candidates-decisions-and-rule-homes",
+            "status": "PASS",
+            "evidence": "plan_conflicts.rs:258-277 reuse conflict_candidates/count_term_hits; :289-299 rule_intersects over load_ownership"
+          },
+          {
+            "id": "empty-list-verdict-one-refusals-rederive",
+            "status": "PASS",
+            "evidence": "tests.rs:2649,2674,2696,2730; plan_conflicts.rs:321-368"
+          },
+          {
+            "id": "conflict-review-seeded-absent",
+            "status": "PASS",
+            "evidence": "record.rs:195-203 comment only; no insert anywhere"
+          },
+          {
+            "id": "prohibitions-hold",
+            "status": "PASS",
+            "evidence": "no conflict_review in set_gate paths; decisions/read.rs untouched; set_gate.rs +4 dispatch rows only"
+          },
+          {
+            "id": "registry-and-gates-md",
+            "status": "PASS",
+            "evidence": "commands[43]/[44]; PINNED_FLAG_COUNT 180; gates.md R136/R137 + Pointers"
+          },
+          {
+            "id": "verify-green",
+            "status": "PASS",
+            "evidence": "state_group 162 passed; registry_contracts 10; registry_dispatch 8"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T06:26:24.491Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

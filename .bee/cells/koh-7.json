@@ -1,0 +1,154 @@
+{
+  "id": "koh-7",
+  "feature": "knowledge-one-home",
+  "title": "Load rule homes and print update obligations from decisions log",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/knowledge/areas/decision-memory/overview.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs"
+  ],
+  "action": "Two parts. (1) Per D4, a reusable loader: new module src/verbs/knowledge/ownership.rs (register in knowledge/mod.rs) exposing `pub(crate) fn load_ownership(repo_root: &Path) -> Ownership` that walks docs/knowledge/ once and returns, per area, the `owns.code` / `owns.skills` / `owns.tests` lists from areas/<area>/overview.md, plus every rule home: {rule id, home path, areas, applied_at list} — reusing check.rs's frontmatter parse (frontmatter.rs:259 `parse_frontmatter`), marker extraction (rg -n 'fn extract_rule_markers' check.rs) and glob matching (check.rs:294 `match_glob_segment`); also `pub(crate) fn matches_owned(list: &[String], path: &str) -> bool` for trailing-* globs. For the AGENTS.md homes, read the 'AGENTS.md rule homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md (koh-4 put the applied_at list there) so `agents-*` rules load with home AGENTS.md. Unit-test the loader on a temp bundle. (2) Per D1's decision-log trigger: in src/verbs/decisions/verbs_read.rs:191 `run_log`, after the existing conflict_candidates insert at verbs_read.rs:738 `m.insert(\"conflict_candidates\".into(), ...)`, resolve the new decision's --tags and --scope against the loaded rule homes (a rule matches when one of its areas equals a tag or the scope) and insert `update_obligations`: [{rule, home, applied_at: [..]}] — the union of files the agent now owes an update to; empty array when nothing matches; in the non-JSON path print one line per obligation. Update `decisions log` help in src/generated/registry_payload.json (rg -n '\"decisions log\"') to name the field, and the catalog count if the drift test moves. Sync the home spec docs/knowledge/areas/decision-memory/overview.md with the new output field. Tests in decisions/tests.rs: a log whose tag matches a homed rule's area carries that rule's applied_at; a log with no match carries [].",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee decisions && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "load_ownership returns the owns.* lists for every area overview and every rule home with its applied_at, including AGENTS.md-homed rules",
+      "decisions log output carries update_obligations listing the applied_at files of every rule whose area matches a tag or the scope"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+        "substantive": "the loader and matches_owned, unit-tested"
+      },
+      {
+        "path": "docs/knowledge/areas/decision-memory/overview.md",
+        "substantive": "update_obligations documented as a log output field"
+      }
+    ],
+    "key_links": [
+      "run_log calls load_ownership and inserts update_obligations",
+      "ownership.rs reuses check.rs parsing rather than re-implementing it"
+    ],
+    "prohibitions": [
+      "decisions log never refuses on an obligation — it prints, cap enforces (D1)",
+      "No change to conflict_candidates scoring"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-7",
+    "outcome": "Load rule homes and print update obligations from decisions log",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/decision-memory/overview.md"
+    ],
+    "deviations": [
+      "worker did not run finish; orchestrator capped from its result form"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T05:24:56.971Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T05:15:44.614Z",
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "Load rule homes and print update obligations from decisions log",
+      "commit": "712fc041",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/decision-memory/overview.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge, decisions, registry_contracts — green — loader and decisions log are the touched scope; registry pins the help text",
+      "deviations": [
+        "worker did not run finish; orchestrator capped from its result form"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "load-ownership-area-owns-lists",
+            "status": "PASS",
+            "evidence": "ownership.rs:60-102; knowledge/tests.rs:2670-2700"
+          },
+          {
+            "id": "rule-homes-with-applied-at-incl-agents-md",
+            "status": "PASS",
+            "evidence": "ownership.rs:105-133, parse_agents_rule_homes :150-239; real doc yields agents-proof-at-cap with 7 applied_at paths"
+          },
+          {
+            "id": "matches-owned-trailing-globs",
+            "status": "PASS",
+            "evidence": "ownership.rs:242-273; tests.rs:2745-2778 (note: foo/* also matches deep paths, untested)"
+          },
+          {
+            "id": "reuses-check-rs-parsing",
+            "status": "PASS",
+            "evidence": "ownership.rs calls parse_frontmatter, bee_of, list_bundle_markdown, extract_rule_markers, match_glob_segment"
+          },
+          {
+            "id": "decisions-log-update-obligations",
+            "status": "PASS",
+            "evidence": "verbs_read.rs:736-762 additive after conflict_candidates; [] on no match (decisions/tests.rs:1868-1884)"
+          },
+          {
+            "id": "never-refuses-conflict-scoring-untouched",
+            "status": "PASS",
+            "evidence": "verbs_read.rs +27 -0; conflict_candidates call at :726 unchanged"
+          },
+          {
+            "id": "help-and-home-doc-synced",
+            "status": "PASS",
+            "evidence": "registry_payload.json decisions.log description; decision-memory/overview.md:203-204"
+          },
+          {
+            "id": "verify-green",
+            "status": "PASS",
+            "evidence": "knowledge 109 passed; decisions 63 passed; registry_contracts 10 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T05:27:49.614Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

@@ -87,7 +87,52 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "six-codes-profile-errors-default-run",
+            "status": "PASS",
+            "evidence": "check.rs:855,874,890,947,963,995 profile_errors.push; check.rs:1007 ok requires profile_errors empty; tests.rs:1836 asserts !report.ok"
+          },
+          {
+            "id": "exempt-trees-skipped-agents-skills-scanned",
+            "status": "PASS",
+            "evidence": "check.rs:279 is_exempt_tree; check.rs:913-921; tests.rs:1936"
+          },
+          {
+            "id": "no-repo-root-note",
+            "status": "PASS",
+            "evidence": "check.rs:422-427; tests.rs:1985"
+          },
+          {
+            "id": "conformance-doc-and-registry-help-updated",
+            "status": "PASS",
+            "evidence": "conformance-check.md:50-67; registry_payload.json knowledge check description"
+          },
+          {
+            "id": "verify-green",
+            "status": "PASS",
+            "evidence": "knowledge 107 passed; registry_contracts 10 passed"
+          },
+          {
+            "id": "undeclared-files-justified",
+            "status": "PASS",
+            "evidence": "walk.rs:347 notes field, routing.rs:77 note output, bootstrap.rs:205 owns.code on generated overviews - coherent, deviation unrecorded"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T04:45:24.838Z"
+      }
+    ]
   },
   "tier": "generation"
 }

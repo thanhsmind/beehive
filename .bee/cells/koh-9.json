@@ -1,0 +1,162 @@
+{
+  "id": "koh-9",
+  "feature": "knowledge-one-home",
+  "title": "Refuse the merged gate while a conflict candidate lacks a verdict",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "koh-8"
+  ],
+  "decisions": [
+    "D2",
+    "D5"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/gates.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/knowledge/areas/workflow-state/gates.md",
+    "skills/bee-planning/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-one-home/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs"
+  ],
+  "action": "Per D5 and D2, the gate precondition. In set_gate.rs:616 `run_gate_body`, beside the two `high_risk_advisor_refusal` call sites (set_gate.rs:701 pre-lock peek and :711 post-lock recompute, both under `if exec_component && approved`), add `conflict_review_refusal(record, lane)` with the same fail-closed shape: refuse a merged (or execution) approval when `conflict_review` is absent, when its `plan_rev` differs from the record's current `plan_rev` (a plan-rev bump therefore invalidates it — no explicit reset needed, say so in the message), or when any candidate's verdict is null — naming the unverdicted candidate ids and the fix (`bee state plan-conflicts derive` / `... verdict`). A recorded `conflicts` verdict does NOT refuse (D5 verbatim): the approval output lists such candidates under `conflicts_acknowledged` so the user approves with eyes open. Lane-only like the advisor precondition; the default record (no lane) is unchanged. Update `gate` / `state gate` help in src/generated/registry_payload.json and the catalog count. Sync the home spec docs/knowledge/areas/workflow-state/gates.md (Business Rules: the precondition, its three refusal causes, the plan-rev invalidation) and the planning skill gate step in skills/bee-planning/SKILL.md (the Gate section: derive + verdict before asking the shape/execution question; one line, pointer to the spec) — then run the regen chain because skills/ is a manifest root. Tests in state_group/tests.rs (pattern: set_gate.rs:1271 `high_risk_merged_gate_approval_succeeds_after_a_fresh_advisor_ref_is_recorded` and its negatives at :1437, :1462): absent conflict_review refuses; stale plan_rev refuses; one null verdict refuses naming the id; all verdicts set approves; a `conflicts` verdict approves and the output names it; plan-rev bump after approval flips the gate (existing) and the next approval refuses as stale; unapprove never runs the check.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee state_group && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "gate --merge --approved true on a lane refuses when conflict_review is absent, stale by plan_rev, or carries a null verdict, naming the candidate ids",
+      "A conflicts verdict does not refuse; the approval output lists it under conflicts_acknowledged",
+      "Existing gate tests, including the advisor precondition cases, stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "substantive": "conflict_review_refusal wired at both advisor call sites"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/gates.md",
+        "substantive": "the precondition's three causes and the plan-rev invalidation"
+      }
+    ],
+    "key_links": [
+      "bee-planning SKILL.md gate step points at derive/verdict",
+      "registry_payload.json gate help names the precondition"
+    ],
+    "prohibitions": [
+      "No change to the advisor precondition",
+      "No refusal on the default (no-lane) record",
+      "No refusal on a conflicts verdict"
+    ]
+  },
+  "trace": {
+    "worker": "w-koh-9",
+    "outcome": "Merged/execution gate refuses a lane whose conflict review is absent, stale by plan_rev, or unverdicted; a conflicts verdict is surfaced, not refused",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "docs/knowledge/areas/workflow-state/gates.md",
+      "skills/bee-planning/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Tests authored in set_gate.rs own #[cfg(test)] module beside the advisor-precondition cases the cell cited as the pattern, not state_group/tests.rs — every gate test lives there and run_gate_body is private to that file",
+      "conflict_review_refusal reads the LIVE WORKFLOW RECORD (root + lane) instead of the passed lane record the cell sketched: koh-8 writes conflict_review to the workflow record and the lane projection never copies it down",
+      "catalog.rs PINNED_FLAG_COUNT stays 180 — koh-9 adds a refusal and an output field, no flag name; the audit comment says so explicitly",
+      "Regen output trees (.agents/.claude/.claude-plugin/.codex-plugin/.opencode skills + .bee/onboarding.json) reserved and committed beside the cell files — skills/ is a manifest root"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T06:35:28.024Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
+    "claimed_at": "2026-08-22T06:23:32.776Z",
+    "report": {
+      "outcome": "Merged/execution gate refuses a lane whose conflict review is absent, stale by plan_rev, or unverdicted; a conflicts verdict is surfaced under conflicts_acknowledged, not refused",
+      "commit": "3dec8983298e5df54687e1d5763246ab9427e1a8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "docs/knowledge/areas/workflow-state/gates.md",
+        "skills/bee-planning/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release -p bee state_group (172 passed, +10 new) && --test registry_contracts (10 passed) && bee dev release-manifest --check (270 files match) — green — the cell verify verbatim; full -p bee run also green except the known pre-existing opencode_plugin_contracts red",
+      "deviations": [
+        "Tests authored in set_gate.rs own #[cfg(test)] module beside the advisor-precondition cases the cell cited as the pattern, not state_group/tests.rs — every gate test lives there and run_gate_body is private to that file",
+        "conflict_review_refusal reads the LIVE WORKFLOW RECORD (root + lane) instead of the passed lane record the cell sketched: koh-8 writes conflict_review to the workflow record and the lane projection never copies it down",
+        "catalog.rs PINNED_FLAG_COUNT stays 180 — koh-9 adds a refusal and an output field, no flag name; the audit comment says so explicitly",
+        "Regen output trees (.agents/.claude/.claude-plugin/.codex-plugin/.opencode skills + .bee/onboarding.json) reserved and committed beside the cell files — skills/ is a manifest root"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 528 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "wired-at-both-advisor-call-sites",
+            "status": "PASS",
+            "evidence": "set_gate.rs:824/:842 pre-lock, :852/:860 post-lock under exec_component && approved"
+          },
+          {
+            "id": "refuses-absent-stale-null-naming-ids",
+            "status": "PASS",
+            "evidence": "set_gate.rs:711,717,725; tests :1691/:1712/:1734"
+          },
+          {
+            "id": "conflicts-verdict-surfaced-not-refused",
+            "status": "PASS",
+            "evidence": "set_gate.rs:990-1005 conflicts_acknowledged; test asserts [efd6cbaa]"
+          },
+          {
+            "id": "lane-only-unapprove-exempt-advisor-unchanged",
+            "status": "PASS",
+            "evidence": "set_gate.rs:660 return Ok(None) without lane; both sites guarded by approved; git numstat 429/0 insert-only"
+          },
+          {
+            "id": "help-docs-skill-regen",
+            "status": "PASS",
+            "evidence": "registry commands[4]/[39]; gates.md R138; bee-planning SKILL.md:73; release-manifest 270 match"
+          },
+          {
+            "id": "deviation-workflow-record-exemption-sound",
+            "status": "PASS",
+            "evidence": "policy.rs:781 ensure_workflow_record_for_feature after both start branches; residual: default start-feature closes other records (feature.rs:401) — pre-existing"
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "state_group 172 passed; registry_contracts 10"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-22T06:39:14.601Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}
