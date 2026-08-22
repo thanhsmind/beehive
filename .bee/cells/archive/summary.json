@@ -763,5 +763,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-21T22:35:50.800Z"
+  },
+  "store-reach-gaps": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-22T00:04:42.447Z"
   }
 }
