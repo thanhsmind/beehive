@@ -79,8 +79,12 @@ pub(crate) struct CapFlags {
     pub(crate) deviations: Vec<Value>,
     /// frd-1: `--deviation "<one line>"`, RAW (untrimmed) — `None` = not
     /// passed. Validated (refused if it trims to empty) and trimmed at cap
-    /// time in `cap_cell_from_flags`, then appended to `deviations` above so
-    /// `trace.deviations` carries it into the pattern-candidate mining
+    /// time in `cap_cell_from_flags`, then appended to `deviations` above.
+    /// dol-1: this flag is for a deviation the ORCHESTRATOR observed and
+    /// the worker did NOT report — a worker's own structured deviations
+    /// (`--report`'s `deviations` array) are merged into `trace.deviations`
+    /// by `cap_cell_from_flags` itself, so nobody re-types a report line
+    /// here to get it into the pattern-candidate mining
     /// `verbs/knowledge/promote.rs` reads. The flag parser (`rsv::Flags`,
     /// mirroring `--did` on `capture add`) is single-value — a repeated
     /// `--deviation` keeps only the LAST occurrence — so this carries one
@@ -364,6 +368,35 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             let trimmed = js_trim(raw);
             if !trimmed.is_empty() {
                 deviations.push(Value::String(trimmed.to_string()));
+            }
+        }
+        // dol-1: last, the worker's OWN structured deviations — the
+        // `deviations` array of the validated `--report` object below.
+        // `parse_report_flag` already proved it is an array, so this reads
+        // it, never re-validates or re-parses the raw flag. A deviation the
+        // worker recorded structurally used to reach only `trace.report`,
+        // which `bee knowledge promote` never reads (it mines
+        // `trace.deviations` alone), so the lesson stayed invisible until
+        // someone hand-copied it into `--deviation`. This is a UNION, never
+        // a move: `trace.report` keeps its verbatim copy (D8, below).
+        // Dedup is exact string equality against what is already here — a
+        // non-string entry a `--deviations-file` supplied is compared past,
+        // never mutated or dropped. A report entry that is not a string
+        // cannot be trimmed into a line, so it is left to `trace.report`'s
+        // verbatim copy rather than guessed at here.
+        if let Some(Value::Array(reported)) = report_value.get("deviations") {
+            for entry in reported {
+                let Value::String(raw) = entry else { continue };
+                let trimmed = js_trim(raw);
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let already = deviations
+                    .iter()
+                    .any(|d| matches!(d, Value::String(existing) if existing == trimmed));
+                if !already {
+                    deviations.push(Value::String(trimmed.to_string()));
+                }
             }
         }
         trace.insert("deviations".into(), Value::Array(deviations));

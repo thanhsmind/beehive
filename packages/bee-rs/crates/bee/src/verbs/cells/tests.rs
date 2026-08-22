@@ -3837,6 +3837,163 @@ use std::time::Instant;
         assert_eq!(capped["trace"]["deviations"], json!([]));
     }
 
+    // ══ dol-1 — the report's own deviations join trace.deviations ══════════
+    //
+    // A worker records its deviations STRUCTURALLY, in the `--report`
+    // Result form. That copy landed only on `trace.report`, which
+    // `bee knowledge promote` never reads — it mines `trace.deviations`
+    // alone — so the lesson stayed invisible unless the orchestrator
+    // hand-copied the line into `--deviation`. hss-3 is the real loss:
+    // three report deviations beside `trace.deviations: []`, and its
+    // feature's promote proposal printed "None". `cap_cell_from_flags` now
+    // merges the report's entries into the same list: a UNION, in the order
+    // deviations-file → --deviation → report, deduped by exact string
+    // equality, with `trace.report` left verbatim.
+
+    fn cap_flags_dol(
+        id: &str,
+        deviations: Vec<Value>,
+        deviation: Option<&str>,
+        report: &str,
+    ) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations,
+            deviation: deviation.map(str::to_string),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: Some(report.to_string()),
+        }
+    }
+
+    /// The Result form a worker actually sends, with `deviations` swapped
+    /// for the JSON array literal under test.
+    fn dol_report(deviations: &str) -> String {
+        format!(
+            r#"{{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":{deviations}}}"#
+        )
+    }
+
+    /// (e) — `trace.report` is the parsed report verbatim, its own
+    /// `deviations` included. The merge copies, it never moves.
+    fn assert_report_verbatim(capped: &Value, report: &str) {
+        assert_eq!(
+            capped["trace"]["report"],
+            serde_json::from_str::<Value>(report).unwrap(),
+            "trace.report stays the verbatim D8 object — dol-1 reads it, never rewrites it"
+        );
+    }
+
+    #[test]
+    fn report_deviations_reach_trace_deviations_with_no_deviation_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "dol-1a", &cell("dol-1a", "claimed", "f", json!([])));
+
+        // The exact shape that lost hss-3's lesson: deviations in the
+        // report, no --deviation, nothing in --deviations-file.
+        let report = dol_report(
+            r#"["a cell's declared file is a hypothesis","  serialized what the plan split  ",""," "]"#,
+        );
+        let flags = cap_flags_dol("dol-1a", Vec::new(), None, &report);
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!([
+                "a cell's declared file is a hypothesis",
+                "serialized what the plan split",
+            ]),
+            "report entries land trimmed, in their own order; blank entries are dropped"
+        );
+        assert_report_verbatim(&capped, &report);
+    }
+
+    #[test]
+    fn deviations_file_then_flag_then_report_keep_that_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "dol-1b", &cell("dol-1b", "claimed", "f", json!([])));
+
+        // A --deviations-file may carry arbitrary JSON values, not only
+        // strings: the non-string entry passes through untouched.
+        let report = dol_report(r#"["from the report","and one more"]"#);
+        let flags = cap_flags_dol(
+            "dol-1b",
+            vec![json!({"note": "structured"}), json!("from the file")],
+            Some("  from the flag  "),
+            &report,
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!([
+                {"note": "structured"},
+                "from the file",
+                "from the flag",
+                "from the report",
+                "and one more",
+            ]),
+            "deviations-file entries first, then --deviation, then the report's own"
+        );
+        assert_report_verbatim(&capped, &report);
+    }
+
+    #[test]
+    fn a_deviation_in_both_the_flag_and_the_report_appears_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "dol-1c", &cell("dol-1c", "claimed", "f", json!([])));
+
+        // The orchestrator hand-copied the line anyway (the old habit), and
+        // the deviations-file already held another of them.
+        let report = dol_report(r#"["said twice","  said twice  ","from the file","fresh"]"#);
+        let flags = cap_flags_dol(
+            "dol-1c",
+            vec![json!("from the file")],
+            Some("said twice"),
+            &report,
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!(["from the file", "said twice", "fresh"]),
+            "exact string equality after trimming dedupes against every earlier source"
+        );
+        assert_report_verbatim(&capped, &report);
+    }
+
+    #[test]
+    fn an_empty_report_deviations_array_changes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "dol-1d", &cell("dol-1d", "claimed", "f", json!([])));
+
+        let report = dol_report("[]");
+        let flags = cap_flags_dol(
+            "dol-1d",
+            vec![json!("from the file")],
+            Some("from the flag"),
+            &report,
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!(["from the file", "from the flag"]),
+            "a report with no deviations leaves frd-1's own list exactly as it was"
+        );
+        assert_report_verbatim(&capped, &report);
+    }
+
     // ══ wfl-1/D8 — `--report <json>` on cells cap/finish ═══════════════════
     //
     // The structured counterpart to the worker Result form
