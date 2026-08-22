@@ -1674,6 +1674,71 @@ use std::time::Instant;
         assert!(report.ok);
     }
 
+    // ═══ owns.* and applied_at frontmatter keys (koh-1 / D4) ═════════════════
+
+    #[test]
+    fn parse_each_new_frontmatter_key_individually() {
+        for (key, val) in [
+            ("owns.code", "[crates/bee/src/verbs/knowledge/*, crates/bee/src/verbs/knowledge.rs]"),
+            ("owns.skills", "[skills/bee-hive/SKILL.md]"),
+            ("owns.tests", "[tests/registry_contracts.rs, tests/hook_contracts.rs]"),
+            ("applied_at", "[docs/history/knowledge-one-home/CONTEXT.md]"),
+        ] {
+            let text = format!("---\ntype: bee.pattern\ntitle: Demo\ntags: []\nbee:\n  id: p-1\n  lifecycle: active\n  {key}: {val}\n---\nbody\n");
+            let Fm::Parsed { data, block, .. } = parse_frontmatter(&text) else {
+                panic!("failed to parse {key}");
+            };
+            let bee = data["bee"].as_object().unwrap();
+            assert!(bee.contains_key(key), "bee block must contain {key}");
+            assert_eq!(emit_frontmatter(&data).unwrap(), block, "round-trip for {key}");
+        }
+    }
+
+    #[test]
+    fn owns_and_applied_at_keys_emit_in_fixed_bee_key_order() {
+        let mut data = Map::new();
+        data.insert("type".into(), json!("bee.area"));
+        data.insert("title".into(), json!("Demo Area"));
+        data.insert("tags".into(), json!([]));
+        let mut bee = Map::new();
+        // Insert in reverse / mixed order
+        bee.insert("applied_at".into(), json!(["docs/history/CONTEXT.md"]));
+        bee.insert("custom_unknown_key".into(), json!("tail"));
+        bee.insert("owns.tests".into(), json!(["tests/a.rs"]));
+        bee.insert("id".into(), json!("area-demo"));
+        bee.insert("owns.skills".into(), json!(["skills/a/SKILL.md"]));
+        bee.insert("superseded_by".into(), json!("next-id"));
+        bee.insert("owns.code".into(), json!(["crates/a/*", "crates/b.rs"]));
+        bee.insert("lifecycle".into(), json!("active"));
+        data.insert("bee".into(), Value::Object(bee));
+
+        let emitted = emit_frontmatter(&data).unwrap();
+        let expected = "---\ntype: bee.area\ntitle: Demo Area\ntags: []\nbee:\n  id: area-demo\n  lifecycle: active\n  superseded_by: next-id\n  owns.code: [crates/a/*, crates/b.rs]\n  owns.skills: [skills/a/SKILL.md]\n  owns.tests: [tests/a.rs]\n  applied_at: [docs/history/CONTEXT.md]\n  custom_unknown_key: tail\n---\n";
+        assert_eq!(emitted, expected);
+    }
+
+    #[test]
+    fn concept_carrying_all_four_new_keys_parses_cleanly_and_round_trips() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("area-demo")
+                .ty("bee.area")
+                .title("Demo Area")
+                .description("Area description")
+                .bee("owns.code", json!(["crates/bee/src/verbs/knowledge/*", "crates/bee/src/verbs/knowledge.rs"]))
+                .bee("owns.skills", json!(["skills/bee-hive/SKILL.md"]))
+                .bee("owns.tests", json!(["tests/registry_contracts.rs"]))
+                .bee("applied_at", json!(["docs/history/knowledge-one-home/CONTEXT.md", "crates/bee/src/verbs/cells/obligation.rs"])),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.okf_errors.is_empty(), "okf errors: {:?}", report.okf_errors);
+        assert!(report.profile_errors.is_empty(), "profile errors: {:?}", report.profile_errors);
+        assert!(report.warnings.is_empty(), "warnings: {:?}", report.warnings);
+        assert!(report.ok, "concept with all four keys must pass bundle check");
+    }
+
     // ═══ knowledge index (D21) ═════════════════════════════════════════════
 
     /// makeIndexFixture (test_knowledge.mjs l.573): nested dirs, one critical,

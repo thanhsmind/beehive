@@ -145,7 +145,7 @@ pub(crate) const CONCEPT_TYPES: [&str; 9] = [
 
 pub(crate) const ROOT_KEY_ORDER: [&str; 6] = ["type", "title", "description", "tags", "timestamp", "resource"];
 
-pub(crate) const BEE_KEY_ORDER: [&str; 13] = [
+pub(crate) const BEE_KEY_ORDER: [&str; 17] = [
     "id",
     "lifecycle",
     "areas",
@@ -159,6 +159,10 @@ pub(crate) const BEE_KEY_ORDER: [&str; 13] = [
     "review_status",
     "supersedes",
     "superseded_by",
+    "owns.code",
+    "owns.skills",
+    "owns.tests",
+    "applied_at",
 ];
 
 pub(crate) const PROFILE_REQUIRED: [&[&str]; 4] = [&["title"], &["description"], &["bee", "id"], &["bee", "lifecycle"]];
