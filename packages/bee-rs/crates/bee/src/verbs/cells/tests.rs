@@ -4024,11 +4024,17 @@ use std::time::Instant;
         assert_report_verbatim(&capped, &report);
     }
 
-    /// dol-1: an object and the string it renders to are ONE deviation.
-    /// Dedup runs on `deviation_text`, the same rendering the miner uses, so
+    /// dol-1: an object and the string it renders to are ONE deviation —
     /// an orchestrator who hand-copied the rendered line into `--deviation`
-    /// does not double it — and the earlier source keeps its place and its
-    /// form.
+    /// does not double it.
+    ///
+    /// This case does NOT prove the `deviation_text` dedup on its own, and
+    /// it is written down here so nobody reads it as that proof: the
+    /// pre-dedup code SKIPPED every non-string report entry, and a skip
+    /// leaves behind exactly the array a dedup does. What it locks is a
+    /// naive rewrite — pass-through with raw string equality would double
+    /// the deviation into `["scope: …", {object}]`. The object-FIRST case
+    /// below is the one that goes red without the dedup.
     #[test]
     fn an_object_and_its_rendered_string_are_one_deviation() {
         let tmp = tempfile::tempdir().unwrap();
@@ -4049,6 +4055,38 @@ use std::time::Instant;
             capped["trace"]["deviations"],
             json!(["scope: the declared file was a hypothesis"]),
             "the flag's line came first and stands; the report's object is the same deviation"
+        );
+        assert_report_verbatim(&capped, &report);
+    }
+
+    /// dol-1: the OTHER direction, and the one that fails without the
+    /// `deviation_text` dedup. The object is already in the list from
+    /// `--deviations-file`, and the report repeats it as the rendered line:
+    /// a skip cannot produce this array, only the dedup can. The object
+    /// keeps its place AND its form — the string never replaces it, and it
+    /// is never re-added beside it.
+    #[test]
+    fn an_object_from_the_file_absorbs_its_rendered_twin_in_the_report() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "dol-1g", &cell("dol-1g", "claimed", "f", json!([])));
+
+        let report = dol_report(r#"["scope: the declared file was a hypothesis","fresh line"]"#);
+        let flags = cap_flags_dol(
+            "dol-1g",
+            vec![json!({"type": "scope", "description": "the declared file was a hypothesis"})],
+            None,
+            &report,
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!([
+                {"type": "scope", "description": "the declared file was a hypothesis"},
+                "fresh line",
+            ]),
+            "the file's object stands as an object; its rendered twin is the same deviation"
         );
         assert_report_verbatim(&capped, &report);
     }
