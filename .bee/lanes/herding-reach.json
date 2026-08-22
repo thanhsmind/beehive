@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-reach",
   "mode": "feature",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,13 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"herding-reach\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"herding-reach\" (lane).",
+  "next_action": "bee close finished \"herding-reach\" — feature is closed.",
   "created_at": "2026-08-22T04:09:17.657Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "▸ All four cells capped and committed. Close doors are all clear. Now I wait for the full test suite (runs in the background), then I close",
-    "asked_at": "2026-08-22T04:27:19.817Z",
+    "kind": "gate",
+    "subject": "uat: approve herding-reach for merge (bee worktree merge --id beehive--wt--herding-reach)",
+    "asked_at": "2026-08-22T04:28:01.072Z",
     "session": "15dafcf0-9d77-49a6-aefe-e79b8f894e8d"
   },
   "route": {
