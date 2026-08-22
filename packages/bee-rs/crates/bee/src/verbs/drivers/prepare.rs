@@ -519,6 +519,39 @@ pub(crate) enum Prepared {
     Thrown(String),
 }
 
+/// herding-reach D1: dispatch prepare reports herding transport reachability.
+/// Probes HERDR_ENV (must be '1') and HERDR_PANE_ID (non-empty).
+pub(crate) fn herding_transport_probe(
+    env: &dyn Fn(&str) -> Option<String>,
+) -> (bool, String, Option<String>) {
+    let pane_id = env("HERDR_PANE_ID").filter(|s| !s.is_empty());
+    let herdr_env = env("HERDR_ENV");
+    match herdr_env.as_deref() {
+        Some("1") => match pane_id {
+            Some(pane) => (
+                true,
+                format!("HERDR_ENV=1 and HERDR_PANE_ID={pane} are set"),
+                Some(pane),
+            ),
+            None => (
+                false,
+                "HERDR_PANE_ID is not set — this session is not inside a herdr pane".into(),
+                None,
+            ),
+        },
+        Some("") | None => (
+            false,
+            "HERDR_ENV is not set — this session is not inside a herdr pane".into(),
+            pane_id,
+        ),
+        Some(_) => (
+            false,
+            "HERDR_ENV is not 1 — this session is not inside a herdr pane".into(),
+            pane_id,
+        ),
+    }
+}
+
 /// provenance: dispatch-prepare.mjs prepareDispatch(root, {...}). Throws only
 /// on a malformed CALL; every legitimate cli-shaped / unconfigured-advisor /
 /// native-unavailable / claim-ownership resolution is a typed {ok:false}
@@ -806,6 +839,14 @@ pub(crate) fn prepare_dispatch(
             }
             payload.insert("command".into(), Value::String(command));
             payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+            // herding-reach D1: dispatch prepare reports herding transport
+            // reachability. Probes HERDR_ENV and HERDR_PANE_ID in the caller's
+            // environment and writes transport_ready and transport_reason into
+            // the payload.
+            let (transport_ready, transport_reason, _) =
+                herding_transport_probe(&|k| std::env::var(k).ok());
+            payload.insert("transport_ready".into(), Value::Bool(transport_ready));
+            payload.insert("transport_reason".into(), Value::String(transport_reason));
             // herding-review-slots D3: `fallback:"default"` on the slot
             // names the runtime's own default model for this slot (the
             // same table a gather purpose used to fall back to silently,
@@ -827,6 +868,10 @@ pub(crate) fn prepare_dispatch(
                 {
                     let mut fb = Map::new();
                     fb.insert("model".into(), Value::String(model));
+                    fb.insert(
+                        "fallback_when".into(),
+                        Value::String("transport_ready is false".into()),
+                    );
                     payload.insert("fallback".into(), Value::Object(fb));
                 }
             }

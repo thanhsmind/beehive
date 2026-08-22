@@ -1145,7 +1145,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(
             v.get("payload").unwrap().get("fallback"),
-            Some(&json!({"model": "sonnet"}))
+            Some(&json!({"model": "sonnet", "fallback_when": "transport_ready is false"}))
         );
     }
 
@@ -1216,6 +1216,108 @@ use std::time::Instant;
             panic!()
         };
         assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
+    // ── herding-reach D1: transport reachability probe & payload fields ─────
+
+    #[test]
+    fn herding_transport_probe_reports_ready_when_both_vars_set() {
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "1".to_string()),
+            ("HERDR_PANE_ID", "w4:p7".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(ready);
+        assert_eq!(reason, "HERDR_ENV=1 and HERDR_PANE_ID=w4:p7 are set");
+        assert_eq!(pane_id, Some("w4:p7".to_string()));
+    }
+
+    #[test]
+    fn herding_transport_probe_reports_not_ready_when_either_var_missing() {
+        // Missing HERDR_ENV
+        let env_map = HashMap::from([
+            ("HERDR_PANE_ID", "w4:p7".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_ENV is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, Some("w4:p7".to_string()));
+
+        // HERDR_ENV is not "1"
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "0".to_string()),
+            ("HERDR_PANE_ID", "w4:p7".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_ENV is not 1 — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, Some("w4:p7".to_string()));
+
+        // Missing HERDR_PANE_ID
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "1".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_PANE_ID is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, None);
+
+        // Empty HERDR_PANE_ID
+        let env_map = HashMap::from([
+            ("HERDR_ENV", "1".to_string()),
+            ("HERDR_PANE_ID", "".to_string()),
+        ]);
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_PANE_ID is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, None);
+
+        // Both missing
+        let env_map = HashMap::<&str, String>::new();
+        let (ready, reason, pane_id) = herding_transport_probe(&|k| env_map.get(k).cloned());
+        assert!(!ready);
+        assert_eq!(
+            reason,
+            "HERDR_ENV is not set — this session is not inside a herdr pane"
+        );
+        assert_eq!(pane_id, None);
+    }
+
+    #[test]
+    fn herding_dispatch_payload_carries_transport_ready_and_transport_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let payload = v.get("payload").unwrap();
+        assert!(payload.get("transport_ready").is_some());
+        assert!(payload.get("transport_ready").unwrap().is_boolean());
+        assert!(payload.get("transport_reason").is_some());
+        assert!(payload.get("transport_reason").unwrap().is_string());
+        // Fallback is omitted when not configured
+        assert_eq!(payload.get("fallback"), None);
     }
 
     // ── hrv-1: herding-review-slots D1/D2 — reviewer/advisor purposes ──────
