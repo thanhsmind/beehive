@@ -9,6 +9,7 @@
 // in a session; failing open silently would let a guard stop guarding
 // without anyone noticing. Loud and open is the only safe pair.
 
+pub mod activity;
 pub mod adapter;
 pub mod chain_nudge;
 pub mod cli_shape;
@@ -71,8 +72,9 @@ fn emit_undecidable(name: &str) -> ExitCode {
 /// The hook names `bee hook <name>` dispatches to. Kept as one list so the
 /// usage line and the dispatch match arm can never drift apart silently —
 /// add a hook to both, or the usage line lies.
-const HOOK_NAMES: [&str; 9] = [
+const HOOK_NAMES: [&str; 10] = [
     "tools-logger",
+    "activity",
     "codex-subagent-audit",
     "chain-nudge",
     "state-sync",
@@ -128,6 +130,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     let stdin_str = String::from_utf8_lossy(&stdin).into_owned();
     let outcome = match name.as_str() {
         "tools-logger" => tools_logger::run(&rest, &stdin_str),
+        "activity" => activity::run(&rest, &stdin_str),
         "codex-subagent-audit" => codex_subagent_audit::run(&rest, &stdin_str),
         "chain-nudge" => chain_nudge::run(&rest, &stdin_str),
         "state-sync" => state_sync::run(&rest, &stdin_str),

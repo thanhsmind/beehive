@@ -201,7 +201,10 @@ fn opt_strict_eq(a: Option<&Value>, b: Option<&Value>) -> bool {
 mod tests;
 
 mod flags;
-mod store;
+// `pub(crate)` for `store` and `waiting_on`: the activity hook
+// (hooks/activity.rs, agent-activity-hook D5) sets the SAME waiting mark this
+// group's verbs set, through these same functions rather than a second writer.
+pub(crate) mod store;
 mod ledger;
 mod set_gate;
 mod workers;
@@ -210,7 +213,7 @@ mod workflows;
 mod feature;
 mod policy;
 mod advisor_ref;
-mod waiting_on;
+pub(crate) mod waiting_on;
 mod plan_conflicts;
 pub(crate) use self::flags::*;
 pub(crate) use self::store::*;
