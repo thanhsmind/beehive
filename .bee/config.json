@@ -14,19 +14,19 @@
   "ship_visibility": "off",
   "worktree_first": "on",
   "worktree_cleanup_on_merge": false,
-  "uat_stop": "merge",
-  "uat_before_merge": true,
+  "uat_stop": "close",
+  "uat_before_merge": false,
   "staging_before_merge": false,
   "models": {
     "claude": {
       "extraction": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "pi-agy-flash-3.7",
         "fallback": "default"
       },
       "generation": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "pi-agy-flash-3.7",
         "fallback": "default"
       },
       "review": "opus",
@@ -68,6 +68,12 @@
         "-a",
         "--model",
         "opencode/x-preview-f-free:high"
+      ],
+      "pi-agy-flash-3.7": [
+        "pi",
+        "-a",
+        "--model",
+        "agy/gemini-3.7-flash:high"
       ],
       "agy-flash": {
         "argv": [

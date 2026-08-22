@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "review-fix-2183",
+  "mode": "feature",
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"review-fix-2183\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"review-fix-2183\" (lane).",
+  "created_at": "2026-08-22T02:09:34.234Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}

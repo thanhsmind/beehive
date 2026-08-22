@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-08-22T00:34:40.199Z",
+    "subject": "▸ Finding 2 confirmed — `down` splits pass the parent's unchanged width into the guard (`herding/run.rs:906-913`), so the check is trivially",
+    "asked_at": "2026-08-22T02:07:58.286Z",
     "session": "1a1174b2-16b6-40b7-be29-f17e74f3b0cd"
   },
   "route": {
