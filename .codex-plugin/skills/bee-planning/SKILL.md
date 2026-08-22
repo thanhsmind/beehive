@@ -96,12 +96,8 @@ end-to-end, real behavior, no stubs.
 
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap
-(`.bee/expertise/tests.md`). The agent owns test scope: pick the proof
-each cap's change type needs (code → related tests green; docs →
-parity/pointer checks; behavior → judge verdict), run it, and record it
-as the cap's proof line. `bee close` and `bee worktree merge` check that
-recorded proof; CI runs the full declared command on every push
-(`references/planning-reference.md` ("Test scoping")). Then
+(`.bee/expertise/tests.md`). The agent owns test scope (rule: agents-proof-at-cap;
+`references/planning-reference.md` ("Test scoping")). Then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 
 ## Scope integrity

@@ -124,7 +124,7 @@ Reading the record yourself is the normal case: a fresh proof line or `.bee/logs
 The one orchestration pattern bee runs: the session model (the owner's best model) stays the orchestrator in every phase, and mechanical gather/render/mine steps dispatch down-tier as I/O workers that return digests.
 
 - **Decide-altitude stays on the session model**: gates, Socratic questions, the mode gate, synthesis of findings, accept/reject of worker results, state writes, human conversation.
-- **Delegation rubric** — a mechanical step delegates down-tier when it needs reading >3 files OR content the main model only needs as a digest, not verbatim; the orchestrator may override either way at dispatch. Prose-ruled — no hook enforces the threshold.
+- **Delegation rubric** — a mechanical step delegates down-tier when its content is needed as a digest, not verbatim (rule: doctrine-layer-delegation-threshold); the orchestrator may override either way at dispatch. Prose-ruled — no hook enforces the threshold.
 - **Lane rule** — the rubric applies in every lane and every phase, tiny/small included. The "0 subagents" rule for tiny/small means zero *ceremony* subagents (reviewers/checkers/panels); I/O workers are exempt. A 1-file tiny fix never crosses the rubric, so it stays inline naturally.
 - **Digest contract** — an I/O worker returns paths read, the facts extracted (with file:line anchors), and verbatim quotes only where asked; the orchestrator never re-reads what a digest already answers.
 - **Transport** — the door is `.bee/bin/bee dispatch prepare --runtime <rt> --kind <cell|gather|reviewer|advisor> --json`: `prepare` reads the tier slot out of `.bee/config.json` and returns the tool plus the payload — a model-shaped slot returns an Agent/Task payload naming the rendered bee agent, a `{kind:"herding"}` slot returns a Bash `bee herding run` payload, a `{kind:"cli"}` slot returns a Bash external-executor payload. `subagent_type: bee-build|bee-gather|bee-extract|bee-review` survives in the bullet only as what `prepare` RETURNS for a model-shaped slot, and as a spelling the guard still accepts (D2) — the rendered agent file already IS its tier (generation/extraction/review), so naming it declares the tier and needs nothing else. Or an anchored `[bee-tier: <tier>]` marker, or a `model` param. Only `ceiling|generation|extraction|review` count as tier words; anything else in that marker reads as plain text, not a declaration. Where two of them disagree — a marker plus `subagent_type: general-purpose`, or a marker plus a mismatched `model` — the guard rewrites the request to config rather than refusing it, and says so in one line; you do not re-issue the dispatch. Plus one work-language intent sentence of what the worker will find/build/check plus the model name in the Agent description (a description that is only a model name or a codename is a red flag), background dispatch where the runtime supports it, the dispatch log as the audit trail. I/O workers do **not** register in `bee state worker add` — the registry stays swarm-cell-scoped (reservations/status are execution concerns); the dispatch log is the audit surface for gathers.
@@ -193,24 +193,7 @@ The judge returns the `judge-verdict/1` schema, recorded via `bee cells judge-re
 
 ### Test scope (agent-owned, proof-per-change-type)
 
-The agent owns test scope end to end, including at the close/merge
-boundary: it picks the proof its change type needs (code → related tests
-green; docs → parity/pointer checks; behavior → judge verdict), runs it,
-and records it on the cap as a proof line `<command> — <result> — <scope
-reason>` (`bee-swarming/references/swarming-reference.md`, "Proof at
-finish and close, in full"). `bee finish` requires that `--report` proof
-line; `bee close` and `bee worktree merge` CHECK it at the boundary and
-run nothing themselves. CI runs the project's ONE declared `commands.test`
-command on its own cadence (push, nightly, or scheduled — the host
-workflow decides) and auto-files a `verify-red` issue when red; the
-release flow dispatches the CI run (`gh workflow run CI --ref main`) right
-after the tag push, a red result arriving back as the same `verify-red`
-issue, not a local gate — CI stays the one deterministic net. A
-scoped-green cap whose CI later goes red is a fix-first cell plus a
-mandatory captured learning on why the scope missed. A host keeps CI fast
-by pointing `commands.test` at a suite it is willing to run there. Judges
-and reviewers verify against the diff and `must_haves`, never by running
-the suite as part of a verdict.
+The agent owns test scope end to end (rule: agents-proof-at-cap; `bee-swarming/references/swarming-reference.md` ("Proof at finish and close, in full")).
 
 **Suite rent.** A suite is not immortal: every guard suite pays rent by catching real defects. A suite that has not caught one in ~6 months is a demotion candidate — moved out of the local/impacted hot path to the CI/nightly tier by a RECORDED decision (never a silent delete; the suite still runs, just not on every developer loop). `bee-grooming` owns the audit: read the verify logs for which suites have gone red for a real defect (environment reds don't count as rent paid), list the never-fired tenants, and propose demotions. Institutional/meta guards (fences, parity checks, doctrine gates) are the usual tenants — product-behavior suites earn rent more often and mostly stay.
 

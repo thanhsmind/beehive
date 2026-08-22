@@ -11,6 +11,7 @@ bee:
   decisions: [D1/D2/D3 delegation contract]
   sources: ["fanout-doctrine (cell fanout-doctrine-1, 2026-07-13, flushed capture stub 2f796f40)", "advisor-and-orchestration Slice 2A-iii (cells ao-2aiii-1/ao-2aiii-2 — dispatch-boundary enforcement + gather-purpose routing prose, 2026-07-17)", "docs/specs/doctrine-layer.md#B3", "docs/specs/doctrine-layer.md#R3", "docs/specs/doctrine-layer.md#R4", "docs/specs/doctrine-layer.md#R5", "docs/specs/doctrine-layer.md#E2", "docs/specs/doctrine-layer.md#P3", "docs/specs/doctrine-layer.md#P5"]
   authoritative_for: "doctrine-layer: the delegation threshold"
+  applied_at: [skills/bee-hive/references/gates-and-delegation.md]
 ---
 
 # Doctrine Layer — The Delegation Threshold
@@ -39,11 +40,13 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
 
 ## Business Rules
 
+<!-- rule: doctrine-layer-delegation-threshold -->
 - **R3** — Mechanical gathering delegates to a lower-cost helper whenever its
   content is wanted only as a digest, not verbatim — that is the standing-sheet
   criterion (critical rule 12). "More than three sources" is a historical
   heuristic, not a pinned threshold, since judgement-rules D1. The orchestrator
   may override in either direction; the criterion is judgment, not a mechanism.
+<!-- /rule -->
 - **R4** — Decide-altitude work never delegates: gates, the mode decision,
   synthesis, accept/reject of a helper's result, state writes, and conversation
   with the human (D1).

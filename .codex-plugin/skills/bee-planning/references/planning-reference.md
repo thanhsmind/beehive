@@ -138,8 +138,7 @@ history.
 3. **Testable exit.** The cell's outcome is provable by the proof its
    writer will run and record at cap time (related tests for code, a
    parity/pointer check for docs, a judge verdict for behavior) — plan the
-   cell so that proof exists by cap time; `bee close`/`bee worktree merge`
-   check the recorded proof, never run anything themselves.
+   cell so that proof exists by cap time (rule: agents-proof-at-cap).
    "Manually check" is not an exit.
 4. **must_haves are contracts:** `truths` (observable behavior),
    `artifacts` (path + substantive description — no stub counts),
@@ -226,14 +225,7 @@ never downgrade the lane to dodge validation.
 
 ## Test scoping
 
-The agent owns test scope end to end, including at the close/merge
-boundary: pick the proof each cell's change type needs (code → related
-tests green; docs → parity/pointer checks; behavior → judge verdict), run
-it, and record it as the cap's proof line, `<command> — <result> —
-<scope reason>`. `bee close` and `bee worktree merge` CHECK that recorded
-proof; neither runs `commands.test` itself — that's the project's ONE
-declared test command, and it stays what CI runs on every push, the one
-deterministic net. `commands.verify` is retired. A host keeps CI fast by
+The agent owns test scope end to end (rule: agents-proof-at-cap). `commands.test` is the project's ONE declared test command, and it stays what CI runs on every push, the one deterministic net. `commands.verify` is retired. A host keeps CI fast by
 pointing `commands.test` at a suite it is willing to run there. In a
 repo that has declared itself no-test (`commands.test` set to the
 sentinel `"none"`), cells prove with the command segment `none` and the

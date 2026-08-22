@@ -165,6 +165,20 @@ rule never disappears — only its elaboration moves.
   (`plans/cutover-readiness.md` records the gap) — so the L1d not-every-turn classification was
   applied manually and recorded in the block-lean CONTEXT rather than checked by automation.
 
+## AGENTS.md rule homes
+
+Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_at` records are tracked here:
+
+- `agents-proof-at-cap` (AGENTS.md § Prove, then say so):
+  - applied_at:
+    - `docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md`
+    - `skills/bee-hive/references/gates-and-delegation.md`
+    - `skills/bee-planning/SKILL.md`
+    - `skills/bee-planning/references/planning-reference.md`
+    - `skills/bee-shaping/references/mini-brief-template.md`
+    - `skills/bee-shaping/references/implement-plan-template.md`
+    - `skills/bee-swarming/references/swarming-reference.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens

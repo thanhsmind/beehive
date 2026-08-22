@@ -79,6 +79,7 @@ context before planning or executing.
 
 ## Prove, then say so
 
+<!-- rule: agents-proof-at-cap -->
 - The agent owns test scope: pick the proof your change type needs
   (code → related tests green; docs → parity/pointer checks; behavior
   → judge verdict), run it yourself, and record it on the cap as a
@@ -89,6 +90,7 @@ context before planning or executing.
   a red base, still as a principle, never a pre-claim full-suite
   order. A scoped-green cap whose CI later goes red is a fix-first
   cell plus a captured learning on why the scope missed.
+<!-- /rule -->
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.
 - Evidence is what the build already emits — red test output, a diff,
