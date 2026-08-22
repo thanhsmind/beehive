@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"dispatch-door-upfront\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"dispatch-door-upfront\" — feature is closed.",
+  "next_action": "Merged into main at 506d061; capture what settled, then bee close --feature dispatch-door-upfront.",
   "created_at": "2026-08-22T04:13:27.805Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
