@@ -1308,3 +1308,59 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(!text.contains("Open discovery map(s)"), "{text}");
     }
+
+    // ── dispatch-door-upfront D2 ──────────────────────────────────────────
+
+    #[test]
+    fn dispatch_door_renders_herding_generation_slot_and_prepare_line() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":{"kind":"herding","agent":"agy-flash"}}}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(text.contains("### Dispatch door"), "{text}");
+        assert!(
+            text.contains(
+                "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "- Tier slots (claude): generation=herding (agy-flash) | extraction=session default | review=herding (agy-flash) | advisor=none"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn dispatch_door_renders_model_slot_name() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":"claude-3-5-sonnet-20241022","extraction":"claude-3-5-haiku-20241022","review":"claude-3-opus-20240229","advisor":"claude-3-7-sonnet-20250219"}}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(
+            text.contains(
+                "- Tier slots (claude): generation=claude-3-5-sonnet-20241022 | extraction=claude-3-5-haiku-20241022 | review=claude-3-opus-20240229 | advisor=claude-3-7-sonnet-20250219"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn dispatch_door_renders_session_default_when_no_models_key_present() {
+        let tmp = minimal_repo();
+        let text = render(tmp.path());
+        assert!(text.contains("### Dispatch door"), "{text}");
+        assert!(
+            text.contains(
+                "- Tier slots (claude): generation=session default | extraction=session default | review=session default | advisor=none"
+            ),
+            "{text}"
+        );
+    }

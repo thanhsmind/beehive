@@ -242,7 +242,7 @@ enum Slot {
     /// the flag `dispatch prepare` reads to publish this slot's default model
     /// as the failed-herding re-dispatch target — so the guard must admit that
     /// same model into `configured_model_set`.
-    Herding { fallback: bool },
+    Herding { agent: Option<String>, fallback: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -295,7 +295,8 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
             // the field; absent, empty, mistyped, or non-string is false.
             if kind == Some("herding") {
                 let fallback = obj.get("fallback").and_then(Value::as_str) == Some("default");
-                return Some(Slot::Herding { fallback });
+                let agent = str_field("agent");
+                return Some(Slot::Herding { agent, fallback });
             }
             // Explicit-fallback composite: {primary:{kind:'native', model}, ...}.
             if let Some(Value::Object(primary)) = obj.get("primary") {
@@ -319,6 +320,70 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
         }
         _ => None,
     }
+}
+
+fn parse_runtime_slots(models_raw: Option<&Value>, runtime: &str) -> Slots {
+    let mut slots = Slots {
+        extraction: Slot::Unset,
+        generation: Slot::Unset,
+        review: Slot::Unset,
+        advisor: Slot::Unset,
+    };
+    let Some(Value::Object(raw)) = models_raw else { return slots };
+    let Some(Value::Object(src)) = raw.get(runtime) else { return slots };
+    for slot in ["extraction", "generation", "review", "advisor"] {
+        let Some(value) = src.get(slot) else { continue };
+        if let Some(v) = normalize_tier_value(value) {
+            match slot {
+                "extraction" => slots.extraction = v,
+                "generation" => slots.generation = v,
+                "review" => slots.review = v,
+                _ => slots.advisor = v,
+            }
+        }
+    }
+    slots
+}
+
+fn format_slot_display(slot: &Slot, is_advisor: bool) -> String {
+    match slot {
+        Slot::Name(m) => m.clone(),
+        Slot::Herding { agent, .. } => match agent {
+            Some(a) => format!("herding ({a})"),
+            None => "herding".to_string(),
+        },
+        Slot::Cli(_) => "cli".to_string(),
+        Slot::Native(m) => format!("native:{m}"),
+        Slot::Null | Slot::Unset => {
+            if is_advisor {
+                "none".to_string()
+            } else {
+                "session default".to_string()
+            }
+        }
+    }
+}
+
+pub(crate) fn tier_slot_display(
+    models_raw: Option<&Value>,
+    runtime: &str,
+) -> Vec<(&'static str, String)> {
+    let slots = parse_runtime_slots(models_raw, runtime);
+    let gen_disp = format_slot_display(&slots.generation, false);
+    let ext_disp = format_slot_display(&slots.extraction, false);
+    let rev_slot = if matches!(slots.review, Slot::Null | Slot::Unset) {
+        &slots.generation
+    } else {
+        &slots.review
+    };
+    let rev_disp = format_slot_display(rev_slot, false);
+    let adv_disp = format_slot_display(&slots.advisor, true);
+    vec![
+        ("generation", gen_disp),
+        ("extraction", ext_disp),
+        ("review", rev_disp),
+        ("advisor", adv_disp),
+    ]
 }
 
 fn normalize_models(raw: Option<&Value>) -> Models {
@@ -345,23 +410,16 @@ fn normalize_models(raw: Option<&Value>) -> Models {
     };
     let Some(Value::Object(raw)) = raw else { return out };
     for rt in ["claude", "codex", "opencode"] {
-        let Some(Value::Object(src)) = raw.get(rt) else { continue };
+        let parsed = parse_runtime_slots(Some(&Value::Object(raw.clone())), rt);
         let dst = match rt {
             "claude" => &mut out.claude,
             "codex" => &mut out.codex,
             _ => &mut out.opencode,
         };
-        for slot in ["extraction", "generation", "review", "advisor"] {
-            let Some(value) = src.get(slot) else { continue };
-            if let Some(v) = normalize_tier_value(value) {
-                match slot {
-                    "extraction" => dst.extraction = v,
-                    "generation" => dst.generation = v,
-                    "review" => dst.review = v,
-                    _ => dst.advisor = v,
-                }
-            }
-        }
+        if parsed.extraction != Slot::Unset { dst.extraction = parsed.extraction; }
+        if parsed.generation != Slot::Unset { dst.generation = parsed.generation; }
+        if parsed.review != Slot::Unset { dst.review = parsed.review; }
+        if parsed.advisor != Slot::Unset { dst.advisor = parsed.advisor; }
     }
     out
 }
@@ -471,7 +529,7 @@ fn configured_model_set(models: &Models) -> BTreeSet<String> {
             // default_models("claude")["review"], not the generation one.
             raw = &models.claude.generation;
         }
-        if matches!(raw, Slot::Herding { fallback: true }) {
+        if matches!(raw, Slot::Herding { fallback: true, .. }) {
             if let Some(Value::String(m)) =
                 crate::verbs::drivers::default_models("claude").get(slot)
             {

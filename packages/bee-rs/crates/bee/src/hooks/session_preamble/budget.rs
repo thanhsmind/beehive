@@ -625,6 +625,21 @@ pub fn build_session_preamble(
         }
     }
 
+    // dispatch-door-upfront D2: the prepare command and resolved tier slots
+    // for claude, rendered before any dispatch can happen.
+    lines.push(String::new());
+    lines.push("### Dispatch door".to_string());
+    lines.push(
+        "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker.".to_string(),
+    );
+    let slots = crate::hooks::model_guard::tier_slot_display(config.get("models"), "claude");
+    let slots_line = slots
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join(" | ");
+    lines.push(format!("- Tier slots (claude): {slots_line}"));
+
     // csc-1: the whole command surface, always on — unlike Standard
     // commands above it never depends on host-project config. Placed right
     // after Standard commands and before Doc links, never appended at the
