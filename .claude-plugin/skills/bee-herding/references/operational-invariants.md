@@ -130,6 +130,80 @@ assume a `claude` session underneath (Merge role / Dispatch role in
 SKILL.md). Treat it as a documented starting point for a future adapter, not
 a claim that codex control panes work today.
 
+### Which multiplexer — `herding.transport` and `herding.tmux.*`
+
+The adapter seam above says WHAT bee spawns. One more key says WHERE:
+which terminal multiplexer bee reaches a worker pane through
+(tmux-herding-transport D1-D4).
+
+- **`herding.transport`** — the string `"herdr"` or the string `"tmux"`.
+  **Absent = `herdr`**, the unchanged default; a missing or unparseable
+  `.bee/config.json` reads as `herdr` too. bee **never auto-detects** the
+  transport from `$TMUX` or `$HERDR_ENV` — a session nested in both tools
+  must not pick by accident (D1). Any other value — a typo, a number — is a
+  typed refusal naming both legal spellings, and `bee herding run` refuses
+  on it **before** the job file, the mailbox, or any pane split, so a
+  typo'd transport can never half-start a worker.
+- The transport a run picked is reported back: `bee herding status --json`
+  gains `transport.kind`, and its readiness probe reads the pane variables
+  of the CONFIGURED transport only (`HERDR_ENV` + `HERDR_PANE_ID` for
+  herdr, `TMUX` + `TMUX_PANE` for tmux).
+- **Binaries.** `herdr` on `PATH` is required for the herdr transport (the
+  default); the tmux transport needs `tmux` on `PATH` instead. Neither is
+  needed for the other.
+- **What does NOT change on tmux.** Workers are panes split inside the
+  CALLER's current tmux window, under the same one-column rule and the same
+  cross-process split lock (D2) — never a detached session per worker. The
+  mailbox, the control loop, the merge gesture and every safety boundary
+  are the herdr ones, untouched.
+- **The screen read is advisory (D4).** tmux has no agent API, so worker
+  status is a classifier over a bounded `capture-pane` read: content
+  stability plus two marker lists. `result-N.json` and `ack-N.json` stay
+  the ONLY truth for done and delivered. A pane showing a trust /
+  permission / auth dialog ends the wait as `blocked`, the pane STAYS OPEN,
+  and bee types nothing into it (D3) — a key sent into a dialog would
+  answer it on the human's behalf.
+
+The marker lists and the poll shape are config **data**, not code, because
+marker strings are another tool's UI chrome and rot with its releases. All
+five keys are optional and fail open — a malformed value leaves the default
+in place (the one typed refusal is `herding.transport` itself). Defaults
+come from upstream (D5: `https://github.com/luongnv89/skills` @
+`ab46724e`, scope `skills/tmux-agent-comms/`):
+
+| Key | Default | What it does |
+|---|---|---|
+| `herding.tmux.busy_markers` | `["esc to interrupt", "esc to cancel", "ctrl+c to interrupt", "press esc to"]` | Present in the last **2** non-empty screen lines → the agent is mid-turn. The narrow window keeps a stale mention scrolled up in the transcript from reading as "still working". |
+| `herding.tmux.blocked_markers` | `["do you trust", "trust the files", "paste your api key", "press enter to submit"]` | Present in the last **12** non-empty lines → a human must answer a dialog (D3). A dialog is a multi-row box, so its marker can sit rows above the cursor. |
+| `herding.tmux.scrollback` | `40` | Lines each `capture-pane -p -S -<n>` read pulls. |
+| `herding.tmux.quiet_cycles` | `3` | Consecutive identical reads that count as a settled screen (clamped to at least 1 — zero would make every first read "settled"). |
+| `herding.tmux.interval_ms` | `2000` | Delay between polls, in milliseconds. |
+
+A list override **replaces** the default list, it never extends it: a repo
+correcting a rotted marker needs the stale one GONE. The cost is that an
+override restates the markers it still wants, and an explicit empty array
+is a legal override meaning "never classify on this list".
+
+```json
+{
+  "herding": {
+    "transport": "tmux",
+    "tmux": {
+      "busy_markers": ["esc to interrupt"],
+      "blocked_markers": ["do you trust", "paste your api key"],
+      "scrollback": 40,
+      "quiet_cycles": 3,
+      "interval_ms": 2000
+    }
+  }
+}
+```
+
+Implementation: `packages/bee-rs/crates/bee/src/herding/tmux.rs`
+(`TmuxSettings::from_config`, the `classify` screen reader, the
+`PaneTransport` impl), selected at one construction site by
+`herding.rs`'s `transport_kind`.
+
 ## `herding.agents` — the named-agent registry
 
 herd-registry D1 adds one more optional key, independent of the two above:
