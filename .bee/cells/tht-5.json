@@ -1,0 +1,75 @@
+{
+  "id": "tht-5",
+  "feature": "tmux-herding-transport",
+  "title": "Record the tmux pane id in the activity record",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-transport/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee activity",
+  "action": "The activity record stores which pane a session runs in. At `hooks/activity.rs:257` — `if let Some(pane) = std::env::var(\"HERDR_PANE_ID\").ok().filter(|p| !p.trim().is_empty()) {` — the pane field is written only for herdr. Extract a pure `fn pane_from_env(lookup: impl Fn(&str) -> Option<String>) -> Option<(String, String)>` returning `(\"herdr\", id)` from `HERDR_PANE_ID` when non-empty, else `(\"tmux\", id)` from `TMUX_PANE` when non-empty, else None; write `pane` as before and one additive key `pane_transport` with the first tuple slot. This is identity recording, not transport selection, so it does not read config and does not violate D1 — state that in a one-line comment. Tests ride the cell (names prefixed `activity_`): herdr wins when both are set; tmux when only TMUX_PANE; None when neither; empty strings count as unset. Check `docs/knowledge/areas/hook-runtime/agent-activity-record.md` for the field list and add `pane_transport` to it if the page enumerates fields (docs edit rides this cell only if that page lists `pane`; otherwise leave docs to tht-6).",
+  "must_haves": {
+    "truths": [
+      "Inside a tmux pane (TMUX_PANE=%5, no HERDR_PANE_ID) the activity record carries pane %5 and pane_transport tmux",
+      "Inside herdr the record is unchanged except the additive pane_transport herdr"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "substantive": "pane_from_env with tests; pane_transport key"
+      }
+    ],
+    "key_links": [
+      "the activity writer at activity.rs:257 calls pane_from_env"
+    ],
+    "prohibitions": [
+      "No config read in the hook",
+      "No change to the state-transition logic"
+    ]
+  },
+  "trace": {
+    "worker": "w-tht-5",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+    ],
+    "deviations": [
+      "sync-ack: hook-runtime identity field, not a herding gesture: the cell declares affects_skills [] and no bee-herding skill instruction changes; the activity-record knowledge page is updated in this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T16:44:05.552Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-22T16:38:05.231Z",
+    "sync_ack": "hook-runtime identity field, not a herding gesture: the cell declares affects_skills [] and no bee-herding skill instruction changes; the activity-record knowledge page is updated in this cell",
+    "report": {
+      "outcome": "pane_from_env records the tmux pane and an additive pane_transport key",
+      "commit": "c9f063b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee activity — green (37 passed) — the hook module this cell changed, plus 4 new activity_pane cases",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

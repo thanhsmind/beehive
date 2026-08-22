@@ -1,0 +1,77 @@
+{
+  "id": "tht-2",
+  "feature": "tmux-herding-transport",
+  "title": "Rename run's private Herdr trait to PaneTransport, behavior-neutral",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-transport/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run",
+  "action": "Pure rename so a second transport can implement run's seam under an honest name. In run.rs: rename `trait Herdr` (anchor `rg -n \"^trait Herdr\" packages/bee-rs/crates/bee/src/herding/run.rs` → 404: `trait Herdr {`) to `pub(crate) trait PaneTransport` — it has 13 methods: pane_current, pane_layout, pane_split, tab_create, pane_run, agent_start, agent_status, pane_close, agent_prompt, agent_wait, pane_alive, pane_read, process_info. Make `pub(crate)` every type those signatures mention: `enum Liveness` (384), `struct PaneGeom` (394). Keep `struct RealHerdr` (498) and `impl RealHerdr` (500) as they are; change `impl Herdr for RealHerdr` (574) to `impl PaneTransport for RealHerdr`. Rename every `&dyn Herdr` parameter to `&dyn PaneTransport` — live list from `rg -n \"dyn Herdr\" packages/bee-rs/crates/bee/src/herding/run.rs`: 965, 1480, 1520, 1759 (`fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult`), 1767, 1806, 1877, 2141; the parameter name may stay `herdr` or become `transport`, your choice, applied consistently. Update the three test fakes from `rg -n \"impl Herdr for\" packages/bee-rs/crates/bee/src/herding/run.rs` (3165, 3287, 3520). Keep every method name, argv string and doc comment. Note in a one-line doc comment on the trait that the split lock (`split_lock::acquire` at run.rs:974) sits OUTSIDE the trait, so D2's serialization is transport-neutral. Record the test count before and after (`cargo test … herding::run 2>&1 | rg 'test result'`) in the cap proof line; they must match.",
+  "must_haves": {
+    "truths": [
+      "cargo test for herding::run passes with the same test count as before the rename"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "pub(crate) trait PaneTransport with the 13 existing methods; RealHerdr implements it; Liveness and PaneGeom are pub(crate)"
+      }
+    ],
+    "key_links": [
+      "execute(&opts, &RealHerdr) at run.rs:2538 still compiles"
+    ],
+    "prohibitions": [
+      "No new behavior, no new herdr argv, no deleted or weakened test"
+    ]
+  },
+  "trace": {
+    "worker": "w-tht-2",
+    "outcome": "run's private Herdr trait is now pub(crate) PaneTransport; Liveness and PaneGeom pub(crate); behavior unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "PaneGeom fields also made pub(crate): a pub(crate) type a sibling module must construct needs constructible fields",
+      "Renamed Herdr -> PaneTransport inside comments and PanicHerdr panic strings that name the trait, and trimmed 8 box-drawing chars off the seam banner to keep column alignment; no method name, argv or doc-comment content changed",
+      "Commit ba3cd40 is empty: a concurrent worker (cell tht-5) git-added this file into commit c9f063bd before this cell committed; c9f063bd carries the exact rename diff (verified line by line), ba3cd40 records the cell trailer",
+      "sync-ack: Behavior-neutral rename of a crate-private trait; no herdr verb, no user-visible behavior and no documented contract changed, so skills/bee-herding/* has nothing to sync"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T16:44:52.357Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-22T16:38:05.182Z",
+    "sync_ack": "Behavior-neutral rename of a crate-private trait; no herdr verb, no user-visible behavior and no documented contract changed, so skills/bee-herding/* has nothing to sync",
+    "report": {
+      "outcome": "run.rs seam renamed Herdr -> pub(crate) PaneTransport, RealHerdr and 3 test fakes reimplement it, Liveness/PaneGeom pub(crate), split-lock note added",
+      "commit": "ba3cd405512692d42ccc194fdbd5e76e98856dff",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run — green (159 passed; 159 #[test] at HEAD and after, count unchanged) — pure rename inside run.rs, no other module names the trait",
+      "deviations": [
+        "PaneGeom fields also made pub(crate): a pub(crate) type a sibling module must construct needs constructible fields",
+        "Renamed Herdr -> PaneTransport inside comments and PanicHerdr panic strings that name the trait, and trimmed 8 box-drawing chars off the seam banner to keep column alignment; no method name, argv or doc-comment content changed",
+        "Commit ba3cd40 is empty: a concurrent worker (cell tht-5) git-added this file into commit c9f063bd before this cell committed; c9f063bd carries the exact rename diff (verified line by line), ba3cd40 records the cell trailer"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

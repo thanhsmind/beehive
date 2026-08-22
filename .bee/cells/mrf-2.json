@@ -1,0 +1,113 @@
+{
+  "id": "mrf-2",
+  "feature": "merge-ready-fact",
+  "title": "Keep merge_ready honest from close, gate uat, worktree merge/unregister, and surface it in status",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "mrf-1"
+  ],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/topology.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/merge-ready-fact/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "Per D2 wire the helper from mrf-1 (workflow_store::merge_ready) into four verbs, each call fail-open and never altering the verb's own result or exit code. (1) drivers/close.rs: right after the full doors vector is assembled — both the dry-run vector (:1830-1841) and the real one (:1924-1930) — call `set_blocked_by(root, feature, &names)` where names = every door with blocking == true except \"uat\", in vector order ([] when none); this must run BEFORE any early-return refusal arm so a blocked close still records why; dry-run also writes (it is the same truth). (2) state_group/set_gate.rs run_gate_body: after the approved_gates write (:885-912) when name == \"uat\", call `set_uat(root, feature, approved)` for the target's feature. (3) worktree/phases.rs close_the_lane_on_merge (:495): call `clear(root, feature)` in the same mutation; ensure the lane-rewrite commit at :744-784 still fires when the only change was the clear (return a changed flag). (4) worktree/registry.rs run_unregister: resolve the feature (resolve_worktree_by_id + topology.rs read_worktree_feature) and call `clear` before teardown. (5) status_full/topology.rs build_lane_rows (:313): surface the record's merge_ready verbatim on each lane row (null when absent) per D3. Tests: drivers/tests.rs — a close with a blocking judge-debt door writes blocked_by [\"judge-debt\"], a green close writes []; state_group/tests.rs — gate uat true flips to approved, false back to pending; worktree/tests.rs — a merge removes merge_ready from a tracked lane and the lane rewrite commit fires; unregister removes it. Commit trailer `cell: mrf-2`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml merge_ready",
+  "must_haves": {
+    "truths": [
+      "bee close records the names of blocking non-uat doors in merge_ready.blocked_by, [] when green",
+      "bee gate --name uat flips merge_ready.uat between pending and approved",
+      "bee worktree merge and bee worktree unregister remove merge_ready",
+      "bee status --json lane rows carry merge_ready verbatim"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "blocked_by write before any refusal arm, both vectors"
+      }
+    ],
+    "key_links": [
+      "all four verbs write through the same merge_ready helper"
+    ],
+    "prohibitions": [
+      "no change to close door semantics, gate refusals, or merge preconditions",
+      "merge_ready never consulted by the uat gate or the merge door (D3)"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/merge-readiness.md"
+  ],
+  "behavior_change": true,
+  "trace": {
+    "worker": "w-mrf-2",
+    "outcome": "merge_ready is written by close, gate uat, worktree merge and unregister, and surfaced verbatim on status lane rows",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/topology.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "close.rs has THREE full-doors vectors, not the two the cell named: the proof-debt refusal arm assembles its own complete vector and returns before the green path. Wired all three, because the rule the cell states (record before any early-return refusal arm, so a blocked close still records why) is what asks for it; a close stopped at the tests door would otherwise record nothing. Pinned by a_close_stopped_at_the_tests_door_still_records_that_door.",
+      "set_uat is called after run_gate_body drops its mutation locks, not immediately after the approved_gates write: the helper goes through the same ledger mutation seam and takes those very locks, so an earlier call would find them busy and fail-open into silence. Still strictly after the write.",
+      "merge_ready.rs was not in the cell files list but had to be edited to drop the two allow(dead_code) attributes the cell asked for; reserved under w-mrf-2 before writing.",
+      "worktree unregister takes the clear before the worktree-admin lock rather than inside it, so the record mutation locks are never nested under it. Still strictly before teardown. The test drives the extracted clear_merge_ready_for_worktree helper directly, since run_unregister itself needs a cwd-bound prelude fixture.",
+      "sync-ack: Additive projection only (D3): merge_ready is written and surfaced, never read by any gate, door, or workflow step, so no workflow-state skill guidance changes; the cell itself predicts affects_skills [] and the concept doc docs/knowledge/areas/workflow-state/merge-readiness.md already describes this exact wiring (landed by mrf-1)."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T16:23:32.347Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "48e1abb8-07f6-4058-8db3-383af16fba58",
+    "claimed_at": "2026-08-22T16:08:48.513Z",
+    "sync_ack": "Additive projection only (D3): merge_ready is written and surfaced, never read by any gate, door, or workflow step, so no workflow-state skill guidance changes; the cell itself predicts affects_skills [] and the concept doc docs/knowledge/areas/workflow-state/merge-readiness.md already describes this exact wiring (landed by mrf-1).",
+    "report": {
+      "outcome": "merge_ready is written by close (blocked_by), gate uat (uat), worktree merge and unregister (clear), and surfaced verbatim on status lane rows",
+      "commit": "a92c0e72e60f094a8ef3a5a9770ce42417ccf243",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/topology.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — whole bee crate suite, 2459 unit tests pass including the 7 new merge_ready wiring tests across close, gate, worktree merge and unregister (the cell verify filter merge_ready alone: 19 passed); the only 2 reds are the pre-existing, out-of-scope tests/opencode_plugin_contracts.rs failures the dispatch named",
+      "deviations": [
+        "close.rs has THREE full-doors vectors, not the two the cell named: the proof-debt refusal arm assembles its own complete vector and returns before the green path. Wired all three, because the rule the cell states (record before any early-return refusal arm, so a blocked close still records why) is what asks for it; a close stopped at the tests door would otherwise record nothing. Pinned by a_close_stopped_at_the_tests_door_still_records_that_door.",
+        "set_uat is called after run_gate_body drops its mutation locks, not immediately after the approved_gates write: the helper goes through the same ledger mutation seam and takes those very locks, so an earlier call would find them busy and fail-open into silence. Still strictly after the write.",
+        "merge_ready.rs was not in the cell files list but had to be edited to drop the two allow(dead_code) attributes the cell asked for; reserved under w-mrf-2 before writing.",
+        "worktree unregister takes the clear before the worktree-admin lock rather than inside it, so the record mutation locks are never nested under it. Still strictly before teardown. The test drives the extracted clear_merge_ready_for_worktree helper directly, since run_unregister itself needs a cwd-bound prelude fixture."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

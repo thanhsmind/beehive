@@ -1,0 +1,59 @@
+{
+  "id": "tht-4",
+  "feature": "tmux-herding-transport",
+  "title": "Select RealTmux in bee herding run from herding.transport",
+  "lane": "standard",
+  "status": "open",
+  "deps": [
+    "tht-1",
+    "tht-3"
+  ],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-transport/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run",
+  "action": "Wire the switch at run's single construction site. In `pub(super) fn run(flags: &[&str]) -> ExitCode` (run.rs:2530; the call is `let result = execute(&opts, &RealHerdr);` at 2538): after `parse_options` succeeds, call `crate::herding::transport_kind_at(&opts.main_root)` (tht-1). On Err print `bee herding run: <msg>` to stderr and return FAILURE before any split or mailbox write. On Ok build the transport into a local `Box<dyn PaneTransport>`: Herdr → `Box::new(RealHerdr)`, Tmux → load `<main_root>/.bee/config.json` (the same read `execute` does at run.rs:1917 — reuse or extract that helper) and `Box::new(RealTmux::new(TmuxSettings::from_config(&cfg)))`; then `execute(&opts, transport.as_ref())`. Pull the selection into a pure, testable `fn select_transport(kind: TransportKind, cfg: &Value) -> Box<dyn PaneTransport>` and test it: Herdr kind yields a RealHerdr (assert via a `fn name(&self) -> &'static str` you add to the trait with a default impl returning \"herdr\", overridden to \"tmux\" in RealTmux — the one permitted trait addition, default-implemented so the three test fakes need no edit), Tmux kind yields \"tmux\", and an invalid key refuses before execute (test `run` through the existing test harness pattern in run.rs's tests — see `test_options` at run.rs:3568 — with a config.json carrying `herding.transport: \"nope\"`). Also, under `--dry-run` the emitted JSON gains one additive key `transport` (\"herdr\"|\"tmux\") so an operator can see which transport would be used.",
+  "must_haves": {
+    "truths": [
+      "With herding.transport=tmux, bee herding run constructs RealTmux and never spawns herdr",
+      "With the key absent, bee herding run behaves byte-identically (RealHerdr)",
+      "With an invalid value the run refuses before any pane split or mailbox write"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "select_transport with tests; run() refuses on an invalid key; dry-run JSON names the transport"
+      }
+    ],
+    "key_links": [
+      "run() calls transport_kind_at then select_transport then execute"
+    ],
+    "prohibitions": [
+      "No change to execute's behavior for the herdr arm",
+      "No edit to existing test assertions"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

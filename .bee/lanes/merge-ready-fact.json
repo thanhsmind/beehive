@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "feature": "merge-ready-fact",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"merge-ready-fact\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-22T15:42:06.449Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 7,
+    "rationale": "New stored field waggledance reads (public contract); touches cap, reopen, close, gate, worktree merge (multi-domain).",
+    "updated_at": "2026-08-22T15:42:06.476Z",
+    "feature": "merge-ready-fact"
+  }
+}

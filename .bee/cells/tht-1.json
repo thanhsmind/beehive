@@ -1,0 +1,90 @@
+{
+  "id": "tht-1",
+  "feature": "tmux-herding-transport",
+  "title": "Read herding.transport and give both transport probes a tmux arm",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-transport/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee transport_",
+  "action": "Per D1, add to herding.rs: `pub(crate) enum TransportKind { Herdr, Tmux }` with `fn as_str(&self) -> &'static str` (\"herdr\"/\"tmux\"), a pure `pub(crate) fn transport_kind(cfg: &Value) -> Result<TransportKind, String>` (key `herding.transport`: absent → Herdr, \"herdr\" → Herdr, \"tmux\" → Tmux, anything else → Err naming exactly the two legal values), and `pub(crate) fn transport_kind_at(main_root: &Path) -> Result<TransportKind, String>` that reads `<main_root>/.bee/config.json` (missing or unparseable file → Ok(Herdr), the same fail-open posture `read_command_template_tokens` at `herding.rs:674` takes) and calls `transport_kind`. Probes: KEEP the two existing functions and their signatures untouched so every current test at `herding.rs:897,907,915,923` and `verbs/drivers/tests.rs:1229-1289` stays byte-for-byte unchanged. Add beside each a kind-taking sibling: `transport_state_for(kind: TransportKind, lookup: impl Fn(&str) -> Option<String>) -> Map<String, Value>` in herding.rs (anchor `pub(crate) fn transport_state_with` at 577 — make the old function delegate to the new one with `TransportKind::Herdr`), and `herding_transport_probe_for(kind: TransportKind, env: &dyn Fn(&str) -> Option<String>) -> (bool, String, Option<String>)` in prepare.rs (anchor `pub(crate) fn herding_transport_probe(` at 553 — same delegation). The Tmux arm: ready iff `TMUX` is non-empty AND `TMUX_PANE` is non-empty; reasons, modelled on the herdr arm of the SAME file (the two files already word theirs differently — mirror each file's own style, not the other file's): ready → `TMUX and TMUX_PANE=<pane> are set`; TMUX set but TMUX_PANE empty/missing → `TMUX is set but TMUX_PANE is empty or not set`; TMUX missing → `TMUX is not set — this session is not inside a tmux pane`; the third tuple slot carries the pane id when present. In herding.rs's map add one key `kind` (the `as_str` value) in BOTH arms — this is an additive key, so `bee herding status --json` gains `transport.kind`; the existing keys keep their values. Wire the two production call sites to the new siblings with the kind from `transport_kind_at`: `transport_state()` at `herding.rs:611` (it has `explicit`/main-root resolution in scope from `status`; resolve the root the way the surrounding function does), and the `herding_transport_probe(&|k| std::env::var(k).ok())` call at `prepare.rs:929` (prepare already holds the main root / cfg it used to build the payload — pass that). On `transport_kind_at` Err, `bee herding status` reports `ready:false` with the Err text as the reason and `bee dispatch prepare` sets `transport_ready:false` with the same reason — never a panic. Tests ride the cell, named with the prefix `transport_` so the verify filter reaches them: both tmux reasons and the ready case, the unknown-value Err text, the absent-key default, and the `kind` key on each arm.",
+  "must_haves": {
+    "truths": [
+      "With herding.transport absent, the herdr arm's existing keys and reason strings are unchanged; transport.kind == \"herdr\"",
+      "With herding.transport=tmux, TMUX set and TMUX_PANE=%3, bee herding status --json reports transport.ready true and names %3",
+      "With herding.transport=nope, status and dispatch prepare report not ready with a reason naming herdr and tmux"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding.rs",
+        "substantive": "TransportKind, transport_kind, transport_kind_at, transport_state_for with tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "herding_transport_probe_for with a tmux arm, wired at the payload site"
+      }
+    ],
+    "key_links": [
+      "prepare.rs:929 call site passes the kind from transport_kind_at",
+      "herding.rs transport_state() passes the kind from transport_kind_at"
+    ],
+    "prohibitions": [
+      "No auto-detect: with the key absent, TMUX vars are never consulted (D1)",
+      "Existing probe tests are not edited"
+    ]
+  },
+  "trace": {
+    "worker": "w-tht-1",
+    "outcome": "herding.transport selects the probe; both probes gained a tmux arm and transport.kind",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Added #[allow(dead_code)] to the two kept herdr-only delegators: production now calls the _for siblings, so the bin build warned. Signatures and existing tests untouched.",
+      "Pre-existing red at base, untouched by this cell: crates/bee/tests/opencode_plugin_contracts.rs two failures (activity PreToolUse matcher, opencode invalid-tool anchor) — confirmed failing with my changes stashed.",
+      "sync-ack: The cell's files list carries no skill path: phase 1 of the plan puts the docs/skill/knowledge sync in its own later cell, and this cell is the config key plus the two probe arms only."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T16:47:21.401Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-22T16:37:02.265Z",
+    "sync_ack": "The cell's files list carries no skill path: phase 1 of the plan puts the docs/skill/knowledge sync in its own later cell, and this cell is the config key plus the two probe arms only.",
+    "report": {
+      "outcome": "herding.transport selects the probe; both probes gained a tmux arm and transport.kind",
+      "commit": "3897dad3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee transport_ (10 tests) plus -p bee --bin bee (2451) — green — the transport probes and the whole bee bin unit suite that owns the two touched modules",
+      "deviations": [
+        "Added #[allow(dead_code)] to the two kept herdr-only delegators: production now calls the _for siblings, so the bin build warned. Signatures and existing tests untouched.",
+        "Pre-existing red at base, untouched by this cell: crates/bee/tests/opencode_plugin_contracts.rs two failures (activity PreToolUse matcher, opencode invalid-tool anchor) — confirmed failing with my changes stashed."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

@@ -395,6 +395,7 @@
     "cli-flags",
     "skill-sync",
     "cap",
-    "preamble"
+    "preamble",
+    "tmux"
   ]
 }
