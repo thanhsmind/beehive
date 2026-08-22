@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "merge-ready-fact",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"merge-ready-fact\" started at phase \"planning\" (lane).",
-  "next_action": "Record judge verdicts for mrf-1/mrf-2, then bee close --feature merge-ready-fact.",
+  "next_action": "bee close finished \"merge-ready-fact\" — feature is closed.",
   "created_at": "2026-08-22T15:42:06.449Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "The trigger is the word \"later\" in \"a later completion\". Rewording it.",
-    "asked_at": "2026-08-22T16:56:28.929Z",
-    "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

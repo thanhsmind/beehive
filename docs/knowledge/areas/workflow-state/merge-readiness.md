@@ -80,7 +80,7 @@ last completion, so the trigger never fires — a docs-only feature that never
 authored a unit simply has no fact, and that is the intended answer, not a
 gap.
 
-When the fact already exists, a later completion refreshes only the branch and
+When the fact already exists, a subsequent completion refreshes only the branch and
 the worktree identity. The waiting clock, the acceptance value, and the
 blocking list are left exactly as they were: the feature did not become ready
 again, it was already ready.
