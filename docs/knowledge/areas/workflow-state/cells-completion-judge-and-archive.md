@@ -594,6 +594,19 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
 - A `tiny` unit never reaches the registered-worker check (B44) — it is
   permitted to run inline by contract, exactly as before this door existed
   (worker-proof, wp-1).
+- A unit that touches no owned path, and names no rule home, passes the sync
+  door in silence — the door writes nothing, warns about nothing, and adds no
+  deviation line. The legacy-cell note (a unit predating the prediction field)
+  is written only when the touched set actually carried a skill path, because a
+  note about a missing skill prediction on a unit that touched no skill says
+  nothing. The first cut of the door wrote that note unconditionally and broke
+  nine existing deviation tests that had nothing to do with ownership
+  (knowledge-one-home D3, koh-6).
+- **Cosmetic, named rather than repaired:** on the finish path the
+  diff-versus-test advisory is printed before the sync door can refuse, so a
+  finish that is about to be refused still prints an advisory about work that
+  will not be recorded. The ordering misleads nobody about the outcome — the
+  refusal follows immediately — and was left alone (koh-6).
 
 ## Open Gaps
 

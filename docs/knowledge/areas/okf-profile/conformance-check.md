@@ -79,7 +79,7 @@ Profile-warning codes — reported always, failing only under `--strict`:
 | `duplicate_id` | Two or more concepts share one `bee.id` (D31). |
 | `dangling_required_context` (knowledge-distill-trigger kdt-1) | A `bee.required_context` entry does not resolve to a real file inside the bundle OR against the repo root (same two-step order `dangling source` uses) — a promote-generated `docs/history/<feature>/...` pointer that exists on disk is not dangling. Both dangling codes also feed the knowledge-freshness close door: findings scoped to a closing feature's touched areas plus its `work/<feature>/` files block `bee close` unless a recorded deferral decision names the feature. |
 | `dangling_supersedes` | A `bee.supersedes` id matches no concept's `bee.id` in the bundle. |
-| dangling source (knowledge-usable U2, cell ku-2, 2026-08-10) | A `bee.sources` entry that names an in-repo file path resolving to no file on disk is reported, so a concept citing code a later port retired degrades visibly instead of silently. |
+| `dangling_source` (knowledge-usable U2, cell ku-2, 2026-08-10) | A `bee.sources` entry that names an in-repo file path resolving to no file on disk is reported, so a concept citing code a later port retired degrades visibly instead of silently. |
 | `dangling_md_link` (knowledge-link-check klc-1, 2026-08-11) | A relative body link ending in `.md` (external `http(s)`/`mailto`, absolute paths, and anchor-only links are skipped) resolved against the containing file's directory does not exist or escapes the bundle. |
 | `dangling_wiki_link` (knowledge-link-check klc-1, 2026-08-11) | A `[[target]]` body reference where neither `target` nor `target` minus an optional `pattern-` prefix matches the stem of any `.md` in the bundle. Code fences and inline backtick spans are stripped first — quoted syntax never warns. A host-repo integration test keeps the shipped bundle clean of both link codes. |
 | `invalid_evidence_state` (evidence-ladder el-1, 2026-08-11) | A `bee.evidence` value outside present/wired/exercised, named by file and value. Absent stays valid and reads as present; `bee.evidence_ref` names the enforcing hook/guard/doctor check/test. `bee knowledge report` surfaces the ladder — per-state counts over patterns plus the present-only list — so a doc-only pattern is visible risk, never a silent default. |
@@ -98,12 +98,26 @@ runtime state, though reads from it are permitted.
 ## Business Rules
 
 - The checker never leaves `docs/knowledge/` (D23) and never writes anything, anywhere (D2).
+- The pointer form a copy carries names a **marker-homed rule id and nothing else**
+  (knowledge-one-home D4, koh-10/koh-12). An area concept's own numbered rule (`R138`, `B50`) lives
+  in a different namespace: it is cited in prose, never through the pointer form, because no
+  `<!-- rule: … -->` marker homes a rule number. A pointer naming one is exactly what
+  `unknown_rule_ref` is for.
 
 ## Edge Cases Settled
 
 - A hand-edited frontmatter block that still parses but does not re-emit byte-identically is a
   `not_canonical` warning naming the file, not a silent pass — the class of error a colon in an
   unquoted title, a `#` mid-value, or CRLF line endings would otherwise cause.
+- **A generated area overview carries its own ownership map, so `bee knowledge bootstrap` cannot
+  trip `owns_missing` on its own output** (koh-2). The bootstrap path writes `areas/<area>/overview.md`,
+  which is exactly the shape `owns_missing` grades, so the generator emits an `owns.code` entry
+  with the overview. A check added over a shape some generator produces is tried against that
+  generator in the same cell, or the generator's next run is the first violation.
+- **A document that TEACHES the marker or pointer spelling does not home a rule or point at one.**
+  Both extractors strip fenced blocks and inline backtick spans first, so quoting the syntax is
+  quotation. Before that stripping landed, this very concept read as a second home for every rule
+  id it names (koh-2, closed by koh-10).
 
 ## Pointers (implementation)
 

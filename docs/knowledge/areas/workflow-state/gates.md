@@ -642,6 +642,17 @@ a malformed record has earned none.
   nothing declared there is no overlap to find.
 - Refused starts are proven side-effect-free: the record is byte-identical
   after a refusal.
+- **The candidate scorer reads a NORMALIZED term set, and without it "zero
+  candidates" is unreachable** (R136, knowledge-one-home D5, koh-8). Before a
+  plan's titles and paths are scored against the decision store, every term is
+  lowercased, stripped of surrounding punctuation, dropped when shorter than
+  four characters, and filtered against a 24-word stop list. Unnormalized, an
+  ordinary cell title contributes its articles and prepositions, those clear the
+  two-hit threshold against nearly every decision in the store, and the derive
+  returns an unusable list every time. Since R136 makes "0 conflicts" a true
+  statement only when the derive genuinely returned nothing, a list that can
+  never be empty is not a check — it is noise wearing a verdict field. The
+  scorers themselves are untouched; only what is handed to them changed.
 
 ## Open Gaps
 
@@ -677,6 +688,26 @@ a malformed record has earned none.
   verb is itself high-risk work, so it deadlocks against the door it would
   repair (decision 20969403). What shipped instead was the honesty, never the
   unblock.
+
+- **Starting a feature on the default record closes other live workflow
+  records, which can leave a lane whose conflict derive also refuses.** The
+  default start path closes the live records it finds; a lane whose record was
+  closed that way has nothing for `bee state plan-conflicts derive` to write to,
+  so the derive refuses and the merged gate's precondition (R138) then refuses
+  for the absent-review cause. The behaviour predates this door — the door only
+  makes it visible, because a closed record used to cost nothing until a gate
+  started reading one. Named rather than repaired: reworking what a default
+  start does to sibling records is a change to the workflow store's own write
+  path, not to the gate (knowledge-one-home D5, koh-9).
+
+- **The plan-revision bump's transaction is COPIED into the lane path rather
+  than shared with it.** The lane-targeted conflict verbs take the same two
+  locks in the same order as `plan-rev bump`, but by carrying their own copy of
+  that transaction rather than calling one shared helper. Both are correct
+  today; nothing keeps them correct together, so a future change to one lock
+  order silently leaves the other behind. Recorded as drift risk, not repaired —
+  factoring the shared transaction out is a change to the bump path itself
+  (koh-8).
 
 ## Pointers (implementation)
 
@@ -760,7 +791,10 @@ a malformed record has earned none.
   this repo, decision `3358743e`), with `catalog.rs`'s `PINNED_FLAG_COUNT` at
   180 for the one new flag name `--verdict`. Proof: the six
   `plan-conflicts` rows in `verbs/state_group/tests.rs`, plus
-  `tests/registry_contracts.rs` and `tests/registry_dispatch.rs`.
+  `tests/registry_contracts.rs` and `tests/registry_dispatch.rs`. Hygiene note:
+  `plan_conflicts.rs` carries a file-wide `allow(unused_imports)` taken from the
+  module it was split out of — it hides a real unused import from the compiler
+  and is worth narrowing whenever the file is next touched (koh-8).
 - The merged gate's conflict precondition (R138, knowledge-one-home D2/D5):
   `conflict_review_refusal` + `lane_conflict_review` /
   `unverdicted_candidate_ids` / `acknowledged_conflicts` in

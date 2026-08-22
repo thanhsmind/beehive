@@ -202,6 +202,16 @@ Three field failures (reported against a host repo, fixed generically):
   flip (R7 annotation).
 - **Update obligations** — `update_obligations: [{rule, home, applied_at: [..]}]` emitted in
   `decisions log` output (knowledge-one-home D1), listing the applied_at files of homed rules whose area matches a tag or the scope.
+  This is the PUSH half of the obligation and nothing more: it tells the author, at the moment the
+  decision settles, which files the rule already reaches. The enforcement half is the cap-time sync
+  door (`areas/workflow-state/cells-completion-judge-and-archive.md`), which refuses a cap that left
+  one of those files untouched. A settled rule that never reaches a cap therefore obliges nobody —
+  by design, because the obligation belongs to the change, not to the decision (koh-7).
+- **Owned-path matching** — an ownership pattern ending in a single `*` matches at ANY depth below
+  its prefix, not just the immediate children: `foo/*` and `foo/**` are one and the same test. This
+  is the intended reading for an ownership map, where an area owns a subtree rather than one
+  directory level, but it is a deliberate widening of the usual glob meaning and is stated here
+  because no test pins the deep case (koh-7).
 
 ## Proven behavior (evidence anchors)
 
@@ -228,3 +238,12 @@ Three field failures (reported against a host repo, fixed generically):
 - **The archive** — receives superseded/redacted and aged-out events at an
   explicit cutoff; union reads (`--all`) reach both the active store and the
   archive and de-duplicate by id.
+
+## Open Gaps
+
+- **The ownership map is re-read from disk on every logged decision.** The
+  update-obligation list walks the whole knowledge bundle each time
+  `decisions log` runs, with no cache between calls. At today's bundle size the
+  cost is invisible, so nothing was built; it is stated here rather than
+  discovered as a slow log verb once the bundle grows (koh-7,
+  knowledge-one-home D1).
