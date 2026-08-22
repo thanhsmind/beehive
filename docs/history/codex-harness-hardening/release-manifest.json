@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "a72958b2d56681db266022603356e9633bb67f7bb01007dcf043a0836220dd5d",
+      "sha256": "18adc466182b64d7167f5901b17c17617c95f20df08a07901cb42ef7a1cea27a",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -381,7 +381,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "29b6f40483445b75b35af26cf9c470a44b5af9c095892ff7f89667337594835a",
+      "sha256": "aaab54da83ad8b3fb092d1f28d2c08cef0fe29ab8f47e7dd002a8477e60fb000",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/references/planning-reference.md"
@@ -647,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "9c1560f165351a49a238179bf530c63070a7afaa5965dfacb4d1204b05129700",
+      "sha256": "5a438eb099a0af1a4d031f8bb3011896a619e15c91e60ab54099986c02744286",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -892,7 +892,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "29b6f40483445b75b35af26cf9c470a44b5af9c095892ff7f89667337594835a",
+      "sha256": "aaab54da83ad8b3fb092d1f28d2c08cef0fe29ab8f47e7dd002a8477e60fb000",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/references/planning-reference.md"
@@ -1607,7 +1607,7 @@
     },
     {
       "path": "skills/bee-planning/references/planning-reference.md",
-      "sha256": "29b6f40483445b75b35af26cf9c470a44b5af9c095892ff7f89667337594835a",
+      "sha256": "aaab54da83ad8b3fb092d1f28d2c08cef0fe29ab8f47e7dd002a8477e60fb000",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/references/planning-reference.md"

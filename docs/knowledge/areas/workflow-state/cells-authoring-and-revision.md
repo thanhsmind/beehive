@@ -22,6 +22,28 @@ owns the authoring door itself — the all-or-nothing batch, the revision guard,
 the authoring-time classification — plus the one document that stops being
 revisable at all once its gate is granted.
 
+## Data Dictionary
+
+### Cell Fields
+
+| Field | Meaning |
+|---|---|
+| `id` | Unique string identifying the cell (e.g. `auth-3`). |
+| `feature` | The feature slug the cell belongs to. |
+| `title` | One-line summary of what the cell delivers. |
+| `lane` | Lane classification (`tiny`, `small`, `standard`, `high-risk`, `spike`). |
+| `status` | State of the cell (`open`, `claimed`, `capped`, `blocked`, `dropped`). |
+| `deps` | Array of cell ids whose completion this cell depends on. |
+| `decisions` | Array of decision ids or tags cited by this cell. |
+| `files` | Flat array of repo-relative paths the cell is permitted to touch. |
+| `read_first` | Flat array of repo-relative paths the worker must read before editing. |
+| `affects_skills` | Flat array of repo-relative skill paths predicted to be affected by this cell (`[]` if none). Required on `cells add` across all lanes (D3). |
+| `affects_specs` | Flat array of repo-relative spec/concept paths predicted to be affected by this cell (`[]` if none). Required on `cells add` across all lanes (D3). |
+| `action` | Directive prose explaining what the assigned worker must do. |
+| `verify` | Command string to verify the cell's changes. |
+| `must_haves` | Object containing observable truths, substantive artifacts, key links, and prohibitions. |
+| `trace` | Execution audit record (worker, outcome, deviations, friction, etc.). |
+
 ## Behaviors & Operations
 
 **One-verb regen chain (workflow-lessons wfl-2, 2026-08-11).** `bee dev regen`
@@ -40,7 +62,8 @@ they ride the mandated regen, not the unit's own edit set.
 
 **B7 — Cell plans are revisable in place, execution records never.** A unit of
 work's PLAN fields (title, action, scope files, reading list, dependencies,
-cited decisions, acceptance contracts, verify command, lane, behavior flag)
+cited decisions, acceptance contracts, verify command, lane, behavior flag,
+affected skills, affected specs)
 can be revised after creation through one guarded operation — the normal path
 when a pre-execution review prescribes a fix. The door: only open or blocked
 units accept revision (claimed = a live worker owns it; capped/dropped = the

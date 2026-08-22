@@ -155,6 +155,9 @@ history.
    `artifacts` are the product the cell builds (a source file, a spec, a
    migration), never a report that the cell ran; verification evidence
    belongs in the cell trace, its single source.
+9. **Predicted affects_skills and affects_specs.** Every cell carries flat arrays
+   `affects_skills` and `affects_specs` (repo-relative paths; `[]` when none are
+   affected) required on every lane (per D3).
 
 ## Example cell JSON
 
@@ -169,6 +172,8 @@ history.
   "decisions": ["D2", "D4"],
   "files": ["src/api/router.ts", "src/auth/middleware.ts"],
   "read_first": ["src/api/router.ts"],
+  "affects_skills": [],
+  "affects_specs": [],
   "action": "Mount the session middleware from auth-2 onto all /api/* routes (per D2). Preserve the existing public response envelope (per D4). Follow the error-handler registration pattern already used in router.ts.",
   "must_haves": {
     "truths": ["Unauthenticated /api/* requests return 401"],
@@ -193,8 +198,9 @@ stays the source of truth:
    `<feature-slug-abbrev>-<n>` convention (e.g. `auth-3`); collide with no
    existing cell id — list current ids first: `bee cells list`.
 2. **Required fields.** `id`, `feature`, `title`, `action`, `verify` are all
-   non-empty strings; `verify: "none"` is legal only in a repo whose
-   `commands.test` declares itself no-test (the `"none"` sentinel).
+   non-empty strings; `affects_skills` and `affects_specs` are required flat
+   arrays (`[]` when none are affected); `verify: "none"` is legal only in a
+   repo whose `commands.test` declares itself no-test (the `"none"` sentinel).
 3. **Lane.** One of `tiny`/`small`/`standard`/`high-risk`/`spike`;
    `standard`/`high-risk` cells carry non-empty `must_haves.truths`.
 4. **Scope-derived obligations.** Any `files` path under a release-manifest

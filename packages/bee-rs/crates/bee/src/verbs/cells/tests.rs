@@ -707,10 +707,12 @@ use std::time::Instant;
              addCell: cell is missing required field \"title\" (non-empty string). \
              addCell: cell is missing required field \"action\" (non-empty string). \
              addCell: cell is missing required field \"verify\" (non-empty string). \
+             addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
+             addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike."
         );
         let base = |lane: &str| {
-            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane})
+            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "affects_skills": [], "affects_specs": []})
         };
         assert_eq!(
             thrown(validate_new_cell(root, &base("mega"))),
@@ -742,7 +744,7 @@ use std::time::Instant;
         // normalize: literal-order appends + trace defaults
         let normalized = normalize_new_cell(&json!({"id": "n-1", "title": "t"})).unwrap();
         let keys: Vec<&String> = normalized.as_object().unwrap().keys().collect();
-        assert_eq!(keys, vec!["id", "title", "status", "deps", "decisions", "files", "read_first", "trace"]);
+        assert_eq!(keys, vec!["id", "title", "status", "deps", "decisions", "files", "read_first", "affects_skills", "affects_specs", "trace"]);
         assert_eq!(normalized["status"], json!("open"));
         let trace_keys: Vec<&String> = normalized["trace"].as_object().unwrap().keys().collect();
         assert_eq!(
@@ -770,16 +772,16 @@ use std::time::Instant;
     fn validate_new_cell_problems_collects_every_problem_in_one_call() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        // Missing id, feature, action, verify — title present so it does not
-        // fire — plus an invalid lane: five independent problems, none of
-        // them a dependent-check side effect (id absent skips id
-        // pattern/already-exists; lane invalid skips must_haves.truths).
+        // Missing id, feature, action, verify, affects_skills, affects_specs —
+        // title present so it does not fire — plus an invalid lane.
         let broken = json!({"title": "t", "lane": "nope"});
         let expected = vec![
             "addCell: cell is missing required field \"id\" (non-empty string).".to_string(),
             "addCell: cell is missing required field \"feature\" (non-empty string).".to_string(),
             "addCell: cell is missing required field \"action\" (non-empty string).".to_string(),
             "addCell: cell is missing required field \"verify\" (non-empty string).".to_string(),
+            "addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
+            "addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
                 .to_string(),
         ];
@@ -3370,7 +3372,91 @@ use std::time::Instant;
         json!({
             "id": id, "feature": "batch", "title": format!("title {id}"),
             "action": "do the thing", "verify": "echo ok", "lane": "tiny",
+            "affects_skills": [], "affects_specs": [],
         })
+    }
+
+    #[test]
+    fn add_cell_requires_affects_skills_and_affects_specs_on_every_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        for lane in LANES {
+            let mut base = json!({
+                "id": format!("cell-{lane}"),
+                "feature": "feat",
+                "title": "title",
+                "action": "action",
+                "verify": "cargo test",
+                "lane": lane,
+            });
+            if lane == "standard" || lane == "high-risk" {
+                base["must_haves"] = json!({"truths": ["something true"]});
+            }
+
+            // Missing both
+            let thrown_both = thrown(validate_new_cell(root, &base));
+            assert!(
+                thrown_both.contains("addCell: cell is missing required field \"affects_skills\""),
+                "lane {lane} must refuse missing affects_skills: {thrown_both}"
+            );
+            assert!(
+                thrown_both.contains("addCell: cell is missing required field \"affects_specs\""),
+                "lane {lane} must refuse missing affects_specs: {thrown_both}"
+            );
+
+            // Missing affects_skills only
+            let mut missing_skills = base.clone();
+            missing_skills["affects_specs"] = json!([]);
+            let thrown_skills = thrown(validate_new_cell(root, &missing_skills));
+            assert!(
+                thrown_skills.contains("addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none)."),
+                "lane {lane} must name missing affects_skills with FIX: {thrown_skills}"
+            );
+            assert!(!thrown_skills.contains("missing required field \"affects_specs\""));
+
+            // Missing affects_specs only
+            let mut missing_specs = base.clone();
+            missing_specs["affects_skills"] = json!([]);
+            let thrown_specs = thrown(validate_new_cell(root, &missing_specs));
+            assert!(
+                thrown_specs.contains("addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none)."),
+                "lane {lane} must name missing affects_specs with FIX: {thrown_specs}"
+            );
+            assert!(!thrown_specs.contains("missing required field \"affects_skills\""));
+
+            // Non-array value
+            let mut non_array = base.clone();
+            non_array["affects_skills"] = json!("not-an-array");
+            non_array["affects_specs"] = json!([]);
+            let thrown_non_array = thrown(validate_new_cell(root, &non_array));
+            assert!(
+                thrown_non_array.contains("addCell: \"affects_skills\" must be an array of strings."),
+                "lane {lane} must refuse non-array affects_skills: {thrown_non_array}"
+            );
+
+            // Both present as [] -> valid
+            let mut valid = base.clone();
+            valid["affects_skills"] = json!([]);
+            valid["affects_specs"] = json!([]);
+            assert!(
+                validate_new_cell(root, &valid).is_ok(),
+                "lane {lane} accepts [] for affects_skills and affects_specs"
+            );
+        }
+
+        // Updating an existing cell that lacks the keys still succeeds
+        let legacy_cell = json!({
+            "id": "legacy-1",
+            "feature": "feat",
+            "title": "old title",
+            "action": "action",
+            "verify": "cargo test",
+            "lane": "tiny",
+            "status": "open",
+        });
+        write_cell_fixture(root, "legacy-1", &legacy_cell);
+        assert!(update_field_problem("title", &json!("updated title")).is_none());
     }
 
     #[test]
@@ -6434,6 +6520,8 @@ use std::time::Instant;
             "verify": "echo ok",
             "lane": lane,
             "files": ["packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"],
+            "affects_skills": [],
+            "affects_specs": [],
         });
         if lane == "standard" || lane == "high-risk" {
             c["must_haves"] = json!({"truths": ["the guard still refuses the bad case"]});
