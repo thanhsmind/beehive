@@ -110,6 +110,45 @@ pub(crate) fn run_lanes(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     finish(&ctx, out)
 }
 
+/// The window an `activity.at` stamp stays "live" for (D4, decision
+/// 2d4e3900). It is NOT a heartbeat constant: the heartbeat answers "is this
+/// session's process still around", this answers "did the agent do anything
+/// just now", and the two ages are read independently.
+pub(crate) const SESSION_SIGNAL_WINDOW_SECONDS: f64 = 90.0;
+
+/// D4 (decision 2d4e3900) — read-time liveness for one session record.
+///
+/// - `None` — the session is over (`status` `"dead"` or `"closed"`); there is
+///   nothing left to be live about, so callers emit no signal rather than a
+///   misleading `no_signal`.
+/// - `Some("live")` — the activity hook stamped `activity.at` inside the
+///   window.
+/// - `Some("no_signal")` — no `activity` object at all, or its `at` is at
+///   least `SESSION_SIGNAL_WINDOW_SECONDS` old. An `at` that will not parse
+///   reads the same way: bee's own hook writes that field as an ISO-8601
+///   stamp, so an unreadable one is a damaged record, never a live one.
+///
+/// Pure and DERIVED: every caller computes it at read time from the record it
+/// already holds, and no writer ever persists the result — a stored `signal`
+/// would be a stale claim about the present.
+pub(crate) fn session_signal(record: &Map<String, Value>, now_ms_v: f64) -> Option<&'static str> {
+    if matches!(record.get("status"), Some(Value::String(s)) if s == "dead" || s == "closed") {
+        return None;
+    }
+    let Some(Value::Object(activity)) = record.get("activity") else {
+        return Some("no_signal");
+    };
+    // date_parse_val: Ok(None) = NaN (absent/unparseable), Err = a string only
+    // V8's legacy parser would take. Both are "not a stamp we can trust".
+    let Some(at) = date_parse_val(activity.get("at")).ok().flatten() else {
+        return Some("no_signal");
+    };
+    if !at.is_finite() || at + SESSION_SIGNAL_WINDOW_SECONDS * 1000.0 <= now_ms_v {
+        return Some("no_signal");
+    }
+    Some("live")
+}
+
 pub(crate) fn run_session_list(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &[]) {
         return None;
@@ -119,7 +158,19 @@ pub(crate) fn run_session_list(flags: Flags, use_json: bool, t0: Instant) -> Opt
         Err(code) => return Some(code),
     };
     let out = (|| -> R2<Out> {
-        let sessions = list_session_records(&ctx.root)?;
+        let mut sessions = list_session_records(&ctx.root)?;
+        // D4: `signal` is DERIVED here, once, against a single `now` so every
+        // row in one listing is judged against the same instant — and it is
+        // added to the OUTGOING copy only. Nothing on this path writes a
+        // session file, so the field can never reach disk.
+        let now = now_ms();
+        for session in sessions.iter_mut() {
+            let signal = match session_signal(session, now) {
+                Some(s) => json!(s),
+                None => Value::Null,
+            };
+            session.insert("signal".into(), signal);
+        }
         let lines: Vec<String> = sessions
             .iter()
             .map(|s| {
@@ -131,8 +182,14 @@ pub(crate) fn run_session_list(flags: Flags, use_json: bool, t0: Instant) -> Opt
                     Some(v) => js_disp(v),
                     None => "undefined".to_string(),
                 };
+                // A closed or dead session shows "-": it has no signal to
+                // read, which is not the same claim as "no_signal".
+                let signal = match s.get("signal") {
+                    Some(Value::String(v)) => v.as_str(),
+                    _ => "-",
+                };
                 format!(
-                    "{} {lane_note} | started {} | heartbeat {}",
+                    "{} {lane_note} | started {} | heartbeat {} | signal {signal}",
                     disp("id"),
                     disp("started_at"),
                     disp("last_heartbeat")
@@ -656,4 +713,74 @@ pub(crate) fn run_handoff_show(flags: Flags, use_json: bool, t0: Instant) -> Opt
         Ok(Out::Emit(Value::Object(m), text, 0))
     })();
     finish(&ctx, out)
+}
+
+
+// ─── tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn record(json_text: &str) -> Map<String, Value> {
+        match serde_json::from_str::<Value>(json_text).unwrap() {
+            Value::Object(m) => m,
+            _ => panic!("expected an object"),
+        }
+    }
+
+    /// One fixed `now`, so every case reads the same clock the production
+    /// path reads: a stamp `age_secs` old against it.
+    const NOW_MS: f64 = 1_700_000_000_000.0;
+
+    /// Exotic carries no Debug (reservations.rs owns it), so the local
+    /// expect keeps a fixture panic readable — the same shape the sibling
+    /// suite's `ok` helper uses.
+    fn iso(ms: f64) -> String {
+        match iso_from_ms(ms) {
+            Ok(s) => s,
+            Err(_) => panic!("fixture timestamp is inside the JS Date range"),
+        }
+    }
+
+    fn with_activity_age(age_secs: f64) -> Map<String, Value> {
+        let at = iso(NOW_MS - age_secs * 1000.0);
+        record(&format!(
+            "{{\"id\":\"s1\",\"last_heartbeat\":\"{at}\",\"activity\":{{\"state\":\"working\",\"event\":\"PreToolUse\",\"at\":\"{at}\"}}}}"
+        ))
+    }
+
+    /// D4: inside the 90 s window the agent is live. 89 s is the last second
+    /// that still counts.
+    #[test]
+    fn session_signal_reads_live_inside_the_window() {
+        assert_eq!(session_signal(&with_activity_age(89.0), NOW_MS), Some("live"));
+    }
+
+    /// D4: past the window the record says nothing about now — `no_signal`,
+    /// never "gone". 91 s is the first second outside it.
+    #[test]
+    fn session_signal_reads_no_signal_past_the_window() {
+        assert_eq!(session_signal(&with_activity_age(91.0), NOW_MS), Some("no_signal"));
+    }
+
+    /// A session the activity hook has never written for is indistinguishable
+    /// from one that went quiet: both read `no_signal`.
+    #[test]
+    fn session_signal_reads_no_signal_without_an_activity_object() {
+        let plain = record("{\"id\":\"s1\",\"last_heartbeat\":\"2026-08-22T00:00:00.000Z\"}");
+        assert_eq!(session_signal(&plain, NOW_MS), Some("no_signal"));
+    }
+
+    /// A finished session carries NO signal — `None`, so callers emit null
+    /// instead of asserting `no_signal` about a session that ended on purpose.
+    /// Fresh activity does not change that: `status` decides first.
+    #[test]
+    fn session_signal_is_absent_for_a_dead_or_closed_session() {
+        for status in ["dead", "closed"] {
+            let mut ended = with_activity_age(1.0);
+            ended.insert("status".into(), json!(status));
+            assert_eq!(session_signal(&ended, NOW_MS), None, "status {status}");
+        }
+    }
 }

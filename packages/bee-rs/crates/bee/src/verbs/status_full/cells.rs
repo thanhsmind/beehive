@@ -786,6 +786,26 @@ pub(crate) fn active_workers(ctx: &Ctx, root: &Path, exclude_session_id: Option<
             }
             None => {} // undefined -> key dropped by JSON.stringify
         }
+        // D2/D4: the row carries the activity object the hook wrote, verbatim,
+        // plus the signal DERIVED from that same object — one shape, read the
+        // same way here and in `state session list`. `activity` is null when
+        // no hook has written for this session yet; `signal` is null only for
+        // a finished session, which this live-heartbeat filter already
+        // excludes. Neither field is ever written back to the record.
+        row.insert(
+            "activity".into(),
+            match session.get("activity") {
+                Some(v @ Value::Object(_)) => v.clone(),
+                _ => Value::Null,
+            },
+        );
+        row.insert(
+            "signal".into(),
+            match crate::verbs::state_group::session_signal(&session, now) {
+                Some(s) => json!(s),
+                None => Value::Null,
+            },
+        );
         rows.push(row);
     }
     Ok(rows)
