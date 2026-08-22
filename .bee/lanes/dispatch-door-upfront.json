@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "dispatch-door-upfront",
+  "mode": "feature",
+  "phase": "planning",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"dispatch-door-upfront\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"dispatch-door-upfront\" (lane).",
+  "created_at": "2026-08-22T04:13:27.805Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Việc tiếp theo: không có.",
+    "asked_at": "2026-08-22T04:16:43.859Z",
+    "session": "374324c6-7065-4c42-8897-a86870abcf6c"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 4,
+    "rationale": "Dispatch door must be named up front",
+    "updated_at": "2026-08-22T04:13:54.340Z",
+    "feature": "dispatch-door-upfront"
+  }
+}

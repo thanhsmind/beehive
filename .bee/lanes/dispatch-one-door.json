@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": true
+    "uat": false
   },
   "summary": "Feature \"dispatch-one-door\" started at phase \"exploring\".",
   "next_action": "guard-herding-fallback is closed and its worktree is gone. Live work is store-reach-gaps in beehive--wt--store-reach-gaps (cells srg-1, srg-2 claimed).",
@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "▸ Finding 2 confirmed — `down` splits pass the parent's unchanged width into the guard (`herding/run.rs:906-913`), so the check is trivially",
-    "asked_at": "2026-08-22T02:07:58.286Z",
-    "session": "1a1174b2-16b6-40b7-be29-f17e74f3b0cd"
+    "subject": "The worker forgot the cell trailer on its commit. I use the guard's own recipe to fix the message without touching the shared index.",
+    "asked_at": "2026-08-22T04:17:33.844Z",
+    "session": "183cb71e-55d3-47c9-8dae-9225ec998bbf"
   },
   "route": {
     "class": "feature",

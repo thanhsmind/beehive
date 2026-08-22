@@ -1,0 +1,49 @@
+{
+  "id": "ddu-2",
+  "feature": "dispatch-door-upfront",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Render a Dispatch door block in the session preamble and compaction re-injection",
+  "behavior_change": true,
+  "judge_obligation_ack": "Independent bee-review read of the diff is dispatched by the orchestrator at cap; small lane kept because the block is additive text with no guard logic change.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/dispatch-door-upfront/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "action": "In build_session_preamble (budget.rs), right after the 'Standard commands (host project)' block and before command_surface_section(), push a new section:\n### Dispatch door\n- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker.\n- Tier slots (claude): generation=<x> | extraction=<x> | review=<x> | advisor=<x>\nwhere <x> is the model name for a model slot, `herding (<agent>)` for a {kind:herding} slot (agent field if present), `cli` for a cli slot, `native:<m>` for a native slot, and `session default` when null/unset (review falls back to generation the same way model_guard::resolve_tier does; advisor unset = `none`). Read the slots from config.models (the config Value build_session_preamble already has). Reuse model_guard's parsing: add ONE pub(crate) helper in model_guard.rs (e.g. `pub(crate) fn tier_slot_display(models_raw: Option<&Value>, runtime: &str) -> Vec<(&'static str, String)>`) built on its existing parse/resolve fns, and call it from both places — no second parser that can drift. Add the same two-line block to compaction.rs right after item 10 (Standard commands) as item 10c so a compacted session keeps the door. Add tests in session_preamble/tests.rs: (1) a herding generation slot renders `generation=herding (agy-flash)` and the prepare line; (2) a model slot renders the model name; (3) no models key renders `session default` for every tier slot. Keep the closing trailer bytes untouched (tests pin ends_with). Commit once with subject in imperative mood.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_preamble",
+  "must_haves": {
+    "truths": [
+      "The preamble shows the prepare command before any dispatch can happen",
+      "Slot display comes from model_guard's own resolver, not a second parser",
+      "Compaction re-injects the same block",
+      "Existing preamble tests stay green"
+    ]
+  },
+  "decisions": [
+    "D2"
+  ],
+  "deps": [],
+  "status": "claimed",
+  "trace": {
+    "worker": "w-ddu-2",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "374324c6-7065-4c42-8897-a86870abcf6c",
+    "claimed_at": "2026-08-22T04:15:45.925Z"
+  }
+}

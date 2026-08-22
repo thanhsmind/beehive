@@ -21,12 +21,12 @@
     "claude": {
       "extraction": {
         "kind": "herding",
-        "agent": "pi-agy-flash-3.7",
+        "agent": "agy-flash",
         "fallback": "default"
       },
       "generation": {
         "kind": "herding",
-        "agent": "pi-agy-flash-3.7",
+        "agent": "agy-flash",
         "fallback": "default"
       },
       "review": "opus",

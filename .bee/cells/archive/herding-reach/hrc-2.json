@@ -1,0 +1,57 @@
+{
+  "id": "hrc-2",
+  "feature": "herding-reach",
+  "lane": "small",
+  "title": "Build bee herding status with the transport probe",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "action": "In herding.rs try_native add \"status\" => Some(status(rest)). status(flags): accept --main-root and --json; build the same object interlock builds (enabled, marker, main_root, reason) by factoring the marker check out of interlock into fn enable_marker_state(explicit) -> Map; then add transport: {ready: bool, reason: string, pane_id: string|null} from std::env HERDR_ENV=='1' && HERDR_PANE_ID non-empty. Exit 0 always (status is a report, not an interlock). Without --json print one line: 'herding: enabled=<b> transport=<ready|not ready> (<reason>)'. In registry_payload.json remove the unavailable object from the herding.status entry and add --main-root to its parameters (tests/registry_contracts.rs pins shape — run it). Add a unit test for the transport object with both env states via a small fn taking a closure for env lookup.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding registry",
+  "verify_owner": "worker",
+  "acceptance": "bee herding status --json prints {enabled, marker, main_root, reason, transport:{ready, reason, pane_id}} and exits 0; the not-built message is gone for this verb; herding and registry tests green.",
+  "deps": [],
+  "decisions": [
+    "herding-reach D2"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding.rs:100-125",
+    "packages/bee-rs/crates/bee/src/herding.rs:468-560"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrc-2",
+    "outcome": "bee herding status is built: enable-marker state plus transport {ready, reason, pane_id}; registry unavailable block removed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "worker's proof line omitted the result; orchestrator re-ran the suites: herding 322 passed, registry_contracts+registry_dispatch 18 passed",
+      "herding.rs content landed in hrc-1 commit bb47fac6 (shared index sweep); hrc-2 commit carries the registry edit"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T04:25:59.627Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "15dafcf0-9d77-49a6-aefe-e79b8f894e8d",
+    "claimed_at": "2026-08-22T04:10:25.309Z",
+    "report": {
+      "outcome": "bee herding status built with the transport probe",
+      "commit": "cd98e63c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding; --test registry_contracts --test registry_dispatch — 322 passed, 18 passed, 0 failed — herding module and registry shape pinned by these suites",
+      "deviations": [
+        "herding.rs content landed in hrc-1 commit bb47fac6 (shared index sweep); hrc-2 commit carries the registry edit"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

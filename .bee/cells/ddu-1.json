@@ -1,0 +1,59 @@
+{
+  "id": "ddu-1",
+  "feature": "dispatch-door-upfront",
+  "lane": "small",
+  "tier": "generation",
+  "title": "State the dispatch door up front in AGENTS.md",
+  "behavior_change": false,
+  "files": [
+    "AGENTS.md"
+  ],
+  "read_first": [
+    "docs/history/dispatch-door-upfront/CONTEXT.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "action": "Rewrite the 'Every dispatch carries its tier' bullet in AGENTS.md (the Work-in-parallel section). New content, same length class: the ONE door for any dispatch is `.bee/bin/bee dispatch prepare --runtime <rt> --kind cell|gather|reviewer|advisor --json` — run it first, then run exactly the tool and payload it returns (an Agent call naming a rendered bee agent, or a Bash `bee herding run` / cli call). Never hand-pick `subagent_type`, a `model` param, or a `[bee-tier: …]` marker: those are what prepare RETURNS, and the model-guard hook refuses or rewrites anything else. Keep the sentences about small-and-up cells running through dispatched workers and a tiny cell inline. Keep the file's line-wrap style (~72 cols). Do not touch any other section.",
+  "verify": "rg -n 'dispatch prepare' AGENTS.md",
+  "must_haves": {
+    "truths": [
+      "AGENTS.md names dispatch prepare as the one door before it mentions any agent name, marker, or model param",
+      "The small/tiny worker rule survives unchanged in meaning"
+    ]
+  },
+  "decisions": [
+    "D1"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-ddu-1",
+    "outcome": "AGENTS.md names dispatch prepare as the one door before any agent name, marker or model param",
+    "files_changed": [
+      "AGENTS.md"
+    ],
+    "deviations": [
+      "worker committed without the cell trailer and did not run cells finish; orchestrator rewrote the trailer via commit-tree and capped"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T04:17:30.539Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "374324c6-7065-4c42-8897-a86870abcf6c",
+    "claimed_at": "2026-08-22T04:15:45.875Z",
+    "report": {
+      "outcome": "AGENTS.md names dispatch prepare as the one door",
+      "commit": "ef60e88770b949f8bd89907da207b3d5cfb0a5ff",
+      "files": [
+        "AGENTS.md"
+      ],
+      "tests": "rg -n 'dispatch prepare' AGENTS.md — green — docs pointer check, the cell verify",
+      "deviations": [
+        "worker committed without the cell trailer and did not run cells finish; orchestrator rewrote the trailer via commit-tree and capped"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
