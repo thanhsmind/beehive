@@ -1,0 +1,95 @@
+{
+  "id": "tht-3",
+  "feature": "tmux-herding-transport",
+  "title": "Build herding/tmux.rs: RealTmux implementing PaneTransport with a screen classifier",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "tht-2"
+  ],
+  "decisions": [
+    "D2",
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-transport/CONTEXT.md",
+    "docs/history/research/tmux-herding-transport.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/fleet/tests/herdr_backend.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::tmux",
+  "action": "Create `packages/bee-rs/crates/bee/src/herding/tmux.rs` and declare `pub(crate) mod tmux;` in herding.rs beside `mod run`. The crate is a BINARY crate (no lib.rs), so every test lives in a `#[cfg(test)] mod tests` inside tmux.rs — never under crates/bee/tests/. Shape: `pub(crate) struct TmuxSettings { busy_markers: Vec<String>, blocked_markers: Vec<String>, scrollback: u32, quiet_cycles: u32, interval_ms: u64 }` with `Default` per D4/D5 from upstream wait_for_idle.py — busy: `esc to interrupt`, `esc to cancel`, `ctrl+c to interrupt`, `press esc to` (scanned in the last 2 non-empty lines); blocked: `do you trust`, `trust the files`, `paste your api key`, `press enter to submit` (last 12 non-empty lines); scrollback 40 (upstream's bounded read), quiet_cycles 3, interval_ms 2000 — and `TmuxSettings::from_config(cfg: &Value)` reading overrides from `herding.tmux.{busy_markers,blocked_markers,scrollback,quiet_cycles,interval_ms}` (a list override REPLACES the default list). `pub(crate) struct RealTmux { settings: TmuxSettings, panes: Mutex<HashMap<String, String>> }` — `panes` maps job_id → pane_id, filled by `agent_start` and read by `agent_status`, `agent_prompt`, `agent_wait` (which take a job_id, see run.rs:458,474,482); a job with no pane → None / Err. One private `fn call(&self, args: &[&str]) -> Result<String, String>` runs `Command::new(\"tmux\")` with `stdin(Stdio::null())`, returns trimmed stdout, Err naming the argv on spawn failure or non-zero exit. Pure classifier, testable with no process: `pub(crate) enum Screen { Idle, Working, Blocked }` and `pub(crate) fn classify(screen: &str, settings: &TmuxSettings) -> Screen` (blocked wins over working; case-insensitive contains). Method mapping, per D2 (panes in the caller's window, never `new-session`): `pane_current` → `$TMUX_PANE` if set else `display-message -p '#{pane_id}'`; `pane_layout(pane)` → `list-panes -t <pane> -F '#{pane_id} #{pane_width} #{pane_height}'` parsed into PaneGeom, None on any trouble; `pane_split(parent, direction, ratio, cwd)` → `split-window -t <parent> -h|-v -l <n> -c <cwd> -d -P -F '#{pane_id}'` with `right`→`-h`, `down`→`-v`, and `<n>` = the CHILD's cells = round(parent width or height × (1 − ratio)) because `ratio` is the share the parent keeps (read run.rs's `pane_split` doc); `tab_create(workspace, cwd, label)` → `new-window -d -c <cwd> -n <label> -P -F '#{pane_id}'` — tmux has no workspace, so `workspace` is ignored (say so in the doc comment); `pane_run(pane, line)` → `send-keys -t <pane> -l <line>` then a SEPARATE `send-keys -t <pane> Enter`; `agent_start(job, kind, pane, args)` → record job→pane, then type one line built by single-quoting every token (`'` inside a token becomes `'\\''`): `exec '<kind>' '<arg1>' … ` via the same two-call send (never `-p`/`--print`); `agent_status(job)` → one `capture-pane -p -t <pane> -S -<scrollback>` read, classify → Some(\"idle\"|\"working\"|\"blocked\"), None on trouble; `agent_wait(job, timeout_ms)` → poll `capture-pane` every interval_ms; a screen unchanged for quiet_cycles reads is stable; return Some(\"blocked\") the moment a blocked marker shows (D3 — and never send anything), Some(\"idle\") on stable-without-markers, None at timeout; `agent_prompt(job, text, until, timeout_ms)` → capture a baseline, send text then Enter (two calls), then until `timeout_ms` poll: if `until == \"working\"` succeed when a busy marker appears OR the screen differs from the baseline, otherwise succeed when `classify` yields the `until` state; on timeout return Err containing the literal `agent_prompt_stalled` so `is_agent_prompt_stalled` (run.rs:1173) keeps working; `pane_close(pane)` → `kill-pane -t <pane>`; `pane_alive(pane)` → `list-panes -a -F '#{pane_id}'` contains the id, false on any trouble (fail closed); `pane_read(pane)` → `capture-pane -p -t <pane> -S -<scrollback>`; `process_info(pane)` → `list-panes -t <pane> -F '#{pane_pid} #{pane_current_command} #{pane_dead}'` → Liveness (pane_dead=1 → the dead variant, a pid → alive with that pid, trouble → Unknown; read the Liveness enum at run.rs:384 for the exact variants). Tests (inside the module, names prefixed `tmux_`): `classify` on three bodies (a plain shell prompt → Idle; a last line ending `esc to interrupt` → Working; a box containing `Do you trust the files in this folder?` → Blocked, and blocked-beats-working when both appear); `from_config` replaces a list and keeps the other default; the shell-quoting helper on a token with a single quote and a `$`; and a stub-binary round trip: write an executable `tmux` script into a temp dir that logs its argv to a file and prints canned output, prepend that dir to PATH for the test (mirror the `Stub` helper in crates/fleet/tests/herdr_backend.rs), then assert the exact argv of `pane_split`, `pane_run` (two invocations, `-l`, Enter separate), `pane_alive` false when the stub exits 1, and `process_info` on `pane_dead=1`. No real tmux is required by any test.",
+  "must_haves": {
+    "truths": [
+      "A pane whose last 12 lines contain a blocked marker classifies Blocked and agent_wait returns blocked without sending any key",
+      "send-keys text and Enter are always two separate tmux invocations",
+      "TmuxSettings::default() carries the upstream marker lists and can be overridden from herding.tmux.*"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+        "substantive": "RealTmux implementing all 13 PaneTransport methods, TmuxSettings with from_config, classify, job→pane map, in-module tests with a stub tmux"
+      }
+    ],
+    "key_links": [
+      "herding.rs declares pub(crate) mod tmux",
+      "RealTmux: PaneTransport compiles against the tht-2 trait"
+    ],
+    "prohibitions": [
+      "No attach-session or switch-client ever",
+      "No key is typed into a blocked pane (D3)",
+      "No new-session per worker (D2)",
+      "The classifier never reports done; mailbox files stay the truth (D4)"
+    ]
+  },
+  "trace": {
+    "worker": "w-tht-3",
+    "outcome": "RealTmux implements PaneTransport over tmux verbs with a screen classifier and stub-tmux tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [
+      "process_info format gained a leading #{pane_id} field: list-panes -t <pane> resolves to the pane WINDOW and lists every pane in it, so the cell's three-field format could not tell the target row from a sibling worker's",
+      "agent_prompt preflights the pane and refuses a blocked screen before typing — the cell did not name it, D3's prohibition (no key into a dialog) requires it",
+      "pane_split falls open to tmux's default even split when the parent geometry cannot be read, rather than failing the spawn",
+      "sync-ack: skills/bee-herding docs land in tht-6, the slice's dedicated sync cell; this cell adds an unwired module only. In-module tests are required, not skipped: crates/bee is a binary crate with no lib target, so no tests/ path can reach these items."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T17:04:40.551Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-22T16:47:45.657Z",
+    "sync_ack": "skills/bee-herding docs land in tht-6, the slice's dedicated sync cell; this cell adds an unwired module only. In-module tests are required, not skipped: crates/bee is a binary crate with no lib target, so no tests/ path can reach these items.",
+    "report": {
+      "outcome": "RealTmux implements PaneTransport over tmux verbs with a screen classifier and stub-tmux tests",
+      "commit": "7d05b92",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding — green (30 tmux tests; 357 across herding) — the cell adds one module and one mod declaration, so the herding module is the whole blast radius",
+      "deviations": [
+        "process_info format gained a leading #{pane_id} field: list-panes -t <pane> resolves to the pane WINDOW and lists every pane in it, so the cell's three-field format could not tell the target row from a sibling worker's",
+        "agent_prompt preflights the pane and refuses a blocked screen before typing — the cell did not name it, D3's prohibition (no key into a dialog) requires it",
+        "pane_split falls open to tmux's default even split when the parent geometry cannot be read, rather than failing the spawn"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1356 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

@@ -6871,3 +6871,302 @@ use std::time::Instant;
         assert_eq!(updated["affects_skills"], json!(["skills/demo/SKILL.md"]));
         assert_eq!(updated["affects_specs"], json!([]));
     }
+
+    // ══ merge-ready-fact — the stored merge_ready fact ═════════════════════
+    //
+    // D1's four writers live in workflow_store/merge_ready.rs and carry
+    // their own unit tests over the record seam. What is pinned HERE is the
+    // WIRING: the cap that leaves nothing outstanding is the ONE writer,
+    // every reopen door removes the fact, and neither can change the verb's
+    // own result.
+
+    fn merge_ready_cap_flags(id: &str) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: Some(default_test_report_json()),
+            sync_ack: None,
+        }
+    }
+
+    /// A main checkout with one GRANTED linked worktree whose identity names
+    /// `feature`. `find_granted_worktree_for_feature` validates the gitdir
+    /// link in BOTH directions, so this has to be a real `git worktree add`
+    /// — hand-written link files never resolve. Returns main's root, which
+    /// doubles as the cell STORE root exactly as the cap door uses it (`cells
+    /// finish` always runs at main's store, so `list_cells` applies no island
+    /// scope here), and the worktree id.
+    fn merge_ready_granted_worktree(tmp: &Path, feature: &str) -> (PathBuf, String) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        bp28_repo(&main);
+        write_bee_config(&main, &json!({"commands": {"test": "none"}}));
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "init"]);
+        let id = format!("wt-{feature}");
+        let worktree = tmp.join(&id);
+        git_ok(
+            &main,
+            &["worktree", "add", "-q", worktree.to_str().unwrap(), "-b", &format!("wt/{feature}")],
+        );
+        let mut grants = Map::new();
+        grants.insert(id.clone(), json!(true));
+        let runtime = main.join(".bee").join("runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        std::fs::write(
+            runtime.join("worktree-grants.json"),
+            jsjson::stringify_pretty(&Value::Object(grants)),
+        )
+        .unwrap();
+        let wt_runtime = worktree.join(".bee").join("runtime");
+        std::fs::create_dir_all(&wt_runtime).unwrap();
+        std::fs::write(
+            wt_runtime.join("worktree-identity.json"),
+            jsjson::stringify_pretty(&json!({"feature": feature})),
+        )
+        .unwrap();
+        (main, id)
+    }
+
+    /// The feature's lane record — the record the fact lands on.
+    fn merge_ready_lane(root: &Path, feature: &str) {
+        let dir = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            jsjson::stringify_pretty(
+                &json!({"schema_version": "1.0", "feature": feature, "phase": "swarming"}),
+            ),
+        )
+        .unwrap();
+    }
+
+    /// What the feature record on DISK carries — `null` for "no fact".
+    fn merge_ready_on_lane(root: &Path, feature: &str) -> Value {
+        let raw = std::fs::read_to_string(
+            root.join(".bee").join("lanes").join(format!("{feature}.json")),
+        )
+        .unwrap();
+        let lane: Value = serde_json::from_str(&raw).unwrap();
+        lane.get("merge_ready").cloned().unwrap_or(Value::Null)
+    }
+
+    #[test]
+    fn merge_ready_is_set_by_the_cap_that_leaves_nothing_outstanding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        merge_ready_lane(&root, "demo");
+        write_cell_fixture(&root, "mr-1", &cell("mr-1", "capped", "demo", json!([])));
+        write_cell_fixture(&root, "mr-2", &cell("mr-2", "claimed", "demo", json!([])));
+
+        let capped = cap_cell_from_flags(&root, &merge_ready_cap_flags("mr-2"), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        let fact = capped["merge_ready"].clone();
+        assert_eq!(fact["branch"], json!("wt/demo"), "the worktree's real branch: {fact}");
+        assert_eq!(fact["worktree_id"], json!(wt_id));
+        assert_eq!(fact["uat"], json!("pending"), "no uat gate approved yet");
+        assert_eq!(fact["blocked_by"], json!([]));
+        assert!(fact["since"].is_string(), "the wait is stamped: {fact}");
+        // The cap RESULT carries it, and so does the feature record on disk.
+        assert_eq!(merge_ready_on_lane(&root, "demo"), fact);
+        // The CELL file never grew the key — the fact belongs to the feature.
+        assert!(read_cell_fixture(&root, "mr-2").get("merge_ready").is_none());
+    }
+
+    #[test]
+    fn merge_ready_stays_unset_while_a_sibling_cell_is_still_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, _wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        merge_ready_lane(&root, "demo");
+        write_cell_fixture(&root, "mr-1", &cell("mr-1", "claimed", "demo", json!([])));
+        write_cell_fixture(&root, "mr-2", &cell("mr-2", "open", "demo", json!([])));
+
+        let capped = cap_cell_from_flags(&root, &merge_ready_cap_flags("mr-1"), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["merge_ready"],
+            json!(null),
+            "work is still outstanding — the feature is not ready to merge"
+        );
+        assert_eq!(merge_ready_on_lane(&root, "demo"), json!(null));
+    }
+
+    #[test]
+    fn merge_ready_stays_unset_without_a_worktree_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        merge_ready_lane(root, "demo");
+        write_cell_fixture(root, "mr-1", &cell("mr-1", "claimed", "demo", json!([])));
+
+        let capped = cap_cell_from_flags(root, &merge_ready_cap_flags("mr-1"), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["merge_ready"],
+            json!(null),
+            "the fact names a branch and a worktree — with no grant there is neither"
+        );
+        assert_eq!(merge_ready_on_lane(root, "demo"), json!(null));
+    }
+
+    /// The fail-open promise, at the door that matters most: the cap has
+    /// already written the cell and released the claim by the time the fact
+    /// is attempted, so a record it cannot read must cost the cap nothing.
+    #[test]
+    fn merge_ready_over_a_corrupt_record_leaves_the_cap_result_intact() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, _wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        let lane_file = root.join(".bee").join("lanes").join("demo.json");
+        std::fs::create_dir_all(lane_file.parent().unwrap()).unwrap();
+        std::fs::write(&lane_file, "{not json").unwrap();
+        write_cell_fixture(&root, "mr-1", &cell("mr-1", "claimed", "demo", json!([])));
+
+        let capped = cap_cell_from_flags(&root, &merge_ready_cap_flags("mr-1"), false)
+            .expect("a record the fact cannot read never turns a landed cap into a refusal");
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["merge_ready"], json!(null));
+        assert_eq!(
+            read_cell_fixture(&root, "mr-1")["status"],
+            json!("capped"),
+            "the cap itself landed on disk"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&lane_file).unwrap(),
+            "{not json",
+            "the corrupt record is left exactly as found"
+        );
+    }
+
+    /// D2: a reopen un-finishes the feature, and the NEXT last-cap starts the
+    /// wait over rather than resurrecting the old `since`.
+    #[test]
+    fn merge_ready_is_cleared_by_a_reopen_and_re_set_with_a_fresh_since() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, _wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        merge_ready_lane(&root, "demo");
+        // `cells_reopen_behavior_child` hardcodes `--id x1`, so the fixture
+        // id must match it — the same coupling every other test on that
+        // child carries.
+        write_cell_fixture(&root, "x1", &cell("x1", "claimed", "demo", json!([])));
+
+        let first = cap_cell_from_flags(&root, &merge_ready_cap_flags("x1"), false).unwrap();
+        let since_1 = first["merge_ready"]["since"]
+            .as_str()
+            .expect("the last cap set the fact")
+            .to_string();
+
+        let out = cells_reopen_behavior_run(&root);
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(read_cell_fixture(&root, "x1")["status"], json!("open"));
+        assert_eq!(
+            merge_ready_on_lane(&root, "demo"),
+            json!(null),
+            "an open cell means the feature is no longer ready to merge"
+        );
+
+        let second = cap_cell_from_flags(&root, &merge_ready_cap_flags("x1"), false).unwrap();
+        let since_2 = second["merge_ready"]["since"]
+            .as_str()
+            .expect("the next last-cap sets it again")
+            .to_string();
+        assert!(since_2 > since_1, "the wait restarts: {since_1} -> {since_2}");
+    }
+
+    /// D2 at the third reopen door: `cells unclaim` takes a claimed cell back
+    /// to open. It can only ever fire for a feature whose fact was set by an
+    /// EARLIER cap and then re-claimed, which is exactly this fixture.
+    #[test]
+    fn merge_ready_is_cleared_by_an_unclaim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, _wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        merge_ready_lane(&root, "demo");
+        write_cell_fixture(&root, "mr-1", &cell("mr-1", "claimed", "demo", json!([])));
+        let capped = cap_cell_from_flags(&root, &merge_ready_cap_flags("mr-1"), false).unwrap();
+        assert!(capped["merge_ready"]["since"].is_string(), "the fact was set first");
+
+        // A follow-up cell claimed after the fact was written, then handed
+        // back: the feature has open work again.
+        write_cell_fixture(&root, "mr-2", &cell("mr-2", "claimed", "demo", json!([])));
+        unclaim_cell(&root, "mr-2", None, true).unwrap();
+        assert_eq!(read_cell_fixture(&root, "mr-2")["status"], json!("open"));
+        assert_eq!(merge_ready_on_lane(&root, "demo"), json!(null));
+    }
+
+    const MERGE_READY_JUDGE_CHILD: &str = "verbs::cells::tests::merge_ready_judge_record_child";
+
+    /// Runs ONLY as a child of the test below — records the NEEDS_REVISION
+    /// verdict its parent left at `verdict.json` in its cwd, against cell
+    /// "mrj-1", through the REAL `cells judge-record` CLI door. The capped
+    /// -> open flip that verdict performs lives inside that door's dispatch
+    /// closure, which has no library-level seam taking an explicit root.
+    #[test]
+    #[ignore = "spawned by merge_ready_is_cleared_by_a_needs_revision_judge_record"]
+    fn merge_ready_judge_record_child() {
+        let (flags, use_json) = rsv::parse_flags(&["--id", "mrj-1", "--file", "verdict.json"])
+            .expect("well-formed fixture argv");
+        run_judge_record(flags, use_json, Instant::now());
+    }
+
+    #[test]
+    fn merge_ready_is_cleared_by_a_needs_revision_judge_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, _wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        merge_ready_lane(&root, "demo");
+        write_cell_fixture(&root, "mrj-1", &cell("mrj-1", "claimed", "demo", json!([])));
+        let capped = cap_cell_from_flags(&root, &merge_ready_cap_flags("mrj-1"), false).unwrap();
+        assert!(capped["merge_ready"]["since"].is_string(), "the fact was set first");
+
+        std::fs::write(
+            root.join("verdict.json"),
+            jsjson::stringify_pretty(&json!({
+                "schema": "judge-verdict/1",
+                "verdict": "NEEDS_REVISION",
+                "checks": [{"id": "t1", "status": "FAIL", "evidence": "the truth is not met"}],
+                "fixability": "automatic",
+                "confidence": "high",
+                "failure_signature": "truth-missing",
+            })),
+        )
+        .unwrap();
+
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(&exe)
+            .args(["--exact", MERGE_READY_JUDGE_CHILD, "--ignored", "--test-threads", "1"])
+            .current_dir(&root)
+            .output()
+            .expect("spawn the test binary");
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(
+            read_cell_fixture(&root, "mrj-1")["status"],
+            json!("open"),
+            "the verdict reopened the cell"
+        );
+        assert_eq!(
+            merge_ready_on_lane(&root, "demo"),
+            json!(null),
+            "a reopen is a reopen, whichever door performs it"
+        );
+    }

@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature": "merge-ready-fact",
+  "mode": "feature",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"merge-ready-fact\" started at phase \"planning\" (lane).",
+  "next_action": "bee close finished \"merge-ready-fact\" — feature is closed.",
+  "created_at": "2026-08-22T15:42:06.449Z",
+  "run_state": "shaping",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 7,
+    "rationale": "New stored field waggledance reads (public contract); touches cap, reopen, close, gate, worktree merge (multi-domain).",
+    "updated_at": "2026-08-22T15:42:06.476Z",
+    "feature": "merge-ready-fact"
+  },
+  "last_scribing_run": {
+    "feature": "merge-ready-fact",
+    "date": "2026-08-22",
+    "at": "2026-08-22T16:56:09.997Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Record judge verdicts for mrf-1/mrf-2, then bee close --feature merge-ready-fact."
+  }
+}

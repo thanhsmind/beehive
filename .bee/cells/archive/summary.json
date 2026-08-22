@@ -788,5 +788,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-08-22T14:27:07.819Z"
+  },
+  "merge-ready-fact": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-22T17:00:11.383Z"
   }
 }

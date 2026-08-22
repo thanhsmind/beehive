@@ -5053,3 +5053,108 @@ use std::time::Instant;
             assert_eq!(!uat_door.blocking, expect_approved, "uat={uat} detail={}", uat_door.detail);
         }
     }
+
+    // ── merge-ready-fact D2: a grant that ends removes the fact ─────────────
+    //
+    // `merge_ready` says "finished in its worktree, waiting for the human to
+    // merge". Both ways a worktree grant can end — the merge itself, and
+    // `worktree unregister` — end that wait, so both remove the fact. The
+    // fact is seeded by writing the lane record directly (test setup;
+    // production seeds it from the last cap).
+
+    fn write_merge_ready_lane(main: &Path, feature: &str) {
+        let dir = main.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            format!(
+                r#"{{"feature":"{feature}","phase":"scribing",
+                     "merge_ready":{{"since":"2026-01-01T00:00:00.000Z","branch":"wt/{feature}",
+                     "worktree_id":"wt-{feature}","uat":"pending","blocked_by":[]}}}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    fn lane_has_merge_ready(main: &Path, feature: &str) -> bool {
+        let raw = std::fs::read_to_string(
+            main.join(".bee").join("lanes").join(format!("{feature}.json")),
+        )
+        .unwrap();
+        let parsed: Value = serde_json::from_str(&raw).unwrap();
+        parsed.get("merge_ready").is_some_and(|v| !v.is_null())
+    }
+
+    /// A green merge drops the fact from the merged feature's lane — and
+    /// still commits that TRACKED lane file in its own path-scoped
+    /// bookkeeping commit, so the removal never sits as dirt in main.
+    #[test]
+    fn a_green_merge_removes_the_merged_features_merge_ready_fact_and_commits_the_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_merge_ready_lane(&main, "demo");
+        // Track the lane file, exactly as production does — an untracked
+        // lane file would hide the commit step this test also pins.
+        std::fs::write(
+            main.join(".gitignore"),
+            ".bee/*\n!.bee/companion-session.json\n!.bee/lanes/\n",
+        )
+        .unwrap();
+        git_ok(&main, &["add", "-A", "--", ".gitignore"]);
+        git_ok(&main, &["commit", "-qm", "stop ignoring lanes"]);
+        git_ok(&main, &["add", "-f", ".bee/lanes/demo.json"]);
+        git_ok(&main, &["commit", "-qm", "track the demo lane"]);
+        assert!(lane_has_merge_ready(&main, "demo"), "the fixture must start merge-ready");
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+
+        assert!(
+            !lane_has_merge_ready(&main, "demo"),
+            "the merge is what ends the wait — the fact goes with it"
+        );
+        assert_eq!(
+            answer.result["lane_bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "the lane rewrite must land in its own commit: {}",
+            answer.result["lane_bookkeeping_commit"]
+        );
+        assert!(
+            git_status_porcelain_str(&main).is_empty(),
+            "main must be clean after the merge: {}",
+            git_status_porcelain_str(&main)
+        );
+    }
+
+    /// `worktree unregister` ends the grant the other way, and removes the
+    /// fact the same way — resolving the feature off the worktree's own
+    /// identity BEFORE teardown makes the id unresolvable. A dead id is
+    /// silence, never a refusal.
+    #[test]
+    fn unregistering_a_worktree_removes_its_features_merge_ready_fact() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_merge_ready_lane(&main, "demo");
+
+        assert!(
+            clear_merge_ready_for_worktree(&main, &created.id),
+            "the grant's own feature must resolve off the worktree identity"
+        );
+        assert!(!lane_has_merge_ready(&main, "demo"));
+        assert!(
+            !clear_merge_ready_for_worktree(&main, &created.id),
+            "clearing twice writes nothing"
+        );
+        assert!(
+            !clear_merge_ready_for_worktree(&main, "wt-does-not-exist"),
+            "an unresolvable id is silence, never a throw"
+        );
+    }

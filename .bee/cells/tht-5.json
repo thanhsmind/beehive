@@ -1,0 +1,138 @@
+{
+  "id": "tht-5",
+  "feature": "tmux-herding-transport",
+  "title": "Record the tmux pane id in the activity record",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-transport/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee activity",
+  "action": "The activity record stores which pane a session runs in. At `hooks/activity.rs:257` — `if let Some(pane) = std::env::var(\"HERDR_PANE_ID\").ok().filter(|p| !p.trim().is_empty()) {` — the pane field is written only for herdr. Extract a pure `fn pane_from_env(lookup: impl Fn(&str) -> Option<String>) -> Option<(String, String)>` returning `(\"herdr\", id)` from `HERDR_PANE_ID` when non-empty, else `(\"tmux\", id)` from `TMUX_PANE` when non-empty, else None; write `pane` as before and one additive key `pane_transport` with the first tuple slot. This is identity recording, not transport selection, so it does not read config and does not violate D1 — state that in a one-line comment. Tests ride the cell (names prefixed `activity_`): herdr wins when both are set; tmux when only TMUX_PANE; None when neither; empty strings count as unset. Check `docs/knowledge/areas/hook-runtime/agent-activity-record.md` for the field list and add `pane_transport` to it if the page enumerates fields (docs edit rides this cell only if that page lists `pane`; otherwise leave docs to tht-6).",
+  "must_haves": {
+    "truths": [
+      "Inside a tmux pane (TMUX_PANE=%5, no HERDR_PANE_ID) the activity record carries pane %5 and pane_transport tmux",
+      "Inside herdr the record is unchanged except the additive pane_transport herdr"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "substantive": "pane_from_env with tests; pane_transport key"
+      }
+    ],
+    "key_links": [
+      "the activity writer at activity.rs:257 calls pane_from_env"
+    ],
+    "prohibitions": [
+      "No config read in the hook",
+      "No change to the state-transition logic"
+    ]
+  },
+  "trace": {
+    "worker": "w-tht-5",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+    ],
+    "deviations": [
+      "sync-ack: hook-runtime identity field, not a herding gesture: the cell declares affects_skills [] and no bee-herding skill instruction changes; the activity-record knowledge page is updated in this cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T16:44:05.552Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-22T16:38:05.231Z",
+    "sync_ack": "hook-runtime identity field, not a herding gesture: the cell declares affects_skills [] and no bee-herding skill instruction changes; the activity-record knowledge page is updated in this cell",
+    "report": {
+      "outcome": "pane_from_env records the tmux pane and an additive pane_transport key",
+      "commit": "c9f063b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee activity — green (37 passed) — the hook module this cell changed, plus 4 new activity_pane cases",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-tmux-pane-recorded",
+            "name": "Inside a tmux pane with no HERDR_PANE_ID the record carries pane and pane_transport tmux",
+            "status": "PASS",
+            "evidence": "activity.rs:286-293 pane_from_env walks [(herdr, HERDR_PANE_ID), (tmux, TMUX_PANE)] and returns the first non-blank value, trimmed; activity.rs:257-260 writes pane and then pane_transport. Unit hooks::activity::tests::activity_pane_reads_tmux_when_only_tmux_names_a_pane returns (tmux, %5)."
+          },
+          {
+            "id": "truth-2-herdr-record-unchanged-plus-additive-key",
+            "name": "Inside herdr the record is unchanged except the additive pane_transport herdr",
+            "status": "PASS",
+            "evidence": "The pane value is still HERDR_PANE_ID trimmed with the same blank filter (activity.rs:286-291); the only new key is pane_transport at activity.rs:259. Unit hooks::activity::tests::activity_pane_prefers_herdr_when_both_transports_name_a_pane returns (herdr, herdr-3) while TMUX_PANE is also set, so HERDR wins. hooks::activity::tests::an_existing_record_keeps_its_own_fields still passes."
+          },
+          {
+            "id": "prohibition-no-config-read-in-the-hook",
+            "name": "No config read in the hook",
+            "status": "PASS",
+            "evidence": "pane_from_env takes a lookup closure over the environment only (activity.rs:286) and the call site passes std::env::var (activity.rs:257); commit c9f063bd adds no fs read, no config path and no transport_kind call to activity.rs. The doc comment at activity.rs:281-285 states it records identity and selects no transport."
+          },
+          {
+            "id": "prohibition-no-change-to-state-transition-logic",
+            "name": "No change to the state-transition logic",
+            "status": "PASS",
+            "evidence": "The activity.rs hunks are only the pane block at 257-260, the new pure fn at 281-293, and four added tests near line 819; sticky_suppresses, map_event and write_activity carry no changed lines."
+          },
+          {
+            "id": "key-link-writer-calls-pane-from-env",
+            "name": "The activity writer calls pane_from_env",
+            "status": "PASS",
+            "evidence": "activity.rs:257 - if let Some((transport, pane)) = pane_from_env(|key| std::env::var(key).ok())."
+          },
+          {
+            "id": "docs-field-list-updated",
+            "name": "The knowledge page enumerates the new field",
+            "status": "PASS",
+            "evidence": "docs/knowledge/areas/hook-runtime/agent-activity-record.md:67 adds the pane_transport row next to pane, stating it is present exactly when pane is and that it never selects a transport."
+          },
+          {
+            "id": "proof-verify-command-green",
+            "name": "Cell verify command re-run by the judge",
+            "status": "PASS",
+            "evidence": "cargo test release -p bee filter activity printed test result: ok. 37 passed; 0 failed, including the four activity_pane_* cases."
+          },
+          {
+            "id": "note-foreign-bytes-in-the-commit",
+            "name": "Advisory: the commit also carries 91 lines of herding/run.rs belonging to cell tht-2",
+            "status": "PASS",
+            "evidence": "Commit c9f063bd also touches packages/bee-rs/crates/bee/src/herding/run.rs (the Herdr to PaneTransport rename), a file outside tht-5 files list and absent from its trace files_changed. Disclosed, not hidden: commit ba3cd405 (cell tht-2) is an empty commit whose body records that a concurrent worker git add swept the file into c9f063bd. No tht-5 behavior is affected; the remedy is a trace record correction, not rework, so it is not scored as a cell failure."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T17:20:36.202Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

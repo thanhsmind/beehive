@@ -1,0 +1,93 @@
+{
+  "id": "mrf-3",
+  "feature": "merge-ready-fact",
+  "title": "Document the merge-readiness fact as a workflow-state concept",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "docs/knowledge/areas/workflow-state/merge-readiness.md",
+    "docs/knowledge/areas/workflow-state/index.md",
+    "docs/knowledge/index.md",
+    "docs/knowledge/areas/index.md"
+  ],
+  "read_first": [
+    "docs/history/merge-ready-fact/CONTEXT.md",
+    "docs/history/merge-ready-fact/plan.md",
+    "docs/knowledge/areas/workflow-state/index.md",
+    "docs/knowledge/areas/workflow-state/gates.md",
+    "docs/knowledge/areas/hook-runtime/agent-activity-record.md"
+  ],
+  "action": "Write docs/knowledge/areas/workflow-state/merge-readiness.md as a bee.area concept (copy a sibling's frontmatter shape exactly, e.g. agent-activity-record.md; areas [workflow-state]; decisions cite cfccdde4, e069ef73, f2c16247). Content in business vocabulary: what merge-readiness means (every unit of the feature complete, a feature worktree open, waiting for the human's merge), the record shape and each field's meaning (since, branch, worktree_id, uat pending|approved, blocked_by door names), the one moment it is set (the last completion) and the four moments it changes (close rewrites blocked_by; uat approval flips uat; merge or unregister removes it; any reopen removes it, next last-completion re-sets with a fresh since), a Mermaid state diagram of absent -> ready(pending) -> ready(approved) -> absent with the reopen edge, the edge cases from plan.md Test matrix, the rule that bee's own gates never read it (D3), and where readers find it (lane record, default record, status lane rows). Pointers section names the helper module and the five calling verbs. Add the row to the workflow-state index; run `bee knowledge index`; finish with `bee knowledge check` green. Commit trailer `cell: mrf-3`.",
+  "verify": ".bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check is green with the new concept indexed",
+      "the concept states every set/clear moment from D1/D2 and the never-read rule from D3"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/workflow-state/merge-readiness.md",
+        "substantive": "the merge-readiness concept: meaning, record shape, lifecycle diagram, edges, readers"
+      }
+    ],
+    "key_links": [
+      "workflow-state index lists the concept"
+    ],
+    "prohibitions": [
+      "no code names outside Pointers",
+      "no claim the code does not make"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/merge-readiness.md"
+  ],
+  "behavior_change": false,
+  "trace": {
+    "worker": "w-mrf-3",
+    "outcome": "Documented merge-readiness as a workflow-state concept: meaning, the five fields, the one set moment and four change moments, a lifecycle diagram, edge cases, the never-read rule, readers, and implementation pointers; workflow-state index regenerated.",
+    "files_changed": [
+      "docs/knowledge/areas/workflow-state/merge-readiness.md",
+      "docs/knowledge/areas/workflow-state/index.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/areas/index.md"
+    ],
+    "deviations": [
+      "Quoted the title and left two plain-safe sources unquoted to match the canonical frontmatter emitter — a first pass added a new not_canonical warning; the warning count is back at the 51 baseline.",
+      "Registered w-mrf-3 in state.workers[] from the main checkout: the dispatch had not registered it, and the cap refused with no registered execution worker."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T15:56:18.869Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "48e1abb8-07f6-4058-8db3-383af16fba58",
+    "claimed_at": "2026-08-22T15:50:24.601Z",
+    "report": {
+      "outcome": "Documented merge-readiness as a workflow-state concept: meaning, the five fields, the one set moment and four change moments, a lifecycle diagram, edge cases, the never-read rule, readers, and implementation pointers; workflow-state index regenerated.",
+      "commit": "9a60e8687a2ae35b57587c813e22a419834bfe13",
+      "files": [
+        "docs/knowledge/areas/workflow-state/merge-readiness.md",
+        "docs/knowledge/areas/workflow-state/index.md",
+        "docs/knowledge/index.md",
+        "docs/knowledge/areas/index.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — green (0 OKF errors, 0 profile errors; 51 warnings, all pre-existing, none in the new file) — docs-only cell: the knowledge bundle validator is the proof for a new area concept plus its regenerated indexes",
+      "deviations": [
+        "Quoted the title and left two plain-safe sources unquoted to match the canonical frontmatter emitter — a first pass added a new not_canonical warning; the warning count is back at the 51 baseline.",
+        "Registered w-mrf-3 in state.workers[] from the main checkout: the dispatch had not registered it, and the cap refused with no registered execution worker."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 239 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

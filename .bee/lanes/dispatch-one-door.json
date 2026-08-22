@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Regen rendered the new wording into every projection and the vendored prompt. Proof: prompt-rendering tests + a live render, then commit.",
-    "asked_at": "2026-08-22T14:49:16.066Z",
+    "subject": "Nothing. Say **\"flush\"** when you want the 5 stubs folded into the knowledge docs.",
+    "asked_at": "2026-08-22T17:05:33.285Z",
     "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
   },
   "route": {

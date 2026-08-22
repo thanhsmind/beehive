@@ -4746,3 +4746,143 @@ use std::time::Instant;
         let err = parse_expertise(raw).unwrap_err();
         assert!(err.contains("malformed --expertise line"), "got {err}");
     }
+
+    // ── merge-ready-fact D2: close records WHY it is still standing ─────────
+    //
+    // `bee close` is the writer of `merge_ready.blocked_by` — the names of
+    // the doors still standing, so a board can say what the feature waits on
+    // without re-deriving every door itself. The three tests below pin the
+    // three places a full doors vector exists: the dry-run listing, the
+    // proof-debt refusal arm, and the green path. `merge_ready` is seeded by
+    // writing the lane record directly (test setup — production seeds it
+    // from the last cap, verbs/workflow_store/merge_ready.rs `set_after_cap`).
+
+    /// A lane record carrying an already-seeded `merge_ready`, with the
+    /// blocked_by list pre-dirtied so a rewrite is visible as a rewrite.
+    fn seed_merge_ready_lane(root: &Path, feature: &str, extra: &str, blocked_by: &str) {
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(
+                r#"{{"feature":"{feature}","phase":"execution","mode":"feature"{extra},
+                     "merge_ready":{{"since":"2026-01-01T00:00:00.000Z","branch":"wt/{feature}",
+                     "worktree_id":"wt-{feature}","uat":"pending","blocked_by":{blocked_by}}}}}"#
+            ),
+        );
+    }
+
+    fn read_merge_ready(root: &Path, feature: &str) -> Value {
+        let raw = std::fs::read_to_string(
+            root.join(".bee").join("lanes").join(format!("{feature}.json")),
+        )
+        .unwrap();
+        let parsed: Value = serde_json::from_str(&raw).unwrap();
+        parsed.get("merge_ready").cloned().unwrap_or(Value::Null)
+    }
+
+    /// The judge-debt door's name lands on the fact — and ONLY that name.
+    /// The "uat" door is blocking in this same fixture and is deliberately
+    /// left out: the fact carries the uat answer in its own `uat` field, so
+    /// listing it under `blocked_by` too would say it twice. Both the
+    /// dry-run vector and the real one write, because they report the same
+    /// truth about the same feature.
+    #[test]
+    fn close_records_the_blocking_doors_on_the_features_merge_ready_fact() {
+        let tmp = tempfile::tempdir().unwrap();
+        // uat_stop absent reads as Close, which grows the blocking uat door
+        // this test needs in order to prove the exclusion.
+        let root = repo(&tmp, "{}");
+        seed_merge_ready_lane(&root, "demo", r#","route":{"lane":"standard"}"#, r#"["stale-door"]"#);
+        // A scribing run recorded after the cap clears the scribing-debt
+        // door, so judge-debt is the door that actually surfaces.
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2026-08-12T00:00:01.000Z\"}\n",
+        );
+        // Capped, behavior_change, unjudged, and with no report at all (so
+        // the tests door reads it as a legacy cap and never blocks).
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-08-12T00:00:00.000Z"}}"#,
+        );
+
+        // The dry run writes too: it lists the same doors, so it knows the
+        // same truth.
+        let Out::Emit(dry, _, dry_code) =
+            close_handler(&root, "demo", true, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(dry_code, 0, "a dry run never refuses");
+        assert_eq!(read_merge_ready(&root, "demo")["blocked_by"], json!(["judge-debt"]), "{dry:?}");
+
+        // Re-dirty the list, then take the real close.
+        seed_merge_ready_lane(&root, "demo", r#","route":{"lane":"standard"}"#, r#"["stale-door"]"#);
+        let Out::Emit(result, _, code) =
+            close_handler(&root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1, "judge debt refuses");
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(
+            doors.iter().find(|d| d["door"] == "judge-debt").unwrap()["blocking"],
+            json!(true)
+        );
+        assert_eq!(
+            doors.iter().find(|d| d["door"] == "uat").unwrap()["blocking"],
+            json!(true),
+            "the uat door must be blocking here, or the exclusion below proves nothing"
+        );
+
+        let fact = read_merge_ready(&root, "demo");
+        assert_eq!(fact["blocked_by"], json!(["judge-debt"]), "{fact}");
+        assert_eq!(fact["uat"], json!("pending"), "flipping uat is the gate's job, never close's");
+        assert_eq!(
+            fact["since"],
+            json!("2026-01-01T00:00:00.000Z"),
+            "the rest of the fact is untouched"
+        );
+    }
+
+    /// The proof-debt refusal arm assembles its own complete doors vector
+    /// and returns before the green path is ever reached — a close stopped
+    /// there still records the door it stopped at.
+    #[test]
+    fn a_close_stopped_at_the_tests_door_still_records_that_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"uat_stop":"off"}"#);
+        seed_merge_ready_lane(&root, "demo", "", "[]");
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+        );
+
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1, "proof debt refuses at the tests door: {text}");
+        assert_eq!(read_merge_ready(&root, "demo")["blocked_by"], json!(["tests"]));
+    }
+
+    /// A green close writes the empty list back — nothing stands, and the
+    /// last refusal's door names must not linger as a stale answer.
+    #[test]
+    fn a_green_close_writes_the_empty_door_list_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"uat_stop":"off"}"#);
+        seed_merge_ready_lane(&root, "demo", "", r#"["judge-debt","tests"]"#);
+
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0, "nothing blocks this close: {text}");
+        assert_eq!(read_merge_ready(&root, "demo")["blocked_by"], json!([]));
+    }

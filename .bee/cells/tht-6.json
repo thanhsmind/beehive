@@ -1,0 +1,117 @@
+{
+  "id": "tht-6",
+  "feature": "tmux-herding-transport",
+  "title": "Document the tmux transport in the skill, the config sample, and the knowledge bundle",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "tht-4",
+    "tht-5"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "files": [
+    "skills/bee-herding/SKILL.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    ".bee/config-sample.json",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/index.md",
+    "docs/knowledge/index.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-transport/CONTEXT.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/SKILL.md",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "affects_specs": [],
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+  "action": "Sync the words to the code from tht-1/3/4/5. In `skills/bee-herding/references/operational-invariants.md` under the heading found by `rg -n \"Runtime adapter\" skills/bee-herding/references/operational-invariants.md`, add `herding.transport` (D1: herdr|tmux, absent = herdr, no env auto-detect) and the `herding.tmux.*` knobs with the defaults tmux.rs carries (read `TmuxSettings::default` — do not guess) and the D4 rule that the screen verdict is advisory; add the same keys with a one-line comment to `.bee/config-sample.json` beside the existing `herding` block. In `skills/bee-herding/SKILL.md` frontmatter change the `herdr-cli` dependency's `reason` to say the herdr binary is required when `herding.transport` is herdr (the default) and that the tmux transport needs `tmux` on PATH instead — keep `missing_effect: unavailable`. In `docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md` add a section \"Transport: herdr or tmux\" stating D1–D4 in the page's voice (split panes in the caller's window, dialog = blocked and the pane stays, screen status advisory, result/ack files the truth) naming `herding/tmux.rs`, and add the D5 source line (luongnv89/skills @ ab46724e, skills/tmux-agent-comms/) to its frontmatter `sources`. In `overview.md` frontmatter `owns.code` add `packages/bee-rs/crates/bee/src/herding/tmux.rs` (tests live inside that file, so `owns.tests` is unchanged). Never hand-edit an index: regenerate with `.bee/bin/bee knowledge index` (it writes `docs/knowledge/index.md` and the area index). Because `skills/` is a release-manifest root, run the regen chain INSIDE this cell before the cap — `.bee/bin/bee dev regen` (render-skill-trees, onboard --repo-root . --apply, release-manifest --write, in that order) — commit the regenerated `docs/history/codex-harness-hardening/release-manifest.json` with the cell, and only then run the verify line (the `--check` commands read-only; they prove the committed tree is self-consistent).",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check and bee knowledge index --check pass on the committed tree",
+      "operational-invariants.md names herding.transport and every herding.tmux.* key tmux.rs reads, with the same defaults"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "substantive": "a Transport section stating D1–D4 and citing tmux.rs; D5 in sources"
+      }
+    ],
+    "key_links": [
+      "config-sample.json keys match the names TmuxSettings::from_config reads"
+    ],
+    "prohibitions": [
+      "No change to the cockpit roles or safety boundaries text",
+      "No hand edit of a generated index"
+    ]
+  },
+  "trace": {
+    "worker": "w-tht-6",
+    "outcome": "tmux transport documented: herding.transport plus every herding.tmux.* knob in the invariants reference and the annotated sample, a D1-D4 Transport section with the D5 source on the run-verb page, and the herdr-cli dependency reason split by transport",
+    "files_changed": [
+      "skills/bee-herding/SKILL.md",
+      "skills/bee-herding/references/operational-invariants.md",
+      ".bee/config-sample.json",
+      "docs/knowledge/areas/bee-herding/overview.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "bee dev regen rewrote 15 paths outside the cell files list (the five rendered skill trees plus .bee/onboarding.json timestamp); reserved each under w-tht-6 before committing them with the cell",
+      "added tmux-herding-transport D1-D4 to the run-verb page frontmatter decisions as well as D5 to sources — the new section states those four decisions, so the page must declare them"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T17:16:53.364Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-22T17:11:23.582Z",
+    "report": {
+      "outcome": "tmux transport documented: herding.transport plus every herding.tmux.* knob in the invariants reference and the annotated sample, a D1-D4 Transport section with the D5 source on the run-verb page, and the herdr-cli dependency reason split by transport",
+      "commit": "fc1d12c701ab3f9296601a069bbeee028fd6c0b2",
+      "files": [
+        "skills/bee-herding/SKILL.md",
+        "skills/bee-herding/references/operational-invariants.md",
+        ".bee/config-sample.json",
+        "docs/knowledge/areas/bee-herding/overview.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".agents/skills/bee-herding/SKILL.md",
+        ".agents/skills/bee-herding/references/operational-invariants.md",
+        ".claude/skills/bee-herding/SKILL.md",
+        ".claude/skills/bee-herding/references/operational-invariants.md",
+        ".claude-plugin/skills/bee-herding/SKILL.md",
+        ".claude-plugin/skills/bee-herding/references/operational-invariants.md",
+        ".codex-plugin/skills/bee-herding/SKILL.md",
+        ".codex-plugin/skills/bee-herding/references/operational-invariants.md",
+        ".opencode/skills/bee-herding/SKILL.md",
+        ".opencode/skills/bee-herding/references/operational-invariants.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check — green (0 OKF errors, 0 stale indexes, 270 files match the stored manifest) — docs-only cell: parity and pointer checks over the knowledge bundle and the regenerated skill manifest are the proof this change type needs",
+      "deviations": [
+        "bee dev regen rewrote 15 paths outside the cell files list (the five rendered skill trees plus .bee/onboarding.json timestamp); reserved each under w-tht-6 before committing them with the cell",
+        "added tmux-herding-transport D1-D4 to the run-verb page frontmatter decisions as well as D5 to sources — the new section states those four decisions, so the page must declare them"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 560 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}
