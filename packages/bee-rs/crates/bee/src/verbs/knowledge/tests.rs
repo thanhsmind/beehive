@@ -2662,3 +2662,117 @@ use std::time::Instant;
                 .join("\n")
         );
     }
+
+    // ═══ ownership loader and glob matching (D1/D4) ═════════════════════════
+
+    #[test]
+    fn load_ownership_collects_areas_and_homed_rules_including_agents_md() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+
+        put(
+            &dir,
+            "areas/auth/overview.md",
+            Cx::new("auth-overview")
+                .ty("bee.area")
+                .bee("areas", json!(["auth"]))
+                .bee("owns.code", json!(["src/auth/*", "src/login.rs"]))
+                .bee("owns.skills", json!(["skills/auth/**"]))
+                .bee("owns.tests", json!(["tests/auth_tests.rs"]))
+                .body("Auth overview"),
+        );
+
+        put(
+            &dir,
+            "areas/auth/token.md",
+            Cx::new("auth-token")
+                .ty("bee.area")
+                .bee("areas", json!(["auth"]))
+                .bee("applied_at", json!(["skills/auth/SKILL.md", "src/auth/token.rs"]))
+                .body("<!-- rule: auth-token-entropy -->\nToken entropy rule\n<!-- /rule -->"),
+        );
+
+        put(
+            &dir,
+            "areas/doctrine/router.md",
+            Cx::new("doctrine-router")
+                .ty("bee.area")
+                .bee("areas", json!(["doctrine"]))
+                .body(
+                    "## AGENTS.md rule homes\n\n- `agents-discipline-rule` (AGENTS.md § Test):\n  - applied_at:\n    - `skills/demo/SKILL.md`\n    - `docs/specs/demo.md`\n",
+                ),
+        );
+
+        let ownership = load_ownership(root);
+
+        // Check area
+        let auth_area = ownership.areas.get("auth").expect("auth area must be present");
+        assert_eq!(auth_area.area, "auth");
+        assert_eq!(auth_area.code, vec!["src/auth/*", "src/login.rs"]);
+        assert_eq!(auth_area.skills, vec!["skills/auth/**"]);
+        assert_eq!(auth_area.tests, vec!["tests/auth_tests.rs"]);
+
+        // Check homed rule in concept
+        let token_rule = ownership
+            .rules
+            .iter()
+            .find(|r| r.rule == "auth-token-entropy")
+            .expect("auth-token-entropy must be found");
+        assert_eq!(token_rule.home, "docs/knowledge/areas/auth/token.md");
+        assert_eq!(token_rule.areas, vec!["auth"]);
+        assert_eq!(
+            token_rule.applied_at,
+            vec!["skills/auth/SKILL.md", "src/auth/token.rs"]
+        );
+
+        // Check AGENTS.md homed rule
+        let agents_rule = ownership
+            .rules
+            .iter()
+            .find(|r| r.rule == "agents-discipline-rule")
+            .expect("agents-discipline-rule must be found");
+        assert_eq!(agents_rule.home, "AGENTS.md");
+        assert_eq!(agents_rule.areas, vec!["doctrine"]);
+        assert_eq!(
+            agents_rule.applied_at,
+            vec!["skills/demo/SKILL.md", "docs/specs/demo.md"]
+        );
+    }
+
+    #[test]
+    fn matches_owned_evaluates_exact_trailing_and_glob_patterns() {
+        let code_patterns = vec![
+            "packages/bee-rs/crates/bee/src/verbs/decisions/*".to_string(),
+            "packages/bee-rs/crates/bee/src/main.rs".to_string(),
+            "skills/**".to_string(),
+            "crates/*/src/lib.rs".to_string(),
+        ];
+
+        // Exact match
+        assert!(matches_owned(
+            &code_patterns,
+            "packages/bee-rs/crates/bee/src/main.rs"
+        ));
+
+        // Trailing /* match
+        assert!(matches_owned(
+            &code_patterns,
+            "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs"
+        ));
+
+        // Trailing /** match
+        assert!(matches_owned(
+            &code_patterns,
+            "skills/bee-hive/references/gates.md"
+        ));
+
+        // Wildcard segment match
+        assert!(matches_owned(&code_patterns, "crates/foo/src/lib.rs"));
+
+        // Negative cases
+        assert!(!matches_owned(
+            &code_patterns,
+            "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+        ));
+        assert!(!matches_owned(&code_patterns, "docs/knowledge/overview.md"));
+    }

@@ -200,6 +200,8 @@ Three field failures (reported against a host repo, fixed generically):
   body; `--check` mode exits non-zero on drift.
 - **Delivered subset** — the evidenced portion of a row's CoS at a refused
   flip (R7 annotation).
+- **Update obligations** — `update_obligations: [{rule, home, applied_at: [..]}]` emitted in
+  `decisions log` output (knowledge-one-home D1), listing the applied_at files of homed rules whose area matches a tag or the scope.
 
 ## Proven behavior (evidence anchors)
 
