@@ -451,7 +451,7 @@ a malformed record has earned none.
   The approval succeeds and names those candidates on a second output line
   and under `conflicts_acknowledged` on the JSON result — present only when
   non-empty — so the contradiction is approved with eyes open rather than
-  discovered later.
+  found after approval.
 - R104 — An approvals map merges over the gate defaults only when it is stored as
   an object; every other shape yields the defaults untouched, and no shape is
   read partially or refused (js-parity-cleanup D2, cell jp-4, 2026-08-04).

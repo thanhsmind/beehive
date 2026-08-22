@@ -125,9 +125,9 @@ From the quick scout only.
 
 None.
 
+<!-- bee:not-a-deferral: template section heading; the three questions below were answered by planning and execution (plan.md Approach; koh-6, koh-8, slice order) — kept as the record of what planning had to settle, not as open promises -->
 ### Deferred To Planning
 
-<!-- bee:not-a-deferral: these three questions were answered by planning and execution (plan.md Approach; koh-6, koh-8, slice order) — kept as the record of what planning had to settle, not as open promises -->
 - [x] Does the cap-time ownership check run on `git diff` of the cell's
   commit or on `--files`? — Answered (koh-6): the union of the commit's
   numstat and `--files`; `--files` alone when no commit resolves.
@@ -138,9 +138,9 @@ None.
   Answered: that order held; nothing needed the migration earlier.
 <!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: template section heading over out-of-scope lines carried from the map; neither line is a promise to act -->
 ## Deferred Ideas
 
-<!-- bee:not-a-deferral: out-of-scope lines carried from the map; neither is a promise to act later -->
 - Smarter `knowledge context` ranking — explicitly out of scope (map).
 - Release checklist gaps — already fixed as its own example (map).
 <!-- /bee:not-a-deferral -->
@@ -149,5 +149,5 @@ None.
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning
 reads locked decisions, code context, canonical references, and
-deferred-to-planning questions. Planning's Gate 2 shape stage and
+the questions routed to planning. Planning's Gate 2 shape stage and
 reviewing use locked decisions for coverage and UAT.

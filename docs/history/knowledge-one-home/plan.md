@@ -187,6 +187,8 @@ advisor precondition) and authors only the gap.
 
 - `knowledge context` ranking changes (D1).
 - A generator for `registry_payload.json`.
-- Migrating rules beyond the 12 in ticket 004; later drifts are caught
-  by the check, not by this feature.
+<!-- bee:not-a-deferral: out-of-scope statement; drift after this feature is the check's job, not a promised follow-up -->
+- Migrating rules beyond the 12 in ticket 004; any drift after this
+  feature is caught by the check, not by this feature.
+<!-- /bee:not-a-deferral -->
 - Release checklist gaps (already fixed separately).
