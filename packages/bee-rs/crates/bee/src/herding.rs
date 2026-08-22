@@ -91,6 +91,14 @@ mod mailbox;
 // See run.rs.
 mod run;
 
+// The tmux implementation of run.rs's `PaneTransport` seam
+// (tmux-herding-transport D2/D3/D4/D5): the same 13 operations, reached
+// through `tmux` verbs instead of `herdr` ones, with pane status read from a
+// bounded `capture-pane` and classified against marker lists held as config
+// data. Selected by `herding.transport` (D1), never by env sniffing.
+// See tmux.rs.
+pub(crate) mod tmux;
+
 // The cross-PROCESS pane-split lock (herding-split-serialize): concurrent
 // `bee herding run` processes serialize their pane split through an advisory
 // lock file, because each spawn is its own OS process. See split_lock.rs.
