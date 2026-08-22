@@ -35,6 +35,11 @@ announce what settled, then record it:
 - A rule, behavior, or tuned value settles → `bee decisions log` the
   same turn, plus a one-line stub via `bee capture add`; the full spec
   merge waits for the flush. High-risk work merges now, never queued.
+  A stub whose `--area` owns a skill must also answer whether that skill
+  changed — `--skill-answer "changed: <path>"` or `--skill-answer "not:
+  <why>"`, or the stub is refused
+  (rule: workflow-state-capture-skill-answer;
+  docs/knowledge/areas/workflow-state/capture-queue-and-the-blocker-threshold.md).
 - The user defers work ("later", "phase 2") → `bee backlog add` the
   same turn, announce-then-do.
 - A settlement that contradicts shipped behavior is recorded as "not

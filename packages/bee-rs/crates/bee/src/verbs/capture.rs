@@ -5,7 +5,7 @@
 //   capture count [--json]
 //   capture list  [--json]
 //   capture add   --outcome <v> [--did <v>] [--area <v>] [--files <v>]
-//                 [--lane <v>] [--source <v>] [--json]
+//                 [--lane <v>] [--source <v>] [--skill-answer <v>] [--json]
 //   capture flush --id <v> [--into <v>] [--json]
 // Nothing in this group is left permanently delegated; within the accepted
 // shapes, ALL refusal/error paths still delegate to Node (missing/empty
@@ -212,7 +212,10 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "count" => run_count(parse_shape(rest, &[])?, t0),
         "list" => run_list(parse_shape(rest, &[])?, t0),
         "add" => run_add(
-            parse_shape(rest, &["outcome", "did", "area", "files", "lane", "source"])?,
+            parse_shape(
+                rest,
+                &["outcome", "did", "area", "files", "lane", "source", "skill-answer"],
+            )?,
             t0,
         ),
         "flush" => run_flush(parse_shape(rest, &["id", "into"])?, t0),
@@ -260,6 +263,36 @@ fn run_list(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     Some(emit_success(&ctx.root, "capture list", parsed.json, &ctx.drift, &Value::Object(result), &text, t0))
 }
 
+/// The skill answer a stub owes its area — knowledge-one-home D4 item 5
+/// (rule: workflow-state-capture-skill-answer). An area that owns a skill cannot settle
+/// anything without the skill either changing or being named as unchanged, so a
+/// stub filed against such an area must SAY which — the queue is where that
+/// answer is still cheap to give. Returns the refusal text, or None when the
+/// stub is free to queue: no `--area` at all, an area the ownership map does
+/// not know, an area whose `owns.skills` is empty, or an answer already given.
+/// `skill_answer` arrives trimmed, so a blank flag reads as absent.
+fn skill_answer_refusal(
+    root: &Path,
+    area: Option<&str>,
+    skill_answer: Option<&str>,
+) -> Option<String> {
+    if skill_answer.is_some() {
+        return None;
+    }
+    let area = area?;
+    let ownership = crate::verbs::knowledge::load_ownership(root);
+    let owned = ownership.areas.get(area)?;
+    if owned.skills.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "bee capture add: area \"{area}\" owns skill(s) {} — a capture stub for a \
+         skill-owning area must answer whether the skill changed. FIX: pass \
+         --skill-answer \"changed: <skill path>\" or --skill-answer \"not: <why>\".",
+        owned.skills.join(", ")
+    ))
+}
+
 fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     // ── pure-argv validation first (bee.mjs handleCaptureAdd +
     // lib/capture.mjs addCaptureStub) — every refusal delegates. ────────────
@@ -287,13 +320,26 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let files = normalize_list(opt("files"));
     let lane = lane_raw.map(js_trim).filter(|l| !l.is_empty());
     let source = opt("source").map(js_trim).filter(|s| !s.is_empty());
+    let skill_answer = opt("skill-answer").map(js_trim).filter(|s| !s.is_empty());
 
     let ctx = match preamble("capture add", parsed.pre_json, t0) {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
 
-    // Stub key order: kind, id, at, outcome, dids, area, files, lane[, source].
+    // D4 item 5: the stub owes a skill answer when its area owns a skill.
+    if let Some(msg) = skill_answer_refusal(&ctx.root, area, skill_answer) {
+        return Some(crate::verbs::feedback::emit_error(
+            &ctx.root,
+            "capture add",
+            parsed.json,
+            &msg,
+            t0,
+        ));
+    }
+
+    // Stub key order: kind, id, at, outcome, dids, area, files, lane[, source]
+    // [, skill_answer].
     let mut stub = Map::new();
     stub.insert("kind".into(), Value::String("stub".into()));
     stub.insert("id".into(), Value::String(random_uuid_v4()));
@@ -305,6 +351,9 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     stub.insert("lane".into(), lane.map(|l| Value::String(l.to_string())).unwrap_or(Value::Null));
     if let Some(source) = source {
         stub.insert("source".into(), Value::String(source.to_string()));
+    }
+    if let Some(skill_answer) = skill_answer {
+        stub.insert("skill_answer".into(), Value::String(skill_answer.to_string()));
     }
     let stub = Value::Object(stub);
     // Append failure: no line was written — delegate so Node owns the error.
@@ -473,6 +522,87 @@ mod tests {
         assert_eq!(normalize_list(Some("a, b ,,c ")), vec!["a", "b", "c"]);
         assert_eq!(normalize_list(Some("   ")), Vec::<String>::new());
         assert_eq!(normalize_list(None), Vec::<String>::new());
+    }
+
+    // ── the skill answer a skill-owning area's stub owes (D4 item 5) ───────
+
+    /// Writes docs/knowledge/areas/<area>/overview.md carrying `owns.skills`,
+    /// the one input `load_ownership` reads for this door.
+    fn write_area_overview(root: &Path, area: &str, owns_skills: &str) {
+        let dir = root.join("docs").join("knowledge").join("areas").join(area);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("overview.md"),
+            format!(
+                "---\ntype: bee.area\ntitle: \"{area}\"\ndescription: \"fixture\"\n\
+                 timestamp: 2026-08-22\nbee:\n  id: {area}-overview\n  lifecycle: active\n  \
+                 areas: [{area}]\n  owns.code: [\"src/{area}/*\"]\n  owns.skills: [{owns_skills}]\n  \
+                 owns.tests: []\n---\n\n# {area}\n\nFixture body.\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn skill_owning_area_without_the_answer_is_refused_naming_its_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_area_overview(tmp.path(), "workflow-state", "\"skills/bee-capturing/*\"");
+        let msg = skill_answer_refusal(tmp.path(), Some("workflow-state"), None)
+            .expect("a skill-owning area must refuse a stub with no answer");
+        assert!(msg.contains("skills/bee-capturing/*"), "{msg}");
+        assert!(msg.contains("--skill-answer \"changed: <skill path>\""), "{msg}");
+        assert!(msg.contains("--skill-answer \"not: <why>\""), "{msg}");
+    }
+
+    #[test]
+    fn either_spelling_of_the_answer_clears_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_area_overview(tmp.path(), "workflow-state", "\"skills/bee-capturing/*\"");
+        assert!(skill_answer_refusal(
+            tmp.path(),
+            Some("workflow-state"),
+            Some("changed: skills/bee-capturing/SKILL.md")
+        )
+        .is_none());
+        assert!(skill_answer_refusal(
+            tmp.path(),
+            Some("workflow-state"),
+            Some("not: the rule is code-only")
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn an_area_owning_no_skill_and_a_stub_with_no_area_owe_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_area_overview(tmp.path(), "workflow-state", "\"skills/bee-capturing/*\"");
+        write_area_overview(tmp.path(), "plumbing", "");
+        assert!(skill_answer_refusal(tmp.path(), Some("plumbing"), None).is_none());
+        assert!(skill_answer_refusal(tmp.path(), None, None).is_none());
+        // An area no ownership map knows is not a skill-owning area either.
+        assert!(skill_answer_refusal(tmp.path(), Some("nowhere"), None).is_none());
+    }
+
+    #[test]
+    fn the_answer_rides_the_stub_as_skill_answer() {
+        // Mirrors run_add's construction: skill_answer trails source.
+        let mut stub = Map::new();
+        stub.insert("kind".into(), Value::String("stub".into()));
+        stub.insert("id".into(), Value::String("fixed".into()));
+        stub.insert("at".into(), Value::String("t".into()));
+        stub.insert("outcome".into(), Value::String("o".into()));
+        stub.insert("dids".into(), json!([]));
+        stub.insert("area".into(), Value::String("workflow-state".into()));
+        stub.insert("files".into(), json!([]));
+        stub.insert("lane".into(), Value::Null);
+        stub.insert(
+            "skill_answer".into(),
+            Value::String("changed: skills/bee-capturing/SKILL.md".into()),
+        );
+        assert_eq!(
+            jsjson::stringify(&Value::Object(stub)),
+            r#"{"kind":"stub","id":"fixed","at":"t","outcome":"o","dids":[],"area":"workflow-state","files":[],"lane":null,"skill_answer":"changed: skills/bee-capturing/SKILL.md"}"#
+        );
     }
 
     #[test]

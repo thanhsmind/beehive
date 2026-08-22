@@ -463,7 +463,16 @@ mod tests {
         // conflict precondition is a REFUSAL and an extra output field
         // (`conflicts_acknowledged`), not a flag — `gate`/`state gate` gained
         // no parameter, so the count is deliberately unchanged.
-        const PINNED_FLAG_COUNT: usize = 180;
+        // 180 -> 181 (knowledge-one-home koh-11): `capture.add` gained
+        // `--skill-answer`, the stub's answer to "did the area's owned skill
+        // change?" (D4 item 5). Checked first: `--outcome` is what settled,
+        // `--files` is what the settlement touched (a list of paths, not a
+        // yes/no with a reason), `--note`/`--reason` name retrospective
+        // free text about an action bee itself took, and `--sync-ack` is the
+        // cap door's ESCAPE from a skill obligation, not the answer to one —
+        // none of them carries "whether the owned skill changed", so
+        // `--skill-answer` is new.
+        const PINNED_FLAG_COUNT: usize = 181;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
