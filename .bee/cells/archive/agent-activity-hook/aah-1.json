@@ -99,6 +99,71 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "permission-request-writes-blocked-and-one-row",
+            "status": "PASS",
+            "evidence": "Live probe against a throwaway store: `bee hook activity` fed {hook_event_name:PermissionRequest,session_id:probe1,tool_name:Bash,tool_use_id:tu_1} exit=0; .bee/sessions/probe1.json activity={state:\"blocked\",event:\"PermissionRequest\",tool_name:\"Bash\",tool_use_id:\"tu_1\",...}; wc -l probe1.activity.jsonl = 1. Code: packages/bee-rs/crates/bee/src/hooks/activity.rs:107 (PermissionRequest=>Blocked), :391 write_activity, :425 append_transition. Test hooks::activity::tests::a_permission_request_blocks_and_records_the_tool_it_blocked_on ok."
+          },
+          {
+            "id": "foreign-post-tool-use-leaves-blocked-and-appends-nothing",
+            "status": "PASS",
+            "evidence": "Same probe, second event PostToolUse tool_use_id=tu_2 exit=0; activity still {state:'blocked',tool_use_id:'tu_1'}; sidecar still 1 row. Code activity.rs:281-306 sticky_suppresses (Blocked arm returns !clears). Test a_post_tool_use_with_a_different_tool_use_id_leaves_the_block_standing ok."
+          },
+          {
+            "id": "malformed-stdin-exits-zero-with-a-log-line",
+            "status": "PASS",
+            "evidence": "Probe: empty stdin exit=0, 'not json at all {{{' exit=0, 2 MiB of 'x' exit=0. .bee/logs/hook-activity.log then held 3 lines 'unusable payload — no session_id (hook_event_name \"\"); nothing recorded'. Code activity.rs:190-197, :700 append_activity_log, cap at :59 LOG_CAP_BYTES. Tests empty_garbage_and_huge_stdin_exit_zero_and_leave_a_log_line, the_log_is_capped_to_its_last_half ok."
+          },
+          {
+            "id": "hook-set-mark-cleared-at-next-user-prompt-submit",
+            "status": "PASS",
+            "evidence": "Probe: after the PermissionRequest, .bee/state.json waiting_on={kind:'gate',subject:'Bash',session:'probe1'} and activity.waiting_on_set_by_hook=true; a UserPromptSubmit then left waiting_on=None. Code activity.rs:600-616 sync_waiting_on turn-boundary arm, :129 is_turn_boundary. Test waiting_input_sets_a_question_mark_and_a_turn_boundary_clears_it ok."
+          },
+          {
+            "id": "agent-set-mark-never-touched",
+            "status": "PASS",
+            "evidence": "Probe: pre-seeded state.json waiting_on={kind:'question',subject:\"agent's own ask\",session:'agentsess'}; PermissionRequest for probe2 exit=0 left waiting_on byte-identical, activity.state=blocked with waiting_on_set_by_hook absent; a following UserPromptSubmit also left it untouched. Code activity.rs:659-670 set_mark (`if !marker && waiting_on_is_live(...)` returns Ok(false) for kind gate|question). Test an_agent_set_mark_is_never_overwritten_or_cleared_by_the_hook ok."
+          },
+          {
+            "id": "no-change-to-other-hooks-behavior",
+            "status": "PASS",
+            "evidence": "git show 2fda0a76 touches only hooks/activity.rs (new), hooks/mod.rs (+pub mod activity, HOOK_NAMES 9->10, one dispatch arm), router.rs (+\"hook activity\" name), state_group/mod.rs (mod store/waiting_on -> pub(crate), visibility only), tests/hook_contracts.rs (+\"activity\" to the matrix). HOOK_NAMES is read only by print_hook_usage (hooks/mod.rs:92). cargo test --test hook_contracts: 10 passed, 0 failed."
+          },
+          {
+            "id": "no-subagent-stop-handling",
+            "status": "PASS",
+            "evidence": "activity.rs:103-127 map_event has no SubagentStop arm; the `_ => None` catch-all returns no state. Test hooks::activity::tests::subagent_stop_is_never_handled ok."
+          },
+          {
+            "id": "never-non-zero-exit",
+            "status": "PASS",
+            "evidence": "activity.rs:139-157 run_inner returns ExitCode::SUCCESS on every path (early returns plus the Err branch that only logs). Probe recorded exit=0 for all 9 invocations, including empty, garbage, 2 MiB stdin, corrupt claim, and missing claims dir."
+          },
+          {
+            "id": "no-hand-rolled-json-writer",
+            "status": "PASS",
+            "evidence": "activity.rs writes only through crate::fsutil::write_json_atomic (:415 write_json_atomic_retry) and crate::fsutil::append_jsonl (:436); values are serde_json Map/Value throughout. rg found no manual JSON string building; the only format! writes are the plain-text hook-activity.log lines (:711)."
+          },
+          {
+            "id": "decisions-d1-d2-d3-d5-honored",
+            "status": "PASS",
+            "evidence": "D1: one verb, stdin payload, always exit 0, capped .bee/logs/hook-activity.log, never SubagentStop — all above. D2: activity{state,event,tool_name?,tool_use_id?,at,pane?,cwd} verified verbatim in the probe record; MAX_TRANSITIONS=50 (activity.rs:61) with atomic trim (:441); minimal record created for an unknown session (:373). D3: mapping table at :103-127 matches decision 40c707ba word for word; blocked clears on same tool_use_id else same tool_name else turn boundary (:281-306). D5: mark set through set_workflow_waiting_on/set_default_state_waiting_on, never a second writer (:15-21 imports). NOTE (advisory, not a defect found): sticky_suppresses (:307-312) also lets Blocked and Exited override a standing waiting_input, while decision 40c707ba's letter says waiting_input 'is cleared by a turn boundary only'. The code names the reason in a comment, a test pins it (a_permission_prompt_overrides_waiting_input), and it resolves an internal tension in D3 (whose own table maps PermissionRequest=>blocked) in favour of the stronger human-needed signal — but neither the knowledge doc (B21, docs/knowledge/areas/hook-runtime/agent-activity-record.md:114) nor a decision line records the extension."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T14:27:00.931Z"
+      }
+    ]
   }
 }

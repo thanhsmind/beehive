@@ -105,6 +105,56 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "render-hook-manifests-check-clean",
+            "status": "PASS",
+            "evidence": "`.bee/bin/bee dev render-hook-manifests --check` -> 'hook manifests: 3 projections in sync', exit 0."
+          },
+          {
+            "id": "claude-settings-carry-activity-on-the-eight-events",
+            "status": "PASS",
+            "evidence": "Parsed /home/thanhsmind/projects/goglbe/beehive/.claude/settings.json: a `bee hook activity` command appears under UserPromptSubmit, PreToolUse, PostToolUse, Stop, SessionEnd, PostToolUseFailure, PermissionRequest, Notification — 8 events, every one matcher-less (matcher=None). Source rows: devtools/hook_manifests.rs:110 ACTIVITY + CATALOG arms; onboard/hooks_wiring.rs:90-140 render_repo_hook_entries."
+          },
+          {
+            "id": "no-subagent-stop-row",
+            "status": "PASS",
+            "evidence": "settings.json SubagentStop holds only the state-sync and chain-nudge commands; no `hook activity` string in it. Pinned by two tests: devtools::hook_manifests::tests::the_activity_hook_covers_the_eight_decided_events_and_never_subagent_stop and onboard::hooks_wiring::tests::repo_settings_carry_the_activity_hook_on_the_decided_events. cargo test --bins hook_manifests: 7 passed; hooks_wiring: 18 passed; 0 failed."
+          },
+          {
+            "id": "codex-hooks-json-unchanged",
+            "status": "PASS",
+            "evidence": "`git log --name-only 119c7945..HEAD | rg '\\.codex/'` -> no hits; `git diff --stat 119c7945..HEAD -- .codex` -> empty. The catalog test also asserts render_projection_text(Runtime::Codex, Plugin|Repo) contains no ' hook activity'."
+          },
+          {
+            "id": "existing-hook-rows-unchanged",
+            "status": "PASS",
+            "evidence": "git show f80734ba -- devtools/hook_manifests.rs onboard/hooks_wiring.rs: every pre-existing group! / repo_entry row is preserved verbatim; the Stop and SessionEnd hunks only re-indent an unchanged group inside a widened `groups: &[...]` array. render-hook-manifests --check clean confirms no byte drift beyond the added rows; the only non-source file rewritten is the generated packages/bee/hooks/claude-hooks.json plus its sha256 in docs/history/codex-harness-hardening/release-manifest.json (regen bookkeeping)."
+          },
+          {
+            "id": "no-settings-local-json-edit",
+            "status": "PASS",
+            "evidence": "`git log --name-only 119c7945..HEAD | rg 'settings.local'` -> no hits; `git diff --stat 119c7945..HEAD -- .claude/settings.local.json` -> empty."
+          },
+          {
+            "id": "decision-d1-honored",
+            "status": "PASS",
+            "evidence": "Decision b17bfa89 names exactly UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, Notification, SessionEnd, never SubagentStop, declared in the hook-manifest source so render writes it into .claude/settings.json, foreign settings.local.json untouched — all four verified above. The onboard merge test also proves a foreign Notification entry keeps its place and command while the bee row joins behind it (hooks_wiring.rs test, 18 passed)."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T14:27:00.952Z"
+      }
+    ]
   }
 }

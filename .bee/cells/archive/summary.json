@@ -783,5 +783,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-22T04:41:43.731Z"
+  },
+  "agent-activity-hook": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-22T14:27:07.819Z"
   }
 }

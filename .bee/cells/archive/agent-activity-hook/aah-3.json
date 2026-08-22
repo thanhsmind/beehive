@@ -108,6 +108,56 @@
     "warnings": [
       "advisory: this cap's commit changes 358 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "signal-on-every-listed-record",
+            "status": "PASS",
+            "evidence": "Live probe: `bee state session list --json` in a throwaway store returned both records with signal='live' and 'signal' in r == True for each. Text form: 'probe1 -> lane \"lane-alpha\" | started ... | heartbeat undefined | signal live'. Code: verbs/state_group/sessions.rs:161-174 inserts signal into every element of the outgoing vector before both the text and JSON renders."
+          },
+          {
+            "id": "signal-never-persisted",
+            "status": "PASS",
+            "evidence": "After the same listing, on-disk keys of .bee/sessions/probe1.json = ['activity','id','lane','source','started_at','workspace_id'] and probe2.json = ['activity','id','source','started_at','workspace_id'] — no 'signal'. The insert happens on the copy returned by list_session_records; nothing on that path opens a session file for write (sessions.rs:160-175)."
+          },
+          {
+            "id": "worker-rows-carry-activity-and-signal",
+            "status": "PASS",
+            "evidence": "Live probe: `bee status --json` in the throwaway store, workers[] = [{session_id:'probe1',lane:'lane-alpha',cell:null,last_heartbeat:...,activity:{state:'working',event:'PostToolUse',...},signal:'live'}, {session_id:'probe2',...,activity:{...},signal:'live'}]. Code: verbs/status_full/cells.rs:789-808 inserts both keys unconditionally on every row of active_workers. Note: no unit test in status_full/tests.rs asserts these two keys — the behaviour is proven only by this probe and by reading, so a future refactor could drop them silently."
+          },
+          {
+            "id": "knowledge-check-green",
+            "status": "PASS",
+            "evidence": "`.bee/bin/bee knowledge check` -> '262 concept(s) in 293 file(s), 0 OKF error(s), 0 profile error(s), 47 profile warning(s) — OK', exit 0. All 47 warnings are pre-existing not_canonical / dangling_source rows on 2026-08-18..21 pattern files, none on the new doc."
+          },
+          {
+            "id": "no-heartbeat-staleness-constant-change",
+            "status": "PASS",
+            "evidence": "git show d7aa2341 touches only sessions.rs and cells.rs and is +149/-2; the two removed lines are the session-list format string and `let sessions = ...`. The new constant is its own: sessions.rs:114 SESSION_SIGNAL_WINDOW_SECONDS = 90.0, doc-commented as 'NOT a heartbeat constant'. No heartbeat constant appears in the diff."
+          },
+          {
+            "id": "knowledge-doc-added",
+            "status": "PASS",
+            "evidence": "docs/knowledge/areas/hook-runtime/agent-activity-record.md added (201 lines), id hook-runtime-agent-activity-record, decisions: [b17bfa89, 2f782f51, 40c707ba, 2d4e3900, b4f21f29], indexed from areas/hook-runtime/index.md, areas/index.md and docs/knowledge/index.md in the same commit."
+          },
+          {
+            "id": "decision-d4-honored",
+            "status": "PASS",
+            "evidence": "Decision 2d4e3900: signal live|no_signal computed at read time (90 s) in `state session list --json` and `status --json`, never stored. sessions.rs:114 window = 90.0; :117-140 session_signal is pure and returns None for status dead|closed; both readers call that one helper (sessions.rs:167, cells.rs:804). Four unit tests pin the boundary at 89 s live / 91 s no_signal, the absent-activity case, and the dead/closed None case — cargo test --bins session_signal: 4 passed, 0 failed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T14:27:00.975Z"
+      }
+    ]
   }
 }

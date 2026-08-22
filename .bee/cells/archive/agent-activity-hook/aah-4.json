@@ -81,6 +81,66 @@
     "warnings": [
       "advisory: this cap's commit changes 297 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "lane-bound-session-stamps-lane-as-feature",
+            "status": "PASS",
+            "evidence": "Probe: session record probe1 given lane='lane-alpha' while .bee/state.json feature='probe-feature'; a PreToolUse event then wrote activity.feature='lane-alpha'. Code: hooks/activity.rs:493-509 resolve_feature returns the record's own lane first. Test hooks::activity::tests::a_lane_bound_session_stamps_its_lane_as_the_feature ok."
+          },
+          {
+            "id": "unbound-session-falls-back-to-state-feature",
+            "status": "PASS",
+            "evidence": "Probe: probe1 before the lane was added, and probe2 (never lane-bound), both stamped activity.feature='probe-feature' from .bee/state.json. Tests an_unbound_session_falls_back_to_the_default_states_feature and no_lane_and_no_state_file_stamps_no_feature_at_all ok."
+          },
+          {
+            "id": "active-claim-stamps-cell",
+            "status": "PASS",
+            "evidence": "Probe: .bee/claims/aah-9.json {cell:'aah-9',session:'probe1',claimed_at:now,ttl_seconds:3600} plus an expired .bee/claims/old-1.json; the next event wrote activity.cell='aah-9' and never 'old-1'. Code activity.rs:528-575 resolve_cell + claim_is_active. Tests an_active_claim_held_by_this_session_stamps_its_cell, an_expired_or_foreign_claim_stamps_no_cell, a_claim_without_a_ttl_still_counts_as_held ok."
+          },
+          {
+            "id": "missing-claims-dir-or-unreadable-claim-is-fail-open",
+            "status": "PASS",
+            "evidence": "Probe: after overwriting .bee/claims/aah-9.json with 'not json' the hook exit=0 and the record kept feature='lane-alpha' with cell absent; after `rm -rf .bee/claims` the hook again exit=0, feature stamped, cell absent. Code activity.rs:529 (read_dir Err => None) and :540 (unparseable claim => continue). Test a_missing_claims_dir_or_an_unreadable_claim_never_blocks_the_state_write ok."
+          },
+          {
+            "id": "no-state-machine-change",
+            "status": "PASS",
+            "evidence": "`git show 27f82e49 --unified=0 -- .../hooks/activity.rs | rg '^-'` returns only the '--- a/...' header: the commit is purely additive to that file. map_event, is_turn_boundary, sticky_suppresses and the is_transition test are untouched, and neither feature nor cell takes part in the transition test (activity.rs:216-223 reads state and tool_use_id only). Test picking_up_a_cell_without_changing_state_refreshes_but_is_not_a_transition ok."
+          },
+          {
+            "id": "no-new-session-record-fields-outside-activity",
+            "status": "PASS",
+            "evidence": "write_activity inserts exactly one key on the record, `activity` (activity.rs:404). Probe on-disk keys after all events: probe1 ['activity','id','lane','source','started_at','workspace_id'] (lane pre-seeded by the probe), probe2 ['activity','id','source','started_at','workspace_id'] — nothing new outside activity. The commit touches only activity.rs and one doc."
+          },
+          {
+            "id": "never-non-zero-exit",
+            "status": "PASS",
+            "evidence": "Every probe invocation in the aah-4 scenarios returned exit=0, including the corrupt-claim and missing-claims-dir runs. run_inner (activity.rs:139-157) still has ExitCode::SUCCESS on every path; the two new resolvers return Option and cannot produce an Err."
+          },
+          {
+            "id": "doc-table-updated",
+            "status": "PASS",
+            "evidence": "docs/knowledge/areas/hook-runtime/agent-activity-record.md:68-69 add the `feature` and `cell` field rows; :76-79 extend the write behaviour; R22 at :175-180 states the resolution order and the fail-open rule; two new Edge Cases Settled entries cover the unknown stamp and the new-cell-under-unchanged-state case. `bee knowledge check` -> OK, 0 errors."
+          },
+          {
+            "id": "decision-d2-honored",
+            "status": "PASS",
+            "evidence": "Decision 2f782f51 owns the activity object's shape and calls out that a missing session file is created minimally; feature and cell are additive keys on that same object, resolved fresh per write and absent when unknown — no field is stored stale and none is persisted outside `activity`. The doc records them under the same decision's field table, and the 5-decision citation list on the concept is unchanged."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T14:27:00.997Z"
+      }
+    ]
   }
 }
