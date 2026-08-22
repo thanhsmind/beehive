@@ -436,6 +436,12 @@ fn parse_liveness(stdout: &str, pane_id: &str) -> Liveness {
 }
 
 impl PaneTransport for RealTmux {
+    /// The one override of the trait's `"herdr"` default: this transport is
+    /// the tmux arm of `herding.transport` (tmux-herding-transport D1).
+    fn name(&self) -> &'static str {
+        "tmux"
+    }
+
     /// `$TMUX_PANE` when the caller's own shell exports it (tmux sets it in
     /// every pane), else `display-message -p '#{pane_id}'`. The env read
     /// comes first because it is free and exact; the tmux call is the

@@ -58,7 +58,9 @@ use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
 use super::split_lock;
+use super::tmux::{RealTmux, TmuxSettings};
 use super::wave::{resolve_agent_command, WorkspaceTrust};
+use super::TransportKind;
 use super::wave_ledger::{self, WaveRow, WorkerRow};
 
 const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900; // 15 minutes of no heartbeat
@@ -496,6 +498,15 @@ pub(crate) trait PaneTransport {
     /// `herdr pane process-info --pane <id>` (D1/D2) — liveness of the agent
     /// process inside the pane. Fails OPEN to `Unknown` on any trouble.
     fn process_info(&self, pane_id: &str) -> Liveness;
+    /// The transport's own name, as `herding.transport` spells it
+    /// (tmux-herding-transport D1) — carried into `--dry-run`'s JSON so a
+    /// caller can see WHICH multiplexer the run would have reached for
+    /// without spawning anything. Defaults to `"herdr"`, so every
+    /// herdr-shaped implementer (including the test fakes) inherits the
+    /// pre-tmux answer and only `RealTmux` overrides it.
+    fn name(&self) -> &'static str {
+        "herdr"
+    }
 }
 
 struct RealHerdr;
@@ -1917,11 +1928,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         return ExecResult { outcome: RunOutcome::DryRun(brief), pane_id: None, closed_pane: false };
     }
 
-    let cfg_path = opts.main_root.join(".bee").join("config.json");
-    let cfg: Value = std::fs::read_to_string(&cfg_path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or(Value::Null);
+    let cfg = read_main_config(&opts.main_root);
     let (kind, args, env, workspace_trust) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
         Ok(quad) => quad,
         Err(e) => {
@@ -2463,7 +2470,38 @@ fn exit_code_for(o: &RunOutcome) -> ExitCode {
     }
 }
 
-fn emit_result(opts: &Options, result: &ExecResult) {
+/// `<main_root>/.bee/config.json`, parsed — `Value::Null` when the file is
+/// absent or unparseable. This is the fail-open read `execute_new` has always
+/// done for the agent registry; `run`'s transport selection reads the SAME
+/// file for `herding.tmux.*`, so the two share one helper instead of two
+/// drifting copies.
+fn read_main_config(main_root: &Path) -> Value {
+    let cfg_path = main_root.join(".bee").join("config.json");
+    std::fs::read_to_string(&cfg_path).ok().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or(Value::Null)
+}
+
+/// tmux-herding-transport D1: the already-decided transport kind, built into
+/// the one object `execute` runs against. Pure over `(kind, cfg)` — no config
+/// read, no environment sniff, no process — so a test names a kind and reads
+/// the answer back through `name()`.
+fn select_transport(kind: TransportKind, cfg: &Value) -> Box<dyn PaneTransport> {
+    match kind {
+        TransportKind::Herdr => Box::new(RealHerdr),
+        TransportKind::Tmux => Box::new(RealTmux::new(TmuxSettings::from_config(cfg))),
+    }
+}
+
+/// `run`'s whole transport decision: read `herding.transport` out of the main
+/// checkout's config, then build it. An illegal value comes back `Err` with
+/// the message `transport_kind` wrote (it names both legal spellings), and
+/// `run` refuses on it BEFORE the job file, the mailbox, or any pane split —
+/// a typo'd transport must never half-start a worker.
+fn transport_for_run(main_root: &Path) -> Result<Box<dyn PaneTransport>, String> {
+    let kind = crate::herding::transport_kind_at(main_root)?;
+    Ok(select_transport(kind, &read_main_config(main_root)))
+}
+
+fn emit_result(opts: &Options, result: &ExecResult, transport: &str) {
     if opts.json {
         let mut m = Map::new();
         m.insert("job_id".into(), Value::String(opts.job_id.clone()));
@@ -2502,6 +2540,9 @@ fn emit_result(opts: &Options, result: &ExecResult) {
             }
             RunOutcome::DryRun(brief) => {
                 m.insert("brief".into(), Value::String(brief.clone()));
+                // tmux-herding-transport D1: additive, dry-run only — which
+                // multiplexer the real run would have reached for.
+                m.insert("transport".into(), Value::String(transport.to_string()));
                 m.insert(
                     "job_path".into(),
                     Value::String(
@@ -2538,9 +2579,19 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let result = execute(&opts, &RealHerdr);
+    // tmux-herding-transport D1: the transport is chosen from config here,
+    // before ANY side effect — an illegal `herding.transport` refuses with no
+    // job file written and no pane split.
+    let transport = match transport_for_run(&opts.main_root) {
+        Ok(t) => t,
+        Err(msg) => {
+            eprintln!("bee herding run: {msg}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let result = execute(&opts, transport.as_ref());
     let exit = exit_code_for(&result.outcome);
-    emit_result(&opts, &result);
+    emit_result(&opts, &result, transport.name());
     exit
 }
 
@@ -3673,6 +3724,49 @@ mod tests {
         assert_eq!(job["job_id"], "job-1");
         assert_eq!(job["task"], "do the thing");
         assert_eq!(job["round"], 1);
+    }
+
+    // ─── tmux-herding-transport D1: which transport `run` builds ─────────
+
+    #[test]
+    fn transport_select_herdr_kind_builds_the_herdr_transport() {
+        // The absent-key default. `herding.tmux.*` may even be present —
+        // the KIND decides, nothing else.
+        let cfg = serde_json::json!({"herding": {"tmux": {"quiet_cycles": 9}}});
+        assert_eq!(select_transport(TransportKind::Herdr, &cfg).name(), "herdr");
+        assert_eq!(select_transport(TransportKind::Herdr, &Value::Null).name(), "herdr");
+    }
+
+    #[test]
+    fn transport_select_tmux_kind_builds_the_tmux_transport() {
+        let cfg = serde_json::json!({"herding": {"transport": "tmux"}});
+        assert_eq!(select_transport(TransportKind::Tmux, &cfg).name(), "tmux");
+    }
+
+    #[test]
+    fn transport_select_run_refuses_an_illegal_value_before_any_split() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"nope"}}"#).unwrap();
+
+        // The message `run` prints on stderr, read through the same helper
+        // `run` calls: it names BOTH legal spellings so the typo is fixable
+        // from the refusal alone.
+        let msg = match transport_for_run(tmp.path()) {
+            Err(m) => m,
+            Ok(t) => panic!("an illegal transport must refuse, got {}", t.name()),
+        };
+        assert!(msg.contains("herdr"), "refusal must name herdr: {msg}");
+        assert!(msg.contains("tmux"), "refusal must name tmux: {msg}");
+
+        // And the verb itself fails before ANY side effect — no job file, no
+        // mailbox, and (by construction, since `execute` never runs) no split.
+        let root = tmp.path().display().to_string();
+        let exit = run(&["--task", "do the thing", "--job-id", "job-1", "--main-root", &root, "--json"]);
+        assert_eq!(exit, ExitCode::FAILURE);
+        assert!(!bee_dir.join("mailbox").exists(), "the refusal must not create the mailbox tree");
+        assert!(!mailbox::job_path(&bee_dir, "job-1").exists(), "the refusal must not write job.json");
     }
 
     #[test]
