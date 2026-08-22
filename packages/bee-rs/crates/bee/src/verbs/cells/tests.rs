@@ -3994,6 +3994,65 @@ use std::time::Instant;
         assert_report_verbatim(&capped, &report);
     }
 
+    /// dol-1: the two sources are SYMMETRIC. `--deviations-file` has always
+    /// carried arbitrary JSON through verbatim, and mining reads an object
+    /// entry fine (`knowledge::deviation_text`'s `{type, description}`
+    /// arm — a live cell already holds that shape). Dropping the same
+    /// object on the report side would keep this cell's own defect alive in
+    /// one branch, so it passes through untouched rather than stringified,
+    /// trimmed, or skipped.
+    #[test]
+    fn an_object_shaped_report_deviation_passes_through_verbatim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "dol-1e", &cell("dol-1e", "claimed", "f", json!([])));
+
+        let report = dol_report(
+            r#"[{"type":"scope","description":"the declared file was a hypothesis"},"a plain line"]"#,
+        );
+        let flags = cap_flags_dol("dol-1e", Vec::new(), None, &report);
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!([
+                {"type": "scope", "description": "the declared file was a hypothesis"},
+                "a plain line",
+            ]),
+            "the object arrives as an object — mining renders it, this path never does"
+        );
+        assert_report_verbatim(&capped, &report);
+    }
+
+    /// dol-1: an object and the string it renders to are ONE deviation.
+    /// Dedup runs on `deviation_text`, the same rendering the miner uses, so
+    /// an orchestrator who hand-copied the rendered line into `--deviation`
+    /// does not double it — and the earlier source keeps its place and its
+    /// form.
+    #[test]
+    fn an_object_and_its_rendered_string_are_one_deviation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "dol-1f", &cell("dol-1f", "claimed", "f", json!([])));
+
+        let report =
+            dol_report(r#"[{"type":"scope","description":"the declared file was a hypothesis"}]"#);
+        let flags = cap_flags_dol(
+            "dol-1f",
+            Vec::new(),
+            Some("scope: the declared file was a hypothesis"),
+            &report,
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!(["scope: the declared file was a hypothesis"]),
+            "the flag's line came first and stands; the report's object is the same deviation"
+        );
+        assert_report_verbatim(&capped, &report);
+    }
+
     // ══ wfl-1/D8 — `--report <json>` on cells cap/finish ═══════════════════
     //
     // The structured counterpart to the worker Result form

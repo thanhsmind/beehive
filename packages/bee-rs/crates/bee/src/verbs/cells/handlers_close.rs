@@ -10,6 +10,11 @@ use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt};
 use crate::state as bstate;
+// dol-1: the ONE rendering of a deviation entry, borrowed from the reader
+// that mines them (`verbs/knowledge/promote.rs`) rather than copied — two
+// copies of those match arms would drift, and the cap's dedup must agree
+// with the miner's own idea of what counts as the same deviation.
+use crate::verbs::knowledge::deviation_text;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -379,23 +384,35 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         // `trace.deviations` alone), so the lesson stayed invisible until
         // someone hand-copied it into `--deviation`. This is a UNION, never
         // a move: `trace.report` keeps its verbatim copy (D8, below).
-        // Dedup is exact string equality against what is already here — a
-        // non-string entry a `--deviations-file` supplied is compared past,
-        // never mutated or dropped. A report entry that is not a string
-        // cannot be trimmed into a line, so it is left to `trace.report`'s
-        // verbatim copy rather than guessed at here.
+        //
+        // The two sources stay SYMMETRIC. A string entry is trimmed and an
+        // empty one dropped, exactly as `--deviation` above; anything else
+        // passes through VERBATIM, exactly as a `--deviations-file` entry
+        // already does. Mining reads a non-string entry fine — knowledge's
+        // own `deviation_text` has a first-class `{type, description}` arm,
+        // and a live cell already carries that shape from a deviations-file
+        // — so skipping one here would leave this cell's own defect alive
+        // in one branch: dropped silently on the report side, mined on the
+        // file side. Tolerated rather than refused, because a refusal would
+        // block a cap mid-flight over a shape that has never occurred.
+        // Dedup is by that same `deviation_text` rendering rather than raw
+        // equality, so an object and the string it renders to count as ONE
+        // deviation; the earlier source keeps its place and its form.
         if let Some(Value::Array(reported)) = report_value.get("deviations") {
             for entry in reported {
-                let Value::String(raw) = entry else { continue };
-                let trimmed = js_trim(raw);
-                if trimmed.is_empty() {
-                    continue;
-                }
-                let already = deviations
-                    .iter()
-                    .any(|d| matches!(d, Value::String(existing) if existing == trimmed));
-                if !already {
-                    deviations.push(Value::String(trimmed.to_string()));
+                let candidate = match entry {
+                    Value::String(raw) => {
+                        let trimmed = js_trim(raw);
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        Value::String(trimmed.to_string())
+                    }
+                    other => other.clone(),
+                };
+                let text = deviation_text(&candidate);
+                if !deviations.iter().any(|d| deviation_text(d) == text) {
+                    deviations.push(candidate);
                 }
             }
         }
