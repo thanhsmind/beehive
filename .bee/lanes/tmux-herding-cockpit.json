@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"tmux-herding-cockpit\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature tmux-herding-cockpit",
+  "next_action": "Merged into main at 4489ad4; reload the product and test \"tmux-herding-cockpit\", then either approve uat (\"bee gate --name uat --approved true --lane tmux-herding-cockpit\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-23T01:26:22.704Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: tmux-herding-cockpit",
+    "asked_at": "2026-08-23T02:36:53.611Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -26,13 +31,6 @@
     "rationale": null,
     "updated_at": "2026-08-23T01:33:08.573Z",
     "feature": "tmux-herding-cockpit"
-  },
-  "merge_ready": {
-    "since": "2026-08-23T02:34:25.345Z",
-    "branch": "wt/tmux-herding-cockpit",
-    "worktree_id": "beehive--wt--tmux-herding-cockpit",
-    "uat": "pending",
-    "blocked_by": []
   },
   "last_scribing_run": {
     "feature": "tmux-herding-cockpit",
