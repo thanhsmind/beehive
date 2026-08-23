@@ -798,5 +798,10 @@
     "capped": 6,
     "dropped": 0,
     "archived_at": "2026-08-23T01:03:50.512Z"
+  },
+  "tmux-herding-cockpit": {
+    "capped": 8,
+    "dropped": 0,
+    "archived_at": "2026-08-23T02:38:46.613Z"
   }
 }
