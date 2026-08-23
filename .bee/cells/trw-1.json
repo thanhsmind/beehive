@@ -1,0 +1,68 @@
+{
+  "id": "trw-1",
+  "feature": "tmux-ready-wait",
+  "title": "Keep tmux agent_wait stability across short polling calls",
+  "lane": "tiny",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-ready-wait/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::tmux",
+  "action": "Live proof found: run.rs's ready gate calls `herdr.agent_wait(&job, POLL_INTERVAL.as_millis())` with POLL_INTERVAL = 200 ms (run.rs:68, ~2046) in a loop, expecting Some(\"idle\"|\"done\"|\"blocked\") or None; `RealTmux::agent_wait` (tmux.rs ~664) starts `last`/`unchanged` fresh on every call and needs `quiet_cycles` (3) unchanged reads `interval_ms` (2000) apart inside ONE call, so with a 200 ms timeout it always returns None and the gate times out at 60 s while the agent sits idle at its prompt. Per D1: move the stability state into `RealTmux` — `stability: Mutex<HashMap<String /*pane*/, Stability { last: String, unchanged: u32, first_unchanged_at: Instant }>>` — and make `agent_wait` (and `agent_status`'s single read may stay as is) read ONE capture per poll tick, update that pane's entry (same screen → unchanged += 1, else reset with unchanged = 1 and first_unchanged_at = now), and return Some(\"idle\") when `unchanged >= quiet_cycles && now - first_unchanged_at >= quiet_cycles * interval_ms` and the screen classifies Idle; Some(\"blocked\") immediately on a Blocked classification (unchanged); inside the call keep polling until the timeout with sleeps of `min(interval_ms, remaining)` so a long single call still settles on its own (existing behavior), and return None at the deadline. Clear a pane's entry when `pane_close` is called for it and when agent_start records a new job for it. Tests (names prefixed `tmux_wait_`): with the stub returning an unchanged idle screen and settings interval_ms = 100, quiet_cycles = 3, calling `agent_wait(job, 50)` repeatedly returns None, None, … then Some(\"idle\") after at least 300 ms of unchanged reads across calls (use a loop with a 400 ms budget and assert the last answer is idle); a changing screen never reaches idle; a blocked screen returns blocked on the first call; one long call `agent_wait(job, 2000)` still returns idle on its own. Also fix the remedy string in run.rs? NO — run.rs is not in your files; leave it.",
+  "must_haves": {
+    "truths": [
+      "Repeated 200 ms agent_wait calls against an unchanged idle screen return idle within quiet_cycles x interval_ms plus one interval",
+      "A single long agent_wait call still settles by itself"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No change to the PaneTransport trait",
+      "No change to classify or the marker lists"
+    ]
+  },
+  "trace": {
+    "worker": "w-trw-1",
+    "outcome": "agent_wait keeps its screen-stability window per pane across calls, so short polling calls reach idle",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal timing fix; no operator-facing change"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T02:53:10.581Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T02:46:32.930Z",
+    "sync_ack": "internal timing fix; no operator-facing change",
+    "report": {
+      "outcome": "agent_wait keeps its screen-stability window per pane across calls, so short polling calls reach idle",
+      "commit": "827373d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::tmux — green (28 passed, 4 new tmux_wait_ cases) — the changed code is agent_wait plus its two new helpers, all covered by this module filter",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 228 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

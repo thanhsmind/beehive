@@ -19,7 +19,7 @@
   "staging_before_merge": false,
   "models": {
     "claude": {
-           "extraction": "sonnet",
+      "extraction": "sonnet",
       "generation": "opus",
       "review": "opus",
       "advisor": "fable"
