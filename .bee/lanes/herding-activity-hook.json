@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"herding-activity-hook\" started at phase \"planning\" (lane).",
-  "next_action": "staging/uat, then bee worktree merge",
+  "next_action": "Merged into main at 7aa0978; capture what settled, then bee close --feature herding-activity-hook.",
   "created_at": "2026-08-23T05:57:40.229Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,16 +23,6 @@
     "rationale": "one hook exemption, one mailbox path, one read-before-classify seam in run.rs",
     "updated_at": "2026-08-23T05:58:03.394Z",
     "feature": "herding-activity-hook"
-  },
-  "merge_ready": {
-    "since": "2026-08-23T06:14:14.617Z",
-    "branch": "wt/herding-activity-hook",
-    "worktree_id": "beehive--wt--herding-activity-hook",
-    "uat": "pending",
-    "blocked_by": [
-      "routing",
-      "doc-deferral"
-    ]
   },
   "last_scribing_run": {
     "feature": "herding-activity-hook",
