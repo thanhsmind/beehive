@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Feature closed (lane back to idle). Committing the close records and releasing the session.",
-    "asked_at": "2026-08-23T06:55:10.994Z",
+    "subject": "Committing the compounding output (only my files; a sibling session's files stay untouched).",
+    "asked_at": "2026-08-23T07:08:22.549Z",
     "session": "5bb39669-45a1-475c-b613-f3b0c7499d2c"
   },
   "route": {

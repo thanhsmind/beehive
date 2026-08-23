@@ -1,0 +1,67 @@
+{
+  "id": "pro-1",
+  "feature": "prepare-registers-owned",
+  "lane": "small",
+  "title": "Register the worker on a claim-less prepare of an owned cell",
+  "description": "In packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs run_dispatch_prepare: when --kind cell and --claim is absent, after check_cell_claim_ownership confirms the cell is claimed by --worker, call crate::verbs::state_group::register_worker_for_cell(root, worker, cell_id, cell tier) exactly as claim_and_reserve_for_dispatch does (prepare.rs ~1300-1309), splice worker_registered / registration_error into the payload envelope the same way (~1547-1550), and never fail the prepare on a registration error. Ownership refusal still registers nothing; non-cell kinds unchanged; the probe/first pass must not double-register (upsert makes a repeat harmless).",
+  "action": "Add the branch in run_dispatch_prepare; add tests in verbs/drivers/tests.rs next to claim_less_prepare_registers_no_worker (tests.rs ~2219): (a) claim-less prepare of a cell owned by --worker registers the row findable by registered_worker_for_cell, (b) claim-less prepare of a cell owned by another worker refuses and registers nothing, (c) an unclaimed cell with no --claim keeps the existing behaviour. Update the sentence in skills/bee-swarming/references/swarming-reference.md ~163-169 that says registration happens only under --claim, and the matching line in docs/knowledge/areas/workflow-state/dispatch.md if it states the same; then run the regen chain (bee dev regen) and bee dev release-manifest --check inside this cell.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers:: — green; bee dev release-manifest --check",
+  "affects_skills": [
+    "bee-swarming"
+  ],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "orchestrator",
+    "outcome": "Claim-less dispatch prepare registers the worker on a cell it already owns",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Worker ran as a standalone herding executor and could not run bee commands; the orchestrator ran bee dev regen and release-manifest --check in the worktree afterwards and committed the rendered trees in a second commit",
+      "Knowledge line updated in docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md rather than dispatch.md, where the registration rule actually lived",
+      "sync-ack: affects_skills named the skill slug bee-swarming; the touched path is that skill's own reference file"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T07:08:44.557Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "206dc43b-651e-4320-a5ac-32784bef9456",
+    "claimed_at": "2026-08-23T06:57:14.592Z",
+    "sync_ack": "affects_skills named the skill slug bee-swarming; the touched path is that skill's own reference file",
+    "report": {
+      "outcome": "Claim-less dispatch prepare registers the worker on a cell it already owns; ownership refusal and non-cell kinds unchanged",
+      "commit": "f430e15c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers:: — green (214 passed, 3 new) — the drivers module is the only code touched; bee dev regen 3/3 green and release-manifest --check 270 match",
+      "deviations": [
+        "Worker ran as a standalone herding executor and could not run bee commands; the orchestrator ran bee dev regen and release-manifest --check in the worktree afterwards and committed the rendered trees in a second commit",
+        "Knowledge line updated in docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md rather than dispatch.md, where the registration rule actually lived"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

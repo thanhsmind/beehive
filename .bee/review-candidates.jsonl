@@ -145,3 +145,4 @@
 {"id":"dac54262-fcf4-4e2a-86a5-3e32d840eea6","type":"candidate","date":"2026-08-18T07:07:58.111Z","feature":"two-flows","head":"2e3ba21b69cfb5a69a73d154f0b990db985f0c7f","mode":"small","baseline":null,"cells":[]}
 {"id":"a88f9197-6556-46a2-ae29-6b3220e41f91","type":"candidate","date":"2026-08-18T14:49:02.553Z","feature":"auto-wait-mark","head":"ad52545c","mode":"standard","baseline":null,"cells":["awm-1","awm-2"]}
 {"id":"10f334a0-c9f9-4c11-9b33-1264ec72f3b9","type":"candidate","date":"2026-08-20T13:39:55.154Z","feature":"herding-liveness-signals","head":"02e34822","mode":"standard","baseline":"6f48fab7","cells":[]}
+{"id":"2dc6d9bf-8ff8-4679-b91a-f49dd4b14f0f","type":"candidate","date":"2026-08-23T07:08:09.887Z","feature":"herding-activity-hook","head":"b711b62b","mode":"small","baseline":"18b5b493","cells":[]}

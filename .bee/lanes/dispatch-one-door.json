@@ -14,12 +14,7 @@
   "next_action": "guard-herding-fallback is closed and its worktree is gone. Live work is store-reach-gaps in beehive--wt--store-reach-gaps (cells srg-1, srg-2 claimed).",
   "created_at": "2026-08-21T04:02:40.659Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Tôi sẽ kiểm tra nhanh xem bee đã dùng hook `Notification` chưa, rồi trả lời.",
-    "asked_at": "2026-08-23T06:15:32.728Z",
-    "session": "59eaf791-a0c6-4d24-9455-b017cf093a08"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
