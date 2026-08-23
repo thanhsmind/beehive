@@ -10,7 +10,7 @@ action that lands work in main and a human should be present when it does.
 
 **Role boundary.** This role only retires finished work. It never picks a PBI,
 creates a worktree, or starts a working agent. About to run `bee worktree new`
-or `herdr agent start`? Stop — that is dispatch's job.
+or `bee herding agent-start`? Stop — that is dispatch's job.
 
 ### 0. Where you are running
 
@@ -23,26 +23,29 @@ anything.
 ### 1. Learn who you are, and self-name
 
 ```
-herdr pane current --current
+bee herding pane current
 ```
 
-If `label` is not exactly `merge`, claim it: `herdr pane rename <pane_id>
-merge`. If it already reads `merge`, do nothing — a label outlives the cold
-process that set it. Record `tab_id` and `workspace_id`: your `tab_id` is the
-**cockpit** tab, and everything below scopes to this workspace.
+This returns your own `pane_id`, `tab_id` and `workspace_id`. The label is not
+in that envelope: read it from your own row in `bee herding pane list` — the
+row whose `pane_id` is yours. If `label` is not exactly `merge`, claim it:
+`bee herding pane rename <pane_id> merge`. If it already reads `merge`, do
+nothing — a label outlives the cold process that set it. Record `tab_id` and
+`workspace_id`: your `tab_id` is the **cockpit** tab, and everything below
+scopes to this workspace.
 
 ### 2. Find the chat pane (nothing labels it)
 
 Exactly dispatch's §3 technique, run fresh:
 
 ```
-herdr pane layout --pane <your own pane_id from the step above>
+bee herding pane layout --pane <your own pane_id from the step above>
 ```
 
-Chat is the pane with the smallest `rect.x` (ties on smallest `rect.y`),
-excluding your own `pane_id`. Never `--current` — it resolves the globally
-focused pane, routinely in another workspace. Resolve it once; do not assume an
-earlier invocation's pane_id is still valid.
+Chat is the pane in `result.panes[]` with the smallest `x` (ties on smallest
+`y`), excluding your own `pane_id`. Always pass `--pane` — a bare "current" can
+resolve to the globally focused pane, routinely in another workspace. Resolve it
+once; do not assume an earlier invocation's pane_id is still valid.
 
 ### 3. Find finished worktrees, from bee's own record only
 
@@ -79,8 +82,8 @@ recorded proof line, or the merge refuses (`WORKTREE_MERGE_PROOF_DEBT`) before
 touching main at all. No `commands.test` spawn happens here. CI runs the full
 declared suite against every push — the one deterministic net.
 
-**herdr's `agent_status`/`agent_session` are never read as evidence a worktree
-is finished** — this role does not consult them at all. An agent goes idle the
+**A pane row's `agent_status`/`agent_session` are never read as evidence a
+worktree is finished** — this role does not consult them at all. An agent goes idle the
 moment it stops typing: mid-item, waiting, or crashed all look identical from
 outside. Bee's four conditions are the only signal that can be late but never
 wrong. A granted worktree failing the test is ordinary work in progress, not an
@@ -152,9 +155,9 @@ CI runs the full declared suite against the merged main on every push. Read
 the result:
 
 - **Merged and cleaned up.** Find the worktree's runtime pane by **label**,
-  never by any other identity: `herdr pane list --workspace <workspace_id>`
+  never by any other identity: `bee herding pane list --workspace <workspace_id>`
   filtered to the runtime tab, the pane whose `label` equals the slug. Close
-  it: `herdr pane close <pane_id>`. This is the **only** circumstance in which
+  it: `bee herding pane close <pane_id>`. This is the **only** circumstance in which
   this role closes a pane — it frees the slot dispatch's §4 occupancy count
   watches next. No pane carries that label (already closed, or the agent never
   claimed one) → nothing to close; not an error. The merge result carrying
@@ -172,7 +175,7 @@ the result:
   alone. Write the durable marker first, then report:
   ```
   mkdir -p .bee/tmp && touch .bee/tmp/bee-herding.red.<slug>
-  herdr pane send-text <chat_pane_id> "merge: <slug> came back <MERGE_CONFLICT|WORKTREE_MERGE_PROOF_DEBT> — stopped, no retry, main untouched. Needs a human look (real semantic conflict) or a re-cap of the named cell(s) with a valid proof line. Marker: .bee/tmp/bee-herding.red.<slug> (remove it once resolved)."
+  bee herding pane send-text <chat_pane_id> "merge: <slug> came back <MERGE_CONFLICT|WORKTREE_MERGE_PROOF_DEBT> — stopped, no retry, main untouched. Needs a human look (real semantic conflict) or a re-cap of the named cell(s) with a valid proof line. Marker: .bee/tmp/bee-herding.red.<slug> (remove it once resolved)."
   ```
   Then continue to the next finished worktree — one red result says nothing
   about another's (worktrees, panes, and agents map 1:1:1). The marker, not the
@@ -184,7 +187,7 @@ the result:
   user is the only approver — uat-gate-before-merge D1), and never passes
   `--skip-uat` on its own initiative. Report it once, then move on:
   ```
-  herdr pane send-text <chat_pane_id> "merge: <slug> is awaiting user acceptance (uat gate not approved) — stopped, no retry, main untouched. Approve with \"bee gate --name uat --approved true\", or skip this one merge with \"bee worktree merge --id <grant-key> --skip-uat\", once the human is ready."
+  bee herding pane send-text <chat_pane_id> "merge: <slug> is awaiting user acceptance (uat gate not approved) — stopped, no retry, main untouched. Approve with \"bee gate --name uat --approved true\", or skip this one merge with \"bee worktree merge --id <grant-key> --skip-uat\", once the human is ready."
   ```
   No marker file: unlike §4's red-stop, this is not a failed safety check
   waiting on cleanup — it is ordinary work still in flight. Bee's own gate
@@ -225,16 +228,16 @@ integration transaction.
 
 | Purpose | Command |
 |---|---|
-| Self-identify / self-name | `herdr pane current --current`, `herdr pane rename <pane_id> merge` |
-| Find the chat pane | `herdr pane layout --pane <own pane_id>` → leftmost `rect.x`, excluding self (NEVER `--current`) |
+| Self-identify / self-name | `bee herding pane current` (`pane_id`/`tab_id`/`workspace_id`), your own row's `label` from `bee herding pane list`, then `bee herding pane rename <pane_id> merge` |
+| Find the chat pane | `bee herding pane layout --pane <own pane_id>` → smallest `x` in `result.panes[]`, ties on `y`, excluding self (ALWAYS pass `--pane`) |
 | Granted worktrees | `bee worktree list --json` → `grants` keys |
 | A worktree's own state (phase + cells, one verb) | `(cd <worktree_path> && bee orient --json)` |
 | Worktree cleanliness / branch | `git -C <path> status --porcelain`, `git -C <path> rev-parse --abbrev-ref HEAD` |
 | Killed-merge wreckage on main | `git -C <main-root> rev-parse -q --verify MERGE_HEAD` → `git -C <main-root> merge --abort` |
 | Red-stop marker, check before merging | `ls .bee/tmp/bee-herding.red.<slug>` — exists → skip this worktree, say nothing (§4) |
 | Merge and clean up | `bee worktree merge --id <grant-key> --cleanup` |
-| Find the worktree's runtime pane | `herdr pane list --workspace <id>` filtered to the runtime tab, `label == <slug>` |
-| Close it (only after a successful merge) | `herdr pane close <pane_id>` |
-| On red, write the marker then report, once, no retry | `mkdir -p .bee/tmp && touch .bee/tmp/bee-herding.red.<slug>`, then `herdr pane send-text <chat_pane_id> "..."` |
+| Find the worktree's runtime pane | `bee herding pane list --workspace <id>` filtered to the runtime tab, `label == <slug>` |
+| Close it (only after a successful merge) | `bee herding pane close <pane_id>` |
+| On red, write the marker then report, once, no retry | `mkdir -p .bee/tmp && touch .bee/tmp/bee-herding.red.<slug>`, then `bee herding pane send-text <chat_pane_id> "..."` |
 | `WORKTREE_MERGE_MAIN_DIRTY` | Anomaly, report it — never a silent skip |
 | `WORKTREE_MERGE_UAT_PENDING` | Clean stop, report it once, no marker, no retry — skip until the gate flips (§5) |
