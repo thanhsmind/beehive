@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "tmux-ready-wait",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"tmux-ready-wait\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 2da4afc; capture what settled, then bee close --feature tmux-ready-wait.",
+  "next_action": "bee close finished \"tmux-ready-wait\" — feature is closed.",
   "created_at": "2026-08-23T02:45:07.291Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Closing out: committing the close's promote proposal so main stays clean, and re-releasing the session.",
+    "asked_at": "2026-08-23T02:55:34.835Z",
+    "session": "6462a2f6-395a-468b-a50d-9af405debe2c"
+  },
   "route": {
     "class": "bugfix",
     "lane": "tiny",
