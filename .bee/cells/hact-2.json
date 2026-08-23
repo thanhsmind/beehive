@@ -1,0 +1,88 @@
+{
+  "id": "hact-2",
+  "feature": "herding-activity-hook",
+  "title": "Export the job id into the pane and read activity.json before the screen classifier at every wait point",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-activity-hook/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "action": "In mailbox.rs (pure, no fs): add `activity_path(bee_dir, job_id)` -> `.bee/mailbox/<job-id>/activity.json`, and `parse_activity_text(text, current_round, now) -> Option<ActivityState>` that returns None when the JSON is malformed, when `round` is below current_round (per D2: an older round is the launch-id fence), or when `at` is older than a fixed freshness bound (pick one constant, name it, record it in the cap; 120s is the default suggestion). In run.rs: (a) the fresh-spawn env export at the BEE_HERDING_WORKER marker also exports `BEE_HERDING_JOB_ID=<job-id>` (per D2); (b) add one wrapper, e.g. `status_with_activity(bee_dir, job_id, round, now, fallback: &mut dyn FnMut() -> Option<String>) -> Option<String>`, that reads activity.json through the existing fs seam, maps blocked|waiting_input -> \"blocked\" and working -> \"working\", and otherwise calls the fallback (the screen classifier / herdr status) — per D3; (c) route the three wait points through it: the ready gate, deliver_pointer's blocked preflight and submit-observed check, and the round poll. Do not touch ack/result handling — ack-N.json and result-N.json stay the only delivered/done truth (D3). Tests in run.rs with the existing fake transport: (1) activity.json blocked + screen idle -> the wait ends Blocked; (2) activity.json working + herdr stalled reply -> submit counts as observed, no resend; (3) stale `at` or lower round -> fallback answer wins; (4) no activity.json -> behavior byte-identical to today (existing tests stay green untouched). mailbox.rs unit tests for parse_activity_text.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::",
+  "must_haves": {
+    "truths": [
+      "A herded pane whose activity.json says blocked ends the wait as blocked even when the screen reads idle",
+      "Without activity.json every existing herding test passes unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "substantive": "activity_path and parse_activity_text with round and freshness fences, tested"
+      }
+    ],
+    "key_links": [
+      "run.rs ready gate, deliver_pointer and round poll call status_with_activity"
+    ],
+    "prohibitions": [
+      "ack-N.json / result-N.json semantics unchanged",
+      "no new transport trait method"
+    ]
+  },
+  "trace": {
+    "worker": "w-hact-2",
+    "outcome": "The run verb reads the pane's own activity.json ahead of the screen classifier at all three wait points, fenced by round and a 120s freshness bound",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "deliver_pointer took an 8th parameter, an activity_working probe, so the stall branch reacts only to the hook's own working and the hookless path stays byte-identical; 15 existing test call sites pass false for it",
+      "four export-line assertions updated for the new BEE_HERDING_JOB_ID entry (required by D2, not a behavior drift)",
+      "SYNC_DOOR acked: the cell declares affects_skills: [] and names no skill or knowledge file; the knowledge sync belongs to the scribe pass",
+      "sync-ack: cell hact-2 declares affects_skills: [] and names only the two herding source files; the operator-facing surface is unchanged (no new flag, no new failure wording), and the cell's own affects_specs points at docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md, which is not in this cell's files - a skill or knowledge edit here would be an out-of-scope write for a worker"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T06:14:14.602Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5bb39669-45a1-475c-b613-f3b0c7499d2c",
+    "claimed_at": "2026-08-23T06:00:29.558Z",
+    "sync_ack": "cell hact-2 declares affects_skills: [] and names only the two herding source files; the operator-facing surface is unchanged (no new flag, no new failure wording), and the cell's own affects_specs points at docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md, which is not in this cell's files - a skill or knowledge edit here would be an out-of-scope write for a worker",
+    "report": {
+      "outcome": "The run verb reads the pane's own activity.json ahead of the screen classifier at all three wait points, fenced by round and a 120s freshness bound",
+      "commit": "86bd0e069fbeb0fde93fa52924079d78606e599a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: — green — 376 tests, the cell's own verify: every herding suite, the only code I touched",
+      "deviations": [
+        "deliver_pointer took an 8th parameter, an activity_working probe, so the stall branch reacts only to the hook's own working and the hookless path stays byte-identical; 15 existing test call sites pass false for it",
+        "four export-line assertions updated for the new BEE_HERDING_JOB_ID entry (required by D2, not a behavior drift)",
+        "SYNC_DOOR acked: the cell declares affects_skills: [] and names no skill or knowledge file; the knowledge sync belongs to the scribe pass"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 433 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

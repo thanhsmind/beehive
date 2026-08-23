@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Release commit `dfe7880a` is in. Running `scripts/release.sh` now — it tags, pushes, and waits for the release-binaries CI.",
-    "asked_at": "2026-08-23T03:00:32.808Z",
-    "session": "6462a2f6-395a-468b-a50d-9af405debe2c"
+    "subject": "Tôi sẽ kiểm tra nhanh xem bee đã dùng hook `Notification` chưa, rồi trả lời.",
+    "asked_at": "2026-08-23T06:15:32.728Z",
+    "session": "59eaf791-a0c6-4d24-9455-b017cf093a08"
   },
   "route": {
     "class": "feature",

@@ -1,0 +1,84 @@
+{
+  "id": "hact-1",
+  "feature": "herding-activity-hook",
+  "title": "Let the activity hook run in a herded pane and write the job mailbox activity record",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-activity-hook/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "action": "In hooks/mod.rs, narrow the BEE_HERDING_WORKER early exit: when the marker is set, the `activity` hook name passes through to its handler; every other hook name still exits 0 silently before stdin is read (per D1; herding-worker-standalone D3 stays true for them). In hooks/activity.rs, add a herded sink (per D2): when BEE_HERDING_WORKER is set AND BEE_HERDING_JOB_ID names a job, the hook writes `.bee/mailbox/<job-id>/activity.json` tmp-then-rename with the same record shape as the sessions record plus `job_id` and `round`; it does NOT write `.bee/sessions/<id>.json` or the `.activity.jsonl` sidecar for that pane. `round` is the highest N for which `brief-N.txt` exists in that mailbox directory (the orchestrator writes the brief before it delivers the pointer, so this is the current round without a second env var); 0 when no brief exists yet. Keep the state machine (working/waiting_input/blocked/idle/exited, same-tool_use_id unblock) untouched — only the sink changes. Resolve the mailbox root from the repo's .bee directory the way the sessions sink already does. Tests in activity.rs: (1) marker + job id writes activity.json with job_id and the highest brief round and leaves sessions/ empty; (2) marker without job id falls back to today's behavior; (3) mod.rs dispatch: under the marker, `activity` runs and `tools-logger` exits 0 with no output.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::",
+  "judge_obligation_ack": "hooks/mod.rs is a guard dispatcher but the change only narrows one early-exit branch for a never-denying hook; the guards' silence under the marker is asserted by a new unit test, and the rule stays in force for every guard hook",
+  "must_haves": {
+    "truths": [
+      "Under BEE_HERDING_WORKER=1 the activity hook writes .bee/mailbox/<job-id>/activity.json and nothing under .bee/sessions/",
+      "Under BEE_HERDING_WORKER=1 every other hook still exits 0 with no output"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "substantive": "herded sink with job_id and round, covered by tests"
+      }
+    ],
+    "key_links": [
+      "hooks/mod.rs lets only \"activity\" through the marker exit"
+    ],
+    "prohibitions": [
+      "No guard hook runs under the marker",
+      "The activity state machine is not changed"
+    ]
+  },
+  "trace": {
+    "worker": "w-hact-1",
+    "outcome": "The activity hook runs in a herded pane and writes the job mailbox activity record",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+    ],
+    "deviations": [
+      "Mailbox path arithmetic is restated in activity.rs (herding::mailbox is private to the herding module, and mailbox.rs belongs to a parallel cell)",
+      "A herded pane sets no waiting_on mark — that sink is bee-session state, and the pane holds no bee session"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T06:10:29.684Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5bb39669-45a1-475c-b613-f3b0c7499d2c",
+    "claimed_at": "2026-08-23T06:00:29.491Z",
+    "report": {
+      "outcome": "The activity hook runs in a herded pane and writes .bee/mailbox/<job-id>/activity.json with job_id and round; every other hook still exits 0 under the marker",
+      "commit": "7a10bc6e480687e0d0038499fc6a2c9c9d973647",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks:: — green — 477 hook tests, the two files this cell touched",
+      "deviations": [
+        "Mailbox path arithmetic is restated in activity.rs (herding::mailbox is private to the herding module, and mailbox.rs belongs to a parallel cell)",
+        "A herded pane sets no waiting_on mark — that sink is bee-session state, and the pane holds no bee session"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 454 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
