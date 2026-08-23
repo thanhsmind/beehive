@@ -140,13 +140,14 @@ single worker — never wave analysis or multi-cell assignment.
      states its proven transport verbatim (model-shaped vs cli-shaped, per
      the Worker Prompt Template below) — this must match what
      the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run.
-5. **Record workers** before results arrive. A claim made through
-   `bee dispatch prepare --claim` registers its worker automatically
-   (same record `state worker add` writes; the payload's
-   `worker_registered` says so — cell dpr-1). Manual `.bee/bin/bee state
-   worker add --nickname <n> --cell <id> --tier <tier> --status <status>`
-   remains only for inline runs and claims made without the
-   preparation step.
+5. **Record workers** before results arrive. `bee dispatch prepare --kind
+   cell` registers its worker automatically — with `--claim`, on the fresh
+   claim it just took (cell dpr-1); without it, on a cell `--worker`
+   already owns (cell dpr-2) — same record `state worker add` writes,
+   and the payload's `worker_registered` says so either way. An ownership
+   refusal registers nothing. Manual `.bee/bin/bee state worker add
+   --nickname <n> --cell <id> --tier <tier> --status <status>` remains
+   only for inline runs and claims made without the preparation step.
 6. **Tend** the swarm: collect status tokens, update cells and state, verify
    reservations were released. Silence is not failure — inspect cell status
    and `.bee/bin/bee reservations list --active-only` before
