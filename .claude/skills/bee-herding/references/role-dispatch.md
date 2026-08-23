@@ -16,17 +16,18 @@ before §3 has told you where to report to.
 
 ### 1. Learn who you are, and self-name
 
-herdr assigns no name of its own — an unnamed pane has no `label` field at all.
-The first act of every iteration:
+No transport assigns a name of its own — an unnamed pane carries a `label` of
+`null`. The first act of every iteration:
 
 ```
-herdr pane current --current
+bee herding pane current
 ```
 
-This returns your own `pane_id`, `tab_id`, `workspace_id`, and `label` (absent
-if unset). If `label` is not exactly `dispatch`, claim it:
-`herdr pane rename <pane_id> dispatch`. If it already reads `dispatch` — as it
-will on every iteration after the first, since a label outlives the cold
+This returns your own `pane_id`, `tab_id` and `workspace_id`. The label is not
+in that envelope: read it from your own row in `bee herding pane list` — the
+row whose `pane_id` is yours. If `label` is not exactly `dispatch`, claim it:
+`bee herding pane rename <pane_id> dispatch`. If it already reads `dispatch` —
+as it will on every iteration after the first, since a label outlives the cold
 process that set it — do nothing. Record `tab_id` and `workspace_id`:
 everything below scopes to this workspace, and your `tab_id` is the **cockpit**
 tab you are physically running inside.
@@ -51,21 +52,21 @@ The human's pane carries no label — it is identified structurally. Pass **your
 own `pane_id` from §1 explicitly**:
 
 ```
-herdr pane layout --pane <your own pane_id>
+bee herding pane layout --pane <your own pane_id>
 ```
 
-**Never use `--current` here.** `pane current --current` and
-`pane layout --current` resolve "current" differently: the first means the
-calling pane, the second the globally focused pane, routinely in another
-workspace entirely (verified live — `w7` and `w5` in the same breath). Using it
+**Always pass `--pane` here; never let the layout pick its own anchor.** A bare
+"current" means the calling pane to one verb and the globally FOCUSED pane to
+another — routinely a pane in a different workspace entirely (verified live —
+`w7` and `w5` in the same breath). A layout read around a stranger's pane
 sends every announcement into a stranger's pane, and makes §4's scrollback
 dedup read a pane it never wrote to, so dedup silently fails open.
 
-Among that layout's panes, chat is the one with the smallest `rect.x`
-(leftmost; ties on smallest `rect.y`), excluding your own `pane_id` — the
+Among that layout's `result.panes[]`, chat is the one with the smallest `x`
+(leftmost; ties on smallest `y`), excluding your own `pane_id` — the
 cockpit layout is fixed: chat left, dispatch top-right, merge bottom-right. Its
-`pane_id` is the target of every `herdr pane send-text` below. Resolve it once
-per iteration; panes can be closed and recreated by the human.
+`pane_id` is the target of every `bee herding pane send-text` below. Resolve it
+once per iteration; panes can be closed and recreated by the human.
 
 ### 4. Read occupied runtime slots from the ledger, and report anomalies once
 
@@ -84,7 +85,7 @@ and neither value, nor an outright command failure (see the third case
 below), may ever be treated alike:**
 
 - `source: "live"` — a real crossing of the wave ledger's unresolved worker
-  rows against herdr's own live pane list. Read `count` as `occupied_count`
+  rows against the transport's own live pane list. Read `count` as `occupied_count`
   and hold it against the cap exactly as before: the cap is 4; at `>= 4` no
   slot is free — still run the anomaly scan below, but do not build or
   announce a dispatch decision (§6-7).
@@ -96,14 +97,16 @@ below), may ever be treated alike:**
   exists to prevent — so end the iteration without building a dispatchable
   set (§5-8), and announce it **at most once**, using the SAME dedup the
   anomaly scan below uses: read
-  `herdr pane read <chat_pane_id> --source recent --lines 200` first, and
+  `bee herding pane read <chat_pane_id> --lines 200` first, and
   only send the line if that scrollback does not already carry it —
-  `herdr pane send-text <chat_pane_id> "dispatch: occupancy undetermined this iteration — herdr's live pane list could not be reached, so the ledger's fallback answer cannot be trusted as a real count"`
-  — a line repeated every poll for as long as herdr stays down is exactly
+  `bee herding pane send-text <chat_pane_id> "dispatch: occupancy undetermined this iteration — the transport's live pane list could not be reached, so the ledger's fallback answer cannot be trusted as a real count"`
+  — a line repeated every poll for as long as the transport stays down is
+  exactly
   the noise this dedup exists to prevent (the same failure that would have
   made pane-counting emit an identical line every poll too, forbidden
   everywhere else in this section). **If the send itself fails** — likely,
-  since this branch fires precisely because herdr could not be reached —
+  since this branch fires precisely because the transport could not be
+  reached —
   that failure is not escalated further: there is no second channel to
   report through, and the refusal to dispatch holds either way. Do not
   retry the send; end the iteration regardless of whether it went through.
@@ -121,13 +124,17 @@ distinction for a caller reading text rather than JSON. This role reads the
 inside a sentence.)
 
 **The anomaly scan is unchanged — the ledger does not know about panes it was
-never told about.** Resolve the **runtime** tab: `herdr tab list --workspace
-<workspace_id>`, the tab labelled `runtime`. If nothing carries that label,
+never told about.** Resolve the **runtime** tab: `bee herding pane tab-list`
+(no `--workspace`: it answers for your own), the row in `result.tabs[]` whose
+`label` is `runtime`. If nothing carries that label,
 fall back to "the one tab in this workspace that is not your own `tab_id`" —
 the cockpit fixes exactly two tabs, so exclusion is unambiguous.
 
-List its panes (`herdr pane list --workspace <workspace_id>`, filtered to that
-`tab_id`). For each:
+List its panes (`bee herding pane list --workspace <workspace_id> --with-status`,
+filtered to that `tab_id`). Every row in `result.panes[]` carries `pane_id`,
+`label`, `tab_id`, `cwd`, `command`, `foreground_cwd`, `agent_status` and
+`agent_session` — `--with-status` is what fills `agent_status` on a transport
+with no agent API of its own. For each:
 
 - **Unlabelled, `foreground_cwd` = the MAIN checkout** → the runtime tab's own
   root pane, created empty by bootstrap. Expected; not an anomaly.
@@ -179,7 +186,7 @@ state file to remember what was said, and none should be added; instead read
 the chat pane's own scrollback —
 
 ```
-herdr pane read <chat_pane_id> --source recent --lines 200
+bee herding pane read <chat_pane_id> --lines 200
 ```
 
 — and check whether it already names this exact `pane_id` with this exact
@@ -274,7 +281,7 @@ enumerates the words someone thought of in advance; it cannot enumerate danger,
 and a second pass over the same list cannot either. Announce every refusal:
 
 ```
-herdr pane send-text <chat_pane_id> "dispatch: refusing <PBI-ID> — <what you read that concerned you>"
+bee herding pane send-text <chat_pane_id> "dispatch: refusing <PBI-ID> — <what you read that concerned you>"
 ```
 
 A silent refusal repeated every 60 seconds looks identical to nothing happening
@@ -303,7 +310,7 @@ the candidate's text against the held paths — no keyword script.
 Before taking any action:
 
 ```
-herdr pane send-text <chat_pane_id> "dispatch: picking <PBI-ID> (<slug>) because <reason>"
+bee herding pane send-text <chat_pane_id> "dispatch: picking <PBI-ID> (<slug>) because <reason>"
 ```
 
 Nothing survived §5/§6, or no slot is free (§4) → end the iteration quietly. An
@@ -315,33 +322,36 @@ In order, from the MAIN checkout:
 
 1. `bee worktree new --feature <slug> --json` — creates and registers the
    worktree in one move; read the path from its output.
-2. Split a runtime pane for the working agent. On herdr 0.8.0, `agent start`
-   requires `--pane` and "never creates, splits, or moves layout" — splitting
-   first is now MANDATORY, not forbidden. `references/spawn-proof.md` is the
+2. Split a runtime pane for the working agent. `bee herding agent-start`
+   requires `--pane` and never creates, splits, or moves layout — splitting
+   first is MANDATORY, not forbidden. `references/spawn-proof.md` is the
    re-recorded live evidence for this split-then-start order: a real
-   `herdr agent start … --kind … --pane …` round trip against the installed
-   0.8.0 binary.
+   `agent start … --kind … --pane …` round trip against the installed
+   herdr 0.8.0 binary.
    ```
-   herdr pane split <runtime-pane-id> --direction right|down --ratio <r> --cwd <worktree_path> --no-focus
+   bee herding pane split <runtime-pane-id> --direction right|down --ratio <r> --cwd <worktree_path>
    ```
+   The split never takes focus and there is no flag either way — the verb
+   applies the no-focus behavior itself, on every transport.
+
    Choose the runtime pane to split from the runtime tab's geometry, and the
-   direction from a FIXED rule, not from that geometry: run `herdr pane
+   direction from a FIXED rule, not from that geometry: run `bee herding pane
    layout --pane <any runtime pane_id from §4>` (there is no `--tab` form,
-   and `pane list` carries no `rect`). **The caller's own runtime pane is
+   and `pane list` carries no geometry). **The caller's own runtime pane is
    the MAIN pane: it is split exactly once and never again** (D2). So take
-   the pane with the largest `rect.width * rect.height` **excluding the
-   caller's own pane** as the parent, falling back to the caller's own pane
-   only when the layout lists it alone. The direction follows from which
+   the pane with the largest `width * height` **excluding the caller's own
+   pane** as the parent, falling back to the caller's own pane only when the
+   layout lists it alone. The direction follows from which
    pane that picked: **`--direction right` when the parent IS the caller's
    own pane** (the first spawn, which creates the worker column beside it)
    **and `--direction down` for any other parent** (every subsequent worker
    stacks under the last one inside that column). There is always a runtime
    root pane to split — `bootstrap-cockpit.sh` creates it — so there is no
    "no panes yet" case. Why the rule is fixed rather than read off the
-   rects: a `down` split leaves the pane's width untouched, so width narrows
+   geometry: a `down` split leaves the pane's width untouched, so width narrows
    at most once no matter how many workers the tab collects, and no worker
-   pane can be walked below the width herdr needs to accept a submitted
-   prompt. Choosing by aspect ratio answered `right` again and again on a
+   pane can be walked below the width the transport needs to accept a
+   submitted prompt. Choosing by aspect ratio answered `right` again and again on a
    wide tab — measured live, a 120-column tab went 60/30/15 and both the 30-
    and 15-column children died mid-submission with `agent_prompt_stalled`.
    Choosing the roomiest pane overall then chewed the human's own pane
@@ -355,36 +365,39 @@ In order, from the MAIN checkout:
    of the parent's width, floored at the 60-column worker minimum and capped
    at half, so the main pane always keeps the larger share; the ratio to
    pass is then `(parent_width - child_columns) / parent_width`. Read the
-   new pane's id from the response's `.result.pane.pane_id`.
+   new pane's id out of the reply with `bee herding result pane_id`.
 
-   **Settle before starting the agent.** `agent start` requires its target
-   pane to already be at its interactive shell prompt; `pane split` returns
-   as soon as the pane exists, before its shell has necessarily finished
-   settling — the next command's `--timeout` covers agent *detection*, not
-   shell *readiness*. Confirm (poll, or wait briefly and retry) that the new
-   pane is at its shell prompt before issuing `agent start`. This is the
-   failure most likely to fire on Windows, where ConPTY starts slower.
+   **Settle before starting the agent.** `bee herding agent-start` requires
+   its target pane to already be at its interactive shell prompt; `pane split`
+   returns as soon as the pane exists, before its shell has necessarily finished
+   settling — the detection timeout the next verb carries covers agent
+   *detection*, not shell *readiness*. Confirm (poll, or wait briefly and retry)
+   that the new pane is at its shell prompt before issuing `agent-start`. This
+   is the failure most likely to fire on Windows, where ConPTY starts slower.
 3. Start the working agent into that pane.
    ```
-   herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout 60000 -- <agent args>
+   bee herding agent-start <slug> --kind <kind> --pane <new_pane_id> -- <agent args>
    ```
+   The verb carries the 60-second agent-detection timeout itself; there is no
+   `--timeout` to pass.
    `<kind>` and `<agent args>` come from `herding.agent_command`, per the next
-   paragraph. **On any `agent start` failure, close the pane step 2 of this
-   section just created (`herdr pane close <new_pane_id>`) before reporting**
-   — an unlabelled pane
+   paragraph. **On any `agent-start` failure, close the pane step 2 of this
+   section just created (`bee herding pane close <new_pane_id>`) before
+   reporting** — an unlabelled pane
    whose `foreground_cwd` is the worktree is exactly what §4 classifies as an
    anomaly candidate, and this section created that pane, so this section is
    the one that cleans it up.
 
    **The trailing agent argv is config-driven, not hard-fixed prose.** Read
    `.bee/config.json`'s `herding.agent_command` from MAIN: a non-empty array
-   of argv tokens has its first token supply `--kind` (the herdr-recognized
-   agent kind, e.g. `claude`) and its remaining tokens, substituted per-token
+   of argv tokens has its first token supply `--kind` (the agent kind the
+   transport recognizes, e.g. `claude`) and its remaining tokens, substituted
+   per-token
    (`{MODEL}` → `sonnet`) and each passed as one discrete argv element, go
    after `--` as the agent's own arguments — never re-parsed or
    shell-interpreted, and never re-used as `--kind`. An unrecognised token 0
-   (not one of herdr's supported kinds) is a typed error naming the
-   `herding.agent_command` key, never a generic `agent start` failure. Absent,
+   (not one of the transport's supported kinds) is a typed error naming the
+   `herding.agent_command` key, never a generic `agent-start` failure. Absent,
    not an array, or empty — the common case — use `--kind claude -- --model
    sonnet --permission-mode bypassPermissions "<opening instruction>"`. Shape
    and examples: `references/operational-invariants.md` ("Runtime adapter").
@@ -396,24 +409,26 @@ In order, from the MAIN checkout:
    label — but the anomaly scan (§4) and merge's own pane lookup both still
    key off the label, so an unlabelled pane still cannot be tied to a
    specific PBI there, and merge cannot find it. The positional prompt tells
-   it to (a) run `herdr pane current --current`
-   then `herdr pane rename <pane_id> <slug>` as its very first act, labelled
+   it to (a) run `bee herding pane current` then
+   `bee herding pane rename <pane_id> <slug>` as its very first act, labelled
    with the **bare slug** and nothing else (§4's `cells list --feature <label>`
    and merge's pane lookup both match it exactly), and (b) work `<PBI id>`
    routing through `bee-hive`.
 
    **Never pass `-p`/`--print`.** Also proven live: a headless argv runs to
-   completion and exits, and herdr closes the pane with it — the working agent
+   completion and exits, and the transport closes the pane with it — the
+   working agent
    must be a plain interactive `claude` that stays alive for the whole item.
    (`bee herding control-loop` uses `claude -p` for the *control* panes, where the pane
    runs the control loop, not the agent.) The working agent keeps
    `bypassPermissions` with no allowlist — the owner's recorded accepted risk
    (`references/operational-invariants.md`), not a default to trim.
 
-   Afterwards, confirm: `herdr pane list --workspace <workspace_id>` filtered
+   Afterwards, confirm: `bee herding pane list --workspace <workspace_id>`
+   filtered
    to the runtime tab shows exactly **one** new pane — the one step 2 of this
    section split — live agent, right cwd, not two, not zero. Anything wrong →
-   apply the pane-close rule above if `agent start` itself failed, report one
+   apply the pane-close rule above if `agent-start` itself failed, report one
    plain line into the chat pane, and do **not** blindly repeat the spawn next
    iteration: a blind retry is how a cold loop turns one mistake into 1440 a
    day.
@@ -433,25 +448,26 @@ In order, from the MAIN checkout:
    bookkeeping miss: an unrecorded spawn is WORSE than no spawn at all, since
    it is a live agent the next iteration's occupancy read cannot see, which
    lets the four-slot cap be walked past silently. Report it loudly —
-   `herdr pane send-text <chat_pane_id> "dispatch: recording <slug> (pane <new_pane_id>) in the wave ledger FAILED — occupancy will undercount until this is repaired"`
+   `bee herding pane send-text <chat_pane_id> "dispatch: recording <slug> (pane <new_pane_id>) in the wave ledger FAILED — occupancy will undercount until this is repaired"`
    — and still end the iteration without spawning again this poll: do not
    retry the recording call, and do not spawn a second worker to compensate.
 
-5. **Give the human their view back.** `agent start` carries no `--no-focus`
-   flag, unlike `pane split` and `tab create`, and it MOVES the workspace's
+5. **Give the human their view back.** `agent-start` cannot decline focus,
+   unlike `pane split` and `pane tab-create`, and it MOVES the workspace's
    focus onto the new agent's tab (recorded live in
    `references/spawn-proof.md`). Left alone, a loop polling on a fixed interval
    yanks the owner away from whatever they were reading, every single spawn —
-   the one thing `--no-focus` exists everywhere else to prevent. Read your own
-   tab from the pane id you already hold (§1), then focus it back:
+   the one thing the no-focus split exists everywhere else to prevent. Read your
+   own tab from your own pane context, then focus it back:
    ```
-   herdr pane current --pane <your own pane_id>     # read .result.pane.tab_id
-   herdr tab focus <that tab_id>
+   bee herding pane current                # its tab_id: bee herding result tab_id
+   bee herding pane tab-focus <that tab_id>
    ```
-   **Never `--current` here**, for the reason §3 already gives: it resolves to
-   the globally focused pane, which after `agent start` is the WORKER's — so
-   `--current` would read the worker's tab and focus the thing you are trying
-   to move away from. A failure here is cosmetic, not structural: report it in
+   `bee herding pane current` always answers the CALLING pane, never the
+   globally focused one — and after `agent-start` the focused pane is the
+   WORKER's. That is the whole point of reading it this way: the focused pane
+   would give you the worker's tab and focus the thing you are trying to move
+   away from. A failure here is cosmetic, not structural: report it in
    one line and end the iteration normally, never retry the spawn over it.
 
 The working agent is on its own from there — it runs the ordinary bee chain
@@ -468,30 +484,31 @@ never something the unbounded loop passes on its own.
 Run every read in §1-§7 exactly as written and produce the same decision you
 would otherwise act on. The difference is entirely in what you do with it:
 **print the decision as your own output and stop before §8.** Concretely: no
-`herdr pane rename` in §1 (report what you would have named it), no
-`herdr pane send-text` anywhere (print those lines instead), and never
-`bee worktree new`, `herdr pane split`, or `herdr agent start`. Nothing on disk
-or in the herdr workspace changes as a result.
+`bee herding pane rename` in §1 (report what you would have named it), no
+`bee herding pane send-text` anywhere (print those lines instead), and never
+`bee worktree new`, `bee herding pane split`, or `bee herding agent-start`.
+Nothing on disk or in the pane workspace (a herdr workspace, or a tmux session)
+changes as a result.
 
 ### Dispatch quick reference
 
 | Purpose | Command |
 |---|---|
-| Self-identify / self-name | `herdr pane current --current`, `herdr pane rename <pane_id> dispatch` |
+| Self-identify / self-name | `bee herding pane current` (`pane_id`/`tab_id`/`workspace_id`), your own row's `label` from `bee herding pane list`, then `bee herding pane rename <pane_id> dispatch` |
 | Bypass level | `bee status --json` → `gate_bypass_level` |
-| Find the chat pane | `herdr pane layout --pane <own pane_id>` → leftmost `rect.x`, excluding self (NEVER `--current`) |
+| Find the chat pane | `bee herding pane layout --pane <own pane_id>` → smallest `x` in `result.panes[]`, ties on `y`, excluding self (ALWAYS pass `--pane`) |
 | Occupied slot count (ledger, never pane-counting) | `.bee/bin/bee herding occupancy --json` → `count`/`source` (`live` = real crossing, use against the cap; `fallback` = undetermined, refuse to dispatch this iteration) |
-| Runtime tab, its panes (anomaly scan only) | `herdr tab list --workspace <id>`, `herdr pane list --workspace <id>` |
+| Runtime tab, its panes (anomaly scan only) | `bee herding pane tab-list`, `bee herding pane list --workspace <id> --with-status` |
 | A worktree's own state (phase + cells, one verb) | `(cd <worktree_path> && bee orient --json)` |
-| Read chat scrollback (anomaly dedup) | `herdr pane read <chat_pane_id> --source recent --lines 200` |
+| Read chat scrollback (anomaly dedup) | `bee herding pane read <chat_pane_id> --lines 200` |
 | Enable interlock | `.bee/bin/bee herding interlock` → `enabled` |
 | Slug for a PBI (condition (a)) | the record's own `feature` field from `bee backlog pbi list --json`, then confirm `docs/history/<slug>/CONTEXT.md` exists — never guess |
 | Worktree grant check | `bee worktree list --json` → `grants` keys ending `--wt--<slug>` |
 | Cell count for a slug | `bee cells list --feature <slug> --json` |
 | Lane safety (two-key: both required) | Key 1: `.bee/bin/bee herding classify-lane <PBI-ID>` → `lane_safe` (fail-open on unmatched keywords). Key 2: your own reading — refuse and announce if unsure. |
-| Announce / report | `herdr pane send-text <chat_pane_id> "..."` |
+| Announce / report | `bee herding pane send-text <chat_pane_id> "..."` |
 | Create the worktree | `bee worktree new --feature <slug> --json` |
-| Split the runtime pane | `herdr pane split <roomiest pane EXCLUDING the caller's own> --direction right\|down --ratio <r> --cwd <path> --no-focus` → `right` only when the parent IS the caller's own pane (the one time it is ever split), `down` for every other parent; `<r>` is the share the PARENT keeps — 0.5 for `down`, `(w - child)/w` for the `right` split whose child is `(w/3)` floored at 60 and capped at `w/2`; read `.result.pane.pane_id` (§8) |
-| Start the working agent | `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout 60000 -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; pane must exist first (split, then start), never `-p` (§8) |
+| Split the runtime pane | `bee herding pane split <roomiest pane EXCLUDING the caller's own> --direction right\|down --ratio <r> --cwd <path>` (never focuses; no flag to pass) → `right` only when the parent IS the caller's own pane (the one time it is ever split), `down` for every other parent; `<r>` is the share the PARENT keeps — 0.5 for `down`, `(w - child)/w` for the `right` split whose child is `(w/3)` floored at 60 and capped at `w/2`; read the id with `bee herding result pane_id` (§8) |
+| Start the working agent | `bee herding agent-start <slug> --kind <kind> --pane <new_pane_id> -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; the verb carries the 60s detection timeout; pane must exist first (split, then start), never `-p` (§8) |
 | Record the spawn (closes the occupancy loop) | `.bee/bin/bee herding record-worker --name <slug> --pane-id <new_pane_id> --path <worktree_path> --task <PBI-ID>` — only after the confirm step; failure is reported loudly, never silently passed over (§8) |
-| Give the human their view back after a spawn | `herdr pane current --pane <your own pane_id>` for its `tab_id`, then `herdr tab focus <tab_id>` — `agent start` has no `--no-focus`; never `--current` (§3) |
+| Give the human their view back after a spawn | `bee herding pane current` for your own `tab_id`, then `bee herding pane tab-focus <tab_id>` — `agent-start` cannot decline focus, and `pane current` always answers the CALLING pane (§8) |

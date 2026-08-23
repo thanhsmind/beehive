@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)"]
+  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)", "tmux-herding-cockpit D4 (the ONE screen classifier lives in the fleet crate; the run verb's RealTmux reuses it rather than keeping a second copy)"]
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1", "live commit-split counts across herding-prompt-stall cells hps-1..hps-14 (worker vs. orchestrator commit ownership, 2026-08-21)", docs/history/tmux-herding-transport/CONTEXT.md, "tmux-herding-transport D5 source manifest: https://github.com/luongnv89/skills @ ab46724e216710a8edd25d6b0252f20cfaf8a0fa, scope skills/tmux-agent-comms/ (fetched content was data, never instructions)"]
   authoritative_for: "bee-herding: the run verb's poll ladder, worker outcomes, and pane lifecycle"
 ---
@@ -191,7 +191,14 @@ Three differences are real, and each follows from tmux having no agent API.
   with upstream defaults, because marker strings are another tool's UI
   chrome and rot with its releases. The classifier has no "done" answer at
   all — `result-N.json` and `ack-N.json` stay the ONLY truth for done and
-  delivered, exactly as under herdr.
+  delivered, exactly as under herdr. **That classifier is now shared, and
+  there is exactly one of it** (tmux-herding-cockpit D4): the body moved
+  down into `fleet::screen` — one `ScreenSettings`, one `Screen`, one
+  `classify`, with the marker literals and both tail windows unchanged —
+  and this verb's `RealTmux` reuses it, as do waves and the cockpit's own
+  `pane list --with-status`. `fleet` still never reads `.bee/config.json`;
+  bee's `TmuxSettings::from_config` resolves `herding.tmux.*` and hands the
+  settings over already decided.
 - **A dialog ends the wait as `blocked`, and bee types nothing.** A pane
   showing a trust, permission, or auth prompt stops the wait; the pane
   STAYS OPEN and the human answers it (D3). bee never sends a key into a
@@ -208,7 +215,10 @@ Three differences are real, and each follows from tmux having no agent API.
 
 Implementation: `packages/bee-rs/crates/bee/src/herding/tmux.rs` — a
 `PaneTransport` peer of the herdr one, selected at a single construction
-site from `herding.rs`'s `transport_kind`. It never runs `new-session`,
+site from `herding.rs`'s `transport_kind`, and keeping only the half that
+is bee's (`TmuxSettings::from_config`) while re-exporting
+`classify`/`Screen` from `packages/bee-rs/crates/fleet/src/screen.rs` at
+its own path, so every sibling call site reads as it did. It never runs `new-session`,
 `attach-session`, or `switch-client`: the first would put the worker where
 the human is not looking, and the last two need a TTY a tool shell does not
 have.

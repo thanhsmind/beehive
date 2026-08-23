@@ -49,36 +49,46 @@ nothing to gain by bootstrapping.
 
 ### 4. Resolve the workspace id
 
+On tmux there is nothing to resolve — the workspace IS the tmux session you
+are already in (D3). Skip to §5, and run every later step from the pane you
+want to become the chat pane: the cockpit and runtime windows appear in that
+same session, and the dispatch and merge panes are split off your own pane.
+
+Everywhere else:
+
 - The human gave an explicit workspace id or label → verify it exists:
-  `herdr workspace list`.
-- Otherwise run `herdr workspace list` and match a workspace's `label` to the
-  basename of `<main-root>`.
-- Zero matches, or more than one → list the candidates you found and ask which
-  to use. Never guess.
+  `bee herding pane tab-list --workspace <id>`.
+- Otherwise run `bee herding pane current` and read the `workspace_id` it
+  reports — that is the workspace your own pane sits in.
+- No id comes back, or the human's id does not resolve → list what you found
+  and ask which to use. Never guess.
 
 ### 5. Check for an existing cockpit before bootstrapping again
 
 ```
-herdr pane list --workspace <id>
+bee herding pane-id --label dispatch
+bee herding pane-id --label merge
 ```
 
-Any pane already labelled `dispatch` or `merge` → a cockpit exists for this
-workspace: report that instead of re-bootstrapping, and point at README.md's
-stale-label fix (`herdr pane close <pane_id>` or
-`herdr pane rename <pane_id> --clear`). The script refuses this case too; the
-check exists so you can explain why before spending a run on it.
+Either one answers with a `pane_id` (exit 0) → a cockpit exists: report that
+instead of re-bootstrapping, and point at README.md's stale-label fix
+(`bee herding pane close <pane_id>` or
+`bee herding pane rename <pane_id> --clear`). Exit 1 with `not_found` means
+no such pane. The script refuses the `dispatch` case too; the check exists so
+you can explain why before spending a run on it.
 
 ### 6. Run the bootstrap script
 
 Only once every pre-flight has passed and no cockpit was found:
 
 ```
-bash <main-root>/.claude/skills/bee-herding/scripts/bootstrap-cockpit.sh --workspace <id> --main-root <main-root>
+bash <main-root>/.claude/skills/bee-herding/scripts/bootstrap-cockpit.sh --main-root <main-root> [--workspace <id>]
 ```
 
 (use the copy under whichever skill root your runtime reads — `.agents/` for
-Codex; both are byte-identical.) Pass through `--dry-run` or `--no-start` if
-the human asked for either — see the script's own usage.
+Codex; both are byte-identical.) `--workspace` is required on a transport that
+has workspace objects and ignored on tmux. Pass through `--dry-run` or
+`--no-start` if the human asked for either — see the script's own usage.
 
 Report the script's output back verbatim — it already states which panes it
 created and whether the loops started — then remind the human: watch the chat

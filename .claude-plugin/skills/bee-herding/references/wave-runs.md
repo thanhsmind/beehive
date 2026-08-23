@@ -20,22 +20,23 @@ enable marker, and a wave has no interlock, no classifier, and no gate.
 
 **It does not create panes, and it does not create worktrees.** This is the
 first thing that surprises a caller. Every worker's `name` must already be a
-herdr pane id, or the name of an agent herdr already knows. Splitting a pane
-into a worktree is the CALLER's act, exactly as §8 of `role-dispatch.md` does
-it:
+pane id on the active transport, or the name of an agent that transport
+already knows. Splitting a pane into a worktree is the CALLER's act, exactly
+as §8 of `role-dispatch.md` does it:
 
 ```
-herdr pane split <anchor-pane-id> --direction right --ratio 0.5 \
-  --cwd <worktree_path> --no-focus
+bee herding pane split <anchor-pane-id> --direction right --ratio 0.5 \
+  --cwd <worktree_path>
 ```
 
 The direction is not a free choice — it follows §8's fixed rule: `right` only
 for a tab's FIRST split, `down` from the second pane on, so extra workers stack
 as full-width bands instead of halving the width again.
 
-Read `.result.pane.pane_id` from that reply and use it as the worker's `name`.
-The `worktree` field in a worker's input is recorded in the ledger row and
-nothing more — it does not place the worker anywhere.
+Read the new pane's id out of that reply with `bee herding result pane_id` and
+use it as the worker's `name`. The `worktree` field in a worker's input is
+recorded in the ledger row and nothing more — it does not place the worker
+anywhere.
 
 ## The input
 
@@ -78,7 +79,7 @@ So read two things instead:
 
 ```
 tail -1 <main-root>/.bee/wave-ledger.jsonl
-herdr pane read <pane-id> --lines 30
+bee herding pane read <pane-id> --lines 30
 ```
 
 The ledger row carries one entry per worker — name, pane, worktree, brief and
@@ -97,10 +98,10 @@ a generic start failure.
 
 ## Two live facts worth knowing before you run one
 
-- **Starting an agent moves the workspace's focus.** herdr's `agent start`
-  carries no do-not-focus flag, unlike `pane split` and `tab create`. Every
-  worker a wave starts pulls the view away from wherever you were. Restore it
-  afterwards with `herdr tab focus <your own tab_id>`.
+- **Starting an agent moves the workspace's focus.** `agent-start` cannot
+  decline focus, unlike `pane split` and `pane tab-create`. Every worker a
+  wave starts pulls the view away from wherever you were. Restore it
+  afterwards with `bee herding pane tab-focus <your own tab_id>`.
 - **The ledger only grows.** Nothing sweeps it and no row is marked resolved
   when its wave ends. Occupancy is unaffected — it crosses the ledger's
   unresolved pane ids against the live pane list, so a row whose pane is gone

@@ -1,19 +1,19 @@
 ---
 type: bee.area
 title: "Bee Herding — the three-role cockpit, its safety boundaries, and adoption"
-description: "A herdr-driven cockpit that runs several Claude Code sessions in parallel worktrees: a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
+description: "A cockpit that runs several Claude Code sessions in parallel worktrees, over whichever pane transport one config key names (herdr or tmux): a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
 timestamp: 2026-08-20
 bee:
   id: bee-herding-overview
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)"]
-  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", docs/history/herding-orchestration/CONTEXT.md]
+  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)", "tmux-herding-cockpit D1 (one herding.transport key selects the transport for the WHOLE cockpit)", "tmux-herding-cockpit D2 (the roles and bootstrap act on panes only through transport-neutral bee pane verbs)", "tmux-herding-cockpit D3 (the tmux mapping: session = workspace, window = tab, pane title = label, the bootstrap pane = chat)", "tmux-herding-cockpit D5 (the pane-verb pre-send guard fails open on an unreadable screen and always refuses a blocked one)"]
+  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", docs/history/herding-orchestration/CONTEXT.md, docs/history/tmux-herding-cockpit/CONTEXT.md]
   authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
-  owns.code: [packages/bee-rs/crates/bee/src/herding.rs, "packages/bee-rs/crates/bee/src/herding/*", packages/bee-rs/crates/bee/src/herding/tmux.rs]
+  owns.code: [packages/bee-rs/crates/bee/src/herding.rs, "packages/bee-rs/crates/bee/src/herding/*", packages/bee-rs/crates/bee/src/herding/tmux.rs, packages/bee-rs/crates/fleet/src/backend/tmux.rs, packages/bee-rs/crates/fleet/src/screen.rs]
   owns.skills: ["skills/bee-herding/*"]
-  owns.tests: [packages/bee-rs/crates/fleet/tests/choreography.rs, packages/bee-rs/crates/fleet/tests/herdr_backend.rs, packages/bee-rs/crates/fleet/tests/manifest_boundary.rs]
+  owns.tests: [packages/bee-rs/crates/fleet/tests/choreography.rs, packages/bee-rs/crates/fleet/tests/herdr_backend.rs, packages/bee-rs/crates/fleet/tests/tmux_backend.rs, packages/bee-rs/crates/fleet/tests/manifest_boundary.rs]
 ---
 
 # Bee Herding — the three-role cockpit, its safety boundaries, and adoption
@@ -64,6 +64,28 @@ The machinery it starts is documented beside it:
 - **Dispatchable** — a backlog item that is ready, unclaimed, has no worktree yet, and passes the
   work classifier. This is a *candidate* state, not a licence — the interlock still governs whether
   any candidate is acted on.
+- **Transport** — which terminal multiplexer the cockpit reaches a pane through: `herdr` or `tmux`.
+  It is one configuration key, `herding.transport`, absent meaning `herdr`, and it selects for the
+  WHOLE cockpit — occupancy, waves, the control-pane allowlist, bootstrap, and both control roles
+  (tmux-herding-cockpit D1). bee never guesses it from the environment.
+- **Pane verb** — a `bee herding pane …` command that performs one pane action on whichever
+  transport the key names. The cockpit's whole vocabulary is
+  `pane current|list|split|run|send-text|read|rename|close|layout|tab-create|tab-list|tab-focus`,
+  plus `bee herding agent-start`, `bee herding pane-id --label` and `bee herding result`. A role
+  document, a wave brief and the bootstrap script use ONLY these — never a raw `herdr` or `tmux`
+  line (D2) — so a cold control agent learns one vocabulary rather than two. Every verb prints one
+  envelope of the same shape on both transports (`ok`, `transport`, and either `result` or a typed
+  `error.code`), and `bee herding result <dotted.path>` reads one field back out of it.
+- **Label**, **workspace**, **tab**, **chat pane** — the cockpit's four pane nouns, and on tmux each
+  lands on a carrier that survives a reattach (D3): the workspace is the caller's current tmux
+  SESSION, a tab is a WINDOW (`cockpit`, `runtime`), a pane's label is its pane TITLE
+  (`select-pane -T`, and label lookup reads `list-panes`' `pane_title`), and the chat pane is the
+  pane bootstrap was run from. On herdr each noun is that tool's own object of the same name.
+- **Blocked pane** — a pane showing a trust, permission, or auth dialog. bee never types into one:
+  the pane-verb send pre-reads the screen and refuses. That guard fails OPEN when the screen cannot
+  be READ at all — an unreadable capture does not stop the send, matching the run verb's own
+  posture — while a screen that classifies blocked always refuses (D5). A human answers the dialog;
+  the pane stays open.
 
 ## Behaviors & Operations
 
@@ -187,10 +209,10 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   `bee herding control-loop`
   (`packages/bee-rs/crates/bee/src/herding/control_loop.rs`); the one-shot
   `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
-- The `herding` command group — `classify-lane`, `interlock`, `command-template`,
-  `herdr-result`, `herdr-pane-id`, `wave`, `occupancy`, `record-worker`, `run` and
-  `control-loop`, the ten verbs the current binary actually
-  serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
+- The `herding` command group — `classify-lane`, `interlock`, `status`, `command-template`,
+  `herdr-result`, `herdr-pane-id`, `pane`, `agent-start`, `pane-id`, `result`, `wave`,
+  `occupancy`, `record-worker`, `run` and `control-loop`, the fifteen verbs the current binary
+  actually serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
   from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable` and
   `disable` marked `unavailable`) in the command catalog
   `packages/bee-rs/crates/bee/src/catalog.rs`. `enable` and `disable` are
@@ -199,5 +221,12 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   (`herding.rs`, the `"status"` arm): enable state plus transport
   `{ready, reason, pane_id}`. Test coverage is inline:
   the `#[cfg(test)] mod tests` block in `herding.rs`.
+- The transport-neutral pane verbs are
+  `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs`: a `CockpitTransport` trait on top of the
+  run verb's `PaneTransport`, implemented for both `RealHerdr` and `RealTmux`, plus the envelope
+  every verb prints. The tmux wave backend is
+  `packages/bee-rs/crates/fleet/src/backend/tmux.rs` and the one shared screen classifier is
+  `packages/bee-rs/crates/fleet/src/screen.rs` — see
+  [waves and occupancy](waves-and-occupancy.md) for why it lives there.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.
