@@ -432,8 +432,8 @@ pub(crate) trait PaneTransport {
     /// share the PARENT KEEPS (measured live, `first_split_geometry`), so
     /// D2's one-third worker column travels as a ratio ABOVE 0.5.
     fn pane_split(&self, pane_id: &str, direction: &str, ratio: f64, cwd: &Path) -> Result<String, String>;
-    /// `herdr tab create --workspace <ws> --cwd <cwd> --label <label>`
-    /// (hps-13): the new-tab fallback for a caller's tab with no pane roomy
+    /// `herdr tab create --workspace <ws> --cwd <cwd> --label <label>
+    /// --no-focus` (hps-13): the new-tab fallback for a caller's tab with no pane roomy
     /// enough to split into a usable child — the worker gets a FRESH tab's
     /// root pane directly, unsplit, so it starts at full width instead of a
     /// sliver. Returns the new root pane's id. Never passes `--focus`
@@ -607,6 +607,14 @@ fn extract_tab_create_root_pane(v: &Value) -> Option<String> {
     v.get("result")?.get("root_pane")?.get("pane_id")?.as_str().map(str::to_string)
 }
 
+/// `tab_create`'s argv, pure: the fresh tab is created UNFOCUSED
+/// (`--no-focus`, exactly as `pane_split` passes it) — a worker's new tab
+/// must never pull the human's focus away from the pane they are working
+/// in. Split out so a test can pin the flag with no spawned process.
+fn tab_create_argv<'a>(workspace: &'a str, cwd: &'a str, label: &'a str) -> [&'a str; 9] {
+    ["tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label, "--no-focus"]
+}
+
 impl PaneTransport for RealHerdr {
     fn pane_current(&self) -> Result<String, String> {
         let v = self.call(&["pane", "current", "--current"])?;
@@ -640,7 +648,7 @@ impl PaneTransport for RealHerdr {
 
     fn tab_create(&self, workspace: &str, cwd: &Path, label: &str) -> Result<String, String> {
         let cwd_str = cwd.display().to_string();
-        let v = self.call(&["tab", "create", "--workspace", workspace, "--cwd", &cwd_str, "--label", label])?;
+        let v = self.call(&tab_create_argv(workspace, &cwd_str, label))?;
         extract_tab_create_root_pane(&v)
             .ok_or_else(|| "herdr tab create: missing result.root_pane.pane_id".to_string())
     }
@@ -2869,6 +2877,17 @@ mod tests {
     fn extract_tab_create_root_pane_is_none_when_root_pane_is_missing() {
         let v: Value = serde_json::from_str(r#"{"result":{"tab":{"tab_id":"w4:tE"}}}"#).unwrap();
         assert_eq!(extract_tab_create_root_pane(&v), None);
+    }
+
+    #[test]
+    fn tab_create_argv_carries_no_focus_last_and_nothing_else() {
+        // The fresh-tab fallback must be as focus-safe as `pane_split`:
+        // without `--no-focus`, herdr jumps the human to the worker's new
+        // tab the moment a pane is too small to split.
+        assert_eq!(
+            tab_create_argv("w4", "/repo/wt", "bee-probe"),
+            ["tab", "create", "--workspace", "w4", "--cwd", "/repo/wt", "--label", "bee-probe", "--no-focus"]
+        );
     }
 
     #[test]
