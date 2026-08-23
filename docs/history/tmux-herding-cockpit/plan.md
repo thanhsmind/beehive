@@ -35,7 +35,7 @@ Risk map:
 | Component | Risk | Reason | Proof needed |
 |---|---|---|---|
 | pane verbs | MEDIUM | new CLI surface the roles depend on | in-module tests per verb with both fakes; JSON shape pinned |
-| role-doc rewrite | MEDIUM | 59 lines; a missed line breaks a cold role | `rg "herdr " skills/bee-herding/references` → 0 command hits; dry-run role walk |
+| role-doc rewrite | MEDIUM | 50 command lines across role-dispatch/role-merge/wave-runs; a missed line breaks a cold role | `rg "herdr (pane\|tab\|agent\|workspace) "` over those three files → 0; a reader walk of the dispatch role |
 | fleet TmuxBackend | LOW | mirrors HerdrBackend with a stub binary | `fleet/tests/tmux_backend.rs` |
 | bootstrap | MEDIUM | live pane creation | `--dry-run` prints the bee verb lines; live proof at uat |
 
@@ -54,4 +54,5 @@ Current slice: six cells `thc-1` … `thc-6`. Smaller-path check: a waves-only s
 - Existing coverage: `wave.rs` occupancy tests (:1698-1723), `control_loop.rs` tests, `fleet/tests/herdr_backend.rs`, `run.rs` fakes, `tmux.rs` tests.
 
 ## Out of scope
+- `spawn-proof.md` and `dispatch-dry-run.md` are RECORDS of real herdr runs and keep their herdr lines; `operational-invariants.md` keeps its herdr-arm command examples as documentation of that arm.
 - Native Windows tmux; orchestrator HANDOFF; changes to the enable interlock, the merge gesture, or the permission posture.
