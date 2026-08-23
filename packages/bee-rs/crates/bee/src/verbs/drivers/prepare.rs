@@ -1533,7 +1533,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                     // `claimOutcome ? {...out, claimed:true, reserved} : out`
                     // — the claim/reservations are real state either way, so
                     // the result names them beside the payload.
-                    let result = match &claim_outcome {
+                    let mut result = match &claim_outcome {
                         None => result,
                         Some(reserved) => {
                             let mut m = match result {
@@ -1551,6 +1551,55 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                             Value::Object(m)
                         }
                     };
+
+                    // dp-r2: a claim-less `--kind cell` prepare of a cell
+                    // `--worker` already owns registers the worker too — the
+                    // SAME write dp-r1 (above) makes after a fresh `--claim`,
+                    // so `bee state worker list` and the B44 close-time door
+                    // (`registered_worker_for_cell`) see the worker whether
+                    // or not this particular call claimed anything. Re-reads
+                    // the SAME cell record `prepare_dispatch`'s own
+                    // ownership gate just read to build `result`, so the two
+                    // never disagree: an ownership refusal there already
+                    // returned a refusal envelope (`Ok(false)`, this arm
+                    // never reached) before this branch runs, and registers
+                    // nothing here either. A registration failure never
+                    // turns the prepare itself into a failure — only the
+                    // payload names it, same as dp-r1.
+                    if claim_outcome.is_none() && kind == "cell" {
+                        if let (Some(id), Some(w)) = (cell_id.as_deref(), worker.as_deref()) {
+                            let trimmed = js_trim(w).to_string();
+                            if let Ok(Some(loaded)) = read_cell(&ctx.root, id) {
+                                let ownership = check_cell_claim_ownership(&loaded, &trimmed);
+                                if ownership.ok {
+                                    let tier = match loaded.get("tier") {
+                                        Some(Value::String(t)) if !t.is_empty() => Some(t.clone()),
+                                        _ => None,
+                                    };
+                                    let (registered, reg_err) =
+                                        match crate::verbs::state_group::register_worker_for_cell(
+                                            &ctx.root,
+                                            &trimmed,
+                                            id,
+                                            tier.as_deref(),
+                                        ) {
+                                            Ok(()) => (true, None),
+                                            Err(message) => (false, Some(message)),
+                                        };
+                                    let mut m = match result {
+                                        Value::Object(m) => m,
+                                        other => return finish(&ctx, Ok(Out::Emit(other, String::new(), 0))),
+                                    };
+                                    m.insert("worker_registered".into(), Value::Bool(registered));
+                                    if let Some(err) = &reg_err {
+                                        m.insert("registration_error".into(), Value::String(err.clone()));
+                                    }
+                                    result = Value::Object(m);
+                                }
+                            }
+                        }
+                    }
+
                     let text = jsjson::stringify_pretty(&result);
                     Ok(Out::Emit(result, text, 0))
                 }

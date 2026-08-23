@@ -265,11 +265,17 @@ again (worker-proof, cell wp-1). The dispatch-preparation path no longer
 under-registers: `dispatch prepare --claim`, on a successful claim, registers
 the claimed-for worker through the same write path `state worker add` uses
 (nickname, cell, tier from the cell's own field, status running), so this
-door finds the worker without any manual remedy; a failed or absent claim
-registers nothing, and a registration failure after a standing claim is loud
-in the payload (`worker_registered: false` + `registration_error`), never
-silent (dispatch-registers-worker cell dpr-1, 2026-08-10, closing the gap
-first hit on knowledge-search ks-2 and filed as friction rows 670/707).
+door finds the worker without any manual remedy; a failed claim registers
+nothing. A claim-LESS `--kind cell` prepare registers the same way over a
+cell `--worker` already owns (status `claimed`, `trace.worker` matches),
+so re-preparing an already-claimed cell without `--claim` still leaves the
+worker findable here; an ownership refusal (unclaimed, or claimed by
+someone else) registers nothing either way (dispatch-registers-worker cell
+dpr-1, 2026-08-10; claim-less registration cell pro-1, 2026-08-23, closing
+the gap first hit on knowledge-search ks-2 and filed as friction rows
+670/707). A registration failure after a standing claim — or after a
+claim-less ownership check passes — is loud in the payload
+(`worker_registered: false` + `registration_error`), never silent.
 The payload keys are pinned through the REAL dispatch-prepare entry (an
 out-of-process test child, since the entry resolves its root off the
 process working directory); the registration-failure shape stays pinned on

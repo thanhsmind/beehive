@@ -2211,10 +2211,14 @@ use std::time::Instant;
         assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-3", Some("bee-w3")).unwrap());
     }
 
-    /// `dispatch prepare` WITHOUT `--claim` never reaches the claim-and-
-    /// register door at all — `prepare_dispatch`'s own dry-run build over an
-    /// already-claimed cell (the shape a claim-less call reads) leaves
-    /// `workers` untouched.
+    /// `prepare_dispatch` ALONE — the inner build, not the real CLI door —
+    /// never registers a worker; dp-r2's claim-less registration branch
+    /// lives in `run_dispatch_prepare` (pinned below by
+    /// `claim_less_prepare_of_owned_cell_registers_the_worker` and
+    /// neighbors), never inside `prepare_dispatch` itself, so calling this
+    /// dry-run build directly — the shape a claim-less call's PROBE pass
+    /// reads — leaves `workers` untouched even over a cell `--worker`
+    /// already owns.
     #[test]
     fn claim_less_prepare_registers_no_worker() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2325,6 +2329,156 @@ use std::time::Instant;
         assert_eq!(payload.get("claimed"), Some(&json!(true)), "payload: {payload}");
         assert_eq!(payload.get("worker_registered"), Some(&json!(true)), "payload: {payload}");
         assert!(payload.get("registration_error").is_none(), "payload: {payload}");
+    }
+
+    // ── dp-r2: dispatch prepare --kind cell, claim-less, registers an OWNED cell ─
+
+    const CLAIM_LESS_OWNED_CHILD: &str = "verbs::drivers::tests::claim_less_prepare_of_owned_cell_child";
+
+    /// Runs ONLY as a child of the test below — same process-global seam as
+    /// `dispatch_prepare_claim_payload_child`, above.
+    #[test]
+    #[ignore = "spawned by claim_less_prepare_of_owned_cell_registers_the_worker"]
+    fn claim_less_prepare_of_owned_cell_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "cell", "--cell", "c-6", "--worker", "bee-w6", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// dp-r2: a claim-less `dispatch prepare --kind cell` over a cell
+    /// `--worker` already owns (status `claimed`, `trace.worker` matches)
+    /// registers that worker too — the SAME write dp-r1 makes after a fresh
+    /// `--claim` — named on the payload and findable by the SAME B44
+    /// close-time door (`registered_worker_for_cell`) the claim path already
+    /// pins.
+    #[test]
+    fn claim_less_prepare_of_owned_cell_registers_the_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-6.json",
+            r#"{"id":"c-6","feature":"f","status":"claimed","trace":{"worker":"bee-w6"}}"#,
+        );
+
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = Command::new(&exe);
+        cmd.args(["--exact", CLAIM_LESS_OWNED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(&root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let payload: Value = serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"));
+        assert!(payload.get("claimed").is_none(), "no --claim was passed: payload: {payload}");
+        assert_eq!(payload.get("worker_registered"), Some(&json!(true)), "payload: {payload}");
+        assert!(payload.get("registration_error").is_none(), "payload: {payload}");
+        assert!(
+            crate::verbs::cells::registered_worker_for_cell(&root, "c-6", Some("bee-w6")).unwrap(),
+            "the claim-less registration must be findable by the same close-time door"
+        );
+    }
+
+    const CLAIM_LESS_OTHER_OWNER_CHILD: &str =
+        "verbs::drivers::tests::claim_less_prepare_of_cell_owned_by_another_child";
+
+    /// Runs ONLY as a child of the test below.
+    #[test]
+    #[ignore = "spawned by claim_less_prepare_of_cell_owned_by_another_refuses_and_registers_nothing"]
+    fn claim_less_prepare_of_cell_owned_by_another_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "cell", "--cell", "c-7", "--worker", "bee-w7", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// dp-r2: a claim-less prepare of a cell claimed by a DIFFERENT worker
+    /// still refuses on `claim_ownership` (`check_cell_claim_ownership`'s
+    /// `not_owner` code, unchanged) and registers nothing — the new branch
+    /// never runs when ownership itself refuses.
+    #[test]
+    fn claim_less_prepare_of_cell_owned_by_another_refuses_and_registers_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-7.json",
+            r#"{"id":"c-7","feature":"f","status":"claimed","trace":{"worker":"someone-else"}}"#,
+        );
+
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = Command::new(&exe);
+        cmd.args(["--exact", CLAIM_LESS_OTHER_OWNER_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(&root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let payload: Value = serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"));
+        assert_eq!(payload.get("ok"), Some(&json!(false)), "payload: {payload}");
+        assert_eq!(payload.get("code"), Some(&json!("not_owner")), "payload: {payload}");
+        assert!(payload.get("worker_registered").is_none(), "payload: {payload}");
+        assert!(dpr1_workers(&root).is_empty(), "an ownership refusal registers nothing");
+        assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-7", Some("bee-w7")).unwrap());
+    }
+
+    const CLAIM_LESS_UNCLAIMED_CHILD: &str = "verbs::drivers::tests::claim_less_prepare_of_unclaimed_cell_child";
+
+    /// Runs ONLY as a child of the test below.
+    #[test]
+    #[ignore = "spawned by claim_less_prepare_of_unclaimed_cell_keeps_existing_behaviour"]
+    fn claim_less_prepare_of_unclaimed_cell_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "cell", "--cell", "c-8", "--worker", "bee-w8", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// dp-r2: an UNCLAIMED cell (no prior `bee cells claim`) with no
+    /// `--claim` on this call either keeps the pre-dp-r2 behaviour exactly —
+    /// `claim_ownership`'s `not_claimed` code — and registers nothing.
+    #[test]
+    fn claim_less_prepare_of_unclaimed_cell_keeps_existing_behaviour() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(&root, ".bee/cells/c-8.json", r#"{"id":"c-8","feature":"f","status":"open"}"#);
+
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = Command::new(&exe);
+        cmd.args(["--exact", CLAIM_LESS_UNCLAIMED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(&root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let payload: Value = serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"));
+        assert_eq!(payload.get("ok"), Some(&json!(false)), "payload: {payload}");
+        assert_eq!(payload.get("code"), Some(&json!("not_claimed")), "payload: {payload}");
+        assert!(payload.get("worker_registered").is_none(), "payload: {payload}");
+        assert!(dpr1_workers(&root).is_empty(), "an unclaimed cell registers nothing");
+        assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-8", Some("bee-w8")).unwrap());
     }
 
     #[test]
