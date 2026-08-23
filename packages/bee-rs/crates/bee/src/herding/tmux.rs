@@ -206,9 +206,37 @@ fn shell_quote(token: &str) -> String {
 /// `agent_prompt`, `agent_wait`) read it back. A job with no recorded pane
 /// is unverifiable, never a guess — `None` or an `Err`, matching the
 /// fail-safe posture `RealHerdr` takes for an absent agent.
+///
+/// `stability` is the second thing herdr does not need. herdr answers
+/// "is this agent ready" server-side, in one call; here the answer is a
+/// window over SEVERAL screen reads, and the caller sets how long each
+/// call may take. run.rs polls the ready gate with a 200 ms timeout while
+/// a quiet window is `quiet_cycles × interval_ms` (6 s at the defaults),
+/// so a window rebuilt per call could never close — the agent sat idle at
+/// its prompt and the gate timed out at 60 s (tmux-ready-wait D1). The
+/// window therefore lives on the transport, keyed by pane, and every call
+/// contributes its reads to the same window.
+/// One pane's screen-stability window: what was last read, how many
+/// consecutive reads have shown exactly that, and when the run of
+/// identical reads began.
+///
+/// Both halves are load-bearing. The COUNT alone would let a burst of
+/// fast reads (a caller polling every 20 ms) call a screen settled in far
+/// under one quiet window; the CLOCK alone would let a screen that moved
+/// between two distant reads look quiet. A settled screen needs
+/// `quiet_cycles` identical reads AND `quiet_cycles × interval_ms` of
+/// elapsed time.
+struct Stability {
+    last: String,
+    unchanged: u32,
+    first_unchanged_at: Instant,
+}
+
 pub(crate) struct RealTmux {
     settings: TmuxSettings,
     panes: Mutex<HashMap<String, String>>,
+    /// Per-pane screen-stability window, kept ACROSS `agent_wait` calls.
+    stability: Mutex<HashMap<String, Stability>>,
     /// Test-only `PATH` for the spawned `tmux`. Production leaves this
     /// `None` and inherits the process `PATH`; the stub-binary tests set it
     /// so a fake `tmux` is found WITHOUT mutating the test process's own
@@ -218,7 +246,12 @@ pub(crate) struct RealTmux {
 
 impl RealTmux {
     pub(crate) fn new(settings: TmuxSettings) -> Self {
-        Self { settings, panes: Mutex::new(HashMap::new()), path_override: None }
+        Self {
+            settings,
+            panes: Mutex::new(HashMap::new()),
+            stability: Mutex::new(HashMap::new()),
+            path_override: None,
+        }
     }
 
     /// `new`, plus the stub `PATH` the in-module tests inject. Mirrors
@@ -231,7 +264,12 @@ impl RealTmux {
     /// shipped build.
     #[cfg(test)]
     pub(crate) fn with_test_path(settings: TmuxSettings, path: OsString) -> Self {
-        Self { settings, panes: Mutex::new(HashMap::new()), path_override: Some(path) }
+        Self {
+            settings,
+            panes: Mutex::new(HashMap::new()),
+            stability: Mutex::new(HashMap::new()),
+            path_override: Some(path),
+        }
     }
 
     /// Seeds the job→pane map without typing anything into the pane, so a
@@ -293,6 +331,48 @@ impl RealTmux {
     fn pane_of(&self, job_id: &str) -> Option<String> {
         let map = self.panes.lock().unwrap_or_else(|e| e.into_inner());
         map.get(job_id).cloned()
+    }
+
+    /// Folds one screen read into `pane_id`'s stability window and
+    /// reports whether the window has now CLOSED — `quiet_cycles`
+    /// consecutive identical reads spanning at least
+    /// `quiet_cycles × interval_ms` (tmux-ready-wait D1).
+    ///
+    /// A screen different from the last one restarts both halves: the
+    /// count goes back to one and the clock back to now. The caller pairs
+    /// a closed window with its own `classify` verdict — a settled screen
+    /// still showing a busy marker is not idle.
+    fn observe_stability(&self, pane_id: &str, screen: &str) -> bool {
+        let now = Instant::now();
+        let mut map = self.stability.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = map.entry(pane_id.to_string()).or_insert_with(|| Stability {
+            last: String::new(),
+            unchanged: 0,
+            first_unchanged_at: now,
+        });
+        if entry.unchanged > 0 && entry.last == screen {
+            entry.unchanged = entry.unchanged.saturating_add(1);
+        } else {
+            entry.last = screen.to_string();
+            entry.unchanged = 1;
+            entry.first_unchanged_at = now;
+        }
+        let quiet = self.settings.quiet_cycles;
+        let window =
+            Duration::from_millis(self.settings.interval_ms.saturating_mul(u64::from(quiet)));
+        entry.unchanged >= quiet && now.duration_since(entry.first_unchanged_at) >= window
+    }
+
+    /// Drops `pane_id`'s window, so the next read starts a fresh one.
+    ///
+    /// Called on a failed capture (an unreadable pane is not a quiet one),
+    /// when a pane is closed, and when a new job is started into a pane —
+    /// in the last two cases the screen behind the window is gone or about
+    /// to be replaced, and a leftover count would settle the NEXT agent's
+    /// boot banner.
+    fn forget_stability(&self, pane_id: &str) {
+        let mut map = self.stability.lock().unwrap_or_else(|e| e.into_inner());
+        map.remove(pane_id);
     }
 
     /// Types one literal line into a pane and submits it, as the two
@@ -549,6 +629,9 @@ impl PaneTransport for RealTmux {
         args: &[String],
     ) -> Result<(), String> {
         self.record_pane(job_id, pane_id);
+        // A new agent in this pane means the old window describes a screen
+        // that is about to be overwritten.
+        self.forget_stability(pane_id);
         let mut line = String::from("exec ");
         line.push_str(&shell_quote(kind));
         for arg in args {
@@ -568,7 +651,11 @@ impl PaneTransport for RealTmux {
         Some(classify(&screen, &self.settings).as_str().to_string())
     }
 
+    /// Kills the pane, and drops the stability window that described it —
+    /// first, so a `kill-pane` that fails still leaves no stale window
+    /// behind for a pane id tmux may hand out again.
     fn pane_close(&self, pane_id: &str) -> Result<(), String> {
+        self.forget_stability(pane_id);
         self.call(&["kill-pane", "-t", pane_id]).map(|_| ())
     }
 
@@ -648,10 +735,17 @@ impl PaneTransport for RealTmux {
     /// Polls the pane until its screen settles, and reports what settled.
     ///
     /// Stability is upstream's rule (D5): `quiet_cycles` consecutive
-    /// IDENTICAL reads, `interval_ms` apart. A settled screen with no busy
-    /// marker is `idle`; a settled screen still showing a busy marker is
-    /// not — the agent is thinking with a static frame, so the poll keeps
-    /// going.
+    /// IDENTICAL reads spanning at least `quiet_cycles × interval_ms`. A
+    /// settled screen with no busy marker is `idle`; a settled screen still
+    /// showing a busy marker is not — the agent is thinking with a static
+    /// frame, so the poll keeps going.
+    ///
+    /// That window lives on the TRANSPORT, not in this call
+    /// (tmux-ready-wait D1). Each call reads, folds the read into the
+    /// pane's window and keeps polling until its own timeout, so a caller
+    /// that polls with 200 ms timeouts reaches `idle` on a later call —
+    /// after roughly one quiet window of unchanged screens — while a single
+    /// long call still settles inside itself exactly as before.
     ///
     /// A blocked marker short-circuits the whole loop the moment it appears
     /// (D3): the wait ends as `blocked` without waiting for stability and
@@ -665,32 +759,20 @@ impl PaneTransport for RealTmux {
         let pane = self.pane_of(job_id)?;
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         let interval = Duration::from_millis(self.settings.interval_ms);
-        let mut last: Option<String> = None;
-        let mut unchanged: u32 = 0;
         loop {
             match self.capture(&pane) {
                 Ok(screen) => {
-                    if classify(&screen, &self.settings) == Screen::Blocked {
+                    let state = classify(&screen, &self.settings);
+                    if state == Screen::Blocked {
                         return Some(Screen::Blocked.as_str().to_string());
                     }
-                    if last.as_deref() == Some(screen.as_str()) {
-                        unchanged = unchanged.saturating_add(1);
-                    } else {
-                        unchanged = 1;
-                        last = Some(screen.clone());
-                    }
-                    if unchanged >= self.settings.quiet_cycles
-                        && classify(&screen, &self.settings) == Screen::Idle
-                    {
+                    if self.observe_stability(&pane, &screen) && state == Screen::Idle {
                         return Some(Screen::Idle.as_str().to_string());
                     }
                 }
-                // A failed read is not a settled screen: reset, keep
-                // polling, and let the deadline decide.
-                Err(_) => {
-                    unchanged = 0;
-                    last = None;
-                }
+                // A failed read is not a settled screen: drop the window,
+                // keep polling, and let the deadline decide.
+                Err(_) => self.forget_stability(&pane),
             }
             let now = Instant::now();
             if now >= deadline {
@@ -1000,6 +1082,13 @@ $
                 RealTmux::with_test_path(TmuxSettings::default(), self.child_path())
             }
 
+            /// `tmux()`, with the screen knobs the test wants. The wait
+            /// tests shrink `interval_ms` so a whole quiet window fits
+            /// inside a test's patience.
+            pub(super) fn tmux_with(&self, settings: TmuxSettings) -> RealTmux {
+                RealTmux::with_test_path(settings, self.child_path())
+            }
+
             /// The stub directory PREPENDED to the inherited `PATH`, the
             /// same shape `HerdrBackend::child_path` builds. Prepending
             /// (rather than replacing) is required, not cosmetic: the stub
@@ -1156,6 +1245,97 @@ $
             !calls.iter().any(|c| c.contains("send-keys")),
             "D3: no key is ever typed into a blocked pane: {calls:?}"
         );
+    }
+
+    // ── the cross-call stability window (tmux-ready-wait D1) ────────────
+    //
+    // Existing coverage for `agent_wait`:
+    //   tmux.rs: "tmux_agent_wait_reports_blocked_without_sending_a_single_key"
+    //            — the D3 short-circuit, on ONE long call.
+    // Gap: nothing drove the SHORT-timeout shape run.rs actually uses, so
+    // a stability window rebuilt per call could ship green and still hang
+    // every live spawn. The four cases below are that gap.
+
+    /// `interval_ms` shrunk from 2000 to 100, so one quiet window is
+    /// 3 × 100 = 300 ms and a test can wait it out. `quiet_cycles` stays
+    /// at the shipped 3 — the count is half the behavior under test.
+    #[cfg(unix)]
+    fn fast_wait_settings() -> TmuxSettings {
+        let mut s = TmuxSettings::default();
+        s.interval_ms = 100;
+        s.quiet_cycles = 3;
+        s
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tmux_wait_settles_across_short_calls_that_each_time_out() {
+        // The live failure this fixes: run.rs polls the ready gate with a
+        // 200 ms timeout, far shorter than one quiet window, so a window
+        // rebuilt per call never closed — the gate timed out at 60 s while
+        // the agent sat idle at its own prompt.
+        let stub = Stub::new();
+        stub.reply("capture-pane", IDLE_SCREEN, None);
+        let tmux = stub.tmux_with(fast_wait_settings());
+        tmux.remember_pane("job-9", "%7");
+
+        assert_eq!(tmux.agent_wait("job-9", 50), None, "no single 50 ms call spans 300 ms");
+
+        let budget = Instant::now() + Duration::from_millis(1_000);
+        let mut answer = None;
+        while Instant::now() < budget {
+            answer = tmux.agent_wait("job-9", 50);
+            if answer.is_some() {
+                break;
+            }
+        }
+        assert_eq!(answer.as_deref(), Some("idle"), "the window closes ACROSS calls");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tmux_wait_never_settles_while_the_screen_keeps_changing() {
+        let stub = Stub::new();
+        let tmux = stub.tmux_with(fast_wait_settings());
+        tmux.remember_pane("job-9", "%7");
+
+        // Ten 50 ms calls span ~500 ms, well past one 300 ms window — but
+        // the body moves between calls, so the count and the clock both
+        // restart and a working pane is never called ready.
+        for round in 0..10 {
+            stub.reply("capture-pane", &format!("$ ls\nrun {round}\n$\n"), None);
+            assert_eq!(tmux.agent_wait("job-9", 50), None, "round {round} moved the screen");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tmux_wait_answers_blocked_on_the_first_short_call() {
+        let stub = Stub::new();
+        stub.reply("capture-pane", BLOCKED_SCREEN, None);
+        let tmux = stub.tmux_with(fast_wait_settings());
+        tmux.remember_pane("job-9", "%7");
+
+        // D3 short-circuits AHEAD of the stability window: a dialog never
+        // settles, so a short call must answer `blocked` rather than
+        // return None and leave the caller polling a pane that needs a
+        // human.
+        assert_eq!(tmux.agent_wait("job-9", 50).as_deref(), Some("blocked"));
+        let calls = stub.invocations();
+        assert_eq!(calls.len(), 1, "one read, no polling: {calls:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tmux_wait_one_long_call_still_settles_by_itself() {
+        let stub = Stub::new();
+        stub.reply("capture-pane", IDLE_SCREEN, None);
+        let tmux = stub.tmux_with(fast_wait_settings());
+        tmux.remember_pane("job-9", "%7");
+
+        // The shape that already worked must keep working: a caller that
+        // waits long enough gets its answer inside the one call.
+        assert_eq!(tmux.agent_wait("job-9", 2_000).as_deref(), Some("idle"));
     }
 
     #[cfg(unix)]
