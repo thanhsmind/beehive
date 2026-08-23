@@ -85,6 +85,21 @@ const HOOK_NAMES: [&str; 10] = [
     "write-guard",
 ];
 
+/// The herded-worker marker (herding/run.rs D2): set and non-empty means
+/// this process runs inside a pane `bee herding run` opened.
+pub(crate) fn herding_worker_marker_set() -> bool {
+    std::env::var("BEE_HERDING_WORKER").is_ok_and(|v| !v.is_empty())
+}
+
+/// herding-activity-hook D1, as one testable predicate: under the marker,
+/// which hook names still exit 0 before stdin is read? Every one of them
+/// except `activity` — including names this build does not know, because an
+/// unknown name in a herded pane is still a hook invocation the pane must
+/// not answer.
+fn marker_short_circuits(name: &str) -> bool {
+    name != "activity"
+}
+
 fn print_hook_usage() {
     println!("usage: bee hook <name> [args...]");
     println!();
@@ -92,6 +107,20 @@ fn print_hook_usage() {
     for hook_name in HOOK_NAMES {
         println!("  {hook_name}");
     }
+}
+
+/// `BEE_HERDING_WORKER` and `BEE_HERDING_JOB_ID` are PROCESS environment,
+/// and cargo runs this crate's tests on parallel threads of ONE process.
+/// Every test that reads or writes them takes THIS lock — here and in
+/// `hooks::activity`'s tests — because two module-local mutexes would not
+/// serialize against each other. Same shape as
+/// `verbs/status_full/tests.rs`'s `session_env_lock`.
+#[cfg(test)]
+pub(crate) fn herding_env_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Dispatch `bee hook <name> [args...]`. Returns None when argv is not a
@@ -117,7 +146,13 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     // that pane exits 0 silently, before stdin is read or any hook runs —
     // the worker's posture is already fully-open (herding-adopt D7), so it
     // gets zero bee preamble, zero guards, zero nudges.
-    if std::env::var("BEE_HERDING_WORKER").is_ok_and(|v| !v.is_empty()) {
+    //
+    // herding-activity-hook D1 cuts ONE hole in that: `activity` passes
+    // through to its handler. It is the only hook that can never deny,
+    // never prints, and always exits 0 — so the guard silence D3 buys is
+    // untouched, and the pane gains the one thing the orchestrator needs
+    // back: its own state, written into the job mailbox (D2).
+    if herding_worker_marker_set() && marker_short_circuits(&name) {
         return Some(ExitCode::SUCCESS);
     }
     let rest: Vec<String> = args
@@ -179,13 +214,10 @@ mod tests {
         assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
     }
 
-    /// `BEE_HERDING_WORKER` is process environment, and cargo runs this
-    /// crate's tests on parallel threads of the same process — every test
-    /// that reads or writes it takes this lock, same shape
-    /// `verbs/status_full/tests.rs`'s `session_env_lock`.
+    /// The ONE process-wide lock for the herding env vars — shared with
+    /// `hooks::activity`'s tests, which set the same variables.
     fn herding_worker_env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-        LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        super::herding_env_lock()
     }
 
     /// herding-worker-standalone D3: under the marker, a hook invocation
@@ -204,6 +236,56 @@ mod tests {
         let args = vec![OsString::from("hook"), OsString::from("some-unknown-hook")];
         let code = try_native(&args).expect("bee hook <name> is a hook invocation");
         assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+
+        // SAFETY: see above.
+        match prior {
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
+    }
+
+    /// herding-activity-hook D1: the hole in the marker exit is EXACTLY one
+    /// name wide. Asserted over the whole `HOOK_NAMES` list rather than one
+    /// sampled guard — a predicate tested on a single state is a law with a
+    /// hole (docs/knowledge/patterns/20260713).
+    #[test]
+    fn under_the_marker_only_activity_passes_through_to_its_handler() {
+        assert!(!marker_short_circuits("activity"), "activity must reach its handler");
+        for hook_name in HOOK_NAMES {
+            if hook_name == "activity" {
+                continue;
+            }
+            assert!(
+                marker_short_circuits(hook_name),
+                "{hook_name} must still exit 0 before stdin is read under the marker"
+            );
+        }
+        // An unknown name is not a hole either: it never reaches dispatch.
+        assert!(marker_short_circuits("some-unknown-hook"));
+    }
+
+    /// The guard hooks stay silent through the real entry point too:
+    /// `tools-logger` under the marker returns SUCCESS from the early exit,
+    /// which is the only path in `try_native` that produces no output at
+    /// all — dispatch is never reached, so no hook prints and no stdin is
+    /// read.
+    #[test]
+    fn under_the_marker_a_guard_hook_exits_zero_without_dispatch() {
+        let _guard = herding_worker_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        // SAFETY: `herding_worker_env_lock` serializes every test that
+        // touches this var.
+        unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+
+        for hook_name in ["tools-logger", "write-guard", "model-guard"] {
+            let args = vec![OsString::from("hook"), OsString::from(hook_name)];
+            let code = try_native(&args).expect("bee hook <name> is a hook invocation");
+            assert_eq!(
+                format!("{code:?}"),
+                format!("{:?}", ExitCode::SUCCESS),
+                "{hook_name} must exit 0 silently under the marker"
+            );
+        }
 
         // SAFETY: see above.
         match prior {
