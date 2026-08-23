@@ -803,5 +803,10 @@
     "capped": 8,
     "dropped": 0,
     "archived_at": "2026-08-23T02:38:46.613Z"
+  },
+  "tmux-ready-wait": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-23T02:55:16.440Z"
   }
 }
