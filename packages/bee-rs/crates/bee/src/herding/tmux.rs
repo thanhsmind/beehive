@@ -52,80 +52,75 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
+// The ONE classifier (tmux-herding-cockpit D4). It used to live in this
+// file; it now lives one crate down, in `fleet`, where this crate's own
+// `TmuxBackend` reaches it too. Nothing about the semantics changed — the
+// import is the change.
+use fleet::screen::ScreenSettings;
+// Re-exported at this module's own path, `pub(crate)`, so every sibling
+// that already says `use super::tmux::{classify, Screen, …}` keeps
+// reading exactly as it did — the classifier moved crates, the local
+// vocabulary did not.
+pub(crate) use fleet::screen::{classify, Screen};
+
 use super::run::{Liveness, PaneGeom, PaneTransport};
 
 // ═══════════════════════════════════════════════════════════════════════════
-// settings — the marker lists and poll shape, as DATA (D4)
+// settings and the classifier — ONE copy, held down in `fleet` (D4)
 // ═══════════════════════════════════════════════════════════════════════════
+//
+// tmux-herding-cockpit D4: ONE screen classifier (markers plus stability
+// knobs) serves both crates, and it lives in `fleet` because `bee` depends
+// on `fleet` and never the other way round. `fleet::screen` therefore owns
+// the marker lists, the two tail windows, `Screen` and `classify`; this
+// file owns only the half that is bee's — reading the knobs out of
+// `.bee/config.json`, which `fleet` must never do (herding-orchestration
+// D2, the crate boundary).
+//
+// There is no second classifier body here, and adding one would be the
+// drift D4 exists to prevent.
 
-/// How many trailing non-empty lines each marker list is scanned over.
+/// bee's wrapper around `fleet::screen::ScreenSettings`: the SAME data,
+/// carried under the local name every call site in this crate already
+/// uses, with the one method that is bee's alone — reading the knobs out
+/// of `.bee/config.json`.
 ///
-/// The two windows differ on purpose, and the difference comes from
-/// upstream (`wait_for_idle.py`, D5). A busy marker is TUI chrome painted
-/// on the very last row ("esc to interrupt"), so a 2-line window keeps a
-/// stale mention scrolled up in the transcript from reading as "still
-/// working". A dialog is a multi-row box, so its marker can sit a dozen
-/// rows above the cursor and needs the wider window.
-const BUSY_TAIL_LINES: usize = 2;
-const BLOCKED_TAIL_LINES: usize = 12;
+/// A newtype rather than a bare `type` alias for exactly that method:
+/// `from_config` is an inherent function on a bee-owned type, so `fleet`
+/// never grows a bee config key and no caller needs a trait in scope to
+/// spell `TmuxSettings::from_config`. `Deref`/`DerefMut` to the wrapped
+/// value keep every field read (`settings.scrollback`) and every
+/// `classify(&screen, &settings)` call reading as they did before the
+/// classifier moved crates.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct TmuxSettings(ScreenSettings);
 
-/// The screen-reading knobs, defaulted from upstream `wait_for_idle.py`
-/// (D5: luongnv89/skills @ `ab46724e`, `skills/tmux-agent-comms/`) and
-/// overridable per repo under `herding.tmux.*`.
-///
-/// D4's reason for holding these as data rather than code: marker strings
-/// are another tool's UI chrome. They rot with every CLI release, and a
-/// repo pinned to an older agent build must be able to correct them
-/// without a bee release.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TmuxSettings {
-    /// Strings whose presence in the last `BUSY_TAIL_LINES` non-empty lines
-    /// means the agent is mid-turn.
-    pub(crate) busy_markers: Vec<String>,
-    /// Strings whose presence in the last `BLOCKED_TAIL_LINES` non-empty
-    /// lines means a human must answer a dialog (D3).
-    pub(crate) blocked_markers: Vec<String>,
-    /// Lines of scrollback each `capture-pane` read pulls (`-S -<n>`).
-    pub(crate) scrollback: u32,
-    /// How many consecutive identical reads count as a settled screen.
-    pub(crate) quiet_cycles: u32,
-    /// Delay between polls, in milliseconds.
-    pub(crate) interval_ms: u64,
+impl std::ops::Deref for TmuxSettings {
+    type Target = ScreenSettings;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-impl Default for TmuxSettings {
-    fn default() -> Self {
-        Self {
-            busy_markers: [
-                "esc to interrupt",
-                "esc to cancel",
-                "ctrl+c to interrupt",
-                "press esc to",
-            ]
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect(),
-            blocked_markers: [
-                "do you trust",
-                "trust the files",
-                "paste your api key",
-                "press enter to submit",
-            ]
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect(),
-            scrollback: 40,
-            quiet_cycles: 3,
-            interval_ms: 2000,
-        }
+impl std::ops::DerefMut for TmuxSettings {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
 impl TmuxSettings {
+    /// The wrapped `fleet` value, for a caller that must hand the shared
+    /// type across the crate boundary — `fleet::backend::tmux::TmuxBackend::new`
+    /// takes a `ScreenSettings`, because `fleet` may not name this
+    /// wrapper any more than it may name bee's config keys.
+    pub(crate) fn into_screen_settings(self) -> ScreenSettings {
+        self.0
+    }
+
     /// Reads `herding.tmux.{busy_markers,blocked_markers,scrollback,
     /// quiet_cycles,interval_ms}` out of an already-parsed
-    /// `.bee/config.json`, defaulting every key that is absent or the wrong
-    /// JSON type.
+    /// `.bee/config.json`, defaulting every key that is absent or the
+    /// wrong JSON type.
     ///
     /// A list override REPLACES the default list, it does not extend it.
     /// That is the deliberate choice: a repo correcting a rotted marker
@@ -179,78 +174,6 @@ fn string_list(v: Option<&Value>) -> Option<Vec<String>> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// the classifier — pure, no process, the whole of D4's status story
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// What a captured pane screen says about the agent in it.
-///
-/// There is no `Done` variant and there must never be one. tmux can only
-/// show what the agent PAINTED; the truth about a finished job is the
-/// worker's `result-N.json` (herding-executor D3, restated by D4). A screen
-/// that looks finished is `Idle` — nothing more.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Screen {
-    Idle,
-    Working,
-    Blocked,
-}
-
-impl Screen {
-    /// The wire spelling `agent_status` / `agent_wait` hand back to run.rs,
-    /// matching the herdr states those callers already branch on.
-    fn as_str(self) -> &'static str {
-        match self {
-            Screen::Idle => "idle",
-            Screen::Working => "working",
-            Screen::Blocked => "blocked",
-        }
-    }
-}
-
-/// Classifies a captured pane body. Blocked BEATS working, always: a dialog
-/// box frequently renders while the agent's own "esc to interrupt" footer
-/// is still on screen, and reading that as `working` would let a caller
-/// keep waiting on a pane that will never move until a human answers it
-/// (D3). Matching is case-insensitive substring containment — TUI chrome
-/// changes case between releases far more often than it changes wording.
-pub(crate) fn classify(screen: &str, settings: &TmuxSettings) -> Screen {
-    if any_marker(&tail_lines(screen, BLOCKED_TAIL_LINES), &settings.blocked_markers) {
-        return Screen::Blocked;
-    }
-    if any_marker(&tail_lines(screen, BUSY_TAIL_LINES), &settings.busy_markers) {
-        return Screen::Working;
-    }
-    Screen::Idle
-}
-
-/// The last `n` NON-EMPTY lines, oldest first. Blank lines are skipped
-/// rather than counted: a TUI pads the bottom of a pane with empty rows, so
-/// counting them would push real chrome out of a 2-line window.
-fn tail_lines(screen: &str, n: usize) -> Vec<&str> {
-    let non_empty: Vec<&str> = screen.lines().filter(|l| !l.trim().is_empty()).collect();
-    let start = non_empty.len().saturating_sub(n);
-    non_empty[start..].to_vec()
-}
-
-/// True when any line contains any marker, case-insensitively. An empty
-/// marker string is ignored — it would otherwise match every line and pin
-/// the classifier to one answer forever.
-fn any_marker(lines: &[&str], markers: &[String]) -> bool {
-    if markers.is_empty() {
-        return false;
-    }
-    let lowered: Vec<String> = markers
-        .iter()
-        .filter(|m| !m.trim().is_empty())
-        .map(|m| m.to_lowercase())
-        .collect();
-    lines.iter().any(|line| {
-        let low = line.to_lowercase();
-        lowered.iter().any(|m| low.contains(m))
-    })
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // shell quoting — every token typed into a pane goes through here
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -299,8 +222,14 @@ impl RealTmux {
 
     /// `new`, plus the stub `PATH` the in-module tests inject. Mirrors
     /// `fleet::backend::herdr::HerdrBackend::with_test_seams`.
+    ///
+    /// `pub(crate)`, not private: `crates/bee` is a binary crate with
+    /// in-module tests only, so a SIBLING module's tests (the pane verbs
+    /// built on this transport) can reach a stub `tmux` only through a
+    /// seam this module exports. Still `#[cfg(test)]` — it exists in no
+    /// shipped build.
     #[cfg(test)]
-    fn with_test_path(settings: TmuxSettings, path: OsString) -> Self {
+    pub(crate) fn with_test_path(settings: TmuxSettings, path: OsString) -> Self {
         Self { settings, panes: Mutex::new(HashMap::new()), path_override: Some(path) }
     }
 
@@ -817,7 +746,14 @@ impl PaneTransport for RealTmux {
 mod tests {
     use super::*;
 
-    // ── the classifier ──────────────────────────────────────────────────
+    // ── screen fixtures ─────────────────────────────────────────────────
+    //
+    // The classifier's OWN tests moved down to `crates/fleet/src/screen.rs`
+    // with the classifier (D4) — there is one body now, so there is one
+    // set of tests for it. These three captured screens stay here because
+    // the stub-tmux round trips below feed them to a fake `capture-pane`,
+    // and because the config-override test needs a real dialog to prove a
+    // rotted marker list stops recognising.
 
     /// A settled shell prompt: no chrome, no dialog.
     const IDLE_SCREEN: &str = "\
@@ -846,46 +782,6 @@ $
 │   2. No, exit                            │
 ╰──────────────────────────────────────────╯
 ";
-
-    #[test]
-    fn tmux_classify_reads_a_settled_shell_prompt_as_idle() {
-        assert_eq!(classify(IDLE_SCREEN, &TmuxSettings::default()), Screen::Idle);
-    }
-
-    #[test]
-    fn tmux_classify_reads_a_busy_footer_on_the_last_line_as_working() {
-        assert_eq!(classify(WORKING_SCREEN, &TmuxSettings::default()), Screen::Working);
-    }
-
-    #[test]
-    fn tmux_classify_reads_a_trust_dialog_as_blocked_even_with_a_busy_marker_present() {
-        // D3, and the whole reason blocked is checked first: the dialog box
-        // renders while the agent's own busy footer is still on screen. The
-        // marker sits nine rows above the bottom, inside the 12-line
-        // blocked window and outside the 2-line busy one.
-        assert_eq!(classify(BLOCKED_SCREEN, &TmuxSettings::default()), Screen::Blocked);
-    }
-
-    #[test]
-    fn tmux_classify_ignores_a_busy_marker_scrolled_out_of_the_last_two_lines() {
-        // A transcript mentioning the chrome is not a working agent.
-        let screen = "* Thinking… (2s · esc to interrupt)\ndone\n$\n";
-        assert_eq!(classify(screen, &TmuxSettings::default()), Screen::Idle);
-    }
-
-    #[test]
-    fn tmux_classify_matches_markers_case_insensitively() {
-        let screen = "Press ESC To Interrupt\n";
-        assert_eq!(classify(screen, &TmuxSettings::default()), Screen::Working);
-    }
-
-    #[test]
-    fn tmux_classify_has_no_done_state() {
-        // D4: the screen never reports done — `result-N.json` does. A pane
-        // literally printing "done" is idle, nothing more.
-        let screen = "task complete. done.\n$\n";
-        assert_eq!(classify(screen, &TmuxSettings::default()), Screen::Idle);
-    }
 
     // ── settings from config ────────────────────────────────────────────
 

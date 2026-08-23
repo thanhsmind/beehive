@@ -45,11 +45,15 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 use fleet::backend::herdr::HerdrBackend;
+use fleet::backend::tmux::TmuxBackend;
 use fleet::backend::WorkerBackend;
 use fleet::choreography::{run_wave, WaveResult};
+use fleet::screen::ScreenSettings;
 use fleet::wave::{FailurePolicy, Wave, WaveTimeouts, WorkerSpec};
 
+use super::tmux::TmuxSettings;
 use super::wave_ledger;
+use super::TransportKind;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // D14 — splitting herding.agent_command into (agent kind, agent args)
@@ -584,6 +588,82 @@ fn real_backend_ctor(kind: String, args: Vec<String>) -> HerdrBackend {
     HerdrBackend::new(kind, args)
 }
 
+/// The tmux twin of `real_backend_ctor` (tmux-herding-cockpit D1/D4): the
+/// production `construct_backend` when `herding.transport` is `tmux`.
+///
+/// It takes one more input than the herdr arm does — the screen-reading
+/// settings, which tmux needs because it has no agent API and reads
+/// status off the pane's own text — so it cannot BE a plain `fn` of
+/// `(kind, args)`. It is a NAMED constructor factory instead: a function
+/// returning the closure, so `wave()`'s call site still passes a name
+/// (`tmux_backend_ctor(settings)`) and never an inline closure literal.
+///
+/// That naming is the same doctrine `real_backend_ctor`'s own doc records,
+/// and for the same reason: a closure literal written at the `wave()` call
+/// site is reachable by no test, while this factory can be called directly
+/// — `tmux_backend_ctor(settings)(kind, args)` — and the backend it built
+/// asserted on. Mutating it to construct with constants is caught by
+/// `wave_tmux_backend_ctor_hands_kind_args_and_settings_straight_through`
+/// below, independent of every other seam in this file.
+fn tmux_backend_ctor(
+    settings: ScreenSettings,
+) -> impl FnOnce(String, Vec<String>) -> TmuxBackend {
+    move |kind, args| TmuxBackend::new(kind, args, settings)
+}
+
+/// The production transport switch: ONE `match` on the configured
+/// transport, each arm calling `build_wave_backend_and_run` once with its
+/// own concrete backend type.
+///
+/// `build_wave_backend_and_run` is generic over `B`, so this cannot be a
+/// single call with a runtime-chosen backend value — and it deliberately
+/// is not boxed into a `dyn WorkerBackend`: the generic seam and its
+/// tests are unchanged by this cell, and a box would add an indirection
+/// nothing here needs. Both arms return the same `Result` type, so the
+/// caller branches on the transport exactly once, here, and never again.
+///
+/// Named rather than inlined into `wave()` for the reason
+/// `real_backend_ctor`'s doc gives about `wave()`: nothing written inside
+/// `wave()` is reachable by a test, because `wave()` reads stdin and the
+/// real filesystem. This function is.
+fn run_wave_for_transport(
+    transport: TransportKind,
+    cfg: &Value,
+    root: &Path,
+    wave_id: String,
+    started_at: String,
+    inputs: &[WaveWorkerInput],
+    wave: &Wave,
+) -> Result<WaveResult, AgentCommandError> {
+    match transport {
+        TransportKind::Herdr => build_wave_backend_and_run(
+            cfg,
+            root,
+            wave_id,
+            started_at,
+            inputs,
+            wave,
+            real_backend_ctor,
+        ),
+        TransportKind::Tmux => {
+            // The screen knobs are bee's to read (`herding.tmux.*`) and
+            // `fleet`'s to classify with — hence the unwrap into the
+            // shared `ScreenSettings` on the way across the crate
+            // boundary.
+            let settings = TmuxSettings::from_config(cfg).into_screen_settings();
+            build_wave_backend_and_run(
+                cfg,
+                root,
+                wave_id,
+                started_at,
+                inputs,
+                wave,
+                tmux_backend_ctor(settings),
+            )
+        }
+    }
+}
+
 fn emit_wave_result(wave_id: &str, result: &WaveResult, json: bool) {
     if json {
         let obj = serde_json::json!({
@@ -709,20 +789,38 @@ pub(super) fn wave(flags: &[&str]) -> ExitCode {
         FailurePolicy::WaitForAll,
     );
 
-    // `real_backend_ctor` is the named production `construct_backend` —
-    // wiring D14's resolved kind/args through to a real `HerdrBackend`
-    // (the caller obligation `HerdrBackend::new`'s own docs name). Passing
-    // the name, not a closure literal written here, is what lets a test
-    // call the exact same construction directly (see `real_backend_ctor`'s
-    // own doc comment).
-    let result = match build_wave_backend_and_run(
+    // Which backend the wave briefs its workers through is the SAME key
+    // the run verb and occupancy read — `herding.transport`
+    // (tmux-herding-cockpit D1/D4), never a sniff of `$TMUX`. A typo'd
+    // value is a typed refusal, not a silent fallback to the other
+    // transport.
+    let transport = match super::transport_kind_at(&main_root) {
+        Ok(kind) => kind,
+        Err(message) => {
+            if json {
+                let mut m = Map::new();
+                m.insert("error".into(), Value::String(message.clone()));
+                m.insert("key".into(), Value::String("herding.transport".into()));
+                println!("{}", Value::Object(m));
+            }
+            eprintln!("bee herding wave: {message}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // `run_wave_for_transport` holds the one production switch, and each
+    // arm passes a NAMED `construct_backend` — `real_backend_ctor` or
+    // `tmux_backend_ctor(settings)` — never a closure literal written
+    // here, which is what lets a test call the exact same construction
+    // directly (see those functions' own doc comments).
+    let result = match run_wave_for_transport(
+        transport,
         &cfg,
         &main_root,
         wave_id.clone(),
         started_at,
         &inputs,
         &wave_value,
-        real_backend_ctor,
     ) {
         Ok(result) => result,
         Err(e) => {
@@ -1733,6 +1831,89 @@ mod tests {
             debug.contains(r#"agent_args: ["--flag", "value"]"#),
             "constructed backend must carry the args it was handed, got: {debug}"
         );
+    }
+
+    #[test]
+    fn wave_tmux_backend_ctor_hands_kind_args_and_settings_straight_through() {
+        // The tmux twin of the test above, and the same reasoning: `wave()`
+        // passes `tmux_backend_ctor(settings)` — a NAMED factory — as
+        // `construct_backend`, never a closure literal written at its own
+        // call site, precisely so this test can call the ACTUAL production
+        // construction and assert on what it built. `TmuxBackend` exposes
+        // no accessors (and should grow none for a test — `fleet` is out of
+        // scope here), so the assertion reads its derived `Debug`.
+        //
+        // The settings matter as much as the kind and args do: tmux has no
+        // agent API, so the scrollback depth and marker lists ARE how this
+        // backend reads status. A ctor that dropped them for
+        // `ScreenSettings::default()` would still compile and still spawn
+        // workers — and would silently ignore every `herding.tmux.*`
+        // override the repo set. This assertion is what catches that.
+        let settings = ScreenSettings {
+            busy_markers: vec!["chewing on it".to_string()],
+            scrollback: 777,
+            ..ScreenSettings::default()
+        };
+        let backend =
+            tmux_backend_ctor(settings)("codex".to_string(), vec!["--flag".to_string(), "value".to_string()]);
+        let debug = format!("{backend:?}");
+        assert!(
+            debug.contains("agent_kind: \"codex\""),
+            "constructed backend must carry the kind it was handed, got: {debug}"
+        );
+        assert!(
+            debug.contains(r#"agent_args: ["--flag", "value"]"#),
+            "constructed backend must carry the args it was handed, got: {debug}"
+        );
+        assert!(
+            debug.contains("scrollback: 777") && debug.contains("chewing on it"),
+            "constructed backend must carry the SETTINGS it was handed, not a fresh default \
+             — otherwise every herding.tmux.* override is silently dropped, got: {debug}"
+        );
+    }
+
+    #[test]
+    fn wave_tmux_transport_never_constructs_the_herdr_backend() {
+        // The production switch itself, called the way `wave()` calls it.
+        // A wave with no workers exercises the arm without needing a live
+        // tmux: the point under test is WHICH arm ran, and the closure the
+        // tmux arm builds is typed `TmuxBackend`, so a herdr construction
+        // in that arm could not compile. What this adds beyond the type
+        // system is that the two arms agree on one `Result` type and that
+        // the tmux arm reaches `build_wave_backend_and_run` at all — a
+        // `todo!()`/`unimplemented!()` arm, or one that fell through to
+        // herdr's config error, fails here.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cfg = serde_json::json!({
+            "herding": {
+                "transport": "tmux",
+                "agent_command": ["codex", "--flag"],
+                "tmux": {"scrollback": 90}
+            }
+        });
+        let wave_value = Wave::new(
+            Vec::new(),
+            WaveTimeouts {
+                worker_settle: Duration::from_millis(50),
+                poll_interval: Duration::from_millis(5),
+            },
+            FailurePolicy::WaitForAll,
+        );
+
+        for transport in [TransportKind::Tmux, TransportKind::Herdr] {
+            let result = run_wave_for_transport(
+                transport,
+                &cfg,
+                root,
+                format!("w-{}", transport.as_str()),
+                "2026-08-23T00:00:00Z".to_string(),
+                &[],
+                &wave_value,
+            )
+            .unwrap_or_else(|e| panic!("{} arm must resolve its command: {e}", transport.as_str()));
+            assert!(result.is_success(), "{transport:?}: {result:?}");
+        }
     }
 
     // ─── the bridge: occupancy reports which answer it gave ────────────

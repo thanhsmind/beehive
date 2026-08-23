@@ -30,6 +30,13 @@ pub mod wave;
 /// naming of herdr in this crate.
 pub mod backend;
 
+/// The screen classifier: what a captured terminal pane's text says about
+/// the agent in it — idle, working, or blocked on a dialog. ONE classifier
+/// serves both this crate's tmux backend and bee's own `RealTmux`
+/// transport (tmux-herding-cockpit D4); `bee` depends on `fleet`, so the
+/// shared half lives here and never the other way round.
+pub mod screen;
+
 /// The choreography: the state machine that drives a wave of workers from
 /// dispatch through waiting to a single aggregated verdict, using
 /// `std::thread` fan-out and `std::sync::mpsc` for result collection (D9).
