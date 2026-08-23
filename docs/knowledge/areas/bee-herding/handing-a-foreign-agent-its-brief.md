@@ -36,6 +36,44 @@ kind silently drops a multi-line injected prompt even when idle.
 The pane start retries through a booting shell, and readiness is observed before
 the send.
 
+## The worker's own hook reports its state into the mailbox
+
+Locked in herding-activity-hook D1/D2/D3/D4 (2026-08-23).
+
+A herded pane silences every bee hook — except one. Since herding-activity-hook D1
+the `activity` hook still runs under `BEE_HERDING_WORKER=1`;
+every guard, preamble and nudge hook keeps exiting 0 before stdin is read.
+`activity` never denies and never prints, so letting it through widens nothing
+the worker can touch.
+
+When the pane also carries `BEE_HERDING_JOB_ID` (exported with the worker
+marker at fresh spawn), the hook writes **`<mailbox>/activity.json`** —
+tmp-then-rename, the same gesture as ack and result — instead of
+`.bee/sessions/` (D2). The record is the sessions-record shape plus `job_id`
+and `round`: `{state, event, tool_name?, tool_use_id?, at (RFC3339), job_id,
+round}`. The hook reads `round` as the highest `brief-N.txt` present in the
+mailbox, never from an env var — the export fires once at spawn and would go
+stale across a `--continue` round. The state vocabulary and the
+same-`tool_use_id` unblock rule are `hooks/activity.rs`'s, unchanged.
+
+The run verb reads that record BEFORE the screen classifier at all three wait
+points — the ready gate, pointer delivery, and the round poll (D3): `blocked`
+or `waiting_input` ends the wait as blocked; `working` satisfies the
+submit-observed check so a stalled-looking submission is not resent. Two
+fences keep a stale record from steering: a `round` below the current round is
+ignored (the round is the launch-id fence), and an `at` older than
+`ACTIVITY_FRESHNESS_SECS` (120 s) is ignored; either way the answer falls back
+to the screen classifier, exactly today's behavior. Agent kinds that install no
+hooks never write the record and keep the screen path — the hook is an upgrade,
+never a requirement. `ack-N.json` and `result-N.json` remain the only truth
+for delivered and done.
+
+Why this exists: the screen read missed a trust dialog live (the `blocked`
+detector saw `idle`, the full ready-wait burned). The agent's own
+`PermissionRequest` hook is exact where a screen regex guesses. Distilled from
+agent-orchestrator (D4, `docs/history/research/agent-orchestrator-mailbox-distill.md`);
+only its hook return channel was adopted.
+
 ## The Expertise section — briefed like a leader, still outside the workflow
 
 The dispatcher may hand the worker an **Expertise section** in the brief
@@ -221,6 +259,11 @@ permit.
   retryable stall runs through `is_agent_prompt_stalled` into
   `DeliveryError::NeverDelivered`, kept distinct from
   `DeliveryError::NeverAcked` (cells hps-11, hps-14).
+- The activity record: writer is the herded sink in
+  `packages/bee-rs/crates/bee/src/hooks/activity.rs` (the marker pass-through
+  is in `hooks/mod.rs`); reader is `activity_path` / `parse_activity_text` /
+  `ACTIVITY_FRESHNESS_SECS` in `herding/mailbox.rs`, wired through
+  `status_with_activity` in `herding/run.rs`.
 - The worker marker is the environment variable `BEE_HERDING_WORKER=1`, exported
   into the pane before `agent start`; the mailbox directory is
   `.bee/mailbox/<job-id>/`. The repo instructions the contract tells the worker to

@@ -1399,6 +1399,7 @@ fn deliver_pointer(
     pointer: &str,
     prompt: &mut dyn FnMut(&str) -> Result<(), String>,
     status: &mut dyn FnMut() -> Option<String>,
+    activity_working: &mut dyn FnMut() -> bool,
     ack_present: &mut dyn FnMut() -> bool,
     result_present: &mut dyn FnMut() -> bool,
     sleep: &mut dyn FnMut(Duration),
@@ -1429,7 +1430,7 @@ fn deliver_pointer(
                 }
             }
             Err(_) if ack_present() || result_present() => return Ok(()),
-            Err(e) if is_agent_prompt_stalled(&e) => {
+            Err(e) if is_agent_prompt_stalled(&e) && !activity_working() => {
                 // D6 (hps-14): a stall proves the submission had not landed
                 // AT THAT INSTANT, not that it never will — sleep the same
                 // backoff the ready-with-no-ack path already sleeps, then
@@ -1438,6 +1439,19 @@ fn deliver_pointer(
                 stalls += 1;
                 sleep(POLL_INTERVAL);
                 continue;
+            }
+            Err(e) if is_agent_prompt_stalled(&e) => {
+                // herding-activity-hook D3: the guard above did not fire
+                // because the agent's OWN activity record says `working` —
+                // so herdr's "no observed lifecycle change" is herdr's
+                // blind spot, not the agent's. `working` satisfies the
+                // submit-observed check, so this falls through into the
+                // ack poll exactly as a `timeout` reply does instead of
+                // resending into a worker already reading the brief. Only
+                // reachable for a stalled reply: `activity_working` is
+                // consulted nowhere else, and with no fresh activity record
+                // it is always false, which leaves the arms below — and the
+                // whole hookless path — byte-identical to before.
             }
             Err(e) if is_agent_prompt_timeout(&e) => {
                 // The submission WAS made — herdr's own stall detector
@@ -1510,6 +1524,64 @@ fn wait_for_agent_ready(
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+/// herding-activity-hook D3: read the job's activity record — the herded
+/// agent's OWN reported state, written by the `activity` hook running
+/// inside its pane — through the same plain `std::fs` seam every other
+/// mailbox read in this file uses. Every failure is `None`: no file, an
+/// unreadable file, a half-written one, a record fenced out by round or by
+/// age. `None` is not an error anywhere — it means "this pane has no hook",
+/// which is the ordinary case for a hookless agent kind and the exact state
+/// this whole feature is an upgrade FROM.
+fn read_activity(bee_dir: &Path, job_id: &str, round: u32, now_ms: i64) -> Option<mailbox::ActivityState> {
+    let text = std::fs::read_to_string(mailbox::activity_path(bee_dir, job_id)).ok()?;
+    mailbox::parse_activity_text(&text, round, now_ms)
+}
+
+/// D3: the ONE wrapper every wait point's status read goes through — the
+/// agent's own hook answer FIRST, the screen classifier (herdr's
+/// `agent_status` / `agent_wait`) as the fallback. Only the two states D3
+/// names are answered here:
+///
+/// * `blocked` / `waiting_input` -> `"blocked"`, so the wait ends at once —
+///   this is the live trust-dialog miss (herding-prompt-stall D5) the hook
+///   sees exactly and the screen read did not;
+/// * `working` -> `"working"`, which the callers already treat as the
+///   healthy, poll-never-resend path.
+///
+/// `idle` and `exited` deliberately fall through to `fallback`: D3 makes
+/// the hook an upgrade over the screen classifier for the two states it is
+/// BETTER at, never a replacement that would let a hook's own idea of idle
+/// stand in for herdr's ready-for-input observation. With no fresh record
+/// this function is exactly `fallback()`, so a hookless agent kind keeps
+/// today's behavior byte for byte.
+///
+/// D3 again, at the boundary: nothing here touches `ack-N.json` or
+/// `result-N.json`. Delivered and done stay file-proven; this only decides
+/// how a WAIT reads the pane.
+fn status_with_activity(
+    bee_dir: &Path,
+    job_id: &str,
+    round: u32,
+    now_ms: i64,
+    fallback: &mut dyn FnMut() -> Option<String>,
+) -> Option<String> {
+    match read_activity(bee_dir, job_id, round, now_ms) {
+        Some(mailbox::ActivityState::Blocked) | Some(mailbox::ActivityState::WaitingInput) => {
+            Some("blocked".to_string())
+        }
+        Some(mailbox::ActivityState::Working) => Some("working".to_string()),
+        _ => fallback(),
+    }
+}
+
+/// D3's submit-observed half, kept as its own probe rather than read off
+/// `status_with_activity`: `deliver_pointer`'s stall branch must react ONLY
+/// to the hook's own `working`, never to a `working` the screen classifier
+/// guessed at — that separation is what keeps the hookless path unchanged.
+fn activity_says_working(bee_dir: &Path, job_id: &str, round: u32, now_ms: i64) -> bool {
+    matches!(read_activity(bee_dir, job_id, round, now_ms), Some(mailbox::ActivityState::Working))
 }
 
 /// The last few lines of a pane's capture, for a blocked-pane error's
@@ -1893,8 +1965,13 @@ fn wait_for_round(
                 }
             }
             // One status read serves both the heartbeat check and the
-            // blocked check (D3) — never two herdr calls for one tick.
-            let status = herdr.agent_status(job_id);
+            // blocked check (herding-prompt-stall D3) — never two herdr
+            // calls for one tick. herding-activity-hook D3 puts the agent's
+            // own activity record ahead of that read, so a pane that went
+            // blocked behind a screen the classifier reads as idle ends the
+            // wait here instead of burning the whole idle timeout.
+            let status =
+                status_with_activity(bee_dir, job_id, min_round, now_ms(), &mut || herdr.agent_status(job_id));
             if status.as_deref() == Some("working") {
                 heartbeat_fresh = true;
             }
@@ -2004,8 +2081,15 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     // spawn, not only when the per-agent env is non-empty. Treated exactly
     // like a start failure: the agent never started, so the pane this call
     // just split is closed.
+    // herding-activity-hook D2: the job id rides the SAME export, so the
+    // `activity` hook running inside the pane knows which mailbox to write
+    // its record into — a hook has no other way to learn it. Only the job
+    // id: the ROUND changes under a `--continue` while this export fires
+    // once, at the fresh spawn, so an exported round would go stale and lie.
+    // The hook reads the round from the job's own mailbox instead.
     let mut pane_env = env.clone();
     pane_env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
+    pane_env.insert("BEE_HERDING_JOB_ID".to_string(), opts.job_id.clone());
     let export_line = build_export_line(&pane_env);
     if let Err(e) = herdr.pane_run(&new_pane, &export_line) {
         let closed = herdr.pane_close(&new_pane).is_ok();
@@ -2043,7 +2127,11 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     let ready = wait_for_agent_ready(
         opts.ready_wait_secs,
         POLL_INTERVAL,
-        || herdr.agent_wait(&opts.job_id, POLL_INTERVAL.as_millis() as u64),
+        || {
+            status_with_activity(&bee_dir, &opts.job_id, 1, now_ms(), &mut || {
+                herdr.agent_wait(&opts.job_id, POLL_INTERVAL.as_millis() as u64)
+            })
+        },
         |d| std::thread::sleep(d),
         now_ms,
     );
@@ -2090,7 +2178,8 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     if let Err(e) = deliver_pointer(
         &pointer,
         &mut |p| herdr.agent_prompt(&opts.job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
-        &mut || herdr.agent_status(&opts.job_id),
+        &mut || status_with_activity(&bee_dir, &opts.job_id, 1, now_ms(), &mut || herdr.agent_status(&opts.job_id)),
+        &mut || activity_says_working(&bee_dir, &opts.job_id, 1, now_ms()),
         &mut || round1_ack.exists(),
         &mut || round1_result.exists(),
         &mut |d| std::thread::sleep(d),
@@ -2247,7 +2336,8 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         if let Err(e) = deliver_pointer(
             &pointer,
             &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
-            &mut || herdr.agent_status(job_id),
+            &mut || status_with_activity(&bee_dir, job_id, resume_round, now_ms(), &mut || herdr.agent_status(job_id)),
+            &mut || activity_says_working(&bee_dir, job_id, resume_round, now_ms()),
             &mut || round_ack.exists(),
             &mut || round_result.exists(),
             &mut |d| std::thread::sleep(d),
@@ -2392,7 +2482,8 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     if let Err(e) = deliver_pointer(
         &pointer,
         &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
-        &mut || herdr.agent_status(job_id),
+        &mut || status_with_activity(&bee_dir, job_id, next_round, now_ms(), &mut || herdr.agent_status(job_id)),
+        &mut || activity_says_working(&bee_dir, job_id, next_round, now_ms()),
         &mut || round_ack.exists(),
         &mut || round_result.exists(),
         &mut |d| std::thread::sleep(d),
@@ -3767,6 +3858,20 @@ mod tests {
         std::fs::write(mailbox::ack_path(&bee_dir, job_id, round), "{}").unwrap();
     }
 
+    /// herding-activity-hook D2: writes the activity record the pane's own
+    /// `activity` hook would write — the same field set, so a test never
+    /// asserts against a shape the hook does not produce.
+    fn seed_activity(bee_dir: &Path, job_id: &str, state: &str, round: u32, at: &str) {
+        std::fs::create_dir_all(mailbox::mailbox_dir(bee_dir, job_id)).unwrap();
+        std::fs::write(
+            mailbox::activity_path(bee_dir, job_id),
+            format!(
+                r#"{{"state":"{state}","event":"PreToolUse","tool_name":"Bash","at":"{at}","job_id":"{job_id}","round":{round}}}"#
+            ),
+        )
+        .unwrap();
+    }
+
     fn continue_options(main_root: &Path, dry_run: bool) -> Options {
         Options {
             task: "round 2: keep going".to_string(),
@@ -4000,6 +4105,7 @@ mod tests {
                 Ok(())
             },
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || true,
             &mut || false,
             &mut |_d| {},
@@ -4029,6 +4135,7 @@ mod tests {
                 }
             },
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || *sent.borrow() >= 2, // ack shows once the resend lands
             &mut || false,
             &mut |_d| {},
@@ -4070,6 +4177,7 @@ mod tests {
                 Err(r#"{"error":{"code":"timeout","message":"timed out waiting for agent status"}}"#.to_string())
             },
             &mut || Some("working".to_string()),
+            &mut || false,
             &mut || {
                 *polls.borrow_mut() += 1;
                 *polls.borrow() >= 2
@@ -4092,6 +4200,7 @@ mod tests {
             &mut |_p| Err("agent_prompt_stalled: no observed change".to_string()),
             &mut || Some("idle".to_string()),
             &mut || false,
+            &mut || false,
             &mut || true,
             &mut |_d| {},
             &mut || 0,
@@ -4107,6 +4216,7 @@ mod tests {
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| Err("agent_prompt_stalled: no observed change".to_string()),
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || true,
             &mut || false,
             &mut |_d| {},
@@ -4121,6 +4231,7 @@ mod tests {
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| Err("could not spawn herdr: No such file or directory".to_string()),
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || false,
             &mut || false,
             &mut |_d| {},
@@ -4146,6 +4257,7 @@ mod tests {
             &mut || Some("blocked".to_string()),
             &mut || false,
             &mut || false,
+            &mut || false,
             &mut |_d| {},
             &mut || 0,
         );
@@ -4166,6 +4278,7 @@ mod tests {
                 Ok(())
             },
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || false,
             &mut || false,
             &mut |_d| {},
@@ -4191,6 +4304,7 @@ mod tests {
                 Ok(())
             },
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || *sent.borrow() >= 3, // ack shows on the 3rd send
             &mut || false,
             &mut |_d| {},
@@ -4213,6 +4327,7 @@ mod tests {
                 Ok(())
             },
             &mut || if *sent.borrow() >= 1 { Some("blocked".to_string()) } else { Some("idle".to_string()) },
+            &mut || false,
             &mut || false,
             &mut || false,
             &mut |_d| {},
@@ -4238,6 +4353,7 @@ mod tests {
                 }
             },
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || *sent.borrow() >= 4, // ack shows only after the send past the stall
             &mut || false,
             &mut |_d| {},
@@ -4262,6 +4378,7 @@ mod tests {
                 Err("agent_prompt_stalled: no observed change".to_string())
             },
             &mut || Some("idle".to_string()),
+            &mut || false,
             &mut || false,
             &mut || false,
             &mut |_d| {},
@@ -4293,6 +4410,7 @@ mod tests {
                 Ok(())
             },
             &mut || Some("working".to_string()),
+            &mut || false,
             &mut || {
                 *polls.borrow_mut() += 1;
                 *polls.borrow() >= 5 // ack shows only after a few poll ticks
@@ -4322,6 +4440,7 @@ mod tests {
                 *poll.borrow_mut() += 1;
                 if *poll.borrow() < 3 { Some("working".to_string()) } else { Some("idle".to_string()) }
             },
+            &mut || false,
             &mut || *sent.borrow() >= 2, // ack shows only after the resend
             &mut || false,
             &mut |_d| {},
@@ -4347,6 +4466,7 @@ mod tests {
             &mut || Some("working".to_string()),
             &mut || false,
             &mut || false,
+            &mut || false,
             &mut |_d| {},
             &mut || {
                 let mut c = calls.borrow_mut();
@@ -4361,6 +4481,115 @@ mod tests {
             other => panic!("expected NeverAcked{{AckWaitBudget}}, got {other:?}"),
         }
         assert_eq!(*sent.borrow(), 1, "never resends while status stays working — only the budget ends it");
+    }
+
+    // ── the activity record ahead of the screen classifier (D3) ──────────
+
+    #[test]
+    fn a_blocked_activity_record_ends_the_ready_gate_even_when_the_screen_reads_idle() {
+        // D3, the whole point of the feature: herdr reports the pane `idle`
+        // (FakeHerdr's default) while the agent actually sits behind a trust
+        // dialog — the exact live miss herding-prompt-stall D5 recorded. The
+        // agent's own hook says `blocked`, so the wait ends at once instead
+        // of burning the ready-wait ceiling and sending the pointer into it.
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        seed_activity(&main_root.join(".bee"), &opts.job_id, "blocked", 1, &chrono::Utc::now().to_rfc3339());
+        let fake = FakeHerdr::new();
+
+        let result = execute(&opts, &fake);
+
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("is blocked"), "{msg}"),
+            other => panic!("expected SpawnFailed(blocked), got {other:?}"),
+        }
+        assert!(fake.prompt_calls.borrow().is_empty(), "the pointer is never sent into a blocked pane");
+        assert!(!result.closed_pane, "a blocked pane is kept for the person who has to answer it");
+    }
+
+    #[test]
+    fn an_activity_working_record_makes_a_stalled_submission_count_as_observed() {
+        // D3: `working` satisfies the submit-observed check. herdr saw no
+        // lifecycle change and called it a stall, but the agent's own hook
+        // says it is working — so the submission DID land, and resending
+        // would type a second pointer into a worker already reading the
+        // brief. Contrast
+        // `deliver_pointer_exhausts_the_resend_bound_when_every_send_stalls`,
+        // the identical stall with no activity record: that one resends.
+        let sent = std::cell::RefCell::new(0u32);
+        let polls = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Err("agent_prompt_stalled: no observed change".to_string())
+            },
+            &mut || Some("working".to_string()),
+            &mut || true,
+            &mut || {
+                *polls.borrow_mut() += 1;
+                *polls.borrow() >= 3 // the ack lands a few poll ticks later
+            },
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "the hook's own `working` is the observation herdr missed — never resent");
+    }
+
+    #[test]
+    fn status_with_activity_answers_only_the_two_states_d3_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let at = chrono::Utc::now().to_rfc3339();
+        // `done` is the fallback answer throughout, so any row whose want is
+        // `done` is a row that fell through to the screen classifier.
+        for (state, want, working) in [
+            ("blocked", "blocked", false),
+            ("waiting_input", "blocked", false),
+            ("working", "working", true),
+            ("idle", "done", false),
+            ("exited", "done", false),
+        ] {
+            seed_activity(&bee_dir, "job-1", state, 1, &at);
+            let got = status_with_activity(&bee_dir, "job-1", 1, now_ms(), &mut || Some("done".to_string()));
+            assert_eq!(got.as_deref(), Some(want), "state {state}");
+            assert_eq!(activity_says_working(&bee_dir, "job-1", 1, now_ms()), working, "state {state}");
+        }
+    }
+
+    #[test]
+    fn status_with_activity_falls_back_when_the_record_is_stale_or_from_an_older_round() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let fallback_idle = |round: u32| {
+            status_with_activity(&bee_dir, "job-1", round, now_ms(), &mut || Some("idle".to_string()))
+        };
+
+        seed_activity(&bee_dir, "job-1", "blocked", 2, &chrono::Utc::now().to_rfc3339());
+        assert_eq!(fallback_idle(2).as_deref(), Some("blocked"), "fresh and on-round: the hook answers");
+        assert_eq!(fallback_idle(3).as_deref(), Some("idle"), "D2: a record from an older round is fenced out");
+
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 60);
+        seed_activity(&bee_dir, "job-1", "blocked", 2, &stale.to_rfc3339());
+        assert_eq!(fallback_idle(2).as_deref(), Some("idle"), "a stale record is a dead hook, not a blocked agent");
+    }
+
+    #[test]
+    fn status_with_activity_is_exactly_the_fallback_with_no_record() {
+        // The hookless agent kind, and the whole repo before this feature:
+        // every answer the screen classifier gives passes through unchanged,
+        // including `None`.
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        for answer in [None, Some("idle".to_string()), Some("done".to_string()), Some("blocked".to_string())] {
+            let want = answer.clone();
+            let got = status_with_activity(&bee_dir, "job-1", 1, now_ms(), &mut || answer.clone());
+            assert_eq!(got, want);
+        }
+        assert!(!activity_says_working(&bee_dir, "job-1", 1, now_ms()), "no record is never a working observation");
     }
 
     #[test]
@@ -5106,7 +5335,10 @@ mod tests {
         let calls = fake.pane_run_calls.borrow();
         assert_eq!(calls.len(), 1, "exactly one env export line must be sent, got {calls:?}");
         assert_eq!(calls[0].0, "w1:p2", "the export line must go to the newly split pane");
-        assert_eq!(calls[0].1, r#"export API_KEY='it'\''s-a-secret' BEE_HERDING_WORKER='1'"#);
+        assert_eq!(
+            calls[0].1,
+            r#"export API_KEY='it'\''s-a-secret' BEE_HERDING_JOB_ID='job-1' BEE_HERDING_WORKER='1'"#
+        );
     }
 
     #[test]
@@ -5170,7 +5402,10 @@ mod tests {
         let pane_run_idx = log.iter().position(|c| *c == "pane_run").expect("pane_run must be called");
         let agent_start_idx = log.iter().position(|c| *c == "agent_start").expect("agent_start must be called");
         assert!(pane_run_idx < agent_start_idx, "pane_run must precede agent_start: {log:?}");
-        assert_eq!(fake.pane_run_calls.borrow()[0].1, "export BEE_HERDING_WORKER='1' K='v'");
+        assert_eq!(
+            fake.pane_run_calls.borrow()[0].1,
+            "export BEE_HERDING_JOB_ID='job-1' BEE_HERDING_WORKER='1' K='v'"
+        );
 
         // herding-worker-standalone D2: a fresh spawn ALWAYS sends the
         // export, marker included, even for an array-shape (env-less)
@@ -5184,7 +5419,7 @@ mod tests {
         assert!(matches!(result2.outcome, RunOutcome::Result(_)), "got {:?}", result2.outcome);
         let calls2 = fake2.pane_run_calls.borrow();
         assert_eq!(calls2.len(), 1, "an array-shape entry must still send the marker export, got {calls2:?}");
-        assert_eq!(calls2[0].1, "export BEE_HERDING_WORKER='1'");
+        assert_eq!(calls2[0].1, "export BEE_HERDING_JOB_ID='job-plain' BEE_HERDING_WORKER='1'");
     }
 
     // ─── hps-8 (D5): workspace-trust pre-flight ─────────────────────────
@@ -5382,7 +5617,11 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
         let calls = fake.pane_run_calls.borrow();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].1, "export BEE_HERDING_WORKER='1'", "the marker must win over a same-name per-agent value");
+        assert_eq!(
+            calls[0].1,
+            "export BEE_HERDING_JOB_ID='job-1' BEE_HERDING_WORKER='1'",
+            "the marker must win over a same-name per-agent value"
+        );
     }
 
     // ─── --continue (D3) ────────────────────────────────────────────────

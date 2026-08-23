@@ -116,6 +116,90 @@ fn ack_filename(round: u32) -> String {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Activity record — the herded agent's OWN reported state
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// `.bee/mailbox/<job-id>/activity.json` — the ONE activity record a herded
+/// pane keeps (herding-activity-hook D2). Unlike `ack_path` and
+/// `result_path` it is NOT round-numbered: there is exactly one truth per
+/// job, rewritten tmp-then-rename by the pane's `activity` hook, and the
+/// round it belongs to rides INSIDE the record as the `round` field, which
+/// `parse_activity_text` fences on. D3 keeps this file strictly an upgrade
+/// to the screen classifier: `ack-N.json` and `result-N.json` stay the only
+/// truth for delivered and done, and nothing here ever touches them.
+pub(crate) fn activity_path(bee_dir: &Path, job_id: &str) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join("activity.json")
+}
+
+/// The agent-reported states an activity record can carry — the SAME
+/// vocabulary `hooks/activity.rs` writes, never a second spelling of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ActivityState {
+    Working,
+    WaitingInput,
+    Blocked,
+    Idle,
+    Exited,
+}
+
+/// How old an activity record may be and still count (the "fresh" bound
+/// CONTEXT.md left to the agent's discretion; recorded here as the one
+/// number). 120s: comfortably longer than a slow agent turn between hook
+/// events, far shorter than `ACK_WAIT_BUDGET_SECS` (180s) or the round's
+/// own idle timeout — so a pane whose hook died mid-round falls back to the
+/// screen classifier well before either of those bounds could fire off a
+/// state nobody is refreshing.
+pub(crate) const ACTIVITY_FRESHNESS_SECS: i64 = 120;
+
+/// Parse one activity record's text (already read by the caller — this
+/// module still touches no filesystem) into the agent's own reported state,
+/// or `None` when the record must not be trusted for `current_round`.
+///
+/// `None` is the FAIL-SAFE answer and every refusal returns it, because the
+/// caller's fallback is exactly today's screen classifier: a `None` here can
+/// only ever mean "behave as if the hook were not installed". The refusals:
+///
+/// * the text is not JSON, is not an object, or is missing/mistyped `round`,
+///   `at`, or `state` — a half-written or foreign file never speaks for the
+///   agent;
+/// * `state` is outside the known vocabulary — an unknown word is never
+///   guessed at;
+/// * `round` is BELOW `current_round` (D2: the round is the launch-id
+///   fence) — a record left over from an earlier round of the same job
+///   cannot describe this one. A record from a LATER round is kept: the
+///   pane genuinely moved on, and its state is still this agent's state.
+/// * `at` is more than `ACTIVITY_FRESHNESS_SECS` older than `now_ms` — a
+///   stale record is a dead hook, not a blocked agent. A record stamped in
+///   the FUTURE is kept: clock skew between the hook's own stamp and the
+///   reader is jitter, and treating it as stale would silently disable the
+///   signal on exactly the machines that need it.
+pub(crate) fn parse_activity_text(text: &str, current_round: u32, now_ms: i64) -> Option<ActivityState> {
+    let value: Value = serde_json::from_str(text).ok()?;
+    let obj = value.as_object()?;
+
+    let round = u32::try_from(obj.get("round").and_then(Value::as_u64)?).ok()?;
+    if round < current_round {
+        return None;
+    }
+
+    let at_ms = chrono::DateTime::parse_from_rfc3339(obj.get("at").and_then(Value::as_str)?)
+        .ok()?
+        .timestamp_millis();
+    if now_ms.saturating_sub(at_ms) > ACTIVITY_FRESHNESS_SECS.saturating_mul(1000) {
+        return None;
+    }
+
+    match obj.get("state").and_then(Value::as_str)? {
+        "working" => Some(ActivityState::Working),
+        "waiting_input" => Some(ActivityState::WaitingInput),
+        "blocked" => Some(ActivityState::Blocked),
+        "idle" => Some(ActivityState::Idle),
+        "exited" => Some(ActivityState::Exited),
+        _ => None,
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Brief renderer — the whole worker-facing contract, self-contained
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -811,5 +895,93 @@ mod tests {
         let err = MailboxError::MissingField { round: 9, field: "proof" };
         assert!(err.to_string().contains("result-9.json"));
         assert!(err.to_string().contains("proof"));
+    }
+
+    // ── activity record (herding-activity-hook D2/D3) ────────────────────
+
+    /// The record shape `hooks/activity.rs` writes under the herded-worker
+    /// marker — one helper so every case below varies exactly one field.
+    fn activity_text(state: &str, round: u32, at: &str) -> String {
+        format!(
+            r#"{{"state":"{state}","event":"PreToolUse","tool_name":"Bash","at":"{at}","job_id":"job-42","round":{round}}}"#
+        )
+    }
+
+    fn at_secs_ago(now_ms: i64, secs: i64) -> String {
+        chrono::DateTime::from_timestamp_millis(now_ms - secs * 1000).unwrap().to_rfc3339()
+    }
+
+    #[test]
+    fn activity_path_is_one_unnumbered_file_beside_the_round_numbered_ones() {
+        let bee_dir = Path::new("/repo/.bee");
+        assert_eq!(activity_path(bee_dir, "job-42"), Path::new("/repo/.bee/mailbox/job-42/activity.json"));
+    }
+
+    #[test]
+    fn parse_activity_text_reads_every_state_in_the_hook_vocabulary() {
+        let now_ms = 1_700_000_000_000i64;
+        let at = at_secs_ago(now_ms, 1);
+        for (word, want) in [
+            ("working", ActivityState::Working),
+            ("waiting_input", ActivityState::WaitingInput),
+            ("blocked", ActivityState::Blocked),
+            ("idle", ActivityState::Idle),
+            ("exited", ActivityState::Exited),
+        ] {
+            assert_eq!(parse_activity_text(&activity_text(word, 1, &at), 1, now_ms), Some(want), "state {word}");
+        }
+    }
+
+    #[test]
+    fn parse_activity_text_refuses_malformed_input() {
+        let now_ms = 1_700_000_000_000i64;
+        let at = at_secs_ago(now_ms, 1);
+        // Not JSON, not an object, and a half-written prefix — every one
+        // falls back rather than speaking for the agent.
+        assert_eq!(parse_activity_text("not json at all", 1, now_ms), None);
+        assert_eq!(parse_activity_text("[1,2,3]", 1, now_ms), None);
+        assert_eq!(parse_activity_text(r#"{"state":"blocked","at":"#, 1, now_ms), None);
+        // Missing round, missing at, missing state.
+        assert_eq!(parse_activity_text(&format!(r#"{{"state":"blocked","at":"{at}"}}"#), 1, now_ms), None);
+        assert_eq!(parse_activity_text(r#"{"state":"blocked","round":1}"#, 1, now_ms), None);
+        assert_eq!(parse_activity_text(&format!(r#"{{"round":1,"at":"{at}"}}"#), 1, now_ms), None);
+        // Mistyped round, unparseable timestamp, unknown state word.
+        assert_eq!(parse_activity_text(&format!(r#"{{"state":"blocked","round":"1","at":"{at}"}}"#), 1, now_ms), None);
+        assert_eq!(parse_activity_text(r#"{"state":"blocked","round":1,"at":"yesterday"}"#, 1, now_ms), None);
+        assert_eq!(parse_activity_text(&activity_text("thinking", 1, &at), 1, now_ms), None);
+    }
+
+    #[test]
+    fn parse_activity_text_fences_a_record_from_an_older_round() {
+        // D2: the round is the launch-id fence — round 1's leftover record
+        // can never describe round 2.
+        let now_ms = 1_700_000_000_000i64;
+        let at = at_secs_ago(now_ms, 1);
+        assert_eq!(parse_activity_text(&activity_text("blocked", 1, &at), 2, now_ms), None);
+        // The current round passes, and so does a LATER one: the pane moved
+        // on, and its state is still this agent's state.
+        assert_eq!(parse_activity_text(&activity_text("blocked", 2, &at), 2, now_ms), Some(ActivityState::Blocked));
+        assert_eq!(parse_activity_text(&activity_text("blocked", 3, &at), 2, now_ms), Some(ActivityState::Blocked));
+    }
+
+    #[test]
+    fn parse_activity_text_fences_a_stale_record_but_keeps_a_future_stamped_one() {
+        let now_ms = 1_700_000_000_000i64;
+        let fresh = at_secs_ago(now_ms, ACTIVITY_FRESHNESS_SECS - 1);
+        let edge = at_secs_ago(now_ms, ACTIVITY_FRESHNESS_SECS);
+        let stale = at_secs_ago(now_ms, ACTIVITY_FRESHNESS_SECS + 1);
+        let future = at_secs_ago(now_ms, -30);
+        assert_eq!(parse_activity_text(&activity_text("blocked", 1, &fresh), 1, now_ms), Some(ActivityState::Blocked));
+        assert_eq!(
+            parse_activity_text(&activity_text("blocked", 1, &edge), 1, now_ms),
+            Some(ActivityState::Blocked),
+            "exactly at the bound still counts"
+        );
+        assert_eq!(parse_activity_text(&activity_text("blocked", 1, &stale), 1, now_ms), None);
+        assert_eq!(
+            parse_activity_text(&activity_text("blocked", 1, &future), 1, now_ms),
+            Some(ActivityState::Blocked),
+            "clock skew is jitter, never staleness"
+        );
     }
 }

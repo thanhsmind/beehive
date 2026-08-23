@@ -31,6 +31,16 @@
 // `at`/`event` on the record but is NOT a transition, or the sidecar would be
 // a tool log instead of a state history.
 //
+// HERDED SINK (herding-activity-hook D1/D2). In a pane `bee herding run`
+// opened — `BEE_HERDING_WORKER=1` plus `BEE_HERDING_JOB_ID` — this is the ONE
+// hook that still runs (D1), and it writes somewhere else: the job mailbox,
+// `.bee/mailbox/<job-id>/activity.json`, tmp-then-rename, stamped with the
+// job id and the round. That pane gets NO `.bee/sessions/<id>.json` record,
+// no `.activity.jsonl` sidecar, and no `waiting_on` mark — a foreign agent in
+// a herded pane is not a bee session, and one truth per job beside
+// `ack-N.json` / `result-N.json` is the whole contract. The STATE MACHINE is
+// identical on both sinks: only where the record lands changes.
+//
 // waiting_on (D5). A transition INTO `waiting_input`/`blocked` also sets the
 // record's waiting mark (`question`/`gate`) through the SAME store functions
 // `bee state waiting-on set` uses — no second writer. `activity
@@ -207,7 +217,14 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
     let ctrl = ctx.control_root.clone().unwrap_or_else(|| root.to_path_buf());
     let tool_name = field(&ctx.payload, "tool_name");
     let tool_use_id = field(&ctx.payload, "tool_use_id");
-    let prior = read_prior(&ctrl, &session_id);
+    // D2: which sink this pane writes to is decided ONCE, here, and the same
+    // decision picks where the prior state is read from — a state machine
+    // that read one sink and wrote the other would forget every block.
+    let herded = herded_job();
+    let prior = match &herded {
+        Some(job) => read_prior_herded(&ctrl, job),
+        None => read_prior(&ctrl, &session_id),
+    };
 
     if sticky_suppresses(&prior, &event, target, tool_name.as_deref(), tool_use_id.as_deref()) {
         return Ok(()); // D3: the human-needed state stands; not a transition
@@ -227,21 +244,27 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
     // workflow locks of their own, and nesting store locks is how a hook
     // deadlocks a session. A refusal here is logged and the activity write
     // still happens — the mark is a courtesy, the state is the contract.
+    // D2: a herded pane sets NO waiting mark. `waiting_on` is the bee
+    // session's own pending ask, and a foreign agent in a herded pane holds
+    // no bee session — its wait travels to the orchestrator in the mailbox
+    // record's own `state`, which is the whole point of the herded sink.
     let mut marker = prior.marker;
-    let waiting_on = sync_waiting_on(
-        root,
-        &session_id,
-        &event,
-        target,
-        is_transition,
-        marker,
-        tool_name.as_deref(),
-        field(&ctx.payload, "message").as_deref(),
-    );
-    match waiting_on {
-        Ok(Some(next)) => marker = next,
-        Ok(None) => {}
-        Err(message) => append_activity_log(root, &format!("waiting_on: {message}")),
+    if herded.is_none() {
+        let waiting_on = sync_waiting_on(
+            root,
+            &session_id,
+            &event,
+            target,
+            is_transition,
+            marker,
+            tool_name.as_deref(),
+            field(&ctx.payload, "message").as_deref(),
+        );
+        match waiting_on {
+            Ok(Some(next)) => marker = next,
+            Ok(None) => {}
+            Err(message) => append_activity_log(root, &format!("waiting_on: {message}")),
+        }
     }
 
     let mut activity = Map::new();
@@ -275,7 +298,17 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
         activity.insert("waiting_on_set_by_hook".into(), Value::Bool(true));
     }
 
-    write_activity(ctx, &ctrl, &session_id, &activity, is_transition)
+    match &herded {
+        // D2's record: the sessions record's own activity block, plus the two
+        // fields that address it — the job it belongs to, and the round it
+        // speaks about (an older round is ignored by the reader).
+        Some(job) => {
+            activity.insert("job_id".into(), Value::String(job.clone()));
+            activity.insert("round".into(), Value::Number(current_round(&ctrl, job).into()));
+            write_activity_herded(&ctrl, job, &activity)
+        }
+        None => write_activity(ctx, &ctrl, &session_id, &activity, is_transition),
+    }
 }
 
 /// The pane this session runs in, and the name of the multiplexer that named
@@ -358,13 +391,6 @@ fn read_prior(ctrl: &Path, session_id: &str) -> Prior {
         .as_ref()
         .and_then(|r| r.get("activity"))
         .and_then(Value::as_object);
-    let str_of = |key: &str| {
-        activity
-            .and_then(|a| a.get(key))
-            .and_then(Value::as_str)
-            .filter(|s| !s.trim().is_empty())
-            .map(str::to_string)
-    };
     let lane = record
         .as_ref()
         .and_then(|r| r.get("lane"))
@@ -372,6 +398,21 @@ fn read_prior(ctrl: &Path, session_id: &str) -> Prior {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
+    prior_from_activity(activity, lane)
+}
+
+/// The state machine's inputs, read off whichever activity block is the prior
+/// one: the session record's under the sessions sink, the mailbox file's
+/// whole body under the herded sink (D2). Same fields, same rules — the state
+/// machine never learns which sink it runs over.
+fn prior_from_activity(activity: Option<&Map<String, Value>>, lane: Option<String>) -> Prior {
+    let str_of = |key: &str| {
+        activity
+            .and_then(|a| a.get(key))
+            .and_then(Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string)
+    };
     Prior {
         state: str_of("state").as_deref().and_then(State::parse),
         tool_name: str_of("tool_name"),
@@ -471,6 +512,82 @@ fn trim_transitions(file: &Path) -> Result<(), String> {
     ));
     with_transient_fs_retry(|| std::fs::write(&tmp, &body).and_then(|()| std::fs::rename(&tmp, file)))
         .map_err(|e| format!("trim {}: {e}", file.display()))
+}
+
+// ── the herded sink (herding-activity-hook D1/D2) ───────────────────────────
+
+/// The job this pane works for, or `None` when this is not a herded worker
+/// pane at all. BOTH halves are required: the marker says the pane is herded
+/// (herding/run.rs D2), the job id says which mailbox is its own. A marker
+/// with no job id addresses no mailbox, so that pane keeps today's sessions
+/// sink rather than losing its record to nowhere.
+fn herded_job() -> Option<String> {
+    if !crate::hooks::herding_worker_marker_set() {
+        return None;
+    }
+    let job = std::env::var("BEE_HERDING_JOB_ID").ok()?;
+    let job = job.trim().to_string();
+    // A job id addresses a directory, so the same shape check `well_formed_id`
+    // makes for a session id: no separators, no `..`, never empty.
+    well_formed_id(&job).then_some(job)
+}
+
+/// `.bee/mailbox/<job-id>/` — resolved off the control root the same way
+/// `sessions_dir` resolves its own directory. Restated here rather than
+/// borrowed from `herding::mailbox`: that module is private to `herding`, and
+/// a hook must not need the herding runtime to write one file.
+fn mailbox_dir(ctrl: &Path, job_id: &str) -> PathBuf {
+    ctrl.join(".bee").join("mailbox").join(job_id)
+}
+
+/// D2's file: one activity record per job, beside `ack-N.json` /
+/// `result-N.json`.
+fn mailbox_activity_file(ctrl: &Path, job_id: &str) -> PathBuf {
+    mailbox_dir(ctrl, job_id).join("activity.json")
+}
+
+/// The round the pane is in: the highest N with a `brief-N.txt` in the job's
+/// mailbox. The orchestrator writes the brief BEFORE it delivers the pointer,
+/// so the newest brief on disk already names the round the pane is being
+/// asked about — no second environment variable to keep in step with it, and
+/// nothing to go stale across a re-brief. No brief yet reads as round 0: the
+/// pane is open and nothing has been asked of it.
+fn current_round(ctrl: &Path, job_id: &str) -> u64 {
+    let Ok(entries) = std::fs::read_dir(mailbox_dir(ctrl, job_id)) else {
+        return 0; // no mailbox directory yet: nothing asked, never an error
+    };
+    entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let digits = name.strip_prefix("brief-")?.strip_suffix(".txt")?;
+            digits.parse::<u64>().ok()
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+/// The prior state, read back off the mailbox record. Missing or corrupt
+/// reads as "no prior" — the same fail-open collapse `read_session_failopen`
+/// makes, and the next event records the state anyway.
+fn read_prior_herded(ctrl: &Path, job_id: &str) -> Prior {
+    let record = match read_json(&mailbox_activity_file(ctrl, job_id)) {
+        ReadJson::Parsed(Value::Object(m)) => Some(m),
+        _ => None,
+    };
+    prior_from_activity(record.as_ref(), None)
+}
+
+/// D2's write: tmp-then-rename, no store lock. The mailbox record has exactly
+/// one writer — the hook inside this one pane — so the atomic rename is the
+/// whole safety story, and a hook that took a store lock could stall behind
+/// an orchestrator holding it.
+fn write_activity_herded(
+    ctrl: &Path,
+    job_id: &str,
+    activity: &Map<String, Value>,
+) -> Result<(), String> {
+    write_json_atomic_retry(&mailbox_activity_file(ctrl, job_id), &Value::Object(activity.clone()))
 }
 
 // ── transient-FS retry (state_sync's posture, same window) ──────────────────
@@ -770,10 +887,89 @@ mod tests {
     }
 
     /// Drive the hook exactly as the dispatcher does: argv tail + raw stdin.
+    ///
+    /// The herding env vars are PROCESS state and pick the sink (D2), so
+    /// every ordinary firing holds the shared lock for the length of the run:
+    /// otherwise a herded test's marker, set on another thread, would send
+    /// this record to a mailbox. `fire_herded` is the ONE caller that sets
+    /// them, and it takes the same lock — never call it from inside `fire`.
     fn fire(repo: &Repo, payload: Value) -> ExitCode {
+        let _guard = crate::hooks::herding_env_lock();
+        fire_locked(repo, payload)
+    }
+
+    fn fire_locked(repo: &Repo, payload: Value) -> ExitCode {
         let mut payload = payload;
         payload["cwd"] = Value::String(repo.root.to_string_lossy().into_owned());
         run_inner(&[], &payload.to_string())
+    }
+
+    /// Fire inside a herded worker pane: `BEE_HERDING_WORKER=1`, plus the job
+    /// id when one is given. Both variables are restored on the way out, even
+    /// through a panic, while the lock is still held.
+    fn fire_herded(repo: &Repo, job: Option<&str>, payload: Value) -> ExitCode {
+        let _guard = crate::hooks::herding_env_lock();
+        let restore = HerdedEnv::set(job);
+        let code = fire_locked(repo, payload);
+        drop(restore);
+        code
+    }
+
+    struct HerdedEnv {
+        marker: Option<std::ffi::OsString>,
+        job: Option<std::ffi::OsString>,
+    }
+
+    impl HerdedEnv {
+        fn set(job: Option<&str>) -> HerdedEnv {
+            let prior = HerdedEnv {
+                marker: std::env::var_os("BEE_HERDING_WORKER"),
+                job: std::env::var_os("BEE_HERDING_JOB_ID"),
+            };
+            // SAFETY: `fire_herded` holds `herding_env_lock`, which every
+            // test that reads or writes these variables also takes.
+            unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+            match job {
+                // SAFETY: see above.
+                Some(id) => unsafe { std::env::set_var("BEE_HERDING_JOB_ID", id) },
+                // SAFETY: see above.
+                None => unsafe { std::env::remove_var("BEE_HERDING_JOB_ID") },
+            }
+            prior
+        }
+    }
+
+    impl Drop for HerdedEnv {
+        fn drop(&mut self) {
+            for (key, prior) in [("BEE_HERDING_WORKER", &self.marker), ("BEE_HERDING_JOB_ID", &self.job)] {
+                match prior {
+                    // SAFETY: the lock `fire_herded` took is still held.
+                    Some(value) => unsafe { std::env::set_var(key, value) },
+                    // SAFETY: see above.
+                    None => unsafe { std::env::remove_var(key) },
+                }
+            }
+        }
+    }
+
+    fn mailbox_record(repo: &Repo, job: &str) -> Map<String, Value> {
+        match read_json(&mailbox_activity_file(&repo.root, job)) {
+            ReadJson::Parsed(Value::Object(m)) => m,
+            _ => panic!("no readable mailbox activity record for {job}"),
+        }
+    }
+
+    fn brief(repo: &Repo, job: &str, round: u32) {
+        let dir = mailbox_dir(&repo.root, job);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("brief-{round}.txt")), "do the thing\n").unwrap();
+    }
+
+    fn sessions_is_empty(repo: &Repo) -> bool {
+        match std::fs::read_dir(sessions_dir(&repo.root)) {
+            Ok(entries) => entries.filter_map(|e| e.ok()).next().is_none(),
+            Err(_) => true, // never created at all
+        }
     }
 
     fn event(name: &str, session: &str) -> Value {
@@ -1454,5 +1650,121 @@ mod tests {
         ok(fire(&repo, event("UserPromptSubmit", "s1")));
         let mark = state_waiting_on(&repo).expect("still the agent's mark");
         assert_eq!(mark["subject"], Value::String("the agent's own ask".into()));
+    }
+
+    // ── the herded sink (herding-activity-hook D1/D2) ──────────────────────
+
+    /// D2: in a herded pane the record lands in the job mailbox, stamped with
+    /// the job and the round — and `.bee/sessions/` stays untouched, sidecar
+    /// included.
+    #[test]
+    fn a_herded_pane_writes_the_job_mailbox_record_and_no_session_record() {
+        let repo = repo();
+        brief(&repo, "job-7", 1);
+        brief(&repo, "job-7", 2);
+        ok(fire_herded(
+            &repo,
+            Some("job-7"),
+            serde_json::json!({
+                "hook_event_name": "PermissionRequest", "session_id": "s1",
+                "tool_name": "Bash", "tool_use_id": "call-1"
+            }),
+        ));
+
+        let rec = mailbox_record(&repo, "job-7");
+        assert_eq!(rec["state"], Value::String("blocked".into()));
+        assert_eq!(rec["event"], Value::String("PermissionRequest".into()));
+        assert_eq!(rec["tool_name"], Value::String("Bash".into()));
+        assert_eq!(rec["tool_use_id"], Value::String("call-1".into()));
+        assert_eq!(rec["job_id"], Value::String("job-7".into()));
+        assert_eq!(rec["round"].as_u64(), Some(2), "the newest brief names the round");
+        assert!(rec.contains_key("at"), "the record is stamped");
+
+        assert!(sessions_is_empty(&repo), "a herded pane writes nothing under .bee/sessions/");
+        assert!(
+            state_waiting_on(&repo).is_none(),
+            "and sets no waiting mark: a herded pane holds no bee session"
+        );
+    }
+
+    /// The round before any brief exists is 0 — the pane is open and nothing
+    /// has been asked of it yet.
+    #[test]
+    fn a_herded_pane_records_round_zero_before_the_first_brief() {
+        let repo = repo();
+        ok(fire_herded(&repo, Some("job-7"), event("UserPromptSubmit", "s1")));
+        let rec = mailbox_record(&repo, "job-7");
+        assert_eq!(rec["state"], Value::String("working".into()));
+        assert_eq!(rec["round"].as_u64(), Some(0));
+    }
+
+    /// The state machine is untouched by the sink swap: `blocked` survives
+    /// unrelated tool traffic and only the call that blocked clears it — read
+    /// back off the mailbox record, the herded pane's only prior state.
+    #[test]
+    fn the_state_machine_runs_unchanged_over_the_herded_sink() {
+        let repo = repo();
+        brief(&repo, "job-7", 1);
+        ok(fire_herded(
+            &repo,
+            Some("job-7"),
+            serde_json::json!({
+                "hook_event_name": "PermissionRequest", "session_id": "s1",
+                "tool_name": "Bash", "tool_use_id": "call-1"
+            }),
+        ));
+        ok(fire_herded(
+            &repo,
+            Some("job-7"),
+            serde_json::json!({
+                "hook_event_name": "PostToolUse", "session_id": "s1",
+                "tool_name": "Read", "tool_use_id": "call-2"
+            }),
+        ));
+        assert_eq!(
+            mailbox_record(&repo, "job-7")["state"],
+            Value::String("blocked".into()),
+            "other tool traffic never washes the block away"
+        );
+
+        ok(fire_herded(
+            &repo,
+            Some("job-7"),
+            serde_json::json!({
+                "hook_event_name": "PostToolUse", "session_id": "s1",
+                "tool_name": "Bash", "tool_use_id": "call-1"
+            }),
+        ));
+        assert_eq!(
+            mailbox_record(&repo, "job-7")["state"],
+            Value::String("working".into()),
+            "the call that blocked is the one that clears it"
+        );
+    }
+
+    /// The marker alone addresses no mailbox, so that pane keeps today's
+    /// sessions sink rather than losing its record to nowhere.
+    #[test]
+    fn the_marker_without_a_job_id_keeps_todays_sessions_sink() {
+        let repo = repo();
+        ok(fire_herded(&repo, None, event("UserPromptSubmit", "s1")));
+        assert_eq!(state_of(&repo, "s1"), "working");
+        assert_eq!(transitions(&repo, "s1").len(), 1);
+        assert!(
+            !repo.root.join(".bee").join("mailbox").exists(),
+            "no job id, no mailbox write"
+        );
+    }
+
+    /// A job id that could climb out of the mailbox is not a job id: the same
+    /// shape check every other id-addressed writer here makes.
+    #[test]
+    fn a_job_id_that_is_not_a_plain_id_falls_back_to_the_sessions_sink() {
+        for bogus in ["../escape", "a/b", "  "] {
+            let repo = repo();
+            ok(fire_herded(&repo, Some(bogus), event("UserPromptSubmit", "s1")));
+            assert_eq!(state_of(&repo, "s1"), "working", "{bogus} must not address a mailbox");
+            assert!(!repo.root.join(".bee").join("mailbox").exists());
+        }
     }
 }
