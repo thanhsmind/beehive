@@ -38,8 +38,10 @@ the send.
 
 ## The worker's own hook reports its state into the mailbox
 
-A herded pane silences every bee hook — except one. Since herding-activity-hook
-D1 (2026-08-23) the `activity` hook still runs under `BEE_HERDING_WORKER=1`;
+Locked in herding-activity-hook D1/D2/D3/D4 (2026-08-23).
+
+A herded pane silences every bee hook — except one. Since herding-activity-hook D1
+the `activity` hook still runs under `BEE_HERDING_WORKER=1`;
 every guard, preamble and nudge hook keeps exiting 0 before stdin is read.
 `activity` never denies and never prints, so letting it through widens nothing
 the worker can touch.

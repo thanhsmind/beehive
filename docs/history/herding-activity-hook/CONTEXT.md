@@ -77,8 +77,10 @@ Decision-log ids: D1 `09f16084`, D2 `8040996b`, D3 `2284af77`, D4 `848e0aa5`.
 
 - None.
 
-### Can Defer
+### Out of scope
 
-- Should a dashboard (waggledance) also read `activity.json` from the
-  mailbox? Out of scope here; it keeps reading `.bee/sessions/` for
-  non-herded sessions.
+<!-- bee:not-a-deferral: this names a boundary of the feature, not a promise to act; a dashboard reading the mailbox record is a separate ask -->
+- A dashboard (waggledance) reading `activity.json` from the mailbox is not
+  part of this feature; it keeps reading `.bee/sessions/` for non-herded
+  sessions.
+<!-- /bee:not-a-deferral -->
