@@ -1,0 +1,146 @@
+{
+  "id": "thc-4",
+  "feature": "tmux-herding-cockpit",
+  "title": "Bootstrap the cockpit through bee pane verbs on either transport",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "thc-3"
+  ],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+    "skills/bee-herding/references/role-bootstrap.md"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-cockpit/CONTEXT.md",
+    "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+    "skills/bee-herding/references/role-bootstrap.md",
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+    "skills/bee-herding/references/role-bootstrap.md"
+  ],
+  "affects_specs": [],
+  "verify": "bash -n skills/bee-herding/scripts/bootstrap-cockpit.sh && bash skills/bee-herding/scripts/bootstrap-cockpit.sh --dry-run --main-root . --workspace dry 2>&1 | grep -q 'bee herding pane' && ! bash skills/bee-herding/scripts/bootstrap-cockpit.sh --dry-run --main-root . --workspace dry 2>&1 | grep -q 'herdr '",
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Rewrite `skills/bee-herding/scripts/bootstrap-cockpit.sh` so every pane action goes through the thc-3 verbs (D2) and it never names `herdr` or `tmux` except in one comment explaining the key. Keep its contract exactly as the script has it today — read it first: `--main-root`, `--workspace`, `--dry-run`, `--no-start`, the stop-file check (the script's ONLY pre-flight; the main-clean/bypass pre-flight belongs to the bootstrap ROLE in SKILL.md, not to this script — do not add it), the idempotency refusal when a pane labelled `dispatch` already exists (now `bee herding pane-id --label dispatch`), the same layout — cockpit tab with chat (the caller's own pane: `bee herding pane current`), dispatch split right, merge split down, a runtime tab — and starting ONLY the dispatch loop with `bee herding pane run <dispatch_pane> \"'$BEE_BIN' herding control-loop --role dispatch --main-root '$MAIN_ROOT'\"`. `--workspace` becomes optional: required on herdr as today (pass it through to the verbs), ignored on tmux (D3: the current session). Parse every verb's envelope with `bee herding result <path>` instead of `herdr-result`; label panes with `bee herding pane rename <id> <label>`. `--dry-run` prints the exact bee verb lines it would run. Update `references/role-bootstrap.md` (5 herdr lines: `herdr workspace list`, `pane list --workspace`, `pane close`, `pane rename --clear`) to the bee verbs and add two sentences on the tmux case (run it from the pane that will be the chat pane; the cockpit windows appear in that session). Proof is the verify line itself: `bash -n`, then `--dry-run --workspace dry` against this checkout (herdr is the default transport, so a workspace must be given) prints at least one `bee herding pane` line and zero `herdr ` lines; today's dry-run prints 5 herdr command lines, so expect about 5-6 bee lines.",
+  "must_haves": {
+    "truths": [
+      "bootstrap --dry-run prints only bee herding verbs for pane actions, on both transports",
+      "On herdr the produced layout and the started loop are the same as before",
+      "role-bootstrap.md names no raw herdr command"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+        "substantive": "transport-neutral bootstrap on bee pane verbs with dry-run"
+      }
+    ],
+    "key_links": [
+      "the idempotency check uses bee herding pane-id --label dispatch"
+    ],
+    "prohibitions": [
+      "No merge loop is started (merge stays a gesture)",
+      "No change to the pre-flight rules"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-4",
+    "outcome": "bootstrap-cockpit.sh and role-bootstrap.md act on panes only through bee herding pane verbs",
+    "files_changed": [
+      "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+      "skills/bee-herding/references/role-bootstrap.md"
+    ],
+    "deviations": [
+      "tab-create answers with a root PANE id on both transports, so the closing line now names the runtime tab by its root pane instead of a tab_id; the chat pane branches on herding.transport because D3 fixes the tmux chat pane to the caller's own pane while herdr parity needs the cockpit tab's root pane",
+      "tab-create answers with a root pane id on both transports, so the closing line names the runtime tab by its root pane instead of a tab_id",
+      "the chat pane branches on herding.transport: D3 fixes the tmux chat pane to the caller own pane, while herdr parity needs the cockpit tab root pane"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T02:03:25.513Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T01:56:24.747Z",
+    "report": {
+      "outcome": "bootstrap-cockpit.sh and role-bootstrap.md act on panes only through bee herding pane verbs; the transport key decides the chat pane origin and whether --workspace is required",
+      "commit": "573faf32",
+      "files": [
+        "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+        "skills/bee-herding/references/role-bootstrap.md"
+      ],
+      "tests": "bash -n skills/bee-herding/scripts/bootstrap-cockpit.sh && bootstrap-cockpit.sh --dry-run --main-root . --workspace dry | grep -q (bee herding pane) and no (herdr ) — green — the cell verify line: the change is a bash script(s command vocabulary, so syntax plus dry-run output is its proof; also dry-ran the tmux branch against a temp config",
+      "deviations": [
+        "tab-create answers with a root pane id on both transports, so the closing line names the runtime tab by its root pane instead of a tab_id",
+        "the chat pane branches on herding.transport: D3 fixes the tmux chat pane to the caller own pane, while herdr parity needs the cockpit tab root pane"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 260 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "dry-run-prints-only-bee-verbs",
+            "status": "PASS",
+            "evidence": "ran: bash skills/bee-herding/scripts/bootstrap-cockpit.sh --dry-run --main-root . --workspace dry ... printed 6 lines all starting ./.bee/bin/bee herding pane, and zero herdr lines"
+          },
+          {
+            "id": "bash-syntax-clean",
+            "status": "PASS",
+            "evidence": "ran: bash -n skills/bee-herding/scripts/bootstrap-cockpit.sh ... exit 0"
+          },
+          {
+            "id": "herdr-layout-and-loop-unchanged",
+            "status": "PASS",
+            "evidence": "parent of 573faf32 ran tab-create cockpit, split right, split down, tab-create runtime, pane run dispatch; new dry-run prints the same order 1:1. skills/bee-herding/scripts/bootstrap-cockpit.sh:278-285"
+          },
+          {
+            "id": "role-bootstrap-no-raw-herdr",
+            "status": "PASS",
+            "evidence": "ran: rg -n herdr skills/bee-herding/references/role-bootstrap.md ... no matches. tmux case at skills/bee-herding/references/role-bootstrap.md:52 and :90"
+          },
+          {
+            "id": "idempotency-uses-pane-id-label-dispatch",
+            "status": "PASS",
+            "evidence": "dry-run first line: ./.bee/bin/bee herding pane-id --label dispatch --main-root ."
+          },
+          {
+            "id": "no-merge-loop-started",
+            "status": "PASS",
+            "evidence": "skills/bee-herding/scripts/bootstrap-cockpit.sh:229-232; dry-run has exactly one pane run line, role dispatch"
+          },
+          {
+            "id": "no-new-pre-flight",
+            "status": "PASS",
+            "evidence": "skills/bee-herding/scripts/bootstrap-cockpit.sh:52-53 and :200-203 keep the stop file as the only pre-flight, same as the pre-573faf32 script at lines 142-146"
+          },
+          {
+            "id": "focus-not-stolen-on-herdr",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:615 tab_create_argv ends with --no-focus; packages/bee-rs/crates/bee/src/herding/run.rs:639 pane_split already passed it. Fix landed in cell thc-8, commit 29302f4"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-23T02:30:59.111Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

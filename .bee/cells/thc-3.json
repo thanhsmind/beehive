@@ -1,0 +1,159 @@
+{
+  "id": "thc-3",
+  "feature": "tmux-herding-cockpit",
+  "title": "Add the transport-neutral bee herding pane verb group over a CockpitTransport trait",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/router.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-cockpit/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/scripts/bootstrap-cockpit.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::pane_verbs",
+  "action": "Per D2, one vocabulary for the cockpit. Create `herding/pane_verbs.rs` (declare `pub(crate) mod pane_verbs;` in herding.rs) and route these names in herding.rs's `try_native` match (anchor `\"herdr-pane-id\" => Some(herdr_pane_id(rest)),`): `pane` (subverbs `current`, `list`, `split`, `run`, `send-text`, `read`, `rename`, `close`, `layout`, `tab-create`, `tab-list`, `tab-focus`), `agent-start`, `pane-id` (`--label <l>`), and `result` (`<dotted.path>`, a transport-neutral twin of `herdr-result` that reads the pane verbs' own envelope). Keep `herdr-result` and `herdr-pane-id` working as-is. Add the names to `router.rs`'s names index beside the existing `herding herdr-pane-id --label <label>` line (anchor `rg -n \"herding herdr-pane-id\" packages/bee-rs/crates/bee/src/router.rs`). The trait: in run.rs, make `struct RealHerdr` `pub(crate)` and keep `PaneTransport` untouched; in pane_verbs.rs define `pub(crate) trait CockpitTransport: PaneTransport { fn pane_send_text(&self, pane: &str, text: &str) -> Result<(), String>; fn pane_rename(&self, pane: &str, label: Option<&str>) -> Result<(), String>; fn pane_list(&self, workspace: Option<&str>) -> Result<Vec<PaneRow>, String>; fn tab_list(&self, workspace: Option<&str>) -> Result<Vec<TabRow>, String>; fn tab_focus(&self, tab: &str) -> Result<(), String>; fn pane_id_by_label(&self, label: &str) -> Result<Option<String>, String> }` with `PaneRow { id, label: Option<String>, tab, cwd: Option<String>, command: Option<String> }` and `TabRow { id, label }`, and implement it for BOTH `RealHerdr` (herdr verbs: `pane send-text <id> <text>`, `pane rename <id> <label>` / `--clear`, `pane list [--workspace <ws>]` parsed from herdr's JSON, `tab list`, `tab focus <id>`) and `RealTmux` (cockpit D3 mapping; the two-call send discipline is tmux-herding-transport's, see its CONTEXT 'Specific Ideas': `send-keys -t <pane> -l <text>` + separate Enter; `select-pane -t <pane> -T <label>` (empty title to clear); `list-panes -a -F '#{pane_id}\\t#{pane_title}\\t#{window_id}\\t#{pane_current_path}\\t#{pane_current_command}'` filtered to the current session when workspace is None; `list-windows -F '#{window_id}\\t#{window_name}'`; `select-window -t <id>`; label lookup = first pane whose title equals the label). The phase-1 PaneTransport ops back the rest: `current`→pane_current, `split`→pane_split (flags `--direction right|down --ratio <r> --cwd <dir>`), `run`→pane_run, `read`→pane_read (`--lines N` trims the tail), `close`→pane_close, `layout`→pane_layout, `tab-create`→tab_create (`--label`, `--cwd`, `--workspace` optional: when absent, on herdr resolve the workspace id from `pane_current`'s envelope (herdr `pane current --current` carries `workspace_id`) and refuse with code `workspace_required` if it cannot; on tmux pass the empty string — RealTmux::tab_create ignores it (D3)), `agent-start`→agent_start (`<job> --kind <k> --pane <id> -- <args…>`). Selection: reuse run.rs's `transport_for_run(main_root)` style — expose a `pub(crate) fn cockpit_transport_for(main_root: &Path) -> Result<Box<dyn CockpitTransport>, String>` (Box<dyn CockpitTransport> is fine here; RealHerdr/RealTmux both implement it), with `--main-root` optional on every verb (default `super::resolve_main_root`). Output: EVERY verb prints one JSON envelope `{\"ok\":true,\"transport\":\"herdr|tmux\",\"result\":{…}}` on success (result keys: `current`→`{pane_id, tab_id?, workspace_id?}`; `list`→`{panes:[PaneRow…]}`; `split`/`tab-create`→`{pane_id}`; `tab-list`→`{tabs:[…]}`; `pane-id`→`{pane_id}` or a non-zero `{ok:false,error:{code:\"not_found\",…}}`; `read`→`{text}`; the rest `{}`), and `{\"ok\":false,\"transport\":…,\"error\":{\"code\",\"message\"}}` with exit 1 on failure; `bee herding result <dotted.path>` reads such an envelope on stdin and prints the value at `result.<path>` exactly the way `herdr_result` does for herdr bodies (read `fn herdr_result` at herding.rs ~854 and share its path walker). Tests in-module (prefixed `pane_verbs_`): a `FakeCockpit` implementing both traits records calls; each subverb maps its flags to the right trait call and renders the pinned envelope keys; `pane-id` not-found exits 1 with code `not_found`; `result` walks `result.pane_id`. Do NOT edit tmux.rs (thc-2 owns it concurrently) and do not reach its private test stub: put the `impl CockpitTransport for RealTmux` block in pane_verbs.rs (a crate trait for a crate type may be implemented in any module of the crate), give pane_verbs.rs its own small private `fn tmux_call(args: &[&str]) -> Result<String, String>` (Command::new(\"tmux\"), stdin null, Err naming the argv), and make every tmux argv a PURE builder function (`fn send_text_argv(pane, text) -> Vec<Vec<String>>` returning the two calls, `fn rename_argv`, `fn list_panes_argv`, `fn tab_list_argv`, `fn tab_focus_argv`) plus a pure `fn parse_pane_rows(stdout: &str, session: Option<&str>) -> Vec<PaneRow>`; test the builders and the parser with no process (two calls with `-l` then `Enter`; `select-pane -T`; a 5-column tab-separated line; an empty title → label None).",
+  "must_haves": {
+    "truths": [
+      "Every cockpit pane action the role docs need has a bee herding verb that works on both transports",
+      "The JSON envelope keys are identical across transports and pinned by tests",
+      "bee herding pane-id --label <l> returns the pane whose herdr label or tmux title equals <l>"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+        "substantive": "CockpitTransport trait, both impls, 14 subverbs, envelope rendering, tests with a FakeCockpit and a stub tmux"
+      }
+    ],
+    "key_links": [
+      "herding.rs try_native routes pane, agent-start, pane-id, result",
+      "router.rs names index lists the new verbs"
+    ],
+    "prohibitions": [
+      "PaneTransport's existing 14 methods and the run.rs test fakes are not changed",
+      "No key is ever typed into a pane that classifies Blocked (transport D3)",
+      "herdr-result and herdr-pane-id keep working"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-3",
+    "outcome": "bee herding pane/agent-start/pane-id/result verbs run on both transports over a new CockpitTransport trait",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/router.rs"
+    ],
+    "deviations": [
+      "CockpitTransport carries a 7th method pane_context() -> {pane_id, tab_id?, workspace_id?}: the cell requires pane current to render tab/workspace and tab-create to fall back to the caller workspace, and PaneTransport::pane_current returns only a pane id",
+      "pane layout renders {panes:[{pane_id,width,height}]} instead of the cell listed {} — role-dispatch reads layout to pick split geometry, so an empty result would make the verb unusable for its only caller",
+      "tmux pane listing uses list-panes -s (one session) instead of -a plus a client-side filter: the pinned 5-column format carries no session column, so parse_pane_rows drops the unused session parameter",
+      "run.rs RealHerdr::call and read_main_config widened to pub(crate) alongside RealHerdr itself, so pane_verbs reuses the one herdr spawn-and-decode helper instead of a second copy",
+      "pane read accepts and ignores herdr flag --source, so one role line reads the same on both transports",
+      "the D3 blocked-preflight reads TmuxSettings from a module OnceLock set by cockpit_transport_for, because RealTmux keeps its settings private and tmux.rs is owned by another cell",
+      "sync-ack: docs land in thc-5/thc-6"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T01:56:06.032Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T01:41:10.433Z",
+    "sync_ack": "docs land in thc-5/thc-6",
+    "report": {
+      "outcome": "bee herding pane/agent-start/pane-id/result verbs run on both transports over a new CockpitTransport trait",
+      "commit": "e5698a9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/router.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding — green (28 pane_verbs tests; 395 with the whole herding filter) — scoped to the herding module, the only code this cell touched",
+      "deviations": [
+        "CockpitTransport carries a 7th method pane_context() -> {pane_id, tab_id?, workspace_id?}: the cell requires pane current to render tab/workspace and tab-create to fall back to the caller workspace, and PaneTransport::pane_current returns only a pane id",
+        "pane layout renders {panes:[{pane_id,width,height}]} instead of the cell listed {} — role-dispatch reads layout to pick split geometry, so an empty result would make the verb unusable for its only caller",
+        "tmux pane listing uses list-panes -s (one session) instead of -a plus a client-side filter: the pinned 5-column format carries no session column, so parse_pane_rows drops the unused session parameter",
+        "run.rs RealHerdr::call and read_main_config widened to pub(crate) alongside RealHerdr itself, so pane_verbs reuses the one herdr spawn-and-decode helper instead of a second copy",
+        "pane read accepts and ignores herdr flag --source, so one role line reads the same on both transports",
+        "the D3 blocked-preflight reads TmuxSettings from a module OnceLock set by cockpit_transport_for, because RealTmux keeps its settings private and tmux.rs is owned by another cell"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1427 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth: every cockpit pane action the role docs need has a bee herding verb that works on both transports",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs defines the 12 pane subverbs plus agent-start, pane-id and result; CockpitTransport is implemented for RealHerdr at pane_verbs.rs:258 and for RealTmux at pane_verbs.rs:481"
+          },
+          {
+            "id": "truth: the JSON envelope keys are identical across transports and pinned by tests",
+            "status": "PASS",
+            "evidence": "one transport-agnostic renderer: pane_verbs.rs:551 print_ok, :560 print_err, :616 pane_row_json, :638 tab_row_json, :650 geom_json - the transport name is a value, never a key. CAVEAT: the test named pane_verbs_envelope_keys_are_the_same_on_both_transports at pane_verbs.rs:1382 is tautological (it builds its own literal Map and asserts on that Map keys, never calling print_ok); the real key pinning comes from the per-verb tests at :1126, :1153, :1277, :1337"
+          },
+          {
+            "id": "truth: bee herding pane-id --label returns the pane whose herdr label or tmux title equals the label",
+            "status": "PASS",
+            "evidence": "tests pane_verbs_pane_id_by_label_finds_the_first_match at pane_verbs.rs:1358 and pane_verbs_pane_id_not_found_is_a_typed_refusal at :1369"
+          },
+          {
+            "id": "check: herdr-result and herdr-pane-id still routed",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding.rs:127-128 route herdr-result and herdr-pane-id unchanged; herding.rs:866 herdr_result keeps its own context strings; router.rs:98-99 still index both"
+          },
+          {
+            "id": "check/prohibition: no key typed into a blocked pane",
+            "status": "PASS",
+            "evidence": "pane_verbs.rs:470-479 refuse_if_blocked; :483 RealTmux::pane_send_text calls it before any send_text_argv call; test pane_verbs_tmux_blocked_screens_are_never_typed_into at :1509. NOTE: the preflight fails OPEN on an unreadable screen (pane_verbs.rs:472), matching RealTmux::agent_prompt existing posture"
+          },
+          {
+            "id": "prohibition: PaneTransport 14 methods and the run.rs test fakes are not changed",
+            "status": "PASS",
+            "evidence": "e5698a9 run.rs hunk is +8 -3 and only widens visibility: struct RealHerdr and RealHerdr::call to pub(crate) at run.rs:512/517, read_main_config at run.rs:2483"
+          },
+          {
+            "id": "key_link: herding.rs try_native routes pane, agent-start, pane-id, result; router.rs names index lists them",
+            "status": "PASS",
+            "evidence": "herding.rs router block near :127; router.rs +6 lines in the same commit"
+          },
+          {
+            "id": "proof: cargo test --release -p bee herding::",
+            "status": "PASS",
+            "evidence": "360 passed; 0 failed (28 pane_verbs_ tests present)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-23T02:35:26.491Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

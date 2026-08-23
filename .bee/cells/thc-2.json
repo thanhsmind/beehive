@@ -1,0 +1,180 @@
+{
+  "id": "thc-2",
+  "feature": "tmux-herding-cockpit",
+  "title": "Add fleet TmuxBackend for waves and move the screen classifier into fleet",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "thc-1"
+  ],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/src/backend.rs",
+    "packages/bee-rs/crates/fleet/src/backend/tmux.rs",
+    "packages/bee-rs/crates/fleet/src/screen.rs",
+    "packages/bee-rs/crates/fleet/src/lib.rs",
+    "packages/bee-rs/crates/fleet/tests/tmux_backend.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-cockpit/CONTEXT.md",
+    "packages/bee-rs/crates/fleet/src/backend.rs",
+    "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+    "packages/bee-rs/crates/fleet/tests/herdr_backend.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::",
+  "action": "Per D4, ONE classifier. Step 1 — move: create `crates/fleet/src/screen.rs` (declare `pub mod screen;` in fleet's lib.rs) holding `pub struct ScreenSettings { pub busy_markers: Vec<String>, pub blocked_markers: Vec<String>, pub scrollback: u32, pub quiet_cycles: u32, pub interval_ms: u64 }` with the SAME defaults bee's `TmuxSettings::default()` carries today (read `packages/bee-rs/crates/bee/src/herding/tmux.rs` — copy the literals, do not re-derive), `pub enum Screen { Idle, Working, Blocked }`, and `pub fn classify(screen: &str, s: &ScreenSettings) -> Screen` with the exact semantics bee's `classify` has (blocked wins, last-12/last-2 non-empty-line windows, case-insensitive). Move bee's classifier tests into fleet beside it. Then make bee's tmux.rs REUSE it: `TmuxSettings` becomes a thin alias/newtype over `fleet::screen::ScreenSettings` (keep `TmuxSettings::from_config(cfg)` in bee — config parsing is bee's), and bee's `classify` calls `fleet::screen::classify`; delete the duplicate body. bee's tmux tests must stay green unchanged apart from the import. Step 2 — backend: create `crates/fleet/src/backend/tmux.rs` with `pub struct TmuxBackend` implementing `WorkerBackend` as a peer of `HerdrBackend` (declare `pub mod tmux;` in backend.rs beside `pub mod herdr;`), with `new(agent_kind, agent_args, settings: ScreenSettings)` and `with_test_seams(dirs, spill_dir, …)` mirroring herdr.rs (reuse the `child_path` PATH-PREPEND idea — prepend, never replace; the stub script needs coreutils). Worker names are tmux pane ids (`%N`) or pane titles: `canonical_id(name)` → if `%N`-shaped return it, else `tmux display-message -p -t <name> '#{pane_id}'`, on failure return the name unchanged (no-collapse default); `start(spec)` → type one shell-quoted `exec '<kind>' '<args>…'` line into the pane via `send-keys -t <pane> -l <line>` + separate `send-keys -t <pane> Enter` (never -p/--print); `status(name)` → `capture-pane -p -t <pane> -S -<scrollback>` then `classify`: Idle → `WorkerStatus::Ready`, Working → `Working`, Blocked → `Blocked`, any failure → `Unverifiable` (never Err); `send(name, task)` → wrap the task with the same spill-file instruction herdr.rs uses (`wrap_task_with_spill_instruction` — make it `pub(crate)` shared or copy with a pointer), then the two-call send, and refuse with Err when the pre-send capture classifies Blocked (tmux-herding-transport D3); `read_output(name)` → capture-pane plus `recover_transcript` from the spill file (reuse herdr.rs's helper the same way). Step 3 — selection: in bee's wave.rs, `fn real_backend_ctor(kind: String, args: Vec<String>) -> HerdrBackend` (anchor `rg -n \"fn real_backend_ctor\" …/wave.rs`) is passed by `wave()` as `construct_backend`; make the production path pick by `transport_kind_at(main_root)`: keep `real_backend_ctor` byte-identical for Herdr and add a NAMED constructor factory `fn tmux_backend_ctor(settings: ScreenSettings) -> impl FnOnce(String, Vec<String>) -> TmuxBackend`; the call site passes `tmux_backend_ctor(settings)` by name, never an inline closure literal — this honors the doctrine in the comment above `real_backend_ctor` (wave.rs ~572-582) because a test can call `tmux_backend_ctor(settings)(kind, args)` directly and assert on what it built. `settings` comes from bee's `TmuxSettings::from_config(&cfg)` converted into `ScreenSettings`. `build_wave_backend_and_run` is generic over `B`, so dispatch with a `match transport_kind_at(main_root)` that calls it once per concrete type (both arms return the same Result type) — do not box. Also widen bee tmux.rs's test seam `with_test_path` to `pub(crate)` (it is private today) so sibling modules' tests can reuse it later. Tests: `crates/fleet/tests/tmux_backend.rs` with a PATH-prepended stub `tmux` (mirror `herdr_backend.rs`'s `Stub`): start types two send-keys calls with `-l` and a separate Enter; status maps the three screens to Ready/Working/Blocked and a failing stub to Unverifiable; send refuses on a blocked screen; canonical_id passes `%3` through and resolves a title via display-message; read_output recovers a spill. In bee: a test that `wave` under transport=tmux constructs the tmux ctor (assert through a seam the way `real_backend_ctor_hands_kind_and_args_straight_through_to_construction` does). Test in bee (name prefixed `wave_tmux_`): `tmux_backend_ctor(settings)(kind, args)` hands kind/args/settings straight through, mirroring `real_backend_ctor_hands_kind_and_args_straight_through_to_construction`.",
+  "must_haves": {
+    "truths": [
+      "fleet::screen::classify is the only classifier; bee's tmux.rs has no second body",
+      "bee herding wave under transport=tmux briefs workers through TmuxBackend and never spawns herdr",
+      "TmuxBackend::status never returns Err and maps a failure to Unverifiable"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/fleet/src/backend/tmux.rs",
+        "substantive": "TmuxBackend: WorkerBackend over tmux verbs with stub-tested start/status/send/read/canonical_id"
+      },
+      {
+        "path": "packages/bee-rs/crates/fleet/src/screen.rs",
+        "substantive": "ScreenSettings, Screen, classify with the moved tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/fleet/tests/tmux_backend.rs",
+        "substantive": "stub-tmux integration tests"
+      }
+    ],
+    "key_links": [
+      "bee tmux.rs imports fleet::screen",
+      "wave.rs production path selects the backend by transport_kind_at"
+    ],
+    "prohibitions": [
+      "No change to WorkerBackend's five methods or WorkerStatus",
+      "No change to HerdrBackend behavior",
+      "No new-session per worker; never attach-session"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-2",
+    "outcome": "fleet gains TmuxBackend and the one shared screen classifier; bee's wave picks the backend by herding.transport",
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/src/screen.rs",
+      "packages/bee-rs/crates/fleet/src/backend.rs",
+      "packages/bee-rs/crates/fleet/src/backend/tmux.rs",
+      "packages/bee-rs/crates/fleet/src/lib.rs",
+      "packages/bee-rs/crates/fleet/tests/tmux_backend.rs",
+      "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave.rs"
+    ],
+    "deviations": [
+      "TmuxSettings became a Deref newtype over fleet::screen::ScreenSettings, not a bare type alias: the alias forced from_config onto an extension trait, which broke the sibling worker in-flight files run.rs and pane_verbs.rs that call TmuxSettings::from_config. The newtype keeps their call sites byte-identical and keeps config parsing on a bee-owned type.",
+      "bee tmux.rs re-exports classify and Screen at its own path (pub(crate) use) so sibling use super::tmux::{classify, Screen} imports keep resolving after the move.",
+      "wrap_task_with_spill_instruction and recover_transcript are copied into fleet/src/backend/tmux.rs with a pointer to herdr.rs rather than widened to pub(crate) there: herdr.rs is outside this cell files list. The cell named copy-with-a-pointer as the allowed alternative.",
+      "sync-ack: docs land in thc-6"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T02:02:51.239Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T01:48:20.485Z",
+    "sync_ack": "docs land in thc-6",
+    "report": {
+      "outcome": "fleet gains TmuxBackend and the one shared screen classifier; bee wave picks the backend by herding.transport",
+      "commit": "f6d63730d985cac0ae66fbfe4349a52306df7638",
+      "files": [
+        "packages/bee-rs/crates/fleet/src/screen.rs",
+        "packages/bee-rs/crates/fleet/src/backend.rs",
+        "packages/bee-rs/crates/fleet/src/backend/tmux.rs",
+        "packages/bee-rs/crates/fleet/src/lib.rs",
+        "packages/bee-rs/crates/fleet/tests/tmux_backend.rs",
+        "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave.rs"
+      ],
+      "tests": "cargo test --release -p fleet (117 passed) && cargo test --release -p bee herding:: (355 passed) — green — the two crates the cell touches: fleet gains the classifier plus the backend, bee reuses them in tmux.rs and wave.rs",
+      "deviations": [
+        "TmuxSettings became a Deref newtype over fleet::screen::ScreenSettings, not a bare type alias: the alias forced from_config onto an extension trait, which broke the sibling worker in-flight files run.rs and pane_verbs.rs that call TmuxSettings::from_config. The newtype keeps their call sites byte-identical and keeps config parsing on a bee-owned type.",
+        "bee tmux.rs re-exports classify and Screen at its own path (pub(crate) use) so sibling use super::tmux::{classify, Screen} imports keep resolving after the move.",
+        "wrap_task_with_spill_instruction and recover_transcript are copied into fleet/src/backend/tmux.rs with a pointer to herdr.rs rather than widened to pub(crate) there: herdr.rs is outside this cell files list. The cell named copy-with-a-pointer as the allowed alternative."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth: fleet::screen::classify is the only classifier; bee tmux.rs has no second body",
+            "status": "PASS",
+            "evidence": "rg fn classify across packages/bee-rs/crates finds one definition: packages/bee-rs/crates/fleet/src/screen.rs:125; packages/bee-rs/crates/bee/src/herding/tmux.rs:65 pub(crate) use fleet::screen::{classify, Screen}"
+          },
+          {
+            "id": "check: no duplicate marker lists across crates",
+            "status": "PASS",
+            "evidence": "rg busy_markers|blocked_markers shows default literals only at fleet/src/screen.rs:69 and :78; bee herding/tmux.rs:143-147 only overlays them from herding.tmux.* config"
+          },
+          {
+            "id": "truth: bee herding wave under transport=tmux briefs through TmuxBackend and never spawns herdr",
+            "status": "PASS",
+            "evidence": "wave.rs:797 transport_kind_at switch with a typed refusal on a bad key; run_wave_for_transport arms at wave.rs:646 and :661 pass real_backend_ctor and tmux_backend_ctor(settings)"
+          },
+          {
+            "id": "truth: TmuxBackend::status never returns Err and maps a failure to Unverifiable",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/fleet/src/backend/tmux.rs:360 signature returns WorkerStatus (not Result); :364 Err(_) => WorkerStatus::Unverifiable"
+          },
+          {
+            "id": "check: send refuses on a blocked screen",
+            "status": "PASS",
+            "evidence": "fleet/src/backend/tmux.rs:379-382 pre-send capture; classify == Screen::Blocked returns Err before any send-keys call"
+          },
+          {
+            "id": "check: wave selection is by name, not a closure literal",
+            "status": "PASS",
+            "evidence": "wave.rs:608 fn tmux_backend_ctor is a named factory; call sites wave.rs:646 and :661 pass named items; test wave_tmux_backend_ctor_hands_kind_args_and_settings_straight_through at wave.rs:1837"
+          },
+          {
+            "id": "prohibition: no change to WorkerBackend five methods or WorkerStatus",
+            "status": "PASS",
+            "evidence": "f6d63730 stat: fleet/src/backend.rs +6 lines only, the pub mod tmux declaration and its doc"
+          },
+          {
+            "id": "prohibition: no new-session per worker; never attach-session",
+            "status": "PASS",
+            "evidence": "rg new-session|attach-session|switch-client over fleet/src/backend/tmux.rs and bee herding/tmux.rs returns only doc lines (backend/tmux.rs:44, herding/tmux.rs:37) and the negative assertion at herding/tmux.rs:1084-1086"
+          },
+          {
+            "id": "check: two-call send discipline preserved",
+            "status": "PASS",
+            "evidence": "fleet/src/backend/tmux.rs:199-200 send-keys -t pane -l line then a separate send-keys -t pane Enter"
+          },
+          {
+            "id": "proof: cargo test --release -p fleet and -p bee herding::",
+            "status": "PASS",
+            "evidence": "fleet 117 passed across 6 suites, exit 0; bee herding:: 360 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-23T02:35:26.487Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

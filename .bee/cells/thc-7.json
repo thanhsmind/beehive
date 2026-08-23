@@ -1,0 +1,147 @@
+{
+  "id": "thc-7",
+  "feature": "tmux-herding-cockpit",
+  "title": "Widen the pane-verb envelope with geometry origin, foreground cwd and agent status",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "thc-2",
+    "thc-3"
+  ],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-cockpit/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+    "skills/bee-herding/references/role-dispatch.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::",
+  "action": "The dispatch and merge roles branch on three pane fields the thc-3 envelope does not carry (found by the thc-5 worker): (1) `rect.x`/`rect.y` — the chat pane is 'the smallest x, ties on smallest y, excluding your own pane' (role-dispatch.md §3, role-merge.md §2); (2) `foreground_cwd` — the §4 anomaly scan, which role-dispatch.md:141 says must NOT be substituted by `cwd`; (3) `agent_status`/`agent_session` — the dead-session test at role-dispatch.md:169. Add them. In run.rs: `PaneGeom` (anchor `pub(crate) struct PaneGeom` ~396) gains `x: u64, y: u64`; `RealHerdr`'s layout parse (`extract_pane_layout` or wherever `rect.width`/`rect.height` are read — `rg -n \"rect\" run.rs`) also reads `rect.x`/`rect.y`; every existing constructor of PaneGeom (test fakes included — `rg -n \"PaneGeom {\" run.rs tmux.rs pane_verbs.rs`) gets `x: 0, y: 0` or real values. In tmux.rs: `RealTmux::pane_layout` lists `list-panes -t <pane> -F '#{pane_id} #{pane_left} #{pane_top} #{pane_width} #{pane_height}'` and fills x/y (update its stub-parse test). In pane_verbs.rs: `geom_json` adds `x`, `y`; `PaneRow` gains `foreground_cwd: Option<String>`, `agent_status: Option<String>`, `agent_session: Option<String>` and `pane_row_json` renders them (null when absent); the herdr `pane list` parse reads herdr's `foreground_cwd`, `agent_status`, `agent_session` fields (read `skills/bee-herding/references/role-dispatch.md` §4 and `spawn-proof.md` for the exact herdr field names, and `RealHerdr`'s existing list parse); the tmux parse fills `foreground_cwd` from `#{pane_current_path}` (tmux's pane_current_path already follows the foreground process, so on tmux `cwd` and `foreground_cwd` are the same value — say so in a doc comment), `agent_status` from the screen classifier on a bounded capture of that pane (idle|working|blocked, advisory per tmux-herding-transport D4; skip the capture and emit null when the row is not the caller's target to keep `list` cheap — implement as: `pane list` never classifies; a new subverb flag `pane list --with-status` classifies every row), and `agent_session` null. Update the envelope-key tests in pane_verbs.rs (the pinned-keys test for `layout` rows and `list` rows) and add parser tests: a tmux 5-field layout line → x/y/width/height; a herdr list body carrying foreground_cwd/agent_status → the row fields. Keep every existing verb flag and key; this cell only ADDS keys.",
+  "must_haves": {
+    "truths": [
+      "bee herding pane layout rows carry x and y on both transports",
+      "bee herding pane list rows carry foreground_cwd, agent_status and agent_session (null where a transport has none)",
+      "No existing envelope key or flag changes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+        "substantive": "widened PaneRow and geom_json with tests; --with-status flag"
+      }
+    ],
+    "key_links": [
+      "PaneGeom x/y flow from both RealHerdr and RealTmux pane_layout into geom_json"
+    ],
+    "prohibitions": [
+      "No removal or rename of an existing envelope key",
+      "No key typed into a pane"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-7",
+    "outcome": "pane layout rows carry x/y and pane list rows carry foreground_cwd, agent_status and agent_session on both transports; new pane list --with-status classifies tmux panes through the shared classifier",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+    ],
+    "deviations": [
+      "Named the tmux layout format string as a PANE_GEOM_FORMAT const so the argv and the test that pins it cannot drift — the cell asked for the widened format, not for where it lives",
+      "Replaced tmux.rs stale not-wired-yet header with a truthful one instead of deleting it outright, because the #![allow(dead_code)] under it still needs a stated reason",
+      "extract_pane_layout defaults a missing rect x/y to 0 rather than dropping the row: the split-parent rule is pure over area and must not lose a spawn to an absent origin",
+      "bee is a binary crate so its tests are in-module #[cfg(test)]; the untested-lines advisory fires on path shape, but 12 tests were added or widened inside the three touched files",
+      "sync-ack: docs land in thc-5/thc-6"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T02:15:27.665Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T02:03:13.516Z",
+    "sync_ack": "docs land in thc-5/thc-6",
+    "report": {
+      "outcome": "pane layout rows carry x/y and pane list rows carry foreground_cwd, agent_status and agent_session on both transports; new pane list --with-status classifies tmux panes through the shared classifier",
+      "commit": "6278c77",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/tmux.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: — green (361 passed, 0 failed) — the cell only touches the herding transport seam and its pane verbs, so the herding module scope covers every changed line",
+      "deviations": [
+        "Named the tmux layout format string as a PANE_GEOM_FORMAT const so the argv and the test that pins it cannot drift — the cell asked for the widened format, not for where it lives",
+        "Replaced tmux.rs stale not-wired-yet header with a truthful one instead of deleting it outright, because the #![allow(dead_code)] under it still needs a stated reason",
+        "extract_pane_layout defaults a missing rect x/y to 0 rather than dropping the row: the split-parent rule is pure over area and must not lose a spawn to an absent origin",
+        "bee is a binary crate so its tests are in-module #[cfg(test)]; the untested-lines advisory fires on path shape, but 12 tests were added or widened inside the three touched files"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 457 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth: bee herding pane layout rows carry x and y on both transports",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:399-403 PaneGeom gains x and y; run.rs:586-590 extract_pane_layout reads rect.x/rect.y for herdr; packages/bee-rs/crates/bee/src/herding/tmux.rs PANE_GEOM_FORMAT adds pane_left and pane_top and parse_pane_geoms reads them; pane_verbs.rs:650-658 geom_json renders x and y"
+          },
+          {
+            "id": "truth: pane list rows carry foreground_cwd, agent_status and agent_session (null where a transport has none)",
+            "status": "PASS",
+            "evidence": "pane_verbs.rs:616-636 pane_row_json inserts all three with map_or(Value::Null, ...); tests pane_verbs_list_renders_the_role_fields_and_nulls_what_a_transport_lacks at pane_verbs.rs:1153 and pane_verbs_list_with_status_* at :1187, :1202, :1219"
+          },
+          {
+            "id": "truth/check: only additive keys - no existing envelope key or flag changes",
+            "status": "PASS",
+            "evidence": "pane_row_json keeps pane_id,label,tab_id,cwd,command in their original order then appends the three (assertion in the thc-7 test hunk pinning the full key vector); geom_json pins vec![pane_id,width,height,x,y] in the layout key test"
+          },
+          {
+            "id": "key_link: PaneGeom x/y flow from both RealHerdr and RealTmux pane_layout into geom_json",
+            "status": "PASS",
+            "evidence": "herdr: run.rs extract_pane_layout test asserts x 36 / y 1 survive the captured body; tmux: herding/tmux.rs parse_pane_geoms test asserts %4 at x 61 y 22 from a five-column line, and the argv test pins list-panes -t %1 -F PANE_GEOM_FORMAT"
+          },
+          {
+            "id": "prohibition: no removal or rename of an existing envelope key",
+            "status": "PASS",
+            "evidence": "the two key-order assertions above; 6278c77 renderers only insert new entries"
+          },
+          {
+            "id": "prohibition: no key typed into a pane",
+            "status": "PASS",
+            "evidence": "the 6278c77 pane_verbs.rs hunk adds no send path; --with-status classifies through a bounded capture only (fill_agent_status at pane_verbs.rs:680, RealTmux::pane_status at :509-513 uses capture_argv)"
+          },
+          {
+            "id": "proof: cargo test --release -p bee herding::",
+            "status": "PASS",
+            "evidence": "360 passed; 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-23T02:35:26.495Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

@@ -1,0 +1,153 @@
+{
+  "id": "thc-1",
+  "feature": "tmux-herding-cockpit",
+  "title": "Count occupancy through tmux and swap the control-pane allowlist by transport",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-cockpit/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::",
+  "action": "Two transport switches, both keyed by `crate::herding::transport_kind_at(main_root)` (herding.rs: Result<TransportKind, String>, fail-open Herdr on a missing config). (A) Occupancy, wave.rs: the only process spawn is `fn live_pane_ids_via_herdr() -> Option<HashSet<String>>` (anchor `rg -n \"fn live_pane_ids_via_herdr\" packages/bee-rs/crates/bee/src/herding/wave.rs` → 763) with its sole caller `let live_panes = live_pane_ids_via_herdr();` inside `pub(super) fn occupancy` (→ 851, after `main_root` is resolved at ~843). Add `fn live_pane_ids_via_tmux() -> Option<HashSet<String>>` running `tmux list-panes -a -F '#{pane_id}'` with `stdin(Stdio::null())`, one id per non-empty line, None on any trouble (spawn failure, non-zero exit) — the same fail-closed contract that routes to `Occupancy::Fallback`. Extract the pure `fn parse_tmux_pane_list(stdout: &str) -> HashSet<String>` and test it (three ids, trailing newline, empty body → empty set; names prefixed `occupancy_tmux_`). Add `fn live_pane_ids(main_root: &Path) -> Option<HashSet<String>>` that picks by `transport_kind_at(main_root)` (Err → None) and switch the caller to it. Keep `live_pane_ids_via_herdr` byte-identical. (B) Allowlist, control_loop.rs: `fn allowed_tools_for(role: Role) -> &'static str` (anchor `rg -n \"fn allowed_tools_for\" packages/bee-rs/crates/bee/src/herding/control_loop.rs` → 212) returns the byte-copied herdr strings. Change it to `allowed_tools_for(role: Role, kind: TransportKind) -> &'static str`: the Herdr arm returns the EXACT existing strings (do not retype them — keep the literals), the Tmux arm returns the same strings with `Bash(herdr:*)` replaced by `Bash(tmux:*)` and nothing else. Thread the kind from `resolve_iteration_argv(main_root, role, turn_ceiling)` (→ 288), which already holds `main_root`. Update the existing callers/tests of `allowed_tools_for` (the literals also appear in tests at ~675, 700, 747 — `rg -n \"Bash(herdr:\\*)\" …control_loop.rs` lists every site; the test expectations for the herdr arm stay byte-identical). Tests (prefixed `allowlist_`): tmux arm for both roles contains `Bash(tmux:*)` and not `Bash(herdr:*)`; herdr arm equals the original literal.",
+  "must_haves": {
+    "truths": [
+      "bee herding occupancy under transport=tmux crosses the ledger against tmux list-panes ids",
+      "With the key absent, occupancy and the allowlist are byte-identical to today",
+      "The tmux control pane allowlist names Bash(tmux:*) and never Bash(herdr:*)"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "substantive": "live_pane_ids dispatcher, tmux lister, parse_tmux_pane_list with tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "substantive": "allowed_tools_for(role, kind) with a tmux arm and tests"
+      }
+    ],
+    "key_links": [
+      "occupancy() calls live_pane_ids(&main_root)",
+      "resolve_iteration_argv passes transport_kind_at(main_root) into allowed_tools_for"
+    ],
+    "prohibitions": [
+      "No change to the wave briefing path or real_backend_ctor (that is thc-2)",
+      "No widening of the allowlist beyond the one substitution"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-1",
+    "outcome": "Occupancy lists live panes through tmux and the control allowlist swaps Bash(herdr:*) for Bash(tmux:*), both keyed by herding.transport",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [
+      "Spelled the transport lookup super::transport_kind_at / super::TransportKind rather than crate::herding::… — the same items, matching the super:: idiom already used in both files",
+      "Amended one clause of the live_pane_ids_via_herdr DOC comment (it claimed to be the only process spawn in the file, which the new tmux lister made false); the function body stays byte-identical",
+      "A malformed herding.transport value now propagates as an Err out of resolve_iteration_argv (the typed refusal transport_kind defines) instead of silently arming the herdr allowlist",
+      "sync-ack: docs land in thc-6"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T01:48:02.587Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T01:41:10.370Z",
+    "sync_ack": "docs land in thc-6",
+    "report": {
+      "outcome": "Occupancy lists live panes through tmux and the control-pane allowlist swaps Bash(herdr:*) for Bash(tmux:*), both keyed by herding.transport; with the key absent both paths are byte-identical",
+      "commit": "e087a26375c0b5fcf36721a437dc9e65223d7351",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: — green, 331 passed, including 3 new occupancy_tmux_ and 4 new allowlist_ tests — the verify recorded on the cell; both touched files are herding:: modules and no module outside herding:: calls the changed functions",
+      "deviations": [
+        "Spelled the transport lookup super::transport_kind_at / super::TransportKind rather than crate::herding::… — the same items, matching the super:: idiom already used in both files",
+        "Amended one clause of the live_pane_ids_via_herdr DOC comment (it claimed to be the only process spawn in the file, which the new tmux lister made false); the function body stays byte-identical",
+        "A malformed herding.transport value now propagates as an Err out of resolve_iteration_argv (the typed refusal transport_kind defines) instead of silently arming the herdr allowlist"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 165 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth: bee herding occupancy under transport=tmux crosses the ledger against tmux list-panes ids",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/wave.rs:785 live_pane_ids_via_tmux runs tmux list-panes -a -F pane_id; wave.rs:891 occupancy calls live_pane_ids(main_root)"
+          },
+          {
+            "id": "truth: with the key absent, occupancy and the allowlist are byte-identical to today",
+            "status": "PASS",
+            "evidence": "wave.rs:817 Herdr arm calls live_pane_ids_via_herdr with an unchanged body (only its doc comment was amended); control_loop.rs:220-226 Herdr arms keep the original string literals; test allowlist_herdr_arms_stay_the_byte_identical_bash_strings"
+          },
+          {
+            "id": "truth: the tmux control pane allowlist names Bash(tmux:*) and never Bash(herdr:*)",
+            "status": "PASS",
+            "evidence": "control_loop.rs:229-234; test allowlist_tmux_arms_name_tmux_and_never_herdr"
+          },
+          {
+            "id": "check: tmux arm substitutes exactly one entry",
+            "status": "PASS",
+            "evidence": "control_loop.rs test allowlist_tmux_arms_swap_that_one_entry_and_widen_nothing asserts allowed_tools_for(role,Tmux) == allowed_tools_for(role,Herdr).replace(Bash(herdr:*),Bash(tmux:*)) for both roles"
+          },
+          {
+            "id": "check: occupancy falls back to Fallback when tmux is absent",
+            "status": "PASS",
+            "evidence": "wave.rs:785-795 returns None on spawn failure or non-zero exit; wave_ledger.rs:287-294 maps None to Occupancy::Fallback"
+          },
+          {
+            "id": "key_link: resolve_iteration_argv passes transport_kind_at into allowed_tools_for",
+            "status": "PASS",
+            "evidence": "control_loop.rs:310; test allowlist_transport_tmux_config_reaches_the_spawned_argv writes .bee/config.json and asserts the spawned argv tail"
+          },
+          {
+            "id": "prohibition: no change to the wave briefing path or real_backend_ctor",
+            "status": "PASS",
+            "evidence": "e087a263 wave.rs hunk is +70 -2 and touches only live_pane_ids* plus occupancy one call site at wave.rs:891"
+          },
+          {
+            "id": "prohibition: no widening of the allowlist beyond the one substitution",
+            "status": "PASS",
+            "evidence": "the replace-equality test named above"
+          },
+          {
+            "id": "proof: cargo test --release -p bee herding::",
+            "status": "PASS",
+            "evidence": "360 passed; 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-23T02:35:26.484Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

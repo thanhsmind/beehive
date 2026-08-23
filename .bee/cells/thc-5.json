@@ -1,0 +1,119 @@
+{
+  "id": "thc-5",
+  "feature": "tmux-herding-cockpit",
+  "title": "Rewrite the dispatch, merge and wave role docs onto the bee pane verbs",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "thc-3",
+    "thc-7"
+  ],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/role-merge.md",
+    "skills/bee-herding/references/wave-runs.md",
+    "skills/bee-herding/references/dispatch-prompt.md",
+    "skills/bee-herding/references/merge-prompt.md",
+    "skills/bee-herding/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-cockpit/CONTEXT.md",
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/role-merge.md",
+    "skills/bee-herding/references/wave-runs.md",
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/SKILL.md",
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/role-merge.md",
+    "skills/bee-herding/references/wave-runs.md"
+  ],
+  "affects_specs": [],
+  "verify": "test \"$(rg -c 'herdr (pane|tab|agent|workspace) ' skills/bee-herding/references/role-dispatch.md skills/bee-herding/references/role-merge.md skills/bee-herding/references/wave-runs.md | awk -F: '{s+=$2} END {print s+0}')\" = 0 && .bee/bin/bee knowledge check",
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Per D2, a cold role reads one vocabulary. The verbs landed in commit e5698a9 and thc-7 widened the envelope — READ `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs` for the exact subverbs, flags and envelope keys; never guess a key. `pane layout` rows now carry `x`,`y`,`width`,`height`; `pane list` rows carry `id,label,tab,cwd,command,foreground_cwd,agent_status,agent_session` (`--with-status` fills agent_status on tmux). Replace every herdr command in the three role references with the bee verb that performs the same action — the live list is `rg -n \"herdr (pane|tab|agent|workspace) \" skills/bee-herding/references/role-dispatch.md skills/bee-herding/references/role-merge.md skills/bee-herding/references/wave-runs.md` (re-run it, do not count on numbers). Mapping: `herdr pane current --current` → `bee herding pane current` (envelope `result.{pane_id, tab_id, workspace_id}`; the `--pane <own id>` form in §8.5 collapses to the same verb); `pane rename <id> <label>` → `bee herding pane rename <id> <label>`; `pane layout --pane <id>` → `bee herding pane layout --pane <id>` (`result.panes[]` with pane_id/x/y/width/height — the chat-pane rule 'smallest x, ties smallest y, excluding own' maps 1:1); `pane read <id> --source recent --lines N` → `bee herding pane read <id> --lines N`; `pane send-text <id> \"…\"` → `bee herding pane send-text <id> \"…\"`; `pane list --workspace <ws>` → `bee herding pane list [--workspace <ws>] [--with-status]` (rows carry foreground_cwd/agent_status/agent_session — the §4 anomaly scan and the §4 dead-session test keep their exact fields); `pane split <id> --direction … --ratio … --cwd … --no-focus` → `bee herding pane split …` (same flags minus --no-focus, which the verb always applies; `result.pane_id`); `pane close <id>` → `bee herding pane close <id>`; `agent start <slug> --kind <k> --pane <id> --timeout 60000 -- <args>` → `bee herding agent-start <slug> --kind <k> --pane <id> -- <args>`; `tab list --workspace <ws>` → `bee herding pane tab-list`; `tab focus <id>` → `bee herding pane tab-focus <id>`; `herdr-result`/JSON field reads (`.result.pane.tab_id` etc.) → `bee herding result <path>` (relative to `result`) over the verbs' envelope. Keep every rule, order, refusal and report line of the roles exactly; only the command spelling and the parsed field names change. Where a role says \"herdr workspace\" as a place (including `dispatch-prompt.md` and `merge-prompt.md`), say \"the pane workspace (herdr workspace or tmux session)\". The quick-reference tables at the end of role-dispatch.md and role-merge.md get the same treatment. In `SKILL.md` frontmatter, the `herdr-cli` dependency becomes a transport note: herdr is required when `herding.transport` is herdr, tmux on PATH when it is tmux. Do NOT touch role-bootstrap.md (thc-4 owns it). Proof: the verify's rg count must be 0 and `bee knowledge check` green; also walk role-dispatch.md §1–§9 once as a reader and record in the cap line that every command is a bee verb.",
+  "must_haves": {
+    "truths": [
+      "No raw herdr pane/tab/agent/workspace command remains in role-dispatch.md, role-merge.md or wave-runs.md",
+      "Every role step still performs the same action in the same order with the same refusals"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-herding/references/role-dispatch.md",
+        "substantive": "dispatch role on bee pane verbs, quick reference included"
+      },
+      {
+        "path": "skills/bee-herding/references/role-merge.md",
+        "substantive": "merge role on bee pane verbs"
+      }
+    ],
+    "key_links": [
+      "every parsed field path matches an envelope key pinned in pane_verbs.rs tests"
+    ],
+    "prohibitions": [
+      "No change to the safety boundaries, interlock, lane-safety filter, or merge-stop rules",
+      "role-bootstrap.md is not edited here"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-5",
+    "outcome": "Dispatch, merge and wave role docs drive panes through the bee herding pane verbs; every parsed field follows the pane_verbs.rs envelope",
+    "files_changed": [
+      "skills/bee-herding/references/role-dispatch.md",
+      "skills/bee-herding/references/role-merge.md",
+      "skills/bee-herding/references/wave-runs.md",
+      "skills/bee-herding/references/dispatch-prompt.md",
+      "skills/bee-herding/references/merge-prompt.md",
+      "skills/bee-herding/SKILL.md"
+    ],
+    "deviations": [
+      "pane current renders pane_id/tab_id/workspace_id only (context_result in pane_verbs.rs) and carries no label key, so section 1 of role-dispatch.md and role-merge.md now names bee herding pane list as where the label is read; the self-name rule itself is unchanged",
+      "The cell's mandated phrase 'the pane workspace (herdr workspace or tmux session)' itself matches the cell verify regex, so all four places read '(a herdr workspace, or a tmux session)' and the verify counts 0",
+      "The never-let-the-verb-pick-its-own-anchor rule is kept in dispatch section 3 and merge section 2 but reworded: the bee verb has no --current form, so the hazard now reads 'always pass --pane' with the same reason and the same refusal",
+      "Prose that named herdr where both transports apply (herdr's live pane list, herdr closes the pane, the width herdr needs) now says the transport; the herdr 0.8.0 live-evidence citations in section 8 stay as recorded history",
+      "SKILL.md frontmatter now carries two dependency entries, herdr-cli and tmux-cli, both missing_effect degraded, each required only when herding.transport names it",
+      "sync-ack: dispatch-prompt.md and merge-prompt.md are named in the cell's own files list and its action text (the 'herdr workspace' rewording), but were left out of affects_skills when the cell was written — the touched set matches the assignment, the prediction field was short"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T02:25:11.326Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T02:15:46.945Z",
+    "verify_command": null,
+    "verified_at": null,
+    "sync_ack": "dispatch-prompt.md and merge-prompt.md are named in the cell's own files list and its action text (the 'herdr workspace' rewording), but were left out of affects_skills when the cell was written — the touched set matches the assignment, the prediction field was short",
+    "report": {
+      "outcome": "Dispatch, merge and wave role docs drive panes through the bee herding pane verbs; every parsed field follows the pane_verbs.rs envelope",
+      "commit": "bc791dd0",
+      "files": [
+        "skills/bee-herding/references/role-dispatch.md",
+        "skills/bee-herding/references/role-merge.md",
+        "skills/bee-herding/references/wave-runs.md",
+        "skills/bee-herding/references/dispatch-prompt.md",
+        "skills/bee-herding/references/merge-prompt.md",
+        "skills/bee-herding/SKILL.md"
+      ],
+      "tests": "rg -c 'herdr (pane|tab|agent|workspace) ' over the three role refs = 0, then .bee/bin/bee knowledge check, then a reader walk of role-dispatch.md sections 1-9 — green: 0 matches, knowledge check OK (0 OKF errors, 0 profile errors), and every command in the walked sections is a bee verb — docs-only change, so the cell verify plus the pointer/parity check it names plus the walk the cell asked for is the whole needed scope",
+      "deviations": [
+        "pane current renders pane_id/tab_id/workspace_id only (context_result in pane_verbs.rs) and carries no label key, so section 1 of role-dispatch.md and role-merge.md now names bee herding pane list as where the label is read; the self-name rule itself is unchanged",
+        "The cell's mandated phrase 'the pane workspace (herdr workspace or tmux session)' itself matches the cell verify regex, so all four places read '(a herdr workspace, or a tmux session)' and the verify counts 0",
+        "The never-let-the-verb-pick-its-own-anchor rule is kept in dispatch section 3 and merge section 2 but reworded: the bee verb has no --current form, so the hazard now reads 'always pass --pane' with the same reason and the same refusal",
+        "Prose that named herdr where both transports apply (herdr's live pane list, herdr closes the pane, the width herdr needs) now says the transport; the herdr 0.8.0 live-evidence citations in section 8 stay as recorded history",
+        "SKILL.md frontmatter now carries two dependency entries, herdr-cli and tmux-cli, both missing_effect degraded, each required only when herding.transport names it"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 281 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

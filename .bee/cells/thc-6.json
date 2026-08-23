@@ -1,0 +1,127 @@
+{
+  "id": "thc-6",
+  "feature": "tmux-herding-cockpit",
+  "title": "Sync the knowledge bundle, the invariants reference and the config sample, then regen",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "thc-2",
+    "thc-4",
+    "thc-5"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-herding/references/operational-invariants.md",
+    ".bee/config-sample.json",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+    "docs/knowledge/areas/bee-herding/index.md",
+    "docs/knowledge/index.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/tmux-herding-cockpit/CONTEXT.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+    "packages/bee-rs/crates/fleet/src/backend/tmux.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "affects_specs": [],
+  "verify": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+  "action": "Words to the code from thc-1..thc-5 — read the code, never guess. `operational-invariants.md` \"Runtime adapter\": state that `herding.transport` now governs the whole cockpit (occupancy, waves, control-pane allowlist `Bash(tmux:*)`, bootstrap, roles), that the roles speak only `bee herding pane …` verbs (D2), and the tmux mapping (D3); the permission-posture section gets one line: the tmux allowlist substitutes exactly one entry. `.bee/config-sample.json`: no new keys unless pane_verbs.rs reads one — check, and document any it does in `_doc.herding`. Knowledge: `waves-and-occupancy.md` gets a section \"On tmux\" (occupancy via `list-panes -a`, `TmuxBackend` for waves, the shared classifier in `fleet::screen` — tmux-herding-cockpit D1/D4 cited); `overview.md` gets the pane-verb vocabulary (D2) and the mapping (D3) in Data Dictionary terms, its frontmatter `owns.code` adds `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs`, `packages/bee-rs/crates/fleet/src/backend/tmux.rs`, `packages/bee-rs/crates/fleet/src/screen.rs`, and `owns.tests` adds `packages/bee-rs/crates/fleet/tests/tmux_backend.rs`; `the-run-verb-and-worker-outcomes.md`'s Transport section notes the classifier now lives in fleet; `agent-resolution-and-spawn-commands.md` (10 herdr references) gets its spawn-command prose restated over the bee pane verbs where it describes what a role types, leaving herdr-specific facts (e.g. `agent start` has no --no-focus) as herdr-arm notes. `overview.md`'s owns.code glob already covers pane_verbs.rs; add only the two fleet paths. Cite `tmux-herding-cockpit D1`–`D4` in frontmatter `decisions` of the pages that state them. Regenerate indexes with `.bee/bin/bee knowledge index` (never hand-edit). Because `skills/` is a release-manifest root and thc-4/thc-5 acked the regen as wave-barrier, run the full chain here: `.bee/bin/bee dev regen`, reserve and commit every path it rewrites (rendered skill trees, onboarding.json, release-manifest.json), then run the verify line (read-only checks) and record it.",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check, knowledge index --check and release-manifest --check pass on the committed tree",
+      "The invariants reference states the one-entry allowlist substitution and the pane-verb rule"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+        "substantive": "an On tmux section citing D1/D4"
+      },
+      {
+        "path": "docs/knowledge/areas/bee-herding/overview.md",
+        "substantive": "pane-verb vocabulary and tmux mapping; owns.code/owns.tests updated"
+      }
+    ],
+    "key_links": [
+      "overview.md owns.code names pane_verbs.rs, fleet tmux.rs, screen.rs"
+    ],
+    "prohibitions": [
+      "No change to the cockpit roles or safety-boundary text beyond the allowlist line",
+      "No hand edit of a generated index"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-6",
+    "outcome": "The invariants reference, the config sample and the bee-herding knowledge bundle now state the tmux cockpit; regen re-rendered the skill trees, onboarding and the release manifest",
+    "files_changed": [
+      "skills/bee-herding/references/operational-invariants.md",
+      ".bee/config-sample.json",
+      ".bee/onboarding.json",
+      "docs/knowledge/areas/bee-herding/overview.md",
+      "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+      "docs/knowledge/areas/bee-herding/index.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".agents/skills",
+      ".claude/skills",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      ".opencode/skills"
+    ],
+    "deviations": [
+      "Added the four new pane verbs and status to overview.md Pointers verb list (it said ten verbs; the router serves fifteen) — drift found while syncing, inside the cell files",
+      "Updated overview.md frontmatter description from herdr-driven to transport-neutral so the regenerated index stops naming one transport"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T02:34:25.296Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T02:25:31.584Z",
+    "report": {
+      "outcome": "The invariants reference, the config sample and the bee-herding knowledge bundle now state the tmux cockpit; regen re-rendered the skill trees, onboarding and the release manifest",
+      "commit": "9613e6f1bfd2953f3ab691aefad68df9f3cf8aff",
+      "files": [
+        "skills/bee-herding/references/operational-invariants.md",
+        ".bee/config-sample.json",
+        ".bee/onboarding.json",
+        "docs/knowledge/areas/bee-herding/overview.md",
+        "docs/knowledge/areas/bee-herding/waves-and-occupancy.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+        "docs/knowledge/areas/bee-herding/index.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".agents/skills",
+        ".claude/skills",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills",
+        ".opencode/skills"
+      ],
+      "tests": "bee knowledge check && bee knowledge index --check && bee dev release-manifest --check — green (0 OKF errors, 0 stale indexes, 270 files match) — docs-and-generated-tree cell: parity and freshness checks are the proof its change type needs; no Rust source was touched",
+      "deviations": [
+        "Added the four new pane verbs and status to overview.md Pointers verb list (it said ten verbs; the router serves fifteen) — drift found while syncing, inside the cell files",
+        "Updated overview.md frontmatter description from herdr-driven to transport-neutral so the regenerated index stops naming one transport"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 3598 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

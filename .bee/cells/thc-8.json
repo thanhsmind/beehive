@@ -1,0 +1,107 @@
+{
+  "id": "thc-8",
+  "feature": "tmux-herding-cockpit",
+  "title": "Pass --no-focus on herdr tab create so bootstrap never steals focus",
+  "lane": "tiny",
+  "status": "capped",
+  "deps": [
+    "thc-7"
+  ],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run",
+  "action": "Judge finding on thc-4: the old bootstrap ran `herdr tab create … --no-focus` at every site, but `RealHerdr::tab_create` in run.rs (anchor `rg -n 'self.call(&\\[\"tab\", \"create\"' packages/bee-rs/crates/bee/src/herding/run.rs` → ~641: `let v = self.call(&[\"tab\", \"create\", \"--workspace\", workspace, \"--cwd\", &cwd_str, \"--label\", label])?;`) omits it, so on herdr `bee herding pane tab-create` (and the run verb's fresh-tab fallback) pulls the human's focus. Append `\"--no-focus\"` to that argv, matching `pane_split` (~631). Update or add the one test that pins tab_create's argv (search `tab\", \"create` in run.rs tests; if none pins it, add one through the existing RecordingHerdr-style fake pattern).",
+  "must_haves": {
+    "truths": [
+      "RealHerdr::tab_create argv ends with --no-focus"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No other argv changes"
+    ]
+  },
+  "trace": {
+    "worker": "w-thc-8",
+    "outcome": "RealHerdr::tab_create now passes --no-focus so the fresh-tab fallback never steals the human's focus",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "No fake could pin RealHerdr's argv (call() spawns herdr directly), so the argv was split into a pure tab_create_argv helper — the same split-out-for-test idiom as parse_herdr_body and extract_tab_create_root_pane in this file. Argv content is unchanged apart from the appended --no-focus.",
+      "sync-ack: docs land in thc-6"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-23T02:27:46.824Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-23T02:24:00.226Z",
+    "sync_ack": "docs land in thc-6",
+    "report": {
+      "outcome": "RealHerdr::tab_create now passes --no-focus so the fresh-tab fallback never steals the human's focus",
+      "commit": "29302f4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run — green (164 passed, 0 failed) — the cell's verify: the only touched module is herding::run",
+      "deviations": [
+        "No fake could pin RealHerdr's argv (call() spawns herdr directly), so the argv was split into a pure tab_create_argv helper — the same split-out-for-test idiom as parse_herdr_body and extract_tab_create_root_pane in this file. Argv content is unchanged apart from the appended --no-focus."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "tab-create-argv-ends-with-no-focus",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:615 - tab_create_argv returns [tab, create, --workspace, workspace, --cwd, cwd, --label, label, --no-focus]"
+          },
+          {
+            "id": "real-herdr-uses-the-helper",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:651 - self.call(and tab_create_argv(workspace, cwd_str, label))"
+          },
+          {
+            "id": "no-other-argv-changes",
+            "status": "PASS",
+            "evidence": "ran: git show 29302f4 ... 22 added, 3 removed, one file; touches only the trait doc comment (run.rs:432-441), the new helper, the single call site, and one new test. No other argv literal altered"
+          },
+          {
+            "id": "argv-pinned-by-a-test",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:2883 tab_create_argv_carries_no_focus_last_and_nothing_else; ran cargo test --release -p bee tab_create_argv ... 1 passed"
+          },
+          {
+            "id": "cell-verify-green",
+            "status": "PASS",
+            "evidence": "ran: cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run ... 164 passed, 0 failed, 2540 filtered out"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-23T02:30:59.114Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}
