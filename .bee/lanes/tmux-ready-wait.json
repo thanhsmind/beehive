@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"tmux-ready-wait\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature tmux-ready-wait",
+  "next_action": "Merged into main at 2da4afc; capture what settled, then bee close --feature tmux-ready-wait.",
   "created_at": "2026-08-23T02:45:07.291Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,15 +25,6 @@
     "rationale": null,
     "updated_at": "2026-08-23T02:46:19.842Z",
     "feature": "tmux-ready-wait"
-  },
-  "merge_ready": {
-    "since": "2026-08-23T02:53:10.589Z",
-    "branch": "wt/tmux-ready-wait",
-    "worktree_id": "beehive--wt--tmux-ready-wait",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt"
-    ]
   },
   "last_scribing_run": {
     "feature": "tmux-ready-wait",
