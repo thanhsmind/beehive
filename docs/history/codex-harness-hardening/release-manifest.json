@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "f09a1d2b948ac52e82dfd76974053c37308f0cb30928e8d9f32b2113a393944f",
+      "sha256": "7ac98cd1d9f9b3ed17c587e1347decf881f5dacb2b0c4eae6649806b76c42f43",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -248,42 +248,42 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/dispatch-prompt.md",
-      "sha256": "535f7902b837de895851d789ca8be9ec8283ddbda5f78281e1692e798adc4893",
+      "sha256": "4076fe82f7f6cdf5459b729842097c3adbd39954beb3f8946e24895e6eda6dde",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/dispatch-prompt.md"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/merge-prompt.md",
-      "sha256": "b0d97eb70928eab01a89683361a219f1dc02ef5ab2293deac9ce1abca4a4b186",
+      "sha256": "0e3e6bdf459afcd24c1a31e5330f8189a9e5e3bab766dca7b4cd4b1d4771a203",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/merge-prompt.md"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "6e53515bda7c54bb1b6df2e24b53498b59d27e90dc0a295e9a3ad919d80edde7",
+      "sha256": "0d4152a589c8406e900223f0c5e27516e04643c341a336cc52043a548be5c9d3",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/operational-invariants.md"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/role-bootstrap.md",
-      "sha256": "49850fab92dc2654f75cd96ddbc802d111cf38be06c3860857afb1ff53bf55e0",
+      "sha256": "5d41337fc17af7755ed1e3781cd7346fd3ddf9f18156773cb97a1ff522603793",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/role-bootstrap.md"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/role-dispatch.md",
-      "sha256": "ca179d79efca5de264ed426b60532d73502d25e7cf4217d00cd45f41ae02f546",
+      "sha256": "d47114948d7d82ffc48e544d569ad74ba5a88a83e2014a47ec5dd8d77d870873",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/role-dispatch.md"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/role-merge.md",
-      "sha256": "323bcf3bc92018ea537e8eb7a323054086708546aba780ad417cfc7e1a1799f5",
+      "sha256": "6afa77ac3391f40deb4c6841dec2dab9e0da46f572790c2a4e746377155ff58a",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/role-merge.md"
@@ -297,21 +297,21 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/wave-runs.md",
-      "sha256": "22dd0ded80e292c5a3a457a59c80d3c02fe4d34573bfb2eae28df202ffd42564",
+      "sha256": "9a3dc477f31fbed05b39d4b9b5fa7e129552d723181bdf764824380dabfffdf9",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/wave-runs.md"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/scripts/bootstrap-cockpit.sh",
-      "sha256": "ecda216b190c1ee8dde49e7857415f07649d3372ff66470edb913c3c1ad01b35",
+      "sha256": "cee9e1038f6c9801e1383a868476a6bb4c6fdfb36b81b0a07530755c22125f39",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/scripts/bootstrap-cockpit.sh"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/SKILL.md",
-      "sha256": "b49049503251ae7e296eb6c9cf895c8d5b65c0b1c947ebc8fea63f60ab90f580",
+      "sha256": "8dbe92a6979f1be0b879e7748a07d24c5a341b554ac91048f8be8956a47a85de",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/SKILL.md"
@@ -647,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "0539e21ed6b0b504fec24a1c80150dcc803e4cc922d00bf64933ae9ce3e2ecf1",
+      "sha256": "9095f1e265c1e7b8a1fd35ef644f377becb3b349166fc9cb62daa2b86ca8476f",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -759,42 +759,42 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/dispatch-prompt.md",
-      "sha256": "535f7902b837de895851d789ca8be9ec8283ddbda5f78281e1692e798adc4893",
+      "sha256": "4076fe82f7f6cdf5459b729842097c3adbd39954beb3f8946e24895e6eda6dde",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/dispatch-prompt.md"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/merge-prompt.md",
-      "sha256": "b0d97eb70928eab01a89683361a219f1dc02ef5ab2293deac9ce1abca4a4b186",
+      "sha256": "0e3e6bdf459afcd24c1a31e5330f8189a9e5e3bab766dca7b4cd4b1d4771a203",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/merge-prompt.md"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "6e53515bda7c54bb1b6df2e24b53498b59d27e90dc0a295e9a3ad919d80edde7",
+      "sha256": "0d4152a589c8406e900223f0c5e27516e04643c341a336cc52043a548be5c9d3",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/operational-invariants.md"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/role-bootstrap.md",
-      "sha256": "49850fab92dc2654f75cd96ddbc802d111cf38be06c3860857afb1ff53bf55e0",
+      "sha256": "5d41337fc17af7755ed1e3781cd7346fd3ddf9f18156773cb97a1ff522603793",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/role-bootstrap.md"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/role-dispatch.md",
-      "sha256": "ca179d79efca5de264ed426b60532d73502d25e7cf4217d00cd45f41ae02f546",
+      "sha256": "d47114948d7d82ffc48e544d569ad74ba5a88a83e2014a47ec5dd8d77d870873",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/role-dispatch.md"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/role-merge.md",
-      "sha256": "323bcf3bc92018ea537e8eb7a323054086708546aba780ad417cfc7e1a1799f5",
+      "sha256": "6afa77ac3391f40deb4c6841dec2dab9e0da46f572790c2a4e746377155ff58a",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/role-merge.md"
@@ -808,21 +808,21 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/wave-runs.md",
-      "sha256": "22dd0ded80e292c5a3a457a59c80d3c02fe4d34573bfb2eae28df202ffd42564",
+      "sha256": "9a3dc477f31fbed05b39d4b9b5fa7e129552d723181bdf764824380dabfffdf9",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/wave-runs.md"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/scripts/bootstrap-cockpit.sh",
-      "sha256": "ecda216b190c1ee8dde49e7857415f07649d3372ff66470edb913c3c1ad01b35",
+      "sha256": "cee9e1038f6c9801e1383a868476a6bb4c6fdfb36b81b0a07530755c22125f39",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/scripts/bootstrap-cockpit.sh"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/SKILL.md",
-      "sha256": "b49049503251ae7e296eb6c9cf895c8d5b65c0b1c947ebc8fea63f60ab90f580",
+      "sha256": "8dbe92a6979f1be0b879e7748a07d24c5a341b554ac91048f8be8956a47a85de",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/SKILL.md"
@@ -1474,42 +1474,42 @@
     },
     {
       "path": "skills/bee-herding/references/dispatch-prompt.md",
-      "sha256": "535f7902b837de895851d789ca8be9ec8283ddbda5f78281e1692e798adc4893",
+      "sha256": "4076fe82f7f6cdf5459b729842097c3adbd39954beb3f8946e24895e6eda6dde",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/dispatch-prompt.md"
     },
     {
       "path": "skills/bee-herding/references/merge-prompt.md",
-      "sha256": "b0d97eb70928eab01a89683361a219f1dc02ef5ab2293deac9ce1abca4a4b186",
+      "sha256": "0e3e6bdf459afcd24c1a31e5330f8189a9e5e3bab766dca7b4cd4b1d4771a203",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/merge-prompt.md"
     },
     {
       "path": "skills/bee-herding/references/operational-invariants.md",
-      "sha256": "6e53515bda7c54bb1b6df2e24b53498b59d27e90dc0a295e9a3ad919d80edde7",
+      "sha256": "0d4152a589c8406e900223f0c5e27516e04643c341a336cc52043a548be5c9d3",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/operational-invariants.md"
     },
     {
       "path": "skills/bee-herding/references/role-bootstrap.md",
-      "sha256": "49850fab92dc2654f75cd96ddbc802d111cf38be06c3860857afb1ff53bf55e0",
+      "sha256": "5d41337fc17af7755ed1e3781cd7346fd3ddf9f18156773cb97a1ff522603793",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/role-bootstrap.md"
     },
     {
       "path": "skills/bee-herding/references/role-dispatch.md",
-      "sha256": "ca179d79efca5de264ed426b60532d73502d25e7cf4217d00cd45f41ae02f546",
+      "sha256": "d47114948d7d82ffc48e544d569ad74ba5a88a83e2014a47ec5dd8d77d870873",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/role-dispatch.md"
     },
     {
       "path": "skills/bee-herding/references/role-merge.md",
-      "sha256": "323bcf3bc92018ea537e8eb7a323054086708546aba780ad417cfc7e1a1799f5",
+      "sha256": "6afa77ac3391f40deb4c6841dec2dab9e0da46f572790c2a4e746377155ff58a",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/role-merge.md"
@@ -1523,21 +1523,21 @@
     },
     {
       "path": "skills/bee-herding/references/wave-runs.md",
-      "sha256": "22dd0ded80e292c5a3a457a59c80d3c02fe4d34573bfb2eae28df202ffd42564",
+      "sha256": "9a3dc477f31fbed05b39d4b9b5fa7e129552d723181bdf764824380dabfffdf9",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/wave-runs.md"
     },
     {
       "path": "skills/bee-herding/scripts/bootstrap-cockpit.sh",
-      "sha256": "ecda216b190c1ee8dde49e7857415f07649d3372ff66470edb913c3c1ad01b35",
+      "sha256": "cee9e1038f6c9801e1383a868476a6bb4c6fdfb36b81b0a07530755c22125f39",
       "mode": "755",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/scripts/bootstrap-cockpit.sh"
     },
     {
       "path": "skills/bee-herding/SKILL.md",
-      "sha256": "b49049503251ae7e296eb6c9cf895c8d5b65c0b1c947ebc8fea63f60ab90f580",
+      "sha256": "8dbe92a6979f1be0b879e7748a07d24c5a341b554ac91048f8be8956a47a85de",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/SKILL.md"

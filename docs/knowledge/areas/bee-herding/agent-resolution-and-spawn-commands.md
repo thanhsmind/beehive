@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-tier D1-D6 (the config tier route)", "herding-review-slots D1 (every purpose on a herding slot)", "herding-review-slots D3 (optional per-slot fallback to default)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", "defaults-and-agent-env D3 (built-in claude-sonnet and agy-flash registry entries)", "defaults-and-agent-env D4 (registry entry carries validated pane env)", "herding-orchestration D12 (starting a worker is two acts)", "herding-orchestration D14 (command tokens are never re-joined into a shell string)", i54-closeout D4, "herding-prompt-stall D1 (retires herding-pointer-delivery D1's hand-rolled receipt)", "herding-prompt-stall D2 (narrows herding-run-ready-wait D1 — done counts as ready)", "herding-prompt-stall D3 (blocked is a fast, loud failure at every wait point)", "herding-prompt-stall D5 (corrects D3's reach: blocked does not cover a trust dialog; a herd entry may declare and pre-seed the foreign tool's own trust store instead)"]
-  sources: [docs/history/herding-bare-agent/CONTEXT.md, docs/history/herd-registry/CONTEXT.md, docs/history/defaults-and-agent-env/CONTEXT.md, docs/history/herding-tier/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "herding-review-slots, herd-registry, herding-tier and defaults-and-agent-env promote proposals (reviewed 2026-08-20)"]
+  decisions: ["herding-tier D1-D6 (the config tier route)", "herding-review-slots D1 (every purpose on a herding slot)", "herding-review-slots D3 (optional per-slot fallback to default)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", "defaults-and-agent-env D3 (built-in claude-sonnet and agy-flash registry entries)", "defaults-and-agent-env D4 (registry entry carries validated pane env)", "herding-orchestration D12 (starting a worker is two acts)", "herding-orchestration D14 (command tokens are never re-joined into a shell string)", i54-closeout D4, "herding-prompt-stall D1 (retires herding-pointer-delivery D1's hand-rolled receipt)", "herding-prompt-stall D2 (narrows herding-run-ready-wait D1 — done counts as ready)", "herding-prompt-stall D3 (blocked is a fast, loud failure at every wait point)", "herding-prompt-stall D5 (corrects D3's reach: blocked does not cover a trust dialog; a herd entry may declare and pre-seed the foreign tool's own trust store instead)", "tmux-herding-cockpit D2 (a cockpit role types transport-neutral bee pane verbs, never a raw herdr or tmux line)"]
+  sources: [docs/history/herding-bare-agent/CONTEXT.md, docs/history/herd-registry/CONTEXT.md, docs/history/defaults-and-agent-env/CONTEXT.md, docs/history/herding-tier/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "herding-review-slots, herd-registry, herding-tier and defaults-and-agent-env promote proposals (reviewed 2026-08-20)", docs/history/tmux-herding-cockpit/CONTEXT.md]
   authoritative_for: "bee-herding: agent resolution, the named-agent registry, and spawn-command construction"
 ---
 
@@ -75,8 +75,13 @@ four-step precedence:
    name resolves through `herding.agents`. This is the configured role-to-agent
    mapping that a bare `bee herding run` obeys;
 3. `herding.agent_command` as a plain string, resolved through `herding.agents`;
-4. `herding.agent_command` as an array (token 0 is the herdr `--kind`, rest
+4. `herding.agent_command` as an array (token 0 is the agent KIND, rest
    are args), or the built-in default array when absent or malformed.
+   Token 0 is read the same way on both transports and means the same
+   thing — which external agent runs — but it is DELIVERED differently:
+   on herdr it feeds `agent start`'s `--kind`, and on tmux it is the
+   executable typed as token 0 of the `exec` line the backend sends into
+   the pane. Neither arm validates it against a list of bee's own.
 
 Any other slot shape (`kind: "herding"` with no agent, a plain model name like
 `"sonnet"`, `{"kind":"cli",...}`, null, absent) is skipped and falls through.
@@ -170,7 +175,49 @@ its own warning (windows-suite-green, cell wsg-1, 2026-08-21).
   the repair, every pane with an uppercase letter was refused and the whole wave
   aborted before sending anything.
 
+## What a cockpit role types
+
+Resolution decides WHICH agent runs. A cockpit role — dispatch, merge, the
+bootstrap script, a wave brief — still has to say START it, and since
+tmux-herding-cockpit D2 it says so in ONE vocabulary whatever
+`herding.transport` names: transport-neutral bee verbs, never a raw `herdr`
+or `tmux` line.
+
+Spawning a worker is two acts (herding-orchestration D12) and reads the same
+way on both transports:
+
+```
+bee herding pane split <runtime_pane_id> --direction right|down --ratio <r> --cwd <worktree>
+bee herding agent-start <slug> --kind <kind> --pane <new_pane_id> -- <agent args>
+```
+
+`<kind>` and `<agent args>` are exactly what the four-step precedence above
+resolved. Three facts about that pair are now properties of the VERB rather
+than flags a role passes:
+
+- `pane split` applies the do-not-focus behavior itself, on every transport,
+  and there is no flag either way — a worker never steals the owner's view.
+- `agent-start` carries the 60-second agent-detection timeout itself; there
+  is no `--timeout` to pass.
+- `agent-start` requires `--pane` and never creates, splits, or moves
+  layout, so the split is mandatory and comes first. Detection timeout is
+  not shell readiness: the role settles the new pane at its shell prompt
+  before starting the agent.
+
+Everything a role reads back comes out of the same envelope — one shape on
+both transports — with `bee herding result <dotted.path>` pulling a single
+field out of it, e.g. the new pane's id after a split. `bee herding pane-id
+--label <label>` is the typed label lookup a role branches on: exit 1 and
+`not_found` on a miss.
+
 ## After spawn: herdr's agent lifecycle contract
+
+**This section is the herdr arm's own contract.** It describes states a
+herdr server reports, so it applies when `herding.transport` is `herdr`
+(the default). tmux has no agent API at all: there is no lifecycle state to
+quote, worker status is the advisory screen classifier instead, and the
+mailbox files stay the only truth for done and delivered on both arms — see
+[the run verb and worker outcomes](the-run-verb-and-worker-outcomes.md).
 
 Resolving and spawning the right agent is only half the seam; bee also has
 to read that agent back honestly once it is running. From `herdr --skill`,
@@ -252,6 +299,13 @@ sampled state — but it is a RETRYABLE one, not an immediate failure
   variant the caller logs and proceeds past (hps-8, herding-prompt-stall
   D5).
 - The wave caller that resolves env without applying it reaches
-  `fleet::backend::herdr` in `packages/bee-rs/crates/fleet/src/backend/herdr.rs`.
+  `fleet::backend::herdr` in `packages/bee-rs/crates/fleet/src/backend/herdr.rs`,
+  or `fleet::backend::tmux` in
+  `packages/bee-rs/crates/fleet/src/backend/tmux.rs` when the transport says
+  tmux.
+- The verbs a role types are
+  `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs` — the
+  `CockpitTransport` seam, both production implementations, and the one
+  envelope every verb prints.
 - Operating detail for operators:
   `skills/bee-herding/references/operational-invariants.md`.

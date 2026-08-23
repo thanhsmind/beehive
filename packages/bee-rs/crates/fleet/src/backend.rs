@@ -17,6 +17,12 @@ pub mod fake;
 /// bee concept, so it is a peer of the fake backend, not a bee concern.
 pub mod herdr;
 
+/// The tmux implementation of `WorkerBackend` — a peer of `herdr`, not a
+/// replacement for it (tmux-herding-cockpit D1/D4). Selected by bee's own
+/// `herding.transport` key at the ONE wave construction site; this crate
+/// reads no config and knows nothing about that key.
+pub mod tmux;
+
 /// One worker's current status, as read from a backend. Exactly the five
 /// states the choreography needs — no more, no fewer (D7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

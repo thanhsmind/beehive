@@ -97,6 +97,12 @@ pub const PORTED: &[&str] = &[
     "herding command-template <key> [--main-root PATH]",
     "herding herdr-result <dotted.path> [--context NAME]",
     "herding herdr-pane-id --label <label>",
+    // tmux-herding-cockpit D2 — the transport-neutral cockpit vocabulary
+    "herding pane current|list|split|run|send-text|read|rename|close|layout|\
+     tab-create|tab-list|tab-focus [--main-root PATH]",
+    "herding agent-start <job_id> --kind <kind> --pane <pane_id> -- <args…>",
+    "herding pane-id --label <label>",
+    "herding result <dotted.path>",
     // R3 wave 4 — the last per-group debts
     "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (ALL repo shapes)",
     "state workflows list|close",

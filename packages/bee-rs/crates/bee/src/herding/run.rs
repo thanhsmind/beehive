@@ -392,9 +392,19 @@ pub(crate) enum Liveness {
 /// One entry of `herdr pane layout`'s `panes` array — an id and its
 /// character-cell rect. hps-12: the split-parent choice is a pure function
 /// over a `Vec` of these, never over a live herdr call.
+///
+/// `x`/`y` are the rect's ORIGIN — the top-left character cell of the pane
+/// inside its tab. The split-parent rule never reads them (it is pure over
+/// area), but the cockpit roles do: "the chat pane is the one with the
+/// smallest `x`, ties on smallest `y`, excluding your own pane"
+/// (`skills/bee-herding/references/role-dispatch.md` §3, `role-merge.md`
+/// §2). Without an origin that sentence is unanswerable, which is why the
+/// rect is carried whole rather than as a bare size.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PaneGeom {
     pub(crate) pane_id: String,
+    pub(crate) x: u64,
+    pub(crate) y: u64,
     pub(crate) width: u64,
     pub(crate) height: u64,
 }
@@ -422,8 +432,8 @@ pub(crate) trait PaneTransport {
     /// share the PARENT KEEPS (measured live, `first_split_geometry`), so
     /// D2's one-third worker column travels as a ratio ABOVE 0.5.
     fn pane_split(&self, pane_id: &str, direction: &str, ratio: f64, cwd: &Path) -> Result<String, String>;
-    /// `herdr tab create --workspace <ws> --cwd <cwd> --label <label>`
-    /// (hps-13): the new-tab fallback for a caller's tab with no pane roomy
+    /// `herdr tab create --workspace <ws> --cwd <cwd> --label <label>
+    /// --no-focus` (hps-13): the new-tab fallback for a caller's tab with no pane roomy
     /// enough to split into a usable child — the worker gets a FRESH tab's
     /// root pane directly, unsplit, so it starts at full width instead of a
     /// sliver. Returns the new root pane's id. Never passes `--focus`
@@ -509,10 +519,15 @@ pub(crate) trait PaneTransport {
     }
 }
 
-struct RealHerdr;
+/// The herdr transport. `pub(crate)` (with `call`) because the cockpit's
+/// pane verbs implement their own `CockpitTransport` for it in
+/// `pane_verbs.rs` — a crate trait for a crate type may be implemented in
+/// any module of the crate, and reusing this spawn-and-decode helper is
+/// what keeps the two modules' herdr calls from drifting.
+pub(crate) struct RealHerdr;
 
 impl RealHerdr {
-    fn call(&self, args: &[&str]) -> Result<Value, String> {
+    pub(crate) fn call(&self, args: &[&str]) -> Result<Value, String> {
         let out = Command::new("herdr")
             .args(args)
             .stdin(Stdio::null())
@@ -568,7 +583,14 @@ fn extract_pane_layout(v: &Value) -> Option<Vec<PaneGeom>> {
                 let rect = p.get("rect")?;
                 let width = rect.get("width")?.as_u64()?;
                 let height = rect.get("height")?.as_u64()?;
-                Some(PaneGeom { pane_id, width, height })
+                // The origin is READ but never REQUIRED: a herdr whose rect
+                // omits `x`/`y` still yields a usable row for the
+                // split-parent rule (pure over area), so a missing origin
+                // reads as 0 rather than dropping the pane. Width and height
+                // keep their `?` — a row with no size is genuinely useless.
+                let x = rect.get("x").and_then(Value::as_u64).unwrap_or(0);
+                let y = rect.get("y").and_then(Value::as_u64).unwrap_or(0);
+                Some(PaneGeom { pane_id, x, y, width, height })
             })
             .collect(),
     )
@@ -583,6 +605,14 @@ fn extract_pane_layout(v: &Value) -> Option<Vec<PaneGeom>> {
 /// extraction the impl uses.
 fn extract_tab_create_root_pane(v: &Value) -> Option<String> {
     v.get("result")?.get("root_pane")?.get("pane_id")?.as_str().map(str::to_string)
+}
+
+/// `tab_create`'s argv, pure: the fresh tab is created UNFOCUSED
+/// (`--no-focus`, exactly as `pane_split` passes it) — a worker's new tab
+/// must never pull the human's focus away from the pane they are working
+/// in. Split out so a test can pin the flag with no spawned process.
+fn tab_create_argv<'a>(workspace: &'a str, cwd: &'a str, label: &'a str) -> [&'a str; 9] {
+    ["tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label, "--no-focus"]
 }
 
 impl PaneTransport for RealHerdr {
@@ -618,7 +648,7 @@ impl PaneTransport for RealHerdr {
 
     fn tab_create(&self, workspace: &str, cwd: &Path, label: &str) -> Result<String, String> {
         let cwd_str = cwd.display().to_string();
-        let v = self.call(&["tab", "create", "--workspace", workspace, "--cwd", &cwd_str, "--label", label])?;
+        let v = self.call(&tab_create_argv(workspace, &cwd_str, label))?;
         extract_tab_create_root_pane(&v)
             .ok_or_else(|| "herdr tab create: missing result.root_pane.pane_id".to_string())
     }
@@ -2475,7 +2505,7 @@ fn exit_code_for(o: &RunOutcome) -> ExitCode {
 /// done for the agent registry; `run`'s transport selection reads the SAME
 /// file for `herding.tmux.*`, so the two share one helper instead of two
 /// drifting copies.
-fn read_main_config(main_root: &Path) -> Value {
+pub(crate) fn read_main_config(main_root: &Path) -> Value {
     let cfg_path = main_root.join(".bee").join("config.json");
     std::fs::read_to_string(&cfg_path).ok().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or(Value::Null)
 }
@@ -2666,9 +2696,9 @@ mod tests {
         // the retired hps-12 rule would have split it again. It is excluded
         // outright, so the roomiest WORKER pane takes the split instead.
         let panes = vec![
-            PaneGeom { pane_id: "w1:p1".to_string(), width: 113, height: 50 },
-            PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 25 },
-            PaneGeom { pane_id: "w1:p3".to_string(), width: 60, height: 12 },
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 113, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 25 },
+            PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 60, height: 12 },
         ];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p2", "the main pane is never split twice");
@@ -2683,9 +2713,9 @@ mod tests {
         // is excluded, so the roomiest of the rest takes a "down" split,
         // which leaves its 60 columns untouched in the child.
         let panes = vec![
-            PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
-            PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 43 },
-            PaneGeom { pane_id: "w1:p3".to_string(), width: 15, height: 43 },
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 30, height: 43 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 43 },
+            PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 15, height: 43 },
         ];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p2");
@@ -2698,7 +2728,7 @@ mod tests {
         // The live D5 shape: a 120x43 tab root, the caller's own and the
         // only pane. This is the one split it ever takes — "right", and its
         // child lands at exactly the 60-column minimum, workable.
-        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 120, height: 43 }];
+        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 120, height: 43 }];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
@@ -2710,7 +2740,7 @@ mod tests {
     fn resolve_split_parent_carries_the_one_third_ratio_on_the_first_split_of_a_wide_tab() {
         // The uat tab: 173x50, one pane. The worker column is 60 wide and
         // the human keeps 113 — the whole point of D2.
-        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 173, height: 50 }];
+        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 173, height: 50 }];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
@@ -2726,8 +2756,8 @@ mod tests {
         // child is exactly as wide as the parent, so a 60-wide worker is
         // workable with no narrowing penalty.
         let panes = vec![
-            PaneGeom { pane_id: "w1:p1".to_string(), width: 60, height: 90 },
-            PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 40 },
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 60, height: 90 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 40 },
         ];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p2");
@@ -2756,7 +2786,7 @@ mod tests {
     fn resolve_split_parent_refuses_a_parent_below_the_minimum_width_naming_it() {
         // The caller's own pane, alone: a "right" split, and 15 columns cap
         // at a 7-column child — the width the refusal must name.
-        let panes = vec![PaneGeom { pane_id: "w1:p3".to_string(), width: 15, height: 43 }];
+        let panes = vec![PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 15, height: 43 }];
         let parent = resolve_split_parent(Some(&panes), "w1:p3");
         assert_eq!(parent.pane_id, "w1:p3");
         let msg = parent.refusal.expect("a 7-column child is below the minimum and must refuse");
@@ -2778,7 +2808,31 @@ mod tests {
         let body = r#"{"result":{"layout":{"tab_id":"w4:t4","panes":[{"pane_id":"w4:p4","rect":{"height":43,"width":120,"x":36,"y":1}}],"splits":[]}}}"#;
         let v: Value = serde_json::from_str(body).unwrap();
         let panes = extract_pane_layout(&v).expect("captured reply parses");
-        assert_eq!(panes, vec![PaneGeom { pane_id: "w4:p4".to_string(), width: 120, height: 43 }]);
+        // The rect is read WHOLE — the origin the captured body carries
+        // (x 36, y 1) is what the cockpit's "leftmost pane is chat" rule
+        // reads, so it must survive the parse rather than flatten to zero.
+        assert_eq!(panes, vec![PaneGeom {
+            pane_id: "w4:p4".to_string(),
+            x: 36,
+            y: 1,
+            width: 120,
+            height: 43
+        }]);
+    }
+
+    #[test]
+    fn extract_pane_layout_defaults_a_missing_origin_instead_of_dropping_the_pane() {
+        // A rect with no `x`/`y` still describes a splittable pane, and the
+        // split-parent rule is pure over area — losing the row would cost a
+        // spawn, so the origin falls back to 0 and the row survives.
+        let body = r#"{"result":{"layout":{"panes":[
+            {"pane_id":"w4:p4","rect":{"height":43,"width":120}}
+        ]}}}"#;
+        let v: Value = serde_json::from_str(body).unwrap();
+        let panes = extract_pane_layout(&v).expect("a rect with no origin still parses");
+        assert_eq!(panes.len(), 1);
+        assert_eq!((panes[0].x, panes[0].y), (0, 0));
+        assert_eq!(panes[0].width, 120);
     }
 
     #[test]
@@ -2792,6 +2846,10 @@ mod tests {
         assert_eq!(panes.len(), 2);
         assert_eq!(panes[1].pane_id, "w4:p2");
         assert_eq!(panes[1].width, 60);
+        // Two side-by-side panes are told apart by their origins alone —
+        // the leftmost is the one the cockpit calls chat.
+        assert_eq!((panes[0].x, panes[0].y), (0, 1));
+        assert_eq!((panes[1].x, panes[1].y), (30, 1));
     }
 
     #[test]
@@ -2819,6 +2877,17 @@ mod tests {
     fn extract_tab_create_root_pane_is_none_when_root_pane_is_missing() {
         let v: Value = serde_json::from_str(r#"{"result":{"tab":{"tab_id":"w4:tE"}}}"#).unwrap();
         assert_eq!(extract_tab_create_root_pane(&v), None);
+    }
+
+    #[test]
+    fn tab_create_argv_carries_no_focus_last_and_nothing_else() {
+        // The fresh-tab fallback must be as focus-safe as `pane_split`:
+        // without `--no-focus`, herdr jumps the human to the worker's new
+        // tab the moment a pane is too small to split.
+        assert_eq!(
+            tab_create_argv("w4", "/repo/wt", "bee-probe"),
+            ["tab", "create", "--workspace", "w4", "--cwd", "/repo/wt", "--label", "bee-probe", "--no-focus"]
+        );
     }
 
     #[test]
@@ -3189,7 +3258,7 @@ mod tests {
                 // hps-13: 120x43 — the same roomy tab shape the live D5
                 // probe measured, whose "right" split yields a 60-column
                 // child (the minimum, workable) rather than a refusal.
-                layout: Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 120, height: 43 }]),
+                layout: Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 120, height: 43 }]),
                 split_result: Ok("w1:p2".to_string()),
                 split_calls: RefCell::new(Vec::new()),
                 tab_create_result: Ok("w9:p1".to_string()),
@@ -3311,6 +3380,8 @@ mod tests {
             SharedLayoutHerdr {
                 panes: std::sync::Mutex::new(vec![PaneGeom {
                     pane_id: "w1:p1".to_string(),
+                    x: 0,
+                    y: 0,
                     width: root_width,
                     height: root_height,
                 }]),
@@ -3369,14 +3440,30 @@ mod tests {
                 let kept = kept.min(dim);
                 (kept, dim - kept)
             };
+            // The child's ORIGIN follows the cut: a `right` split puts it
+            // just past the parent's kept columns, a `down` split just below
+            // the parent's kept rows. The fake models the whole rect, so a
+            // caller reading origins off this fake reads what herdr reports.
             let child = if direction == "right" {
                 let (kept, given) = split_cells(panes[idx].width);
                 panes[idx].width = kept;
-                PaneGeom { pane_id: id.clone(), width: given, height: panes[idx].height }
+                PaneGeom {
+                    pane_id: id.clone(),
+                    x: panes[idx].x + kept,
+                    y: panes[idx].y,
+                    width: given,
+                    height: panes[idx].height,
+                }
             } else {
                 let (kept, given) = split_cells(panes[idx].height);
                 panes[idx].height = kept;
-                PaneGeom { pane_id: id.clone(), width: panes[idx].width, height: given }
+                PaneGeom {
+                    pane_id: id.clone(),
+                    x: panes[idx].x,
+                    y: panes[idx].y + kept,
+                    width: panes[idx].width,
+                    height: given,
+                }
             };
             panes.push(child);
             self.directions.lock().expect("directions").push(direction.to_string());
@@ -3791,8 +3878,8 @@ mod tests {
         // the sibling and goes "down", and the child keeps all 130
         // columns — hps-13's roomy-tab case, with no narrowing at all.
         fake.layout = Some(vec![
-            PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
-            PaneGeom { pane_id: "w1:p9".to_string(), width: 130, height: 43 },
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 30, height: 43 },
+            PaneGeom { pane_id: "w1:p9".to_string(), x: 0, y: 0, width: 130, height: 43 },
         ]);
         seeded_result_dir(&tmp.path().join(".bee"), &opts.job_id);
 
@@ -3814,7 +3901,7 @@ mod tests {
         let mut fake = FakeHerdr::new();
         // Every pane in the tab is too narrow to split into a usable
         // child — the fresh-tab fallback fires instead of a refusal.
-        fake.layout = Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 }]);
+        fake.layout = Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 30, height: 43 }]);
         fake.tab_create_result = Ok("w9:p1".to_string());
         seeded_result_dir(&tmp.path().join(".bee"), &opts.job_id);
 
@@ -3835,7 +3922,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let opts = test_options(tmp.path(), false);
         let mut fake = FakeHerdr::new();
-        fake.layout = Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 15, height: 43 }]);
+        fake.layout = Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 15, height: 43 }]);
         fake.tab_create_result = Err("herdr: no free workspace slot".to_string());
 
         let result = execute(&opts, &fake);

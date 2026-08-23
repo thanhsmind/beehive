@@ -14,8 +14,13 @@ metadata:
     herdr-cli:
       kind: command
       command: herdr
-      missing_effect: unavailable
-      reason: Required when `herding.transport` is `herdr` — the default, and the transport both cockpit roles use today: every pane/tab/agent action goes through the herdr binary directly. Set `herding.transport` to `tmux` (tmux-herding-transport D1) and `bee herding run` reaches its panes through `tmux` on PATH instead, with herdr unneeded; the choice is that one config key, never an auto-detect from `$TMUX` or `$HERDR_ENV`.
+      missing_effect: degraded
+      reason: One of two transports, and only one is ever needed. Required when `herding.transport` is `herdr` — the default: the cockpit's `bee herding pane …` / `agent-start` verbs then reach their panes through the herdr binary. Unneeded when the key says `tmux`. The choice is that one config key (tmux-herding-transport D1), never an auto-detect from `$TMUX` or `$HERDR_ENV`.
+    tmux-cli:
+      kind: command
+      command: tmux
+      missing_effect: degraded
+      reason: The other of the two transports. Required on PATH when `herding.transport` is `tmux` — the same `bee herding pane …` / `agent-start` verbs then act on the caller's tmux session, windows and pane titles (tmux-herding-cockpit D3). Unneeded when the key says `herdr`. No role document or bootstrap script ever calls `tmux` (or `herdr`) directly: the pane verbs are the one vocabulary (D2).
 ---
 
 # Herding — the unattended cockpit
@@ -83,7 +88,8 @@ Full record for each: `references/operational-invariants.md`.
   never read it — close their panes to stop them. Removing the file
   allows a restart (re-run bootstrap; it never self-restarts).
 - **Carry nothing over.** Never act on an assumption from an earlier
-  iteration — only bee state, git, and the herdr workspace persist.
+  iteration — only bee state, git, and the pane workspace (a herdr
+  workspace, or a tmux session) persist.
 
 ## Runtime adapter
 

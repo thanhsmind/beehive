@@ -52,6 +52,18 @@ its job (e.g. cleaning a dirty main). The exact allowlist per role, and
 the note that it must grow if a role gains a command, live in
 `bee herding control-loop`.
 
+**On tmux the allowlist substitutes exactly ONE entry**
+(tmux-herding-cockpit D1). `allowed_tools_for` takes the transport beside
+the role: the herdr arms are the byte-identical strings that verb
+documents, and the tmux arms are those same strings with `Bash(herdr:*)`
+rewritten to `Bash(tmux:*)` — nothing else added, nothing else removed,
+nothing else reordered. The surface stays enumerated and stays the same
+width. A control pane driving tmux needs the tmux client for exactly the
+pane work it used herdr for, and gains no other tool; with no
+`herding.transport` key the control argv is the byte-identical pre-tmux
+one, and a typo'd key is `transport_kind`'s typed refusal that stops the
+loop rather than quietly arming the other multiplexer.
+
 ## Runtime adapter
 
 Config-driven spawn commands. Both spawn points — the
@@ -134,7 +146,9 @@ a claim that codex control panes work today.
 
 The adapter seam above says WHAT bee spawns. One more key says WHERE:
 which terminal multiplexer bee reaches a worker pane through
-(tmux-herding-transport D1-D4).
+(tmux-herding-transport D1-D4). That key now governs the WHOLE cockpit,
+not the run verb alone (tmux-herding-cockpit D1) — see "The cockpit on
+tmux" below.
 
 - **`herding.transport`** — the string `"herdr"` or the string `"tmux"`.
   **Absent = `herdr`**, the unchanged default; a missing or unparseable
@@ -155,7 +169,9 @@ which terminal multiplexer bee reaches a worker pane through
   CALLER's current tmux window, under the same one-column rule and the same
   cross-process split lock (D2) — never a detached session per worker. The
   mailbox, the control loop, the merge gesture and every safety boundary
-  are the herdr ones, untouched.
+  are the herdr ones, untouched — with exactly one recorded exception, the
+  control pane's allowlist, which substitutes its single multiplexer entry
+  and nothing else (see "Permission posture" above).
 - **The screen read is advisory (D4).** tmux has no agent API, so worker
   status is a classifier over a bounded `capture-pane` read: content
   stability plus two marker lists. `result-N.json` and `ack-N.json` stay
@@ -200,9 +216,89 @@ is a legal override meaning "never classify on this list".
 ```
 
 Implementation: `packages/bee-rs/crates/bee/src/herding/tmux.rs`
-(`TmuxSettings::from_config`, the `classify` screen reader, the
-`PaneTransport` impl), selected at one construction site by
-`herding.rs`'s `transport_kind`.
+(`TmuxSettings::from_config`, the `PaneTransport` impl, and a re-export of
+the shared classifier that now lives in `fleet::screen`), selected at one
+construction site by `herding.rs`'s `transport_kind`.
+
+### The cockpit on tmux — one key, one vocabulary
+
+`herding.transport` picks the multiplexer for the WHOLE cockpit, not for
+`bee herding run` alone (tmux-herding-cockpit D1). Occupancy, waves, the
+control-pane allowlist, the bootstrap script, and the dispatch and merge
+roles all read that same key, and **no new config key was added for any of
+them** — a repo with no `herding` block behaves exactly as it did.
+
+- **Occupancy** crosses the wave ledger's unresolved pane ids against
+  `tmux list-panes -a -F '#{pane_id}'` instead of `herdr pane list`, under
+  the same fail-closed contract: any trouble at all (no `tmux` on `PATH`,
+  no server running, a non-zero exit) means "no live list available", and
+  the ledger answers through its degraded `Occupancy::Fallback` path —
+  never through the other multiplexer's pane list. A refused key resolves
+  the same way.
+- **Waves** build `fleet::backend::tmux::TmuxBackend`, a peer of
+  `HerdrBackend`, at the one wave construction site (D1/D4).
+- **ONE screen classifier serves both crates (D4).** It lives in
+  `fleet::screen` — the two marker lists, both tail windows, and the
+  stability knobs — and bee's `RealTmux` reuses exactly it. `bee` depends
+  on `fleet` and never the reverse, so the shared half moved DOWN; two
+  copies would drift the moment one crate's marker list was corrected and
+  the other's was not. `fleet` still never reads `.bee/config.json`: bee's
+  `TmuxSettings::from_config` resolves `herding.tmux.*` and hands a
+  `ScreenSettings` over already decided.
+
+**The roles speak only bee verbs (D2).** A cockpit role document, a wave
+brief, and `bootstrap-cockpit.sh` act on panes ONLY through
+transport-neutral bee verbs — never a raw `herdr` or `tmux` line:
+
+```
+bee herding pane current|list|split|run|send-text|read|rename|close|layout
+                 |tab-create|tab-list|tab-focus
+bee herding agent-start <job_id> --kind <kind> --pane <pane_id> -- <args…>
+bee herding pane-id --label <label>
+bee herding result <dotted.path>
+```
+
+Every verb prints exactly one envelope, identical in shape on both
+transports — `{"ok":true,"transport":"herdr|tmux","result":{…}}` at exit 0,
+`{"ok":false,"transport":…,"error":{"code":…,"message":…}}` at exit 1 — and
+`bee herding result <dotted.path>` reads such an envelope on stdin and
+prints one field of it. A cold control agent therefore learns ONE
+vocabulary, whatever the key names. `pane list --with-status` is the only
+branch that costs a call per pane: it fills a row the transport did not
+already answer for itself, which on herdr is no row at all (its own
+`pane list` body carries `agent_status` server-side) and on tmux is every
+row, one bounded `capture-pane` each through the shared classifier. That
+answer stays ADVISORY (transport D4) — the mailbox files remain the only
+truth for done and delivered.
+
+**The tmux mapping (D3).** tmux has no workspace object and no pane-label
+object, so the cockpit's nouns land on carriers that survive a reattach:
+
+| Cockpit noun | herdr | tmux |
+|---|---|---|
+| workspace | workspace | the caller's current session |
+| tab | tab | a window (`cockpit`, `runtime`) |
+| pane label | pane label | the pane TITLE (`select-pane -T`) |
+| chat pane | the pane bootstrap ran from | the pane bootstrap ran from |
+
+`bee herding pane-id --label <label>` looks that label up in `list-panes`'
+`pane_title` on tmux and in the pane label on herdr; a miss is the typed
+`not_found` at exit 1 on both, so a role branches on one shape.
+
+**The pre-send guard fails OPEN on an unreadable screen (D5).** Before
+`pane send-text` types anything on tmux, it captures the pane and refuses
+when the shared classifier says `Blocked`: a dialog is answered by a human,
+never by whatever character the text happens to begin with (transport D3,
+unchanged). A capture that cannot be READ does not block the send — the
+guard takes the same posture `RealTmux::agent_prompt` already takes for its
+own preflight, because a transport hiccup must not silently stop the
+cockpit from typing.
+
+Implementation: `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs`
+(the `CockpitTransport` seam over phase 1's `PaneTransport`, both
+production impls, and every verb above),
+`packages/bee-rs/crates/fleet/src/backend/tmux.rs` (the wave backend), and
+`packages/bee-rs/crates/fleet/src/screen.rs` (the one classifier).
 
 ## `herding.agents` — the named-agent registry
 

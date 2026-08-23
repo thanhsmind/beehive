@@ -45,6 +45,8 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+use super::TransportKind;
+
 // ═══════════════════════════════════════════════════════════════════════════
 // role, options, CLI parsing
 // ═══════════════════════════════════════════════════════════════════════════
@@ -206,15 +208,29 @@ fn print_usage() {
 pub(crate) type Argv = Vec<String>;
 
 /// The ENUMERATED control-pane command surface (D7-FINAL in CONTEXT.md).
-/// Byte-identical to control-loop.sh's `allowed_tools_for` — this is part of
-/// the D13 crossing, so it is copied character for character, not
-/// paraphrased.
-fn allowed_tools_for(role: Role) -> &'static str {
-    match role {
-        Role::Dispatch => {
+/// The `Herdr` arms are byte-identical to control-loop.sh's
+/// `allowed_tools_for` — this is part of the D13 crossing, so they are copied
+/// character for character, not paraphrased.
+///
+/// The `Tmux` arms (tmux-herding-cockpit D1) are those same strings with the
+/// ONE multiplexer entry swapped — `Bash(herdr:*)` becomes `Bash(tmux:*)` —
+/// and nothing else touched. The surface stays enumerated and stays the same
+/// width: a control pane driving tmux needs the tmux client for exactly the
+/// pane work it used herdr for, and gains no other tool.
+fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
+    match (role, kind) {
+        (Role::Dispatch, TransportKind::Herdr) => {
             "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
         }
-        Role::Merge => "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read",
+        (Role::Merge, TransportKind::Herdr) => {
+            "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
+        }
+        (Role::Dispatch, TransportKind::Tmux) => {
+            "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
+        }
+        (Role::Merge, TransportKind::Tmux) => {
+            "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
+        }
     }
 }
 
@@ -287,7 +303,11 @@ fn read_prompt_file(main_root: &Path, role: Role) -> Result<String, String> {
 /// second, drifted copy.
 pub(crate) fn resolve_iteration_argv(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<Argv, String> {
     let prompt = read_prompt_file(main_root, role)?;
-    let allowed_tools = allowed_tools_for(role);
+    // The transport picks the allowlist (tmux-herding-cockpit D1). A missing
+    // key reads as herdr, so a repo with no key spawns the byte-identical
+    // pre-tmux argv; a typo'd key is `transport_kind`'s typed refusal and
+    // stops the loop here rather than quietly arming the other multiplexer.
+    let allowed_tools = allowed_tools_for(role, super::transport_kind_at(main_root)?);
     let template = super::read_command_template_tokens(main_root, "control_command");
     Ok(build_control_argv(template.as_deref(), &prompt, DEFAULT_MODEL, turn_ceiling, allowed_tools))
 }
@@ -700,6 +720,63 @@ mod tests {
                 "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
                     .to_string(),
             ]
+        );
+    }
+
+    // ── the transport swaps exactly one allowlist entry ───────────────────
+
+    #[test]
+    fn allowlist_herdr_arms_stay_the_byte_identical_bash_strings() {
+        assert_eq!(
+            allowed_tools_for(Role::Dispatch, TransportKind::Herdr),
+            "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Merge, TransportKind::Herdr),
+            "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
+        );
+    }
+
+    #[test]
+    fn allowlist_tmux_arms_name_tmux_and_never_herdr() {
+        for role in [Role::Dispatch, Role::Merge] {
+            let tools = allowed_tools_for(role, TransportKind::Tmux);
+            assert!(tools.contains("Bash(tmux:*)"), "{role:?}: {tools}");
+            assert!(!tools.contains("Bash(herdr:*)"), "{role:?}: {tools}");
+        }
+    }
+
+    #[test]
+    fn allowlist_tmux_arms_swap_that_one_entry_and_widen_nothing() {
+        // The surface stays ENUMERATED and stays the same width: the tmux
+        // string must be the herdr string with the single multiplexer token
+        // rewritten, never a superset.
+        for role in [Role::Dispatch, Role::Merge] {
+            assert_eq!(
+                allowed_tools_for(role, TransportKind::Tmux),
+                allowed_tools_for(role, TransportKind::Herdr).replace("Bash(herdr:*)", "Bash(tmux:*)"),
+                "{role:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allowlist_transport_tmux_config_reaches_the_spawned_argv() {
+        // The whole point of threading the kind: `herding.transport: tmux`
+        // in the main checkout's config lands in the argv the control pane
+        // is really spawned with.
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("dispatch-prompt.md"), "p").unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"tmux"}}"#).unwrap();
+
+        let argv = resolve_iteration_argv(tmp.path(), Role::Dispatch, 50).expect("argv resolves");
+        assert_eq!(
+            argv.last().unwrap(),
+            "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
         );
     }
 

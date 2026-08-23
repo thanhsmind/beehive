@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-orchestration D2/D5 (the choreography is generic, behind a compiler-enforced boundary)", "herding-orchestration D7 (unverifiable is one of five worker states)", "herding-orchestration D9 (blocking threads, not an event runtime)", "herding-orchestration D10 (the wave ledger, written at spawn)", "herding-orchestration D11 (a wave is one value, not a sequence of calls)", "herding-orchestration D18 (dispatch records its own ledger row at spawn)"]
-  sources: [docs/history/herding-orchestration/CONTEXT.md, "the first live D6 run on Linux, 2026-08-19"]
+  decisions: ["herding-orchestration D2/D5 (the choreography is generic, behind a compiler-enforced boundary)", "herding-orchestration D7 (unverifiable is one of five worker states)", "herding-orchestration D9 (blocking threads, not an event runtime)", "herding-orchestration D10 (the wave ledger, written at spawn)", "herding-orchestration D11 (a wave is one value, not a sequence of calls)", "herding-orchestration D18 (dispatch records its own ledger row at spawn)", "tmux-herding-cockpit D1 (the whole cockpit — occupancy and waves included — selects its transport from the same herding.transport key)", "tmux-herding-cockpit D4 (waves and occupancy build the tmux backend from that key; ONE screen classifier, living in fleet, serves both crates)"]
+  sources: [docs/history/herding-orchestration/CONTEXT.md, "the first live D6 run on Linux, 2026-08-19", docs/history/tmux-herding-cockpit/CONTEXT.md]
   authoritative_for: "bee-herding: waves, the wave ledger, and occupancy"
 ---
 
@@ -72,6 +72,51 @@ is also when counting panes would have failed — so refusing is not a lost
 opportunity, and dispatching on a count nobody can verify is the over-spawn the
 ledger exists to prevent.
 
+## On tmux
+
+**The multiplexer is a configuration choice, and waves and occupancy make it
+from the same key everything else does** — `herding.transport` in
+`.bee/config.json`, absent meaning `herdr` (tmux-herding-cockpit D1/D4). No
+key of their own was added, and a repo that sets nothing gets the answer it
+always got.
+
+**Occupancy counts panes tmux lists.** The live pane list comes from `tmux
+list-panes -a -F '#{pane_id}'`, which prints one pane id per line across
+EVERY session — the same population the herdr branch collects out of `herdr
+pane list`. The ledger's unresolved pane ids are crossed against it
+unchanged, so nothing above this line changes: a real crossing is still a
+real crossing, and the answer still carries its own source. The fail-closed
+contract is the herdr one, character for character — no `tmux` on `PATH`, no
+server running, or a non-zero exit all mean "no live list available", which
+the ledger reads as its degraded `Occupancy::Fallback` and dispatch refuses
+to act on. A key that is neither spelling refuses the same way rather than
+quietly listing the other multiplexer's panes.
+
+**A wave builds the tmux backend at the one construction site.**
+`fleet::backend::tmux::TmuxBackend` is a peer of `HerdrBackend`, not a
+variant of it: worker names are pane ids or pane TITLES, a send is the
+two-call `send-keys -l <text>` then `send-keys Enter` gesture, and a send
+into a pane showing a dialog refuses instead of typing. The choreography,
+the ledger, the outcome buckets and the failure policy are untouched — only
+the backend behind them differs.
+
+**ONE screen classifier serves both crates (D4).** tmux has no agent API, so
+a worker's status on tmux is a classifier over a bounded `capture-pane`
+read: marker lists plus content stability. That classifier lives in
+`fleet::screen` — one `ScreenSettings`, one `Screen`, one `classify` — and
+bee's own `RealTmux` reuses exactly it. `bee` depends on `fleet` and never
+the reverse, so the shared half moved DOWN into `fleet`; two copies would
+drift the moment one crate's marker list was corrected and the other's was
+not. The crate boundary still holds: `fleet` never reads `.bee/config.json`,
+and bee's `TmuxSettings::from_config` resolves `herding.tmux.*` and hands
+the settings over already decided.
+
+The classifier has no `Done` state and must never gain one. It answers
+`idle`, `working` or `blocked`, and that answer is ADVISORY
+(tmux-herding-transport D4) — it never becomes evidence that a worker
+finished. Everything this page says about unverifiable outcomes therefore
+reads identically on tmux.
+
 ## Edge Cases Settled
 
 - **A working agent that fails to name its own pane** used to leave a slot
@@ -116,3 +161,12 @@ ledger exists to prevent.
 - The generic choreography lives in the fleet crate,
   `packages/bee-rs/crates/fleet/`; the wave entry point and the ledger's read and
   write sides are in `packages/bee-rs/crates/bee/src/herding/wave.rs`.
+- The two live-pane listers and the transport switch between them are
+  `live_pane_ids_via_herdr`, `live_pane_ids_via_tmux` and `live_pane_ids` in
+  that same `wave.rs`; the parse half of each is a pure function pinned by
+  tests with no multiplexer binary anywhere.
+- The two wave backends are `packages/bee-rs/crates/fleet/src/backend/herdr.rs`
+  and `packages/bee-rs/crates/fleet/src/backend/tmux.rs`, chosen by
+  `wave.rs`'s `run_wave_for_transport`; the shared classifier is
+  `packages/bee-rs/crates/fleet/src/screen.rs`, tested from
+  `packages/bee-rs/crates/fleet/tests/tmux_backend.rs`.
