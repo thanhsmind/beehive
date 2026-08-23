@@ -808,5 +808,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-23T02:55:16.440Z"
+  },
+  "herding-activity-hook": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-23T06:54:45.577Z"
   }
 }
