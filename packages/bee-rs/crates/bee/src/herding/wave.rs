@@ -757,7 +757,8 @@ pub(super) fn wave(flags: &[&str]) -> ExitCode {
 /// an unparsable body, an error envelope, an unrecognised shape — which is
 /// exactly the signal `wave_ledger::live_worker_count` reads as "no live
 /// list available" and answers through its `Occupancy::Fallback` path
-/// instead. This is the only place in this file that spawns a process, so
+/// instead. This is the only place in this file that spawns a `herdr`
+/// process (its tmux twin below is the other, and only the other, spawn), so
 /// no test exercising `occupancy_json`/`live_worker_count` below needs a
 /// `herdr` binary on PATH.
 fn live_pane_ids_via_herdr() -> Option<HashSet<String>> {
@@ -779,6 +780,48 @@ fn live_pane_ids_via_herdr() -> Option<HashSet<String>> {
         _ => return None,
     };
     Some(panes.iter().filter_map(|p| p.get("pane_id").and_then(Value::as_str).map(str::to_string)).collect())
+}
+
+/// The tmux twin of `live_pane_ids_via_herdr` (tmux-herding-cockpit D1/D4).
+/// `tmux list-panes -a -F '#{pane_id}'` prints one pane id per line across
+/// EVERY session, which is the same population the herdr branch collects out
+/// of `herdr pane list` — the ledger's recorded `pane_id`s are crossed
+/// against it unchanged. Same fail-closed contract as the herdr lister:
+/// `None` on ANY trouble (no `tmux` on PATH, no server running, a non-zero
+/// exit), which `wave_ledger::live_worker_count` reads as "no live list
+/// available" and answers through its `Occupancy::Fallback` path instead.
+fn live_pane_ids_via_tmux() -> Option<HashSet<String>> {
+    let out = Command::new("tmux")
+        .args(["list-panes", "-a", "-F", "#{pane_id}"])
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(parse_tmux_pane_list(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// The pure parse half of `live_pane_ids_via_tmux`: one pane id per line,
+/// empty lines dropped (`tmux` always ends its listing with a newline, and an
+/// empty body is an empty set, never a one-element set holding `""`). Split
+/// out so the parsing is pinned by tests with no `tmux` binary in sight.
+fn parse_tmux_pane_list(stdout: &str) -> HashSet<String> {
+    stdout.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect()
+}
+
+/// Picks the live-pane lister the configured transport names (D1: one
+/// `herding.transport` key, never environment sniffing; absent reads as
+/// `herdr`, so a repo with no key gets the byte-identical pre-tmux answer).
+/// A refused key — a typo, which `transport_kind` reports as an `Err` rather
+/// than guessing — resolves to `None`, i.e. the ledger's degraded timer
+/// answer, never the other transport's pane list.
+fn live_pane_ids(main_root: &Path) -> Option<HashSet<String>> {
+    match super::transport_kind_at(main_root) {
+        Ok(super::TransportKind::Herdr) => live_pane_ids_via_herdr(),
+        Ok(super::TransportKind::Tmux) => live_pane_ids_via_tmux(),
+        Err(_) => None,
+    }
 }
 
 /// The occupancy answer's JSON shape — `Live` and `Fallback` NEVER collapse
@@ -848,7 +891,7 @@ pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let live_panes = live_pane_ids_via_herdr();
+    let live_panes = live_pane_ids(&main_root);
     let now_ms = chrono::Utc::now().timestamp_millis();
     let occ =
         wave_ledger::live_worker_count(&main_root, live_panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS);
@@ -1747,6 +1790,31 @@ mod tests {
 
         let fallback = wave_ledger::live_worker_count(root, None, now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS);
         assert_eq!(occupancy_json(&fallback), serde_json::json!({"count": 1, "source": "fallback"}));
+    }
+
+    // ─── the tmux lister's pure parse (no tmux binary anywhere) ────────
+
+    #[test]
+    fn occupancy_tmux_parses_one_pane_id_per_line() {
+        let got = parse_tmux_pane_list("%0\n%1\n%12\n");
+        let want: HashSet<String> = ["%0".to_string(), "%1".to_string(), "%12".to_string()].into_iter().collect();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn occupancy_tmux_drops_the_trailing_newline_never_an_empty_id() {
+        // `tmux list-panes` always terminates its last line, so the naive
+        // `split('\n')` spelling would smuggle an empty id into the live set
+        // and make a dead ledger row look live.
+        let got = parse_tmux_pane_list("%7\n");
+        assert_eq!(got, ["%7".to_string()].into_iter().collect::<HashSet<String>>());
+        assert!(!got.contains(""), "an empty pane id must never enter the live set");
+    }
+
+    #[test]
+    fn occupancy_tmux_empty_body_is_an_empty_set() {
+        assert!(parse_tmux_pane_list("").is_empty());
+        assert!(parse_tmux_pane_list("\n").is_empty());
     }
 
     // ─── reachable from the router without a herdr binary on PATH ──────
