@@ -82,6 +82,18 @@ what the session is working on — its feature and its held cell — so one
 session file answers both "what is this agent doing" and "what is it doing it
 to".
 
+The activity record has two sinks, and the pane decides which
+(herding-activity-hook D2, 2026-08-23). An ordinary session writes it onto its
+own session record as above. A pane opened to work one herded job writes it
+into that job's mailbox instead, stamped with the job and the round it is in,
+and that pane gets no session record, no transition log, and no waiting-on
+mark — a foreign agent working one brief is not a session of this repo, and
+there is no session state for a mark to sit on. The state machine is
+identical on both sinks; only the destination changes. The mailbox side of
+the contract — the file, the round rule, and how the run verb reads it — is
+described with the herding area
+(`areas/bee-herding/handing-a-foreign-agent-its-brief.md`).
+
 **B19 — Five states, and each one is a claim about the agent, not about the
 process.**
 

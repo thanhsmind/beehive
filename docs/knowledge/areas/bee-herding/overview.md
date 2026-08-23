@@ -67,7 +67,11 @@ The machinery it starts is documented beside it:
 - **Transport** — which terminal multiplexer the cockpit reaches a pane through: `herdr` or `tmux`.
   It is one configuration key, `herding.transport`, absent meaning `herdr`, and it selects for the
   WHOLE cockpit — occupancy, waves, the control-pane allowlist, bootstrap, and both control roles
-  (tmux-herding-cockpit D1). bee never guesses it from the environment.
+  (tmux-herding-cockpit D1). bee never guesses it from the environment. The two reachability
+  probes — the status report's and the dispatch door's — read the configured transport's own
+  environment and nobody else's: on `herdr` the herdr pane variables, on `tmux` the tmux ones, and
+  each answer names the transport it probed (`kind`). A repo that sets nothing keeps the herdr
+  answer it always got (tmux-herding-transport cell tht-1).
 - **Pane verb** — a `bee herding pane …` command that performs one pane action on whichever
   transport the key names. The cockpit's whole vocabulary is
   `pane current|list|split|run|send-text|read|rename|close|layout|tab-create|tab-list|tab-focus`,
@@ -76,11 +80,22 @@ The machinery it starts is documented beside it:
   line (D2) — so a cold control agent learns one vocabulary rather than two. Every verb prints one
   envelope of the same shape on both transports (`ok`, `transport`, and either `result` or a typed
   `error.code`), and `bee herding result <dotted.path>` reads one field back out of it.
+  A pane listing row carries eight facts, and every transport answers all eight: the pane's id,
+  its label, its tab, the directory its shell started in, the directory its foreground process is
+  in now, the command it runs, and the transport's own word on the agent — that agent's status and
+  its session. A fact the transport cannot answer renders as an explicit empty value rather than a
+  missing key, so a role reads one shape whichever transport replied. A layout row carries the
+  pane's origin as well as its size, because the roles pick the chat pane by position
+  (tmux-herding-cockpit cell thc-7).
 - **Label**, **workspace**, **tab**, **chat pane** — the cockpit's four pane nouns, and on tmux each
   lands on a carrier that survives a reattach (D3): the workspace is the caller's current tmux
   SESSION, a tab is a WINDOW (`cockpit`, `runtime`), a pane's label is its pane TITLE
   (`select-pane -T`, and label lookup reads `list-panes`' `pane_title`), and the chat pane is the
   pane bootstrap was run from. On herdr each noun is that tool's own object of the same name.
+  Creating a tab answers with the id of that tab's ROOT PANE, never a tab id, on both transports —
+  a role names a fresh tab by the pane it can act on. The chat pane is the one noun that differs:
+  on tmux it is the pane the bootstrap ran in, on herdr the cockpit tab's root pane
+  (tmux-herding-cockpit cell thc-4).
 - **Blocked pane** — a pane showing a trust, permission, or auth dialog. bee never types into one:
   the pane-verb send pre-reads the screen and refuses. That guard fails OPEN when the screen cannot
   be READ at all — an unreadable capture does not stop the send, matching the run verb's own
@@ -219,7 +234,7 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   not among the live verbs and refuse by name; the manual `touch`/`rm` marker
   gesture is their only live form (see Data Dictionary). `status` is live
   (`herding.rs`, the `"status"` arm): enable state plus transport
-  `{ready, reason, pane_id}`. Test coverage is inline:
+  `{ready, reason, pane_id, kind}`. Test coverage is inline:
   the `#[cfg(test)] mod tests` block in `herding.rs`.
 - The transport-neutral pane verbs are
   `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs`: a `CockpitTransport` trait on top of the

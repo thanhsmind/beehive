@@ -174,7 +174,10 @@ for it: `$TMUX` and `$HERDR_ENV` are both ignored as selectors, because a
 session nested in both tools would otherwise pick by accident. Any other
 value is a typed refusal naming both legal spellings, and the refusal lands
 **before** the job file, the mailbox, or any pane split — a typo'd
-transport never half-starts a worker.
+transport never half-starts a worker. A dry run names the transport it would
+have reached for, beside the brief it would have sent; the key is added on the
+dry-run answer alone, and a real run's answer keeps every field it had before
+the transport choice existed (tmux-herding-transport cell tht-4).
 
 Everything this page describes above survives the switch. On tmux a worker
 is still a pane split inside the CALLER's current window, under the same
@@ -199,6 +202,14 @@ Three differences are real, and each follows from tmux having no agent API.
   `pane list --with-status`. `fleet` still never reads `.bee/config.json`;
   bee's `TmuxSettings::from_config` resolves `herding.tmux.*` and hands the
   settings over already decided.
+- **Whether a worker's screen has gone quiet is the transport's memory, not
+  one call's** (tmux-ready-wait D1). The quiet window — a run of identical
+  screen reads that is both long enough in count and long enough in time — is
+  held per pane and survives across calls, so a caller that polls in short
+  bursts reaches idle after about one window instead of never. A read that
+  fails, a pane that closes, and a new worker started into a pane each drop
+  the window. A dialog still ends the wait immediately, ahead of the window
+  (pattern `pattern-20260823-a-settling-window-rebuilt-per-call-never-closes`).
 - **A dialog ends the wait as `blocked`, and bee types nothing.** A pane
   showing a trust, permission, or auth prompt stops the wait; the pane
   STAYS OPEN and the human answers it (D3). bee never sends a key into a

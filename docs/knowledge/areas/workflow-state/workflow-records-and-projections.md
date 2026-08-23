@@ -241,7 +241,15 @@ lock — from near-instant to the ~5 s lock timeout (D12/D13; see
 `rebuildStateProjection`/`rebuildLaneProjection` themselves stay
 caller-serialized and acquire nothing internally — unchanged from D3's
 original rule — because `lock.mjs` is non-reentrant and the hook already
-holds `'state'` when it calls `rebuildStateProjection`. What each actor
+holds `'state'` when it calls `rebuildStateProjection`. The same rule holds
+for the record-mutation seam in the ported runtime: it is not re-entrant, so a
+side effect that writes through the same seam as the verb hosting it runs
+after that verb releases its locks, never inside them — inside, the write
+finds the locks busy and, being best-effort, disappears without a sound
+(merge-ready-fact cell mrf-2: the uat-gate and worktree-unregister writes of
+the merge-ready fact both sit after their host's locks are released; pattern
+`pattern-20260823-a-best-effort-write-sits-on-every-exit-outside-the-locks`).
+What each actor
 observes: a session mutating `.bee/state.json` is excluded from every other
 writer of `.bee/state.json`, including the hook, with no lost update
 possible; a session mutating lane F's projection is excluded from every

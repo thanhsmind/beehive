@@ -92,6 +92,11 @@ an empty list. The write happens as soon as the doors are known, before the
 close decides whether to refuse, so a *blocked* close still records why it was
 blocked. That is the whole value of the field: a reader learns "ready except
 for these two things" without running anything (decision e069ef73).
+The write sits on every exit of the close, never only on the success path: a
+close can stop at several different doors, and a refusal arm that skipped the
+write would leave the previous answer standing — a green-looking list for a
+close that never happened (merge-ready-fact cell mrf-2, pattern
+`pattern-20260823-a-best-effort-write-sits-on-every-exit-outside-the-locks`).
 
 **B3 — The acceptance gate flips one field.** Granting the acceptance gate
 sets `uat` to `approved`; withdrawing it sets `uat` back to `pending`. The

@@ -7,7 +7,7 @@ timestamp: 2026-07-29
 bee:
   id: pattern-20260729-an-advisory-check-that-is-wrong-survives-because-it-cannot-cost-anything
   lifecycle: active
-  sources: ["tick-contract-inline cell tci-2 (pointer matcher fix, scripts/skill_lint.mjs, commit d3a3cbde, 2026-07-29)", "tick-contract-inline cell tci-3 (blocking reachability suite, scripts/tests/test_always_loaded_rules.mjs, commit 69de4c1d)", "derived-check-hardening cell dch-7 and cell dch-1 worker reports (both recorded the same warning as 'pre-existing advisory, unrelated', 2026-07-29)", docs/history/tick-contract-inline/CONTEXT.md T4/T5, docs/history/learnings/20260729-tick-contract-inline.md N2]
+  sources: ["tick-contract-inline cell tci-2 (pointer matcher fix, scripts/skill_lint.mjs, commit d3a3cbde, 2026-07-29)", "tick-contract-inline cell tci-3 (blocking reachability suite, scripts/tests/test_always_loaded_rules.mjs, commit 69de4c1d)", "derived-check-hardening cell dch-7 and cell dch-1 worker reports (both recorded the same warning as 'pre-existing advisory, unrelated', 2026-07-29)", docs/history/tick-contract-inline/CONTEXT.md T4/T5, docs/history/learnings/20260729-tick-contract-inline.md N2, "tmux-herding-cockpit cell thc-7 (the untested-lines advisory flagged a binary crate whose tests live in-module beside the code; a false positive that cost nothing and survived)"]
   polarity: pitfall
   critical: true
 ---

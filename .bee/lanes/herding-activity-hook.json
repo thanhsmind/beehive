@@ -13,8 +13,13 @@
   "summary": "Feature \"herding-activity-hook\" started at phase \"planning\" (lane).",
   "next_action": "bee close finished \"herding-activity-hook\" — feature is closed.",
   "created_at": "2026-08-23T05:57:40.229Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Feature closed (lane back to idle). Committing the close records and releasing the session.",
+    "asked_at": "2026-08-23T06:55:10.994Z",
+    "session": "5bb39669-45a1-475c-b613-f3b0c7499d2c"
+  },
   "route": {
     "class": "feature",
     "lane": "small",

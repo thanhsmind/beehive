@@ -62,7 +62,11 @@ even from a bound session; passing it together with an explicit `--lane` is
 refused. A missing or corrupt bound lane refuses the write loudly, with zero
 writes performed — it never silently falls back to the default record (the
 same never-borrow-the-default's-authority discipline as B13's read path,
-fresh-session-handoff D2). An unbound session sees no behavior change at all:
+fresh-session-handoff D2). A background writer that has already decided which
+record owns its fact names that record directly, and forces the default record
+when that is the answer; it never lets this shared resolver choose, because the
+resolver prefers the calling session's bound lane and would land the write on
+another feature's record (merge-ready-fact cell mrf-1). An unbound session sees no behavior change at all:
 every one of the four mutation verbs resolves to the default record exactly as
 it always did. `--owner`, where a verb accepts it, is still checked against
 the *selected* record's own pre-mutation phase, never the default's. **Since

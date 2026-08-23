@@ -190,9 +190,14 @@ decision auditable.
 
 ## Business Rules
 
-- R7 — **Every hook exits 0 and silent inside a herded worker session.** When
-  the worker marker is set in the environment, the hook dispatcher returns
-  success without running any hook body, and the check sits at the single
+- R7 — **Every hook except the activity checkpoint exits 0 and silent inside
+  a herded worker session, unknown hook names included.** When the worker
+  marker is set in the environment, the hook dispatcher returns success
+  without running any hook body — the activity checkpoint is the one
+  exception (herding-activity-hook D1, 2026-08-23): it never denies and never
+  prints, so letting it run widens nothing the worker can reach, and it is
+  what lets the job's own mailbox carry the worker's state back (the record
+  is described with the activity record, B18). The check sits at the single
   dispatch entry point so every rendered manifest inherits it on a binary
   upgrade rather than needing its own opt-out. A herded worker is a foreign
   agent executing one brief; giving it preamble, guards, or nudges makes it
