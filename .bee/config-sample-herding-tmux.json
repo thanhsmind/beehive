@@ -1,0 +1,35 @@
+{
+  "_doc": {
+    "what": "Variant of config-sample.json showing the herding cockpit on TMUX instead of herdr. Read config-sample.json first for the full key guide, config-sample-herding-agents.json for the herd registry, and config-sample-cli-executors.json for the gather-only `cli` seam. Copy the `herding` block into your own .bee/config.json.",
+    "transport": "`herding.transport` (tmux-herding-transport D1) is the ONE switch: \"herdr\" (the default when the key is absent — byte-identical behavior) or \"tmux\". Any other value refuses `bee herding run`, `bee herding wave`, the control loop and every `bee herding pane` verb before any side effect. bee never sniffs $TMUX or $HERDR_ENV to pick a transport; the key decides.",
+    "what_runs_on_tmux": "Everything the cockpit does: `bee herding run` / `--continue` (one worker in a split pane, mailbox protocol unchanged), `bee herding wave` (briefs running panes through fleet's TmuxBackend), `bee herding occupancy` (counts `tmux list-panes -a`), `bee herding control-loop` (the control pane's allowlist swaps exactly one entry, Bash(herdr:*) -> Bash(tmux:*)), `skills/bee-herding/scripts/bootstrap-cockpit.sh`, and the dispatch/merge roles — which speak only the transport-neutral `bee herding pane …` verbs (tmux-herding-cockpit D2).",
+    "mapping": "tmux-herding-cockpit D3: workspace = the tmux SESSION you run in (so `--workspace` is ignored on tmux); tab = WINDOW (bootstrap makes `cockpit` and `runtime`); pane label = PANE TITLE (`bee herding pane rename <id> <label>` runs `select-pane -T`; an unrenamed pane reads its host name as the title, so `pane-id --label` only matches after a rename); chat pane = the pane you ran bootstrap from. Workers are split panes in your window (right once, then down), never detached sessions.",
+    "how_status_is_read": "tmux has no agent_status API, so bee reads the SCREEN (tmux-herding-transport D4): a pane is `working` when one of `tmux.busy_markers` appears in its last 2 non-empty lines, `blocked` when one of `tmux.blocked_markers` appears in its last 12 lines, and `idle` when the screen has been unchanged for `quiet_cycles` reads spanning at least quiet_cycles x interval_ms. That verdict is ADVISORY — the mailbox ack and result files stay the only truth for delivered and done. A `blocked` screen ends the wait and the pane stays for you to answer; bee never types into a dialog (D3), and the pre-send guard fails open only when the screen cannot be read at all (tmux-herding-cockpit D5).",
+    "markers_are_data": "The marker defaults below come from luongnv89/skills tmux-agent-comms @ ab46724e (tmux-herding-transport D5) and match Claude Code 2.x and Gemini CLI chrome. They rot as CLIs change their footer text: when a worker sits idle but bee reads `working`, or a dialog is not caught, edit the lists here — a list you set REPLACES the default list, it does not extend it. scrollback is the `capture-pane -S -N` window the classifier reads; interval_ms is the poll interval; quiet_cycles is how many unchanged reads make `idle`.",
+    "agents_on_tmux": "Same registry as config-sample-herding-agents.json: token 0 is the agent binary, typed into the fresh pane as one shell-quoted `exec <kind> <args…>` line (never `-p`/`--print`), then Enter. Put each vendor's DO-NOT-ASK flag in its entry exactly as on herdr — a permission or trust dialog on tmux reads `blocked` and waits for a human.",
+    "requirements": "`tmux` on PATH and a running tmux server; run bee from INSIDE a tmux pane ($TMUX and $TMUX_PANE set — `bee herding status --json` reports transport.ready and the reason). The herdr binary is not needed on this transport. Native Windows tmux is not supported; WSL works.",
+    "try_one": "inside a tmux pane: bee herding status --json  (transport.kind = tmux, ready = true), then bee herding pane current, then bee herding run --task 'say PONG and stop' --json  — a worker pane splits off yours, acks, writes its result file, and is closed on done. The recorded round trip: docs/history/tmux-herding-cockpit/live-proof.md."
+  },
+
+  "herding": {
+    "transport": "tmux",
+
+    "agent_command": "claude-sonnet",
+
+    "agents": {
+      "claude-sonnet": ["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"],
+      "opencode-auto": ["opencode", "--auto"],
+      "pi-auto": ["pi", "-a"]
+    },
+
+    "control_command": ["claude", "-p", "{PROMPT}", "--model", "sonnet", "--max-turns", "{MAX_TURNS}", "--allowedTools", "{ALLOWED_TOOLS}"],
+
+    "tmux": {
+      "busy_markers": ["esc to interrupt", "esc to cancel", "ctrl+c to interrupt", "press esc to"],
+      "blocked_markers": ["do you trust", "trust the files", "paste your api key", "press enter to submit"],
+      "scrollback": 40,
+      "quiet_cycles": 3,
+      "interval_ms": 2000
+    }
+  }
+}
