@@ -793,5 +793,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-22T17:00:11.383Z"
+  },
+  "tmux-herding-transport": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-08-23T01:03:50.512Z"
   }
 }
