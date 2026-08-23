@@ -509,10 +509,15 @@ pub(crate) trait PaneTransport {
     }
 }
 
-struct RealHerdr;
+/// The herdr transport. `pub(crate)` (with `call`) because the cockpit's
+/// pane verbs implement their own `CockpitTransport` for it in
+/// `pane_verbs.rs` — a crate trait for a crate type may be implemented in
+/// any module of the crate, and reusing this spawn-and-decode helper is
+/// what keeps the two modules' herdr calls from drifting.
+pub(crate) struct RealHerdr;
 
 impl RealHerdr {
-    fn call(&self, args: &[&str]) -> Result<Value, String> {
+    pub(crate) fn call(&self, args: &[&str]) -> Result<Value, String> {
         let out = Command::new("herdr")
             .args(args)
             .stdin(Stdio::null())
@@ -2475,7 +2480,7 @@ fn exit_code_for(o: &RunOutcome) -> ExitCode {
 /// done for the agent registry; `run`'s transport selection reads the SAME
 /// file for `herding.tmux.*`, so the two share one helper instead of two
 /// drifting copies.
-fn read_main_config(main_root: &Path) -> Value {
+pub(crate) fn read_main_config(main_root: &Path) -> Value {
     let cfg_path = main_root.join(".bee").join("config.json");
     std::fs::read_to_string(&cfg_path).ok().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or(Value::Null)
 }

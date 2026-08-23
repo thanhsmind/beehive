@@ -99,6 +99,13 @@ mod run;
 // See tmux.rs.
 pub(crate) mod tmux;
 
+// `bee herding pane …` / `agent-start` / `pane-id` / `result`
+// (tmux-herding-cockpit D2) — the transport-neutral cockpit vocabulary a
+// role document and bootstrap-cockpit.sh act through, over a
+// `CockpitTransport` trait implemented for both `RealHerdr` and
+// `RealTmux`. See pane_verbs.rs.
+pub(crate) mod pane_verbs;
+
 // The cross-PROCESS pane-split lock (herding-split-serialize): concurrent
 // `bee herding run` processes serialize their pane split through an advisory
 // lock file, because each spawn is its own OS process. See split_lock.rs.
@@ -119,6 +126,10 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "command-template" => Some(command_template(rest)),
         "herdr-result" => Some(herdr_result(rest)),
         "herdr-pane-id" => Some(herdr_pane_id(rest)),
+        "pane" => Some(pane_verbs::pane(rest)),
+        "agent-start" => Some(pane_verbs::agent_start(rest)),
+        "pane-id" => Some(pane_verbs::pane_id(rest)),
+        "result" => Some(pane_verbs::result(rest)),
         "wave" => Some(wave::wave(rest)),
         "occupancy" => Some(wave::occupancy(rest)),
         "record-worker" => Some(wave::record_worker(rest)),
@@ -852,8 +863,41 @@ pub(crate) fn read_stdin() -> String {
 /// (surfacing herdr's own `.error.message`). `--context NAME` supplies the
 /// message prefix the shell script used to hardcode.
 fn herdr_result(flags: &[&str]) -> ExitCode {
+    result_reader(flags, "bee herding herdr-result", "herdr-result", "herdr")
+}
+
+/// `bee herding result <dotted.path>` (tmux-herding-cockpit D2) — the
+/// transport-neutral twin of `herdr-result`. It reads the pane verbs' OWN
+/// envelope (`{"ok":…,"transport":…,"result":{…}}`), whose `result` and
+/// `error.message` keys are the same two the herdr reader already walks, so
+/// both verbs share one reader rather than two that can drift.
+pub(crate) fn envelope_result(flags: &[&str]) -> ExitCode {
+    result_reader(flags, "bee herding result", "result", "transport")
+}
+
+/// The dotted-path walk both readers share: descend `result.<a>.<b>…`,
+/// stopping at `Null` on the first hop that is missing rather than
+/// distinguishing "absent" from "null" — the shell callers cannot tell the
+/// two apart anyway.
+pub(crate) fn walk_result_path(root: &Value, path: &str) -> Value {
+    let mut v = root.get("result").cloned().unwrap_or(Value::Null);
+    for key in path.split('.') {
+        v = if v.is_null() { Value::Null } else { v.get(key).cloned().unwrap_or(Value::Null) };
+    }
+    v
+}
+
+/// The body of both readers. `usage_noun` and `subject` are the only things
+/// that differ between them, so `herdr-result`'s messages stay byte-for-byte
+/// what bootstrap-cockpit.sh has always printed.
+fn result_reader(
+    flags: &[&str],
+    default_context: &str,
+    usage_noun: &str,
+    subject: &str,
+) -> ExitCode {
     let mut path: Option<&str> = None;
-    let mut context = "bee herding herdr-result";
+    let mut context = default_context;
     let mut i = 0usize;
     while i < flags.len() {
         if flags[i] == "--context" {
@@ -869,12 +913,12 @@ fn herdr_result(flags: &[&str]) -> ExitCode {
         i += 1;
     }
     let Some(path) = path else {
-        eprintln!("{context}: herdr-result needs a dotted path under .result");
+        eprintln!("{context}: {usage_noun} needs a dotted path under .result");
         return ExitCode::FAILURE;
     };
     let s = read_stdin();
     let Ok(r) = serde_json::from_str::<Value>(&s) else {
-        eprintln!("{context}: unparseable herdr output: {s}");
+        eprintln!("{context}: unparseable {subject} output: {s}");
         return ExitCode::FAILURE;
     };
     if let Some(err) = r.get("error").filter(|v| !v.is_null()) {
@@ -883,13 +927,10 @@ fn herdr_result(flags: &[&str]) -> ExitCode {
             .and_then(Value::as_str)
             .map(str::to_string)
             .unwrap_or_else(|| serde_json::to_string(err).unwrap_or_default());
-        eprintln!("{context}: herdr error: {msg}");
+        eprintln!("{context}: {subject} error: {msg}");
         return ExitCode::FAILURE;
     }
-    let mut v = r.get("result").cloned().unwrap_or(Value::Null);
-    for key in path.split('.') {
-        v = if v.is_null() { Value::Null } else { v.get(key).cloned().unwrap_or(Value::Null) };
-    }
+    let v = walk_result_path(&r, path);
     let printed = match &v {
         Value::Null => None,
         Value::String(s) => Some(s.clone()),
@@ -901,7 +942,7 @@ fn herdr_result(flags: &[&str]) -> ExitCode {
             ExitCode::SUCCESS
         }
         None => {
-            eprintln!("{context}: herdr response missing result.{path}: {s}");
+            eprintln!("{context}: {subject} response missing result.{path}: {s}");
             ExitCode::FAILURE
         }
     }
