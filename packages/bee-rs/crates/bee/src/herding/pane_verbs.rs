@@ -52,13 +52,35 @@ use super::{resolve_main_root, TransportKind};
 /// One pane as the cockpit sees it. `label` is herdr's pane label and
 /// tmux's pane title (D3) — `None` when the pane carries neither, which is
 /// what makes "the pane labelled dispatch" answerable on both transports.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// The last three fields exist because the dispatch and merge roles branch
+/// on them and nothing else can answer:
+///
+/// - `cwd` is where the pane's SHELL started; `foreground_cwd` is where its
+///   FOREGROUND PROCESS is now. The anomaly scan reads the second and is
+///   told in so many words not to substitute the first
+///   (`skills/bee-herding/references/role-dispatch.md` §4), because live
+///   panes routinely disagree and a worktree read through `cwd` would never
+///   test as finished.
+/// - `agent_status`/`agent_session` carry the transport's own word on the
+///   agent in the pane. §4's dead-session test is "unfinished worktree, but
+///   the agent session is gone", and it needs both. They are advisory and
+///   never evidence that work is done — `result-N.json` stays that truth
+///   (tmux-herding-transport D4).
+///
+/// `None` is the honest answer for a transport that has no such field, and
+/// the envelope renders it as an explicit `null` rather than dropping the
+/// key: a role reads the same shape whichever transport answered.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct PaneRow {
     pub(crate) id: String,
     pub(crate) label: Option<String>,
     pub(crate) tab: String,
     pub(crate) cwd: Option<String>,
     pub(crate) command: Option<String>,
+    pub(crate) foreground_cwd: Option<String>,
+    pub(crate) agent_status: Option<String>,
+    pub(crate) agent_session: Option<String>,
 }
 
 /// One tab (herdr) / window (tmux).
@@ -103,6 +125,23 @@ pub(crate) trait CockpitTransport: PaneTransport {
     fn tab_focus(&self, tab: &str) -> Result<(), String>;
     /// The caller's own pane, tab, and workspace.
     fn pane_context(&self) -> Result<PaneContext, String>;
+    /// One pane's advisory screen status — `idle` / `working` / `blocked`,
+    /// or `None` when this transport cannot tell. Only `pane list
+    /// --with-status` calls it, and only for a row the transport did not
+    /// already answer for itself.
+    ///
+    /// The default is `None`, which is exactly right for herdr: herdr tracks
+    /// agents server-side and puts `agent_status` straight into its own
+    /// `pane list` body, so there is nothing to classify and no extra call
+    /// to make. tmux has no agent API at all (tmux.rs, property 1), so its
+    /// override reads the screen — one bounded `capture-pane` per pane
+    /// through the ONE shared classifier (cockpit D4). That answer is
+    /// ADVISORY (tmux-herding-transport D4): the mailbox files stay the sole
+    /// truth for done and delivered.
+    fn pane_status(&self, _pane: &str) -> Option<String> {
+        None
+    }
+
     /// The first pane whose label (herdr) or title (tmux) equals `label`.
     /// One definition for both transports, because `pane_list` already
     /// normalizes the two carriers into the same `label` field.
@@ -170,9 +209,26 @@ fn parse_herdr_pane_rows(v: &Value) -> Vec<PaneRow> {
                 tab: non_empty(p.get("tab_id")).unwrap_or_default(),
                 cwd: non_empty(p.get("cwd")),
                 command: non_empty(p.get("command")),
+                foreground_cwd: non_empty(p.get("foreground_cwd")),
+                agent_status: non_empty(p.get("agent_status")),
+                agent_session: herdr_agent_session(p.get("agent_session")),
             })
         })
         .collect()
+}
+
+/// herdr spells a pane's agent session BOTH ways depending on the verb: a
+/// bare string on some bodies, and `{"value": "<uuid>"}` on the ones that
+/// carry provenance beside it (`docs/history/research/`
+/// `herdr-orchestrator-distill.md` records `agent_session.value` as the
+/// Claude Code session UUID). Reading both spellings here means the role
+/// above never has to know which verb it came from; anything else is
+/// `None`, never a panic.
+fn herdr_agent_session(v: Option<&Value>) -> Option<String> {
+    match v {
+        Some(Value::Object(o)) => non_empty(o.get("value")),
+        other => non_empty(other),
+    }
 }
 
 /// `herdr tab list`'s body → `TabRow`s. Pure, same drop rule.
@@ -337,12 +393,26 @@ fn parse_pane_rows(stdout: &str) -> Vec<PaneRow> {
             let tab = cols.next().unwrap_or("").to_string();
             let cwd = cols.next().unwrap_or("");
             let command = cols.next().unwrap_or("");
+            let cwd = (!cwd.is_empty()).then(|| cwd.to_string());
             Some(PaneRow {
                 id,
                 label: (!title.is_empty()).then(|| title.to_string()),
                 tab,
-                cwd: (!cwd.is_empty()).then(|| cwd.to_string()),
+                // On tmux `cwd` and `foreground_cwd` are THE SAME VALUE, and
+                // that is not a shortcut: `#{pane_current_path}` already
+                // follows the pane's foreground process, so tmux has no
+                // separate "where the shell started" to report. The role's
+                // §4 rule ("read foreground_cwd, never cwd") therefore reads
+                // correctly here without a second column.
+                foreground_cwd: cwd.clone(),
+                cwd,
                 command: (!command.is_empty()).then(|| command.to_string()),
+                // tmux has no agent API: there is no session id to report,
+                // and status is a classifier over the screen, which costs a
+                // capture per pane — so it stays `None` until the caller
+                // asks with `pane list --with-status`.
+                agent_status: None,
+                agent_session: None,
             })
         })
         .collect()
@@ -431,6 +501,15 @@ impl CockpitTransport for RealTmux {
 
     fn tab_focus(&self, tab: &str) -> Result<(), String> {
         tmux_call(&tab_focus_argv(tab)).map(|_| ())
+    }
+
+    /// One bounded `capture-pane` through the shared classifier (cockpit
+    /// D4). Fails soft to `None`: a pane whose screen cannot be read is
+    /// "cannot tell", never a guess, and never a failed listing.
+    fn pane_status(&self, pane: &str) -> Option<String> {
+        let settings = tmux_settings();
+        let screen = tmux_call(&capture_argv(pane, settings.scrollback)).ok()?;
+        Some(classify(&screen, settings).as_str().to_string())
     }
 
     fn pane_context(&self) -> Result<PaneContext, String> {
@@ -529,6 +608,11 @@ fn pane_id_result(pane_id: &str) -> Map<String, Value> {
     m
 }
 
+/// The row's five original keys first, in their original order, then the
+/// three this cell adds. A role written against the old shape keeps reading
+/// exactly what it read; a role written against the new one gets an
+/// explicit `null` wherever the transport has no answer, never a missing
+/// key it would have to test for.
 fn pane_row_json(row: &PaneRow) -> Value {
     let mut m = Map::new();
     m.insert("pane_id".into(), Value::String(row.id.clone()));
@@ -536,6 +620,18 @@ fn pane_row_json(row: &PaneRow) -> Value {
     m.insert("tab_id".into(), Value::String(row.tab.clone()));
     m.insert("cwd".into(), row.cwd.clone().map_or(Value::Null, Value::String));
     m.insert("command".into(), row.command.clone().map_or(Value::Null, Value::String));
+    m.insert(
+        "foreground_cwd".into(),
+        row.foreground_cwd.clone().map_or(Value::Null, Value::String),
+    );
+    m.insert(
+        "agent_status".into(),
+        row.agent_status.clone().map_or(Value::Null, Value::String),
+    );
+    m.insert(
+        "agent_session".into(),
+        row.agent_session.clone().map_or(Value::Null, Value::String),
+    );
     Value::Object(m)
 }
 
@@ -546,11 +642,18 @@ fn tab_row_json(row: &TabRow) -> Value {
     Value::Object(m)
 }
 
+/// `width`/`height` keep their place at the front; `x`/`y` are appended.
+/// The origin is what the cockpit roles read to name the chat pane — "the
+/// smallest `x`, ties on smallest `y`, excluding your own pane"
+/// (`role-dispatch.md` §3, `role-merge.md` §2) — and it now answers the
+/// same way on both transports.
 fn geom_json(g: &PaneGeom) -> Value {
     let mut m = Map::new();
     m.insert("pane_id".into(), Value::String(g.pane_id.clone()));
     m.insert("width".into(), Value::from(g.width));
     m.insert("height".into(), Value::from(g.height));
+    m.insert("x".into(), Value::from(g.x));
+    m.insert("y".into(), Value::from(g.y));
     Value::Object(m)
 }
 
@@ -564,6 +667,22 @@ fn context_result(ctx: &PaneContext) -> Map<String, Value> {
         m.insert("workspace_id".into(), Value::String(w.clone()));
     }
     m
+}
+
+/// `pane list --with-status`, the one branch that costs a call per pane.
+///
+/// A row the transport ALREADY answered is left alone — that is herdr's
+/// whole arm: its `pane list` body carries `agent_status` server-side, so
+/// the flag adds nothing and spawns nothing. Only a row with no answer is
+/// classified, which on tmux is every row and costs one bounded
+/// `capture-pane` each. A pane that will not classify stays `None`; the
+/// flag never turns a readable listing into a failed one.
+fn fill_agent_status(t: &dyn CockpitTransport, rows: &mut [PaneRow]) {
+    for row in rows.iter_mut() {
+        if row.agent_status.is_none() {
+            row.agent_status = t.pane_status(&row.id);
+        }
+    }
 }
 
 /// The last `n` lines of a capture — what `pane read --lines N` trims to.
@@ -641,8 +760,12 @@ fn dispatch_pane(
         "current" => Ok(context_result(&t.pane_context().map_err(transport_err)?)),
 
         "list" => {
+            let with_status = take_flag(&mut a, "--with-status");
             let workspace = take_opt(&mut a, "--workspace");
-            let rows = t.pane_list(workspace).map_err(transport_err)?;
+            let mut rows = t.pane_list(workspace).map_err(transport_err)?;
+            if with_status {
+                fill_agent_status(t, &mut rows);
+            }
             let mut m = Map::new();
             m.insert("panes".into(), Value::Array(rows.iter().map(pane_row_json).collect()));
             Ok(m)
@@ -840,6 +963,10 @@ mod tests {
         split_result: Option<String>,
         tab_create_result: Option<String>,
         layout: Option<Vec<PaneGeom>>,
+        /// What `pane_status` answers. `None` is herdr's arm (the row
+        /// already carries the transport's own status); `Some` is tmux's
+        /// (the classifier read the screen).
+        pane_status: Option<String>,
         name: &'static str,
     }
 
@@ -950,6 +1077,10 @@ mod tests {
             self.log("pane_context");
             self.context.clone().ok_or_else(|| "no context seeded".to_string())
         }
+        fn pane_status(&self, pane: &str) -> Option<String> {
+            self.log(format!("pane_status {pane}"));
+            self.pane_status.clone()
+        }
     }
 
     fn row(id: &str, label: Option<&str>, tab: &str) -> PaneRow {
@@ -957,8 +1088,7 @@ mod tests {
             id: id.into(),
             label: label.map(str::to_string),
             tab: tab.into(),
-            cwd: None,
-            command: None,
+            ..Default::default()
         }
     }
 
@@ -1002,10 +1132,99 @@ mod tests {
         assert_eq!(panes.len(), 2);
         let keys: Vec<&str> =
             panes[0].as_object().unwrap().keys().map(String::as_str).collect();
-        assert_eq!(keys, vec!["pane_id", "label", "tab_id", "cwd", "command"]);
+        // The five original keys keep their order; the three the roles need
+        // are appended. Nothing here is ever renamed or dropped.
+        assert_eq!(keys, vec![
+            "pane_id",
+            "label",
+            "tab_id",
+            "cwd",
+            "command",
+            "foreground_cwd",
+            "agent_status",
+            "agent_session",
+        ]);
         assert_eq!(panes[0].get("label").and_then(Value::as_str), Some("dispatch"));
         // an unlabelled pane carries an explicit null, never a "" label
         assert_eq!(panes[1].get("label"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn pane_verbs_list_renders_the_role_fields_and_nulls_what_a_transport_lacks() {
+        let mut f = FakeCockpit::new();
+        f.panes = vec![
+            PaneRow {
+                id: "w4:p5".into(),
+                label: Some("thc".into()),
+                tab: "w4:t1".into(),
+                cwd: Some("/repo".into()),
+                command: Some("claude".into()),
+                foreground_cwd: Some("/repo--wt--thc".into()),
+                agent_status: Some("working".into()),
+                agent_session: Some("6462a2f6".into()),
+            },
+            row("w4:p6", None, "w4:t1"),
+        ];
+        let r = ok(&f, "list", &[]);
+        let panes = r.get("panes").and_then(Value::as_array).expect("panes array");
+        // §4 reads foreground_cwd, and it must NOT be cwd: the two disagree
+        // on a live worker pane, which is the whole reason the role forbids
+        // the substitution.
+        assert_eq!(panes[0].get("cwd").and_then(Value::as_str), Some("/repo"));
+        assert_eq!(
+            panes[0].get("foreground_cwd").and_then(Value::as_str),
+            Some("/repo--wt--thc")
+        );
+        assert_eq!(panes[0].get("agent_status").and_then(Value::as_str), Some("working"));
+        assert_eq!(panes[0].get("agent_session").and_then(Value::as_str), Some("6462a2f6"));
+        // absent is an explicit null, so a role tests a value, never a key
+        for key in ["foreground_cwd", "agent_status", "agent_session"] {
+            assert_eq!(panes[1].get(key), Some(&Value::Null), "{key}");
+        }
+    }
+
+    #[test]
+    fn pane_verbs_list_with_status_classifies_only_the_rows_the_transport_left_blank() {
+        // The tmux arm: no agent API, so every row arrives statusless and
+        // the classifier answers each one.
+        let mut f = FakeCockpit::new();
+        f.name = "tmux";
+        f.pane_status = Some("working".into());
+        f.panes = vec![row("%4", Some("dispatch"), "@1"), row("%5", None, "@1")];
+        let r = ok(&f, "list", &["--with-status"]);
+        let panes = r.get("panes").and_then(Value::as_array).expect("panes array");
+        assert_eq!(panes[0].get("agent_status").and_then(Value::as_str), Some("working"));
+        assert_eq!(panes[1].get("agent_status").and_then(Value::as_str), Some("working"));
+        assert_eq!(f.calls(), vec!["pane_list <own>", "pane_status %4", "pane_status %5"]);
+    }
+
+    #[test]
+    fn pane_verbs_list_with_status_passes_herdrs_own_status_through_untouched() {
+        // The herdr arm: the row already carries the server's answer, so the
+        // flag must neither overwrite it nor spend a call on it.
+        let mut f = FakeCockpit::new();
+        f.pane_status = Some("idle".into());
+        f.panes = vec![PaneRow {
+            id: "w4:p5".into(),
+            agent_status: Some("done".into()),
+            ..Default::default()
+        }];
+        let r = ok(&f, "list", &["--with-status"]);
+        let panes = r.get("panes").and_then(Value::as_array).expect("panes array");
+        assert_eq!(panes[0].get("agent_status").and_then(Value::as_str), Some("done"));
+        assert_eq!(f.calls(), vec!["pane_list <own>"], "an answered row costs no call");
+    }
+
+    #[test]
+    fn pane_verbs_list_without_the_flag_never_classifies() {
+        let mut f = FakeCockpit::new();
+        f.name = "tmux";
+        f.pane_status = Some("working".into());
+        f.panes = vec![row("%4", None, "@1")];
+        let r = ok(&f, "list", &[]);
+        let panes = r.get("panes").and_then(Value::as_array).expect("panes array");
+        assert_eq!(panes[0].get("agent_status"), Some(&Value::Null));
+        assert_eq!(f.calls(), vec!["pane_list <own>"], "no flag, no capture");
     }
 
     #[test]
@@ -1057,12 +1276,23 @@ mod tests {
     #[test]
     fn pane_verbs_layout_reports_every_pane_of_the_tab() {
         let mut f = FakeCockpit::new();
-        f.layout = Some(vec![PaneGeom { pane_id: "w4:p4".into(), width: 120, height: 43 }]);
+        f.layout = Some(vec![
+            PaneGeom { pane_id: "w4:p4".into(), x: 0, y: 1, width: 60, height: 43 },
+            PaneGeom { pane_id: "w4:p9".into(), x: 61, y: 1, width: 59, height: 43 },
+        ]);
         let r = ok(&f, "layout", &["--pane", "w4:p4"]);
         let panes = r.get("panes").and_then(Value::as_array).expect("panes array");
+        let keys: Vec<&str> =
+            panes[0].as_object().unwrap().keys().map(String::as_str).collect();
+        // pane_id/width/height keep their place; the origin is appended
+        assert_eq!(keys, vec!["pane_id", "width", "height", "x", "y"]);
         assert_eq!(panes[0].get("pane_id").and_then(Value::as_str), Some("w4:p4"));
-        assert_eq!(panes[0].get("width").and_then(Value::as_u64), Some(120));
+        assert_eq!(panes[0].get("width").and_then(Value::as_u64), Some(60));
         assert_eq!(panes[0].get("height").and_then(Value::as_u64), Some(43));
+        assert_eq!(panes[0].get("x").and_then(Value::as_u64), Some(0));
+        assert_eq!(panes[0].get("y").and_then(Value::as_u64), Some(1));
+        // the rule the roles state, answerable now: leftmost is chat
+        assert_eq!(panes[1].get("x").and_then(Value::as_u64), Some(61));
     }
 
     #[test]
@@ -1240,6 +1470,11 @@ mod tests {
                 tab: "@1".into(),
                 cwd: Some("/repo".into()),
                 command: Some("bash".into()),
+                // `#{pane_current_path}` already follows the foreground
+                // process, so on tmux the two paths ARE one value
+                foreground_cwd: Some("/repo".into()),
+                agent_status: None,
+                agent_session: None,
             }
         );
         // an empty title is NO label — an untitled pane must never answer
@@ -1282,6 +1517,39 @@ mod tests {
     // ─── the herdr body parsers, no process ─────────────────────────────
 
     #[test]
+    fn pane_verbs_herdr_pane_rows_carry_the_fields_the_anomaly_scan_reads() {
+        // A live worker pane: the shell started in MAIN, the agent moved
+        // into the worktree. §4 classifies on the second, so the parse must
+        // keep them apart rather than collapse them.
+        let body: Value = serde_json::from_str(
+            r#"{"result":{"panes":[{"pane_id":"w4:p5","label":"thc","tab_id":"w4:t1",
+                 "cwd":"/repo","command":"claude","foreground_cwd":"/repo--wt--thc",
+                 "agent_status":"working","agent_session":{"value":"6462a2f6"}}]}}"#,
+        )
+        .unwrap();
+        let rows = parse_herdr_pane_rows(&body);
+        assert_eq!(rows[0].cwd.as_deref(), Some("/repo"));
+        assert_eq!(rows[0].foreground_cwd.as_deref(), Some("/repo--wt--thc"));
+        assert_eq!(rows[0].agent_status.as_deref(), Some("working"));
+        // `agent_session` arrives wrapped on this verb and bare on others
+        assert_eq!(rows[0].agent_session.as_deref(), Some("6462a2f6"));
+
+        let bare: Value = serde_json::from_str(
+            r#"{"result":{"panes":[{"pane_id":"w4:p5","agent_session":"7d1"}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(parse_herdr_pane_rows(&bare)[0].agent_session.as_deref(), Some("7d1"));
+
+        // a pane herdr says nothing about carries None, not ""
+        let quiet: Value =
+            serde_json::from_str(r#"{"result":{"panes":[{"pane_id":"w4:p6"}]}}"#).unwrap();
+        let quiet = &parse_herdr_pane_rows(&quiet)[0];
+        assert_eq!(quiet.foreground_cwd, None);
+        assert_eq!(quiet.agent_status, None);
+        assert_eq!(quiet.agent_session, None);
+    }
+
+    #[test]
     fn pane_verbs_herdr_pane_rows_parse_both_result_shapes() {
         let object: Value = serde_json::from_str(
             r#"{"result":{"panes":[{"pane_id":"w4:p4","label":"dispatch","tab_id":"w4:t1",
@@ -1298,6 +1566,7 @@ mod tests {
             tab: "w4:t1".into(),
             cwd: Some("/repo".into()),
             command: Some("bash".into()),
+            ..Default::default()
         }];
         assert_eq!(parse_herdr_pane_rows(&object), want);
         assert_eq!(parse_herdr_pane_rows(&bare), want);

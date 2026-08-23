@@ -38,9 +38,10 @@
 // two would put the worker somewhere the human is not looking; the last two
 // need a TTY a tool shell does not have.
 //
-// Nothing here is wired into production yet: the run verb's construction
-// site is switched by tht-4. Until then the module is compiled and fully
-// tested, but unreferenced — hence the allow below, which tht-4 removes.
+// This transport IS wired into production: `transport_for_run` builds it
+// whenever `herding.transport` is `tmux`, and the cockpit's pane verbs
+// build it too. The allow below covers the handful of trait methods and
+// settings accessors only one of the two arms ever reaches.
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -314,9 +315,21 @@ impl RealTmux {
     }
 }
 
-/// Parses `list-panes -F '#{pane_id} #{pane_width} #{pane_height}'` output.
-/// Pure, so the parse is pinned by a test against captured tmux text rather
-/// than only ever seen through a fake — the failure
+/// The five columns `pane_layout` asks for, in the order
+/// `parse_pane_geoms` reads them. Named once so the argv and the test that
+/// pins it cannot drift apart.
+///
+/// `pane_left`/`pane_top` are tmux's own spelling of the rect ORIGIN, in
+/// character cells relative to the window. They are the tmux half of the
+/// same `x`/`y` herdr reports under `rect`, which is what lets the cockpit
+/// roles name the chat pane ("smallest x, ties on smallest y") in ONE
+/// sentence that holds on both transports.
+const PANE_GEOM_FORMAT: &str =
+    "#{pane_id} #{pane_left} #{pane_top} #{pane_width} #{pane_height}";
+
+/// Parses `list-panes -F PANE_GEOM_FORMAT` output. Pure, so the parse is
+/// pinned by a test against captured tmux text rather than only ever seen
+/// through a fake — the failure
 /// `docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md`
 /// records. A malformed row is dropped (mirroring `extract_pane_layout` in
 /// run.rs); a body with no usable row at all is `None`, because for tmux an
@@ -327,9 +340,11 @@ fn parse_pane_geoms(stdout: &str) -> Option<Vec<PaneGeom>> {
         .filter_map(|line| {
             let mut parts = line.split_whitespace();
             let pane_id = parts.next()?.to_string();
+            let x = parts.next()?.parse::<u64>().ok()?;
+            let y = parts.next()?.parse::<u64>().ok()?;
             let width = parts.next()?.parse::<u64>().ok()?;
             let height = parts.next()?.parse::<u64>().ok()?;
-            Some(PaneGeom { pane_id, width, height })
+            Some(PaneGeom { pane_id, x, y, width, height })
         })
         .collect();
     if geoms.is_empty() {
@@ -408,7 +423,7 @@ impl PaneTransport for RealTmux {
     /// pane rather than losing the run over a geometry read.
     fn pane_layout(&self, pane_id: &str) -> Option<Vec<PaneGeom>> {
         let out = self
-            .call(&["list-panes", "-t", pane_id, "-F", "#{pane_id} #{pane_width} #{pane_height}"])
+            .call(&["list-panes", "-t", pane_id, "-F", PANE_GEOM_FORMAT])
             .ok()?;
         parse_pane_geoms(&out)
     }
@@ -865,17 +880,37 @@ $
 
     #[test]
     fn tmux_parse_pane_geoms_reads_a_multi_pane_window_listing() {
-        // `tmux list-panes -t %0 -F '#{pane_id} #{pane_width} #{pane_height}'`
-        let out = "%0 120 43\n%3 59 43\n%4 59 21\n";
+        // `tmux list-panes -t %0 -F '<PANE_GEOM_FORMAT>'` — a 120-wide
+        // window cut into a left column and two stacked panes
+        // on the right, so every origin is distinct.
+        let out = "%0 0 0 120 43\n%3 61 0 59 43\n%4 61 22 59 21\n";
         let geoms = parse_pane_geoms(out).expect("a well-formed listing parses");
         assert_eq!(geoms.len(), 3);
-        assert_eq!(geoms[0], PaneGeom { pane_id: "%0".into(), width: 120, height: 43 });
-        assert_eq!(geoms[2], PaneGeom { pane_id: "%4".into(), width: 59, height: 21 });
+        assert_eq!(geoms[0], PaneGeom {
+            pane_id: "%0".into(),
+            x: 0,
+            y: 0,
+            width: 120,
+            height: 43
+        });
+        assert_eq!(geoms[2], PaneGeom {
+            pane_id: "%4".into(),
+            x: 61,
+            y: 22,
+            width: 59,
+            height: 21
+        });
+        // The chat-pane rule the cockpit roles state: smallest x wins.
+        let leftmost = geoms.iter().min_by_key(|g| (g.x, g.y)).expect("a pane");
+        assert_eq!(leftmost.pane_id, "%0");
     }
 
     #[test]
     fn tmux_parse_pane_geoms_drops_a_bad_row_and_refuses_an_empty_body() {
-        assert_eq!(parse_pane_geoms("%0 wide 43\n%3 59 43\n").unwrap().len(), 1);
+        assert_eq!(parse_pane_geoms("%0 0 0 wide 43\n%3 61 0 59 43\n").unwrap().len(), 1);
+        // A three-column row is the OLD, origin-less format: it no longer
+        // describes a pane, so it is dropped rather than half-read.
+        assert!(parse_pane_geoms("%0 120 43\n").is_none());
         assert!(parse_pane_geoms("").is_none());
     }
 
@@ -1011,8 +1046,8 @@ $
     #[test]
     fn tmux_pane_split_sizes_the_child_as_the_complement_of_the_parent_s_ratio() {
         let stub = Stub::new();
-        // A 120-cell-wide parent, alone in its window.
-        stub.reply("list-panes", "%1 120 40\n", None);
+        // A 120-cell-wide parent, alone in its window, at the origin.
+        stub.reply("list-panes", "%1 0 0 120 40\n", None);
         stub.reply("split-window", "%7\n", None);
         let tmux = stub.tmux();
 
@@ -1025,7 +1060,7 @@ $
 
         let calls = stub.invocations();
         assert_eq!(calls.len(), 2, "one geometry read, one split: {calls:?}");
-        assert_eq!(calls[0], "list-panes -t %1 -F #{pane_id} #{pane_width} #{pane_height}");
+        assert_eq!(calls[0], format!("list-panes -t %1 -F {PANE_GEOM_FORMAT}"));
         assert_eq!(
             calls[1],
             "split-window -t %1 -h -l 30 -c /tmp/wt -d -P -F #{pane_id}",
@@ -1037,7 +1072,7 @@ $
     #[test]
     fn tmux_pane_split_down_measures_height_and_never_new_sessions() {
         let stub = Stub::new();
-        stub.reply("list-panes", "%1 120 40\n", None);
+        stub.reply("list-panes", "%1 0 0 120 40\n", None);
         stub.reply("split-window", "%8\n", None);
         let tmux = stub.tmux();
         tmux.pane_split("%1", "down", 0.5, Path::new("/tmp/wt")).unwrap();
