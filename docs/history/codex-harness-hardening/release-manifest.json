@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "7ac98cd1d9f9b3ed17c587e1347decf881f5dacb2b0c4eae6649806b76c42f43",
+      "sha256": "d510c352cca224d5ca0c2a2d3ab2dcea00b13d9864c82e9d06e9634f6c36cd40",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -514,7 +514,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "2138e4b44446dc01c95933b2b8ddac0d853defad4f485544bd1bada35609c581",
+      "sha256": "007f5243d6a4c778f0901e45e52b966c68f3948107a9c12d55ded528b3e38a68",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -647,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "9095f1e265c1e7b8a1fd35ef644f377becb3b349166fc9cb62daa2b86ca8476f",
+      "sha256": "c1bae7f346b7fc83954592ffccec70b60d5d2928be46316562b68827c11db7bf",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1025,7 +1025,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "3bb7b1afcec87c1db6a86249d5379d9edd9068225489a6bceb0f9850401de943",
+      "sha256": "620583032642e68d1d7352eff5262cedb6a6c86c541b604d3fa9aa7e80d5d332",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -1740,7 +1740,7 @@
     },
     {
       "path": "skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "dfc5dc91119fddc7718d7e16669b49ff99310619218d963de671a8081f8fe071",
+      "sha256": "12df358943b24f6e8af625d6cb189086b830715ad7fbe91ca601d209dc6a3b53",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/swarming-reference.md"
