@@ -8,16 +8,11 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"prepare-registers-owned\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 4afdd78; reload the product and test \"prepare-registers-owned\", then either approve uat (\"bee gate --name uat --approved true --lane prepare-registers-owned\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-23T06:56:49.311Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: prepare-registers-owned",
-    "asked_at": "2026-08-23T07:08:45.143Z",
-    "session": "bee-worktree-merge-sessionless"
-  }
+  "run_state": "done",
+  "waiting_on": null
 }
