@@ -203,3 +203,14 @@ cut no decision-log line. **Closed 2026-08-24**: the binary was rebuilt
 from `packages/bee-rs` and installed at `.bee/bin/bee`; from ticket 001
 onward the wayfinding verbs (`reservations reserve`, `decisions log`)
 run normally.
+
+**Named deviation — three with-user tickets in one session
+(2026-08-24).** The skill caps a session at one. Ticket 001's answer
+re-framed 002 in the same exchange, and the owner's xia read of
+`~/Projects/refs/oh-my-pi` then dissolved 005 and re-framed 002 again
+before it could be answered. Recomputing the frontier after each answer
+is the skill's own instruction, and each time it moved inside the same
+conversation. Stopping at one ticket would have left the map holding a
+question the next answer had already retired. Cost of the deviation:
+this session ran long; the tickets it opened (006) and left open (003,
+004) are the natural stop.
