@@ -396,6 +396,8 @@
     "skill-sync",
     "cap",
     "preamble",
-    "tmux"
+    "tmux",
+    "model-roles",
+    "tiers"
   ]
 }
