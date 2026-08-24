@@ -97,14 +97,27 @@ split would make configuration more dynamic and more efficient.
 
 ## Decisions so far
 
-(none — nothing locked yet)
+- **`8dad7c2e`** — `bee dispatch prepare` gains `--kind extract`,
+  resolving the `extraction` slot and returning `bee-extract`; `gather`
+  keeps `generation`. Establishes the map's spine: a model role is
+  reachable by **two independent paths** — a cell's recorded `tier`, or
+  a dispatch `--kind` — and both are legitimate. Touches `a2f85972`
+  (its herding-fallback member set must widen to extraction).
+  Ticket: `tickets/001-dead-extraction-slot.md`.
 
 ## Open shape
 
 The observation that started this map points at *more roles*. The code
-says the first defect is *a role nothing can select*. Adding roles on
-top of the current door multiplies dead config rather than reducing it,
-so ticket 001 comes before any decision on role count.
+said the first defect was *a role nothing can select* — answered by
+`8dad7c2e`, which also renamed the real axis: bee does not have one
+role surface, it has two paths onto one set of slots (cell `tier`,
+dispatch `--kind`).
+
+That reframes what is left. Role **count** is no longer the question;
+role **shape** is. A role that names work size wants a cell tier and
+costs nothing at the door. A role that names a job wants a kind and
+costs three constants plus the duplications ticket 004 lists. Ticket
+002 now sorts its candidates by that split before counting them.
 
 ## Not yet specified
 
@@ -113,6 +126,8 @@ so ticket 001 comes before any decision on role count.
   existing single-step mechanisms stay as they are (ticket 003).
 - Whether the two parsers and the two guard tier lists collapse into one
   source before the surface grows (ticket 004).
+- Whether slot-to-door reachability is enforced rather than conventional
+  (ticket 005, graduated from 001's answer).
 
 ## Out of scope
 

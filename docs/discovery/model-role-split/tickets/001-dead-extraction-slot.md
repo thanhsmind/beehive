@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: (unclaimed)
+status: closed
+claimed-by: wayfinder (resolved)
 blocked-by: (none)
 ---
 
@@ -65,4 +65,19 @@ pattern.
 
 ## Answer
 
-(open)
+**Option 1 — add a kind.** Owner answer 2026-08-24. `bee dispatch
+prepare` gains `--kind extract`, resolving the `extraction` slot and
+returning the rendered `bee-extract` worker; `--kind gather` keeps
+`generation`, so no existing caller changes model.
+
+Full text, rationale and the rejected alternatives: decision
+`8dad7c2e`. The consequences it records — the guard's
+`dispatch_kind_for_tier` extraction arm, the widened herding-fallback
+member set (touches `a2f85972`), and the now-reachable swarming
+reference instruction — are that decision's, not this ticket's.
+
+Frame this answer established, and the map's spine from here: **a model
+role is reachable by two independent paths — a cell's recorded `tier`,
+or a dispatch `--kind` — and both are legitimate.** `extraction` had
+the first and lacked the second. Ticket 002 is re-framed on that split;
+ticket 005 asks whether the pairing is enforced.
