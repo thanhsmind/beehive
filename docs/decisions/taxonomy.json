@@ -399,6 +399,9 @@
     "tmux",
     "model-roles",
     "tiers",
-    "budget"
+    "budget",
+    "fallback",
+    "retry",
+    "refactor"
   ]
 }

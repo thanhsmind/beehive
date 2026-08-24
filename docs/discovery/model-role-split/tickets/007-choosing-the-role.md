@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: (unclaimed)
+status: closed
+claimed-by: wayfinder (resolved)
 blocked-by: (none)
 ---
 
@@ -54,4 +54,32 @@ model. There is no red output to notice.
 
 ## Answer
 
-(open)
+**Option 2, enforced** — decision `4eaf1b71`. `role` is **required** on a
+cell, exactly as `lane` is: `bee cells add` refuses without it. The
+value is any non-empty name (the open set of `06e49368` holds, so
+validation checks presence and shape, never membership). bee ships a
+recommended vocabulary — `code`, `read`, `test`, `docs`, `review`,
+`design` — as *authoring guidance* on the planning surface and in
+`bee cells add --help`, never as a validation enum.
+
+Decided on a natural experiment already in the store, not on
+preference:
+
+| Field | Rule | Present in 506 cells |
+|---|---|---|
+| `lane` | required (`validate.rs:133-140`) | **506 / 506** |
+| `tier` | optional (`validate.rs:164-173`) | 291 / 506 |
+
+Same authors, same cells, same file. The 100 percent is enforcement,
+not diligence — a cell without a lane never enters the store — and that
+is the argument: enforcement is the only mechanism shown to make a cell
+field present. An optional role reproduces the `tier` outcome, where a
+configured per-job model fires on about half the cells that wanted it
+and the miss is **silent**, because fall-through completes the work on
+the default with no red output.
+
+Backfill for the 506 stored cells is recorded in `4eaf1b71` (d).
+
+Owner-delegated: the owner handed the remaining tickets to the agent on
+2026-08-25 ("cứ làm tới khi ra plan không cần hỏi thêm"). This answer is
+the agent's call under that delegation and is overturnable.

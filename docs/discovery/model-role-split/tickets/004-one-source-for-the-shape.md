@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: (unclaimed)
+status: closed
+claimed-by: wayfinder (resolved)
 blocked-by: (none)
 ---
 
@@ -49,4 +49,26 @@ the closed 3-value enum on `bee cells tier` and
 
 ## Answer
 
-(open)
+**Yes, and it lands first** — decision `cd72ec97`.
+
+Most of what this ticket listed collapses on its own from decisions
+already taken: `CLAUDE_TIERS`/`CODEX_TIERS` end with `06e49368`'s
+is-this-configured check; `CONFIGURABLE_SLOTS` vs
+`MODEL_NORMALIZE_SLOTS` ends when any configured name is legal; the
+four private `MODEL_TIERS` copies end with `97ce5225` retiring `tier`
+as a selector.
+
+One real item stays: the two independent `resolve_tier` implementations
+(`models.rs:318-383`, `model_guard.rs:442-467`) plus the paired
+`resolve_advisor`. They become **one** `resolve_role` in the drivers
+module, which the guard calls rather than reimplements.
+
+The operative half is **ordering**: that collapse is the first step of
+the implementation sequence, not the last. Every remaining step in this
+map writes into the shape it parses, so a second parser would have to
+be edited in lockstep four more times. The drift is not hypothetical —
+the guard's two tier lists had already drifted 4 against 5 with nothing
+intending it, and that asymmetry is recorded as a defect rather than a
+design.
+
+Owner-delegated, 2026-08-25; the agent's call, overturnable.

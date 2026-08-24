@@ -137,6 +137,17 @@ slot.
   95 percent of cells carried no signal in `tier`, `extraction` was used
   twice, and all 22 informative cells meant budget, not model choice.
   Closes ticket 006.
+- **`4eaf1b71`** — a cell's `role` is **required**, as `lane` is; any
+  non-empty name is legal and bee ships a recommended vocabulary as
+  guidance, never as an enum. Decided on the store's own natural
+  experiment: the required field is present on 506 of 506 cells, the
+  optional one on 291. Closes ticket 007.
+- **`50808d48`** — bee gains an ordered **runtime** fallback chain, held
+  apart from resolution fall-through, **explicit-only**, and gated to
+  transient and infrastructural failures only — never a semantic one.
+  Closes ticket 003.
+- **`cd72ec97`** — **one parser** for the config shape, landing **first** in
+  the implementation sequence. Closes ticket 004.
 
 ## Open shape
 
@@ -218,3 +229,22 @@ conversation. Stopping at one ticket would have left the map holding a
 question the next answer had already retired. Cost of the deviation:
 this session ran long; the tickets it opened (006) and left open (003,
 004) are the natural stop.
+
+## Closed — 2026-08-25
+
+No tickets and no fog remain: nothing left to *decide*. Seven tickets
+opened, seven closed (005 dissolved rather than answered), across eight
+decisions — `8dad7c2e`, `06e49368`, `3c9d6262`, `97ce5225`,
+`4eaf1b71`, `50808d48`, `cd72ec97`.
+
+The map spawns **one** feature, `model-role-split`, whose CONTEXT.md
+cites these decisions rather than re-asking them. Implementation order
+is fixed by `cd72ec97`: the shared parser first, then the role field, the
+escalation flag, and the runtime chain.
+
+Tickets 001 through 007 stay as history. What the map changed on its
+way through is worth naming, because none of it was visible at charting
+time: the opening question was "how many roles should bee have", and
+the answer turned out to be that role *count* was never the governing
+variable — a resolver that refused on an empty slot was. Every ticket
+after 001 was a consequence of that one fact.

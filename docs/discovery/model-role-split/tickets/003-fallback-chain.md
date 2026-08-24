@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: (unclaimed)
+status: closed
+claimed-by: wayfinder (resolved)
 blocked-by: (none)
 ---
 
@@ -63,4 +63,35 @@ Still the user's decision; this ticket stays open.
 
 ## Answer
 
-(open)
+**Yes, with the two layers held apart** — decision `50808d48`. bee gains an
+ordered **runtime** fallback chain, and it does not reopen the
+loud-failure stance, because the stance was never about this layer.
+
+- **Resolution layer** (`06e49368`): an unset or unresolvable role
+  yields to the next name. No failure is involved.
+- **Runtime layer** (this ticket): a configured chain may carry a
+  dispatch to another model after the first fails.
+
+The chain is **explicit-only** — no built-in default chain for any
+role — so absent configuration nothing changes, and decisions
+`3ceba8f5` D2, `267192c1` and `4faf1de9` stay intact rather than being
+reopened. The advisor keeps its no-fallback behavior unless the owner
+configures a chain for it deliberately.
+
+The gate answers this ticket's own stated question, "which failures
+should a chain absorb?":
+
+| Fires a chain step | Never fires one |
+|---|---|
+| quota, rate limit | a tool error |
+| provider auth or policy rejection | a wrong or unwanted result |
+| empty response | a failed proof, a red test |
+| malformed tool call, replay-safe only | anything semantic |
+| stream stall, connection reset, 5xx | |
+
+Transient and infrastructural only. No **result** failure is ever
+absorbed, so falling to a weaker model can never hide a defect. Every
+chain step is recorded on the dispatch, because a quiet degrade is the
+failure mode being guarded against.
+
+Owner-delegated, 2026-08-25; the agent's call, overturnable.
