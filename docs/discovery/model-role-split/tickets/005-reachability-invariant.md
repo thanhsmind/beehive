@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: (unclaimed)
+status: closed
+claimed-by: wayfinder (resolved)
 blocked-by: (none)
 ---
 
@@ -54,4 +54,13 @@ resolve 004 first if both are open.
 
 ## Answer
 
-(open)
+**Dissolved by decision `06e49368`** (owner answers 2026-08-24), not resolved
+on its own terms. This ticket asked how to *enforce* that every
+configurable slot is reachable. With roles now falling through — a
+consumer names an ordered list, an unset name yields to the next — an
+unreachable role is no longer a defect: it is free. There is nothing
+left to enforce.
+
+What survives from it, folded into `06e49368`'s (b) clause: a role name that
+nothing configures is **warned**, so a typo surfaces. That is the
+useful half of option 2 (the doctor check), kept without the invariant.

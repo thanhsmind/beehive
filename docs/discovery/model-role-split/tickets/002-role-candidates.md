@@ -48,6 +48,28 @@ change the model actually chosen? A role whose answer is "it would
 resolve to the same model as `generation`" is a config knob with no
 effect and should not ship.
 
+## Settled 2026-08-24 — decision `06e49368`
+
+The structural half of this ticket is answered. Roles fall through (a
+consumer names an ordered list; an unset name yields to the next) and
+the role set is open (any name in `models.<runtime>` is legal; the
+guard asks "is this configured", not "is this one of four words"). The
+cost of publishing a role therefore falls to roughly one name.
+
+Two consequences for the candidates below:
+
+- The ticket's own admission test — *does a real dispatch site select
+  it* — is retired. It was a symptom of a resolver that refused. A role
+  now earns its place by being **nameable**.
+- `plan` and `commit`, ruled out above for having zero dispatch sites,
+  are no longer ruled out on that ground. Zero sites now means a role
+  nobody currently asks for, which costs one name. Whether it should
+  still ship is a publishing question, not a reachability one.
+
+**What stays open in this ticket:** which names bee publishes as its
+default role set, and what each one means. That is the map's remaining
+destination.
+
 ## The ticket's own test is challenged by the source read
 
 This ticket tests a candidate by "does a real dispatch site select it".

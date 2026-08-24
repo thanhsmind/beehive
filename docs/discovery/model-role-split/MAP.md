@@ -117,6 +117,14 @@ slot.
   a dispatch `--kind` — and both are legitimate. Touches `a2f85972`
   (its herding-fallback member set must widen to extraction).
   Ticket: `tickets/001-dead-extraction-slot.md`.
+- **`06e49368`** — model roles become an **open, fall-through set**. A
+  consumer names an ordered *list* of role names and an unset name
+  yields to the next; any name in `models.<runtime>` is a legal role and
+  the guard asks "is this configured" rather than checking a hardcoded
+  list; an unconfigured name is warned, never silently accepted. Ends
+  the dead-slot class of defect, so role **count** stops being the
+  governing question. Touches `8dad7c2e`, `a2f85972`, `72f3d6dd`.
+  Ticket: `tickets/002-role-candidates.md`.
 
 ## Open shape
 
@@ -126,11 +134,33 @@ said the first defect was *a role nothing can select* — answered by
 role surface, it has two paths onto one set of slots (cell `tier`,
 dispatch `--kind`).
 
-That reframes what is left. Role **count** is no longer the question;
-role **shape** is. A role that names work size wants a cell tier and
-costs nothing at the door. A role that names a job wants a kind and
-costs three constants plus the duplications ticket 004 lists. Ticket
-002 now sorts its candidates by that split before counting them.
+Then `06e49368` moved the axis again, and further. The owner's
+objection — `extraction` and `generation` are cost words, so nobody can
+judge which model is "good at generation", while real model strengths
+are job-shaped — turned out to be answerable without choosing between
+the axes. The source read showed a shipping product running six job
+roles beside two cost roles and two capability roles quite happily; what
+holds it together is not naming discipline but **fallthrough**. A role
+nobody configures costs one name.
+
+So neither role count nor role shape is the open question any more.
+Both were consequences of a resolver that refused. What is left is
+smaller and more concrete:
+
+- **Which names ship** as bee's default role set, and what each means
+  (ticket 002 — the map's remaining destination).
+- **Whether a runtime error chain** sits on top of the resolution-layer
+  fallthrough, and which failures it may absorb (ticket 003 — the
+  upstream answer is recorded there; the stance is still the owner's).
+- **One parser for the config shape** (ticket 004, now narrowed to the
+  two `resolve_tier` implementations).
+
+One structural fact the answer exposes and does not yet resolve: bee
+already owns job names at the *agent* layer — `bee-build`, `bee-gather`,
+`bee-extract`, `bee-review` — welded 1:1 to cost slots by
+`pinned_agent_type` (`verbs/drivers/guard.rs:32-39`). Unwelding those
+two layers, so an agent names a role the way `reviewer.md:6` names
+`"@slow"` upstream, is the shape the remaining tickets are circling.
 
 ## Not yet specified
 
@@ -139,8 +169,10 @@ costs three constants plus the duplications ticket 004 lists. Ticket
   existing single-step mechanisms stay as they are (ticket 003).
 - Whether the two parsers and the two guard tier lists collapse into one
   source before the surface grows (ticket 004).
-- Whether slot-to-door reachability is enforced rather than conventional
-  (ticket 005, graduated from 001's answer).
+- Which names bee publishes as its default role set (ticket 002 — the
+  remaining destination).
+- ~~Whether slot-to-door reachability is enforced~~ — dissolved by
+  `06e49368`; ticket 005 closed.
 
 ## Out of scope
 
