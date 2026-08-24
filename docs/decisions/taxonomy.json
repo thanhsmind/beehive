@@ -398,6 +398,7 @@
     "preamble",
     "tmux",
     "model-roles",
-    "tiers"
+    "tiers",
+    "budget"
   ]
 }
