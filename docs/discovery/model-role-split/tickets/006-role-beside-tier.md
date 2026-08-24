@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: (unclaimed)
+status: closed
+claimed-by: wayfinder (resolved)
 blocked-by: (none)
 ---
 
@@ -65,4 +65,34 @@ is not overspending.
 
 ## Answer
 
-(open)
+**Option 2, with the split the measurement forced** — owner answer
+2026-08-24, decision `97ce5225`. A cell's `role` becomes its sole model
+selector; `tier` is retired as a selector; and `ceiling` becomes an
+explicit **escalation flag** rather than a tier value, keeping the
+40-percent ration and its reason exactly as they are.
+
+The deciding evidence was a scan of all **506 cells** in `.bee/cells`,
+run before the question went to the owner:
+
+| `tier` recorded | cells |
+|---|---|
+| `generation` — the default the dispatch would pick anyway | 269 |
+| nothing at all | 215 |
+| `ceiling` | 20 |
+| `extraction` | 2 |
+
+So 95 percent of cells put no signal in the field, `extraction` was
+chosen twice in 506 cells, and every one of the 22 cells that did carry
+information was expressing **budget**, not model choice. `tier` was not
+paying rent as a selector; it was a budget marker wearing a selector's
+name. Splitting it names both meanings honestly and leaves exactly one
+open-ended name on a cell instead of one open name plus one closed
+enum.
+
+Migration is recorded in `97ce5225` (d): the 484 cells reading `generation`
+or nothing become cells with no role and fall through to the execution
+default — equivalent in outcome; the 20 `ceiling` cells become
+escalation-flagged; the 2 `extraction` cells take a read-shaped role.
+
+Graduated from this answer: ticket 007, what tells a cell's author
+which role to write.

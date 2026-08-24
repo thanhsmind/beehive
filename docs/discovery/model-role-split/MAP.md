@@ -131,6 +131,12 @@ slot.
   itself asks for; every other job name (`test`, `design`, `docs`,
   `migrate`) is the user's to invent, with no bee code needed. Closes
   ticket 002.
+- **`97ce5225`** — a cell's **`role` is its sole model selector**; `tier` is
+  retired as a selector and `ceiling` becomes an explicit **escalation
+  flag** keeping today's 40-percent ration. Decided on a 506-cell scan:
+  95 percent of cells carried no signal in `tier`, `extraction` was used
+  twice, and all 22 informative cells meant budget, not model choice.
+  Closes ticket 006.
 
 ## Open shape
 
@@ -153,10 +159,9 @@ So neither role count nor role shape is the open question any more.
 Both were consequences of a resolver that refused. What is left is
 smaller and more concrete:
 
-- **Whether `role` replaces the cell's `tier` or sits beside it**
-  (ticket 006, graduated from 002's answer) — the last structural
-  question, and the one that decides where the ceiling budget guard
-  lives.
+- **What tells a cell's author which role to write** (ticket 007,
+  graduated from 006's answer) — the last question standing between
+  this map and a shapeable feature.
 - **Whether a runtime error chain** sits on top of the resolution-layer
   fallthrough, and which failures it may absorb (ticket 003 — the
   upstream answer is recorded there; the stance is still the owner's).
@@ -177,12 +182,11 @@ two layers, so an agent names a role the way `reviewer.md:6` names
   existing single-step mechanisms stay as they are (ticket 003).
 - Whether the two parsers and the two guard tier lists collapse into one
   source before the surface grows (ticket 004).
-- Whether the cell's `role` replaces its `tier` or sits beside it
-  (ticket 006).
-- What tells a cell's author which role to write — a published
-  vocabulary, free text, or something derived from the cell's own
-  fields. Too dim to ticket until 006 settles whether that judgment
-  also covers cost. `(agent-suspected)`
+- ~~Whether the cell's `role` sits beside its `tier`~~ — answered by
+  `97ce5225`; ticket 006 closed.
+- ~~What tells a cell's author which role to write~~ — graduated to
+  ticket 007 now that 006 has settled that the judgment covers job
+  only.
 - ~~Which names bee publishes as its default role set~~ — answered by
   `3c9d6262`: only the names bee asks for; ticket 002 closed.
 - ~~Whether slot-to-door reachability is enforced~~ — dissolved by
