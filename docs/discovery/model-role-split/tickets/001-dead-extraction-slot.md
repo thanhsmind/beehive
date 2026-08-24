@@ -10,8 +10,22 @@ blocked-by: (none)
 `extraction` is a configurable slot (`models.rs:37`) that no dispatch
 kind selects: `DISPATCH_KINDS` has no `extract`, and `slot_for_kind`
 sends both `cell` and `gather` to `generation`
-(`prepare.rs:31`, `prepare.rs:34-40`). So `models.claude.extraction`
-is set in this repo's own `.bee/config.json` and never used.
+(`prepare.rs:31`, `prepare.rs:34-40`).
+
+**Premise corrected 2026-08-24 (verified read).** The slot is not
+inert — it is reachable by the *other* path. A cell may record
+`tier: extraction` (`verbs/cells/validate.rs:29`), and `--kind cell`
+prefers that recorded tier over the slot default
+(`prepare.rs:731-745`), so the extraction model does resolve. What is
+missing is the *role* path: no `--kind` selects extraction, and
+`bee-extract` — rendered, onboarded, tier `extraction`
+(`onboard/templates.rs:222-230`) — is never a value `prepare` can
+return, because `pinned_agent_type` is consulted only when
+`kind != "cell"` (`prepare.rs:810-811`). So the defect is a read-only
+extraction *worker* that the one door cannot dispatch, while the
+shipped swarming reference still instructs agents to name it
+(`swarming-reference.md:104-114`, `:294`) and AGENTS.md forbids
+hand-picking `subagent_type`.
 
 Which is the intended fix:
 
@@ -42,6 +56,12 @@ pattern.
 - `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:34-40`
 - `.bee/config.json` — `models.claude.extraction: "sonnet"`, live and unused
 - `rg -n extraction packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` — no match
+- `packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs:32-39` — `"extraction" => "bee-extract"`, the only mapping, unreachable from `prepare`
+- `packages/bee-rs/crates/bee/src/hooks/model_guard.rs:653-659` — source comment: "there is no `--kind` value that resolves the extraction slot today"
+- `packages/bee-rs/crates/bee/src/hooks/model_guard.rs:660-666`, `:768` — refusal text "dispatch prepare has no --kind for the {t} tier yet"
+- `packages/bee-rs/crates/bee/src/hooks/model_guard.rs:1614-1634` — test pinning that refusal
+- decision `a2f85972` — the guard's herding-fallback widening is scoped to generation+review *because* extraction is unreachable; option 1 or 2 touches it
+- decision `de967733` + `3ff7cd72` — down-tier I/O dispatch is bee's one cost pattern, and `tier_mix extraction 1` proves the tier ran live
 
 ## Answer
 

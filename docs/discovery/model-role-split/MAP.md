@@ -33,14 +33,59 @@ split would make configuration more dynamic and more efficient.
   `{primary, fallback_policy, fallback}` (`models.rs:134-166`, decision
   3ceba8f5 D2) and the herding slot's `fallback: "default"` flag
   (`models.rs:112-133`, decision 267192c1). No list-of-models anywhere.
-- **The `extraction` slot is unreachable through the dispatch door.**
-  `DISPATCH_KINDS = ["cell", "gather", "reviewer", "advisor"]` —
-  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:31`; and
-  `slot_for_kind` maps `"cell" | "gather" => "generation"` —
-  `prepare.rs:34-40`. The string `extraction` does not appear in
-  `prepare.rs` at all. So a configured `extraction` model is dead
-  config: the `bee-extract` agent's own tier has no `--kind` that
-  selects it, and every gather runs on `generation`.
+- **The `extraction` slot is reachable by cell tier, never by dispatch
+  kind.** Two reachability paths exist, and extraction has only one of
+  them. (a) By `--kind`: `DISPATCH_KINDS = ["cell","gather","reviewer",
+  "advisor"]` (`prepare.rs:31`) and `slot_for_kind` maps
+  `"cell" | "gather" => "generation"` (`prepare.rs:34-40`) — no arm
+  yields `extraction`. (b) By a cell's own recorded `tier` field:
+  `MODEL_TIERS = ["extraction","generation","ceiling"]` validates cells
+  (`verbs/cells/validate.rs:29`) and `--kind cell` prefers the cell
+  record's tier over the slot default, `tier_source: "cell"`
+  (`prepare.rs:731-745`). So a cell recorded `tier: extraction` does
+  resolve the extraction model — but it dispatches as `bee-build` with
+  a `[bee-tier: extraction]` marker (`prepare.rs:1033-1036`).
+- **`bee-extract` is rendered but never returned by the door.**
+  `pinned_agent_type` maps `"extraction" => "bee-extract"`
+  (`verbs/drivers/guard.rs:32-39`), and the agent is a full member of
+  the rendered set (`onboard/templates.rs:222-230`, tier `extraction`;
+  rendered here at `.claude/agents/bee-extract.md` on `sonnet`). But
+  `prepare` calls `pinned_agent_type` only when `kind != "cell"`
+  (`prepare.rs:810-811`), where the tier token can only be generation,
+  review or advisor. `bee-extract` is therefore never a value `prepare`
+  can return; `--kind gather` always yields `bee-gather`
+  (`prepare.rs:870`).
+- **The shipped docs and the one-door rule contradict each other.**
+  `skills/bee-swarming/references/swarming-reference.md:104-114` and
+  `:294` tell the agent to name `subagent_type: "bee-extract"` for
+  extraction, while AGENTS.md forbids hand-picking `subagent_type` and
+  lists only the four kinds. An agent obeying both cannot dispatch an
+  extraction worker at all.
+- **The code already names the gap as temporary.** The guard's
+  `dispatch_kind_for_tier` returns `Some` only for `review` and
+  `generation` (`model_guard.rs:660-666`), and its refusal text reads
+  "dispatch prepare has no --kind for the {t} tier yet"
+  (`model_guard.rs:768`). A source comment states it outright:
+  "`slot_for_kind` … has no extraction arm, so there is no `--kind`
+  value that resolves the extraction slot today"
+  (`model_guard.rs:653-659`). A test pins the resulting refusal —
+  `a_herding_shaped_extraction_slot_denies_bee_extract_without_a_wrong_kind`
+  (`model_guard.rs:1614-1634`).
+- **A `[bee-tier: extraction]` marker passes the guard today.** It is a
+  valid `CLAUDE_TIERS` word, it repairs a `general-purpose` dispatch to
+  `bee-extract` (`model_guard.rs:705-720`, test `:2116-2126`), and it
+  rewrites a mismatched `model` param to the extraction slot's model
+  (`model_guard.rs:724-746`). Only a cli/herding-shaped extraction slot
+  denies.
+- **Two locked decisions pull opposite ways.** `de967733` (advisor-mode
+  removal) makes down-tier I/O dispatch bee's one cost pattern, and
+  `3ff7cd72` recorded live `tier_mix extraction 1 / generation 3 /
+  ceiling 0` — extraction was in real use. `a2f85972`
+  (guard-herding-fallback) now *relies* on the opposite: its herding
+  fallback widening covers generation and review only "because prepare
+  slot_for_kind … never reaches extraction or advisor", and looping all
+  three slots was rejected on that exact ground. Any answer to ticket
+  001 that makes extraction reachable touches `a2f85972`.
 - **The guard's tier lists are asymmetric.** `CLAUDE_TIERS` has 4
   entries and omits `advisor`; `CODEX_TIERS` has 5 and includes it —
   `packages/bee-rs/crates/bee/src/hooks/model_guard.rs:192-193`. Two
@@ -78,7 +123,9 @@ so ticket 001 comes before any decision on role count.
 
 ## Recorded deviation
 
-The bee CLI is absent from this checkout (`.bee/bin/bee` holds only
-`bee.pre-expertise.bak`), so this map was written directly rather than
-through `bee` verbs, and no decision-log line was cut. Re-run the
-wayfinding verbs against this file once the binary is restored.
+The bee CLI was absent when this map was charted (`.bee/bin/bee` held
+only `bee.pre-expertise.bak`), so session 1 wrote the map directly and
+cut no decision-log line. **Closed 2026-08-24**: the binary was rebuilt
+from `packages/bee-rs` and installed at `.bee/bin/bee`; from ticket 001
+onward the wayfinding verbs (`reservations reserve`, `decisions log`)
+run normally.
