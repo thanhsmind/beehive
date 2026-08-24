@@ -125,6 +125,12 @@ slot.
   the dead-slot class of defect, so role **count** stops being the
   governing question. Touches `8dad7c2e`, `a2f85972`, `72f3d6dd`.
   Ticket: `tickets/002-role-candidates.md`.
+- **`3c9d6262`** — the **work declares its job role**. A cell carries a role
+  beside its lane and tier, and its dispatch asks for an ordered list
+  starting with that role. bee publishes as defaults only the names bee
+  itself asks for; every other job name (`test`, `design`, `docs`,
+  `migrate`) is the user's to invent, with no bee code needed. Closes
+  ticket 002.
 
 ## Open shape
 
@@ -147,8 +153,10 @@ So neither role count nor role shape is the open question any more.
 Both were consequences of a resolver that refused. What is left is
 smaller and more concrete:
 
-- **Which names ship** as bee's default role set, and what each means
-  (ticket 002 — the map's remaining destination).
+- **Whether `role` replaces the cell's `tier` or sits beside it**
+  (ticket 006, graduated from 002's answer) — the last structural
+  question, and the one that decides where the ceiling budget guard
+  lives.
 - **Whether a runtime error chain** sits on top of the resolution-layer
   fallthrough, and which failures it may absorb (ticket 003 — the
   upstream answer is recorded there; the stance is still the owner's).
@@ -169,8 +177,14 @@ two layers, so an agent names a role the way `reviewer.md:6` names
   existing single-step mechanisms stay as they are (ticket 003).
 - Whether the two parsers and the two guard tier lists collapse into one
   source before the surface grows (ticket 004).
-- Which names bee publishes as its default role set (ticket 002 — the
-  remaining destination).
+- Whether the cell's `role` replaces its `tier` or sits beside it
+  (ticket 006).
+- What tells a cell's author which role to write — a published
+  vocabulary, free text, or something derived from the cell's own
+  fields. Too dim to ticket until 006 settles whether that judgment
+  also covers cost. `(agent-suspected)`
+- ~~Which names bee publishes as its default role set~~ — answered by
+  `3c9d6262`: only the names bee asks for; ticket 002 closed.
 - ~~Whether slot-to-door reachability is enforced~~ — dissolved by
   `06e49368`; ticket 005 closed.
 

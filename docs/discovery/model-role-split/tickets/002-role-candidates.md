@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed-by: (unclaimed)
+status: closed
+claimed-by: wayfinder (resolved)
 blocked-by: (none) — unblocked by 001
 ---
 
@@ -162,4 +162,38 @@ lists (`model_guard.rs:192-193`). See ticket 004.
 
 ## Answer
 
-(open)
+Answered in two parts, both owner answers of 2026-08-24.
+
+**Structure — decision `06e49368`.** Roles fall through and the role set
+is open. This retired the ticket's own admission test: a role no longer
+has to have a dispatch site, because an unconfigured role costs one
+name rather than being dead config.
+
+**Source of the name — decision `3c9d6262`.** The *work* declares its job
+role. A cell carries a role beside its lane and tier, and its dispatch
+asks for an ordered list starting with that role. So the answer to
+"which new roles earn their place" is:
+
+- **bee publishes as defaults only the names bee itself asks for** — the
+  roles behind its own dispatch sites (cell execution, reading, review,
+  advisor). A published default is a name bee consumes, never a
+  suggestion nobody reads.
+- **Every job name beyond those is the user's to invent** — `test`,
+  `design`, `docs`, `migrate`. No bee code is needed for any of them:
+  name it on a cell, configure it in `models.<runtime>`, done.
+
+Against the four candidates this ticket opened with:
+
+- `tiny` — **not a role.** It names work size, which is `lane`. The
+  two axes are independent: a `tiny` cell can be test work, a
+  `high-risk` cell can be design work. Rejected as an alternative in
+  `3c9d6262`.
+- `judge` — a legal role name the moment a judge cell or a judge
+  dispatch asks for it. It needs no slot of its own.
+- `plan`, `commit` — legal names, not published defaults, because
+  nothing in bee asks for them today. If a planning or commit dispatch
+  is ever added, it names its own role and the name becomes a default
+  then.
+
+Graduated from this answer: ticket 006, whether the new `role` replaces
+the cell's `tier` or sits beside it.
