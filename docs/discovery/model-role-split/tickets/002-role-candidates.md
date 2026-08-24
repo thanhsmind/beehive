@@ -48,6 +48,89 @@ change the model actually chosen? A role whose answer is "it would
 resolve to the same model as `generation`" is a config knob with no
 effect and should not ship.
 
+## The ticket's own test is challenged by the source read
+
+This ticket tests a candidate by "does a real dispatch site select it".
+The xia read of `~/Projects/refs/oh-my-pi` (docs/history/research/oh-my-pi-model-roles-distill.md)
+shows that test belongs to bee's *refusing* resolver, not to roles as
+such. Upstream, a consumer names an ordered list of roles
+(`["commit","smol",...ALL]` — `commit/model-selection.ts:46`) and an
+unset role simply falls through. A role there earns its place by being
+**nameable**, and costs one array entry when nobody configures it. If
+bee adopts fallthrough, the question this ticket asks changes from "how
+many roles" to "which names do we publish".
+
+## Verified findings (2026-08-24, two gather reads)
+
+Applying the ticket's own test — *a real dispatch site that would select
+it* — to each candidate:
+
+- **`tiny` — not a role at all; a missing derivation.** bee already
+  carries both vocabularies and never joins them. Lanes:
+  `LANES = ["tiny","small","standard","high-risk","spike"]`
+  (`verbs/cells/validate.rs:27`). Tiers:
+  `MODEL_TIERS = ["extraction","generation","ceiling"]`
+  (`validate.rs:29`). No code maps one to the other — `dispatch prepare`
+  never reads `lane` at all. Lane drives four other things only (context
+  budget `session_preamble/mod.rs:118-120`, uat applicability `uat.rs:54`,
+  the worktree-first carve-out `status_full/topology.rs:269`, and a
+  must_haves requirement `validate.rs:146`). Meanwhile a cell's `tier` is
+  never derived: `normalize_new_cell` (`validate.rs:272-297`) does not
+  touch it, `cells add` has no `--tier` flag (`handlers_write.rs:236`
+  accepts only file/stdin/dry-run), and the only mutator is the explicit
+  `bee cells tier` verb (`handlers_close.rs:1114`, `:1141`). So an
+  untierred `tiny` cell resolves through `slot_for_kind("cell")` to
+  `generation` — the priciest configured worker model, for the cheapest
+  lane. The `tiny`-may-run-inline rule is real but lives at the *cap*
+  door, not the dispatch door (`handlers_close.rs:348-373`).
+- **`judge` — one real dispatch site, already tiered.** The rule home is
+  `gates-and-delegation.md:190-193`: a pinned `bee-review` dispatch on
+  the review tier, returning `judge-verdict/1`, recorded by
+  `bee cells judge-record`. The verdict contract is Rust
+  (`verbs/cells/judge.rs:226-345`); the *dispatch* is prose. One site
+  (`swarming-reference.md:202`), plus three pointer lines. Independence
+  is already a stated want — `gates-and-delegation.md:191` prefers a
+  model differing from the builder's and records
+  `model_independence: "same-model"` when it does not — and the review
+  slot is already separately configurable.
+- **`plan` — zero dispatch sites.** The single planning dispatch is a
+  *reviewer* on the review tier (`planning-reference.md:285`), and
+  research delegation names a skill, not a kind
+  (`bee-planning/SKILL.md:55`). `skills/bee-planning/` names no tier
+  anywhere. The aux-dispatch rule this candidate rests on
+  (decision `0023`) was never landed: it lists five skills, three of
+  which no longer exist.
+- **`commit` — zero dispatch sites.** Commit text is written by the
+  execution worker inline (`worker-details.md:157-163`) or is a
+  hardcoded Rust string (`verbs/worktree/phases.rs:221`, `:356`). No
+  model is selected for it anywhere.
+
+Two facts about the door itself, which bound any answer here:
+
+- **Two of the four existing kinds are never passed.** Repo-wide the
+  only literal uses are `--kind gather` and `--kind cell`; `reviewer`
+  and `advisor` occur only inside the placeholder
+  `<cell|gather|reviewer|advisor>`. Reviewing dispatches via a plain
+  prompt template with no `prepare` call
+  (`reviewing-reference.md:17-25`); the advisor is resolved by the
+  *worker* through `resolveAdvisor` (`swarming-reference.md:145-147`,
+  `worker-details.md:233`). bee's door already carries roles no caller
+  asks for — adding more is the same defect ticket 001 named.
+- **`slot_for_kind` ends in a catch-all `_ => "advisor"`**
+  (`prepare.rs:34-40`). Any kind added to `DISPATCH_KINDS` without its
+  own arm silently resolves the **advisor** slot. This is a build
+  hazard for ticket 001's `--kind extract` and for every role added
+  here.
+
+Related dead field, same shape as ticket 001: **`effort` is configured,
+displayed, and dropped.** The `{model, effort}` leaf parses
+(`models.rs:167-181`) and the preamble renders `model:effort`
+(`model_guard.rs:338-341`), but every `Resolved::Model` site at the door
+destructures `{ model, .. }` (`prepare.rs:800`, `:1050`, `:1063`). Only
+the codex `native` branch emits it, as `reasoning_effort`
+(`prepare.rs:898-899`); herding never sees it. On the claude runtime bee
+prints an effort it does not send.
+
 ## Constraint from the map
 
 Whatever the count, each role costs: an entry in `CONFIGURABLE_SLOTS`

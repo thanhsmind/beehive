@@ -95,6 +95,19 @@ split would make configuration more dynamic and more efficient.
   `resolve_tier` in `model_guard.rs:442-467` (over the guard's own
   structs). Every new role or entry shape has to land in both.
 
+## Source read (xia, 2026-08-24)
+
+`~/Projects/refs/oh-my-pi` @ `2b66ee69`, the tool whose model-roles
+screen started this map, distilled at `docs/history/research/oh-my-pi-model-roles-distill.md`. Two findings reframe the
+map: their ten roles are **mixed-axis too** (six job, two cost, two
+capability — `README.md:333` "route work by intent"), and the reason
+that works is not naming discipline but **fallthrough** — every consumer
+names an ordered *list* of roles, so an unset role costs nothing
+(`commit/model-selection.ts:46`). Their role set is **open**
+(`model-roles.ts:77-91`), and their agents name a role in frontmatter
+(`reviewer.md:6` `model: "@slow"`) instead of being welded to a cost
+slot.
+
 ## Decisions so far
 
 - **`8dad7c2e`** — `bee dispatch prepare` gains `--kind extract`,
