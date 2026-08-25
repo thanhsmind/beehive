@@ -1348,11 +1348,20 @@ pub(crate) fn claim_cell_cross_session_ex(
 // INTERRUPTED first run safe to finish by simply running again: the cells
 // already done are indistinguishable from cells authored with a role.
 //
-// WHY `ceiling` KEEPS ITS TIER. D5 turns `ceiling` into an escalation flag,
-// but that flag does not exist yet — it is the next slice. Until it lands,
-// the 40% ration still reads `cell["tier"]`, so a migration that rewrote or
-// dropped `ceiling` here would blind the ration in the window between this
-// change and the next. This verb touches exactly one field: `role`.
+// WHAT `ceiling` TAKES NOW. D5 (store `97ce5225`) landed the escalation
+// flag, so this pass has a second job: every stored cell recording
+// `tier: "ceiling"` — the old spelling of "run on the session model and
+// charge the 40% ration" — is marked `escalate: true`. It is the same pass
+// on purpose. A separate migration would leave a store where some
+// escalations answer the flag and some answer the tier, and the ration
+// divides by a whole-store scan.
+//
+// The `tier` string itself is LEFT IN PLACE. `verbs/status_full/cells.rs`
+// and `hooks/session_preamble/store.rs` still count it for their advice
+// lines, and both belong to the tier-retirement slice that deletes the field
+// outright; dropping it here would blind two counters this pass cannot fix.
+// So the verb writes exactly two fields, and only where they are missing:
+// `role` and `escalate`.
 //
 // NO COUNT IS HARDCODED. The decision measured 484 / 2 / 20 on 2026-08-24;
 // the store has grown since and will grow again. Every number below is
@@ -1413,6 +1422,10 @@ pub(crate) struct RoleBackfill {
     pub(crate) written: u64,
     /// Per-source counts, positionally aligned with `ROLE_BACKFILL_SOURCES`.
     pub(crate) by_source: [u64; 4],
+    /// D5: cells converted from the legacy `tier: "ceiling"` spelling onto
+    /// the `escalate` flag. Counted separately from `assigned` because the
+    /// two answer different questions and a cell can need both.
+    pub(crate) escalated: u64,
     /// `(id, tier)` for every cell whose tier D9's mapping does not cover.
     pub(crate) unmapped: Vec<(String, String)>,
     /// Store-relative paths of files that are absent, corrupt, or not a JSON
@@ -1432,11 +1445,6 @@ impl RoleBackfill {
             }
         }
         out
-    }
-
-    /// The `ceiling` cells whose tier this pass deliberately left in place.
-    pub(crate) fn ceiling_preserved(&self) -> u64 {
-        self.by_source[2]
     }
 }
 
@@ -1511,30 +1519,49 @@ pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
                 continue;
             }
         };
-        if nonblank_string(cell.get("role")) {
-            // Already carries a role — not re-derived, not rewritten, not
-            // even opened for writing. This IS the idempotence guarantee.
-            report.already_roled += 1;
-            continue;
-        }
         let tier = cell.get("tier").and_then(|t| t.as_str());
-        let Some(role) = d9_role_for_tier(tier) else {
-            report
-                .unmapped
-                .push((js_string_or_undefined(cell.get("id")), tier.unwrap_or("").to_string()));
-            continue;
-        };
-        let source = d9_source_for_tier(tier);
-        if let Some(i) = ROLE_BACKFILL_SOURCES.iter().position(|(s, _)| *s == source) {
-            report.by_source[i] += 1;
+        let has_role = nonblank_string(cell.get("role"));
+        if has_role {
+            report.already_roled += 1;
         }
-        report.assigned += 1;
+        // D5: the legacy escalation spelling, and whether it has already been
+        // converted. A cell that carries the flag is done, whichever pass put
+        // it there.
+        let needs_flag = matches!(tier.map(js_trim), Some(t) if t == crate::verbs::drivers::ESCALATION_WORD)
+            && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true)));
+        let mut new_role: Option<&'static str> = None;
+        if !has_role {
+            match d9_role_for_tier(tier) {
+                Some(role) => new_role = Some(role),
+                None => {
+                    report.unmapped.push((
+                        js_string_or_undefined(cell.get("id")),
+                        tier.unwrap_or("").to_string(),
+                    ));
+                }
+            }
+        }
+        if new_role.is_none() && !needs_flag {
+            // Nothing to add — not re-derived, not rewritten, not even opened
+            // for writing. This IS the idempotence guarantee.
+            continue;
+        }
         let mut migrated = cell.clone();
-        // The ONLY field this migration touches. `tier` — `ceiling`
-        // included — is left exactly as the store recorded it: the D5
-        // escalation flag does not exist yet, and the 40% ration still
-        // counts `tier` until it does.
-        migrated.insert("role".into(), Value::String(role.to_string()));
+        if let Some(role) = new_role {
+            let source = d9_source_for_tier(tier);
+            if let Some(i) = ROLE_BACKFILL_SOURCES.iter().position(|(s, _)| *s == source) {
+                report.by_source[i] += 1;
+            }
+            report.assigned += 1;
+            migrated.insert("role".into(), Value::String(role.to_string()));
+        }
+        if needs_flag {
+            report.escalated += 1;
+            migrated.insert(ESCALATE_FIELD.into(), Value::Bool(true));
+        }
+        // Exactly two fields, and `tier` is not one of them: it stays as the
+        // store recorded it until the tier-retirement slice removes the
+        // field everywhere at once.
         plan.push((file, Value::Object(migrated)));
     }
 
@@ -1577,7 +1604,7 @@ pub(crate) fn role_backfill_json(report: &RoleBackfill, dry_run: bool) -> Value 
         "written": report.written,
         "by_role": Value::Object(by_role),
         "by_source": Value::Object(by_source),
-        "ceiling_preserved": report.ceiling_preserved(),
+        "escalated": report.escalated,
         "unmapped": report
             .unmapped
             .iter()
@@ -1605,9 +1632,15 @@ pub(crate) fn role_backfill_text(report: &RoleBackfill, dry_run: bool) -> String
             source,
             role,
             report.by_source[i],
-            if *source == "tier:ceiling" { "  (tier \"ceiling\" left untouched)" } else { "" }
+            if *source == "tier:ceiling" { "  (plus the escalation flag)" } else { "" }
         ));
     }
+    lines.push(format!(
+        "  {:<16} -> escalate: true {:>3}{}",
+        "tier:ceiling",
+        report.escalated,
+        if dry_run { "  (would be marked)" } else { "  (marked)" }
+    ));
     if !report.unmapped.is_empty() {
         lines.push(format!(
             "  {} cell(s) carry a tier D9 does not map and were left alone: {}",

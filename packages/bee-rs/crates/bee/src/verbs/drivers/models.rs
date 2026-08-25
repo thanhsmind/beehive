@@ -446,6 +446,16 @@ fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
     );
 }
 
+/// D5 (store `97ce5225`) — the escalation word, in ONE place.
+///
+/// It is not a role and not a tier: it is the marker `dispatch prepare`
+/// stamps on an escalated dispatch (`[bee-tier: ceiling]`) and the model
+/// guard reads back to grant a session-model run with no `model` parameter.
+/// The cell-side spelling of the same fact is the boolean escalation flag
+/// (`verbs::cells::ESCALATE_FIELD`); this constant is what keeps the two
+/// halves naming one word instead of two literals drifting apart.
+pub(crate) const ESCALATION_WORD: &str = "ceiling";
+
 /// Resolve an ORDERED LIST of role names against `models.<runtime>`.
 ///
 /// model-role-split D2 (store 06e49368). The consumer names the roles it will
@@ -504,11 +514,16 @@ pub(crate) fn resolve_role_named<'a>(
     let table = models.get(rt);
     for (i, name) in roles.iter().enumerate() {
         let name = *name;
-        // decision 0015: `ceiling` is the escalation word, never a slot — it
-        // is not configurable, so it terminates the walk on its own.
-        if name == "ceiling" {
-            return (Some(name), Resolved::Inherit);
-        }
+        // No carve-out stands here any more. `ceiling` used to short-circuit
+        // this walk to `Resolved::Inherit` (decision 0015), which made the
+        // "open" role set carry exactly one closed word. D5 (store
+        // `97ce5225`) removes the word from this axis entirely: escalation is
+        // a FLAG on the cell, never a role, so the open set needs no
+        // exception and a cell that declares `role: "ceiling"` is just a role
+        // nothing configures — it warns and falls through like any other.
+        // The escalation word survives ONE layer up, in `resolve_tier`, as
+        // the tier-shaped marker `[bee-tier: ceiling]` that `dispatch
+        // prepare` stamps and `hooks/model_guard.rs` reads back.
         let entry = table.and_then(|t| t.get(name));
         if let Some(resolved) = entry.and_then(|v| resolve_configured(v, name, kind)) {
             return (Some(name), resolved);
@@ -560,6 +575,18 @@ pub(crate) fn resolve_tier(
     runtime: &str,
     kind: &str,
 ) -> Resolved {
+    // D5 (store `97ce5225`) — the ESCALATION WORD, and the one layer that
+    // still knows it. `ceiling` is not a role and never resolves a model: it
+    // means "run on the session model", which `Resolved::Inherit` is the
+    // spelling of. It lives HERE rather than in `resolve_role_named` because
+    // the callers that can still hand it over are the tier-shaped ones — the
+    // model guard classifying a `[bee-tier: ceiling]` marker
+    // (`hooks/model_guard.rs`) and `verbs/drivers/guard.rs`'s economics
+    // audit — and that marker is the wire word between `dispatch prepare`
+    // and the guard, not a name any config carries.
+    if slot == ESCALATION_WORD {
+        return Resolved::Inherit;
+    }
     resolve_role(models, &tier_role_list(slot), runtime, kind)
 }
 

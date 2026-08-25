@@ -40,6 +40,45 @@ pub(crate) const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"
 /// reaching for `ROLE_VOCABULARY.contains(...)`, stop: that is the bug.
 pub(crate) const ROLE_VOCABULARY: [&str; 6] = ["code", "read", "test", "docs", "review", "design"];
 
+/// D5 (store `97ce5225`) — the cell field that carries the ESCALATION FLAG.
+///
+/// `ceiling` used to be the third value of the retiring `tier` enum and it
+/// meant two things at once: run this cell on the SESSION model, and charge
+/// the 40 percent ration (`handlers_close.rs`'s `CEILING_SHARE_REFUSAL_MAX`).
+/// Both halves now hang off this boolean instead.
+///
+/// A flag and NOT a reserved role name, which is the question CONTEXT.md
+/// deferred and plan.md answered: a reserved name would be the one exception
+/// to D2's open role set (store `06e49368`), and every author path would have
+/// to special-case it. As a flag it preserves decision `0015` with no
+/// carve-out at all — `ceiling` is simply not a role, so
+/// `resolve_role_named` needs no branch for it.
+pub(crate) const ESCALATE_FIELD: &str = "escalate";
+
+/// The ONE predicate for "does this cell run on the session model and charge
+/// the ration". Both readers ask it — the ration (`handlers_close.rs`) and
+/// the dispatch (`verbs/drivers/prepare.rs`) — so the two can never disagree
+/// about which cells are escalated.
+///
+/// It reads TWO spellings of one fact, deliberately. The flag is the
+/// authority and the only thing anything writes from here on. `tier:
+/// "ceiling"` is the LEGACY spelling every record written before this change
+/// still carries; `bee cells backfill-roles` converts those records onto the
+/// flag, but a migration verb runs when an operator runs it, and the ration
+/// has to be able to fire on the store as it stands TODAY. Reading the flag
+/// alone would mean that between this change and that run nothing in the
+/// store is marked, the share reads `0.0`, and the 40 percent refusal could
+/// never fire — the zero-share window D5 forbids by name.
+///
+/// This is not a default merged into a read: absent is still absent. A cell
+/// is escalated only if it says so, in one of the two spellings.
+pub(crate) fn cell_is_escalated(cell: &Value) -> bool {
+    if matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true))) {
+        return true;
+    }
+    matches!(cell.get("tier"), Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD)
+}
+
 pub(crate) const CHANGE_CLASSES: [&str; 8] =
     ["formatting", "bugfix", "behavior", "api", "security", "migration", "refactor", "test"];
 const BUDGET_KEYS: [&str; 3] = ["max_claims", "max_failed_attempts", "max_same_signature"];
@@ -197,6 +236,18 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             problems.push(format!(
                 "addCell: optional \"tier\" must be one of {} when present.",
                 MODEL_TIERS.join(", ")
+            ));
+        }
+    }
+    // D5 (store `97ce5225`): the escalation flag is a boolean and nothing
+    // else. Presence and shape only — there is no budget check at authoring
+    // time, exactly as there was none for authoring `tier: "ceiling"`; the
+    // 40 percent ration lives on the `cells tier` door where it always did.
+    if let Some(escalate) = map.get(ESCALATE_FIELD) {
+        let ok = matches!(escalate, Value::Null | Value::Bool(true) | Value::Bool(false));
+        if !ok {
+            problems.push(format!(
+                "addCell: optional \"{ESCALATE_FIELD}\" must be true or false when present — it is the escalation flag (run this cell on the session model, and charge the 40% escalation budget), not a name."
             ));
         }
     }

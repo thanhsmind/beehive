@@ -920,6 +920,44 @@ use std::time::Instant;
             .is_empty());
     }
 
+    /// D5 (store `97ce5225`): the escalation flag is a boolean and nothing
+    /// else. Presence and shape only — there is no budget check here, exactly
+    /// as there was none for authoring `tier: "ceiling"`; the 40% ration
+    /// lives on the `cells tier` door where it always did.
+    #[test]
+    fn the_escalation_flag_is_a_boolean_and_never_a_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let probe = |escalate: Value| {
+            let mut body = role_probe(Some(json!("code")));
+            body.as_object_mut().unwrap().insert("escalate".into(), escalate);
+            body
+        };
+        for legal in [json!(true), json!(false), Value::Null] {
+            assert!(
+                validate_new_cell_problems(root, &probe(legal.clone())).unwrap().is_empty(),
+                "{legal} must be legal"
+            );
+        }
+        for junk in [json!("ceiling"), json!("true"), json!(1), json!([])] {
+            let problems = validate_new_cell_problems(root, &probe(junk.clone())).unwrap();
+            assert_eq!(problems.len(), 1, "{junk}: {problems:?}");
+            assert!(problems[0].contains("must be true or false"), "{}", problems[0]);
+        }
+        // Omitting it entirely is legal and is NOT an escalation: absent
+        // stays absent.
+        let mut bare = probe(Value::Null);
+        bare.as_object_mut().unwrap().remove("escalate");
+        assert!(validate_new_cell_problems(root, &bare).unwrap().is_empty());
+        assert!(!cell_is_escalated(&bare));
+        assert!(!cell_is_escalated(&probe(json!(false))));
+        assert!(cell_is_escalated(&probe(json!(true))));
+        // The legacy spelling reads as escalated, which is what keeps a
+        // store that has not run the migration from reading as unmarked.
+        assert!(cell_is_escalated(&json!({"id": "e-2", "tier": "ceiling"})));
+        assert!(!cell_is_escalated(&json!({"id": "e-3", "tier": "generation"})));
+    }
+
     // P3-5: a cell authored with change_class "behavior" and no explicit
     // trace.behavior_change flag must default to a real behavior change —
     // otherwise the scribing-debt door never arms.
@@ -5499,6 +5537,163 @@ use std::time::Instant;
         assert_eq!(cell["tier"], json!("generation"));
     }
 
+    // ══ D5 (store 97ce5225) — the ration, rehomed onto the escalation flag ══
+    //
+    // The five probes above keep their exact arithmetic and are the "unchanged
+    // in force" half. These are the moved half: the flag is what the ration
+    // now counts, the flag is what `cells tier ceiling` now writes, and no
+    // store — migrated or not — can read as "nothing is marked".
+
+    fn escalated_cell(id: &str, feature: &str) -> Value {
+        let mut body = cell(id, "open", feature, json!([]));
+        body["role"] = json!("code");
+        body["escalate"] = json!(true);
+        body
+    }
+
+    /// The same shape as `ceiling_share_just_over_40_percent_refuses…`, with
+    /// every escalation spelled as the FLAG on a post-D7 cell (a role, no
+    /// tier at all). 3/7 is still over budget and still refuses, which is
+    /// what "fires on the flag exactly as it fired on the tier value" means.
+    #[test]
+    fn the_ration_refuses_on_the_escalation_flag_exactly_as_it_did_on_the_tier() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &escalated_cell("o-1", "f"));
+        write_cell_fixture(root, "o-2", &escalated_cell("o-2", "f"));
+        for id in ["o-3", "o-4", "o-5", "o-6"] {
+            let mut body = cell(id, "open", "f", json!([]));
+            body["role"] = json!("code");
+            write_cell_fixture(root, id, &body);
+        }
+        let mut target = cell("target", "open", "f", json!([]));
+        target["role"] = json!("code");
+        write_cell_fixture(root, "target", &target);
+
+        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        assert!(refusal.starts_with("setTier: cell \"target\" refused"), "{refusal}");
+        assert!(refusal.contains("3/7"), "{refusal}");
+        assert!(refusal.contains("43%"), "names the computed share: {refusal}");
+        assert!(refusal.contains("40%"), "names the threshold: {refusal}");
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert!(after.get("escalate").is_none(), "a refused escalation writes nothing");
+
+        // The reason override still overrides, and still persists under the
+        // key the store already carries on 20 records.
+        let ok = set_tier(root, "target", "ceiling", Some("owner-approved rescue ladder"))
+            .expect("a named reason overrides the refusal");
+        assert_eq!(ok["escalate"], json!(true));
+        assert_eq!(ok["trace"]["tier_reason"], json!("owner-approved rescue ladder"));
+    }
+
+    /// The zero-share window D5 forbids by name. A store still carrying the
+    /// LEGACY spelling — `tier: "ceiling"`, which every record written before
+    /// this change carries and which `bee cells backfill-roles` converts when
+    /// an operator runs it — must charge the ration exactly the same. If the
+    /// ration read the flag alone, this store would compute 0.0 and the
+    /// refusal could never fire.
+    #[test]
+    fn an_unmigrated_store_still_charges_the_ration() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Legacy only: nothing here carries the flag.
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        for id in ["o-3", "o-4", "o-5", "o-6"] {
+            write_cell_fixture(root, id, &tiered_cell(id, "f", Some("generation")));
+        }
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        assert!(refusal.contains("3/7"), "the legacy spelling counts: {refusal}");
+
+        // And a HALF-migrated store — one record converted, one not — counts
+        // each cell exactly once rather than twice or not at all.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        write_cell_fixture(root2, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root2, "o-2", &escalated_cell("o-2", "f"));
+        for id in ["o-3", "o-4", "o-5", "o-6"] {
+            write_cell_fixture(root2, id, &tiered_cell(id, "f", Some("generation")));
+        }
+        write_cell_fixture(root2, "target", &tiered_cell("target", "f", None));
+        let refusal2 = thrown(set_tier(root2, "target", "ceiling", None));
+        assert!(refusal2.contains("3/7"), "one spelling each, counted once: {refusal2}");
+    }
+
+    /// The write half: escalating marks the flag, and any other tier disarms
+    /// it — `--tier generation` took a cell off the session model before D5
+    /// and still does.
+    #[test]
+    fn escalating_marks_the_flag_and_any_other_tier_disarms_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Four cells, one of them escalated: 25%, comfortably under budget.
+        for id in ["o-1", "o-2", "o-3"] {
+            write_cell_fixture(root, id, &tiered_cell(id, "f", None));
+        }
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let up = set_tier(root, "target", "ceiling", None).expect("well under budget");
+        assert_eq!(up["escalate"], json!(true));
+        let on_disk = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert_eq!(on_disk["escalate"], json!(true), "the flag actually landed");
+
+        let down = set_tier(root, "target", "generation", None).expect("never budget-checked");
+        assert!(
+            down.get("escalate").is_none(),
+            "a non-escalating assignment removes the flag rather than writing false"
+        );
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert!(after.get("escalate").is_none());
+    }
+
+    /// The denominator is the feature's CELLS, not the cells that recorded
+    /// the retired optional `tier`. A post-D7 feature records no tier at all,
+    /// so a tier-shaped denominator would be 0 for every one of them, the
+    /// share would be 0.0, and this refusal could never fire again.
+    #[test]
+    fn the_ration_counts_every_cell_of_the_feature_not_just_tiered_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Two escalated, one plain — no `tier` anywhere in this store.
+        write_cell_fixture(root, "o-1", &escalated_cell("o-1", "f"));
+        write_cell_fixture(root, "o-2", &escalated_cell("o-2", "f"));
+        let mut plain = cell("o-3", "open", "f", json!([]));
+        plain["role"] = json!("code");
+        write_cell_fixture(root, "o-3", &plain);
+        let mut target = cell("target", "open", "f", json!([]));
+        target["role"] = json!("code");
+        write_cell_fixture(root, "target", &target);
+
+        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        assert!(refusal.contains("3/4"), "{refusal}");
+        assert!(refusal.contains("75%"), "{refusal}");
+    }
+
+    /// Another feature's escalations are not this feature's budget — the
+    /// scope the share is taken over is unchanged.
+    #[test]
+    fn the_ration_is_scoped_to_the_cells_own_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for id in ["x-1", "x-2", "x-3"] {
+            write_cell_fixture(root, id, &escalated_cell(id, "other"));
+        }
+        // Feature "f": the target plus two plain cells — 1/3, under budget.
+        // Counted store-wide it would be 4/6 and would refuse.
+        for id in ["f-1", "f-2"] {
+            let mut plain = cell(id, "open", "f", json!([]));
+            plain["role"] = json!("code");
+            write_cell_fixture(root, id, &plain);
+        }
+        let mut target = cell("target", "open", "f", json!([]));
+        target["role"] = json!("code");
+        write_cell_fixture(root, "target", &target);
+        let cell = set_tier(root, "target", "ceiling", None)
+            .expect("another feature's escalations never charge this one");
+        assert_eq!(cell["escalate"], json!(true));
+    }
+
     // ══ wf-1 — `cells finish` from a granted worktree ═════════════════════
     //
     // "Today `bee cells finish` refuses inside a granted worktree... Fix
@@ -7407,7 +7602,9 @@ use std::time::Instant;
         assert_eq!(report.written, 0, "--dry-run writes nothing, so `written` must stay 0");
         assert_eq!(report.by_source, [3, 3, 3, 1], "generation / no-tier / ceiling / extraction");
         assert_eq!(report.by_role(), vec![("code", 9), ("read", 1)]);
-        assert_eq!(report.ceiling_preserved(), 3);
+        // D5: the three `ceiling` cells (two live, one archived) are the ones
+        // that also take the escalation flag.
+        assert_eq!(report.escalated, 3);
         assert!(report.unmapped.is_empty());
         assert!(report.unreadable.is_empty());
 
@@ -7424,7 +7621,7 @@ use std::time::Instant;
     }
 
     #[test]
-    fn backfill_applies_d9_and_leaves_ceiling_tiers_untouched() {
+    fn backfill_applies_d9_and_converts_ceiling_onto_the_escalation_flag() {
         let (_tmp, root) = backfill_store();
         let report = backfill_roles(&root, false).expect("apply must not refuse");
         assert_eq!(report.assigned, 10);
@@ -7434,10 +7631,23 @@ use std::time::Instant;
             assert_eq!(read_cell_fixture(&root, id)["role"], json!("code"), "{id}");
         }
         assert_eq!(read_cell_fixture(&root, "x-1")["role"], json!("read"));
-        // D5's escalation flag does not exist yet and the 40% ration still
-        // counts `tier`, so `ceiling` must survive this pass intact.
+        // D5 (store `97ce5225`): a stored `tier: "ceiling"` is converted onto
+        // the escalation flag in this same pass — flag and role together, so
+        // no store ever answers half of one and half of the other.
+        for id in ["c-1", "c-2"] {
+            assert_eq!(read_cell_fixture(&root, id)["escalate"], json!(true), "{id}");
+        }
+        assert_eq!(report.escalated, 3, "two live ceilings plus the archived one");
+        // The tier STRING survives beside the flag. It is vestigial from here
+        // on, and it stays only because status_full/cells.rs and
+        // session_preamble/store.rs still count it — the tier-retirement
+        // slice deletes the field everywhere at once.
         for id in ["c-1", "c-2"] {
             assert_eq!(read_cell_fixture(&root, id)["tier"], json!("ceiling"), "{id}");
+        }
+        // A cell that was never `ceiling` takes no flag: absent stays absent.
+        for id in ["g-1", "n-1", "x-1"] {
+            assert!(read_cell_fixture(&root, id).get("escalate").is_none(), "{id}");
         }
         assert_eq!(read_cell_fixture(&root, "g-1")["tier"], json!("generation"));
         assert_eq!(read_cell_fixture(&root, "x-1")["tier"], json!("extraction"));
@@ -7462,6 +7672,11 @@ use std::time::Instant;
         };
         assert_eq!(archived("a-1")["role"], json!("code"));
         assert_eq!(archived("a-1")["tier"], json!("ceiling"), "an archived ceiling keeps its tier too");
+        assert_eq!(
+            archived("a-1")["escalate"],
+            json!(true),
+            "and an archived ceiling is converted too — `cells unarchive` brings it back live"
+        );
         assert_eq!(archived("a-2")["role"], json!("code"));
     }
 
@@ -7482,6 +7697,33 @@ use std::time::Instant;
             json!("design"),
             "an existing role is never re-derived from tier"
         );
+    }
+
+    /// The exact record shape the role-only pass left behind: a cell that
+    /// ALREADY carries a role and still records `tier: "ceiling"`, because
+    /// the escalation flag did not exist when its role was written. Having a
+    /// role is not having been converted — this cell is opened for writing,
+    /// its role is left alone, and it takes the flag.
+    #[test]
+    fn a_roled_ceiling_cell_is_still_converted_onto_the_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        std::fs::create_dir_all(cells_dir(&root)).unwrap();
+        let mut leftover = roleless("k-1", json!("ceiling"));
+        leftover.as_object_mut().unwrap().insert("role".into(), json!("code"));
+        write_cell_fixture(&root, "k-1", &leftover);
+
+        let report = backfill_roles(&root, false).unwrap();
+        assert_eq!(report.already_roled, 1, "it does carry a role");
+        assert_eq!(report.assigned, 0, "so no role is assigned");
+        assert_eq!(report.escalated, 1, "but the escalation is still converted");
+        assert_eq!(report.written, 1);
+        let after = read_cell_fixture(&root, "k-1");
+        assert_eq!(after["escalate"], json!(true));
+        assert_eq!(after["role"], json!("code"), "the role it already had is never re-derived");
+
+        // And it is done: a second pass opens nothing.
+        assert_eq!(backfill_roles(&root, false).unwrap().written, 0);
     }
 
     /// The property the plan asks for by name: run it, run it again, and the

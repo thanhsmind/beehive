@@ -414,11 +414,22 @@ use std::time::Instant;
             resolve_role(&off, &["review", "generation"], "claude", "gather"),
             Resolved::Budget
         );
-        // ceiling ends the walk wherever it stands (decision 0015).
+        // RETARGETED by D5 (store `97ce5225`), not weakened. `ceiling` used
+        // to end this walk on its own — the one closed word inside the open
+        // role set. It is no longer a role at all (escalation is a flag on
+        // the cell), so the open walk has no exception left: the name is
+        // just a role nothing configures and it yields to the next entry
+        // exactly like `tset` above. Decision `0015` is preserved rather
+        // than reopened — `ceiling` still is not configurable, because it is
+        // not a slot name in the first place.
         assert_eq!(
             resolve_role(&off, &["ceiling", "generation"], "claude", "cell"),
-            Resolved::Inherit
+            Resolved::Budget
         );
+        // The escalation word survives one layer up, where the tier-shaped
+        // marker callers live: `[bee-tier: ceiling]` still means the session
+        // model.
+        assert_eq!(resolve_tier(&off, "ceiling", "claude", "cell"), Resolved::Inherit);
         // Every leaf shape is reachable through a fall-through, not just a
         // first hit: the cli purpose gate still refuses a cell execution.
         let cli = models_from(r#"{"claude":{"generation":{"kind":"cli","command":"glm run"}}}"#);
@@ -1633,6 +1644,155 @@ use std::time::Instant;
         let codex_econ = v_codex.get("economics").unwrap();
         assert_eq!(codex_econ.get("channel"), Some(&json!("session-model")));
         assert_eq!(codex_econ.get("tier_source"), Some(&json!("cell")));
+    }
+
+    /// D5 (store `97ce5225`) — the OTHER half of what `ceiling` meant, now
+    /// carried by the flag: run on the session model, with no `model`
+    /// parameter and NO herding command.
+    ///
+    /// The fixture is chosen so the two answers cannot be confused. The cell
+    /// carries no `tier` at all (a post-D7 cell never will), declares
+    /// `role: "code"`, and the only configured slot is a HERDING
+    /// `generation` — so without the flag this dispatch is a Bash
+    /// `bee herding run` payload on the `herding-exec` channel. With the
+    /// flag it is the session model, and the escalation outranks the job
+    /// role the cell declares.
+    #[test]
+    fn an_escalated_cell_runs_on_the_session_model_with_no_herding_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"rescue ladder","role":"code","escalate":true,"status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        // The same cell WITHOUT the flag: the herding command this fixture
+        // exists to make visible.
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"f","title":"ordinary work","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let prep = |id: &str| {
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v
+        };
+
+        let unescalated = prep("c-2");
+        assert_eq!(unescalated.get("tool"), Some(&json!("Bash")), "the control really does herd");
+        assert_eq!(
+            unescalated.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+
+        let v = prep("c-1");
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), None, "an escalated dispatch has no model param");
+        assert_eq!(payload.get("command"), None, "and no herding command");
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(payload.get("description"), Some(&json!("c-1: rescue ladder (ceiling)")));
+        assert!(payload
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: ceiling]\n"));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("session-model")));
+        assert_eq!(econ.get("enforcement"), Some(&json!("session-model")));
+        assert_eq!(econ.get("requested_model"), Some(&Value::Null));
+        assert_eq!(econ.get("effective_model"), Some(&Value::Null));
+        // The marker and the audit line name ONE word. A cell declaring
+        // `role: "code"` that runs on the session model must not audit as
+        // "code" while its prompt says "ceiling".
+        assert_eq!(econ.get("logical_tier"), Some(&json!("ceiling")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+
+        // Codex takes the same answer through its own transport.
+        let Prepared::Value(v_codex) = prepare_dispatch(
+            &root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v_codex.get("tool"), Some(&json!("spawn_agent")));
+        let codex_payload = v_codex.get("payload").unwrap();
+        assert_eq!(codex_payload.get("model"), None);
+        assert_eq!(codex_payload.get("command"), None);
+        assert!(codex_payload
+            .get("message")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: ceiling]\n"));
+        assert_eq!(
+            v_codex.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model"))
+        );
+    }
+
+    /// An explicit `--role` still names the slot OUTRIGHT — the precedence
+    /// D5 did not change. A `--role` naming a real slot beats the cell's own
+    /// flag, and `--role ceiling` stays the escalation door for a dispatch
+    /// with no cell behind it.
+    #[test]
+    fn explicit_role_still_outranks_the_cells_escalation_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"rescue ladder","role":"code","escalate":true,"status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "cell",
+            Some("code"),
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("claude-agent")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("flag")));
+
+        // And with no cell at all, `--role ceiling` is still the escalation
+        // door for a gather or a reviewer.
+        let Prepared::Value(g) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "gather",
+            Some("ceiling"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            g.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model"))
+        );
     }
 
     #[test]

@@ -907,7 +907,23 @@ pub(crate) fn prepare_dispatch_with_role(
     // whose fall-through predates this feature) and must keep stamping the
     // exact token it always stamped.
     let mut resolved_role: Option<&str> = None;
-    let (resolved, is_ceiling) = if role == Some("advisor") || (role.is_none() && kind == "advisor")
+    // D5 (store `97ce5225`) — ESCALATION, read off the cell's flag rather
+    // than off a tier value. `ceiling` used to arrive here as `tier_token`
+    // and mean "run on the session model"; now the cell says so directly
+    // (`crate::verbs::cells::cell_is_escalated` — the one predicate the 40%
+    // ration reads too, so the cell that charges the budget and the cell
+    // that spends it are the same set).
+    //
+    // Precedence is unchanged: an explicit `--role` names the slot OUTRIGHT,
+    // so it still wins over the cell's own marking — including `--role
+    // ceiling`, which stays the escalation door for a dispatch with no cell
+    // behind it (a gather or a reviewer run on the session model). The flag
+    // is read only on a `--kind cell` dispatch with no `--role`, which is
+    // exactly the shape that used to read the cell's recorded `tier`.
+    let escalated_cell = role.is_none()
+        && kind == "cell"
+        && cell.as_ref().map(crate::verbs::cells::cell_is_escalated).unwrap_or(false);
+    let (resolved, is_escalated) = if role == Some("advisor") || (role.is_none() && kind == "advisor")
     {
         let r = match resolve_advisor(&models, runtime) {
             Some(r) => r,
@@ -922,7 +938,12 @@ pub(crate) fn prepare_dispatch_with_role(
             }
         };
         (r, false)
-    } else if tier_token == "ceiling" {
+    } else if escalated_cell || tier_token == ESCALATION_WORD {
+        // `Resolved::Inherit` IS "the session model": the payload built
+        // below carries no `model` parameter and no herding command, on
+        // either runtime. An escalated cell never walks the role list at
+        // all — the escalation outranks whatever job name the cell declares,
+        // which is what "run on the session model" has always meant.
         (Resolved::Inherit, true)
     } else {
         // A recorded TIER that nothing configures is still a refusal: a cost
@@ -974,7 +995,13 @@ pub(crate) fn prepare_dispatch_with_role(
     // guard refuse the dispatch bee itself just prepared. The marker names
     // the model channel; `tier_source` still says who chose it, and the cell
     // record still carries the job the work declared.
-    let marker_role: &str = resolved_role.unwrap_or(tier_token);
+    //
+    // An ESCALATED dispatch travels under the escalation word, never under
+    // the cell's job role. The payload's marker says `[bee-tier: ceiling]`
+    // and `economics.logical_tier` has to say the same thing, or the guard's
+    // audit line resolves one name while the marker carries another.
+    let marker_role: &str =
+        if is_escalated { ESCALATION_WORD } else { resolved_role.unwrap_or(tier_token) };
 
     let prompt_body = match prompt_body_for(
         root,
@@ -1043,7 +1070,7 @@ pub(crate) fn prepare_dispatch_with_role(
     let mut extra_transport: Option<&str> = None;
     let mut extra_fallback_reason: Option<&str> = None;
 
-    if is_ceiling {
+    if is_escalated {
         if runtime == "codex" {
             tool = "spawn_agent".into();
             payload.insert(
@@ -1052,7 +1079,7 @@ pub(crate) fn prepare_dispatch_with_role(
             );
             payload.insert(
                 "message".into(),
-                Value::String(format!("[bee-tier: ceiling]\n{prompt_body}")),
+                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
             );
             payload.insert("fork_turns".into(), Value::String("none".into()));
             channel = "session-model".into();
@@ -1061,9 +1088,12 @@ pub(crate) fn prepare_dispatch_with_role(
             payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
             payload.insert(
                 "prompt".into(),
-                Value::String(format!("[bee-tier: ceiling]\n{prompt_body}")),
+                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
             );
-            payload.insert("description".into(), Value::String(format!("{subject} (ceiling)")));
+            payload.insert(
+                "description".into(),
+                Value::String(format!("{subject} ({ESCALATION_WORD})")),
+            );
             channel = "session-model".into();
         }
     } else {
