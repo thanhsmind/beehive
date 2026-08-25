@@ -12,7 +12,7 @@
       "total": "zero stops: every gate, secret reads, and review P1 findings auto-proceed. The loud session banner reminds you it is on."
     },
     "models": {
-      "what": "Only the CHEAPER tiers are configured, keyed by runtime (claude | codex) then slot (extraction | generation | review | advisor). The ceiling is never configured — it is always the session model. A missing/null slot = prompt-budget tier (the marker alone carries the tier; the subagent inherits the session model).",
+      "what": "Configured per runtime (claude | codex) then role — the JOB a piece of work is (model-role-split D2/D3, store 06e49368/3c9d6262), never a cost tier. Any non-empty role name is legal; a name this table does not carry falls through to the next name the dispatch asks for and warns, it never refuses. `ceiling` is never configured here — it is an escalation flag, always the session model, not a role name. A missing/null slot = prompt-budget (the marker alone carries the role; the subagent inherits the session model). A fresh `bee onboard` writes exactly `code`, `read`, `extraction` and `generation` — the two names below with no fall-through into `known_roles` (`code`, `read`) plus the historical tail every ordered role list ends with (`extraction`, `generation`). `review` and `advisor` are shown below purely to illustrate their slot shapes: onboarding deliberately does NOT publish either, because both already resolve with no config key at all — review falls through to generation's model, and advisor (no fall-through, decision 4faf1de9) reads unset as \"off\"; a published default would silently decide that product question for every new host. Copy `review`/`advisor` into your own config only if you want to override that behavior on purpose.",
       "slot_shapes": {
         "string": "\"haiku\" — plain model name; dispatches carry it as the model param (economics: effective_model_status=pinned on claude).",
         "object_model": "{ \"model\": \"sonnet\", \"effort\": \"medium\" } — model plus reasoning-effort hint.",
@@ -58,6 +58,8 @@
   "gate_bypass": false,
   "models": {
     "claude": {
+      "code": "sonnet",
+      "read": "haiku",
       "extraction": "haiku",
       "generation": {
         "model": "sonnet",
@@ -67,6 +69,8 @@
       "advisor": "fable"
     },
     "codex": {
+      "code": null,
+      "read": null,
       "extraction": "gpt-5.5",
       "generation": "gpt-5.5",
       "review": {

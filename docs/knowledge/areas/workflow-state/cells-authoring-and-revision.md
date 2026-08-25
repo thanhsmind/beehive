@@ -32,6 +32,7 @@ revisable at all once its gate is granted.
 | `feature` | The feature slug the cell belongs to. |
 | `title` | One-line summary of what the cell delivers. |
 | `lane` | Lane classification (`tiny`, `small`, `standard`, `high-risk`, `spike`). |
+| `role` | The job this work is; the sole model selector. Required on `cells add`, exactly as `lane` is (model-role-split D7, store `4eaf1b71`). Any non-empty name is legal — validation checks presence and shape, never membership. `code`, `read`, `test`, `docs`, `review`, `design` are the recommended vocabulary (D8), authoring guidance only, never an enforced list. A role nothing in `models.<runtime>` configures still runs: the dispatch falls through to the next name it asked for and warns, it never refuses. |
 | `status` | State of the cell (`open`, `claimed`, `capped`, `blocked`, `dropped`). |
 | `deps` | Array of cell ids whose completion this cell depends on. |
 | `decisions` | Array of decision ids or tags cited by this cell. |
