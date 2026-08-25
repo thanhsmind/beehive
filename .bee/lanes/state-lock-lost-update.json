@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "state-lock-lost-update",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"state-lock-lost-update\" started at phase \"planning\" (lane).",
-  "next_action": "The takeover claims are tombstones swept past HARD_STALE_MS; watch that the sweep keeps pace under sustained contention.",
+  "next_action": "bee close finished \"state-lock-lost-update\" — feature is closed.",
   "created_at": "2026-08-25T10:40:43.042Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
