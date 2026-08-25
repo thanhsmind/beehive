@@ -229,8 +229,28 @@ red.
   record on disk is unchanged — a second copy of ownership would drift the
   moment a claim is swept or adopted (claim-owner-visible D1-D4, 2026-08-21).
 
+- R136 — **A claim ACQUIRES the reservations its cap already released.** Taking
+  a unit of work reserves every file the unit declares, under the claiming
+  worker identity and keyed to that unit — the same pair the completion path
+  has always released by. Before this, only the release half existed: the
+  completion path freed reservations that nothing had ever taken, while both
+  the worker briefing and the swarming skill told every worker its files were
+  already held. A worker that believed its briefing wrote unprotected, so the
+  protection the whole parallel-work contract rests on was absent for every
+  dispatched unit and present only for the workers who happened to distrust
+  their own instructions. A file that cannot be reserved refuses the claim,
+  names the holder, rolls back any reservation the attempt took, and leaves
+  both stores as it found them — a unit is never left owned when the paths
+  behind it could not be held. A unit declaring no files claims exactly as
+  before (decision from feature claim-reserves-files, cell crf-1, 2026-08-25).
+
 ## Edge Cases Settled
 
+- **A reservation rollback can only scope by (worker, unit).** That is the only
+  scoping the shared release door offers, so if a refused claim took a lease
+  while the same worker already held an older lease for the same unit, the
+  rollback frees both. Narrow, recorded at the call site, and nothing is
+  released when the attempt took nothing.
 - Project directories on network file systems are declared unsupported for
   session coordination: exclusive creation is not reliable there. The
   supported topologies are a local Linux/WSL2 disk and a local Windows disk

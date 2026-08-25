@@ -13,8 +13,11 @@ Both halves are false. Three independent lines of evidence:
    reserve call at all — `grep -n "reserve"` over that file returns nothing.
 2. **Empirical.** In the `skill-report-stamps` session, `bee reservations list`
    printed `No reservations.` immediately after three cells were claimed with
-   `--worker`. Probe reservations created moments later *did* appear, so the
+   `--worker`.
+   <!-- bee:not-a-deferral: past-tense narration of a control observation already performed, not a promise to act later; "moments later" describes the order of two completed probes -->
+   Probe reservations created moments later *did* appear, so the
    store was working.
+   <!-- /bee:not-a-deferral -->
 3. **Independent worker reports.** Both `wgg-1` and `wgg-2` recorded a deviation
    that their cell's files were not pre-reserved, and reserved them by hand
    before writing.
