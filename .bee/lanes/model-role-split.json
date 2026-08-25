@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Most of main's tracked dirt is **mine** — my findings, decisions, cell and review record. Committing those so what remains is unambiguous.",
-    "asked_at": "2026-08-25T10:56:20.403Z",
+    "subject": "needs input: have that session commit `docs/discovery/human-mailbox/`, `docs/history/human-mailbox/` and its trigger file — or tell me to co",
+    "asked_at": "2026-08-25T11:06:50.412Z",
     "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {
