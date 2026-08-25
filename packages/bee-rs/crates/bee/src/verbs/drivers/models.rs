@@ -33,11 +33,23 @@ pub(crate) const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "
 // whole fix for this reader.
 pub(crate) const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
 
-/// CONFIGURABLE_SLOTS = [...CONFIGURABLE_TIERS, 'review'].
+/// The names bee itself ships a built-in default for.
+///
+/// model-role-split D2 (store 06e49368) RETIRED this list as a membership
+/// test: a role name is legal because `models.<runtime>` carries it, never
+/// because it appears here. It gates neither normalization nor resolution any
+/// more — `normalize_models` carries every key the config names, and
+/// `resolve_role` asks "is this name configured", not "is this name one of
+/// four words". What survives is its one honest job: naming the slots
+/// `default_models` fills in, which is also the floor the last entry of a
+/// role list resolves against. The tier-shaped readers left in `prepare.rs`
+/// still import it; sweeping those is mrs-4's cell.
+///
+/// MODEL_NORMALIZE_SLOTS (this list plus `advisor`) is gone with the same
+/// decision — it existed ONLY to bound the normalize overlay, which now walks
+/// whatever the config names. `verbs/status_full/mod.rs` keeps a private copy
+/// of the old four names for its own display path.
 pub(crate) const CONFIGURABLE_SLOTS: [&str; 3] = ["extraction", "generation", "review"];
-
-/// MODEL_NORMALIZE_SLOTS = [...CONFIGURABLE_SLOTS, 'advisor'].
-pub(crate) const MODEL_NORMALIZE_SLOTS: [&str; 4] = ["extraction", "generation", "review", "advisor"];
 
 /// provenance: state.mjs DEFAULT_MODELS.
 pub(crate) fn default_models(runtime: &str) -> Map<String, Value> {
@@ -183,7 +195,14 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
 }
 
 /// provenance: state.mjs normalizeModels — defaults per runtime, overlaid by
-/// the normalized value of each MODEL_NORMALIZE_SLOTS entry.
+/// the normalized value of every key the config names under that runtime.
+///
+/// model-role-split D2 (store 06e49368): the overlay used to walk
+/// MODEL_NORMALIZE_SLOTS, so a config naming any other role
+/// (`models.claude.test`) was read and then silently DROPPED — the role could
+/// never resolve, and nothing said why. The open role set starts here: every
+/// key whose value normalizes into a documented leaf shape is carried, and a
+/// key whose value is junk is dropped exactly as a junk `generation` was.
 pub(crate) fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
     let mut out = Map::new();
     for rt in RUNTIMES {
@@ -193,15 +212,13 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
         if is_plain_object(raw) {
             for rt in RUNTIMES {
                 let Some(src) = raw.get(rt) else { continue };
-                if !is_plain_object(src) {
-                    continue;
-                }
-                for slot in MODEL_NORMALIZE_SLOTS {
-                    if let Some(value) = normalize_tier_value(src.get(slot)) {
+                let Some(src) = src.as_object() else { continue };
+                for (slot, raw_value) in src {
+                    if let Some(value) = normalize_tier_value(Some(raw_value)) {
                         out.get_mut(rt)
                             .and_then(Value::as_object_mut)
                             .unwrap()
-                            .insert(slot.to_string(), value);
+                            .insert(slot.clone(), value);
                     }
                 }
             }
@@ -307,52 +324,38 @@ pub(crate) fn composite_resolved(obj: &Map<String, Value>) -> Option<Resolved> {
     Some(native_resolved(primary.as_object().unwrap(), fallback))
 }
 
-/// provenance: state.mjs resolveTier(root, slot, runtime, purpose). `slot`
-/// here is always a CONFIGURABLE_SLOTS member or 'advisor' (coerced to
-/// 'generation' exactly like Node); `kind` is the dispatch-prepare purpose
-/// ("cell" | "gather" | "reviewer" | "advisor" — DISPATCH_KINDS). The cli
-/// branch below still gates on `purpose_is_gather(kind)`, byte-identical to
-/// before; herding-review-slots D1 (widened to the full mapping) drops the
-/// herding branch's own gate on `kind` entirely — every purpose reads the
-/// same herding-shaped slot the same way.
-pub(crate) fn resolve_tier(
-    models: &Map<String, Value>,
-    slot: &str,
-    runtime: &str,
-    kind: &str,
-) -> Resolved {
-    if slot == "ceiling" {
-        return Resolved::Inherit;
+/// One name's own configuration, resolved. `None` means this name carries
+/// NOTHING to resolve — it is unset, explicitly null, or shaped like nothing
+/// bee documents — and the caller yields to the next name in its list.
+///
+/// `kind` is the dispatch-prepare purpose ("cell" | "gather" | "reviewer" |
+/// "advisor" — DISPATCH_KINDS); the cli branch gates on
+/// `purpose_is_gather(kind)`, byte-identical to before. herding-review-slots
+/// D1 (widened to the full mapping): the herding branch has no gate on `kind`
+/// at all — every purpose reads the same herding-shaped slot the same way.
+fn resolve_configured(value: &Value, name: &str, kind: &str) -> Option<Resolved> {
+    if value.is_null() {
+        return None;
     }
-    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
-    let s = if CONFIGURABLE_SLOTS.contains(&slot) { slot } else { "generation" };
-    let table = models.get(rt);
-    let mut value = table.and_then(|t| t.get(s)).cloned();
-    if matches!(value, None | Some(Value::Null)) && s == "review" {
-        value = table.and_then(|t| t.get("generation")).cloned();
+    if let Value::String(model) = value {
+        return Some(Resolved::Model { model: model.clone(), effort: None });
     }
-    let Some(value) = value.filter(|v| !v.is_null()) else {
-        return Resolved::Budget;
-    };
-    if let Value::String(model) = &value {
-        return Resolved::Model { model: model.clone(), effort: None };
-    }
-    let Some(obj) = value.as_object() else { return Resolved::Budget };
+    let obj = value.as_object()?;
     // cli purpose gate — unchanged: refused for a cell-execution dispatch,
-    // served for gather/reviewer/advisor exactly as before.
+    // served for gather/reviewer/advisor exactly as before. The refusal names
+    // the slot actually READ, which under a role walk is the entry that
+    // carried the cli value rather than the entry that was asked for.
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
         if !purpose_is_gather(kind) {
-            return Resolved::Refused { slot: s.to_string() };
+            return Some(Resolved::Refused { slot: name.to_string() });
         }
-        return Resolved::Cli {
+        return Some(Resolved::Cli {
             command: truthy_str(obj.get("command")).unwrap_or_default().to_string(),
-        };
+        });
     }
     // herding-review-slots D1 (widened to the full mapping): EVERY purpose
     // — cell, gather, reviewer, advisor — on a `{kind:"herding"}` slot
-    // routes to the herding-exec pane (ht-3/hrv-1/hrv-3 build that
-    // payload); `kind` no longer branches this arm at all, ending the
-    // gather-default split hrv-1 still carried.
+    // routes to the herding-exec pane (ht-3/hrv-1/hrv-3 build that payload).
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
         let agent = match obj.get("agent") {
             Some(Value::String(s)) => Some(s.clone()),
@@ -362,24 +365,133 @@ pub(crate) fn resolve_tier(
             Some(Value::String(f)) if f == "default" => Some(f.clone()),
             _ => None,
         };
-        return Resolved::Herding { agent, fallback };
+        return Some(Resolved::Herding { agent, fallback });
     }
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "native") {
-        return native_resolved(obj, None);
+        return Some(native_resolved(obj, None));
     }
     if let Some(r) = composite_resolved(obj) {
-        return r;
+        return Some(r);
     }
     if let Some(Value::String(model)) = obj.get("model") {
-        return Resolved::Model {
+        return Some(Resolved::Model {
             model: model.clone(),
             effort: match obj.get("effort") {
                 Some(v) if truthy(v) => Some(jsjson::js_to_string(v)),
                 _ => None,
             },
-        };
+        });
+    }
+    // An object matching no documented shape resolves nothing; the walk
+    // yields, and a last entry lands on Budget.
+    None
+}
+
+/// A name bee has never heard of — absent from `models.<runtime>` AND from
+/// the built-in defaults — is the typo case, and the ONE thing it must never
+/// do is quietly hand back some other role's model. It says so, on stderr,
+/// naming what it fell through to.
+///
+/// A name that IS present but null or unresolvable is deliberately unset (or
+/// null by built-in default, as every codex slot ships), not a mistake, so it
+/// yields without a word. Keeping those two apart is what stops a
+/// per-dispatch warning storm on an unconfigured runtime while leaving the
+/// misspelling loud.
+fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
+    let tail = match next {
+        Some(next) => format!(" — falling through to \"{next}\""),
+        None => " — nothing after it in the list, so no model is selected".to_string(),
+    };
+    eprintln!(
+        "bee: model role \"{name}\" is not configured in models.{runtime} of .bee/config.json{tail}"
+    );
+}
+
+/// Resolve an ORDERED LIST of role names against `models.<runtime>`.
+///
+/// model-role-split D2 (store 06e49368). The consumer names the roles it will
+/// accept, best first; the first name that carries a resolvable configuration
+/// wins; an unset or unresolvable name yields to the next. The LAST entry
+/// always resolves, because it falls back to the runtime's built-in
+/// `default_models` entry and then to `Resolved::Budget` — so a walk cannot
+/// dead-end, and an empty list cannot panic (it is Budget: no name asked, no
+/// model selected).
+///
+/// What this replaces is the coercion that stood at the old `resolve_tier`'s
+/// third line: `if CONFIGURABLE_SLOTS.contains(&slot) { slot } else
+/// { "generation" }`. Under a closed four-word set that read as a harmless
+/// normalization; under D2's open set it is a wrong-model dispatch that
+/// completes clean — a cell whose role is `tset` would have been handed the
+/// generation model while `prepare.rs` stamped `tier_source: "cell"`, so the
+/// record asserted the cell had chosen it. No name may resolve a model the
+/// config does not carry for that name, and no name bee does not know
+/// resolves silently.
+///
+/// Falling through on an ABSENT configuration is not a downgrade: decision
+/// `72f3d6dd` licenses a fallback "ONLY when that tier is unconfigured", and
+/// a configured role is still obeyed exactly.
+pub(crate) fn resolve_role(
+    models: &Map<String, Value>,
+    roles: &[&str],
+    runtime: &str,
+    kind: &str,
+) -> Resolved {
+    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
+    let table = models.get(rt);
+    for (i, name) in roles.iter().enumerate() {
+        let name = *name;
+        // decision 0015: `ceiling` is the escalation word, never a slot — it
+        // is not configurable, so it terminates the walk on its own.
+        if name == "ceiling" {
+            return Resolved::Inherit;
+        }
+        let entry = table.and_then(|t| t.get(name));
+        if let Some(resolved) = entry.and_then(|v| resolve_configured(v, name, kind)) {
+            return resolved;
+        }
+        let defaults = default_models(rt);
+        if entry.is_none() && !defaults.contains_key(name) {
+            warn_unknown_role(name, rt, roles.get(i + 1).copied());
+        }
+        if i + 1 == roles.len() {
+            // The floor, so the walk cannot dead-end. `default_models` is
+            // consulted ONLY for a name the table does not carry at all: a
+            // present-but-null entry is a slot somebody turned OFF (or one
+            // `default_models` itself seeded null, as every codex slot is),
+            // and answering it with the built-in default would resurrect the
+            // very model the config just cleared. Absent and refused are not
+            // the same read.
+            if entry.is_none() {
+                return defaults
+                    .get(name)
+                    .and_then(|v| resolve_configured(v, name, kind))
+                    .unwrap_or(Resolved::Budget);
+            }
+            return Resolved::Budget;
+        }
     }
     Resolved::Budget
+}
+
+/// provenance: state.mjs resolveTier(root, slot, runtime, purpose) — kept as
+/// the single-name spelling of `resolve_role` for the tier-shaped callers
+/// mrs-3 (the guard) and mrs-4 (`slot_for_kind`) still have to sweep. It
+/// carries no resolution logic of its own, so the D2 fix above reaches every
+/// one of them today rather than waiting for the sweep.
+///
+/// The one rule it keeps as a list: an unset `review` yields to `generation`,
+/// which used to be a special case inside the resolver and is now just what
+/// fall-through means.
+pub(crate) fn resolve_tier(
+    models: &Map<String, Value>,
+    slot: &str,
+    runtime: &str,
+    kind: &str,
+) -> Resolved {
+    if slot == "review" {
+        return resolve_role(models, &["review", "generation"], runtime, kind);
+    }
+    resolve_role(models, &[slot], runtime, kind)
 }
 
 /// provenance: state.mjs resolveAdvisor — NEVER budget, NEVER a tier fallback;

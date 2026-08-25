@@ -298,12 +298,11 @@ use std::time::Instant;
         assert_eq!(resolve_tier(&m, "review", "codex", "gather"), Resolved::Budget);
         // ceiling is never configured.
         assert_eq!(resolve_tier(&m, "ceiling", "claude", "cell"), Resolved::Inherit);
-        // An unknown slot ('advisor') coerces to generation — the trap
-        // resolveAdvisor exists to avoid.
-        assert_eq!(
-            resolve_tier(&m, "advisor", "claude", "gather"),
-            Resolved::Model { model: "sonnet".into(), effort: None }
-        );
+        // model-role-split D2 (store 06e49368) RETARGETED: 'advisor' used to
+        // coerce to generation and hand back sonnet — the trap resolveAdvisor
+        // exists to avoid. A name now resolves its own slot or nothing, so an
+        // unconfigured advisor is Budget.
+        assert_eq!(resolve_tier(&m, "advisor", "claude", "gather"), Resolved::Budget);
 
         // review: null falls back to the generation tier BEFORE the cli check.
         let m = models_from(
@@ -314,9 +313,13 @@ use std::time::Instant;
             Resolved::Cli { command: "glm run".into() }
         );
         // cli + cell purpose -> typed refusal naming the RESOLVED slot.
+        // model-role-split D2 RETARGETED: the null review yields to
+        // generation, and generation is the slot that carries the cli value,
+        // so the refusal names the slot actually read rather than the one
+        // asked for.
         assert_eq!(
             resolve_tier(&m, "review", "claude", "cell"),
-            Resolved::Refused { slot: "review".into() }
+            Resolved::Refused { slot: "generation".into() }
         );
 
         // {model, effort}
@@ -355,6 +358,78 @@ use std::time::Instant;
             Resolved::Native { fallback, .. } => assert_eq!(fallback, None),
             other => panic!("expected native, got {other:?}"),
         }
+    }
+
+    /// model-role-split D2 (store 06e49368): a consumer names an ORDERED LIST
+    /// of role names; the first that resolves wins, an unset or unresolvable
+    /// name yields to the next, and the last entry always resolves.
+    #[test]
+    fn resolve_role_walks_the_list_and_refuses_to_guess_an_unknown_name() {
+        let m = models_from(r#"{"claude":{"test":"opus","generation":"sonnet"}}"#);
+        // A role name bee never shipped is legal the moment the config
+        // carries it — there is no membership list left to be added to.
+        assert_eq!(
+            resolve_role(&m, &["test", "generation"], "claude", "cell"),
+            Resolved::Model { model: "opus".into(), effort: None }
+        );
+        // A configured role is obeyed EXACTLY (decision 72f3d6dd): the walk
+        // never looks past a name that resolves.
+        assert_eq!(
+            resolve_role(&m, &["test"], "claude", "cell"),
+            Resolved::Model { model: "opus".into(), effort: None }
+        );
+
+        // THE FIX. A misspelling used to be coerced to generation and
+        // dispatched sonnet while prepare.rs stamped tier_source:"cell" — a
+        // wrong-model dispatch that completed clean. It yields instead: to
+        // the next entry when there is one...
+        assert_eq!(
+            resolve_role(&m, &["tset", "generation"], "claude", "cell"),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+        // ...and to no model at all when there is not. Nothing in the config
+        // names `tset`, so nothing resolves for `tset`.
+        assert_eq!(resolve_role(&m, &["tset"], "claude", "cell"), Resolved::Budget);
+
+        // The last entry cannot dead-end: a name the table does not carry
+        // falls to bee's own built-in default for that name.
+        let bare: Map<String, Value> = Map::new();
+        assert_eq!(
+            resolve_role(&bare, &["code", "generation"], "claude", "cell"),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+        // A one-entry list is just a walk of length one, and an empty list
+        // asks for nothing rather than panicking.
+        assert_eq!(
+            resolve_role(&bare, &["generation"], "claude", "cell"),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+        assert_eq!(resolve_role(&m, &[], "claude", "cell"), Resolved::Budget);
+
+        // An explicitly nulled slot yields like an unset one, and is NOT
+        // answered with the built-in default the config just cleared.
+        let off = models_from(r#"{"claude":{"extraction":null,"generation":null,"review":null}}"#);
+        assert_eq!(resolve_role(&off, &["generation"], "claude", "cell"), Resolved::Budget);
+        assert_eq!(
+            resolve_role(&off, &["review", "generation"], "claude", "gather"),
+            Resolved::Budget
+        );
+        // ceiling ends the walk wherever it stands (decision 0015).
+        assert_eq!(
+            resolve_role(&off, &["ceiling", "generation"], "claude", "cell"),
+            Resolved::Inherit
+        );
+        // Every leaf shape is reachable through a fall-through, not just a
+        // first hit: the cli purpose gate still refuses a cell execution.
+        let cli = models_from(r#"{"claude":{"generation":{"kind":"cli","command":"glm run"}}}"#);
+        assert_eq!(
+            resolve_role(&cli, &["docs", "generation"], "claude", "gather"),
+            Resolved::Cli { command: "glm run".into() }
+        );
+        assert_eq!(
+            resolve_role(&cli, &["docs", "generation"], "claude", "cell"),
+            Resolved::Refused { slot: "generation".into() }
+        );
     }
 
     // herding-review-slots D1 (widened to the full mapping): `{kind:
