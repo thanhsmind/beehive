@@ -46,6 +46,13 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "archive" => run_archive(flags, use_json, t0),
         "render" => run_render(flags, use_json, t0),
         "supersede" => run_supersede(flags, use_json, t0),
+        // decision-attribution D5 — the one-time attribution correction.
+        // Served here and DECLARED in generated/registry_payload.json in the
+        // same change: a verb served but not declared is reported unknown by
+        // `bee --help --all` and leaves the CLI-shape guard no schema to
+        // validate a call against, and tests/registry_dispatch.rs enforces
+        // the inverse too.
+        "reattribute" => run_reattribute(flags, use_json, t0),
         _ => None, // anything else: Node's
     }
 }

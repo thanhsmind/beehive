@@ -1846,6 +1846,116 @@ use std::time::Instant;
         );
     }
 
+    /// decision-attribution D5: the predicate reads a claim the record makes
+    /// about itself, and refuses everything else.
+    #[test]
+    fn feature_from_decision_text_reads_only_the_slug_d_number_convention() {
+        assert_eq!(
+            feature_from_decision_text("human-mailbox D17: bee is a harness").as_deref(),
+            Some("human-mailbox")
+        );
+        assert_eq!(
+            feature_from_decision_text("model-role-split D4: role is the selector").as_deref(),
+            Some("model-role-split")
+        );
+        // No D-number: an ordinary decision, never touched.
+        assert_eq!(feature_from_decision_text("The mailbox owns its record shape"), None);
+        assert_eq!(feature_from_decision_text("human-mailbox says hello"), None);
+        // A capital or a space in the slug is not the convention.
+        assert_eq!(feature_from_decision_text("Human-Mailbox D1: x"), None);
+        assert_eq!(feature_from_decision_text("D1: no slug at all"), None);
+        // Digits alone are not a feature name.
+        assert_eq!(feature_from_decision_text("2026 D1: x"), None);
+        assert_eq!(feature_from_decision_text(""), None);
+    }
+
+    /// decision-attribution D5: a stamp is corrected only when the record's
+    /// own text contradicts it. No stamp stays no stamp — post-D1 that is a
+    /// legitimate state, and filling it in from prose is the inference D2
+    /// rejected.
+    #[test]
+    fn plan_reattribution_corrects_only_a_contradiction() {
+        let contradiction = json!({
+            "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "decision": "human-mailbox D17: bee is a harness",
+            "feature": "model-role-split"
+        });
+        let plan = plan_reattribution(&contradiction).expect("a contradiction is corrected");
+        assert_eq!(plan.from, "model-role-split");
+        assert_eq!(plan.to, "human-mailbox");
+
+        // Agrees with its own text — nothing to correct.
+        let agrees = json!({
+            "id": "id2", "decision": "human-mailbox D17: x", "feature": "human-mailbox"
+        });
+        assert!(plan_reattribution(&agrees).is_none());
+
+        // No stamp at all — left unstamped, never inferred.
+        let unstamped = json!({"id": "id3", "decision": "human-mailbox D17: x"});
+        assert!(plan_reattribution(&unstamped).is_none());
+
+        // Stamped, but the text makes no claim — left alone.
+        let no_claim = json!({
+            "id": "id4", "decision": "Some ordinary decision", "feature": "model-role-split"
+        });
+        assert!(plan_reattribution(&no_claim).is_none());
+    }
+
+    /// decision-attribution D5: end to end over a store — corrects the
+    /// contradiction, leaves everything else byte-identical, and is
+    /// idempotent. --dry-run writes nothing.
+    #[test]
+    fn reattribute_corrects_the_contradiction_and_leaves_every_other_line_untouched() {
+        let tmp = fixture_root();
+        let root = tmp.path();
+        let wrong = r#"{"id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:11:06.701Z","decision":"human-mailbox D1: bee owns the mailbox DATA","rationale":"r","feature":"model-role-split"}"#;
+        let right = r#"{"id":"bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:12:00.000Z","decision":"model-role-split D4: role is the sole selector","rationale":"r","feature":"model-role-split"}"#;
+        let plain = r#"{"id":"cccccccc-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:13:00.000Z","decision":"An ordinary decision with no D-number","rationale":"r","feature":"model-role-split"}"#;
+        let unstamped = r#"{"id":"dddddddd-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:14:00.000Z","decision":"human-mailbox D2: every record carries a subject","rationale":"r"}"#;
+        write_events(root, &[wrong, right, plain, unstamped]);
+
+        // --dry-run reports the same single correction and writes nothing.
+        let before = std::fs::read_to_string(decisions_path(root)).unwrap();
+        let Ok(Out::Emit(report, _, 0)) = do_reattribute(root, true, 0) else {
+            panic!("expected a dry-run report");
+        };
+        assert_eq!(report["scanned"], 4);
+        assert_eq!(report["changed"], 1);
+        assert_eq!(report["dry_run"], true);
+        assert_eq!(
+            std::fs::read_to_string(decisions_path(root)).unwrap(),
+            before,
+            "--dry-run must not write"
+        );
+
+        let Ok(Out::Emit(report, _, 0)) = do_reattribute(root, false, 0) else {
+            panic!("expected an apply report");
+        };
+        assert_eq!(report["changed"], 1);
+        assert_eq!(report["changes"][0]["from"], "model-role-split");
+        assert_eq!(report["changes"][0]["to"], "human-mailbox");
+
+        let after: Vec<Value> = read_jsonl(&decisions_path(root));
+        assert_eq!(after[0]["feature"], "human-mailbox", "the contradiction is corrected");
+        // Only `feature` moved on the corrected record.
+        assert_eq!(after[0]["decision"], "human-mailbox D1: bee owns the mailbox DATA");
+        assert_eq!(after[0]["date"], "2026-08-25T10:11:06.701Z");
+        assert_eq!(after[0]["rationale"], "r");
+        // Every other line is untouched, byte-for-byte.
+        let on_disk = std::fs::read_to_string(decisions_path(root)).unwrap();
+        let lines: Vec<&str> = on_disk.lines().collect();
+        assert_eq!(lines.len(), 4);
+        assert_eq!(lines[1], right);
+        assert_eq!(lines[2], plain);
+        assert_eq!(lines[3], unstamped);
+
+        // Idempotent.
+        let Ok(Out::Emit(again, _, 0)) = do_reattribute(root, false, 0) else {
+            panic!("expected a second report");
+        };
+        assert_eq!(again["changed"], 0, "a second run changes nothing");
+    }
+
     /// decision-attribution D2: an explicit --feature names the decision's
     /// own feature even when the default record names a different one. This
     /// is the Discovery case the flag exists for — a wayfinding map locks
