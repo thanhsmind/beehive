@@ -226,6 +226,7 @@ fn log_scribing_debt_waiver(root: &Path, feature: &str, ids: &[Value]) -> R2<()>
             tags: Some(vec!["scribing".to_string(), "state".to_string()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         },
         15,
     )? {
@@ -257,6 +258,7 @@ fn log_scribing_debt_swap_waiver(root: &Path, outgoing_feature: &str, ids: &[Val
             tags: Some(vec!["scribing".to_string(), "state".to_string()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         },
         15,
     )? {
@@ -285,6 +287,7 @@ fn log_compounding_waiver(root: &Path, feature: &str) -> R2<()> {
             tags: Some(vec!["scribing".to_string(), "state".to_string()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         },
         15,
     )? {

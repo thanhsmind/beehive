@@ -196,6 +196,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into(), "recall".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -217,6 +218,7 @@ use std::time::Instant;
             tags: Some(vec!["Bad_Tag".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -246,6 +248,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -281,6 +284,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:bbbb2222".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -298,6 +302,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:aaaa1111".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), ambiguous, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -318,6 +323,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:deadbeef".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), unknown, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -348,6 +354,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:c1".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), stale, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -375,6 +382,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, SUPERSESSION_PROSE_GUARD_MESSAGE),
@@ -393,6 +401,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_edge, 0) else {
             panic!("expected log emit once --supersedes names the target");
@@ -432,6 +441,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: None,
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), missing, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -453,6 +463,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("sideways:a1".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), malformed, 0) {
             Ok(Out::Thrown(msg)) => assert!(msg.starts_with(RELATION_REQUIRED_MESSAGE), "{msg}"),
@@ -479,6 +490,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("touches:f1".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -505,6 +517,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("touches:deadbeef".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -544,6 +557,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, DEFERRAL_WITHOUT_TRIGGER_MESSAGE),
@@ -566,6 +580,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: Some("g1__deadbeef".to_string()),
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit once a registered --trigger is named");
@@ -586,6 +601,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: Some("no-such-trigger".to_string()),
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert!(
@@ -626,6 +642,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Err(Err2::Msg(msg)) => {
@@ -660,6 +677,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), zero, 0) {
             Err(Err2::Msg(msg)) => assert_eq!(msg, UNTAGGED_REFUSED_MESSAGE),
@@ -675,6 +693,7 @@ use std::time::Instant;
             tags: Some(vec!["newtag".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         assert!(matches!(do_log(tmp.path(), unknown, 0), Ok(Out::Emit(_, _, 0))));
         let tax_after: Value = serde_json::from_str(&std::fs::read_to_string(&tax).unwrap()).unwrap();
@@ -788,6 +807,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         assert!(matches!(do_log(tmp.path(), p, 0), Ok(Out::Emit(_, _, 0))));
     }
@@ -1319,6 +1339,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1355,6 +1376,7 @@ use std::time::Instant;
             tags: Some(vec!["finance".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1387,6 +1409,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1413,6 +1436,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1430,6 +1454,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), unrelated, 0) else {
             panic!("expected log emit");
@@ -1455,6 +1480,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -1562,6 +1588,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(..)) = do_log(&ctx.root, p, 0) else {
             panic!("expected decisions log to succeed against the worktree's own store");
@@ -1692,6 +1719,7 @@ use std::time::Instant;
             tags: None,
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -1761,6 +1789,7 @@ use std::time::Instant;
             tags: None,
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1805,6 +1834,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -1813,6 +1843,70 @@ use std::time::Instant;
             event.get("feature").is_none(),
             "an unbound session must not inherit the default record's feature, got {:?}",
             event.get("feature")
+        );
+    }
+
+    /// decision-attribution D2: an explicit --feature names the decision's
+    /// own feature even when the default record names a different one. This
+    /// is the Discovery case the flag exists for — a wayfinding map locks
+    /// decisions before its effort has a lane to be bound to.
+    #[test]
+    fn log_explicit_feature_outranks_whatever_the_default_record_says() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            root.join(".bee").join("state.json"),
+            r#"{"feature":"someone-elses-feature"}"#,
+        )
+        .unwrap();
+
+        let p = LogParams {
+            decision: "human-mailbox D1: the mailbox owns its own record shape".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: Some("human-mailbox".to_string()),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["feature"], "human-mailbox");
+    }
+
+    /// decision-attribution D2: passing the flag is an act of naming, so a
+    /// blank value is refused. Dropping it silently would stamp the lane
+    /// instead and look like it had obeyed.
+    #[test]
+    fn log_refuses_a_blank_feature_rather_than_ignoring_it() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "A decision".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: Some("   ".to_string()),
+        };
+        let Ok(Out::Thrown(msg)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected a refusal for a blank --feature");
+        };
+        assert!(msg.contains("--feature"), "{msg}");
+        assert!(
+            !decisions_path(tmp.path()).exists()
+                || read_jsonl(&decisions_path(tmp.path())).is_empty(),
+            "a refused log must write nothing"
         );
     }
 
@@ -1859,6 +1953,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1894,6 +1989,7 @@ use std::time::Instant;
             tags: Some(vec!["auth".to_string()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1924,6 +2020,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), p_scope, 0) else {
             panic!("expected log emit");
@@ -1960,6 +2057,7 @@ use std::time::Instant;
             tags: Some(vec!["payments".to_string()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");

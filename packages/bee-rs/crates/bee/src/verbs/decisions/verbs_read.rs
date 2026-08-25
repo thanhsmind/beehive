@@ -193,7 +193,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         &flags,
         &[
             "decision", "rationale", "alternatives", "scope", "source", "confidence", "tags",
-            "relation", "trigger",
+            "relation", "trigger", "feature",
         ],
     ) {
         return None;
@@ -228,6 +228,11 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
     // D2: --trigger <id> — a kdt-2 trigger registry id, required only when
     // the decision text itself reads as a deferral (matches_deferral_prose).
     let trigger_raw: Option<String> = str_flag(&flags, "trigger")?;
+    // decision-attribution D2: --feature <slug> — the feature this decision
+    // is ABOUT, outranking the session's bound lane. `None` only when the
+    // flag is absent; a blank value reaches do_log and is refused there,
+    // never quietly dropped.
+    let feature_raw: Option<String> = str_flag(&flags, "feature")?;
 
     let ctx = match decisions_prelude("decisions log", use_json, t0)? {
         Pre::Go(c) => c,
@@ -245,6 +250,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             tags: tags_flag,
             relation: relation_raw,
             trigger: trigger_raw,
+            feature: feature_raw,
         },
         DECISIONS_LOCK_RETRY_ATTEMPTS,
     );
@@ -277,6 +283,16 @@ pub(crate) struct LogParams {
     /// deferral (matches_deferral_prose); optional otherwise. Persisted
     /// onto the event as `trigger` whenever given and valid.
     pub(crate) trigger: Option<String>,
+    /// decision-attribution D2: the feature this decision is ABOUT, named
+    /// explicitly by the caller. Always outranks the session's bound lane.
+    ///
+    /// It exists because D1 made an unresolved feature absent rather than
+    /// borrowed, and the Discovery flow is where decisions are logged most —
+    /// a wayfinding map locks them ticket by ticket, before the effort has a
+    /// lane to be bound to. Without this flag D1 would trade a wrong answer
+    /// for no answer. `None` means the flag was not passed; an empty or
+    /// whitespace-only value is refused rather than ignored.
+    pub(crate) feature: Option<String>,
 }
 
 /// dsh-1's prose-supersession guard: decision text that reads as an inline
@@ -444,6 +460,11 @@ fn relation_required_message(root: &Path, p: &LogParams) -> R2<String> {
     msg.push_str(&conflict_candidate_lines(&candidates));
     Ok(msg)
 }
+
+/// decision-attribution D2: a blank `--feature` is refused rather than
+/// ignored. Passing the flag is an act of naming; dropping a blank value
+/// silently would stamp the lane instead and look like it obeyed.
+pub(crate) const FEATURE_FLAG_EMPTY_MESSAGE: &str = "logDecision: --feature was passed with an empty value — name the feature this decision is about (e.g. --feature human-mailbox), or omit the flag entirely to take the calling session's bound lane.";
 
 pub(crate) const RELATION_REQUIRED_MESSAGE: &str = "logDecision: --relation is required — pass --relation supersedes:<id>[,...] to retire earlier decisions here, --relation touches:<id>[,...] to note a related-but-not-retired decision, or --relation none if this decision relates to nothing active.";
 
@@ -640,9 +661,21 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // lane ONLY, never the shared default `.bee/state.json` record. No bound
     // lane → `None`, and the event carries no `feature` field at all. See
     // `feature_for_stamp` for why borrowing the default record was wrong.
-    let bound_feature: Option<String> = {
-        let target = resolve_mutation_target(root, None, "decisions log", false)?;
-        feature_for_stamp(&target)
+    // decision-attribution D2: an explicit --feature outranks the bound lane.
+    // A blank value is a refusal, never a silent fall-through to the lane —
+    // the caller who typed the flag meant to name something.
+    let bound_feature: Option<String> = match &p.feature {
+        Some(raw) => {
+            let slug = js_trim(raw);
+            if slug.is_empty() {
+                return Ok(Out::Thrown(FEATURE_FLAG_EMPTY_MESSAGE.to_string()));
+            }
+            Some(slug.to_string())
+        }
+        None => {
+            let target = resolve_mutation_target(root, None, "decisions log", false)?;
+            feature_for_stamp(&target)
+        }
     };
 
     let mut event = Map::new();
