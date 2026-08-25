@@ -228,6 +228,38 @@ use crate::version::BEE_VERSION;
         assert_eq!(line, "Lanes: 2 other lane(s) [swarming=1 idle=1] (ids: alpha, beta)");
     }
 
+    /// The row order above is a PROMISE, not the filesystem's accident:
+    /// `list_lanes` returns whatever order the OS enumerates the lane
+    /// directory in, and no filesystem sorts that for us. Write the lanes in
+    /// reverse order, with names whose creation order and sort order
+    /// disagree, and the display builder still hands the caller one stable
+    /// order — otherwise `bee status` renders the same store two ways.
+    #[test]
+    fn lane_rows_order_by_feature_id_not_by_directory_enumeration() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for feature in ["zulu", "mike", "alpha", "delta"] {
+            write(
+                root,
+                &format!(".bee/lanes/{feature}.json"),
+                &format!(r#"{{"feature":"{feature}","phase":"idle"}}"#),
+            );
+        }
+        let mut ctx = ctx_for(root);
+        let features: Vec<String> = build_lane_rows(&mut ctx)
+            .unwrap()
+            .iter()
+            .map(|row| row.get("feature").and_then(|v| v.as_str()).unwrap().to_string())
+            .collect();
+        assert_eq!(features, vec!["alpha", "delta", "mike", "zulu"]);
+        // The summary's `ids` ride the same order — it derives from the rows.
+        let summary = build_lane_summary(&mut ctx).unwrap();
+        assert_eq!(
+            summary.get("ids"),
+            Some(&json!(["alpha", "delta", "mike", "zulu"]))
+        );
+    }
+
     #[test]
     fn staleness_warnings_fire_in_node_order() {
         let tmp = tempfile::tempdir().unwrap();

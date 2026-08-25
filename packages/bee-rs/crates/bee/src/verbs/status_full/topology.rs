@@ -325,7 +325,7 @@ pub(crate) fn build_lane_rows(ctx: &mut Ctx) -> R<Vec<JMap>> {
             }
         }
     }
-    Ok(lanes
+    let mut rows: Vec<JMap> = lanes
         .into_iter()
         .map(|mut lane| {
             let key = lane.get("feature").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -344,7 +344,24 @@ pub(crate) fn build_lane_rows(ctx: &mut Ctx) -> R<Vec<JMap>> {
             lane.insert(crate::verbs::workflow_store::merge_ready::KEY.into(), fact);
             lane
         })
-        .collect())
+        .collect();
+    // `list_lanes` hands back the OS directory-enumeration order, which no
+    // filesystem promises to sort. These rows are a DISPLAY surface — `bee
+    // status` prints them, and `build_lane_summary` derives its `ids` list
+    // from them — so an enumeration-order list makes the same store render
+    // two different ways on two machines (or twice on one). Order the rows
+    // by lane feature id here, at the display builder, and leave the
+    // enumerator's documented Node-parity read order untouched.
+    rows.sort_by(|a, b| {
+        let key = |row: &JMap| {
+            row.get("feature")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        };
+        key(a).cmp(&key(b))
+    });
+    Ok(rows)
 }
 
 /// bee.mjs buildLaneSummary (lpsp-2): active lane in full + counts/ids.
