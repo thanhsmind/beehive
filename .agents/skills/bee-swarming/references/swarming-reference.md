@@ -69,8 +69,8 @@ request).
 
 The rest of this reference and the body's Operating Contract are the
 multi-worker wave protocol for `standard`/`high-risk`; a tiny/small dispatch
-borrows only its Spawn, tier-judgment, Record, and Goal-check steps for its
-single worker — never wave analysis or multi-cell assignment.
+borrows only its Spawn, role-and-escalation judgment, Record, and Goal-check
+steps for its single worker — never wave analysis or multi-cell assignment.
 
 ## Operating Contract in full
 
@@ -81,10 +81,10 @@ single worker — never wave analysis or multi-cell assignment.
    reservations or split the cell scope — never "spawn both and be careful";
    the schedule already auto-serializes file overlap into a later wave
    rather than refusing it. The schedule computation and verify-output
-   capture delegate as extraction-tier I/O workers per the Delegation
+   capture delegate as read-job I/O workers per the Delegation
    contract (`bee-hive/references/gates-and-delegation.md`);
-   judgment (assignment, tier choice, goal-check verdicts, override
-   decisions) stays on the orchestrator.
+   judgment (assignment, a role override, escalation, goal-check verdicts,
+   override decisions) stays on the orchestrator.
 2. **Assign and claim first.** The orchestrator picks exactly **one
    cell per worker**, then claims it itself — `cells claim-next` or `cells
    claim --id <id> --worker <nickname>` — before spawning; `--session-id` is
@@ -100,31 +100,59 @@ single worker — never wave analysis or multi-cell assignment.
    status-token protocol (`[DONE] [BLOCKED] [HANDOFF] [NOOP]`) — **nothing
    else, never session history, never a literal session id**. Use the
    template below.
-   Codex has no per-agent `subagent_type` equivalent — its tier is
+   Codex has no per-agent `subagent_type` equivalent — its role is
    enforced as a read budget + output cap only.
    Default: bee's own agent types only. A same-named type from another plugin
    carries a different contract and makes the run depend on what is installed.
-4. **Judge each cell's model tier at dispatch** — you (the orchestrator)
-   assess the task in front of you and pick the fitting tier; it is NOT
-   fixed by planning (a planning `tier` is at most a hint you may
-   override). Rubric from the cell's lane + action + must_haves +
-   files:
-   - **extraction** — pure retrieval or mechanical edits: rename, reformat,
-     move a file, a one-line change, no design judgment.
-   - **generation** — normal implementation, wiring, writing tests: the
+4. **The cell already names the job — read it, override only with a reason,
+   escalate only where the work earns it.** `role` is REQUIRED on every cell
+   (`bee cells add` refuses without it) and it is the cell's sole model
+   selector. The question it answers is *what job is this work*, never *how
+   expensive is this work*: some models plan well, some test well, some code
+   well, and the host's config is what says which. Planning writes the role;
+   you may override it at dispatch with a stated reason, exactly as you may
+   override the schedule.
+
+   The recommended vocabulary is **authoring guidance, never an enum** —
+   `code`, `read`, `test`, `docs`, `review`, `design`. **Any non-empty name
+   is legal**: bee validates a role's presence and shape, never its
+   membership, so a repo that configures `migrate` or `sql` gets that model
+   with no bee change. Name the job from the cell's action + files:
+   - **`code`** — the work writes product code, wiring or tests. The
      default for most cells.
-   - **ceiling** — integration across modules, architecture/design calls,
-     security-sensitive or `high-risk`-lane work, ambiguous specs,
-     cross-cutting change: where a wrong call is expensive.
+   - **`read`** — the work only reads: retrieval, tracing a call path,
+     mining a transcript, an evidence digest.
+   - **`test`, `docs`, `design`, `review`, or a name this repo invented** —
+     the work is that job, and `models.<runtime>` decides which model is
+     good at it.
 
-   Record the choice so scarcity stays measurable (`cells tier` refuses a
-   ceiling choice over budget): `.bee/bin/bee cells tier --id <id> --tier <tier>`. Then resolve with `resolveTier(root,
-   tier, runtime)` — full semantics, tier-marker anchoring, and dispatch
-   economics: "Model Tiers — Config-Driven, Runtime-Keyed" below. Keep
-   `ceiling` scarce — if `bee_status` flags ceiling scarcity, re-judge
-   routine cells downward before spawning.
+   The dispatch asks for an ORDERED LIST headed by the cell's own role and
+   ending in a name every host has configured for years —
+   `[<cell role>, code, generation]`, or `[read, extraction, generation]`
+   for a read job. **An unconfigured role never fails**: it yields to the
+   next name in the list and WARNS on stderr, naming what it fell through
+   to — silent only for `code` or `read` on a runtime whose
+   `models.<runtime>` configures neither of them, the pre-roles window.
+   That tail is why this costs no host its current model.
 
-   **After the tier choice, resolve the advisor slot for this dispatch**:
+   **Escalation is a separate lever, not a role name.** Integration across
+   modules, architecture/design calls, security-sensitive or
+   `high-risk`-lane work, ambiguous specs, cross-cutting change — where a
+   wrong call is expensive — run on the SESSION model:
+   `.bee/bin/bee cells escalate --id <id>` sets the flag the dispatch reads
+   (no `model` param, the `[bee-tier: ceiling]` marker instead), and
+   `--off` puts the cell back on its role's model. The door keeps the old
+   ration teeth: escalating past 40% of the feature's cells refuses unless
+   `--reason "<text>"` names why, and that reason persists on the cell trace
+   as `escalation_reason`. Keep it scarce — `bee status --json` reports
+   `role_mix` (the rename of `tier_mix`) with the escalated share beside it,
+   and the preamble warns when the share runs high; re-judge routine cells
+   off the session model before spawning.
+
+   Full resolution semantics, marker anchoring, and dispatch economics:
+   "Model Roles — Config-Driven, Runtime-Keyed" below.
+
+   **After the role resolves, resolve the advisor slot for this dispatch**:
    `resolveAdvisor(root, runtime)`. The configured advisor IS the
    advisor — no family test, no strength test, no self-judged skip;
    the orchestrator's only judgment is the one honest no-op below, never a
@@ -135,7 +163,7 @@ single worker — never wave analysis or multi-cell assignment.
    - The advisor resolves to **literally the same model name** as the
      worker's resolved model → skip (the one honest no-op; a `cli`-shaped
      advisor is never the same model, so it is always consulted).
-   - Otherwise → **always** add the `Advisor` line, ceiling-tier workers
+   - Otherwise → **always** add the `Advisor` line, escalated workers
      included — config is the authority, the orchestrator does not
      second-guess it.
    - When it passes, the `Advisor` line names the advisor identity and
@@ -148,8 +176,10 @@ single worker — never wave analysis or multi-cell assignment.
    already owns (cell dpr-2) — same record `state worker add` writes,
    and the payload's `worker_registered` says so either way. An ownership
    refusal registers nothing. Manual `.bee/bin/bee state worker add
-   --nickname <n> --cell <id> --tier <tier> --status <status>` remains
-   only for inline runs and claims made without the preparation step.
+   --nickname <n> --cell <id> --tier <role> --status <status>` remains
+   only for inline runs and claims made without the preparation step —
+   the FLAG keeps its historical `--tier` spelling, the VALUE is the role
+   the dispatch resolved (any non-blank name; membership is never asked).
 6. **Tend** the swarm: collect status tokens, update cells and state, verify
    reservations were released. Silence is not failure — inspect cell status
    and `.bee/bin/bee reservations list --active-only` before
@@ -169,9 +199,10 @@ single worker — never wave analysis or multi-cell assignment.
      `[DONE]` with no diff, a `high-risk`/hard-gate cell, or a proof scope
      that looks too narrow for the diff. Orchestrator judgment, not a
      routine step. Failure on a spot-check → the cell is NOT done:
-     re-dispatch to the same tier with the failing excerpt (a task miss is
-     a rerun, never a silent tier escalation — provider errors, not task
-     errors, are what the rescue ladder's tier rung is for).
+     re-dispatch on the same role with the failing excerpt (a task miss is
+     a rerun, never a silent escalation onto the session model — provider
+     errors, not task errors, are what the rescue ladder's escalation rung
+     is for).
    - **Frozen judge:** `.bee/bin/bee cells judge --id <id>`. Hits
      (undeclared test/CI/lockfile/verify-config changes) → the cell never
      auto-counts toward a clean wave: record the hits in the cell trace and
@@ -253,49 +284,57 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
 
 | | Codex |
 |---|---|
-| Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` — the codex 0.145.0 schema: `task_name` + `message` required, no `agent_type` field; `bee dispatch prepare --runtime codex` emits exactly this shape, and the guard judges the `[bee-tier: <t>]` marker at the START of `message` for every `spawn_agent` payload |
-| Model tier | `config.models.codex[tier]` if set; today Codex cannot select a per-agent model → tier is enforced as a read budget + output cap in the prompt |
+| Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` — the codex 0.145.0 schema: `task_name` + `message` required, no `agent_type` field; `bee dispatch prepare --runtime codex` emits exactly this shape, and the guard judges the `[bee-tier: <role>]` marker at the START of `message` for every `spawn_agent` payload — a marker naming a role nothing configures is refused BY NAME |
+| Model | `config.models.codex[<role>]` if set; today Codex cannot select a per-agent model → the role is enforced as a read budget + output cap in the prompt |
 | Result collection | Status tokens arrive in the parent thread; use `wait_agent(..., timeout_ms=60000)` only when a specific result is needed |
 | Follow-up / rescue | `followup_task({target: "<agent id or task name>", message: "..."})` to continue the same agent; a fresh `spawn_agent` only for a genuinely new task — no routine `send_input(...)` mid-flight |
 | Harness assist | None — the tend loop in this skill is the nudge |
 | Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells |
-| Subagent type | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
+| Subagent type | No per-agent subagent type — the role is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee close`/`bee worktree merge` refuse while a capped cell's recorded proof is missing, malformed, or red — and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 
-## Model Tiers — Config-Driven, Runtime-Keyed
+## Model Roles — Config-Driven, Runtime-Keyed
 
-Only the **cheaper** slots are configured, in `.bee/config.json` `models`, keyed by runtime first (bee is dual-runtime and each names models differently), then slot. **The ceiling is never configured** — it is always the session/orchestrator model. The default is the all-Claude role split — session model orchestrates, opus reviews, sonnet implements, haiku extracts — and **every slot is editable to whatever models the user actually has** (only a Claude subscription → keep all-Claude; a Codex plan too → point slots at GPT via cli executors):
+`.bee/config.json` `models` is a **role→model map**, keyed by runtime first (bee is dual-runtime and each names models differently), then by the ROLE a dispatch asks for. The key is the JOB the work is, never a cost class. **The session model is never configured** — it is what an escalated cell inherits. A fresh config seeds four job names, and **every one is editable to whatever models the user actually has** (only a Claude subscription → keep all-Claude; a Codex plan too → point roles at GPT via cli executors):
 
 ```json
 "models": {
-  "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus" },
-  "codex":  { "extraction": null,    "generation": null,     "review": null }
+  "claude": { "code": "sonnet", "read": "haiku", "extraction": "haiku", "generation": "sonnet", "review": "opus" },
+  "codex":  { "code": null,     "read": null,    "extraction": null,    "generation": null,     "review": null }
 }
 ```
 
-A slot value may also be `{ "model": "opus", "effort": "xhigh" }` (per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` slot is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and bee-planning's merged reviewer (the review wave — Structure + cold-pickup cell review); `null` review falls back to generation. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
+A role value may also be `{ "model": "opus", "effort": "xhigh" }` (per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` role is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and bee-planning's merged reviewer (the review wave — Structure + cold-pickup cell review); `null` review falls back to generation. bee ships a config default for `code`, `read`, `extraction` and `generation` only — `review` and `advisor` resolve without a key, and publishing a value for either would decide a product question for every host. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
 
-- **ceiling** = the strongest model in play = **the session model itself** (no config entry). A ceiling cell inherits the session model — omit the `model` param **and** carry the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only.
-- **generation** = the mid worker that runs the loops (implementation, test writing). Where the bulk of dispatches go.
-- **extraction** = cheapest capable (retrieval, mechanical edits).
-- A **null** tier means the runtime cannot switch per-agent models (Codex today) → state the tier in the worker prompt and enforce it as a read budget + output cap. Set real ids (e.g. `"generation": "gpt-5"`) only if your runtime supports per-agent selection.
+- **`code`** = the work writes: implementation, wiring, test authoring. Where the bulk of dispatches go.
+- **`read`** = the work only reads: retrieval, call-path tracing, evidence digests.
+- **`extraction` / `generation`** = the historical names every ordered role list ENDS with. They resolve on every host that ever onboarded, which is why the move to roles took nobody's model away. Leave them set.
+- **Any other name is legal** — `test`, `docs`, `design`, `migrate`, whatever this repo's work actually is. bee asks "is this name configured", never "is it one of four words", so a new job role needs no bee code and no new dispatch kind.
+- **Escalation is not a role.** Running on the session model is the cell's `escalate` FLAG (`bee cells escalate --id <id>`): that dispatch omits the `model` param and carries the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only.
+- A **null** role means the runtime cannot switch per-agent models (Codex today) → state the role in the worker prompt and enforce it as a read budget + output cap. Set real ids (e.g. `"code": "gpt-5"`) only if your runtime supports per-agent selection.
 
-Resolve a tier for the active runtime before spawning:
+Read the configured roles for the active runtime before spawning:
 
 ```
 .bee/bin/bee status --json    # .models shows both runtime maps
 ```
 
-Or in code: `resolveTier(root, tier, runtime, purpose?)` returns a typed dispatch — `{type:'inherit'}` (ceiling → omit the model param and carry the anchored `[bee-tier: ceiling]` marker), `{type:'model', model}`, `{type:'budget'}` (prompt-enforced tier, anchored `[bee-tier: <tier>]` marker), `{type:'cli', command}` (external executor, below — only when `purpose` is the explicit `{for:'gather'}`), or `{type:'refused', reason:'cli_tier_gather_only', slot, fix}` (a cli-shaped tier resolving without `{for:'gather'}`). The optional 4th param `purpose` is shaped `{for:'gather'|'cell'}` and **defaults to `'cell'`** — the fail-safe side: every bare 3-arg call, and any missing/malformed `purpose`, resolves cli-shaped values as a refusal; only an explicit `{for:'gather'}` unlocks `{type:'cli'}`. Non-cli values ignore `purpose` entirely. `modelForTier` returns a model name or `null` (it calls `resolveTier` with no purpose, so cli degrades to `null`).
+**Resolution is a walk down an ordered list, and the walk is ONE function.** `resolve_role(models, roles, runtime, kind)` (`verbs/drivers/models.rs` — the single parser the dispatcher, the model guard and onboarding's agent renderer all call) takes the names the consumer will accept, best first, and returns a typed dispatch for the first that carries a resolvable configuration: a model, a prompt budget (anchored `[bee-tier: <role>]` marker), a cli executor (external, below — gather purposes only), or a refusal for a cli-shaped role asked for cell execution (`cli_tier_gather_only`). An unset or unresolvable name YIELDS to the next; a name nothing has heard of also **warns on stderr**, naming what it fell through to. The last entry always resolves, so the walk cannot dead-end. No name resolves a model the config does not carry for it, and the ONE unknown name that resolves silently is `code` or `read` on a runtime whose `models.<runtime>` configures NEITHER of them — the pre-roles window, where falling through to the historical name is the intended no-op and a warning would fire on every dispatch. The window is per runtime, because the table is, and the first of the two keys an operator configures shuts it, so a half-migrated config is loud about the sibling it missed. Every other unrecognized slot quietly reading as `generation` is exactly what this feature deleted.
 
-Every dispatch carries an explicit tier marker: `inherit` needs the [bee-tier: ceiling] marker anchored to the first non-whitespace token of the prompt, or the description must start with it; `budget` needs the matching [bee-tier: <tier>] marker anchored the same way, stated alongside the budget in the prompt. A marker anywhere else — embedded mid-prompt or mid-description — never satisfies the transport, and a bare dispatch with neither the model param nor an anchored marker is denied by the model-guard hook.
+Two doors ask the same question and answer it differently, on purpose:
+- a **cell's** declared role heads an ordered list → an unconfigured name falls through and warns (silent only inside the pre-roles window above), and the work still runs;
+- an explicit **`--role <name>`** on `dispatch prepare`, and a `[bee-tier: <name>]` marker at the guard, name the slot OUTRIGHT → an unconfigured name is REFUSED by name, its FIX listing the roles that runtime resolves and ending "Any role name you configure is legal; bee holds no fixed list."
 
-**Dispatch economics:** `.bee/config.json` names the **requested** model for a tier — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared tier), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <t>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the tier's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), the effective model is `inherited-or-unknown` **always** — codex-cli 0.145.0 has no per-agent model selection at all, so this status never flips to `pinned` no matter what the tier resolves to; only a future capability probe proving per-agent selection would justify moving it. A **cli-exec** dispatch (external executor, below) is `unverified` too — the command names its own model in its own argv, outside this vocabulary, so `requested_model` is always `null` there.
+Every dispatch still carries an explicit marker: an escalated dispatch needs the [bee-tier: ceiling] marker anchored to the first non-whitespace token of the prompt, or the description must start with it; a prompt-budget dispatch needs the matching [bee-tier: <role>] marker anchored the same way, stated alongside the budget in the prompt. A marker anywhere else — embedded mid-prompt or mid-description — never satisfies the transport, and a bare dispatch with neither the model param nor an anchored marker is denied by the model-guard hook.
+
+**Runtime fallback chains are PUBLISHED, never walked by bee.** `retry.fallbackChains` maps a role name, a concrete model selector, or a `provider/*` wildcard to an ordered list of models a FAILED dispatch may move along (most specific key wins: model, then wildcard, then role). It is explicit-only — no built-in chain for any role, and a `default` key is refused out loud, so with nothing configured every payload is byte-identical to a bee that never heard of chains. `bee dispatch prepare` resolves the chain that applies and publishes it on the payload as `fallback_chain: {key, chain, fallback_when, advance_on, never_advance_on}`. **bee does not execute dispatches, so bee never retries** (decision `51341f84`): advancing a step, and recording the step taken, belong to whoever runs the payload. The gate travels with the chain — a step may fire ONLY on quota or rate limit, provider auth or policy rejection, empty response, replay-safe malformed tool call, stream stall or connection reset, or a 5xx; it may NEVER fire on a tool error, a wrong or unwanted result, a failed proof, or a red test. A red test moving the work to another model would hide the defect. Distinct from the resolution fall-through above: fall-through answers an unconfigured NAME before anything runs; a chain answers a model that was reached and FAILED.
+
+**Dispatch economics:** `.bee/config.json` names the **requested** model for a role — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared ROLE — the field keeps its historical key), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <role>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the role's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), the effective model is `inherited-or-unknown` **always** — codex-cli 0.145.0 has no per-agent model selection at all, so this status never flips to `pinned` no matter what the role resolves to; only a future capability probe proving per-agent selection would justify moving it. A **cli-exec** dispatch (external executor, below) is `unverified` too — the command names its own model in its own argv, outside this vocabulary, so `requested_model` is always `null` there.
 
 ## External Executors — Multi-Provider Workers
 
-A configurable tier may name an **external CLI executor** instead of a model — that is how GPT/Codex, GLM, Kimi, or any other provider's CLI becomes a bee worker while Claude (or Codex) stays the orchestrator:
+A configured role may name an **external CLI executor** instead of a model — that is how GPT/Codex, GLM, Kimi, or any other provider's CLI becomes a bee worker while Claude (or Codex) stays the orchestrator:
 
 ```json
 "models": {
@@ -306,14 +345,14 @@ A configurable tier may name an **external CLI executor** instead of a model —
 }
 ```
 
-**Dispatch guard — what never routes to a cli executor:** a cell whose work needs the *session's* tools — MCP servers (browser, computer-use), credential managers, secrets reads, or anything only the orchestrating harness can reach — stays on a native tier; the external process cannot see those tools and will improvise instead of failing loudly. Destructive/irreversible operations (pushes, releases, external-system mutations) also never go external.
+**Dispatch guard — what never routes to a cli executor:** a cell whose work needs the *session's* tools — MCP servers (browser, computer-use), credential managers, secrets reads, or anything only the orchestrating harness can reach — stays on a native role; the external process cannot see those tools and will improvise instead of failing loudly. Destructive/irreversible operations (pushes, releases, external-system mutations) also never go external.
 
-**Status:** `resolveTier` purpose-scopes cli resolution — a bare/cell-purpose resolve of a cli-shaped tier **refuses** (`{type:'refused', reason:'cli_tier_gather_only'}`); only the explicit `resolveTier(root, slot, runtime, {for:'gather'})` reaches `{type:'cli'}`. Cli cell execution — the reserve/verify/cap/release worker contract described below — is not dispatched today; a cli-shaped tier serves gathers only, through the Delegation contract's cli gather branch (`bee-hive/references/gates-and-delegation.md`), which has no reservation, no cap, and no `result.json` — stdout **is** the digest. This section documents the cell-execution contract for when that path is enabled; until then, do not dispatch a cell to a cli-shaped tier under the protocol below.
+**Status:** `resolve_role` purpose-scopes cli resolution by its `kind` argument — a cell-purpose resolve of a cli-shaped role **refuses** (`cli_tier_gather_only`); only a gather purpose reaches the cli transport. Cli cell execution — the reserve/verify/cap/release worker contract described below — is not dispatched today; a cli-shaped role serves gathers only, through the Delegation contract's cli gather branch (`bee-hive/references/gates-and-delegation.md`), which has no reservation, no cap, and no `result.json` — stdout **is** the digest. This section documents the cell-execution contract for when that path is enabled; until then, do not dispatch a cell to a cli-shaped role under the protocol below.
 
 The cell-execution protocol for that path — prompt file, finish contract,
 detached spawn, artifact tending, acceptance, trust boundary, rescue — is
 `docs/history/cli-executors-cell-path.md`. It stays out of this reference
-while `resolveTier` refuses a cli-shaped tier for anything but a gather.
+while `resolve_role` refuses a cli-shaped role for anything but a gather.
 
 **Transient hygiene:** dispatch transients (`<cell-id>.prompt.md`, `.out*.log`, `.result.md|json`, reviewer/plan-check logs) accumulate in `.bee/workers/` and are never needed after the feature closes. At feature close — after review acceptance, before the closing commit — the orchestrator runs `.bee/bin/bee state worker prune` (`--dry-run` to preview). Keep-rules protect transients of active workers and non-capped cells (re-read immediately before the destructive loop), and files outside the transient suffix set (evidence snapshots, cell payloads, subdirectories) are never touched — but prune is still the orchestrator's feature-close verb, not something to race against an in-flight dispatch round.
 
@@ -326,10 +365,10 @@ pane, doing write work against a worktree. It supports two scopes:
 
 - **Scope A (user-requested per cell)**: running the verb by hand against ONE
   cell the user names, when an external agent is explicitly requested.
-- **Scope B (automatic tier dispatch)**: a `{kind:"herding"}` tier slot in
+- **Scope B (automatic role dispatch)**: a `{kind:"herding"}` role slot in
   `models.*` (herding-tier D1-D6, widened by herding-review-slots D1), which is
   selected automatically by `.bee/bin/bee dispatch prepare` (per D1) whenever
-  the configured tier slot is herding-shaped.
+  the configured role slot is herding-shaped.
 
 For model-shaped slots, the default for `standard`/`high-risk` cell execution
 stays the wave protocol above.
@@ -391,7 +430,7 @@ Identity:
 - Agent nickname (reservation identity): <NICKNAME>
 - Assigned cell id: <CELL_ID> (ALREADY CLAIMED for you by the orchestrator before dispatch — do NOT run `cells claim`; validate against the inlined cell JSON below)
 - Feature: <FEATURE>
-- Model tier: <extraction|generation|ceiling> (model: <MODEL_NAME>)
+- Role: <the cell's own role, e.g. code|read|test> (model: <MODEL_NAME>; an escalated cell says "escalated — session model")
 - State at dispatch: phase=<PHASE> feature=<FEATURE> gates.execution=<BOOL> (copied from the orchestrator's own fresh read; the worker never re-fetches the full payload for this)
 - Advisor (optional — present only when the advisor resolves and is not the worker's own model, the same-model no-op): <ADVISOR_MODEL_OR_CLI_COMMAND> — consult via <TRANSPORT>
 
@@ -417,7 +456,7 @@ Startup (two reads, zero CLI round-trips):
 3. Reserve, implement, commit, finish (`--report` carrying your proof line; `bee close`/`bee worktree merge` check it, never re-run it), report.
 ```
 
-The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run:
+The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Escalated workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run:
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
 
 The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived.

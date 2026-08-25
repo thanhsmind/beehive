@@ -415,6 +415,8 @@
     "prompt-work-record",
     "waggledance",
     "health-checks",
-    "state-store"
+    "state-store",
+    "contract",
+    "escalation"
   ]
 }

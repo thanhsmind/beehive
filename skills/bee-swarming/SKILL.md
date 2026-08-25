@@ -45,8 +45,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    bound how many cells of the wave are claimed). One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
-   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. Judge and record the model tier first (`bee cells tier`;
-   rubric: `references/swarming-reference.md`).
+   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. The cell already declares the job that
+   selects its model (`role`, required at `cells add`) — escalate onto the
+   session model only where the work earns it
+   (`bee cells escalate --id <id>`; rubric:
+   `references/swarming-reference.md`).
 3. Spawn with exactly that payload — a whole wave goes out in ONE message,
    one tool call per cell. Never paste session history; never hand a
    worker two cells.
@@ -67,9 +70,9 @@ From two cells up, state the one-line concurrency plan before dispatching.
    with no valid proof is the remaining door. Doors are never waived.
 
 **`[BLOCKED]` rescue ladder:** (1) re-dispatch the same cell with the
-missing context; (2) next model tier up — the ceiling is this session, so
-the top rung hands the blocker to you; (3) surface it to the user with the
-worker's diagnosis. If it invalidates the plan, return to bee-planning.
+missing context; (2) `bee cells escalate --id <id>` and re-dispatch — the
+session model is this session, so that rung hands the blocker to you;
+(3) surface it to the user with the worker's diagnosis. If it invalidates the plan, return to bee-planning.
 
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch (an approved plan stays frozen; planning
@@ -158,7 +161,7 @@ unrescuable blocker becomes an `Outstanding Questions` entry.
 
 | File | When to load |
 |---|---|
-| `references/swarming-reference.md` | Tier rubric, worktree dispatch transaction, prompt template details, result formats |
+| `references/swarming-reference.md` | Role rubric and escalation, worktree dispatch transaction, prompt template details, result formats |
 | `references/worker-details.md` | Deep worker mechanics: finish and its refusals, advisor consult, friction triggers |
 | `.bee/expertise/tests.md`, `.bee/expertise/debugging.md` | Authoring tests; hunting a red |
 | `.bee/expertise/INDEX.md` | The cell is domain work — stored data, a caller-facing contract, a trust boundary, a rollout, a speed budget, a surface people use: route from the index, load exactly one |

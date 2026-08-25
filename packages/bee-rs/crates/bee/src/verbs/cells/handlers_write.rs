@@ -434,7 +434,14 @@ pub(crate) fn update_frozen_hint(key: &str) -> Option<&'static str> {
         "feature" => Some("a cell never moves between features — drop and re-add instead"),
         "status" => Some("status moves only through claim/verify/cap/block/drop"),
         "trace" => Some("the trace is the frozen audit record — claim/verify/cap own it"),
-        "tier" => Some("use the tier verb (bee cells tier --id ID --tier T)"),
+        // D4 (store `97ce5225`): `tier` is retired as the model selector, so
+        // this hint no longer names a verb to set it — there is none. It
+        // stays a FROZEN key rather than an unknown one because stored
+        // records still carry the field and a patch naming it deserves the
+        // sentence that explains what replaced it.
+        "tier" => Some(
+            "tier is retired as the model selector — a cell's \"role\" is the job that picks its model, and escalation is the \"escalate\" flag (bee cells escalate --id ID)",
+        ),
         _ => None,
     }
 }
@@ -1598,4 +1605,540 @@ pub(crate) fn claim_cell_cross_session_ex(
             Err(Fail::Delegate)
         }
     }
+}
+
+// ── cells backfill-roles ───────────────────────────────────────────────────
+//
+// D9 (store `4eaf1b71`, plan.md S5) — the ONE-TIME backfill that gives every
+// cell written before `role` existed the role it would have carried.
+//
+// WHY A VERB AND NOT LAZY-ON-READ. Three counters scan the whole store and
+// divide by what they find — `ceiling_share_after` (handlers_close.rs, the
+// 40% refusal), `status_full/cells.rs` and `hooks/session_preamble/store.rs`.
+// A store where half the records answer "role" and half answer nothing makes
+// every one of those denominators a lie, and the lie is silent. So the
+// migration is a single pass with a single answer: after it runs, every
+// readable stored cell carries a role.
+//
+// WHY IT IS IDEMPOTENT AND NOT MERELY RE-RUNNABLE. A cell that already
+// carries a non-blank `role` is not re-derived, not re-normalized and not
+// rewritten — its file is never opened for writing at all. That is what
+// makes a second run a no-op down to the byte, and it is what makes an
+// INTERRUPTED first run safe to finish by simply running again: the cells
+// already done are indistinguishable from cells authored with a role.
+//
+// WHAT `ceiling` TAKES NOW. D5 (store `97ce5225`) landed the escalation
+// flag, so this pass has a second job: every stored cell recording
+// `tier: "ceiling"` — the old spelling of "run on the session model and
+// charge the 40% ration" — is marked `escalate: true`. It is the same pass
+// on purpose. A separate migration would leave a store where some
+// escalations answer the flag and some answer the tier, and the ration
+// divides by a whole-store scan.
+//
+// WHAT THE RETIRED `tier_reason` TAKES NOW. D4 (store `97ce5225`) retired
+// the `tier` selector, and the escalation reason went with its name:
+// `trace.tier_reason` is `trace.escalation_reason` from here on. mrs-14 left
+// the key alone on purpose — `docs/handbook/register.md` publishes it and
+// stored records carry it — so the rename lands as one change with its
+// surfaces, and this pass is the third of them: wherever a stored trace still
+// spells the key the old way, it is renamed in place, VALUE UNTOUCHED. Same
+// pass, same reason as `escalate`: a half-renamed store would answer the same
+// question two ways.
+//
+// The `tier` string itself is LEFT IN PLACE. D4 retires `tier` as a
+// SELECTOR; it does not order stored history rewritten, and a legacy record
+// carrying the field is harmless — `cell_is_escalated` reads exactly one of
+// its values and nothing else reads it at all. So the verb writes three
+// things, and only where they are missing or misspelled: `role`, `escalate`,
+// and the escalation reason's key.
+//
+// NO COUNT IS HARDCODED. The decision measured 484 / 2 / 20 on 2026-08-24;
+// the store has grown since and will grow again. Every number below is
+// computed from the store the verb is handed, and nothing asserts a
+// remembered total.
+
+/// D9's mapping, in D9's own order, as `(source label, role)`. The label is
+/// the REASON a cell takes its role, reported per-source so an operator sees
+/// the shape of what is about to change rather than one lump total — and so
+/// a source with zero cells is reported AS zero rather than omitted (an
+/// absent row and an empty row must not read the same).
+pub(crate) const ROLE_BACKFILL_SOURCES: [(&str, &str); 4] = [
+    ("tier:generation", "code"),
+    ("no-tier", "code"),
+    ("tier:ceiling", "code"),
+    ("tier:extraction", "read"),
+];
+
+/// D9's mapping as a function of the cell's recorded `tier`.
+///
+/// `None` in, `Some("code")` out: an absent (or blank) tier is the 215-cell
+/// majority D4 measured, and D9 gives it the same role as `generation`.
+/// `None` OUT is the deliberate hole: a tier value outside the three legal
+/// ones is data this mapping has no answer for, and guessing "code" for it
+/// would be exactly the silent default D7 exists to end. Those cells are
+/// counted and NAMED instead, so a store that is not fully migrated says so.
+pub(crate) fn d9_role_for_tier(tier: Option<&str>) -> Option<&'static str> {
+    match tier.map(js_trim) {
+        None | Some("") => Some("code"),
+        Some("generation") => Some("code"),
+        Some("ceiling") => Some("code"),
+        Some("extraction") => Some("read"),
+        Some(_) => None,
+    }
+}
+
+/// The source label for a cell's recorded tier — the left column of
+/// `ROLE_BACKFILL_SOURCES`.
+pub(crate) fn d9_source_for_tier(tier: Option<&str>) -> &'static str {
+    match tier.map(js_trim) {
+        None | Some("") => "no-tier",
+        Some("generation") => "tier:generation",
+        Some("ceiling") => "tier:ceiling",
+        Some("extraction") => "tier:extraction",
+        Some(_) => "unmapped",
+    }
+}
+
+/// What one full pass found. `written` is separate from `assigned` on
+/// purpose: under `--dry-run` they differ (assigned N, written 0), and a
+/// reader who would otherwise confuse "planned" with "done" is the reader
+/// this split protects.
+#[derive(Default)]
+pub(crate) struct RoleBackfill {
+    pub(crate) scanned: u64,
+    pub(crate) already_roled: u64,
+    pub(crate) assigned: u64,
+    pub(crate) written: u64,
+    /// Per-source counts, positionally aligned with `ROLE_BACKFILL_SOURCES`.
+    pub(crate) by_source: [u64; 4],
+    /// D5: cells converted from the legacy `tier: "ceiling"` spelling onto
+    /// the `escalate` flag. Counted separately from `assigned` because the
+    /// two answer different questions and a cell can need both.
+    pub(crate) escalated: u64,
+    /// D4: traces whose `tier_reason` key was renamed to `escalation_reason`.
+    /// Its own counter for the same reason: a cell can need this and neither
+    /// of the other two, and an operator reading "0 escalated" must not read
+    /// it as "no reason moved".
+    pub(crate) reasons_renamed: u64,
+    /// `(id, tier)` for every cell whose tier D9's mapping does not cover.
+    pub(crate) unmapped: Vec<(String, String)>,
+    /// Store-relative paths of files that are absent, corrupt, or not a JSON
+    /// object — skipped and named, never guessed at.
+    pub(crate) unreadable: Vec<String>,
+    /// Store-relative paths of records that MOVED between the scan and the
+    /// lock — another writer landed, or `bee close` archived the feature.
+    /// The part of their planned migration the record no longer asks for was
+    /// dropped rather than written over it. Named rather than retried in
+    /// place, because the pass is idempotent and a re-run finishes them
+    /// against a store that has stopped moving.
+    pub(crate) changed_during_pass: Vec<String>,
+}
+
+impl RoleBackfill {
+    /// Role totals folded out of the per-source counts, so the two can never
+    /// disagree.
+    pub(crate) fn by_role(&self) -> Vec<(&'static str, u64)> {
+        let mut out: Vec<(&'static str, u64)> = Vec::new();
+        for (i, (_, role)) in ROLE_BACKFILL_SOURCES.iter().enumerate() {
+            match out.iter_mut().find(|(r, _)| r == role) {
+                Some(slot) => slot.1 += self.by_source[i],
+                None => out.push((role, self.by_source[i])),
+            }
+        }
+        out
+    }
+}
+
+/// Every stored cell file: the hot `.bee/cells/*.json` scan path AND
+/// `.bee/cells/archive/<feature>/*.json`.
+///
+/// The archive is in scope because D9 says "the stored cells", and a capped
+/// cell that was archived is stored history exactly as an active one is —
+/// `readCell` reaches it, `cells unarchive` brings it back live, and a role
+/// count taken after an unarchive would otherwise find a hole. Sorted by
+/// path so two runs over one store report their findings in one order.
+pub(crate) fn stored_cell_files(root: &Path) -> Vec<PathBuf> {
+    fn push_json_files(d: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(d) else { return };
+        for entry in entries.flatten() {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let name = entry.file_name();
+            if name.to_str().map(|n| n.ends_with(".json")).unwrap_or(false) {
+                out.push(entry.path());
+            }
+        }
+    }
+    let mut out: Vec<PathBuf> = Vec::new();
+    let dir = cells_dir(root);
+    push_json_files(&dir, &mut out);
+    let archive_root = dir.join(ARCHIVE_DIR_NAME);
+    if let Ok(features) = std::fs::read_dir(&archive_root) {
+        let mut feature_dirs: Vec<PathBuf> = features
+            .flatten()
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .map(|e| e.path())
+            .collect();
+        feature_dirs.sort();
+        for feature_dir in feature_dirs {
+            push_json_files(&feature_dir, &mut out);
+        }
+    }
+    out.sort();
+    out
+}
+
+/// A path rendered relative to the store root when it sits under one, so a
+/// report names `.bee/cells/x.json` rather than a machine-specific absolute.
+fn store_relative(root: &Path, file: &Path) -> String {
+    file.strip_prefix(root).unwrap_or(file).to_string_lossy().replace('\\', "/")
+}
+
+/// The three keys D9's migration owns, derived from ONE record: `role`
+/// (D9), `escalate` (D5), and the escalation reason's key inside `trace`
+/// (D4). Naming the change as a value rather than as a rewritten object is
+/// what lets the write half re-read a record under the lock and apply only
+/// the part that record still asks for — a cell's other fields are never
+/// this pass's to write, and a whole-object write of a stale clone is
+/// exactly how a concurrent writer gets reversed.
+#[derive(Clone, Default, PartialEq)]
+pub(crate) struct RoleMigration {
+    /// The role to add. `None` when the record already carries one, and
+    /// `None` when its tier is outside D9's mapping — that hole is counted
+    /// and named, never guessed at.
+    role: Option<&'static str>,
+    /// Which row of `ROLE_BACKFILL_SOURCES` the role came from, so the
+    /// per-source counts fold out of the same derivation that produced the
+    /// bytes rather than out of a second reading of them.
+    source: Option<usize>,
+    /// D5: the legacy `tier: "ceiling"` spelling, not yet on the flag.
+    escalate: bool,
+    /// D4: the reason value still sitting under the retired key.
+    reason: Option<Value>,
+}
+
+impl RoleMigration {
+    /// Nothing to add — not re-derived, not rewritten, not even opened for
+    /// writing. This IS the idempotence guarantee.
+    fn is_noop(&self) -> bool {
+        self.role.is_none() && !self.escalate && self.reason.is_none()
+    }
+
+    /// The part of a planned migration that a fresh reading of the same
+    /// record still asks for, key by key. A key both readings agree on is
+    /// applied; a key that moved between the scan and the lock belongs to
+    /// whoever moved it, so it is dropped here rather than written over.
+    /// Dropping costs nothing but a re-run: the pass is idempotent, and the
+    /// record it dropped is named in `changed_during_pass`.
+    fn still_agreed(&self, fresh: &Self) -> Self {
+        let role_agrees = matches!((self.role, fresh.role), (Some(p), Some(f)) if p == f);
+        Self {
+            role: if role_agrees { self.role } else { None },
+            source: if role_agrees { self.source } else { None },
+            escalate: self.escalate && fresh.escalate,
+            reason: match (&self.reason, &fresh.reason) {
+                (Some(planned), Some(now)) if planned == now => Some(now.clone()),
+                _ => None,
+            },
+        }
+    }
+}
+
+/// What ONE record needs, read off that record and nothing remembered.
+fn plan_role_migration(cell: &Map<String, Value>) -> RoleMigration {
+    let tier = cell.get("tier").and_then(|t| t.as_str());
+    let mut plan = RoleMigration::default();
+    if !nonblank_string(cell.get("role")) {
+        plan.role = d9_role_for_tier(tier);
+        if plan.role.is_some() {
+            let source = d9_source_for_tier(tier);
+            plan.source = ROLE_BACKFILL_SOURCES.iter().position(|(s, _)| *s == source);
+        }
+    }
+    // D5: the legacy escalation spelling, and whether it has already been
+    // converted. A cell that carries the flag is done, whichever pass put
+    // it there.
+    plan.escalate = matches!(tier.map(js_trim), Some(t) if t == crate::verbs::drivers::ESCALATION_WORD)
+        && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true)));
+    // D4: the escalation reason under its retired key. Renamed only when
+    // the new key is not already there, so a record migrated once is never
+    // rewritten and never has its current reason overwritten by a stale one.
+    plan.reason = cell
+        .get("trace")
+        .and_then(Value::as_object)
+        .filter(|t| !t.contains_key(ESCALATION_REASON_KEY))
+        .and_then(|t| t.get(LEGACY_ESCALATION_REASON_KEY))
+        .cloned();
+    plan
+}
+
+/// The migration, onto the record it was derived from — three keys and no
+/// others. `tier` is not among what this writes: D4 retires it as a
+/// selector, and a stored record may keep carrying the string harmlessly.
+fn apply_role_migration(cell: &mut Map<String, Value>, plan: &RoleMigration) {
+    if let Some(role) = plan.role {
+        cell.insert("role".into(), Value::String(role.to_string()));
+    }
+    if plan.escalate {
+        cell.insert(ESCALATE_FIELD.into(), Value::Bool(true));
+    }
+    if let Some(reason) = plan.reason.clone() {
+        if let Some(trace) = cell.get_mut("trace").and_then(Value::as_object_mut) {
+            trace.remove(LEGACY_ESCALATION_REASON_KEY);
+            trace.insert(ESCALATION_REASON_KEY.into(), reason);
+        }
+    }
+}
+
+/// The counters for one migration. In an applied run this is fed from what
+/// was WRITTEN rather than from what was planned, so every number describes
+/// bytes that are on disk.
+fn record_role_migration(report: &mut RoleBackfill, plan: &RoleMigration) {
+    if plan.role.is_some() {
+        report.assigned += 1;
+        if let Some(i) = plan.source {
+            report.by_source[i] += 1;
+        }
+    }
+    if plan.escalate {
+        report.escalated += 1;
+    }
+    if plan.reason.is_some() {
+        report.reasons_renamed += 1;
+    }
+}
+
+/// One full pass. Scans EVERY stored cell and builds the whole plan before
+/// it writes a single file, so the counts a caller reads describe the same
+/// store state the writes were derived from — a half-scanned store would
+/// misreport exactly the way a half-migrated one would.
+///
+/// Concurrency: the scan runs UNLOCKED, deliberately. A 40 000-cell store
+/// takes about a second to scan, and holding the archive lock across it
+/// would refuse every other writer in the repository for that whole second.
+/// What an unlocked scan may produce is therefore a PLAN, never bytes.
+///
+/// The write half takes the `cells-archive` store lock — the same lock
+/// `writeCell` acquires (single-attempt) on every cell write, and the same
+/// lock `archiveFeature` holds across a whole feature's move — and then
+/// RE-READS every planned file under it. Each record is migrated from that
+/// fresh reading, and only for the keys this migration owns (`role`,
+/// `escalate`, `trace.escalation_reason`) that the fresh reading still asks
+/// for. Three things follow, and they are the contract:
+///
+/// - A writer that COMPLETES during the scan is not reversed. Its bytes are
+///   in the copy this pass migrates, and any owned key it moved is dropped
+///   from the plan and named in `changed_during_pass` for the next run.
+/// - A file that went away under the scan — `bee close` archiving its
+///   feature — is skipped, never recreated. A whole-object write here would
+///   resurrect an archived cell as a live duplicate, because `readCell`
+///   prefers the live copy.
+/// - A writer that ARRIVES during the write half is refused by the lock
+///   itself, with the typed CELLS_ARCHIVE_BUSY message telling it to retry.
+pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
+    backfill_roles_interleaved(root, dry_run, || {})
+}
+
+/// `backfill_roles` with a seam between the scan and the lock. That window —
+/// unlocked, plan built, nothing written yet — is the one the concurrency
+/// contract above is entirely about, and handing a test the window itself is
+/// the only way to pin the contract without a sleep or a thread race.
+/// Production takes the no-op closure.
+pub(crate) fn backfill_roles_interleaved(
+    root: &Path,
+    dry_run: bool,
+    between_scan_and_write: impl FnOnce(),
+) -> MR<RoleBackfill> {
+    let mut report = RoleBackfill::default();
+    let mut plan: Vec<(PathBuf, RoleMigration)> = Vec::new();
+
+    for file in stored_cell_files(root) {
+        report.scanned += 1;
+        let cell = match read_json(&file) {
+            ReadJson::Parsed(Value::Object(map)) => map,
+            ReadJson::Parsed(_) | ReadJson::Missing | ReadJson::Corrupt => {
+                report.unreadable.push(store_relative(root, &file));
+                continue;
+            }
+        };
+        let has_role = nonblank_string(cell.get("role"));
+        if has_role {
+            report.already_roled += 1;
+        }
+        let planned = plan_role_migration(&cell);
+        if !has_role && planned.role.is_none() {
+            report.unmapped.push((
+                js_string_or_undefined(cell.get("id")),
+                cell.get("tier").and_then(|t| t.as_str()).unwrap_or("").to_string(),
+            ));
+        }
+        if planned.is_noop() {
+            continue;
+        }
+        plan.push((file, planned));
+    }
+
+    if dry_run {
+        for (_, planned) in &plan {
+            record_role_migration(&mut report, planned);
+        }
+        return Ok(report); // `written` stays 0 — nothing was opened for writing
+    }
+
+    between_scan_and_write();
+
+    let mut guard = acquire_named_lock(root, "cells-archive")?;
+    let mut written = 0u64;
+    let mut applied: Vec<RoleMigration> = Vec::new();
+    let mut changed: Vec<String> = Vec::new();
+    let outcome = (|| -> MR<()> {
+        for (file, planned) in &plan {
+            let fresh = match read_json(file) {
+                ReadJson::Parsed(Value::Object(map)) => map,
+                // Gone or unreadable since the scan: archived out from under
+                // the pass, or replaced by something that is not a record.
+                // Writing the plan here is what would recreate an archived
+                // cell as a live duplicate.
+                ReadJson::Parsed(_) | ReadJson::Missing | ReadJson::Corrupt => {
+                    changed.push(store_relative(root, file));
+                    continue;
+                }
+            };
+            let agreed = planned.still_agreed(&plan_role_migration(&fresh));
+            if agreed != *planned {
+                changed.push(store_relative(root, file));
+            }
+            if agreed.is_noop() {
+                continue;
+            }
+            let mut migrated = fresh;
+            apply_role_migration(&mut migrated, &agreed);
+            write_json_atomic(file, &Value::Object(migrated)).map_err(|e| {
+                Fail::Thrown(format!("cells backfill-roles: writing {} — {e}", file.display()))
+            })?;
+            written += 1;
+            applied.push(agreed);
+        }
+        Ok(())
+    })();
+    guard.release();
+    outcome?;
+    for applied_plan in &applied {
+        record_role_migration(&mut report, applied_plan);
+    }
+    report.written = written;
+    report.changed_during_pass = changed;
+    Ok(report)
+}
+
+/// The report as JSON. `dry_run` leads because every other number is read
+/// differently depending on it.
+pub(crate) fn role_backfill_json(report: &RoleBackfill, dry_run: bool) -> Value {
+    let mut by_source = Map::new();
+    for (i, (source, _)) in ROLE_BACKFILL_SOURCES.iter().enumerate() {
+        by_source.insert((*source).to_string(), json!(report.by_source[i]));
+    }
+    let mut by_role = Map::new();
+    for (role, count) in report.by_role() {
+        by_role.insert(role.to_string(), json!(count));
+    }
+    json!({
+        "dry_run": dry_run,
+        "scanned": report.scanned,
+        "already_roled": report.already_roled,
+        "assigned": report.assigned,
+        "written": report.written,
+        "by_role": Value::Object(by_role),
+        "by_source": Value::Object(by_source),
+        "escalated": report.escalated,
+        "reasons_renamed": report.reasons_renamed,
+        "unmapped": report
+            .unmapped
+            .iter()
+            .map(|(id, tier)| json!({"id": id, "tier": tier}))
+            .collect::<Vec<_>>(),
+        "unreadable": report.unreadable.clone(),
+        "changed_during_pass": report.changed_during_pass.clone(),
+    })
+}
+
+/// The human report. Every line is a count this pass measured; none of it is
+/// remembered from the decision that ordered the migration.
+pub(crate) fn role_backfill_text(report: &RoleBackfill, dry_run: bool) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "cells backfill-roles{}: {} stored cell(s) scanned, {} already carry a role, {} {} a role.",
+        if dry_run { " --dry-run" } else { "" },
+        report.scanned,
+        report.already_roled,
+        report.assigned,
+        if dry_run { "would take" } else { "took" }
+    ));
+    for (i, (source, role)) in ROLE_BACKFILL_SOURCES.iter().enumerate() {
+        lines.push(format!(
+            "  {:<16} -> role {:<5} {:>5}{}",
+            source,
+            role,
+            report.by_source[i],
+            if *source == "tier:ceiling" { "  (plus the escalation flag)" } else { "" }
+        ));
+    }
+    lines.push(format!(
+        "  {:<16} -> escalate: true {:>3}{}",
+        "tier:ceiling",
+        report.escalated,
+        if dry_run { "  (would be marked)" } else { "  (marked)" }
+    ));
+    lines.push(format!(
+        "  {:<16} -> trace.{} {:>3}{}",
+        format!("trace.{LEGACY_ESCALATION_REASON_KEY}"),
+        ESCALATION_REASON_KEY,
+        report.reasons_renamed,
+        if dry_run { "  (would be renamed)" } else { "  (renamed)" }
+    ));
+    if !report.unmapped.is_empty() {
+        lines.push(format!(
+            "  {} cell(s) carry a tier D9 does not map and were left alone: {}",
+            report.unmapped.len(),
+            report
+                .unmapped
+                .iter()
+                .map(|(id, tier)| format!("{id} (tier \"{tier}\")"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !report.unreadable.is_empty() {
+        lines.push(format!(
+            "  {} unreadable file(s) skipped: {}",
+            report.unreadable.len(),
+            report.unreadable.join(", ")
+        ));
+    }
+    if !report.changed_during_pass.is_empty() {
+        lines.push(format!(
+            "  {} cell(s) changed under the pass and kept their own writer's value: {}",
+            report.changed_during_pass.len(),
+            report.changed_during_pass.join(", ")
+        ));
+    }
+    lines.push(if dry_run {
+        "Nothing was written. Re-run without --dry-run to apply; running it twice changes nothing the second time.".to_string()
+    } else {
+        format!("{} cell file(s) written. Re-running changes nothing.", report.written)
+    });
+    lines.join("\n")
+}
+
+/// `bee cells backfill-roles [--dry-run] [--json]`.
+pub(crate) fn run_backfill_roles(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["dry-run"]) {
+        return None;
+    }
+    let dry_run = bool_flag(&flags, "dry-run")?;
+    dispatch("cells backfill-roles", use_json, t0, move |ctx| {
+        let report = backfill_roles(&ctx.root, dry_run)?;
+        Ok(Out::Emit(role_backfill_json(&report, dry_run), role_backfill_text(&report, dry_run), 0))
+    })
 }

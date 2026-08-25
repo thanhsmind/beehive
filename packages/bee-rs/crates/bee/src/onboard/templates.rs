@@ -123,6 +123,68 @@ pub fn default_state() -> Value {
 /// behaviour-neutral for the same reason it is safe — an existing config that
 /// still carries them keeps working, because bee ignores unknown top-level
 /// keys.
+///
+/// # What `models` ships, and why exactly these names
+///
+/// model-role-split D3 (store `3c9d6262`), the PUBLISHING half. bee ships a
+/// config default only for a role name bee's own dispatch sites ask for, and
+/// a published default is a name bee CONSUMES — never a suggestion nobody
+/// reads. Asking and publishing are different acts (store `561e1bda`): a name
+/// bee asks for still resolves by fall-through without being written here, so
+/// most asked-for names do not belong in a fresh file. The test each
+/// candidate had to pass is the sharpest one this codebase can state:
+///
+/// > Ship a default only for a name a host's own `models.<runtime>` must
+/// > carry for bee's own dispatch door to accept it.
+///
+/// `verbs::drivers::guard::known_roles` is that door — the keys of
+/// `models.<runtime>` that DECLARE a role (`role_is_declarable`: every key
+/// there, except an `advisor` whose own floor-less resolver answers nothing),
+/// union `ceiling` — and `bee dispatch prepare` REFUSES
+/// (`role_not_configured`) any role outside it. The union over every
+/// `slot_for_kind` answer that used to sit in that derivation is gone
+/// (`c2ef2f9f`), and with it the reachability it lent `advisor`. Note what
+/// `models.<runtime>`'s keys already include after `normalize_models`:
+/// everything `drivers::default_models` seeds for that runtime, which is why
+/// three of the six names below are reachable with no config key at all. The
+/// six names bee asks for, run through it:
+///
+/// | role | who asks for it | reachable with no config key? | shipped |
+/// |---|---|---|---|
+/// | `code` | the execution default in every cell dispatch's list; D9 backfills 504 of 506 cells onto it | **no** — `drivers::default_models` has no entry on any runtime | **added** |
+/// | `read` | the head of the read dispatch's list; D9's `role` for the extraction cells | **no** — same | **added** |
+/// | `review` | `slot_for_kind("reviewer")`, `bee-review`'s role list | yes — `default_models` seeds it | no |
+/// | `advisor` | `slot_for_kind("advisor")`, `resolve_advisor` | **no** — nothing seeds it, and a null-valued key is OFF rather than a configuration | no |
+/// | `generation` | the tail every ordered list ends with; `slot_for_kind("cell")` today | yes — `default_models` seeds it | kept |
+/// | `extraction` | `bee-extract`'s sole role; the read list's middle entry | yes — `default_models` seeds it | kept |
+///
+/// Two names are added; none is removed. Dropping `extraction` or
+/// `generation` was considered and refused: both are what the historical role
+/// lists END on (`cell_role_list`, `tier_role_list`), and a file that
+/// publishes the job names without the tail they fall through to teaches half
+/// the resolution. Neither would become UNREACHABLE by being dropped —
+/// `default_models` seeds both on every runtime — which corrects an earlier
+/// version of this note rather than changing the call.
+///
+/// `review` and `advisor` are asked for and deliberately NOT shipped:
+/// - `review` already resolves without a key, and the documented unset-review
+///   -> generation fall-through is a deliberate cost posture. Writing
+///   `"review": "opus"` here would silently move every new host's reviews onto
+///   the expensive model — a product call, not a publishing one.
+/// - `advisor` has NO fall-through (decision `4faf1de9`): unconfigured means
+///   "no advisor", and since `role_is_declarable` an explicit `null` means the
+///   same thing at every door rather than only at some of them. A value would
+///   switch the advisor on for every new host; a `null` would publish an
+///   off-switch for something that is already off. Neither is shippable, so
+///   the key stays out.
+///
+/// The two added values are today's models on purpose, so nothing moves:
+/// `code` takes what cell execution runs on now (`generation` -> sonnet) and
+/// `read` takes what a read runs on now (`extraction` -> haiku). `models.codex`
+/// stays all-null by design (`CODEX_AGENTS_NOTE`: codex has no per-agent model
+/// selection). And this function seeds a NEW `.bee/config.json` only —
+/// `apply.rs`'s `create_runtime_file` arm is create-if-missing — so no existing
+/// host's config changes meaning.
 pub fn default_config() -> Value {
     json!({
         "hooks": {
@@ -134,9 +196,21 @@ pub fn default_config() -> Value {
             "session-close": true
         },
         "gate_bypass": false,
+        // Job names first — the two a host actually edits — then the
+        // historical tail every ordered role list ends with.
         "models": {
-            "claude": { "extraction": "haiku", "generation": "sonnet" },
-            "codex": { "extraction": Value::Null, "generation": Value::Null }
+            "claude": {
+                "code": "sonnet",
+                "read": "haiku",
+                "extraction": "haiku",
+                "generation": "sonnet"
+            },
+            "codex": {
+                "code": Value::Null,
+                "read": Value::Null,
+                "extraction": Value::Null,
+                "generation": Value::Null
+            }
         }
     })
 }
@@ -218,19 +292,48 @@ pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] = &[
     ("repo-opencode", &[".opencode", "skills"]),
 ];
 
-/// onboard_bee.mjs AGENT_TIER_BY_NAME (l. 1933–1937).
-pub const AGENT_TIER_BY_NAME: &[(&str, &str)] = &[
-    // Two agents share the generation tier: bee-gather reads, bee-build
-    // writes. The tier decides the model; what the agent may DO is the
+/// onboard_bee.mjs AGENT_TIER_BY_NAME (l. 1933–1937), rebased onto ROLE by
+/// model-role-split D2/D3 (store `06e49368`, `3c9d6262`).
+///
+/// An agent no longer names a COST TIER that a private table turns into a
+/// model. It declares the ORDERED ROLE LIST it serves, best first, and
+/// `onboard::agents` walks that list through the one shared resolver
+/// (`verbs::drivers::resolve_role`) — the same resolver `bee dispatch
+/// prepare` and the model guard read. A host that configures a role in
+/// `models.<runtime>` therefore sees that role in the rendered agent file,
+/// with no second parser to keep in step.
+///
+/// The NAMES here are today's names on purpose. Which role names bee
+/// publishes as shipped config defaults is decision D3 (store `3c9d6262`)
+/// and belongs to the cell that gives a cell its `role` field; this table
+/// only changes the MECHANISM, so it introduces no name bee did not already
+/// resolve. When D3 lands its published names, it prepends them to these
+/// lists and fall-through keeps every existing host rendering exactly what
+/// it renders today.
+///
+/// The lists are also where `resolveAgentTierModel`'s one hard-coded
+/// special case went: `bee-review` used to fall back to the generation model
+/// through an `if tier == "review"` branch, which is plain fall-through
+/// spelled by hand. `bee-extract` deliberately does NOT fall through — a
+/// null extraction slot removes the file today and must keep removing it.
+pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
+    // Two agents share the generation role: bee-gather reads, bee-build
+    // writes. The role decides the model; what the agent may DO is the
     // agent file's own contract.
-    ("bee-build", "generation"),
-    ("bee-gather", "generation"),
-    ("bee-extract", "extraction"),
-    ("bee-review", "review"),
+    ("bee-build", &["generation"]),
+    ("bee-gather", &["generation"]),
+    ("bee-extract", &["extraction"]),
+    ("bee-review", &["review", "generation"]),
 ];
 
-/// onboard_bee.mjs AGENT_TIER_DEFAULTS_CLAUDE (l. 1946) — order matters: it
-/// drives `resolved`'s iteration in resolveAgentTierModel.
+/// onboard_bee.mjs AGENT_TIER_DEFAULTS_CLAUDE (l. 1946) — bee's own baked-in
+/// model per role for the claude agent files. It is the SEED the host's
+/// `models.claude` overlays, never a resolver: `onboard::agents` hands the
+/// seeded map to `verbs::drivers::resolve_role` and reads the answer.
+///
+/// The `TIER` in the name is the retiring cost word and outlives this cell on
+/// purpose — the identifier sweep is the `tier`-retirement slice's, and
+/// `verbs::status_full::store` reads the opencode twin below by this name.
 pub const AGENT_TIER_DEFAULTS_CLAUDE: &[(&str, &str)] =
     &[("extraction", "haiku"), ("generation", "sonnet"), ("review", "opus")];
 
@@ -245,6 +348,11 @@ pub const CODEX_AGENTS_NOTE: &str = "Codex has no per-agent model selection (DEF
 /// model-guard dispatch default of Null, because these agent files pin a
 /// real model regardless (structural enforcement, plan.md's model-guard
 /// fallback row).
+///
+/// model-role-split D2: this stays a SEED, not a second resolver. It is why
+/// `onboard::agents` seeds the map it hands `resolve_role` instead of letting
+/// the resolver fall to `drivers::default_models`, whose opencode entries are
+/// all null — an opencode agent file with no `model:` line is not a file.
 pub const AGENT_TIER_DEFAULTS_OPENCODE: &[(&str, &str)] = &[
     ("extraction", "opencode/ling-3.0-tiny-free"),
     ("generation", "opencode/big-pickle"),
@@ -300,6 +408,36 @@ mod tests {
         // seeded for years with none — see default_config's note.
         assert_eq!(keys, vec!["hooks", "gate_bypass", "models"]);
         assert!(v["models"]["codex"]["extraction"].is_null());
+    }
+
+    /// model-role-split D3 (store `3c9d6262`, `561e1bda`): the published set
+    /// is exactly the role names a host's own `models.<runtime>` must carry
+    /// for `known_roles` to accept them, plus the historical tail. See
+    /// `default_config`'s table for the per-name reasoning.
+    #[test]
+    fn default_config_publishes_only_the_roles_bee_asks_for() {
+        let v = default_config();
+        for runtime in ["claude", "codex"] {
+            let table = v["models"][runtime].as_object().unwrap();
+            let names: Vec<&str> = table.keys().map(|k| k.as_str()).collect();
+            // The job names lead; the historical tail follows and is never
+            // dropped (`561e1bda`: a list that ends before it would skip an
+            // existing host's configured model).
+            assert_eq!(names, vec!["code", "read", "extraction", "generation"], "{runtime}");
+            // Asked for, deliberately unshipped: both already resolve without
+            // a key, and writing either one would decide something that is
+            // not this function's to decide.
+            assert!(!table.contains_key("review"), "{runtime} must not ship a review default");
+            assert!(!table.contains_key("advisor"), "{runtime} must not ship an advisor default");
+        }
+        // Nothing moves for a fresh host: the added job names carry the very
+        // models the tail already resolved to.
+        assert_eq!(v["models"]["claude"]["code"], v["models"]["claude"]["generation"]);
+        assert_eq!(v["models"]["claude"]["read"], v["models"]["claude"]["extraction"]);
+        // codex stays all-null by design (CODEX_AGENTS_NOTE).
+        for name in ["code", "read", "extraction", "generation"] {
+            assert!(v["models"]["codex"][name].is_null(), "codex.{name} must stay null");
+        }
     }
 
     #[test]

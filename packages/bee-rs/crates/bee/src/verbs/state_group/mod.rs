@@ -163,8 +163,6 @@ const KNOWN_PHASES_JOINED: &str =
     "idle, exploring, planning, swarming, reviewing, scribing, compounding, grooming, compounding-complete";
 const GATE_NAMES: [&str; 5] = ["context", "shape", "execution", "review", "uat"];
 
-const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
-
 const SCRIBING_RUN_FROM: [&str; 3] = ["swarming", "reviewing", "scribing"];
 
 const HEARTBEAT_STALE_SECONDS: f64 = 900.0;

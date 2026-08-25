@@ -118,7 +118,7 @@ Per-repo configuration.
 | `hooks` | toggle map over the nine handlers: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard`, `model-guard`, `tools-logger`, `codex-subagent-audit` — each default-on |
 | `guards` | write-guard tuning: `idle_gate`, `max_read_lines` |
 | `gate_bypass` | `off` · `normal` · `full` · `total` — the opt-in gate autopilot level |
-| `models` | per-runtime tier→model map: `{claude:{extraction, generation, review, advisor}, codex:{…}}`. A tier may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor |
+| `models` | per-runtime **role→model** map: `{claude:{code, read, extraction, generation, review, advisor}, codex:{…}}`. The key is the job a dispatch asks for; a fresh config seeds `code`/`read` beside the historical `extraction`/`generation` tail, and any role name you add is legal — bee holds no fixed list, and asks "is this name configured", never "is it one of four words". A role value may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor — or `{kind:"herding", agent, fallback}`. `retry.fallbackChains` is a separate key: an explicit-only, role- or model-keyed chain bee PUBLISHES on the payload and never walks itself |
 | `product_root` | subdirectory the product lives in, when the repo root is not it — the product-file count that picks the lane is measured against it |
 | `worktree_first` | whether a code-touching route must open its feature worktree before execution |
 | `cells_archive_on_close` | default true — a capped cell is relocated to `.bee/cells/archive/<feature>/` at close |
@@ -130,7 +130,7 @@ Per-repo configuration.
 | `staging_before_merge` | boolean, absent means ON — whether the repo uses the staging mixing ground at all; explicit `false` makes `bee staging add`/`bee staging rebuild` refuse `STAGING_DISABLED`, so the repo runs feature worktree -> `uat` gate -> main with no staging step; a non-boolean value refuses `STAGING_CONFIG_INVALID` rather than guessing. Independent of `uat_stop` — the `uat` gate itself is unaffected |
 | `doc_viewer` | `{base_url, project}` — an opt-in URL prefix. When set, the session preamble and the compaction capsule give doc links as this URL plus the repo-relative path, instead of the bare path |
 
-Read by hive (bypass level), planning (test scoping), swarming (model tiers),
+Read by hive (bypass level), planning (test scoping), swarming (model roles),
 and `bee test` (`commands.test`, its own runner). `bee close` and `bee
 worktree merge` no longer run `commands.test` — each checks the cap's own
 recorded proof line instead; `bee cells finish` is commit-only proof and
@@ -141,7 +141,7 @@ copy of the whole schema — its `_doc` block is the per-key contract.
 **Config is the one hand-edited register.** The `config get/set/unset/validate`
 verbs are [declared but not built](#declared-but-not-built), and `config.json` is
 deliberately absent from the write guard's direct-edit deny list — so changing
-`gate_bypass` or a model tier means editing the file, preserving every other
+`gate_bypass` or a model role means editing the file, preserving every other
 field, and logging a one-line audit decision in the same turn. This is a named
 exception to invariant 1, not a licence that generalizes.
 
@@ -200,9 +200,11 @@ One unit of executable work — the atom the swarm dispatches. One file per cell
 | `behavior_change` | bool — gates scribing + the semantic judge |
 | `verify` | plan text describing how the change is proven. **MAIN owns running it, once, at feature close** — never the assigned worker (`cells show` states this as `verify_owner`) |
 | `deps` | cell ids that must cap first |
-| `tier` | dispatch tier (`generation`, …) |
+| `role` | **required** — the job this work is (`code`, `read`, `test`, `docs`, `review`, `design`, or any name you configure). The cell's sole model selector: the dispatch asks for this name first and falls through when nothing configures it. Any non-empty name is legal; bee holds no list |
+| `escalate` | bool — run this cell on the session model and charge the 40% escalation ration. Set through `bee cells escalate` (the door that checks the ration), never a role name |
+| `tier` | **retired** as the model selector (model-role-split D4). `role` selects the model; `escalate` is the session-model flag. Records written before the retirement still carry the field, and it is read for exactly one thing: `tier: "ceiling"` still counts as escalated until `bee cells backfill-roles` has run |
 | `status` | `open` · `claimed` · `capped` · `blocked` · `dropped` |
-| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence, report}` — `report` is the worker's structured Result, written by `cells finish --report` |
+| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence, report}` — `report` is the worker's structured Result, written by `cells finish --report`. `escalation_reason` joins it when an over-ration escalation was allowed on a named `--reason` (spelled `tier_reason` on records written before model-role-split D4; `bee cells backfill-roles` renames it) |
 
 `trace.tests` is a proof string `<command> — <result> — <scope reason>` on a
 cap (decision `1f534837`): the writer picks the proof its change type needs,
@@ -407,7 +409,7 @@ top-level spellings still work. `bee --help --all [--json]` lists the full regis
 
 | Group | Verbs |
 |-------|-------|
-| `cells` | list · ready · show · add · update · claim · claim-next · unclaim · finish · cap · block · drop · reopen · tier · judge · judge-record · reset-budget · schedule · archive · unarchive |
+| `cells` | list · ready · show · add · update · claim · claim-next · unclaim · finish · cap · block · drop · reopen · escalate · judge · judge-record · reset-budget · schedule · archive · unarchive · backfill-roles |
 | `state` | set · gate · route · start-feature · lanes · scribing-run · compounding-run · plan-rev bump · session.* · handoff.* · workflows.* · rebuild-projections · advisor-ref.* · compact-* (worker.* = compat no-ops) |
 | `reservations` | reserve · release · list · sweep |
 | `decisions` | log · supersede · redact · active · search · archive · tag · render |
@@ -470,7 +472,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `cells claim` | the feature has no route record **and** this session already spent its one-time warning on an earlier claim (warn once, then refuse) | `bee route --set …`. A racing loser sees the typed `CLAIMED` refusal first, so a claim conflict never reads as a routing problem |
 | `cells finish` (cap) | lane is `small`/`standard`/`high-risk` and `trace.worker` names no registered execution worker — a lane that must dispatch cannot cap as if it had | `--inline-reason "<why>"`, stored on `trace.inline_reason`. `tiny` never reaches this branch |
 | `cells finish` (cap) | the cell changed files and no commit in the last 50 commits carries the trailer `cell: <id>` — one commit per cell, checked, not asserted | `--commit-pending "<reason>"`, stored on `trace.commit_pending` |
-| `cells tier` | assigning `ceiling` would put more than 40% of the feature's tiered cells on the ceiling tier (exactly 40% passes) | `--reason "<text>"`, stored on `trace.tier_reason` |
+| `cells escalate` | escalating a cell (setting its `escalate` flag) would put more than 40% of the feature's cells on the session model (exactly 40% passes) | `--reason "<text>"`, stored on `trace.escalation_reason` |
 | `bee close` | the feature has `behavior_change` cells capped since the last scribing stamp and nothing captured them | run `bee-capturing`, or log a `capture-deferral` decision naming the feature |
 | `bee close` (judge-debt, standard/high-risk lanes only) | a `behavior_change` cell capped since the judge-debt door shipped carries no `cells judge-record` verdict | run `bee cells judge` then `bee cells judge-record` for each named cell, or log a `judge-deferral` decision naming the feature |
 | `bee close` (doc-deferral door) | deferral-shaped prose (matching `matches_deferral_prose`) appears outside a fence with no same-line registered trigger citation | register the condition (`bee triggers add --decision <id> --condition "..."`) and cite it inline (backtick `` `<id>` `` or `[[trigger:<id>]]`), log a `doc-deferral` decision naming the feature, or — only for prose that *documents* deferral machinery rather than prose that itself defers — wrap it in a reasoned `<!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral -->` block; the reason is required, an empty or missing one exempts nothing |
@@ -479,7 +481,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `state handoff adopt` | the session started from `resume` or `compact`, not a fresh-session boundary; or the record's `kind` is `pause` | **none** — present the handoff and wait for the user. A session with no recorded start source warns and proceeds |
 | `reviews record` (`approved`) | a `P1` finding is not named in the decision's `p1_resolutions[]` with a fixing cell | none — land the fix cell, then record with `p1_resolutions` |
 | write-guard, `docs/history/<feature>/plan.md` | that feature's `approved_gates.shape` is true — plan.md freezes once shape is locked | `bee state plan-rev bump --lane <feature>`, or unapprove shape to redraft |
-| model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
+| model-guard, `Agent`/`Task` | the dispatch declares no role and names no pinned subagent type, **or** its `[bee-tier: <name>]` marker names a role nothing configures (`role-not-configured`). A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` *derives* its role from the agent file instead of refusing | declare `[bee-tier: <role>]` (the marker keeps its historical spelling and carries a role name) or a `model` param; for an unconfigured name, add it to `models.<runtime>` or open with one that is configured. A derived `cli` role still refuses — an external process is not dispatchable as an agent |
 | `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
 | `worktree merge` (`WORKTREE_MERGE_UAT_PENDING`) | under `uat_stop: "merge"` (default), the feature's lane is standard/high-risk (missing/unrecognized lane fails closed as standard) and its `uat` gate is not approved | approve it (`bee gate --name uat --approved true`), or skip uat for JUST this merge (`bee worktree merge --id <id> --skip-uat`), or turn the door off repo-wide (`uat_stop: "off"`). Never auto-approved — `uat` is user-only at every `gate_bypass` level (uat-gate-before-merge D1) |
 | `bee close` (`uat` door, headline "Uat gate pending for") | under `uat_stop: "close"`, standard/high-risk lane (same fail-closed rule), the merged feature's `uat` gate is not yet approved | approve it (`bee gate --name uat --approved true`), or log a `uat-deferral` decision naming the feature (uat-stop-placement D2) |

@@ -12,7 +12,7 @@
       "total": "zero stops: every gate, secret reads, and review P1 findings auto-proceed. The loud session banner reminds you it is on."
     },
     "models": {
-      "what": "Only the CHEAPER tiers are configured, keyed by runtime (claude | codex) then slot (extraction | generation | review | advisor). The ceiling is never configured — it is always the session model. A missing/null slot = prompt-budget tier (the marker alone carries the tier; the subagent inherits the session model).",
+      "what": "Configured per runtime (claude | codex) then role — the JOB a piece of work is (model-role-split D2/D3, store 06e49368/3c9d6262), never a cost tier. Any non-empty role name is legal; a name this table does not carry falls through to the next name the dispatch asks for and warns, it never refuses. The one silent case is `code` or `read` on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; configuring either key closes it for that runtime, and the sibling you left out warns from then on. `ceiling` is never configured here — it is an escalation flag, always the session model, not a role name. A missing/null slot = prompt-budget (the marker alone carries the role; the subagent inherits the session model). A fresh `bee onboard` writes exactly `code`, `read`, `extraction` and `generation` — the two names below with no fall-through into `known_roles` (`code`, `read`) plus the historical tail every ordered role list ends with (`extraction`, `generation`). `review` and `advisor` are shown below purely to illustrate their slot shapes: onboarding deliberately does NOT publish either, because both already resolve with no config key at all — review falls through to generation's model, and advisor (no fall-through, decision 4faf1de9) reads unset as \"off\"; a published default would silently decide that product question for every new host. Copy `review`/`advisor` into your own config only if you want to override that behavior on purpose.",
       "slot_shapes": {
         "string": "\"haiku\" — plain model name; dispatches carry it as the model param (economics: effective_model_status=pinned on claude).",
         "object_model": "{ \"model\": \"sonnet\", \"effort\": \"medium\" } — model plus reasoning-effort hint.",
@@ -22,6 +22,14 @@
       },
       "advisor": "The AO3/AO13 consult identity required before Gate 2's execution component opens on high-risk work. Claude default: fable (the session-class model). Set null to skip the advisor line in worker prompts when no advisor resolves.",
       "codex_note": "On codex-cli 0.144.4 native subagents cannot pin a per-agent model — a string here records the REQUESTED model; the dispatch log will still say effective_model_status=inherited-or-unknown until a capability probe proves per-agent selection."
+    },
+    "retry": {
+      "what": "`retry.fallbackChains` — the RUNTIME fallback chain (model-role-split D10/D11, store 50808d48). A map: key = a role name, a concrete model selector, or a \"provider/*\" wildcard; value = an ordered list of model selectors to try after a failure. Distinct from the resolution fall-through under `models` above: fall-through answers an UNCONFIGURED name before anything runs; a chain answers a model that was reached and FAILED.",
+      "explicit_only": "There is NO built-in chain for any role and no role inherits one — a `default` key is refused out loud (decision 4faf1de9's advisor, which records a walled consult as NOT OBTAINED rather than substituting a lesser model, must not change because someone else configured a chain). No `retry` key is set in this sample on purpose: with none configured every dispatch payload is byte-identical to a bee that had never heard of chains, and a chain only exists because you typed it.",
+      "example": "\"retry\": { \"fallbackChains\": { \"code\": [\"sonnet\", \"haiku\"], \"opus\": [\"sonnet\"], \"anthropic/*\": [\"local/qwen\"] } } — a role-keyed chain, a model-keyed chain that follows that model into whatever role is assigned it, and a provider-wide chain. Most specific key wins: concrete model, then \"provider/*\", then role.",
+      "what_bee_publishes": "bee does not execute dispatches, so it never runs a chain (decision 51341f84). `bee dispatch prepare` RESOLVES the chain for this dispatch and publishes it on the payload beside the model as `fallback_chain: {key, chain, fallback_when, advance_on, never_advance_on}`; advancing a step, and recording the step taken, belong to whoever executes the payload. A dispatch that names no model (escalated/session-model, cli-exec, herding pane) carries no chain — there is nothing to fall from.",
+      "the_gate": "A step may fire ONLY on a transient or infrastructural failure — advance_on: quota_or_rate_limit, provider_auth_or_policy_rejection, empty_response, malformed_tool_call_replay_safe, stream_stall_or_connection_reset, server_error_5xx. A step may NEVER fire on a semantic failure — never_advance_on: tool_error, wrong_or_unwanted_result, failed_proof, red_test. A red test moving the work to another model would hide the defect; the chain absorbs the provider, never the result.",
+      "validation": "Junk drops with a warning on stderr rather than half-reaching a payload: a non-array chain, an empty chain, whitespace-only steps, duplicate steps (first wins) and a step naming the key's own model are all ignored."
     },
     "dogfood_repos": "Only used in bee's own source repo (self-improvement loops); host projects can omit or leave [].",
     "product_root": "Optional, for the workshop+nested-product topology only: where the product's own docs live when they are NOT beside .bee/ (path relative to the bee root, or absolute). Unset = the bee root; do not set it speculatively — a set-but-missing path warns loudly on every read.",
@@ -58,6 +66,8 @@
   "gate_bypass": false,
   "models": {
     "claude": {
+      "code": "sonnet",
+      "read": "haiku",
       "extraction": "haiku",
       "generation": {
         "model": "sonnet",
@@ -67,6 +77,8 @@
       "advisor": "fable"
     },
     "codex": {
+      "code": null,
+      "read": null,
       "extraction": "gpt-5.5",
       "generation": "gpt-5.5",
       "review": {

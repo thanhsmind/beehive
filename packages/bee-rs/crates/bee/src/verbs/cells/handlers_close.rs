@@ -367,7 +367,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 if !registered_worker_for_cell(root, id, worker)? {
                     let worker_disp = worker.unwrap_or("unknown");
                     return Err(Fail::Thrown(format!(
-                        "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: dispatch this cell to a registered worker (bee state worker add --nickname <nickname> --cell {id} --tier <tier> --status running), then retry — or re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
+                        "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: dispatch this cell to a registered worker (bee state worker add --nickname <nickname> --cell {id} --status running), then retry — or re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
                     )));
                 }
             }
@@ -1042,128 +1042,180 @@ pub(crate) fn run_reopen(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
     })
 }
 
-// ── tier's ceiling-share budget (D3, decision 0012) ────────────────────────
+// ── the escalation ration (D3, decision 0012; rehomed by D5, store 97ce5225) ──
 //
 // "Keep ceiling scarce" (decision 0012) already backs `bee status`'s
 // ceiling-scarcity line — status_full/cells.rs's `tier_mix` computes the
-// SAME `ceiling / tiered` share this refusal checks. `tier_mix` takes a
-// `status_full::Ctx` whose fields are private to that module (and that
-// module is out of this cell's file reservation), so the formula is
-// re-derived here rather than imported. This is a LIFT, not a second
-// implementation — one membership test (MODEL_TIERS' own partition:
-// extraction/generation/else-is-ceiling), one formula (ceiling/tiered) —
-// following the precedent hooks/session_preamble/store.rs's own
-// `ceiling_scarcity_warning` set for the identical "may not edit that file"
-// boundary.
+// SAME share this refusal checks. `tier_mix` takes a `status_full::Ctx`
+// whose fields are private to that module (and that module is out of this
+// cell's file reservation), so the formula is re-derived here rather than
+// imported. This is a LIFT, not a second implementation — one membership
+// test, one formula — following the precedent
+// hooks/session_preamble/store.rs's own `ceiling_scarcity_warning` set for
+// the identical "may not edit that file" boundary.
+//
+// WHAT D5 MOVED, AND WHAT IT DELIBERATELY DID NOT.
+//
+// Unchanged in force: the threshold (`CEILING_SHARE_REFUSAL_MAX`, still
+// 0.4), the strictly-over comparison, the `--reason` override, the blank
+// reason that is not an override, and the persisted reason on the cell's
+// trace — now under `escalation_reason` (D4, store `97ce5225`). The key was
+// `tier_reason` until the tier retirement; it moved WITH its surfaces, in
+// one change: `docs/handbook/register.md` publishes the key and
+// `bee cells backfill-roles` carries the stored records that already hold
+// it. A rename that left either behind would be a migration half-done.
+//
+// Moved: WHICH cells count. It used to be `tier == "ceiling"`. It is now
+// `cell_is_escalated` — the flag, with the legacy `tier: "ceiling"` spelling
+// still counted so no store, migrated or not, can read as "nothing is
+// marked" (validate.rs states that contract in full).
+//
+// Moved: the DENOMINATOR, and this one is a correction rather than a
+// translation. It used to be "cells that recorded a tier at all", which was
+// only ever a stand-in for "cells that carry the model selector" — `tier`
+// was optional and 484 of 506 stored cells carried nothing. Under D7 `role`
+// is REQUIRED, so no cell authored from here on carries a tier at all: a
+// tier-shaped denominator would count 0 for every new feature, `share` would
+// be 0.0, and the refusal could never fire again. The denominator is
+// therefore the feature's cells, full stop. Every existing probe of this
+// budget keeps its exact arithmetic, because in each of them every fixture
+// is a cell of the feature.
 
 /// D3 (counter-teeth) / decision 0012 — no more than 40% of a feature's
-/// tiered cells may sit on "ceiling" (the scarce, session-cost model)
-/// without a named `--reason` override. Exactly 40% is allowed; strictly
-/// over refuses.
+/// cells may be escalated onto the session model without a named `--reason`
+/// override. Exactly 40% is allowed; strictly over refuses.
 pub(crate) const CEILING_SHARE_REFUSAL_MAX: f64 = 0.4;
 
-struct CeilingShare {
-    ceiling: i64,
-    tiered: i64,
+struct EscalationShare {
+    escalated: i64,
+    cells: i64,
     share: f64,
 }
 
-/// The ceiling share of `feature`'s tiered cells (the whole store when
-/// `feature` is absent — matching `tier_mix`'s own null-feature behavior)
-/// AFTER a hypothetical `new_tier` assignment to `exclude_id`. `exclude_id`
-/// is dropped from the scan first so the assigning cell is counted exactly
-/// once, under its NEW tier rather than its old one.
-fn ceiling_share_after(
+/// The escalated share of `feature`'s cells (the whole store when `feature`
+/// is absent — matching `tier_mix`'s own null-feature behavior) AFTER a
+/// hypothetical escalation decision on `exclude_id`. `exclude_id` is dropped
+/// from the scan first so the cell being assigned is counted exactly once,
+/// under its NEW marking rather than its old one.
+fn escalation_share_after(
     root: &Path,
     feature: Option<&str>,
     exclude_id: &str,
-    new_tier: &str,
-) -> MR<CeilingShare> {
+    escalated_now: bool,
+) -> MR<EscalationShare> {
     let cells = list_cells(root, feature, None).map_err(|_| Fail::Delegate)?;
-    let (mut extraction, mut generation, mut ceiling) = (0i64, 0i64, 0i64);
+    let (mut escalated, mut counted) = (0i64, 0i64);
     for cell in &cells {
         if matches!(cell.get("id"), Some(Value::String(cid)) if cid == exclude_id) {
             continue;
         }
-        match cell.get("tier").and_then(|t| t.as_str()) {
-            Some(t) if MODEL_TIERS.contains(&t) => match t {
-                "extraction" => extraction += 1,
-                "generation" => generation += 1,
-                _ => ceiling += 1,
-            },
-            _ => {}
+        counted += 1;
+        if cell_is_escalated(cell) {
+            escalated += 1;
         }
     }
-    match new_tier {
-        "extraction" => extraction += 1,
-        "generation" => generation += 1,
-        _ => ceiling += 1,
+    counted += 1; // the cell being assigned, counted under its new marking
+    if escalated_now {
+        escalated += 1;
     }
-    let tiered = extraction + generation + ceiling;
-    let share = if tiered > 0 { ceiling as f64 / tiered as f64 } else { 0.0 };
-    Ok(CeilingShare { ceiling, tiered, share })
+    // `counted` is never 0: the assigning cell is always in it.
+    let share = if counted > 0 { escalated as f64 / counted as f64 } else { 0.0 };
+    Ok(EscalationShare { escalated, cells: counted, share })
 }
 
-/// setTier's mutator (D3): assigning tier "ceiling" when the post-assignment
-/// ceiling share would exceed `CEILING_SHARE_REFUSAL_MAX` refuses, naming
-/// the share and the threshold, unless `reason` is a non-blank override — in
-/// which case the reason is recorded on the cell's trace (`tier_reason`).
-/// Any other tier is never budget-checked. `--reason` given for an
-/// already-under-budget "ceiling" assignment is still persisted (harmless
+/// The escalation mutator (D3, rehomed by D5, renamed by D4) — what
+/// `bee cells tier --tier ceiling` used to be, with the retired cost word
+/// taken out of its spelling.
+///
+/// D4 (store `97ce5225`) makes `role` the cell's SOLE model selector, so the
+/// three-value `tier` enum and the verb that wrote it retire. What does NOT
+/// retire is this door: D5 keeps the 40 percent ration "unchanged in force",
+/// and this function plus `bee cells escalate` is where it is enforced. The
+/// old verb carried two jobs in one flag — pick a model tier, and escalate —
+/// and only the second one was ever real (all 22 cells that carried
+/// information in `tier` meant budget; 20 of them `ceiling`). So the tier
+/// half is deleted and the escalation half keeps its name.
+///
+/// `escalate: true` sets the cell's escalation flag. When the post-assignment
+/// escalated share would exceed `CEILING_SHARE_REFUSAL_MAX` it refuses,
+/// naming the share and the threshold, unless `reason` is a non-blank
+/// override — in which case the reason is recorded on the cell's trace as
+/// `escalation_reason`. `escalate: false` is never budget-checked and DISARMS
+/// the flag: `bee cells tier --tier generation` took a cell off the session
+/// model before D5 and `bee cells escalate --off` still does. `reason` given
+/// for an already-under-budget escalation is still persisted (harmless
 /// metadata; never required there).
-pub(crate) fn set_tier(root: &Path, id: &str, tier: &str, reason: Option<&str>) -> MR<Value> {
+///
+/// The literal `tier` string is no longer written. A stored record may still
+/// carry one — D4 retires `tier` as a SELECTOR, it does not rewrite history —
+/// and `cell_is_escalated` still reads that legacy spelling, which is what
+/// keeps the ration firing on a store no one has run
+/// `bee cells backfill-roles` against yet.
+pub(crate) fn set_escalation(
+    root: &Path,
+    id: &str,
+    escalate: bool,
+    reason: Option<&str>,
+) -> MR<Value> {
     let id2 = id.to_string();
-    let tier2 = tier.to_string();
     let reason2 = reason.map(str::to_string);
-    mutate_cell(root, id, "setTier", Some("setTier"), false, move |cell_map| {
-        if tier2 == "ceiling" {
+    mutate_cell(root, id, "escalateCell", Some("escalateCell"), false, move |cell_map| {
+        if escalate {
             let feature = match cell_map.get("feature") {
                 Some(Value::String(f)) if !f.is_empty() => Some(f.as_str()),
                 _ => None,
             };
-            let share = ceiling_share_after(root, feature, &id2, &tier2)?;
+            let share = escalation_share_after(root, feature, &id2, true)?;
             let override_reason = reason2.as_deref().map(js_trim).filter(|r| !r.is_empty());
             if share.share > CEILING_SHARE_REFUSAL_MAX && override_reason.is_none() {
                 return Err(Fail::Thrown(format!(
-                    "setTier: cell \"{id2}\" refused — assigning tier \"ceiling\" would put {}/{} tiered cells on ceiling ({}%), over the {}% ceiling budget (D3, decision 0012). Pass --reason <text> to override; the reason is recorded on the cell's tier record.",
-                    share.ceiling,
-                    share.tiered,
+                    "escalateCell: cell \"{id2}\" refused — escalating it would put {}/{} of the feature's cells on the session model ({}%), over the {}% escalation budget (D3, decision 0012). Pass --reason <text> to override; the reason is recorded on the cell's trace as escalation_reason.",
+                    share.escalated,
+                    share.cells,
                     jsjson::js_f64_to_string(rsv::js_round(share.share * 100.0)),
                     jsjson::js_f64_to_string(rsv::js_round(CEILING_SHARE_REFUSAL_MAX * 100.0)),
                 )));
             }
             if let Some(r) = override_reason {
                 let mut trace = merge_trace(cell_map.get("trace"))?;
-                trace.insert("tier_reason".into(), Value::String(r.to_string()));
+                trace.insert(ESCALATION_REASON_KEY.into(), Value::String(r.to_string()));
                 cell_map.insert("trace".into(), Value::Object(trace));
             }
+            cell_map.insert(ESCALATE_FIELD.into(), Value::Bool(true));
+        } else {
+            // Not an escalation, so the cell is not escalated. Removing the
+            // key rather than writing `false` keeps absent meaning absent —
+            // the same read every other optional cell field gets.
+            cell_map.remove(ESCALATE_FIELD);
         }
-        cell_map.insert("tier".into(), Value::String(tier2.clone()));
         Ok(())
     })
 }
 
-pub(crate) fn run_tier(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !rsv::keys_known(&flags, &["id", "tier", "reason"]) {
+/// `bee cells escalate --id <id> [--reason <text>] [--off]` — the door
+/// `bee cells tier --tier ceiling` used to be.
+pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["id", "reason", "off"]) {
         return None;
     }
     let id = flags.req_str("id")?.to_string();
-    let tier = flags.req_str("tier")?.to_string();
-    if !MODEL_TIERS.contains(&tier.as_str()) {
-        return None; // validate()'s required-field enum refusal — Node's bytes
-    }
-    // --reason <text> (D3): overrides the ceiling-share budget refusal
+    let off = bool_flag(&flags, "off")?;
+    // --reason <text> (D3): overrides the escalation-share budget refusal
     // below. A flag-alone `--reason` (no value) is unprovable here — same
     // as every other optional value-flag this verb group parses through
     // `opt_string_flag` — so it delegates to Node's validate().
     let reason = opt_string_flag(&flags, "reason")?;
-    dispatch("cells tier", use_json, t0, move |ctx| {
+    dispatch("cells escalate", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        let cell = set_tier(&root, &id, &tier, reason.as_deref())?;
+        let cell = set_escalation(&root, &id, !off, reason.as_deref())?;
         let text = format!(
-            "Cell {} tier set to {}.",
+            "Cell {} {}.",
             js_string_or_undefined(cell.get("id")),
-            js_string_or_undefined(cell.get("tier"))
+            if off {
+                "is no longer escalated — it runs on its role's model"
+            } else {
+                "escalated — it runs on the session model and charges the 40% ration"
+            }
         );
         Ok(Out::Emit(cell, text, 0))
     })

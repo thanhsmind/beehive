@@ -26,7 +26,7 @@ None directly — it relies on Gate 2's execution component
 (`approved_gates.execution`) already being approved.
 
 ## State touched
-[`cells schedule/claim/claim-next/show/tier/judge/judge-record`](../register.md#beecellsfeature-njson),
+[`cells schedule/claim/claim-next/show/escalate/judge/judge-record`](../register.md#beecellsfeature-njson),
 `bee dispatch wave --runtime <rt> --feature <f>` — the normal batch verb: it claims,
 reserves, and builds the payloads for a whole ready wave in one call.
 [`bee dispatch prepare --claim`](../register.md#beeclaimscell-idjson) is the
@@ -47,8 +47,9 @@ unwound and nothing is left half-done),
   reservations — never by "spawn both carefully".
 - **A `tiny` cell may run inline** in this session; `small` and up always dispatches
   — one worker per cell, and never two cells to one worker.
-- **Spawn with exactly the prepared payload.** Never paste session history. Judge
-  and record the model tier first (`bee cells tier`).
+- **Spawn with exactly the prepared payload.** Never paste session history. The
+  cell's own `role` names the job and selects the model; escalate onto the session
+  model only where the work earns it (`bee cells escalate --id <id>`).
 - **Silence is not failure** — inspect `bee cells list` and `bee reservations list`
   before assuming a worker is stuck.
 - **Goal-check every `[DONE]` yourself** — a worker's word is never the evidence.
@@ -59,9 +60,9 @@ unwound and nothing is left half-done),
   each has one. A `NEEDS_REVISION` verdict reopens the cell it names — capped goes
   back to open — and the cap refuses until a fresh independent verdict clears it.
   Neither the worker nor the orchestrator issues its own PASS.
-- **`[BLOCKED]` has a rescue ladder**: re-dispatch with the missing context → next
-  model tier up (the ceiling is this session, so the top rung hands it to you) →
-  surface to the user with the worker's diagnosis. If it invalidates the plan,
+- **`[BLOCKED]` has a rescue ladder**: re-dispatch with the missing context →
+  `bee cells escalate --id <id>` and re-dispatch (the session model is this session,
+  so that rung hands it to you) → surface to the user with the worker's diagnosis. If it invalidates the plan,
   return to planning.
 - **Slice clean is a door set, not a feeling**: `bee close --feature <slug>
   --dry-run` names every remaining door with the command that settles it;
@@ -78,8 +79,8 @@ unwound and nothing is left half-done),
 - At ~65% context, write `.bee/HANDOFF.json` and pause cleanly — never push through
   the budget mid-wave. Finishing a unit is never on its own a reason to stop.
 - **The doors here have teeth.** A claim onto a red base, a `small`+ cap with no
-  registered execution worker, a cap with no `cell: <id>` commit trailer, and a
-  ceiling tier past the 40% budget each refuse by name — see
+  registered execution worker, a cap with no `cell: <id>` commit trailer, and an
+  escalation past the 40% budget each refuse by name — see
   [the doors that refuse](../register.md#the-doors-that-refuse) for each one's
   single escape hatch.
 

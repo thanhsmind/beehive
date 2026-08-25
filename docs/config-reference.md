@@ -15,43 +15,100 @@ Two rules the deleted CLI used to enforce for you, now yours to keep:
 - **`hooks.*` and `guards.*` are local-only namespaces.** Put them in `.bee/config.local.json`
   (gitignored, per-machine), never in the tracked `.bee/config.json` — so one developer muting a
   hook never lands in everyone's config. The overlay wins over the tracked file at read time.
-- **The models/cli-tier block has to stay valid.** `config set` refused a write that broke it;
-  nothing refuses a hand-edit, so re-read [Which model each tier uses](#which-model-each-tier-uses)
+- **The models/cli-executor block has to stay valid.** `config set` refused a write that broke it;
+  nothing refuses a hand-edit, so re-read [Which model each role uses](#which-model-each-role-uses)
   after changing `models`.
 
 Values are ordinary JSON: `false` is a boolean, `12` a number, `"repo"` a string. Nested keys that
 the old `--key guards.idle_gate` dot-notation reached are just nested objects in the file.
 
-## Which model each tier uses
+## Which model each role uses
 
-There are three tiers, but **you only configure the two cheaper ones.** The **ceiling** (strongest) tier is **never configured — it is always the model you are running the session on** (decision 0015). So if you run the session on Fable, ceiling work runs on Fable; run it on Opus, ceiling is Opus. bee doesn't pick it; it inherits your session model.
+bee picks a worker model by **the job the work is**, never by how expensive the model is. A cell declares a `role`; the dispatch asks for that role; `models.<runtime>` answers with a model. **`role` is a cell's sole model selector** — the old three-value cost enum (`extraction` / `generation` / `ceiling`) is retired as a selector (model-role-split D4, store `97ce5225`).
 
-You configure only `generation` and `extraction`, under **`models`**, keyed by runtime (Claude Code, Codex, and OpenCode name models differently). Beside the two tiers sit two configurable **roles**, `review` and `advisor`:
+**The strongest model is still never configured.** It is always the model you run the session on (decision `0015`). Work that needs it is *escalated*, which is a flag and a budget, not a role — see [Escalation](#escalation--the-cost-lever-not-a-role) below.
+
+`models` is keyed by runtime first (Claude Code, Codex, and OpenCode name models differently), then by role name:
 
 ```jsonc
 {
   "models": {
     "claude": {
-      "extraction": "haiku",    // cheapest — retrieval, mechanical edits
-      "generation": "sonnet",   // the mid worker that runs the loops (most cells)
-      // no "ceiling" — it's whatever model runs your session
-      "review": "opus",         // reviews what generation implemented; null → falls back to generation
-      "advisor": "opus"         // consulted by a worker whose verify keeps failing; null/unset → no advisor
+      "code": "sonnet",        // the work WRITES: implementation, wiring, tests
+      "read": "haiku",         // the work only READS: retrieval, tracing a call path, mining
+      "extraction": "haiku",   // historical tail — every ordered role list ends here
+      "generation": "sonnet",  // historical tail — leave both set
+      "review": "opus",        // OPTIONAL, not seeded; null → falls through to generation
+      "advisor": "opus"        // OPTIONAL, not seeded; null/unset → no advisor
     },
     "codex": {
-      "extraction": null,       // Codex has no per-agent model switch today →
-      "generation": null,       //   null means "enforce the tier via read budget + output cap in the prompt"
-      "review": null,
-      "advisor": null
+      "code": null,            // Codex has no per-agent model switch today →
+      "read": null,            //   null means "enforce the role via read budget + output cap in the prompt"
+      "extraction": null,
+      "generation": null
     }
   }
 }
 ```
 
-- **To change the worker models**, edit `models.claude.generation` / `extraction` (e.g. `"opus"` for a stronger worker tier). To change the **ceiling**, just run the session on a different model — there is no config for it.
-- **`review`** (decision 0021) is the model that reviews what `generation` implemented — an independent reviewer beats self-review, so a review slot stronger than generation is the point. `null` → the generation tier reviews.
-- **`advisor`** (advisor v1) is a *worker-level, on-failure consult*: a worker that has failed its verify calls the advisor once or twice before blocking, and takes advice only — it never gets authority. Unlike `review` it has **no fallback**: `null`, unset, or an advisor no stronger than the worker's own model simply means "no consult happens".
-- **The six value shapes** each slot accepts (decisions 0019/0021; native override D2, codex-native-transport):
+### What a fresh config seeds
+
+`bee onboard` writes exactly **four** role keys per runtime: **`code` · `read` · `extraction` · `generation`**.
+
+- **`code`** and **`read`** are the names bee's own dispatch sites ask for.
+- **`extraction`** and **`generation`** are the **historical tail**: every ordered role list ends in one of them, so upgrading bee moves no existing host's model. Leave them set.
+- **`review` and `advisor` are deliberately NOT seeded.** Both already resolve with no config key at all — an unset `review` falls through to `generation`'s model, and an unset `advisor` reads as "no advisor" (decision `4faf1de9`; the advisor has no fall-through of its own). Publishing a default would silently decide that product question for every new host. Copy either key in only when you mean to override that behavior.
+- **`ceiling` is not a key and is not a role name.** It never was configurable and it still is not; it is the escalation flag's wire word, nothing a config carries.
+
+To change the worker models, edit `models.claude.code` / `read` (or add your own role key). To change the escalated model, run the session on a different model — there is no config for it.
+
+### Any non-empty role name is legal
+
+bee holds **no fixed list of roles.** Validation checks a role's *presence and shape*, never its membership (D2/D7, store `06e49368` / `4eaf1b71`):
+
+- **`role` is required on a cell**, exactly as `lane` is — `bee cells add` refuses a cell without it.
+- **Any non-empty name passes.** Add `"test": "opus"` or `"migrate": "sonnet"` under `models.claude`, declare that role on a cell, and the cell gets that model. A new job role needs no new bee code.
+- `code` · `read` · `test` · `docs` · `review` · `design` are the **recommended vocabulary** (D8, store `4eaf1b71`) — authoring guidance, carried on the planning surface and in `bee cells add --help`, and printed in the missing-`role` refusal so an author has somewhere to start. Nothing ever matches against it. It is guidance, never an enum.
+
+### An unconfigured role falls through — it never fails
+
+A dispatch does not ask for one name. It asks for an **ordered list**, headed by the cell's own role and ending in a name every host has configured for years:
+
+| The cell's role | The list the dispatch asks for |
+|---|---|
+| `read` | `[read, extraction, generation]` |
+| anything else | `[<the cell's role>, code, generation]` |
+
+The walk takes the **first name that resolves**; an unset or unresolvable name yields to the next. The last entry always resolves, so a walk can never dead-end. That tail is why a bee upgrade moves no host's model: a config that names only `extraction` and `generation` keeps answering every dispatch exactly as it did before roles existed.
+
+Two rules keep the fall-through honest:
+
+- **A name nothing configures WARNS on stderr**, naming what it fell through to — e.g. `bee: model role "tset" is not configured in models.claude of .bee/config.json — falling through to "code"`. It is never silently accepted, and it never hands back another role's model as if the config had named it.
+- **One silent case, and it closes itself — the pre-roles window.** `code` and `read`, the two names bee's own ordered lists ask for, do not warn on a runtime whose `models.<runtime>` configures **NEITHER** of them. That is a host from before roles shipped: falling through to `generation` is the intended no-op, there is no better-fitting model it could have picked, and a warning that fires on every single dispatch is one nobody reads. Configure **either** key — `models.claude.code` is enough — and the window shuts for that runtime: from then on the sibling you left out warns like any other name, so a half-migrated config is loud about what it missed instead of silent about it forever. The window is per runtime, because the table is. An operator-invented name like `test` or `desgin` warns loudly from the start, migrated or not.
+- **A present-but-`null` slot is a slot you turned OFF**, not an absent one. It yields without a word, and the built-in default is never consulted for it — answering a cleared slot with a built-in would resurrect the very model you just cleared.
+
+One path deliberately does **not** fall through: `bee dispatch prepare --role <name>` names the slot **outright** — the kind's default slot is not consulted, and neither is a cell's own recorded value. A name that runtime cannot resolve is a typed refusal (`role_not_configured`) whose FIX lists the roles it can, because an operator who typed a flag made a typo, not a policy choice.
+
+### Escalation — the cost lever, not a role
+
+Cost is a separate axis from job. Work that must run on your strongest model — integration, architecture, a security call, an ambiguous spec — is **escalated** (D5, store `97ce5225`):
+
+```bash
+bee cells escalate --id <cell-id>                       # run on the session model
+bee cells escalate --id <cell-id> --reason "<why>"      # ...past the ration
+bee cells escalate --id <cell-id> --off                 # back to the cell's own role model
+```
+
+- It sets a boolean flag on the cell. The dispatch reads that flag and runs the cell on the **session model** with no `model` parameter at all.
+- **The 40% ration**: escalating when it would put MORE than 40% of the feature's cells on the session model refuses — exactly 40% passes — unless `--reason` names why. The reason is recorded on the cell trace as `escalation_reason`.
+- `--off` clears the flag and is never budget-checked.
+- `bee status` reports the `role_mix` — which is what `tier_mix` became — with that escalated share. The point is unchanged: keep the strongest model scarce.
+
+### What a slot's value may be
+
+Every role slot — a seeded one, `review`, `advisor`, or a name you invented — takes the same value shapes.
+
+- **The shapes** each slot accepts (decisions 0019/0021; native override D2, codex-native-transport):
 
   | shape | means |
   |---|---|
@@ -61,7 +118,7 @@ You configure only `generation` and `extraction`, under **`models`**, keyed by r
   | `{ "kind": "native", "model": "gpt-5.5", "effort": "high", "fork_turns": "none", "agent_type": "worker" }` | a **native V2 model override** (codex runtime) — a stronger model applied per-agent on the codex `spawn_agent` metadata, no separate process. `model` is the exact catalog model id. `fork_turns` must be `"none"` (a full-history fork rejects overrides) and defaults to `"none"`; `agent_type` defaults to `"worker"`. `effort` is optional. The route is inert until a capability probe confirms the host build accepts it (D3) |
   | `{ "kind": "herding" }` (optional `"agent": "<name>"`) | routes **cell execution** for this slot through `bee herding run` automatically — no per-cell request, no other fields required. A gather/review/advisor purpose against the same slot is unaffected: it keeps that runtime's own default model for the slot, never `herding`. The agent that runs is the single global `herding.agent_command` by default; the optional `agent` field names an entry in `herding.agents` instead (herd-registry D1/D2), overriding the global default for this slot alone — an unknown name refuses, listing every registry key. Full `herding.*` contract, the `herding.agents` map shape, and all three reference spellings (tier slot, `bee herding run --agent`, string `herding.agent_command`): [bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md) |
   | `{ "primary": { "kind": "native", "model": "gpt-5.5" }, "fallback": { "kind": "cli", "command": "codex exec … -s read-only -", "promptVia": "stdin" }, "fallback_policy": "explicit-only" }` | a **native primary with an opt-in cli fallback**. The fallback is taken **only** when `fallback_policy` is exactly `"explicit-only"`; without that string the fallback is dropped and never used — silent native→cli fallback is forbidden (D1) |
-  | `null` | no per-agent switch: the tier is enforced via read budget + output cap in the prompt (for `review`: fall back to generation; for `advisor`: no advisor) |
+  | `null` | no per-agent switch: the role is enforced via read budget + output cap in the prompt (for `review`: fall back to generation; for `advisor`: no advisor) |
 
   Invalid shapes are ignored — the slot's default stands, nothing throws. A native override missing its `model`, a `fork_turns` other than `"none"`, or a composite missing `fallback_policy` is flagged by config validation (`bee status`), never silently trusted.
 - **What the short names mean (important).** For Claude Code these are **family aliases**, not exact version strings. The value must be one of exactly `haiku` · `sonnet` · `opus` · `fable` — the Claude Code Agent tool accepts only these four. Each alias is resolved **by Claude Code (not by bee)** to the current model of that family on your account. So `"sonnet"` isn't "some random Sonnet" — it means "the Sonnet tier", and the harness uses the latest. Today they resolve to:
@@ -73,37 +130,41 @@ You configure only `generation` and `extraction`, under **`models`**, keyed by r
   | `opus` | Opus 4.8 | `claude-opus-4-8` |
   | `fable` | Fable 5 | `claude-fable-5` |
 
-  You **cannot pin an exact sub-version** for a Claude Code subagent — the model param is family-alias only, and it tracks the latest of each family as Anthropic ships new ones. (For **Codex**, the `codex` tiers take the runtime's real model ids, e.g. `"gpt-5"`, because that runtime addresses models by id.)
-- `bee_status` prints the active map (`Models (claude): generation=… extraction=… · ceiling = the session model`), and warns if too many cells sit on the ceiling tier — the point is to keep the strong (session) model scarce.
+  You **cannot pin an exact sub-version** for a Claude Code subagent — the model param is family-alias only, and it tracks the latest of each family as Anthropic ships new ones. (For **Codex**, the `codex` roles take the runtime's real model ids, e.g. `"gpt-5"`, because that runtime addresses models by id.)
+- `bee status` prints the active map — every role the runtime configures, bee's own dispatch roles first and the rest in config order, e.g. `Models (claude): generation=… review=… extraction=… test=…` — plus the `role_mix` and its escalated share, and warns when too many cells run escalated — the cost lever erodes when the strongest model touches most dispatches.
 
 ### Runtimes: Claude Code, Codex, and OpenCode — and everything else (agy, …)
 
 `models` accepts **three runtime keys: `claude`, `codex`, and `opencode`** — the three first-class runtimes bee ships hooks, rendered skills, and worker agents for (opencode-support D1). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
 
-- **OpenCode** names models as `provider/model` ids (e.g. `"opencode/big-pickle"` on the zero-config `opencode/*` free provider this machine ships out of the box) — a real catalog id, the same way Codex takes its real model ids, never a Claude-style family alias. There is no per-call model override on OpenCode's dispatch (`task`) tool, so `models.opencode.{extraction,generation,review}` is consumed **structurally**: each `.opencode/agent/bee-{build,gather,extract,review}.md` worker file pins its tier's model directly in that file's own `model:` frontmatter (today hand-authored to match this key, not yet rendered by a `bee dev` generator the way `.claude/agents/*.md` is), so a wrong-tier dispatch is unrepresentable rather than caught after the fact. Example:
+- **OpenCode** names models as `provider/model` ids (e.g. `"opencode/big-pickle"` on the zero-config `opencode/*` free provider this machine ships out of the box) — a real catalog id, the same way Codex takes its real model ids, never a Claude-style family alias. There is no per-call model override on OpenCode's dispatch (`task`) tool, so `models.opencode.{code,read,extraction,generation,review}` is consumed **structurally**: each `.opencode/agent/bee-{build,gather,extract,review}.md` worker file pins its role's model directly in that file's own `model:` frontmatter (today hand-authored to match this key, not yet rendered by a `bee dev` generator the way `.claude/agents/*.md` is), so a wrong-role dispatch is unrepresentable rather than caught after the fact. Example:
 
   ```jsonc
   {
     "models": {
       "opencode": {
-        "extraction": "opencode/ling-3.0-tiny-free",  // bee-extract
-        "generation": "opencode/big-pickle",           // bee-build, bee-gather
+        "code": "opencode/big-pickle",                 // bee-build
+        "read": "opencode/ling-3.0-tiny-free",         // bee-gather
+        "extraction": "opencode/ling-3.0-tiny-free",   // bee-extract (historical tail)
+        "generation": "opencode/big-pickle",           // historical tail
         "review": "opencode/nemotron-3-ultra-free"     // bee-review
       }
     }
   }
   ```
 
-  Named constraint: the free `opencode/*` provider carries no documented quality tiering, so the mapping above is a size-name heuristic ("tiny" → extraction, "ultra" → review), not an empirically verified capability ladder — swap in real provider/model ids once a paid provider is configured.
+  Named constraint: the free `opencode/*` provider carries no documented quality tiering, so the mapping above is a size-name heuristic ("tiny" → the read roles, "ultra" → review), not an empirically verified capability ladder — swap in real provider/model ids once a paid provider is configured.
 
-That does *not* mean other CLIs are unusable — they plug in through the **external-executor slot shape** on whichever runtime you actually run the session in. Example, routing the review tier of a Claude Code session through OpenCode:
+That does *not* mean other CLIs are unusable — they plug in through the **external-executor slot shape** on whichever runtime you actually run the session in. Example, routing the review slot of a Claude Code session through OpenCode:
 
 ```json
 {
   "models": {
     "claude": {
+      "code": { "model": "sonnet", "effort": "medium" },
+      "read": "haiku",
       "extraction": "haiku",
-      "generation": { "model": "sonnet", "effort": "medium" },
+      "generation": "sonnet",
       "review": {
         "kind": "cli",
         "command": "bash -lc 'opencode run --model anthropic/claude-opus \"$(cat)\"'",
@@ -115,6 +176,40 @@ That does *not* mean other CLIs are unusable — they plug in through the **exte
 ```
 
 Two rules travel with every cli-shaped slot: it is **gather/review/advisor-only** — cell *execution* against a cli slot is refused (`cli_tier_gather_only`), so implementation work never rides an executor bee cannot supervise — and `promptVia` must state how the prompt reaches the process (`"stdin"`, or the `"$(cat)"` wrapper for CLIs that only take argv), never guessed from the command string. A ready-to-run demo with **agy** (generation) and **opencode** (review) lives at [`.bee/config-sample-cli-executors.json`](../.bee/config-sample-cli-executors.json); per-flag reasoning and more presets: [`docs/model-presets.md`](model-presets.md).
+
+## `retry.fallbackChains` — a chain bee PUBLISHES, never one it runs
+
+A fallback chain is an ordered list of model selectors a dispatch **may** move along after a *transient* provider failure (D10/D11, store `50808d48`).
+
+**Read this part first, because it is the part that is easy to get wrong.** bee never executes a dispatch. `bee dispatch prepare` builds a payload and returns; the orchestrator or the worker runs it. So bee cannot see the quota wall, the 5xx, or the stream stall a chain step answers — and **none of this is a retry loop bee runs** (decision `51341f84`). What bee owns is the **contract**: it parses the config, resolves the chain that applies to this dispatch, and publishes it — with the gate saying when a step is earned — beside the model on the payload. **Advancing a step, and recording the step taken, belong to whoever actually executes the dispatch.**
+
+**Explicit-only.** There is no built-in chain for any role and no role inherits one. With no `retry` key configured, every dispatch payload is byte-identical to a bee that had never heard of chains, and a failure stays exactly as loud as it is today. A chain exists only because you typed it.
+
+```jsonc
+{
+  "retry": {
+    "fallbackChains": {
+      "code": ["sonnet", "haiku"],        // keyed by ROLE
+      "opus": ["sonnet"],                 // keyed by a concrete MODEL — follows that model into any role
+      "anthropic/*": ["local/qwen"]       // keyed by a provider WILDCARD
+    }
+  }
+}
+```
+
+- **Which chain applies**, most specific key first: the concrete model selector this dispatch carries → the `provider/*` wildcard it falls under → the role the dispatch travels under. A model-keyed chain outranks a role-keyed one because it is keyed on the thing that actually failed.
+- **A `default` key is refused out loud.** No role inherits a chain; keying one by role, by concrete model, or by `provider/*` is the whole of it. (Inheriting a default would change the advisor behavior decision `4faf1de9` settled on live evidence, without the owner asking for it.)
+- **Junk drops loudly, never silently.** A chain that is not an array, one that names no usable step, a step repeating the key's own model, or a `default` key each produces a `bee: retry.fallbackChains["<key>"] … is ignored — <why>` line on stderr. A mistyped chain is not a slot somebody turned off; it is a safety net the operator believes is under them.
+
+**The error gate travels with the chain**, on the payload, so no caller re-derives it:
+
+| Field | What it carries |
+|---|---|
+| `advance_on` | `quota_or_rate_limit` · `provider_auth_or_policy_rejection` · `empty_response` · `malformed_tool_call_replay_safe` · `stream_stall_or_connection_reset` · `server_error_5xx` |
+| `never_advance_on` | `tool_error` · `wrong_or_unwanted_result` · `failed_proof` · `red_test` |
+| `fallback_when` | the condition in one line |
+
+Every class in `advance_on` is transient or infrastructural: the failure happened **before** the model got to be wrong. Every class in `never_advance_on` is **semantic** — the model was reached, answered, and answered badly. Falling to another model there would hide the defect, which is the one thing bee's loud posture exists to refuse. **No result failure is ever absorbed by a chain.** The negative list is published in full rather than left as "everything not in `advance_on`", because the negative is the half a caller gets wrong.
 
 ## `commands` — the host project's lifecycle commands
 
@@ -172,6 +267,8 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 
 | Key | What it does | Default |
 |---|---|---|
+| `models` | runtime-keyed role→model map — the job a piece of work is picks the model that runs it; full section above | `code` · `read` · `extraction` · `generation` seeded per runtime at onboarding |
+| `retry.fallbackChains` | the ordered model chain bee **publishes** on a dispatch for its executor to follow after a *transient* provider failure — explicit-only, no built-in chain, never a retry loop bee runs; full section above | unset — no chain, every payload unchanged |
 | `commands` | the host project's `setup` / `start` / `test` commands — full section above | none — captured at onboarding |
 | `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via `bee-hive`'s "Gates" section (gate-bypass levels) | `false` |
 | `hooks` | per-hook kill switch — nine hooks: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `codex-subagent-audit` | all `true` (an absent key also reads `true`) |
@@ -280,12 +377,14 @@ Clean JSON — paste into `.bee/config.json` and edit values (keep any existing 
   "guards": { "idle_gate": true, "max_read_lines": 800 },
   "models": {
     "claude": {
+      "code": { "model": "sonnet", "effort": "medium" },
+      "read": "haiku",
       "extraction": "haiku",
-      "generation": { "model": "sonnet", "effort": "medium" },
+      "generation": "sonnet",
       "review": "opus",
       "advisor": "opus"
     },
-    "codex": { "extraction": null, "generation": null, "review": null, "advisor": null }
+    "codex": { "code": null, "read": null, "extraction": null, "generation": null }
   }
 }
 ```
@@ -294,4 +393,6 @@ The full, copyable version of this file lives at [`.bee/config-sample.json`](../
 
 A second, ready-to-run demo lives at [`.bee/config-sample-cli-executors.json`](../.bee/config-sample-cli-executors.json): the same file with the `generation` slot dispatched to **agy** (Antigravity, `Gemini 3.5 Flash (High)`) and `review` to **opencode**, both wrapped in `bash -lc '… "$(cat)"'` because neither CLI reads the worker prompt from stdin. Copy it only if those CLIs are installed — otherwise every worker dispatch fails. Presets and the per-flag reasoning: [`docs/model-presets.md`](model-presets.md).
 
-> **ceiling** has no entry — it is always whatever model you run the session on.
+> **`ceiling` has no entry** — it is not a role name and never was configurable. The strongest model is always the one you run the session on, and a cell reaches it through `bee cells escalate`, not through this file.
+>
+> `review` and `advisor` appear in the sample above to show their shapes. A fresh `bee onboard` writes neither on purpose — both already resolve with no key at all.

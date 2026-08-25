@@ -57,9 +57,15 @@ const WORKTREE_COMPANION_COMMAND_KEYS: [&str; 3] = [
     "worktree_companion_start", "worktree_companion_end", "worktree_companion_mount",
 ];
 
-const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
+// model-role-split D4/D6: this module's private `MODEL_TIERS` copy is gone.
+// Its one reader was `cells.rs`'s tier mix, which now counts the OPEN role
+// set instead — there is no list of legal names left to keep in step here.
 
-const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+// model-role-split D1/D2: this module's private `EFFORT_LEVELS` and
+// `MODEL_NORMALIZE_SLOTS` are gone with the third copy of the models
+// parser that was their only reader (`store::normalize_models`). Value
+// shapes and the set of keys carried are `verbs::drivers`' answer now, so
+// there is nothing left here to keep in step with it.
 
 // opencode-support D1/oc-13: models.opencode is a real config key (oc-11
 // made the reader widen to it); this status/doctor copy of the runtime list
@@ -67,9 +73,16 @@ const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 // drift check both see it too — R1 named export, not a hand-kept mirror.
 const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
 
-const MODEL_NORMALIZE_SLOTS: [&str; 4] = ["extraction", "generation", "review", "advisor"];
-
-const MODEL_VALIDATE_SLOTS: [&str; 4] = ["extraction", "generation", "review", "advisor"];
+// model-role-split D2 (store 06e49368): this module's private
+// `MODEL_VALIDATE_SLOTS` is gone. It was the LAST closed list of role names
+// in the status surface, and it stood where an open set lives: config
+// validation walked those four names, so a malformed value under any role
+// the operator invented (`models.claude.test: 7`) was never looked at and
+// earned NO warning at all — silence for a typo in exactly the shape D3
+// tells an operator to write, while the identical typo under `generation`
+// warned. `validate_models_config` walks the keys the config actually
+// carries now, so a role is validated because it is configured, never
+// because it is one of four words.
 
 const ADVICE_CLASS_SLOTS: [&str; 2] = ["advisor", "review"];
 
@@ -117,7 +130,11 @@ const CONTENTION_TOP_LOCKS_LIMIT: usize = 5;
 // cells.mjs ~2280-2281
 const CEILING_MAX_SHARE: f64 = 0.4;
 
-const SCARCITY_MIN_TIERED: i64 = 3;
+// model-role-split D6: was SCARCITY_MIN_TIERED, a floor on "cells that
+// recorded a tier". Nothing records a tier any more, so that floor would sit
+// at 0 forever and the advice would never fire. Same number, honest subject:
+// the feature's cells.
+const SCARCITY_MIN_CELLS: i64 = 3;
 
 // claims.mjs
 const DEFAULT_HEARTBEAT_STALE_SECONDS: f64 = 900.0;

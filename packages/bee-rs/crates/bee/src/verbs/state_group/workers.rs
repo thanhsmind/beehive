@@ -63,15 +63,42 @@ pub(crate) fn thrown_ok(out: R2<Out>) -> R2<Out> {
     }
 }
 
+/// D4 (store `97ce5225`): the ONE shape check both `worker add` and `worker
+/// update` apply to the value a worker row carries. `role` is the sole model
+/// selector now, so that value is the ROLE the worker's dispatch resolved,
+/// never a cost tier — the closed `extraction | generation | ceiling` enum
+/// that used to gate it is retired. What is left is presence and shape (a
+/// non-blank name), never membership, exactly as `addCell`'s required-`role`
+/// refusal reads it (`verbs/cells/validate.rs`, D7 store `4eaf1b71`). One
+/// function rather than a copy per verb: two hand-maintained copies of one
+/// rule is the drift D1 exists to remove.
+fn worker_role_value(verb: &str, role: &str) -> Result<Value, Err2> {
+    if role.trim().is_empty() {
+        return Err(Err2::Msg(format!(
+            "{verb}: invalid tier \"{role}\" — the value records the ROLE this worker's dispatch resolved, and must be a non-empty name (store 97ce5225: role is the sole model selector; the closed extraction/generation/ceiling enum is retired). FIX: pass the cell's own role, e.g. --tier code."
+        )));
+    }
+    Ok(json!(role))
+}
+
 /// The shared record-push body for `state worker add` — the exact shape
-/// (`{nickname, cell, tier, status}`, tier enum-checked, absent tier/status
-/// writing `null`) that `worker add`'s own CLI door builds. Any OTHER native
+/// (`{nickname, cell, tier, status}`, absent role/status writing `null`)
+/// that `worker add`'s own CLI door builds. Any OTHER native
 /// door that needs to register a worker (dispatch prepare --claim, dp-r1)
 /// calls this too, through [`worker_mutate`], rather than re-deriving the
 /// record shape — forking it would let the two callers' records drift.
 ///
+/// The value is validated by [`worker_role_value`] — shape, never
+/// membership. The persisted KEY stays `tier` deliberately. Nothing in the tree reads
+/// `workers[].tier` — the cap door's registered-worker check
+/// (`verbs/cells/handlers_close.rs`'s `registered_worker_for_cell`) matches
+/// on `nickname` + `cell` alone — so a rename would buy no behavior, while
+/// every worker row already on disk (including the in-flight ones this very
+/// change is dispatched under) carries `tier`. A split key would leave the
+/// registry half one spelling and half the other for no gain.
+///
 /// Upserts by the `(nickname, cell)` pair: the SAME pair refreshes the live
-/// record in place (tier/status take the freshly passed values) rather than
+/// record in place (role/status take the freshly passed values) rather than
 /// appending a second row — `run_worker_add` and `register_worker_for_cell`
 /// both inherit this automatically, since neither re-derives the record
 /// shape. The SAME nickname against a DIFFERENT cell still appends: one
@@ -80,25 +107,18 @@ pub(crate) fn push_worker_record(
     workers: &mut Vec<Value>,
     nickname: &str,
     cell: &str,
-    tier: Option<&str>,
+    role: Option<&str>,
     status: Option<&str>,
 ) -> Result<String, Err2> {
-    let tier_val: Value = match tier {
+    let role_val: Value = match role {
         None => Value::Null,
-        Some(t) => {
-            if !MODEL_TIERS.contains(&t) {
-                return Err(Err2::Msg(format!(
-                    "worker add: invalid tier \"{t}\" — must be one of extraction, generation, ceiling."
-                )));
-            }
-            json!(t)
-        }
+        Some(r) => worker_role_value("worker add", r)?,
     };
     let status_val: Value = match status {
         None => Value::Null,
         Some(s) => json!(s),
     };
-    let record = json!({"nickname": nickname, "cell": cell, "tier": tier_val, "status": status_val});
+    let record = json!({"nickname": nickname, "cell": cell, "tier": role_val, "status": status_val});
     let existing = workers.iter_mut().find(|w| {
         truthy(w)
             && opt_strict_eq(jget(w, "nickname"), Some(&Value::String(nickname.to_string())))
@@ -122,9 +142,9 @@ pub(crate) fn run_worker_add(flags: Flags, use_json: bool, t0: Instant) -> Optio
     let out = thrown_ok(worker_mutate(&ctx.root, |workers| {
         let nickname = require_flag(&flags, "nickname")?;
         let cell = require_flag(&flags, "cell")?;
-        let tier = flag_string(&flags, "tier");
+        let role = flag_string(&flags, "tier");
         let status = flag_string(&flags, "status");
-        push_worker_record(workers, &nickname, &cell, tier.as_deref(), status.as_deref())
+        push_worker_record(workers, &nickname, &cell, role.as_deref(), status.as_deref())
     }));
     finish(&ctx, out)
 }
@@ -135,7 +155,7 @@ pub(crate) fn run_worker_add(flags: Flags, use_json: bool, t0: Instant) -> Optio
 /// [`worker_mutate`] lock+read+write frame and the SAME [`push_worker_record`]
 /// body `run_worker_add` uses, never a second copy of the record shape.
 ///
-/// Every failure here (an invalid `tier`, a lock/read/write error) is
+/// Every failure here (a blank `role`, a lock/read/write error) is
 /// returned as `Err(message)` rather than propagated as a delegate or a
 /// thrown command failure — the caller's claim already stands and must
 /// never be unwound over a registration problem; it only needs to know the
@@ -144,10 +164,10 @@ pub(crate) fn register_worker_for_cell(
     root: &Path,
     nickname: &str,
     cell: &str,
-    tier: Option<&str>,
+    role: Option<&str>,
 ) -> Result<(), String> {
     match worker_mutate(root, |workers| {
-        push_worker_record(workers, nickname, cell, tier, Some("running"))
+        push_worker_record(workers, nickname, cell, role, Some("running"))
     }) {
         Ok(Out::Thrown(m)) => Err(m),
         Ok(_) => Ok(()),
@@ -184,13 +204,12 @@ pub(crate) fn run_worker_update(flags: Flags, use_json: bool, t0: Instant) -> Op
         if let Some(c) = flag_string(&flags, "cell") {
             worker.insert("cell".into(), json!(c));
         }
-        if let Some(t) = flag_string(&flags, "tier") {
-            if !MODEL_TIERS.contains(&t.as_str()) {
-                return Err(Err2::Msg(format!(
-                    "worker update: invalid tier \"{t}\" — must be one of extraction, generation, ceiling."
-                )));
-            }
-            worker.insert("tier".into(), json!(t));
+        // D4 (store 97ce5225): the value is the ROLE the dispatch resolved,
+        // so the closed three-value enum is gone — shape only, never
+        // membership. The persisted key stays `tier` for the reason
+        // `push_worker_record` documents.
+        if let Some(r) = flag_string(&flags, "tier") {
+            worker.insert("tier".into(), worker_role_value("worker update", &r)?);
         }
         if let Some(s) = flag_string(&flags, "status") {
             worker.insert("status".into(), json!(s));
@@ -630,15 +649,15 @@ mod tests {
     // ── rph-4 item 1: (nickname, cell) upsert ──────────────────────────────
 
     /// The SAME `(nickname, cell)` pair upserts: a second `push_worker_record`
-    /// call for the identical pair refreshes tier/status on the live record
+    /// call for the identical pair refreshes role/status on the live record
     /// in place — never a second, duplicate row.
     #[test]
     fn push_worker_record_upserts_the_same_nickname_cell_pair() {
         let mut workers: Vec<Value> = Vec::new();
-        push_worker_record(&mut workers, "w1", "c1", Some("generation"), Some("running")).unwrap();
-        push_worker_record(&mut workers, "w1", "c1", Some("ceiling"), Some("capped")).unwrap();
+        push_worker_record(&mut workers, "w1", "c1", Some("code"), Some("running")).unwrap();
+        push_worker_record(&mut workers, "w1", "c1", Some("review"), Some("capped")).unwrap();
         assert_eq!(workers.len(), 1, "the same (nickname, cell) pair must never duplicate");
-        assert_eq!(workers[0].get("tier"), Some(&json!("ceiling")));
+        assert_eq!(workers[0].get("tier"), Some(&json!("review")));
         assert_eq!(workers[0].get("status"), Some(&json!("capped")));
     }
 
@@ -647,8 +666,8 @@ mod tests {
     #[test]
     fn push_worker_record_appends_for_the_same_nickname_a_different_cell() {
         let mut workers: Vec<Value> = Vec::new();
-        push_worker_record(&mut workers, "w1", "c1", Some("generation"), Some("running")).unwrap();
-        push_worker_record(&mut workers, "w1", "c2", Some("generation"), Some("running")).unwrap();
+        push_worker_record(&mut workers, "w1", "c1", Some("code"), Some("running")).unwrap();
+        push_worker_record(&mut workers, "w1", "c2", Some("code"), Some("running")).unwrap();
         assert_eq!(workers.len(), 2, "a different cell for the same worker is not a duplicate");
         assert_eq!(workers[0].get("cell"), Some(&json!("c1")));
         assert_eq!(workers[1].get("cell"), Some(&json!("c2")));
@@ -664,11 +683,11 @@ mod tests {
         let tmp = tmp_root();
         let root = tmp.path();
         worker_mutate(root, |workers| {
-            push_worker_record(workers, "w1", "c1", Some("generation"), Some("running"))
+            push_worker_record(workers, "w1", "c1", Some("code"), Some("running"))
         })
         .unwrap();
         worker_mutate(root, |workers| {
-            push_worker_record(workers, "w1", "c1", Some("generation"), Some("capped"))
+            push_worker_record(workers, "w1", "c1", Some("code"), Some("capped"))
         })
         .unwrap();
         let state = read_state_strict(root).unwrap();
@@ -679,5 +698,83 @@ mod tests {
             "re-registering the live (nickname, cell) pair must not duplicate it: {workers:?}"
         );
         assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+    }
+
+    // ── D4 (store 97ce5225): the closed tier enum is retired ──────────────
+
+    /// The worker registry records the ROLE a dispatch resolved, so no closed
+    /// three-value list constrains it any more. Every name here — the job
+    /// names D8 recommends, a name bee ships no config for, and the two cost
+    /// words the retired enum used to be — is accepted identically: the check
+    /// asks "is this a name", never "is this one of three words".
+    #[test]
+    fn a_worker_row_records_any_non_blank_role_name() {
+        for role in ["code", "read", "test", "docs", "review", "design", "generation", "ceiling"] {
+            let mut workers: Vec<Value> = Vec::new();
+            push_worker_record(&mut workers, "w1", "c1", Some(role), Some("running"))
+                .unwrap_or_else(|_| panic!("role \"{role}\" must be recorded, not refused"));
+            assert_eq!(workers[0].get("tier"), Some(&json!(role)), "role {role}");
+        }
+    }
+
+    /// Shape is still checked, on BOTH doors: presence-and-shape replaced
+    /// membership, it did not replace validation. A blank or whitespace-only
+    /// value names no job at all, so it is refused with the FIX line naming
+    /// the verb the caller actually typed.
+    #[test]
+    fn a_blank_role_is_refused_by_both_worker_doors() {
+        for blank in ["", " ", "\t", "   \n "] {
+            let Err(Err2::Msg(m)) = worker_role_value("worker add", blank) else {
+                panic!("a blank role must refuse, not record: {blank:?}");
+            };
+            assert!(m.starts_with("worker add: invalid tier"), "{m}");
+            assert!(m.contains("FIX:"), "the refusal must name its remedy: {m}");
+            let Err(Err2::Msg(m)) = worker_role_value("worker update", blank) else {
+                panic!("a blank role must refuse on update too: {blank:?}");
+            };
+            assert!(m.starts_with("worker update: invalid tier"), "{m}");
+        }
+        let mut workers: Vec<Value> = Vec::new();
+        assert!(
+            push_worker_record(&mut workers, "w1", "c1", Some(""), Some("running")).is_err(),
+            "push_worker_record must inherit the shape refusal"
+        );
+        assert!(workers.is_empty(), "a refused row must never be pushed: {workers:?}");
+    }
+
+    /// State transition (test matrix row 5): a worker row written BEFORE this
+    /// change — a live one, carrying `tier: "generation"` from the retired
+    /// enum — must still satisfy the cap door's registered-worker check, or
+    /// this change would refuse correct caps for work already in flight. The
+    /// check matches on `nickname` + `cell` and reads the role value not at
+    /// all, which is why the persisted key was left alone.
+    #[test]
+    fn a_worker_row_written_before_this_change_still_satisfies_the_cap_door() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        worker_mutate(root, |workers| {
+            workers.push(json!({
+                "nickname": "old-w", "cell": "c1", "tier": "generation", "status": "running"
+            }));
+            Ok("seeded a pre-change row".to_string())
+        })
+        .unwrap();
+        worker_mutate(root, |workers| {
+            push_worker_record(workers, "new-w", "c2", Some("code"), Some("running"))
+        })
+        .unwrap();
+
+        assert!(
+            crate::verbs::cells::registered_worker_for_cell(root, "c1", Some("old-w")).unwrap(),
+            "the pre-change row must keep proving its worker"
+        );
+        assert!(
+            crate::verbs::cells::registered_worker_for_cell(root, "c2", Some("new-w")).unwrap(),
+            "a row written after the change proves its worker the same way"
+        );
+        assert!(
+            !crate::verbs::cells::registered_worker_for_cell(root, "c2", Some("old-w")).unwrap(),
+            "the check still fails closed for a worker that holds a different cell"
+        );
     }
 }

@@ -228,6 +228,38 @@ use crate::version::BEE_VERSION;
         assert_eq!(line, "Lanes: 2 other lane(s) [swarming=1 idle=1] (ids: alpha, beta)");
     }
 
+    /// The row order above is a PROMISE, not the filesystem's accident:
+    /// `list_lanes` returns whatever order the OS enumerates the lane
+    /// directory in, and no filesystem sorts that for us. Write the lanes in
+    /// reverse order, with names whose creation order and sort order
+    /// disagree, and the display builder still hands the caller one stable
+    /// order — otherwise `bee status` renders the same store two ways.
+    #[test]
+    fn lane_rows_order_by_feature_id_not_by_directory_enumeration() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for feature in ["zulu", "mike", "alpha", "delta"] {
+            write(
+                root,
+                &format!(".bee/lanes/{feature}.json"),
+                &format!(r#"{{"feature":"{feature}","phase":"idle"}}"#),
+            );
+        }
+        let mut ctx = ctx_for(root);
+        let features: Vec<String> = build_lane_rows(&mut ctx)
+            .unwrap()
+            .iter()
+            .map(|row| row.get("feature").and_then(|v| v.as_str()).unwrap().to_string())
+            .collect();
+        assert_eq!(features, vec!["alpha", "delta", "mike", "zulu"]);
+        // The summary's `ids` ride the same order — it derives from the rows.
+        let summary = build_lane_summary(&mut ctx).unwrap();
+        assert_eq!(
+            summary.get("ids"),
+            Some(&json!(["alpha", "delta", "mike", "zulu"]))
+        );
+    }
+
     #[test]
     fn staleness_warnings_fire_in_node_order() {
         let tmp = tempfile::tempdir().unwrap();
@@ -345,14 +377,21 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[8], "Active reservations: 0");
         assert_eq!(lines[9], "Active workers: 0");
         assert_eq!(lines[10], "Critical patterns file: absent");
-        assert!(lines[11].starts_with("Models (claude): generation=sonnet extraction=haiku review=opus"));
+        // model-role-split D2 (store 06e49368): the printed order is DERIVED
+        // now — the slots bee's own dispatch kinds resolve first
+        // (`slot_for_kind` over `DISPATCH_KINDS`), then the rest in map
+        // order. `extraction` reads third rather than second because no
+        // dispatch kind resolves it any more (`gather` goes to
+        // `generation`), not because a list was re-typed.
+        assert!(lines[11]
+            .starts_with("Models (claude): generation=sonnet review=opus extraction=haiku"));
         // opencode-support oc-14: opencode now carries a built-in default
         // too (the free `opencode/*` provider names oc-14 bakes into every
         // rendered `.opencode/agent/bee-*.md`), so its line prints even
         // unconfigured — same as claude's line above.
         assert_eq!(
             lines[12],
-            "Models (opencode): generation=opencode/big-pickle extraction=opencode/ling-3.0-tiny-free review=opencode/nemotron-3-ultra-free"
+            "Models (opencode): generation=opencode/big-pickle review=opencode/nemotron-3-ultra-free extraction=opencode/ling-3.0-tiny-free"
         );
         // Idle repo with no next_action override -> defaultState's line.
         assert_eq!(
@@ -384,10 +423,11 @@ use crate::version::BEE_VERSION;
         let status = build_status(&mut ctx, false).unwrap();
         let text = render_status_text(&status);
         let lines: Vec<&str> = text.split('\n').collect();
-        assert!(lines[10].starts_with("Models (claude): generation=sonnet extraction=haiku review=opus"));
+        assert!(lines[10]
+            .starts_with("Models (claude): generation=sonnet review=opus extraction=haiku"));
         assert_eq!(
             lines[11],
-            "Models (opencode): generation=opencode/big-pickle extraction=opencode/ling-3.0-tiny-free review=opencode/nemotron-3-ultra-free"
+            "Models (opencode): generation=opencode/big-pickle review=opencode/nemotron-3-ultra-free extraction=opencode/ling-3.0-tiny-free"
         );
     }
 
@@ -2585,6 +2625,133 @@ use crate::version::BEE_VERSION;
         problems.iter().map(|p| p.code).collect()
     }
 
+    // ── one parser (model-role-split D1 store `cd72ec97`, D2 store `06e49368`)
+
+    /// The user-visible half of the third-copy bug. An operator who follows
+    /// this feature's own advice — add `models.claude.test`, mark a cell
+    /// `role: test` — got a working dispatch and then saw NOTHING about
+    /// `test` in `bee status`, because status parsed the same config through
+    /// a private copy keyed on a closed four-word list and dropped every
+    /// other key. status reads the ONE parser now, so the role it reports and
+    /// the role dispatch resolves are the same fact.
+    #[test]
+    fn status_carries_a_role_configured_outside_the_historical_names() {
+        let raw = json!({"claude": {
+            "generation": "sonnet",
+            "test": "opus",
+            "design": {"model": "opus", "effort": "high"},
+        }});
+        let models = normalize_models(Some(&raw));
+        let claude = models.get("claude").and_then(|v| v.as_object()).expect("claude");
+        assert_eq!(claude.get("test"), Some(&json!("opus")));
+        assert_eq!(claude.get("design"), Some(&json!({"model": "opus", "effort": "high"})));
+        // The historical names still read exactly as they did.
+        assert_eq!(claude.get("generation"), Some(&json!("sonnet")));
+        assert_eq!(claude.get("extraction"), Some(&json!("haiku")));
+        assert_eq!(claude.get("review"), Some(&json!("opus")));
+
+        // One parser, one answer: for every runtime status does not seed,
+        // what status reports IS what dispatch resolves — not a copy of it.
+        let shared = crate::verbs::drivers::normalize_models(Some(&raw));
+        assert_eq!(models.get("claude"), shared.get("claude"));
+        assert_eq!(models.get("codex"), shared.get("codex"));
+
+        // A junk value under an invented name is still junk: dropped, exactly
+        // as a junk `generation` is.
+        let junk = json!({"claude": {"test": {"neither": "cli nor model"}}});
+        let dropped = normalize_models(Some(&junk));
+        assert!(dropped
+            .get("claude")
+            .and_then(|v| v.as_object())
+            .and_then(|c| c.get("test"))
+            .is_none());
+    }
+
+    /// The one thing status legitimately keeps of its own is the opencode
+    /// SEED (oc-14), which is a default and not a parser: the rendered
+    /// `.opencode/agent/bee-*.md` files pin real models, so status must
+    /// report the same names the drift check compares against.
+    #[test]
+    fn the_opencode_seed_survives_the_collapse() {
+        // (a) unconfigured -> the baked-in names, not drivers' all-null
+        // dispatch default.
+        let unconfigured = normalize_models(None);
+        let oc = unconfigured.get("opencode").and_then(|v| v.as_object()).expect("opencode");
+        for (slot, model) in crate::onboard::templates::AGENT_TIER_DEFAULTS_OPENCODE {
+            assert_eq!(oc.get(*slot), Some(&json!(model)));
+        }
+
+        // (b) a configured value wins over the seed; untouched slots keep it.
+        let configured =
+            normalize_models(Some(&json!({"opencode": {"generation": "opencode/other-free"}})));
+        let oc = configured.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("generation"), Some(&json!("opencode/other-free")));
+        assert_eq!(oc.get("extraction"), Some(&json!("opencode/ling-3.0-tiny-free")));
+
+        // (c) an explicit null turns the slot OFF — the seed never
+        // resurrects a model the operator just cleared.
+        let cleared = normalize_models(Some(&json!({"opencode": {"review": null}})));
+        let oc = cleared.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("review"), Some(&json!(null)));
+
+        // (d) a junk value is not a value: the seed stands, same as before.
+        let junk = normalize_models(Some(&json!({"opencode": {"review": 7}})));
+        let oc = junk.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("review"), Some(&json!("opencode/nemotron-3-ultra-free")));
+
+        // (e) an operator-invented opencode role reaches status too.
+        let invented =
+            normalize_models(Some(&json!({"opencode": {"test": "opencode/big-pickle"}})));
+        let oc = invented.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("test"), Some(&json!("opencode/big-pickle")));
+    }
+
+    /// The drift check asks the same question `onboard::agents` asks when it
+    /// RENDERS these files — one role table, one resolver — instead of
+    /// restating the agent/role mapping and the review fall-through.
+    #[test]
+    fn agent_file_drift_reads_the_shared_role_table() {
+        // Every agent the shared table names is checked; no second list in
+        // this file decides which files are looked at.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for (agent, _roles) in crate::onboard::templates::AGENT_ROLES_BY_NAME {
+            write_agent_file(root, agent, &format!("name: {agent}\nmodel: stale-model"));
+        }
+        let problems = validate_agent_files_drift(&ctx_for(root), None);
+        let mut agents: Vec<&str> = problems.iter().filter_map(|p| p.agent).collect();
+        agents.sort();
+        let mut expected: Vec<&str> =
+            crate::onboard::templates::AGENT_ROLES_BY_NAME.iter().map(|(a, _)| *a).collect();
+        expected.sort();
+        assert_eq!(agents, expected);
+
+        // A composite slot renders its PRIMARY model into the agent file
+        // (`onboard::agents` resolves it through `resolve_role`), so the
+        // drift check reads the same primary rather than "no model name" —
+        // the old private copy read `.get("model")` off the composite and
+        // reported a correctly-rendered file as stale.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet-primary");
+        let cfg = json!({"models": {"claude": {"generation": {
+            "primary": {"kind": "native", "model": "sonnet-primary"},
+            "fallback_policy": "explicit-only",
+            "fallback": {"kind": "cli", "command": "codex exec -s read-only -"},
+        }}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+
+        // `bee-review` inherits generation because the TABLE declares
+        // `["review", "generation"]`, not because this file says so.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-review", "name: bee-review\nmodel: my-own-generation");
+        let cfg =
+            json!({"models": {"claude": {"generation": "my-own-generation", "review": null}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+    }
+
+
     #[test]
     fn valid_models_configs_produce_zero_problems() {
         for config in [
@@ -2642,7 +2809,7 @@ use crate::version::BEE_VERSION;
             assert_eq!(unsafe_rows.len(), 1, "flag {flag}: {:?}", codes(&problems));
             assert!(unsafe_rows[0].message.contains(flag), "row must name {flag}");
             assert_eq!(unsafe_rows[0].runtime, Some("claude"));
-            assert_eq!(unsafe_rows[0].slot, Some("generation"));
+            assert_eq!(unsafe_rows[0].slot.as_deref(), Some("generation"));
         }
         // Two aliases in one command -> one row each.
         let problems = validate_models_config(Some(&json!({"models": {"codex": {
@@ -2773,7 +2940,7 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-gather"));
-        assert_eq!(problems[0].slot, Some("generation"));
+        assert_eq!(problems[0].slot.as_deref(), Some("generation"));
         assert!(problems[0].message.contains("model: \"opus\""));
         assert!(problems[0].message.contains("is \"sonnet\""));
 
@@ -2813,7 +2980,7 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-build"));
-        assert_eq!(problems[0].slot, Some("generation"));
+        assert_eq!(problems[0].slot.as_deref(), Some("generation"));
         assert!(problems[0].message.contains("is now a herding executor"));
         assert!(!problems[0].message.contains("cli"));
         assert!(problems[0].message.contains("bee onboard --apply"));
@@ -3598,7 +3765,13 @@ use crate::version::BEE_VERSION;
         expect_kind("gate_bypass_level", Value::is_string);
         expect_kind("ship_visibility", Value::is_string);
         expect_kind("models", Value::is_object);
-        expect_kind("tier_mix", Value::is_object);
+        // model-role-split D6: `tier_mix` is DELIBERATELY renamed to
+        // `role_mix` — the one breaking key change in that feature, reasoned
+        // at its emit site (`build.rs`) and pinned by
+        // `bee_status_json_renames_tier_mix_to_role_mix` below. It is listed
+        // here under its new name rather than dropped, so this probe keeps
+        // guarding the key it guards.
+        expect_kind("role_mix", Value::is_object);
         expect_kind("handoff", Value::is_null);
         expect_kind("cells", Value::is_object);
         expect_kind("lanes", Value::is_object);
@@ -3627,6 +3800,108 @@ use crate::version::BEE_VERSION;
             let entry = vget(records, g).unwrap_or_else(|| panic!("gate_records missing {g}"));
             assert!(vget(entry, "state").unwrap().is_string());
         }
+    }
+
+    /// model-role-split D6 (store 97ce5225), and the probe the plan asks for
+    /// on the feature's ONE public-output change.
+    ///
+    /// Three things are pinned at once, because the defect this replaces was
+    /// all three failing together and none of them going red:
+    ///
+    /// 1. The RENAME is real: `tier_mix` is gone, `role_mix` is there. A
+    ///    consumer of the old key fails loudly at the read instead of
+    ///    reading zeros out of a retained-but-hollow object.
+    /// 2. The mix counts ROLES, from the open set — `counts` holds exactly
+    ///    the role names the store carries, with no fixed list in between.
+    /// 3. The escalation share is beside it, and it sees a cell that carries
+    ///    `escalate: true` and NO `tier` at all. That cell was invisible to
+    ///    this counter before: the enforcing door already read the flag while
+    ///    the advice still watched a tier value.
+    #[test]
+    fn bee_status_json_renames_tier_mix_to_role_mix_and_counts_the_escalation_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1","mode":"standard"}"#);
+        // Two escalated cells, marked the NEW way: the flag, no `tier` key.
+        write(
+            root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","lane":"standard","title":"t","role":"code","escalate":true}"#,
+        );
+        write(
+            root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"f1","status":"open","lane":"standard","title":"t","role":"code","escalate":true}"#,
+        );
+        write(
+            root,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","feature":"f1","status":"open","lane":"standard","title":"t","role":"read"}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+
+        assert!(status.get("tier_mix").is_none(), "the renamed key must be GONE, not hollow");
+        let rm = status.get("role_mix").expect("role_mix");
+        let counts = vget(rm, "counts").expect("counts");
+        assert_eq!(counts, &json!({"code": 2, "read": 1}), "counts are role names, sorted");
+        assert_eq!(vget(rm, "cells"), Some(&json!(3)), "the denominator is the feature's cells");
+        assert_eq!(vget(rm, "escalated"), Some(&json!(2)), "the flag is seen with no tier present");
+        assert_eq!(
+            vget(rm, "escalationShare").and_then(|v| v.as_f64()).map(|s| (s * 1000.0).round()),
+            Some(667.0)
+        );
+
+        // The scarcity advice fires off the same flag and the same
+        // denominator — it does not report all-clear because its old input
+        // moved out from under it.
+        let cs = status.get("ceiling_scarcity").expect("ceiling_scarcity");
+        assert_eq!(vget(cs, "ceiling"), Some(&json!(2)));
+        assert_eq!(vget(cs, "cells"), Some(&json!(3)));
+        assert_eq!(vget(cs, "pct"), Some(&json!(67)));
+
+        let text = render_status_text(&status);
+        assert!(text.contains("Role mix: code=2 read=1 (escalated 2/3, 67%)"), "{text}");
+        assert!(
+            text.contains("⚠ Ceiling scarcity: 2/3 cells escalated onto the session model (67%)"),
+            "{text}"
+        );
+        assert!(!text.contains("Tier mix"), "no tier vocabulary survives the human line:\n{text}");
+    }
+
+    /// The legacy spelling still counts. A store that was never migrated
+    /// writes `tier: "ceiling"` and no flag; if this counter stopped seeing
+    /// it, every pre-migration repo would read "nothing is escalated" — the
+    /// silent all-clear that is worse than no line at all.
+    #[test]
+    fn role_mix_still_counts_the_legacy_ceiling_tier_spelling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1","mode":"standard"}"#);
+        for id in ["c-1", "c-2"] {
+            write(
+                root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f1","status":"open","lane":"standard","title":"t","tier":"ceiling"}}"#
+                ),
+            );
+        }
+        write(
+            root,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","feature":"f1","status":"open","lane":"standard","title":"t","tier":"generation"}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let rm = status.get("role_mix").expect("role_mix");
+        assert_eq!(vget(rm, "escalated"), Some(&json!(2)));
+        assert_eq!(vget(rm, "cells"), Some(&json!(3)));
+        // No cell carries `role`, so all three land in the honest bucket —
+        // never silently attributed to a role nobody declared.
+        assert_eq!(vget(rm, "counts"), Some(&json!({"unassigned": 3})));
     }
 
     // ── trun-7: run_state, read straight off the projection ────────────────
@@ -4065,4 +4340,216 @@ use crate::version::BEE_VERSION;
             Some(&json!("bee-wayfinding")),
             "the handoff rule wins over the D5 override"
         );
+    }
+
+    // ── the PRINTED line over the open role set (mrs-27) ───────────────────
+
+    /// The half of the third-copy bug that `bee status --json` never fixed.
+    ///
+    /// Before this cell, `bee status` printed the claude line from a FIXED
+    /// three-slot format string. An operator who did exactly what this
+    /// feature tells them to do — add `models.claude.test`, mark a cell
+    /// `role: test` — saw `test` in `--json` and NOT in the line they
+    /// actually read, which is the only place most people look. Verified
+    /// against the built binary before the change: the line read
+    /// `generation=sonnet extraction=haiku review=opus` and said nothing
+    /// about `test`.
+    #[test]
+    fn the_printed_models_line_names_a_role_the_operator_invented() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"claude":{"test":"opus","design":{"model":"opus","effort":"high"}}}}"#,
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        let claude = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (claude): "))
+            .expect("claude models line");
+
+        // Both invented names are PRINTED, with their values — not counted,
+        // not dropped, not left to `--json`.
+        assert!(claude.contains(" test=opus"), "{claude}");
+        assert!(claude.contains(" design=opus@high"), "{claude}");
+        // And the historical names still read exactly as before.
+        assert!(claude.contains("generation=sonnet"), "{claude}");
+        assert!(claude.contains("extraction=haiku"), "{claude}");
+        assert!(claude.contains("review=opus"), "{claude}");
+
+        // The printed line and the JSON are the same fact, name for name.
+        let json_roles: Vec<&String> = status
+            .get("models")
+            .and_then(|m| m.get("claude"))
+            .and_then(|c| c.as_object())
+            .expect("claude table")
+            .keys()
+            .collect();
+        for name in json_roles {
+            assert!(claude.contains(&format!(" {name}=")), "{name} missing from {claude}");
+        }
+    }
+
+    /// The bound, and the promise it makes: a host with a dozen roles still
+    /// prints ONE scannable line, the names bee's own dispatch kinds resolve
+    /// are never the ones counted away, and the remainder is stated out loud
+    /// rather than silently dropped.
+    #[test]
+    fn the_printed_models_line_stays_scannable_on_a_twelve_role_host() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        // Twelve roles with LONG model names — the case a count-based cap
+        // cannot tell from twelve short ones (about 380 characters of role
+        // text unbounded, five wrapped lines for one status row).
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"opencode":{
+                "generation":"opencode/big-pickle",
+                "extraction":"opencode/ling-3.0-tiny-free",
+                "review":"opencode/nemotron-3-ultra-free",
+                "code":"opencode/qwen-3-coder-free",
+                "read":"opencode/ling-3.0-tiny-free",
+                "test":"opencode/deepseek-v3-free",
+                "design":"opencode/nemotron-3-ultra-free",
+                "docs":"opencode/ling-3.0-tiny-free",
+                "migrate":"opencode/qwen-3-coder-free",
+                "triage":"opencode/deepseek-v3-free",
+                "perf":"opencode/nemotron-3-ultra-free",
+                "audit":"opencode/big-pickle"}}}"#,
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        let line = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (opencode): "))
+            .expect("opencode models line");
+
+        // ONE line, and a bounded one.
+        assert!(line.chars().count() < 200, "{} chars: {line}", line.chars().count());
+        // The remainder is COUNTED, never silently dropped, and it names
+        // where the rest lives.
+        assert!(line.contains(" +9 more (--json)"), "{line}");
+        // Truncation can never eat the slots bee's own dispatch kinds
+        // resolve: those are ordered first for exactly this reason.
+        assert!(line.contains("generation=opencode/big-pickle"), "{line}");
+        assert!(line.contains("review=opencode/nemotron-3-ultra-free"), "{line}");
+    }
+
+    /// A short-named host of the same size loses nothing it did not have to:
+    /// the budget is spent on TEXT, so cheap names buy more roles.
+    #[test]
+    fn the_models_line_budget_is_width_not_a_role_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":"sonnet","extraction":"haiku","review":"opus",
+                "advisor":"opus","code":"sonnet","read":"haiku","test":"opus","design":"opus",
+                "docs":"haiku","migrate":"sonnet","triage":"haiku","perf":"opus"}}}"#,
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        let line = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (claude): "))
+            .expect("claude models line");
+        // Same twelve roles as the opencode case above; short names, so NINE
+        // are named instead of three. A count-based cap would have shown the
+        // same number on both.
+        let named = line.matches('=').count();
+        assert!(named >= 9, "only {named} roles named: {line}");
+        assert!(line.contains(" +3 more (--json)"), "{line}");
+    }
+
+    /// codex had no printed line at all — two runtimes rendered by hand out
+    /// of the three status itself carries, so an operator who configured
+    /// `models.codex` read a status page silent about the runtime they
+    /// configured. It prints when configured, and stays absent when not, so
+    /// no existing host reads a new all-null row.
+    #[test]
+    fn a_configured_codex_runtime_gets_its_own_printed_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+
+        // (a) unconfigured codex: all-null defaults, no line.
+        write(root, ".bee/config.json", r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        let mut ctx = ctx_for(root);
+        let text = render_status_text(&build_status(&mut ctx, false).unwrap());
+        assert!(!text.contains("Models (codex):"), "{text}");
+
+        // (b) configured codex, invented role included: its own line.
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"codex":{"generation":"gpt-5-codex","test":"gpt-5"}}}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let text = render_status_text(&build_status(&mut ctx, false).unwrap());
+        let line = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (codex): "))
+            .expect("codex models line");
+        assert!(line.contains("generation=gpt-5-codex"), "{line}");
+        assert!(line.contains(" test=gpt-5"), "{line}");
+    }
+
+    /// The validation half. A malformed value under a role the operator
+    /// invented was checked by NOBODY: `validate_models_config` walked a
+    /// closed four-name list, so `models.claude.test: 7` earned silence while
+    /// the identical `models.claude.generation: 7` warned. Verified against
+    /// the built binary before the change — `bee status` printed no
+    /// `config validate` row for the invented names at all.
+    #[test]
+    fn a_malformed_value_under_an_invented_role_is_validated_like_any_other() {
+        // (a) the exact contrast that made the closed list visible.
+        let invented =
+            validate_models_config(Some(&json!({"models": {"claude": {"test": 7}}})));
+        let historical =
+            validate_models_config(Some(&json!({"models": {"claude": {"generation": 7}}})));
+        assert_eq!(codes(&invented), vec!["slot-value-malformed"]);
+        assert_eq!(codes(&invented), codes(&historical));
+        assert_eq!(invented[0].slot.as_deref(), Some("test"));
+        assert!(invented[0].message.contains("models.claude.test"), "{}", invented[0].message);
+
+        // (b) every check below the entry point reaches an invented name too,
+        // not just the value-shape one at the top.
+        let deeper = validate_models_config(Some(&json!({"models": {"claude": {
+            "design": {"neither": "cli nor model"},
+            "migrate": {"kind": "cli"},
+            "audit": {"primary": {"kind": "native", "model": "opus"}},
+        }}})));
+        let mut seen: Vec<(&str, &str)> =
+            deeper.iter().map(|p| (p.code, p.slot.as_deref().unwrap_or(""))).collect();
+        seen.sort_unstable();
+        assert_eq!(
+            seen,
+            vec![
+                ("cli-malformed", "migrate"),
+                ("composite-fallback-policy-missing", "audit"),
+                ("model-shape-malformed", "design"),
+            ]
+        );
+
+        // (c) a well-formed invented role is silent, exactly like a
+        // well-formed historical one — the walk widened, the bar did not move.
+        assert!(validate_models_config(Some(&json!({"models": {"claude": {
+            "test": "opus",
+            "design": {"model": "opus", "effort": "high"},
+        }}})))
+        .is_empty());
     }
