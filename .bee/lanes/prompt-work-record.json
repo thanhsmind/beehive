@@ -11,17 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"prompt-work-record\" started at phase \"exploring\" (lane).",
-  "next_action": "Slice 3 in the waggledance repo: parse the work object beside BeeActivity and render it. Needs this branch merged and the binary reinstalled first.",
+  "next_action": "Merged into main at 22e4d88; capture what settled, then bee close --feature prompt-work-record.",
   "created_at": "2026-08-25T08:29:10.360Z",
   "run_state": "done",
   "waiting_on": null,
-  "merge_ready": {
-    "since": "2026-08-25T08:54:35.483Z",
-    "branch": "wt/prompt-work-record",
-    "worktree_id": "beehive--wt--prompt-work-record",
-    "uat": "approved",
-    "blocked_by": []
-  },
   "route": {
     "class": "feature",
     "lane": "standard",
