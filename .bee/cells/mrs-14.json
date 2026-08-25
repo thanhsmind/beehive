@@ -1,0 +1,51 @@
+{
+  "id": "mrs-14",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "tier": "generation",
+  "role": "code",
+  "title": "Turn ceiling into an escalation flag and move the ration onto it in one step",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 4, D5 and D6 (store 97ce5225). ceiling stops being a tier VALUE and becomes an explicit escalation flag on the cell: run on the session model, and charge the ration. THE WHOLE POINT OF THIS CELL IS ATOMICITY — introducing the flag, converting the stored ceiling cells onto it, and moving the ration to read it must land TOGETHER. Between any two of those steps the 40 percent share reads zero and the refusal at handlers_close.rs:1126-1133 can never fire, which is the reviewer-found hazard that reordered this whole slice. If you cannot do all three in one commit, BLOCK and say why rather than landing a window. What must keep working, unchanged in force: CEILING_SHARE_REFUSAL_MAX at handlers_close.rs:1063, the refusal itself, and the persisted reason on the trace (today trace.tier_reason — if you rename it, the rename covers the stored records too). The OTHER half of what ceiling meant is run-on-the-session-model: models.rs:322 short-circuits a ceiling slot to Resolved::Inherit, and prepare.rs:761-762 turns that into a session-model channel with no herding command. Both must follow the flag. This also removes ceiling's awkwardness under the open role set (decision 0015 keeps it non-configurable): once it is a flag rather than a name, the open set needs no carve-out for it. Mind that mrs-13 leaves stored ceiling cells carrying BOTH their tier and a role — converting them is yours.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The 40 percent ration refusal fires on the escalation flag exactly as it fired on the tier value, including the reason requirement",
+      "There is no commit in which the ration can read a zero share because nothing is marked — flag, conversion and ration move together",
+      "An escalated cell still resolves to the session model with no herding command",
+      "The persisted reason survives for the stored records, under whatever name it now has",
+      "ceiling is no longer a role name, so the open role set needs no exception for it"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225"
+  ],
+  "deps": [
+    "mrs-13"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

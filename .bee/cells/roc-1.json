@@ -1,0 +1,74 @@
+{
+  "id": "roc-1",
+  "feature": "release-one-command",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Make a release one command with a version argument",
+  "behavior_change": true,
+  "files": [
+    "scripts/release.sh"
+  ],
+  "read_first": [
+    "scripts/release.sh",
+    "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+  ],
+  "action": "THE ASK, from the user in their own words: they want to run one release command and pass the version in, instead of an agent hand-editing each related file first. Today scripts/release.sh only owns the TAIL of a release (tag, push, wait for release-binaries, verify assets) and REFUSES if the version it is given does not already match .claude-plugin/plugin.json at HEAD (see its step 1 and step 2). Everything before that -- bumping BOTH plugin manifests, running the regen chain, and making the release commit -- is done by hand every time. That prologue is exactly what the repo's own CLAUDE.md 'Release' section spells out as a manual checklist, and a checklist a human or an agent walks by hand is the thing this cell replaces.\n\nSCOPE: scripts/release.sh only. Do not touch CLAUDE.md, the workflows, or any Rust source.\n\nNEW CONTRACT.\n`scripts/release.sh` with NO argument keeps today's behaviour exactly: read the version from .claude-plugin/plugin.json, require it committed at HEAD, tag, push, wait, verify.\n`scripts/release.sh <VERSION>` becomes the whole release:\n  1. Preconditions, all zero-mutation refusals with a named reason: on branch main; gh present and authenticated (already checked today, keep it first); VERSION is valid semver; VERSION is strictly GREATER than the version currently in .claude-plugin/plugin.json (a downgrade or a re-release of an older number is refused by name); tag vVERSION does not already exist anywhere (local or origin -- today's step 3 only compares against HEAD, and a tag that exists elsewhere must refuse BEFORE any file is written, not after); the working tree is clean apart from nothing at all (refuse on any dirt, naming the paths, because the commit this script makes must contain the bump and the regen output and nothing else).\n  2. If VERSION already equals the committed version, say so in one line and fall through to the existing tail unchanged -- a re-run after a failed CI wait must stay idempotent and must NOT try to bump or re-commit.\n  3. Otherwise write VERSION into BOTH .claude-plugin/plugin.json AND .codex-plugin/plugin.json. Onboarding reads them as one authoritative tuple and a mismatch blocks it, so both move or neither does. Use a targeted edit of the version field, not a whole-file rewrite.\n  4. Run the regen chain by calling the CLI, not by reimplementing it: `.bee/bin/bee dev regen` (it is render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, and it stops on the first red -- devtools/mod.rs). A red regen aborts the release. If the bump has already been written to the two manifests when something later aborts, restore them to their previous values before exiting so a failed run leaves the tree as it found it.\n  5. TEST GATE, and this is the part that earns its keep: run the project's declared test command BEFORE the tag is created. Read it from .bee/config.json `commands.test` rather than hardcoding it, so the script can never drift from the one source of truth (CI reads the same field). A red suite aborts with a named refusal and NOTHING is tagged or pushed. Today the tag is created and pushed before any test runs, so a red lands as a published tag that can never move -- that is the failure this gate prevents. Provide an explicit escape, `--no-test`, which prints a loud one-line warning naming that the suite was skipped; never make skipping the default and never make it silent.\n  6. Make the release commit carrying the two manifests plus whatever regen wrote. Default subject `Release <VERSION>`; accept an optional `-m <subject>` / `--message <subject>` to override it. Commit path-scoped to the files this script itself changed -- never `git commit -a` -- so a sibling worker's in-flight edits can never be swept into a release commit.\n  7. Fall through to the existing tail unchanged.\n\nKEEP EVERY EXISTING GUARANTEE. set -euo pipefail stays. The tag stays idempotent-if-already-at-HEAD and is still refused if it exists at a different commit ('a published tag never moves'). The final line stays the `OK` line -- the repo's rule is that a release is done ONLY when that prints, so nothing may exit 0 before it. Keep every message on stderr through log()/fail() exactly as now.\n\nUSAGE + COMMENTS. Update the usage block at the top of the file, and the WHY comment, so a reader learns the new one-argument form and the test gate from the file itself. Keep the existing history note about 2.6.6/2.6.7 -- it is why the script exists.\n\nPROOF. This script pushes tags, so do NOT run it end to end. Prove it by: (a) `bash -n scripts/release.sh` clean; (b) shellcheck if available, and if it is not, say so rather than claiming it passed; (c) exercise the refusal paths for real, since they are pure preconditions -- run it from a dirty tree, with a non-semver version, with a version lower than current, and with an existing tag, and paste each refusal line; (d) prove the no-argument path still reaches the same first step it does today. If any check cannot be run in this environment, name it plainly instead of asserting it passed.",
+  "verify": "bash -n scripts/release.sh",
+  "must_haves": {
+    "truths": [
+      "scripts/release.sh <VERSION> bumps both plugin manifests, runs bee dev regen, runs the declared test suite, makes the release commit, then tags/pushes/waits/verifies -- in that order",
+      "The declared test command is read from .bee/config.json commands.test, never hardcoded",
+      "Nothing is tagged or pushed when the suite is red; --no-test exists and warns loudly",
+      "Running with no argument behaves exactly as today",
+      "Running with the version already committed is idempotent and does not re-commit",
+      "A downgrade, a bad semver, an existing tag, or a dirty tree each refuse with a named reason and zero mutations",
+      "An abort after the manifests were written restores them",
+      "The commit is path-scoped and the final OK line is still the only success exit",
+      "bash -n is clean"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "roc-w1",
+    "outcome": "scripts/release.sh <VERSION> now owns the whole release: bump both manifests, regen, run the declared suite, commit, then the existing tag/push/wait/verify tail",
+    "files_changed": [
+      "scripts/release.sh"
+    ],
+    "deviations": [
+      "shellcheck is NOT installed in this environment — not run, and not claimed; bash -n plus real execution stands in",
+      "The no-argument refusal for an uncommitted bump keeps its condition and exit but its remedy text now names the new one-command form instead of telling the reader to hand-edit and commit first",
+      "Restore-on-abort names untracked leftovers instead of deleting them, so a sibling worker's untracked file can never be eaten by a failed release",
+      "The idempotent already-committed check runs BEFORE the clean-tree refusal, because the cell says a re-run falls through to the existing tail unchanged and that tail only warns on dirt"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T05:25:31.478Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "49e28775-6532-4090-9f4e-39c083ae7af2",
+    "claimed_at": "2026-08-25T05:14:22.225Z",
+    "report": {
+      "outcome": "scripts/release.sh <VERSION> now owns the whole release: bump both manifests, regen, run the declared suite before any tag, commit path-scoped, then the unchanged tag/push/wait/verify tail; no-argument behaviour preserved",
+      "commit": "6c0a097b65a3603cb4cf926683bd74701a6b9228",
+      "files": [
+        "scripts/release.sh"
+      ],
+      "tests": "bash -n scripts/release.sh + 16 fixture runs of the refusal, restore and no-arg-parity paths — green — shell script with no unit suite; syntax check plus real execution of every zero-mutation refusal, both restore-on-abort paths, and an old-vs-new no-argument diff, in a throwaway git repo (never the real one)",
+      "deviations": [
+        "shellcheck is NOT installed in this environment — not run, and not claimed; bash -n plus real execution stands in",
+        "The no-argument refusal for an uncommitted bump keeps its condition and exit but its remedy text now names the new one-command form instead of telling the reader to hand-edit and commit first",
+        "Restore-on-abort names untracked leftovers instead of deleting them, so a sibling worker's untracked file can never be eaten by a failed release",
+        "The idempotent already-committed check runs BEFORE the clean-tree refusal, because the cell says a re-run falls through to the existing tail unchanged and that tail only warns on dirt"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 255 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

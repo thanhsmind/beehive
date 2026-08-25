@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"herding-registry-gap\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at c701893; capture what settled, then bee close --feature herding-registry-gap.",
+  "next_action": "Continue bee-planning for \"herding-registry-gap\" (lane).",
   "created_at": "2026-08-25T04:55:56.708Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Both events were the same old commit being re-reported. All five runs on the release commit are still in progress. Let me watch only the rel",
+    "asked_at": "2026-08-25T05:11:40.169Z",
+    "session": "49e28775-6532-4090-9f4e-39c083ae7af2"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",

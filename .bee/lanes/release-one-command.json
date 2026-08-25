@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-one-command",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-one-command\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"release-one-command\" (lane).",
+  "created_at": "2026-08-25T05:13:28.805Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "Fold the version bump, regen, test gate and release commit into scripts/release.sh so a release is one command with a version argument",
+    "updated_at": "2026-08-25T05:13:28.826Z",
+    "feature": "release-one-command"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T05:25:31.497Z",
+    "branch": "wt/release-one-command",
+    "worktree_id": "beehive--wt--release-one-command",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
