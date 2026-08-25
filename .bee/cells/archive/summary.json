@@ -833,5 +833,10 @@
     "capped": 1,
     "dropped": 3,
     "archived_at": "2026-08-25T09:31:37.376Z"
+  },
+  "doctor-probe-honesty": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T09:42:24.300Z"
   }
 }
