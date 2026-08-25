@@ -27,22 +27,50 @@
   "affects_skills": [],
   "affects_specs": [],
   "deps": [],
-  "status": "open",
+  "status": "capped",
   "read_first": [],
   "trace": {
     "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "the opt-in window's null boundary is pinned by a mutation-proven test, and the backfill's count provenance is stated exactly with the movable direction folded from fresh reads",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Executed inline; reason on trace.inline_reason.",
+      "Counts-under-lock must-have narrowed with recorded reason: full recount would undo the P1-B short-hold lock design.",
+      "The null-window test file rode the sibling commit faef734d; the diff carries it.",
+      "sync-ack: Test additions plus a count-provenance fix inside the migration verb; no owned skill teaches count provenance, and the null-window semantics pinned are the ones the code already shipped."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T16:11:57.444Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": null,
     "claimed_at": null,
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "sync_ack": "Test additions plus a count-provenance fix inside the migration verb; no owned skill teaches count provenance, and the null-window semantics pinned are the ones the code already shipped.",
+    "inline_reason": "Same named deviation: inline execution, orchestrator held the anchors.",
+    "report": {
+      "outcome": "a_null_valued_asked_role_is_an_opt_in_and_the_window_shuts pins the boundary and was PROVEN to bite: the exact r2 mutation (.is_some -> non-null) applied, the test failed at its named assertion, mutation reverted. already_roled now counts a role gained during the scan window from the under-lock fresh reading, pinned by an interleaved test; the doc block states the count split exactly. Named deviation from the cell text: full under-lock recounting was narrowed because it would hold the archive lock across a whole store re-scan, undoing the P1-B short-hold design — the one direction the count can move is folded instead, and role has no removal door so no other direction exists.",
+      "commit": "1ac0a663",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green, 3040 passed with only the two node-missing environmental fails — plus the deliberate mutation run showing the new tooth red at tests.rs:6089",
+      "deviations": [
+        "Executed inline; reason on trace.inline_reason.",
+        "Counts-under-lock must-have narrowed with recorded reason: full recount would undo the P1-B short-hold lock design.",
+        "The null-window test file rode the sibling commit faef734d; the diff carries it."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

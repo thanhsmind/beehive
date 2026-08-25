@@ -25,5 +25,12 @@
     "rationale": null,
     "updated_at": "2026-08-25T16:01:46.887Z",
     "feature": "role-edge-hardening"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T16:11:57.451Z",
+    "branch": "wt/role-edge-hardening",
+    "worktree_id": "beehive--wt--role-edge-hardening",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

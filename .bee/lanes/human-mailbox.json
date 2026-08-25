@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"human-mailbox\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 0716787; reload the product and test \"human-mailbox\", then either approve uat (\"bee gate --name uat --approved true --lane human-mailbox\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-planning for \"human-mailbox\" (lane).",
   "created_at": "2026-08-25T10:57:48.542Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: human-mailbox",
-    "asked_at": "2026-08-25T16:09:04.385Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "turn-end",
+    "subject": "Parity verified independently — all four carry the closed kind set, and the free-form `--deviation \"<one line>\"` shape is **gone** (0 occurr",
+    "asked_at": "2026-08-25T16:09:15.757Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
   },
   "route": {
     "class": "feature",

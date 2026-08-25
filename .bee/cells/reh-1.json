@@ -27,20 +27,50 @@
   "affects_skills": [],
   "affects_specs": [],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "read_first": [],
   "trace": {
     "worker": "main-inline",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "the forbidden ceiling key is named with a teach line, the advisor identity folds case at both doors, and a dead chain key warns instead of dying silently",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Executed inline; reason on trace.inline_reason.",
+      "sync-ack: All touches are role-surface code and its own tests; no owned skill describes the ceiling config key, the advisor case rule, or chain-key liveness — the fixes make code match what the docs already teach."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T16:11:44.557Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T16:02:35.689Z"
+    "claimed_at": "2026-08-25T16:02:35.689Z",
+    "sync_ack": "All touches are role-surface code and its own tests; no owned skill describes the ceiling config key, the advisor case rule, or chain-key liveness — the fixes make code match what the docs already teach.",
+    "inline_reason": "Same named deviation as the prior lanes: no subagents unless the user asks; the orchestrator held every review anchor.",
+    "report": {
+      "outcome": "validate_models_config names a ceiling key for every value shape with a bee cells escalate teach line (red-first: zero problems before); role_is_declarable and resolve_advisor fold case so a mis-cased Advisor key answers identically at both doors in both directions; dead_chain_keys computes the chain keys nothing can travel under and read_fallback_chains warns them once, pinned by test rather than stderr.",
+      "commit": "faef734d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green, 3040 passed with only the two node-missing environmental fails — the three new tests cover exactly the three changed surfaces",
+      "deviations": [
+        "Executed inline; reason on trace.inline_reason."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
