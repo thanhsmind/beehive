@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"lane-row-order\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"lane-row-order\" (lane).",
+  "next_action": "Merged into main at 085be46; capture what settled, then bee close --feature lane-row-order.",
   "created_at": "2026-08-25T04:20:58.549Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": "lanes_summary_vs_full asserts rows[0]==alpha against a readdir that documents itself as unordered; the test is the defect, not the reader",
     "updated_at": "2026-08-25T04:20:58.578Z",
     "feature": "lane-row-order"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T04:26:43.479Z",
-    "branch": "wt/lane-row-order",
-    "worktree_id": "beehive--wt--lane-row-order",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
