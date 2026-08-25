@@ -3460,6 +3460,70 @@ use std::time::Instant;
         assert!(update_field_problem("title", &json!("updated title")).is_none());
     }
 
+    // wgg-1: `affects_skills` holds repo-relative PATHS. A bare skill name
+    // used to sail past `cells add` and only explode at cap, inside the sync
+    // door's check (c), where it can never be satisfied — the wrong format
+    // caught at the wrong end of the cell's life. It is refused here now.
+    #[test]
+    fn add_cell_refuses_an_affects_skills_entry_that_is_not_a_skills_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("skills").join("bee-reviewing")).unwrap();
+        std::fs::write(root.join("skills").join("bee-reviewing").join("SKILL.md"), "# skill\n").unwrap();
+
+        // A bare name that names a real skill: the refusal spells out the
+        // exact replacement path.
+        let mut bare = addable("fmt-1");
+        bare["affects_skills"] = json!(["bee-reviewing"]);
+        let refusal = thrown(validate_new_cell(root, &bare));
+        assert!(
+            refusal.contains("addCell: \"affects_skills\" entry \"bee-reviewing\" is not a repo-relative path under \"skills/\""),
+            "must name the entry: {refusal}"
+        );
+        assert!(
+            refusal.contains("FIX: \"bee-reviewing\" is a bare skill name; use \"skills/bee-reviewing/SKILL.md\" instead."),
+            "must name the exact replacement path: {refusal}"
+        );
+
+        // A bare name that names no skill still refuses — it just has no
+        // exact path to offer, so it names the shape instead.
+        let mut unknown = addable("fmt-2");
+        unknown["affects_skills"] = json!(["no-such-skill"]);
+        let unknown_refusal = thrown(validate_new_cell(root, &unknown));
+        assert!(
+            unknown_refusal.contains("entry \"no-such-skill\" is not a repo-relative path")
+                && unknown_refusal.contains("skills/<skill-name>/SKILL.md"),
+            "{unknown_refusal}"
+        );
+        assert!(!unknown_refusal.contains("is a bare skill name"), "{unknown_refusal}");
+
+        // Whole-batch validation is unchanged: EVERY bad entry is named in
+        // one call, in order, and nothing is written.
+        let mut many = addable("fmt-3");
+        many["affects_skills"] =
+            json!(["bee-reviewing", "skills/bee-hive/SKILL.md", "docs/knowledge/index.md", "skills"]);
+        let problems = validate_new_cell_problems(root, &many).unwrap();
+        assert_eq!(problems.len(), 3, "{problems:?}");
+        assert!(problems[0].contains("\"bee-reviewing\""), "{problems:?}");
+        assert!(problems[1].contains("\"docs/knowledge/index.md\""), "{problems:?}");
+        assert!(problems[2].contains("entry \"skills\""), "{problems:?}");
+
+        // Paths under skills/ pass — including a nested reference file and
+        // the "./" spelling the sync door normalizes the same way.
+        let mut ok = addable("fmt-4");
+        ok["affects_skills"] = json!([
+            "skills/bee-hive/SKILL.md",
+            "skills/bee-hive/references/hive-reference.md",
+            "./skills/bee-hive/SKILL.md"
+        ]);
+        assert_eq!(validate_new_cell_problems(root, &ok).unwrap(), Vec::<String>::new());
+
+        // affects_specs keeps its shape-only check — it has no cap-time door.
+        let mut specs = addable("fmt-5");
+        specs["affects_specs"] = json!(["bee-reviewing"]);
+        assert!(validate_new_cell(root, &specs).is_ok());
+    }
+
     #[test]
     fn add_cells_report_aggregates_every_failure_and_writes_nothing() {
         let tmp = tempfile::tempdir().unwrap();
@@ -6795,6 +6859,38 @@ use std::time::Instant;
         assert_eq!(capped["status"], json!("capped"));
     }
 
+    // wgg-1: check (c)'s COMPARISON is unchanged; only its wording grows.
+    // A prediction written as a bare skill name can never match a touched
+    // path, so the refusal names it as the input error it is and prints the
+    // path that would have matched — belt and braces for cells written
+    // before `cells add` began refusing the format.
+    #[test]
+    fn a_bare_skill_name_prediction_is_named_as_a_format_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        std::fs::create_dir_all(root.join("skills").join("bee-reviewing")).unwrap();
+        std::fs::write(root.join("skills").join("bee-reviewing").join("SKILL.md"), "# skill\n").unwrap();
+        let mut c = cell("sd-5", "claimed", "f", json!([]));
+        c["affects_skills"] = json!(["bee-reviewing"]);
+        write_cell_fixture(root, "sd-5", &c);
+
+        let flags = cap_flags_sync("sd-5", vec!["skills/bee-reviewing/SKILL.md"], None);
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains(
+                "predicted but untouched: bee-reviewing (a bare skill name, not a path — use \"skills/bee-reviewing/SKILL.md\")"
+            ),
+            "the refusal must name the format error and the path: {refusal}"
+        );
+        // The comparison itself did not move: the touched path is still
+        // reported as unpredicted, on the same refusal.
+        assert!(
+            refusal.contains("touched but unpredicted: skills/bee-reviewing/SKILL.md"),
+            "{refusal}"
+        );
+    }
+
     #[test]
     fn legacy_cell_without_affects_skills_skips_prediction_and_notes_the_skip() {
         let tmp = tempfile::tempdir().unwrap();
@@ -6870,6 +6966,56 @@ use std::time::Instant;
         let updated = read_cell(root, "c-1").unwrap().unwrap();
         assert_eq!(updated["affects_skills"], json!(["skills/demo/SKILL.md"]));
         assert_eq!(updated["affects_specs"], json!([]));
+    }
+
+    // wgg-1: the backfill road runs the SAME format door `cells add` runs —
+    // a bare skill name cannot be smuggled in through `cells update`.
+    #[test]
+    fn update_refuses_a_bare_skill_name_in_affects_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        std::fs::create_dir_all(root.join("skills").join("demo")).unwrap();
+        std::fs::write(root.join("skills").join("demo").join("SKILL.md"), "# demo\n").unwrap();
+        write_cell_fixture(root, "c-1", &cell("c-1", "open", "f", json!([])));
+
+        // Same child, spawned with --nocapture: libtest swallows a passing
+        // child's output, and the refusal IS the output under test here.
+        std::fs::write(
+            root.join("patch.json"),
+            jsjson::stringify_pretty(&json!({"affects_skills": ["demo"], "affects_specs": []})),
+        )
+        .unwrap();
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.args([
+            "--exact",
+            CELLS_UPDATE_BEHAVIOR_CHILD,
+            "--ignored",
+            "--test-threads",
+            "1",
+            "--nocapture",
+        ]);
+        cmd.current_dir(root);
+        let out = cmd.output().expect("spawn the test binary");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            text.contains("updateCell: \\\"affects_skills\\\" entry \\\"demo\\\" is not a repo-relative path"),
+            "must refuse the bare name: {text}"
+        );
+        assert!(
+            text.contains("use \\\"skills/demo/SKILL.md\\\" instead."),
+            "must name the exact replacement path: {text}"
+        );
+        assert!(text.contains("The whole patch is refused; the cell is untouched."), "{text}");
+
+        // Nothing was written: the cell still has no affects_skills at all.
+        let untouched = read_cell(root, "c-1").unwrap().unwrap();
+        assert!(untouched.get("affects_skills").is_none(), "{untouched}");
     }
 
     // ══ merge-ready-fact — the stored merge_ready fact ═════════════════════

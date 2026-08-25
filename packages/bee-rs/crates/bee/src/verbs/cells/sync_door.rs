@@ -91,7 +91,18 @@ pub(crate) fn sync_refusal(root: &Path, cell: &Map<String, Value>, touched: &[St
             .collect();
         if predicted != touched_skills {
             let unpredicted: Vec<String> = touched_skills.difference(&predicted).cloned().collect();
-            let unfulfilled: Vec<String> = predicted.difference(&touched_skills).cloned().collect();
+            // The comparison is unchanged; only the WORDING is. A prediction
+            // written as a bare skill name can never match a touched path, so
+            // name it as the input error it is and print the path that would
+            // have matched (belt and braces for cells written before `cells
+            // add` began refusing the format).
+            let unfulfilled: Vec<String> = predicted
+                .difference(&touched_skills)
+                .map(|p| match bare_skill_name_path(root, p) {
+                    Some(path) => format!("{p} (a bare skill name, not a path — use \"{path}\")"),
+                    None => p.clone(),
+                })
+                .collect();
             let mut diffs = Vec::new();
             if !unpredicted.is_empty() {
                 diffs.push(format!("touched but unpredicted: {}", unpredicted.join(", ")));
