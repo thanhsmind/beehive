@@ -53,6 +53,7 @@ use crate::hooks::adapter::{bee_installed, log_crash, now_iso, read_hook_context
 use crate::hooks::Outcome;
 use crate::lock::{acquire_store_lock_once, AcquireOnce};
 use crate::state::hook_enabled;
+use crate::verbs::decisions::scanners::SECRET_PATTERNS;
 use crate::verbs::reservations::Err2;
 use crate::verbs::state_group::store::set_default_state_waiting_on;
 use crate::verbs::state_group::waiting_on::resolve_waiting_on_target;
@@ -71,6 +72,14 @@ const LOG_CAP_BYTES: u64 = 256 * 1024;
 const MAX_TRANSITIONS: usize = 50;
 /// The verb name the `waiting_on` target resolver puts in its refusals.
 const WAITING_ON_VERB: &str = "hook activity";
+/// The board shows a title, so a pasted wall of text never reaches it whole.
+const WORK_TITLE_CAP: usize = 200;
+/// How much of the conversation the record keeps. Past this the OLDEST text
+/// goes: the newest prompt is the one that says what the session is doing now.
+const WORK_TEXT_CAP: usize = 8000;
+/// What a secret-shaped prompt is stored as (D5). Never a partial redaction —
+/// keeping "the rest" keeps whatever the matcher did not model.
+const WORK_REDACTED: &str = "[redacted]";
 
 // ── the five states (D3) ────────────────────────────────────────────────────
 
@@ -176,7 +185,7 @@ fn field(payload: &Map<String, Value>, key: &str) -> Option<String> {
 
 /// Session ids address files, so the same shape check every other session
 /// writer makes (state_sync's `well_formed_id`).
-fn well_formed_id(id: &str) -> bool {
+pub(crate) fn well_formed_id(id: &str) -> bool {
     !id.is_empty() && !id.contains('/') && !id.contains('\\') && !id.contains("..")
 }
 
@@ -207,6 +216,20 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
             crate::jsjson::stringify(&Value::String(session_id))
         ));
     }
+
+    // D1/D5: WHAT this session was asked to do. A prompt is a fact about the
+    // session independent of anything the state machine concludes about the
+    // event, so it is read here, above every branch below. `UserPromptSubmit`
+    // maps to `working` and is a turn boundary, so it reaches the write past
+    // both the no-transition return and the sticky suppression — pinned by
+    // `a_prompt_arriving_while_the_prior_state_is_blocked_is_still_recorded`.
+    let prompt = if event == "UserPromptSubmit" {
+        field(&ctx.payload, "prompt")
+            .map(|raw| sanitize_prompt(&raw, root))
+            .filter(|text| !text.is_empty())
+    } else {
+        None
+    };
 
     let notification_type = field(&ctx.payload, "notification_type");
     let reason = field(&ctx.payload, "reason");
@@ -305,9 +328,11 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
         Some(job) => {
             activity.insert("job_id".into(), Value::String(job.clone()));
             activity.insert("round".into(), Value::Number(current_round(&ctrl, job).into()));
-            write_activity_herded(&ctrl, job, &activity)
+            write_activity_herded(&ctrl, job, &activity, prompt.as_deref())
         }
-        None => write_activity(ctx, &ctrl, &session_id, &activity, is_transition),
+        None => {
+            write_activity(ctx, &ctrl, &session_id, &activity, is_transition, prompt.as_deref())
+        }
     }
 }
 
@@ -450,6 +475,7 @@ fn write_activity(
     session_id: &str,
     activity: &Map<String, Value>,
     is_transition: bool,
+    prompt: Option<&str>,
 ) -> Result<(), String> {
     let dir = sessions_dir(ctrl);
     std::fs::create_dir_all(&dir).map_err(|e| format!("ensureDir({}): {e}", dir.display()))?;
@@ -462,6 +488,13 @@ fn write_activity(
                 let mut record = read_session_failopen(ctrl, session_id)
                     .unwrap_or_else(|| minimal_record(session_id, &ctx.payload));
                 record.insert("activity".into(), Value::Object(activity.clone()));
+                // D1/D3: `work` is a top-level sibling of `activity`, merged
+                // under the same lock and the same re-read, so a concurrent
+                // heartbeat can never drop it.
+                if let Some(text) = prompt {
+                    let merged = merge_work(record.get("work"), text, &now_iso());
+                    record.insert("work".into(), merged);
+                }
                 write_json_atomic_retry(&session_file(ctrl, session_id), &Value::Object(record))?;
                 if is_transition {
                     append_transition(ctrl, session_id, activity)?;
@@ -472,6 +505,115 @@ fn write_activity(
             result
         }
     }
+}
+
+// ── the work record (D1, D3, D5) ────────────────────────────────────────────
+
+/// D5. The user's wording survives; their filesystem layout and their
+/// credentials do not. Only the SECRET half of the decisions scanners runs
+/// here: `assert_safe_content` also refuses instruction-like content ("ignore
+/// previous instructions", "[system]"), which is ordinary English in a prompt
+/// and must never redact real work.
+fn sanitize_prompt(prompt: &str, root: &Path) -> String {
+    let text = prompt.trim();
+    if text.is_empty() {
+        return String::new();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    for (matcher, _) in SECRET_PATTERNS {
+        if matcher(&chars) {
+            return WORK_REDACTED.to_string();
+        }
+    }
+    scrub_abs_paths(text, root)
+}
+
+/// Absolute paths reduced the way the cockpit already reduces `next_action`: a
+/// path under the repo root becomes repo-relative, any other absolute path
+/// becomes `<path>`. The record is a shareable surface, and where the user
+/// keeps their files is not part of what they asked for.
+fn scrub_abs_paths(text: &str, root: &Path) -> String {
+    let root_prefix = root.to_string_lossy().into_owned();
+    text.split_inclusive(char::is_whitespace)
+        .map(|piece| {
+            let end = piece.find(char::is_whitespace).unwrap_or(piece.len());
+            let (token, tail) = piece.split_at(end);
+            let bare = token.trim_matches(|c: char| "\"'`(),;:".contains(c));
+            if bare.is_empty() || !is_absolute_path(bare) {
+                return piece.to_string();
+            }
+            let replacement = match bare.strip_prefix(root_prefix.as_str()) {
+                Some(rest) => {
+                    let rest = rest.trim_start_matches(['/', '\\']);
+                    if rest.is_empty() { ".".to_string() } else { rest.to_string() }
+                }
+                None => "<path>".to_string(),
+            };
+            format!("{}{tail}", token.replacen(bare, &replacement, 1))
+        })
+        .collect()
+}
+
+fn is_absolute_path(token: &str) -> bool {
+    if token.starts_with('/') || token.starts_with("\\\\") {
+        return true;
+    }
+    let bytes = token.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'/' || bytes[2] == b'\\')
+}
+
+/// D3. The first prompt names the work and keeps naming it; every later prompt
+/// of a still-open record is more of the same conversation, never a second
+/// record. A record the agent has moved out of `open` is finished, so the next
+/// prompt opens a fresh one.
+fn merge_work(prior: Option<&Value>, prompt: &str, now: &str) -> Value {
+    let open_prior = prior
+        .and_then(Value::as_object)
+        .filter(|work| work.get("status").and_then(Value::as_str) == Some("open"));
+    let mut work = match open_prior {
+        Some(work) => work.clone(),
+        None => {
+            let title = prompt.lines().next().unwrap_or(prompt).trim();
+            let mut fresh = Map::new();
+            fresh.insert("title".into(), Value::String(cap_head(title, WORK_TITLE_CAP)));
+            fresh.insert("text".into(), Value::String(String::new()));
+            fresh.insert("status".into(), Value::String("open".into()));
+            fresh.insert("opened_at".into(), Value::String(now.to_string()));
+            fresh.insert("turns".into(), Value::Number(0u64.into()));
+            fresh
+        }
+    };
+    let prior_text = work.get("text").and_then(Value::as_str).unwrap_or_default();
+    let joined = if prior_text.is_empty() {
+        prompt.to_string()
+    } else {
+        format!("{prior_text}\n\n{prompt}")
+    };
+    work.insert("text".into(), Value::String(keep_tail(&joined, WORK_TEXT_CAP)));
+    let turns = work.get("turns").and_then(Value::as_u64).unwrap_or(0) + 1;
+    work.insert("turns".into(), Value::Number(turns.into()));
+    work.insert("updated_at".into(), Value::String(now.to_string()));
+    Value::Object(work)
+}
+
+fn cap_head(text: &str, cap: usize) -> String {
+    if text.chars().count() <= cap {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(cap).collect();
+    format!("{head}\u{2026}")
+}
+
+fn keep_tail(text: &str, cap: usize) -> String {
+    let total = text.chars().count();
+    if total <= cap {
+        return text.to_string();
+    }
+    let tail: String = text.chars().skip(total - cap).collect();
+    format!("\u{2026}{tail}")
 }
 
 fn transitions_file(ctrl: &Path, session_id: &str) -> PathBuf {
@@ -586,8 +728,27 @@ fn write_activity_herded(
     ctrl: &Path,
     job_id: &str,
     activity: &Map<String, Value>,
+    prompt: Option<&str>,
 ) -> Result<(), String> {
-    write_json_atomic_retry(&mailbox_activity_file(ctrl, job_id), &Value::Object(activity.clone()))
+    let mut record = activity.clone();
+    // The activity map is rebuilt from scratch on every event, so `work` — the
+    // one key an unrelated event says nothing about — is read back off the
+    // prior file instead of being overwritten out of existence.
+    let prior = match read_json(&mailbox_activity_file(ctrl, job_id)) {
+        ReadJson::Parsed(Value::Object(m)) => m,
+        _ => Map::new(),
+    };
+    match prompt {
+        Some(text) => {
+            record.insert("work".into(), merge_work(prior.get("work"), text, &now_iso()));
+        }
+        None => {
+            if let Some(work) = prior.get("work") {
+                record.insert("work".into(), work.clone());
+            }
+        }
+    }
+    write_json_atomic_retry(&mailbox_activity_file(ctrl, job_id), &Value::Object(record))
 }
 
 // ── transient-FS retry (state_sync's posture, same window) ──────────────────
@@ -1766,5 +1927,219 @@ mod tests {
             assert_eq!(state_of(&repo, "s1"), "working", "{bogus} must not address a mailbox");
             assert!(!repo.root.join(".bee").join("mailbox").exists());
         }
+    }
+
+    // ── the work record: D1 open, D3 append, D4 no expiry of its own, D5 ────
+
+    fn prompt_event(session: &str, text: &str) -> Value {
+        serde_json::json!({
+            "hook_event_name": "UserPromptSubmit",
+            "session_id": session,
+            "prompt": text,
+        })
+    }
+
+    fn work(repo: &Repo, session: &str) -> Map<String, Value> {
+        record(repo, session)
+            .get("work")
+            .and_then(Value::as_object)
+            .cloned()
+            .expect("the record carries a work block")
+    }
+
+    fn text_of(work: &Map<String, Value>) -> &str {
+        work.get("text").and_then(Value::as_str).unwrap()
+    }
+
+    #[test]
+    fn a_prompt_opens_the_work_record_in_the_users_own_words() {
+        let repo = repo();
+        assert_eq!(fire(&repo, prompt_event("s-w1", "fix the flaky login test")), ExitCode::SUCCESS);
+        let w = work(&repo, "s-w1");
+        assert_eq!(w["title"].as_str().unwrap(), "fix the flaky login test");
+        assert_eq!(text_of(&w), "fix the flaky login test");
+        assert_eq!(w["status"].as_str().unwrap(), "open");
+        assert_eq!(w["turns"].as_u64().unwrap(), 1);
+        assert!(w.get("opened_at").and_then(Value::as_str).is_some());
+        assert!(w.get("updated_at").and_then(Value::as_str).is_some());
+    }
+
+    #[test]
+    fn a_follow_up_prompt_appends_and_the_first_prompt_stays_the_title() {
+        let repo = repo();
+        fire(&repo, prompt_event("s-w2", "add retries to the sync runner"));
+        fire(&repo, prompt_event("s-w2", "now run the tests"));
+        let w = work(&repo, "s-w2");
+        assert_eq!(w["title"].as_str().unwrap(), "add retries to the sync runner");
+        assert_eq!(text_of(&w), "add retries to the sync runner\n\nnow run the tests");
+        assert_eq!(w["turns"].as_u64().unwrap(), 2);
+    }
+
+    #[test]
+    fn a_prompt_after_the_agent_closed_the_record_opens_a_fresh_one() {
+        let repo = repo();
+        fire(&repo, prompt_event("s-w3", "first job"));
+        // Stand in for the agent's own status write, which is a later slice.
+        let mut full = record(&repo, "s-w3");
+        let mut closed = full["work"].as_object().unwrap().clone();
+        closed.insert("status".into(), Value::String("done".into()));
+        full.insert("work".into(), Value::Object(closed));
+        write_json_atomic_retry(&session_file(&repo.root, "s-w3"), &Value::Object(full)).unwrap();
+
+        fire(&repo, prompt_event("s-w3", "second job"));
+        let w = work(&repo, "s-w3");
+        assert_eq!(w["title"].as_str().unwrap(), "second job");
+        assert_eq!(text_of(&w), "second job");
+        assert_eq!(w["status"].as_str().unwrap(), "open");
+        assert_eq!(w["turns"].as_u64().unwrap(), 1);
+    }
+
+    #[test]
+    fn only_the_first_line_becomes_the_title() {
+        let repo = repo();
+        fire(&repo, prompt_event("s-w4", "make the board show work\n\nand keep the tests green"));
+        let w = work(&repo, "s-w4");
+        assert_eq!(w["title"].as_str().unwrap(), "make the board show work");
+        assert!(text_of(&w).contains("keep the tests green"));
+    }
+
+    #[test]
+    fn a_title_longer_than_the_cap_is_cut_and_marked() {
+        let repo = repo();
+        let long = "x".repeat(WORK_TITLE_CAP + 40);
+        fire(&repo, prompt_event("s-w5", &long));
+        let title = work(&repo, "s-w5")["title"].as_str().unwrap().to_string();
+        assert_eq!(title.chars().count(), WORK_TITLE_CAP + 1);
+        assert!(title.ends_with('\u{2026}'));
+    }
+
+    #[test]
+    fn a_path_under_the_repo_root_is_stored_relative_and_any_other_becomes_a_placeholder() {
+        let repo = repo();
+        let inside = repo.root.join("crates").join("bee.rs").to_string_lossy().into_owned();
+        let outside = if cfg!(windows) { "C:\\Users\\somebody\\.ssh\\id_rsa" } else { "/home/somebody/.ssh/id_rsa" };
+        fire(&repo, prompt_event("s-w6", &format!("read {inside} and then {outside} please")));
+        let stored = text_of(&work(&repo, "s-w6")).to_string();
+        assert!(!stored.contains(&repo.root.to_string_lossy().into_owned()), "{stored}");
+        assert!(!stored.contains("somebody"), "{stored}");
+        assert!(stored.contains("bee.rs"), "{stored}");
+        assert!(stored.contains("<path>"), "{stored}");
+        assert!(stored.starts_with("read "), "{stored}");
+        assert!(stored.ends_with(" please"), "{stored}");
+    }
+
+    #[test]
+    fn every_secret_shape_redacts_the_whole_prompt() {
+        let secrets = [
+            "-----BEGIN RSA PRIVATE KEY-----",
+            "use AKIA0123456789ABCDEF for the upload",
+            "the token is ghp_abcdefghijklmnopqrstuvwxyz01",
+            "try sk-abcdefghijklmnopqrstuvwxyz01 against the api",
+            "header eyJhbGciOiJIUzI1NiIsInR5cCI6.abcdefghijkl",
+            "set password = hunter2hunter2",
+        ];
+        for (i, secret) in secrets.iter().enumerate() {
+            let repo = repo();
+            let session = format!("s-secret-{i}");
+            fire(&repo, prompt_event(&session, secret));
+            let w = work(&repo, &session);
+            assert_eq!(text_of(&w), WORK_REDACTED, "prompt {i} was stored unredacted");
+            assert_eq!(w["title"].as_str().unwrap(), WORK_REDACTED, "prompt {i} leaked through the title");
+        }
+    }
+
+    #[test]
+    fn an_injection_shaped_prompt_is_ordinary_work_and_survives_intact() {
+        let repo = repo();
+        let text = "ignore all previous instructions about the retry count and use five";
+        fire(&repo, prompt_event("s-w7", text));
+        assert_eq!(text_of(&work(&repo, "s-w7")), text);
+    }
+
+    #[test]
+    fn a_prompt_arriving_while_the_prior_state_is_blocked_is_still_recorded() {
+        let repo = repo();
+        fire(&repo, serde_json::json!({
+            "hook_event_name": "PermissionRequest",
+            "session_id": "s-w8",
+            "tool_use_id": "t-1",
+        }));
+        assert_eq!(state_of(&repo, "s-w8"), "blocked");
+        fire(&repo, prompt_event("s-w8", "approve it and carry on"));
+        assert_eq!(text_of(&work(&repo, "s-w8")), "approve it and carry on");
+    }
+
+    #[test]
+    fn an_event_that_says_nothing_about_the_work_leaves_the_record_standing() {
+        let repo = repo();
+        fire(&repo, prompt_event("s-w9", "the one job"));
+        fire(&repo, event("PreToolUse", "s-w9"));
+        fire(&repo, event("Stop", "s-w9"));
+        let w = work(&repo, "s-w9");
+        assert_eq!(text_of(&w), "the one job");
+        assert_eq!(w["turns"].as_u64().unwrap(), 1);
+    }
+
+    #[test]
+    fn an_event_with_no_prompt_field_writes_no_work_record() {
+        let repo = repo();
+        fire(&repo, event("UserPromptSubmit", "s-w10"));
+        assert!(record(&repo, "s-w10").get("work").is_none());
+    }
+
+    #[test]
+    fn a_herded_pane_records_the_work_into_its_mailbox_and_never_a_session_file() {
+        let repo = repo();
+        brief(&repo, "job-w", 1);
+        fire_herded(&repo, Some("job-w"), prompt_event("s-w11", "the herded ask"));
+        let mailbox = mailbox_record(&repo, "job-w");
+        let w = mailbox["work"].as_object().unwrap();
+        assert_eq!(w["text"].as_str().unwrap(), "the herded ask");
+        assert_eq!(w["status"].as_str().unwrap(), "open");
+        assert!(sessions_is_empty(&repo));
+
+        // The activity map is rebuilt per event, so an unrelated event must not
+        // overwrite `work` out of the mailbox record.
+        fire_herded(&repo, Some("job-w"), event("PreToolUse", "s-w11"));
+        let after = mailbox_record(&repo, "job-w");
+        assert_eq!(after["work"]["text"].as_str().unwrap(), "the herded ask");
+    }
+
+    #[test]
+    fn the_stored_text_never_grows_past_its_cap_and_keeps_the_newest_words() {
+        let repo = repo();
+        let filler = "y".repeat(WORK_TEXT_CAP);
+        fire(&repo, prompt_event("s-w12", &filler));
+        fire(&repo, prompt_event("s-w12", "the newest ask"));
+        let stored = text_of(&work(&repo, "s-w12")).to_string();
+        assert!(stored.chars().count() <= WORK_TEXT_CAP + 1, "{}", stored.chars().count());
+        assert!(stored.ends_with("the newest ask"), "the newest prompt must survive the trim");
+        assert!(stored.starts_with('\u{2026}'));
+    }
+
+    #[test]
+    fn a_work_record_needs_no_expiry_of_its_own_because_it_hangs_off_the_session() {
+        // D4: the reader drops a session whose heartbeat is stale, and the work
+        // record lives on that same file — there is nothing separate to expire.
+        let repo = repo();
+        fire(&repo, prompt_event("s-w13", "an ask nobody finished"));
+        assert!(record(&repo, "s-w13").get("work").is_some());
+        assert!(
+            transitions(&repo, "s-w13").iter().all(|row| row.get("work").is_none()),
+            "the transition sidecar is a state history, never a second home for the work"
+        );
+
+        std::fs::remove_file(session_file(&repo.root, "s-w13")).unwrap();
+        let survivors: Vec<String> = std::fs::read_dir(sessions_dir(&repo.root))
+            .unwrap()
+            .flatten()
+            .filter(|entry| {
+                std::fs::read_to_string(entry.path())
+                    .unwrap_or_default()
+                    .contains("an ask nobody finished")
+            })
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(survivors.is_empty(), "the work outlived its session file in {survivors:?}");
     }
 }

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "wave-guard-gaps",
   "mode": null,
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"wave-guard-gaps\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"wave-guard-gaps\" (lane).",
+  "next_action": "bee close finished \"wave-guard-gaps\" — feature is closed.",
   "created_at": "2026-08-25T07:43:41.395Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -24,11 +24,14 @@
     "updated_at": "2026-08-25T07:44:29.120Z",
     "feature": "wave-guard-gaps"
   },
-  "merge_ready": {
-    "since": "2026-08-25T07:54:48.945Z",
-    "branch": "wt/wave-guard-gaps",
-    "worktree_id": "beehive--wt--wave-guard-gaps",
-    "uat": "approved",
-    "blocked_by": []
+  "last_scribing_run": {
+    "feature": "wave-guard-gaps",
+    "date": "2026-08-25",
+    "at": "2026-08-25T08:31:14.113Z",
+    "areas_synced": [
+      "worktree-parallelism",
+      "workflow-state"
+    ],
+    "next_action": "Vendored .bee/bin/bee still carries the old guard; it picks up the fix at the next scripts/release.sh run."
   }
 }

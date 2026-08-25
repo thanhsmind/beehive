@@ -1,0 +1,81 @@
+{
+  "id": "mrs-33",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Make a null-valued role stop being a legal name, and give both doors one predicate",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/reports/review-r2.md"
+  ],
+  "action": "Delta-review findings F1 (P2), F3, F4 and F6 — all one family: a role name meaning different things at two doors. F1 IS THE ONE THAT MATTERS. c2ef2f9f closed the case where advisor is ABSENT from models.<runtime>. It did not close the case where advisor is present with value NULL. known_roles now derives from table.keys() (drivers/guard.rs:68-78) and a null-valued key is still a key; normalize_tier_value preserves an explicit null (models.rs:127). So on a host with models.claude.advisor = null: classify_marker finds the name, returns Marker::Role, skips the unconfigured-role refusal, resolve_configured(Null) gives None, the entry is_some() so no default fallback, and the dispatch lands on Resolved::Budget — ALLOWED with no model param, inheriting the session model. The same host REFUSES --role advisor and --kind advisor, because resolve_advisor returns None on null. One question, two doors, two answers: the exact sentence c2ef2f9f's own commit message uses for the bug it fixed. This is not theoretical — bee's shipped .bee/config-sample.json documents null as the OFF spelling for advisor, so the reachable configuration is the documented one. And guard.rs:60-62 claims a slot is a legal role name where the host CONFIGURES it and nowhere else; a null slot is not configured but is currently legal. Make the predicate VALUE-aware rather than key-aware. Third instance of null-versus-absent in this feature, so prefer a fix that makes the distinction once rather than at each reader. SECOND, F3: the two doors share the known_roles derivation but NOT the predicate — prepare.rs:887 uses contains (case-sensitive) while model_guard.rs:256 uses eq_ignore_ascii_case, deliberately. So --role Generation is refused while [bee-tier: Generation] is admitted. Low consequence because prepare is the stricter side, but prepare.rs:884-886 states in a comment that both doors ask the same predicate so a typo cannot get two answers — that comment is currently false. Make it true or rewrite it. No test exercises a mixed-case --role. THIRD, F4: onboard/templates.rs:140-141 still documents known_roles as keys UNION every slot_for_kind answer UNION ceiling — the union c2ef2f9f removed — and the decision table under it has an advisor row reading reachable-with-no-config-key = yes, now false. FOURTH, F6: model_guard.rs:783's two-agent FIX tail still hardcodes the bee-build/bee-gather pair while the condition above it is now derived, so the message would name the wrong pair for any other ambiguous role. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A role configured as null is not a legal role name at any door, and the marker path refuses it exactly as the absent case does",
+      "A test covers the null row beside the existing absent and set rows",
+      "Both doors answer the same for the same name, including case — or the comment claiming they do is corrected to the truth",
+      "The known_roles documentation in onboard/templates.rs matches the predicate that ships, advisor row included",
+      "The two-agent FIX names the agents it derived, not a hardcoded pair"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "06e49368",
+    "8dad7c2e"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w33",
+    "outcome": "A null role slot now reads as off at every dispatch door, and both doors share one case-insensitive predicate",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+    ],
+    "deviations": [
+      "F1 fixed at the advisor slot (the one role with no Budget floor) rather than by refusing every null-valued key: a blanket non-null rule would empty known_roles on codex, whose default_models seeds every slot null, and would contradict .bee/config-sample.json (\"A missing/null slot = prompt-budget\"). The null-versus-absent rule is still made once, in role_is_declarable, which asks resolve_advisor instead of re-testing the value.",
+      "F3 fixed by making the comment TRUE rather than rewriting it: prepare now asks known_role_named (case-insensitive, answering in the config spelling) and rebinds role to that spelling, so --role Advisor still reaches the advisor resolver.",
+      "F4 also corrected the extraction row of the templates.rs decision table, which claimed extraction was unreachable without a config key; default_models seeds it on every runtime. The shipping call is unchanged, only its stated reason.",
+      "The dispatcher never registered this worker in state.json workers[], so the cap refused; registered it from the main checkout (bee state worker add --nickname mrs-w33 --cell mrs-33 --tier generation) rather than capping with a false inline reason."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T10:30:24.192Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T10:17:17.875Z",
+    "report": {
+      "outcome": "A null role slot now reads as off at every dispatch door, and both doors share one case-insensitive predicate",
+      "commit": "a7338b24",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+      ],
+      "tests": "cargo test -p bee --bin bee --no-fail-fast (2660 passed, 0 failed) plus cargo test -p bee --no-fail-fast --test hook_contracts --test registry_dispatch --test front_door --test route_lane_targeting (30 passed, 0 failed) — green — the bin unit suite holds every consumer of known_roles, classify_marker, prepare_dispatch_with_role and the onboard template doc, and those four integration targets are the only ones that reach dispatch or the model guard",
+      "deviations": [
+        "F1 fixed at the advisor slot (the one role with no Budget floor) rather than by refusing every null-valued key: a blanket non-null rule would empty known_roles on codex, whose default_models seeds every slot null, and would contradict .bee/config-sample.json (\"A missing/null slot = prompt-budget\"). The null-versus-absent rule is still made once, in role_is_declarable, which asks resolve_advisor instead of re-testing the value.",
+        "F3 fixed by making the comment TRUE rather than rewriting it: prepare now asks known_role_named (case-insensitive, answering in the config spelling) and rebinds role to that spelling, so --role Advisor still reaches the advisor resolver.",
+        "F4 also corrected the extraction row of the templates.rs decision table, which claimed extraction was unreachable without a config key; default_models seeds it on every runtime. The shipping call is unchanged, only its stated reason.",
+        "The dispatcher never registered this worker in state.json workers[], so the cap refused; registered it from the main checkout (bee state worker add --nickname mrs-w33 --cell mrs-33 --tier generation) rather than capping with a false inline reason."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 374 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

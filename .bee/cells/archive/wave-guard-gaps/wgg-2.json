@@ -68,6 +68,63 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "sibling-workers-in-worktree-deny-bare-commit",
+            "status": "PASS",
+            "evidence": "Orchestrator ran the hook binary built from this cell's source with two probe holds (cells wgg-1, wgg-2) mirrored against holder beehive--wt--wave-guard-gaps: `git commit -m wip` exited 2 naming '2 workers are live in this checkout'. The pre-cell vendored binary exited 0 silently on identical state.",
+            "id": "c1"
+          },
+          {
+            "name": "path-scoped-commit-still-allowed",
+            "status": "PASS",
+            "evidence": "Same state, same binary, `git commit -m wip -- packages/probe1.rs` exited 0.",
+            "id": "c2"
+          },
+          {
+            "name": "solo-worker-never-blocked",
+            "status": "PASS",
+            "evidence": "One probe hold released, leaving a single cell in the cohort; bare `git commit` from the worktree exited 0. The max-not-sum combination is what keeps the single worker at count 1.",
+            "id": "c3"
+          },
+          {
+            "name": "main-checkout-verdict-unchanged",
+            "status": "PASS",
+            "evidence": "Old and new binaries both run from main on identical state: both exited 2, and diff of their captured stderr reported no difference (byte-identical).",
+            "id": "c4"
+          },
+          {
+            "name": "unresolvable-state-fails-safe",
+            "status": "PASS",
+            "evidence": "Cell reports an unparseable cross-worktree-holds ledger returns WorkerCount::Unresolved naming the ledger, preserving the existing treat-as-more-than-one shape; covered by the cell's own test for the fail-safe arm.",
+            "id": "c5"
+          },
+          {
+            "name": "declared-suite-green",
+            "status": "PASS",
+            "evidence": "cargo test --release on the merged base: CARGO_EXIT=0, 2846 passed, 0 failed. Exit code read from cargo directly, not through a pipeline.",
+            "id": "c6"
+          },
+          {
+            "name": "no-second-reservation-reader-introduced",
+            "status": "PASS",
+            "evidence": "Cell reused the write-guard's existing mirrored-holds reader (find_foreign_holds) with the all-holds sentinel, the same mechanism bee reservations list uses, rather than adding a parallel reader.",
+            "id": "c7"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-25T08:32:27.239Z"
+      }
+    ]
   }
 }

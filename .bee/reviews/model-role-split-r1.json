@@ -1,0 +1,29 @@
+{
+  "id": "model-role-split-r1",
+  "requested_by": "thanhsmind",
+  "requested_at": "2026-08-25T08:59:26.345Z",
+  "scope_description": "model-role-split, the whole feature: bee selects a worker model by the job a cell declares rather than by a cost tier. 36 commits on wt/model-role-split from the merge-base with main, 83 files, 7653 insertions. Baseline is the merge-base rather than the branch point on purpose: main was merged into this branch mid-flight, and main's own 40 commits are neither this feature's work nor unreviewed. Twelve locked decisions D1-D12 in docs/history/model-role-split/CONTEXT.md, plus agent decisions taken under the owner's delegation (8ff6e79e, 561e1bda, fef79243, 51341f84, 647b6f7b). An independent audit already ran against the twelve decisions and its findings were fixed in cells mrs-23 through mrs-29; this review is the panel pass, not a re-run of that audit.",
+  "included": [
+    {
+      "type": "feature",
+      "id": "model-role-split"
+    }
+  ],
+  "excluded": [],
+  "baseline": "0075e2e04225558db964631ba13f8b6e17a5d4a9",
+  "head": "7b14a72fbe75da9ddb5f495d84f4c12d6f43c330",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-08-25T08:59:26.345Z",
+    "cells_checked": [],
+    "passed": true
+  },
+  "findings": [],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-08-25T08:59:26.345Z",
+  "updated_at": "2026-08-25T08:59:26.345Z"
+}

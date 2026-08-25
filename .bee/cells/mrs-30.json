@@ -1,0 +1,85 @@
+{
+  "id": "mrs-30",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Close the ceiling role hole that bypasses the escalation ration",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/reports/review-r2.md"
+  ],
+  "action": "REVIEW P1-A, blocking merge. Read the finding in docs/history/model-role-split/reports/review-r2.md before anything else — it carries the executed proof. A cell whose only marking is role ceiling takes the SESSION MODEL and is invisible to every counter that enforces D5's 40 percent ration. prepare.rs:941 reads `else if escalated_cell || tier_token == ESCALATION_WORD`, and on the from_role path tier_token IS the cell's declared role string, so the arm fires before resolve_role_named is reached: Resolved::Inherit, channel session-model, no model param. cell_is_escalated (validate.rs:98) reads only escalate==true or the legacy tier==ceiling, so the record is false there and all three counters miss it — escalation_share_after, role_mix, ceiling_scarcity_warning. Executed on a seven-cell feature with six such cells: 86 percent escalated and set_escalation on the seventh was ALLOWED. TWO FIXES ARE ON THE TABLE and the choice is yours to make and record: (a) refuse ceiling in the role field at validate.rs:252 — the reserved-name option CONTEXT.md:154 already contemplated, which costs an exception to D2's open set; or (b) narrow prepare.rs:941 so only the flag or an explicit --role ceiling escalates, letting a cell's role ceiling fall through the resolver exactly as models.rs:530-538 already PROMISES it does. Weigh that (b) makes the code match a comment that is currently false, while (a) adds a closed word to an open set this feature spent five slices opening. Whichever you take, THE COMMENT AT models.rs:530-538 MUST END UP TRUE. Also: cells/tests.rs currently ASSERTS that role ceiling is accepted at add time (role_validation_checks_shape_and_never_membership) — if you take (a) that assertion changes and the change must be deliberate and explained, not silent. The missing test is the one that connects the two layers: authoring a cell with this role and observing what the dispatch and the ration then do. Write it so it fails on today's code. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A cell declaring role ceiling either cannot be authored, or does not take the session model without being counted by the ration — the cap names which and why",
+      "The comment at models.rs:530-538 is true of the shipped behaviour",
+      "A test connects add-time acceptance to the dispatch outcome, and it fails on the pre-fix code — state that you checked it fails",
+      "If the add-time assertion changed, the change is explained rather than silently rewritten",
+      "No other escalation path was opened while closing this one"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225",
+    "06e49368"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w30",
+    "outcome": "Narrowed the dispatch escalation arm with !from_role so a cell declared role ceiling can no longer take the session model uncounted; added the two-layer test binding the ration predicate to the dispatch channel",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "Took fix (b) narrow prepare.rs over fix (a) reserve the name in validate.rs; recorded as decision 52ac81bf touching 97ce5225 — (a) puts a closed word back in D2 open set, inverts the existing D2-guard assertion in cells/tests.rs, and protects only cells authored after it lands while every stored role-ceiling cell keeps the bypass. The add-time assertion is therefore unchanged, deliberately, with the reason written beside it.",
+      "Chose fix (b) narrow prepare.rs over fix (a) reserve the name in validate.rs; recorded as decision 52ac81bf touching 97ce5225. (a) would put a closed word back in D2 open role set, invert the existing D2-guard assertion, and leave every already-stored role-ceiling cell bypassing the ration. The add-time assertion in cells/tests.rs is unchanged on purpose, with the reason written beside it.",
+      "New tests confirmed RED on pre-fix code before the fix landed: the_ration_and_the_dispatch_agree_on_which_cells_are_escalated failed at the c-role-ceiling row (ration says escalated=false, dispatch said true), and a_cell_role_of_ceiling_falls_through_the_resolver_but_the_flag_door_stays_open failed with model None instead of sonnet.",
+      "Landed the commit through the guard-prescribed temp-index route (GIT_INDEX_FILE plus commit-tree plus update-ref) because the plain staging and commit verbs are refused while 2 workers are live in this checkout; the commit carries only my five files.",
+      "Noted but NOT touched: verbs/drivers/guard.rs known_roles doc still says resolve_role answers ceiling with Resolved::Inherit, which the D5 resolver no longer does. That file is reserved by mrs-w32 and their in-flight diff already rewrites that same doc block.",
+      "sync-ack: No skill edit is owed: skills/bee-swarming/references/swarming-reference.md:368 already publishes the correct rule — Escalation is not a role, running on the session model is the cell escalate FLAG. This cell fixes the CODE to match that published text; the skill was right and the dispatch was wrong, so nothing the skills teach changes."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T09:45:58.794Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T09:33:30.760Z",
+    "sync_ack": "No skill edit is owed: skills/bee-swarming/references/swarming-reference.md:368 already publishes the correct rule — Escalation is not a role, running on the session model is the cell escalate FLAG. This cell fixes the CODE to match that published text; the skill was right and the dispatch was wrong, so nothing the skills teach changes.",
+    "report": {
+      "outcome": "Narrowed the dispatch escalation arm with !from_role so a cell declaring role ceiling falls through the resolver instead of taking the session model uncounted; the ration predicate and the dispatch channel now agree for every cell marking, proven by a new two-layer test checked red first",
+      "commit": "06e9509721c9c6a8267bdfbb58f8066c9a0b7ac3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=$HOME/.cargo/bin:$PATH cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs:: — green (1425 passed, 0 failed) — covers verbs::drivers (dispatch/resolver), verbs::cells (validation) and verbs::status_full (role_mix, ceiling_scarcity_warning), the three modules this fix touches or is read by; the 4 reds elsewhere in the binary are sibling worker mrs-w32 in-flight on hooks/model_guard.rs plus drivers/guard.rs (advisor removed from known_roles), not this cell",
+      "deviations": [
+        "Chose fix (b) narrow prepare.rs over fix (a) reserve the name in validate.rs; recorded as decision 52ac81bf touching 97ce5225. (a) would put a closed word back in D2 open role set, invert the existing D2-guard assertion, and leave every already-stored role-ceiling cell bypassing the ration. The add-time assertion in cells/tests.rs is unchanged on purpose, with the reason written beside it.",
+        "New tests confirmed RED on pre-fix code before the fix landed: the_ration_and_the_dispatch_agree_on_which_cells_are_escalated failed at the c-role-ceiling row (ration says escalated=false, dispatch said true), and a_cell_role_of_ceiling_falls_through_the_resolver_but_the_flag_door_stays_open failed with model None instead of sonnet.",
+        "Landed the commit through the guard-prescribed temp-index route (GIT_INDEX_FILE plus commit-tree plus update-ref) because the plain staging and commit verbs are refused while 2 workers are live in this checkout; the commit carries only my five files.",
+        "Noted but NOT touched: verbs/drivers/guard.rs known_roles doc still says resolve_role answers ceiling with Resolved::Inherit, which the D5 resolver no longer does. That file is reserved by mrs-w32 and their in-flight diff already rewrites that same doc block."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -281,6 +281,11 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
 /// mtime than the installed binary. Read-only throughout: it only stats and
 /// reads files and spawns the installed binary to ask its own version, never
 /// builds, copies, or writes anything.
+///
+/// When the probe itself cannot run — the binary refuses to exec, or answers
+/// with something unreadable — no version was read, so the row reports unknown
+/// rather than fresh. The mtime leg still runs first: real evidence of drift
+/// beats "unknown".
 fn binary_freshness_row(root: &Path) -> Option<Row> {
     const KEY: &str = "binary_freshness";
     const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
@@ -309,6 +314,7 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         });
     };
 
+    let mut probe_failed = false;
     match installed_binary_bee_version(&bin) {
         ProbedBeeVersion::Missing => {
             return Some(Row {
@@ -331,7 +337,12 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
                 });
             }
         }
-        ProbedBeeVersion::Failed => {}
+        // A probe that could not run read no version at all. That is not
+        // evidence of staleness, so this is never not_ok on its own — but it
+        // is not evidence of freshness either. The mtime scan below still
+        // runs and still wins; only when it finds nothing does this flag turn
+        // the row into an honest unknown.
+        ProbedBeeVersion::Failed => probe_failed = true,
     }
 
     if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
@@ -355,6 +366,17 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
                 ),
             });
         }
+    }
+
+    if probe_failed {
+        return Some(Row {
+            key: KEY,
+            ok: None,
+            detail: format!(
+                "could not run the installed binary to read its release version (bee rs-info \
+                 failed), and no source input is newer than it — freshness is unknown. {REMEDY}"
+            ),
+        });
     }
 
     Some(Row {

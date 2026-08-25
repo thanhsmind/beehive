@@ -34,7 +34,7 @@ Expertise — dispatcher-picked; read/load before implementing:
 Contract:
 - Load the bee-swarming skill (Execute section) for the full worker contract.
 - Execute only the assigned cell. Do not select or accept other work.
-- The cell's listed files are reserved under your nickname when dispatch claimed them; reserve any ADDITIONAL path before writing: .bee/bin/bee reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"
+- The cell's listed files are reserved under your nickname by the claim that dispatched you, and `bee cells finish` releases them at cap; reserve any ADDITIONAL path before writing: .bee/bin/bee reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: {{cell_id}}` (the words "cell:" then the id — a bare id alone fails the cap).
 - Finish with: .bee/bin/bee cells finish --id {{cell_id}} --outcome "<one line>" --files <a,b> --report '<json>' — finish CAPS the cell and records the proof line you hand it; no door runs tests for you. You own the scope: run the narrowest proof this change type needs (code → the related tests, filtered to what you touched, never the whole declared suite; docs → parity/pointer checks; behavior → judge verdict), and run the cell's own `verify` when it carries one. A `red` result refuses the cap: the red is the work — fix it and re-run finish; never build on a red base. CI runs the project's declared commands.test on every push, the one deterministic net.

@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature": "claim-reserves-files",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"claim-reserves-files\" started at phase \"planning\" (lane).",
+  "next_action": "bee close finished \"claim-reserves-files\" — feature is closed.",
+  "created_at": "2026-08-25T08:59:08.924Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Line 16 trips the detector on the word \"later\" — but it is historical narration, not a promise. Wrapping it with the reasoned marker the doo",
+    "asked_at": "2026-08-25T09:32:02.649Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 4,
+    "rationale": "The worker-cell prompt promises files are reserved at claim time; claims.rs reserves nothing, while finish_cap_and_release releases by (agent, cell). Close the asymmetry at the claim side.",
+    "updated_at": "2026-08-25T08:59:14.690Z",
+    "feature": "claim-reserves-files"
+  },
+  "last_scribing_run": {
+    "feature": "claim-reserves-files",
+    "date": "2026-08-25",
+    "at": "2026-08-25T09:30:45.835Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Vendored .bee/bin/bee still predates the fix; claims on main do not reserve until the next scripts/release.sh run."
+  }
+}

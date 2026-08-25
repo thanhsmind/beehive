@@ -732,10 +732,12 @@ pub(crate) fn claim_cell_file(
     let claim = Value::Object(claim);
     let file = claim_path(control, &cell)?;
     let body = format!("{}\n", jsjson::stringify_pretty(&claim));
-    let write = std::fs::OpenOptions::new().write(true).create_new(true).open(&file).and_then(|mut f| {
-        use std::io::Write;
-        f.write_all(body.as_bytes())
-    });
+    // eca-1: published by link(2) from a fully-written temp. The
+    // `AlreadyExists` arm below re-reads this same path to name the winner, so
+    // the claim file must never exist without its body — link makes the name
+    // appear only once the record is complete, and refuses with the same
+    // `AlreadyExists` the O_EXCL create refused with.
+    let write = rsv::publish_exclusive(&file, &body);
     match write {
         Ok(()) => Ok(ClaimFileOutcome::Ok { claim }),
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {

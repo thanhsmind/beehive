@@ -1,0 +1,91 @@
+{
+  "id": "pwr-2",
+  "feature": "prompt-work-record",
+  "lane": "standard",
+  "role": "code",
+  "title": "Give the agent one verb to upgrade an open work record and move its status",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/work.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/router.rs"
+  ],
+  "read_first": [
+    "docs/history/prompt-work-record/CONTEXT.md",
+    "docs/history/prompt-work-record/plan.md"
+  ],
+  "action": "pwr-1 made the hook open a work record in status \"open\" carrying the user's own words. D1's second half is still missing: the agent has no way to say what \"done\" means for it, or to move it off open — so every record sits open forever and D2's promotion rule (a stub becomes a board card once it carries an acceptance) can never fire. Add ONE verb group, `bee work`, with two shapes: `bee work show [--session S] [--json]` reads the current record, and `bee work set [--acceptance A] [--status S] [--session S] [--json]` writes the acceptance, the status, or both. Follow the group pattern the other native verbs use — try_native returning None for any shape it does not serve, pre_json_scan/parse_flags/keys_known, g_prelude for the root and drift preamble, ctx.emit for success and ctx.fail for a typed refusal. Sink parity with the hook: --session wins, else a herded pane (the herding worker marker plus BEE_HERDING_JOB_ID) addresses its job mailbox, else CLAUDE_CODE_SESSION_ID; the sessions sink writes under the same sessions store lock the hook takes, re-reading inside it. Refusals, all typed and zero-mutation: no work record for the resolved session (say that a prompt opens one); neither --acceptance nor --status given; a --status outside open|active|done|dropped, naming the legal set; an empty or whitespace-only acceptance. D5 reaches the acceptance too, but as a REFUSAL not a redaction — the prompt is the user's text and bee stores what it must, while the acceptance is the agent's own sentence and a secret in it is a bug to report, not to swallow. The registry has no generator any more (the regen line in registry_contracts.rs names node scripts/export_registry_payload.mjs, which is not in the tree): declare both commands by hand in generated/registry_payload.json, written off the real argument parsing exactly as commit e8bc86f7 did for the herding verbs, and add the group to router.rs's PORTED list.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee work set --acceptance writes the acceptance onto the open record and bee work show reads it back",
+      "bee work set --status moves the record through open, active, done and dropped, and refuses any other value by naming the legal set",
+      "A status the agent set is not reopened by a later prompt: a record that is no longer open makes the next prompt open a fresh one",
+      "Every refusal is typed, names its fix, and writes nothing",
+      "A secret-shaped acceptance is refused, never stored and never redacted",
+      "A herded pane reads and writes its job mailbox, never a session file",
+      "Both commands appear in the embedded registry and the registry suites stay green"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "bd78f64a",
+    "856789db",
+    "5944ebbb",
+    "34944b7a",
+    "f9bf6456"
+  ],
+  "deps": [
+    "pwr-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "pwr-w2",
+    "outcome": "bee work show|set lets the agent write the acceptance and move an open work record's status, with the hook's own sink resolution and typed zero-write refusals",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/work.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "packages/bee-rs/crates/bee/tests/work_verbs.rs"
+    ],
+    "deviations": [
+      "Two files beyond the cell list: hooks/activity.rs for a one-word visibility bump on well_formed_id so --session is validated by the hook's own predicate rather than a second copy, and the new tests/work_verbs.rs",
+      "Two files beyond the cell list: hooks/activity.rs for a one-word visibility bump on well_formed_id, and the new tests/work_verbs.rs",
+      "Declared both commands as plumbing rather than surface porcelain. The closest sibling, intent.*, is plumbing too, and adding work to the flow surface that bee --help --json prints is a claim better made with slice 3 integration than ahead of it",
+      "The full declared suite also ran: 2590 pass in the lib target and every other integration target green EXCEPT opencode_plugin_contracts, which fails on the INSTALLED opencode-ai binary having changed shape (its tool-id Set literal no longer matches the derivation) — an environment fact, unrelated to the registry or to this change, failing identically on beehive main without it, and already owned by the opencode-contract-reds lane"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T09:10:16.229Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "270feb28-122a-470a-8dab-14fab621a5ce",
+    "claimed_at": "2026-08-25T09:03:07.997Z",
+    "inline_reason": "This session runs under a standing instruction not to call the Agent tool unless the user asks for it, so the standard-lane dispatch of an execution worker was not available; the cell was executed inline by the orchestrator, in the feature worktree, under its own reservations.",
+    "report": {
+      "outcome": "bee work show|set lets the agent write the acceptance and move an open work record status, with the hook own sink resolution and typed zero-write refusals",
+      "commit": "ed4c0729",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/work.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "packages/bee-rs/crates/bee/tests/work_verbs.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test work_verbs --test registry_contracts --test registry_dispatch — green, 12 + 10 + 8 passed 0 failed — 12 new black-box cases cover every must_have behaviourally, and the two registry suites are what a hand-declared command entry can break",
+      "deviations": [
+        "Two files beyond the cell list: hooks/activity.rs for a one-word visibility bump on well_formed_id, and the new tests/work_verbs.rs",
+        "Declared both commands as plumbing rather than surface porcelain. The closest sibling, intent.*, is plumbing too, and adding work to the flow surface that bee --help --json prints is a claim better made with slice 3 integration than ahead of it",
+        "The full declared suite also ran: 2590 pass in the lib target and every other integration target green EXCEPT opencode_plugin_contracts, which fails on the INSTALLED opencode-ai binary having changed shape (its tool-id Set literal no longer matches the derivation) — an environment fact, unrelated to the registry or to this change, failing identically on beehive main without it, and already owned by the opencode-contract-reds lane"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

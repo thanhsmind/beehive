@@ -1,0 +1,81 @@
+{
+  "id": "mrs-31",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Make the backfill hold its lock across the scan so it cannot reverse a concurrent write",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/reports/review-r2.md"
+  ],
+  "action": "REVIEW P1-B, blocking merge. Read the finding in docs/history/model-role-split/reports/review-r2.md first — it carries a demonstration, not a theory. bee cells backfill-roles reads every cell at handlers_write.rs:1537 to build its plan, takes the cells-archive lock only at :1607, then writes each WHOLE OBJECT back with write_json_atomic at :1613. The lock guards the write phase alone; the scan is unlocked and every write is a full-object write of a stale clone. Demonstrated on a 40000-cell store: an operator running bee cells escalate --off (not budget-checked, so it does no store scan) committed a disarm to disk at t=25ms; the backfill finished at t=1.007s and the cell was RE-ARMED on disk. The operator's write was not half-applied — it was fully applied and then fully reversed. The doc block at :1523-1531 claims the opposite and must end up true or be rewritten. A second path found by trace, not executed: a bee close archiving a feature during the scan is not blocked, and the write then recreates .bee/cells/<id>.json as a live duplicate, because read_cell prefers the live copy. TWO SHAPES: take the lock before the scan so one lock spans both phases, or re-read each file under the lock and merge only the three keys this migration owns (role, escalate, trace.escalation_reason) rather than writing the snapshot. The second is friendlier to a long migration on a big store — a lock held across a 40000-cell scan blocks every other writer for a second — so weigh duration against simplicity and say which you chose. THE TEST IS THE DELIVERABLE: the current suite passes with the lock line deleted entirely, because every backfill test is single-threaded. Pin the property — mutate a record mid-pass and assert the operator's write survives, or hold the lock externally and assert the verb refuses. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A write committed by another door during the backfill's scan survives the backfill",
+      "A test fails when the locking is removed or reverted to its pre-fix placement — say that you checked it fails",
+      "The doc block at handlers_write.rs:1523-1531 is true of the shipped behaviour",
+      "The archived-cell resurrection path is closed or explicitly named as out of scope with a reason",
+      "A long migration does not block every other writer for its whole duration, or the cap states that trade deliberately"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4eaf1b71"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w31",
+    "outcome": "backfill-roles re-reads under the lock and merges only its three owned keys, so a write that lands during the scan survives",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "Shape 2 chosen over one-lock-spans-both: a lock held across a 40k-cell scan refuses every other writer for ~1s, and this migration must run against a live multi-session store",
+      "Added a scan/lock seam (backfill_roles_interleaved) so the race is pinned deterministically instead of by sleep or thread timing",
+      "Added report field changed_during_pass (JSON + text) to name records that moved under the pass instead of writing over them",
+      "Verified both race tests fail on pre-fix code (whole-object write restored escalate=true on e-1 and recreated g-1) and that the lock test fails when the lock name is mutated",
+      "Reset stale index entries (validate.rs, drivers/models.rs, drivers/prepare.rs, drivers/tests.rs, cells/tests.rs) that held a pre-sibling-commit revert; worktree content untouched",
+      "Capped with --inline-reason: no worker row registered for mrs-w31 and state worker add refuses inside the worktree",
+      "Capped with --sync-ack: no skill documents this verb's locking or report shape",
+      "sync-ack: Concurrency fix inside cells backfill-roles' write half. No bee skill teaches this verb's locking or its report shape, and the operator-facing contract is unchanged: same flags, still idempotent, still re-runnable. The only new surface is one report line naming records another writer moved."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T10:03:15.432Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T09:35:02.802Z",
+    "sync_ack": "Concurrency fix inside cells backfill-roles' write half. No bee skill teaches this verb's locking or its report shape, and the operator-facing contract is unchanged: same flags, still idempotent, still re-runnable. The only new surface is one report line naming records another writer moved.",
+    "inline_reason": "Dispatched execution worker mrs-w31, but no worker row exists in state.json for this cell and bee state worker add refuses inside a granted feature worktree (control plane lives in the main checkout) — the registration gap is the dispatcher's, not an inline run",
+    "report": {
+      "outcome": "backfill-roles re-reads each planned record under the cells-archive lock and merges only role/escalate/trace.escalation_reason, so a concurrent write that completes during the unlocked scan is no longer reversed and an archived cell is not recreated",
+      "commit": "00fd53b6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --offline -p bee --bin bee --no-fail-fast — green (2657 passed, 0 failed) — the change is confined to verbs::cells; the bin target carries every unit test that reads the backfill report, and the two failing opencode_plugin_contracts tests live in a separate integration target this machine cannot run",
+      "deviations": [
+        "Shape 2 chosen over one-lock-spans-both: a lock held across a 40k-cell scan refuses every other writer for ~1s, and this migration must run against a live multi-session store",
+        "Added a scan/lock seam (backfill_roles_interleaved) so the race is pinned deterministically instead of by sleep or thread timing",
+        "Added report field changed_during_pass (JSON + text) to name records that moved under the pass instead of writing over them",
+        "Verified both race tests fail on pre-fix code (whole-object write restored escalate=true on e-1 and recreated g-1) and that the lock test fails when the lock name is mutated",
+        "Reset stale index entries (validate.rs, drivers/models.rs, drivers/prepare.rs, drivers/tests.rs, cells/tests.rs) that held a pre-sibling-commit revert; worktree content untouched",
+        "Capped with --inline-reason: no worker row registered for mrs-w31 and state worker add refuses inside the worktree",
+        "Capped with --sync-ack: no skill documents this verb's locking or report shape"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

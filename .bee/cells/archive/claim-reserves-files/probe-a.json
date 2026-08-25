@@ -1,0 +1,52 @@
+{
+  "id": "probe-a",
+  "feature": "claim-reserves-files",
+  "title": "probe a",
+  "action": "probe",
+  "verify": "true",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/probeA.rs"
+  ],
+  "acceptance": "probe",
+  "status": "dropped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-pa",
+    "outcome": "probe",
+    "files_changed": [
+      "packages/probeA.rs"
+    ],
+    "deviations": [
+      "sync-ack: probe cell for live door verification; touches no real source and owes no skill text"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T09:16:57.294Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T09:16:29.129Z",
+    "sync_ack": "probe cell for live door verification; touches no real source and owes no skill text",
+    "commit_pending": "probe cell for live verification; no code written",
+    "report": {
+      "outcome": "probe",
+      "commit": "none",
+      "files": [
+        "packages/probeA.rs"
+      ],
+      "tests": "none — green — probe cell, no code touched",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "dropped_reason": "live-verification probe for the claim-reserves-files door; not real work"
+  }
+}

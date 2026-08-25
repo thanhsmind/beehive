@@ -1,0 +1,72 @@
+{
+  "id": "mrs-25",
+  "feature": "model-role-split",
+  "lane": "small",
+  "role": "docs",
+  "title": "Fix the config page the README sends people to and the help that never mentions role",
+  "behavior_change": false,
+  "files": [
+    "docs/config-reference.md",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "README.md"
+  ],
+  "action": "Two gaps an audit found, both user-facing. (1) docs/config-reference.md was NEVER touched by this feature — git log over the branch returns nothing for it. It still says there are three tiers and you configure only generation and extraction, and it never mentions code, read or retry.fallbackChains. Meanwhile README.md, which this feature DID rewrite, tells the reader to set models.claude.code and links straight to that page. A user follows the link and reads the opposite of what they were just told. Rewrite it against what actually ships: role is the sole selector and any non-empty name is legal; a fresh config seeds code, read, extraction and generation and deliberately not review or advisor; a consumer asks an ordered list ending in the historical name so no existing host changes model; an unconfigured name falls through; escalation is bee cells escalate with the 40 percent ration; retry.fallbackChains is explicit-only and is a contract bee PUBLISHES for an executor to follow, never a retry loop bee runs (decision 51341f84). (2) D8 (store 4eaf1b71) requires the recommended vocabulary in bee cells add --help. The authored source of that help is the cells.add entry in generated/registry_payload.json, and it mentions neither role nor the vocabulary — so the verb that REFUSES a cell without a role never says so in its own help. Fix that entry. registry_payload.json is edited by hand; bee dev regen does not write it (mrs-12 established this). If your edit changes anything the release manifest hashes, run bee dev regen and say so.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- catalog:: hooks::cli_shape:: && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A reader following the README link finds a page that agrees with it",
+      "The config page describes what ships, including the fall-through, escalation and the publish-only chain",
+      "bee cells add --help names the role field it refuses without, and the recommended vocabulary as guidance",
+      "registry_dispatch and the CLI-shape tests stay green"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4eaf1b71",
+    "51341f84"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w25",
+    "outcome": "Rewrote docs/config-reference.md onto roles, escalation and the publish-only chain, and gave bee cells add --help the role field and recommended vocabulary",
+    "files_changed": [
+      "docs/config-reference.md",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "Verified live behavior against packages/bee-rs/target/release/bee: the vendored .bee/bin/bee symlinks to the main checkout and predates --role, so it refuses the flag",
+      "bee dev regen not run — release-manifest --check reports 270/270 match, so neither edited file is hashed by the manifest (mrs-12: registry_payload.json is hand-edited and regen does not write it)",
+      "Also corrected role keys in the OpenCode and cli-executor examples, the bottom full sample, and the in-page anchor at line 19 — same page, same contradiction, all within the cell's named file"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T08:27:54.592Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T08:19:33.577Z",
+    "report": {
+      "outcome": "Rewrote docs/config-reference.md onto roles, escalation and the publish-only chain, and gave bee cells add --help the role field and recommended vocabulary",
+      "commit": "a6b41bd000e2fd72fdc9662d5cea3d83e0ed72ea",
+      "files": [
+        "docs/config-reference.md",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --bin bee -- catalog:: hooks::cli_shape:: && bee dev release-manifest --check && bee cells add --help — green (46 passed, 0 failed; manifest 270/270 match; help output carries role + vocabulary) — docs plus one authored help string: the registry-shape tests are what the payload edit can break, the manifest check answers the regen question, and the rendered help is the direct proof of the D8 must-have",
+      "deviations": [
+        "Verified live behavior against packages/bee-rs/target/release/bee: the vendored .bee/bin/bee symlinks to the main checkout and predates --role, so it refuses the flag",
+        "bee dev regen not run — release-manifest --check reports 270/270 match, so neither edited file is hashed by the manifest (mrs-12: registry_payload.json is hand-edited and regen does not write it)",
+        "Also corrected role keys in the OpenCode and cli-executor examples, the bottom full sample, and the in-page anchor at line 19 — same page, same contradiction, all within the cell's named file"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 162 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

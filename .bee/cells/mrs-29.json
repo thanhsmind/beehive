@@ -1,0 +1,74 @@
+{
+  "id": "mrs-29",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "role": "code",
+  "title": "Give one request one agent, and make the chain-gate test bite",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Two findings from an independent audit of this feature. (1) ROLE_AGENTS in drivers/guard.rs is still keyed on the HISTORICAL names, so which rendered agent a request gets depends on whether the host has migrated: on a host seeded by the new default_config, bee dispatch prepare --kind gather --role read returns general-purpose, while the SAME call on an un-migrated host returns bee-extract. One request, two answers, decided by config drift rather than by the request. Decide what the mapping should key on now that roles are open — the audit's framing is that a rendered agent serves a JOB, and the job words are the ones an operator now writes — and make one request give one agent. Verify the two-host claim yourself with the built binary at packages/bee-rs/target/release/bee before fixing, so the cap records the real before-state. (2) The plan named a test without which this feature is not implemented: a red test result never advances a fallback chain. What shipped at drivers/tests.rs around :5744 asserts that two constants in the same file are disjoint sets — a spelling check, not a behaviour pin. Since decision 51341f84 makes the chain a contract bee PUBLISHES rather than a loop bee runs, the honest pin is on the PUBLISHED payload: a dispatch's published gate must place every semantic failure class in never_advance_on and none of them in advance_on, asserted against the payload a caller actually receives, not against the constants that built it. Write that. If you conclude the behaviour genuinely cannot be pinned from bee's side because bee never executes, say so plainly on the cap — that is a real finding and better than a test that agrees with itself. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "The same dispatch request returns the same rendered agent on a migrated and an un-migrated host",
+      "The chain-gate test asserts over a published payload a caller receives, not over two constants in the test's own file",
+      "If the semantic-failure guarantee cannot be pinned from bee's side, the cap says so plainly rather than shipping a self-agreeing test"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "8dad7c2e",
+    "50808d48",
+    "51341f84"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w29",
+    "outcome": "One job now gets one rendered agent on any host vocabulary, and the chain gate is pinned on the published payload",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "The audit's before-state was half wrong and the cap records the measured one: an un-migrated host does not return bee-extract for --role read, it refuses role_not_configured. The divergence is real either way (general-purpose vs a refusal) and the fix is the same.",
+      "ROLE_AGENTS rows left unchanged rather than re-keyed: model_guard.rs and prepare.rs iterate the constant and depend on its rows being agent-unique, and both files are outside this cell. The job normalization lives in agent_for_role instead, which is also the honest split — role_for_agent's answer is resolved against models.<runtime> and must stay the name the agent was rendered from.",
+      "CEILING ON THE CHAIN TEST, so the plan can be corrected rather than satisfied: bee publishes a chain and never walks one (51341f84), so no bee-side test can prove an executor obeys the gate. The new test pins what is provable — every published dispatch carries the gate correctly in both directions. The plan's claim that this test makes the feature \"implemented\" overstates it.",
+      "--role read on a host that configures no read model is still refused by name (D2). Left as is deliberately and pinned in the test: there is no model to select, and answering an agent while selecting none is the silent-migration defect this feature removes.",
+      "Verify ran ~4 min late: the shared crate was transiently red from sibling mrs-w27's in-flight status_full/tests.rs (their reservation). Polled until it compiled rather than writing through it; zero errors in my files at any point."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T08:43:31.148Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T08:31:49.153Z",
+    "report": {
+      "outcome": "One job now gets one rendered agent on any host vocabulary, and the chain gate is pinned on the published payload",
+      "commit": "7cdae0f1a2396b1a948d329d31859246aea784fd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --bin bee -- verbs::drivers (247 passed, 0 failed) + hooks::model_guard (46 passed, 0 failed) — green — drivers owns both changed files; model_guard is the only other consumer of the agent_for_role lookup I changed",
+      "deviations": [
+        "The audit's before-state was half wrong and the cap records the measured one: an un-migrated host does not return bee-extract for --role read, it refuses role_not_configured. The divergence is real either way (general-purpose vs a refusal) and the fix is the same.",
+        "ROLE_AGENTS rows left unchanged rather than re-keyed: model_guard.rs and prepare.rs iterate the constant and depend on its rows being agent-unique, and both files are outside this cell. The job normalization lives in agent_for_role instead, which is also the honest split — role_for_agent's answer is resolved against models.<runtime> and must stay the name the agent was rendered from.",
+        "CEILING ON THE CHAIN TEST, so the plan can be corrected rather than satisfied: bee publishes a chain and never walks one (51341f84), so no bee-side test can prove an executor obeys the gate. The new test pins what is provable — every published dispatch carries the gate correctly in both directions. The plan's claim that this test makes the feature \"implemented\" overstates it.",
+        "--role read on a host that configures no read model is still refused by name (D2). Left as is deliberately and pinned in the test: there is no model to select, and answering an agent while selecting none is the silent-migration defect this feature removes.",
+        "Verify ran ~4 min late: the shared crate was transiently red from sibling mrs-w27's in-flight status_full/tests.rs (their reservation). Polled until it compiled rather than writing through it; zero errors in my files at any point."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -212,26 +212,44 @@ fn source_checkout(tmp: &Path, workspace_version: &str, release_version: &str) -
 /// probe it exactly the way it probes the real binary.
 #[cfg(unix)]
 fn write_executable_binary(path: &Path, package_version: &str, bee_version: &str) {
-    use std::os::unix::fs::PermissionsExt;
     let script = format!(
         "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{{\"version\":\"{package_version}\",\"bee_version\":\"{bee_version}\"}}'\nfi\n"
     );
-    std::fs::write(path, script).unwrap();
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
+    install_executable_script(path, &script);
 }
 
 #[cfg(unix)]
 fn write_executable_binary_raw(path: &Path, stdout_json: &str) {
-    use std::os::unix::fs::PermissionsExt;
     let script = format!(
         "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{stdout_json}'\nfi\n"
     );
-    std::fs::write(path, script).unwrap();
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    install_executable_script(path, &script);
+}
+
+/// Install an executable script at `path` WITHOUT ever holding `path` itself
+/// open for writing.
+///
+/// Writing the final path directly is what made these tests flaky. `cargo
+/// test` runs them on many threads; while one thread holds the script open
+/// for writing, another thread's `Command::spawn` forks and the child
+/// inherits that write fd. Linux then refuses to execute the file with
+/// `ETXTBSY` ("text file busy") until the child execs or exits. `O_CLOEXEC`
+/// does not help — it closes the fd at exec, which is already after the fork.
+///
+/// Writing a sibling temp file and renaming it into place removes the race
+/// structurally rather than papering over it with a retry: the path the test
+/// later executes is only ever created by `rename`, so no process can hold it
+/// open for writing at all. Losing the only test that noticed a real doctor
+/// bug to a retry loop would have cost more than the flake did.
+#[cfg(unix)]
+fn install_executable_script(path: &Path, script: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let staged = path.with_extension("staging");
+    std::fs::write(&staged, script).unwrap();
+    let mut perms = std::fs::metadata(&staged).unwrap().permissions();
     perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
+    std::fs::set_permissions(&staged, perms).unwrap();
+    std::fs::rename(&staged, path).unwrap();
 }
 
 /// Present, version-matched, and newest on disk: nothing to report.
@@ -389,6 +407,71 @@ fn binary_freshness_catches_release_drift_when_package_versions_agree() {
     );
     assert!(row.detail.contains("2.17.1"), "{}", row.detail);
     assert!(row.detail.contains("2.18.0"), "{}", row.detail);
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// A file at `.bee/bin/bee` that cannot be executed at all — so
+/// `installed_binary_bee_version` returns `Failed` and no version is ever read.
+#[cfg(unix)]
+fn write_unprobeable_binary(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, "#!/bin/sh\nexit 0\n").unwrap();
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o644);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+/// A probe that could not run read no version, so the row must not claim the
+/// binary matches source. With nothing newer on disk there is no other
+/// evidence either, so the honest answer is unknown.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_is_unknown_when_the_probe_fails_and_nothing_is_newer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
+    let bin = root.join(".bee/bin/bee");
+    write_unprobeable_binary(&bin);
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
+    for path in source_inputs(&root) {
+        filetime::set_file_mtime(&path, older).unwrap();
+    }
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, None, "a failed probe must never report the binary as fresh: {}", row.detail);
+    assert!(
+        !row.detail.contains("matches source"),
+        "the detail must not claim a match it never read: {}",
+        row.detail
+    );
+    assert!(!row.detail.contains("2.18.0"), "no version was read: {}", row.detail);
+    assert!(row.detail.contains("rs-info"), "{}", row.detail);
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// A source input newer than the binary is real evidence of drift, and it still
+/// wins over a failed probe: not_ok with the existing newer-input detail.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_reports_not_ok_when_the_probe_fails_and_a_source_input_is_newer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
+    let bin = root.join(".bee/bin/bee");
+    write_unprobeable_binary(&bin);
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let newer = filetime::FileTime::from_system_time(bin_time + std::time::Duration::from_secs(60));
+    let stale_input = root.join("packages/bee-rs/crates/bee/src/main.rs");
+    filetime::set_file_mtime(&stale_input, newer).unwrap();
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, Some(false), "{}", row.detail);
+    assert!(
+        row.detail.contains("packages/bee-rs/crates/bee/src/main.rs"),
+        "{}",
+        row.detail
+    );
     assert!(row.detail.contains("cargo build"), "{}", row.detail);
 }
 

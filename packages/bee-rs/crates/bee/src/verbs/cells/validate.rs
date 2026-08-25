@@ -156,6 +156,56 @@ pub(crate) fn js_is_integer(v: &Value) -> Option<f64> {
     }
 }
 
+/// `<name>` -> `skills/<name>/SKILL.md` when that file really exists under
+/// `root`. Used to turn a bare skill name into the exact path that belongs
+/// in `affects_skills`; None for anything already carrying a `/`, and for a
+/// name that names no skill.
+pub(crate) fn bare_skill_name_path(root: &Path, name: &str) -> Option<String> {
+    if name.is_empty() || name.contains('/') {
+        return None;
+    }
+    if root.join("skills").join(name).join("SKILL.md").is_file() {
+        Some(format!("skills/{name}/SKILL.md"))
+    } else {
+        None
+    }
+}
+
+/// One problem sentence for an `affects_skills` entry that is not a
+/// repo-relative path under `skills/` — None when the entry is well formed.
+///
+/// `affects_skills` holds PATHS: the cap-time sync door (sync_door.rs check
+/// (c)) compares the prediction against the touched `skills/**` paths, so a
+/// bare skill name can never match and only ever explodes at cap. The
+/// refusal names the entry and, for a bare name that resolves to an
+/// existing `skills/<name>/SKILL.md`, the exact replacement path.
+pub(crate) fn affects_skills_entry_problem(root: &Path, verb: &str, raw: &str) -> Option<String> {
+    let norm = normalize_cell_path(raw);
+    if !norm.is_empty() && norm != "skills" && path_under_root(&norm, "skills") {
+        return None;
+    }
+    let fix = match bare_skill_name_path(root, &norm) {
+        Some(path) => format!("\"{raw}\" is a bare skill name; use \"{path}\" instead."),
+        None => "use the skill file's repo-relative path (e.g. \"skills/<skill-name>/SKILL.md\"), or drop the entry.".to_string(),
+    };
+    Some(format!(
+        "{verb}: \"affects_skills\" entry \"{raw}\" is not a repo-relative path under \"skills/\" — affects_skills holds paths, never skill names (the cap-time sync door compares them against touched skills/** paths). FIX: {fix}"
+    ))
+}
+
+/// Every bad entry in one `affects_skills` array, in order — whole-batch
+/// validation rules are unchanged: nothing stops at the first problem.
+pub(crate) fn affects_skills_path_problems(root: &Path, verb: &str, value: &Value) -> Vec<String> {
+    let Value::Array(items) = value else { return Vec::new() };
+    items
+        .iter()
+        .filter_map(|item| match item {
+            Value::String(raw) => affects_skills_entry_problem(root, verb, raw),
+            _ => None,
+        })
+        .collect()
+}
+
 /// lib/cells.mjs validateNewCell, as a collector — gathers EVERY schema
 /// problem (in the original check order) into one list instead of throwing
 /// on the first. A dependent check is skipped when its prerequisite already
@@ -188,6 +238,13 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
                 problems.push(format!(
                     "addCell: \"{key}\" must be an array of strings."
                 ));
+            }
+            // Shape is good: `affects_skills` also owes its FORMAT here
+            // (paths, not names) so a bare name never survives to the
+            // cap-time sync door. `affects_specs` has no cap-time door and
+            // keeps its shape-only check.
+            Some(v) if key == "affects_skills" => {
+                problems.extend(affects_skills_path_problems(root, "addCell", v));
             }
             _ => {}
         }

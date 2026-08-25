@@ -76,6 +76,7 @@ pub const PORTED: &[&str] = &[
     "state session list|bind|unbind|release",
     "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (no-lane/no-workflow repos)",
     "intent set|show|advance|clear",
+    "work show|set",
     "reviews create|list|show|record|candidate add|candidates|status (--file shapes)",
     "knowledge check|index|list|context",
     "tmp sweep",

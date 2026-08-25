@@ -497,6 +497,18 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
                 )));
             }
         }
+        // Same format door `cells add` runs (validate.rs): a backfill can no
+        // more smuggle in a bare skill name than an add can. Every bad entry
+        // is named in this one refusal; the patch is refused whole.
+        if let Some(value) = patch_map.get("affects_skills") {
+            let problems = affects_skills_path_problems(&root, "updateCell", value);
+            if !problems.is_empty() {
+                return Err(Fail::Thrown(format!(
+                    "{} The whole patch is refused; the cell is untouched.",
+                    problems.join(" ")
+                )));
+            }
+        }
         if let Some(verify) = patch_map.get("verify") {
             assert_verify_sentinel_allowed(&root, "updateCell", verify)?;
         }
@@ -635,6 +647,259 @@ dispatched from main inherits main's cwd and cannot write here."
     obj.insert("worktree_root".into(), Value::String(worktree_root));
 }
 
+// ── crf-1: the claim-time reservation ACQUIRE half ─────────────────────────
+//
+// docs/history/claim-reserves-files/CONTEXT.md: `finish_cap_and_release`
+// (handlers_close.rs) has always RELEASED by `(trace.worker, cell.id)` — the
+// values `cells claim --worker` records — but nothing ever ACQUIRED under that
+// key, so the release half ran against reservations that were never taken and
+// every dispatched worker wrote unreserved. This is the missing half of an
+// existing designed symmetry: `cells claim` and `cells claim-next` now reserve
+// the claimed cell's declared `files` under the SAME `(agent, cell)` key the
+// cap releases by.
+//
+// Both doors run the SHARED reserve section — `reservations::reserve_prechecks`
+// then `reservations::reserve_exec`, the exact pair `reservations reserve` and
+// `reserve_path_atomic` (the `dispatch prepare --claim` door) themselves call.
+// Never a second reservation path.
+//
+// Why not `reserve_path_atomic` itself: it hardcodes `session: None`, because
+// its one caller passes no session. A claim MUST thread the session it just
+// claimed under — `resolve_session_id` reads flag → BEE_SESSION_ID →
+// CLAUDE_CODE_SESSION_ID → single-live-session adoption, so dropping the
+// `--session-id` flag would make every claim in concurrent mode refuse with
+// reserve's own SESSION_REQUIRED. One layer down is the same door; a second
+// implementation would not be.
+
+/// `reserve_claimed_files`' typed verdict.
+pub(crate) enum ClaimReserve {
+    /// Every declared path is held under `(worker, cell)` — including any path
+    /// this same worker already held for this same cell, which was already
+    /// ours. Carries no payload on purpose: the claim's emitted bytes are
+    /// unchanged by this cell, so the ONE readable answer is the reservation
+    /// store itself (`reservations list`), never a second copy travelling here.
+    Held,
+    /// A genuine conflict. The claim and every reservation THIS call created
+    /// are already rolled back; each caller prefixes the code with its own verb
+    /// word, exactly like `CrossClaim::Refused`.
+    Refused { code: &'static str, reason: String },
+}
+
+fn err2_to_fail(e: Err2) -> Fail {
+    match e {
+        Err2::Ex => Fail::Delegate,
+        Err2::Msg(m) => Fail::Thrown(m),
+    }
+}
+
+/// Is EVERY conflicting lease already ours, for this very cell? `find_conflicts`
+/// filters same-agent rows out on the pre-check side, so this can only be the
+/// O_EXCL exact-path arm meeting a lease we took under an earlier claim of the
+/// same cell whose claim file has since expired or been swept. Re-claiming must
+/// not error on that. A same-agent lease for a DIFFERENT cell is NOT ours here
+/// — that other cell's cap is what releases it — so it stays a real conflict.
+fn conflicts_are_our_own(conflicts: &[Value], worker: &str, cell_id: &str) -> bool {
+    !conflicts.is_empty()
+        && conflicts.iter().all(|c| {
+            matches!(c.get("agent"), Some(Value::String(a)) if a == worker)
+                && matches!(c.get("cell"), Some(Value::String(x)) if x == cell_id)
+        })
+}
+
+/// The hold topology the acquire runs under. `cells claim` resolves its store
+/// root through the NARROW door (`resolve_store_root`), which carries no
+/// topology; this reads the same `StoreRoots::hold_topology()` that
+/// `finish_topology` hands the RELEASE half, so acquire and release mirror one
+/// another across checkouts. Anything unresolvable answers `None` — the same
+/// "skip the cross-worktree wiring entirely" arm an ungranted linked worktree
+/// takes — never a guessed topology.
+pub(crate) fn claim_hold_topology() -> Option<(PathBuf, String)> {
+    let cwd = std::env::current_dir().ok()?;
+    match crate::roots::resolve_store_root_worktree(&cwd) {
+        crate::roots::RootsWt::Go(roots) => roots.hold_topology(),
+        _ => None,
+    }
+}
+
+/// Reserve the just-claimed cell's declared `files`, in declaration order,
+/// stopping at the first conflict and unwinding what this call created IN
+/// REVERSE (reservations first, then the claim) — the same post-creation
+/// rollback discipline `worktree new` and `claim_and_reserve_for_dispatch` use,
+/// so a refusal can truthfully say the store is back in its pre-call state.
+///
+/// A cell declaring no files reserves nothing and refuses nothing: zero paths
+/// is not an error, and the claim runs exactly as it did before this cell.
+///
+/// Two recorded residuals, both inherited from the shared doors:
+///   - the rollback releases by `(worker, cell)`, the only scoping the shared
+///     release door offers. When this call created at least one reservation AND
+///     the worker also held an older lease for the SAME cell, that older lease
+///     goes too. Nothing is released when this call created nothing.
+///   - an unproven store shape (`Err2::Ex`) reaching here travels out as
+///     `Fail::Delegate` with the claim already standing — the identical
+///     accepted residual `claim_and_reserve_for_dispatch` records, and for the
+///     same reason: every store this loop reads was already probed by the claim
+///     door's own prescans and by `reserve_prechecks`.
+pub(crate) fn reserve_claimed_files(
+    root: &Path,
+    topo: Option<(&Path, &str)>,
+    cell: &Value,
+    worker: &str,
+    session_flag: Option<&str>,
+) -> MR<ClaimReserve> {
+    let claimed_id = match cell.get("id") {
+        Some(Value::String(s)) => s.clone(),
+        other => jsjson::js_to_string(other.unwrap_or(&Value::Null)),
+    };
+    // `Array.isArray(cell.files) ? cell.files.filter(f => typeof f === 'string' && f) : []`
+    let files: Vec<String> = match cell.get("files") {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|f| match f {
+                Value::String(s) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    if files.is_empty() {
+        return Ok(ClaimReserve::Held);
+    }
+    let root_s = root.to_str().ok_or(Fail::Delegate)?;
+
+    let t = topo.map(|(m, h)| rsv::Topo { main_root: m, holder: h });
+
+    let mut created: Vec<String> = Vec::new();
+    for file_path in &files {
+        let params = rsv::ReserveParams {
+            agent: worker.to_string(),
+            cell: claimed_id.clone(),
+            path: file_path.clone(),
+            ttl: None,     // reserve() defaults to DEFAULT_TTL_SECONDS
+            session: session_flag.map(str::to_string),
+            kind: None,    // 'lease' — hard conflicts, same as every other door
+        };
+        // Every delegate-trigger front-loaded, before the cross-worktree lock —
+        // reserve_path_atomic's own order.
+        rsv::reserve_prechecks(t, root_s, &params).map_err(|_| Fail::Delegate)?;
+        let out = rsv::reserve_exec(t, root_s, &params, lock::MAX_ATTEMPTS).map_err(err2_to_fail)?;
+        let refusal = match &out {
+            // reserve()'s own argument refusals — structurally unreachable from
+            // here (agent, cell and path are all non-empty by construction),
+            // but never guessed at: reported, after the same rollback.
+            Out::Thrown(m) => Some(vec![format!("- {m}")]),
+            Out::Emit(Value::Object(m), _, _) => {
+                if m.get("ok") == Some(&Value::Bool(true)) {
+                    // The NORMALIZED path off the lease record, not files[i].
+                    let p = match m.get("reservation").and_then(|r| r.get("path")) {
+                        Some(Value::String(s)) => s.clone(),
+                        other => jsjson::js_to_string(other.unwrap_or(&Value::Null)),
+                    };
+                    created.push(p);
+                    None
+                } else if matches!(m.get("code"), Some(Value::String(c)) if c == "FOREIGN_HOLD") {
+                    let or_unknown = |k: &str| match m.get(k) {
+                        Some(v) if rsv::truthy(v) => jsjson::js_to_string(v),
+                        _ => "unknown".to_string(),
+                    };
+                    Some(vec![format!(
+                        "- checkout \"{}\" holds \"{}\" (cross-worktree hold, feature {}, cell {})",
+                        m.get("holder").map_or("undefined".into(), jsjson::js_to_string),
+                        m.get("path").map_or("undefined".into(), jsjson::js_to_string),
+                        or_unknown("feature"),
+                        or_unknown("cell"),
+                    )])
+                } else if matches!(m.get("code"), Some(Value::String(c)) if c == "SESSION_REQUIRED") {
+                    // reserve's own identity refusal, carried verbatim rather
+                    // than flattened into an empty conflict list.
+                    Some(vec![format!(
+                        "- {}",
+                        m.get("reason").map_or("undefined".into(), jsjson::js_to_string)
+                    )])
+                } else {
+                    let conflicts = match m.get("conflicts") {
+                        Some(Value::Array(a)) => a.clone(),
+                        _ => Vec::new(),
+                    };
+                    if conflicts_are_our_own(&conflicts, worker, &claimed_id) {
+                        None
+                    } else {
+                        Some(
+                            conflicts
+                                .iter()
+                                .map(|c| {
+                                    format!(
+                                        "- {} holds \"{}\" (cell {})",
+                                        c.get("agent").map_or("undefined".into(), jsjson::js_to_string),
+                                        c.get("path").map_or("undefined".into(), jsjson::js_to_string),
+                                        c.get("cell").map_or("undefined".into(), jsjson::js_to_string),
+                                    )
+                                })
+                                .collect(),
+                        )
+                    }
+                }
+            }
+            Out::Emit(..) => return Err(Fail::Delegate), // unreachable: always an object
+        };
+        let Some(conflict_lines) = refusal else { continue };
+
+        // Unwind, in reverse: the reservations this call took, then the claim.
+        let mut note = "the claim was rolled back and the store restored as found".to_string();
+        let unwound = (|| -> MR<Result<(), String>> {
+            if !created.is_empty() {
+                if let Out::Thrown(m) =
+                    rsv::release_reservations_for_agent(topo, root_s, worker, Some(&claimed_id))
+                        .map_err(err2_to_fail)?
+                {
+                    return Ok(Err(m));
+                }
+            }
+            match unclaim_cell(root, &claimed_id, session_flag, false) {
+                Ok(_) => Ok(Ok(())),
+                Err(Fail::Delegate) => Err(Fail::Delegate),
+                Err(Fail::Thrown(m)) => Ok(Err(m)),
+            }
+        })()?;
+        if let Err(message) = unwound {
+            note = format!(
+                "ROLLBACK FAILED ({message}) — restore by hand: bee reservations release --agent {worker} --cell {claimed_id} --json ; bee cells unclaim --id {claimed_id} --json"
+            );
+        }
+        let mut lines = vec![format!(
+            "cell \"{claimed_id}\" declares files that could not be reserved — nothing claimed; {note}:"
+        )];
+        lines.extend(conflict_lines);
+        return Ok(ClaimReserve::Refused {
+            code: "RESERVATION_CONFLICT",
+            reason: lines.join("\n"),
+        });
+    }
+    Ok(ClaimReserve::Held)
+}
+
+/// `cells claim`'s door with crf-1's acquire attached — the claim, then the
+/// declared files reserved under the claiming `--worker`. Kept as ONE function
+/// so `run_claim` (which resolves its root off `std::env::current_dir()`) and
+/// the tests exercise the identical composition.
+pub(crate) fn claim_cell_with_reservations(
+    root: &Path,
+    topo: Option<(&Path, &str)>,
+    id: &str,
+    worker: &str,
+    session_flag: Option<&str>,
+    ttl: Option<f64>,
+    fix_first: Option<&str>,
+) -> MR<ClaimDoor> {
+    let door = claim_cell_from_flags_ex(root, id, worker, session_flag, ttl, fix_first)?;
+    match reserve_claimed_files(root, topo, &door.cell, worker, door.session_id.as_deref())? {
+        ClaimReserve::Held => Ok(door),
+        ClaimReserve::Refused { code, reason } => {
+            Err(Fail::Thrown(format!("claim: {code} — {reason}")))
+        }
+    }
+}
+
 pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !rsv::keys_known(&flags, &["id", "worker", "session-id", "ttl", "isolate", "fix-first"]) {
         return None;
@@ -659,8 +924,15 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
     };
     dispatch("cells claim", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        let mut claimed = claim_cell_from_flags_ex(
+        // crf-1: claim, then hold the declared files under the same
+        // `(--worker, cell)` key the cap already releases by. A success emits
+        // exactly the bytes it always did — the acquire adds nothing to the
+        // payload; only a genuine conflict is visible, as a typed refusal.
+        let topology = claim_hold_topology();
+        let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+        let mut claimed = claim_cell_with_reservations(
             &root,
+            topo,
             &id,
             &worker,
             session_flag.as_deref(),

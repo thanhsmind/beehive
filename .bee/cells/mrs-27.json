@@ -1,0 +1,82 @@
+{
+  "id": "mrs-27",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "role": "code",
+  "title": "Show an operator's own role in the printed status line",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "action": "mrs-26 (commit dc6e0c6d) collapsed status's private copy of the models parser onto the one parser, and reported that it left the job half done in a file outside its cell. Two closed lists survive in the status surface and both make an operator's own role invisible. (1) render.rs around :362-381 prints the human line from a FIXED three-slot format string — Models (claude): generation={} extraction={} review={} — so an operator who adds models.claude.test sees it in bee status --json and NOT in the printed line they actually read. Make the printed line render whatever roles the config carries. Keep it short: this line is read at a glance, so a host with a dozen roles must still produce something a human scans, not a wall — say on the cap how you bounded it. (2) validate_models_config in store.rs walks MODEL_VALIDATE_SLOTS, a closed four-name list in mod.rs:74, so a MALFORMED value under models.claude.test gets no validation warning at all — the operator gets silence for a typo in exactly the shape this feature told them to write. Both are the same defect as the parser copy: a closed list standing where an open set now lives. Verify the current behaviour yourself with the built binary at packages/bee-rs/target/release/bee before and after, so the cap records the real before-state rather than my description. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A role the operator configured outside the historical names appears in the PRINTED status line, not only in --json",
+      "The printed line stays scannable for a host with many roles; the cap says how that was bounded",
+      "A malformed value under an operator-invented role name is validated and warned like any other",
+      "No closed list of role names remains in the status surface"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "cd72ec97",
+    "06e49368"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w27",
+    "outcome": "bee status prints every configured role and validates every configured role",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+    ],
+    "deviations": [
+      "Bound justification, measured not asserted: the printed role list is capped by a 120-character WIDTH budget, not a role count, then +N more (--json). Measured on the built binary — 12 short-named claude roles cost 153 chars of role text, the same 12 on opencode cost ~380; a count cannot tell those apart. The first suffix spelling (+N more (bee status --json for all)) cost 35 chars to drop 35 chars of short entries, so it was shortened.",
+      "Printed order changed and two existing assertions with it: order is now derived (slot_for_kind over DISPATCH_KINDS first, then map order), the same rule hooks::model_guard::role_slot_display uses. extraction reads third rather than second because no dispatch kind resolves it any more.",
+      "Fourth defect fixed, same family, one axis over: render.rs printed claude and opencode by hand out of the three RUNTIMES status carries, so a configured models.codex was invisible. A codex line prints when configured; absent when not, so no existing host gains an all-null row.",
+      "Reserved and edited one file outside the cell: status_full/build.rs, two call sites, because Problem.slot had to stop being &'static str for an open name set. Reserved under mrs-w27 before writing.",
+      "ADVICE_CLASS_SLOTS (advisor/review) deliberately LEFT closed, with the reason in code: those are bee's own door names and read-only is a property of what bee does there, not of any name an operator may choose."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T08:43:39.351Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T08:31:49.090Z",
+    "report": {
+      "outcome": "bee status prints every configured role and validates every configured role",
+      "commit": "a651b404",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee — green (2651 passed, 0 failed) — the bin target carries every status_full and drivers test the change reaches; the full declared run adds only the 2 pre-existing env-limited opencode_plugin_contracts reds (node cannot strip TypeScript natively), unchanged by this cell",
+      "deviations": [
+        "Bound justification, measured not asserted: the printed role list is capped by a 120-character WIDTH budget, not a role count, then +N more (--json). Measured on the built binary — 12 short-named claude roles cost 153 chars of role text, the same 12 on opencode cost ~380; a count cannot tell those apart. The first suffix spelling (+N more (bee status --json for all)) cost 35 chars to drop 35 chars of short entries, so it was shortened.",
+        "Printed order changed and two existing assertions with it: order is now derived (slot_for_kind over DISPATCH_KINDS first, then map order), the same rule hooks::model_guard::role_slot_display uses. extraction reads third rather than second because no dispatch kind resolves it any more.",
+        "Fourth defect fixed, same family, one axis over: render.rs printed claude and opencode by hand out of the three RUNTIMES status carries, so a configured models.codex was invisible. A codex line prints when configured; absent when not, so no existing host gains an all-null row.",
+        "Reserved and edited one file outside the cell: status_full/build.rs, two call sites, because Problem.slot had to stop being &'static str for an open name set. Reserved under mrs-w27 before writing.",
+        "ADVICE_CLASS_SLOTS (advisor/review) deliberately LEFT closed, with the reason in code: those are bee's own door names and read-only is a property of what bee does there, not of any name an operator may choose."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

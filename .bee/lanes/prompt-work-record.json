@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "feature": "prompt-work-record",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"prompt-work-record\" started at phase \"exploring\" (lane).",
+  "next_action": "Merged into main at 22e4d88; capture what settled, then bee close --feature prompt-work-record.",
+  "created_at": "2026-08-25T08:29:10.360Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 4,
+    "rationale": "The session record is a contract waggledance parses (public-contracts), and the change spans the hook layer, the decisions scanners and a new agent-facing verb group (multi-domain). Not audit-security and so not hard-gate: no auth or authorization path is touched, no validation is removed, and the redaction rule ADDS a protection over the user's own text on the user's own machine.",
+    "updated_at": "2026-08-25T09:03:01.283Z",
+    "feature": "prompt-work-record"
+  }
+}

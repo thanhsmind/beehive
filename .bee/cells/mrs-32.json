@@ -1,0 +1,76 @@
+{
+  "id": "mrs-32",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "role": "code",
+  "title": "Stop the guard admitting an unconfigured advisor and missing the two-agent ambiguity",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/reports/review-r2.md"
+  ],
+  "action": "REVIEW P2 x2, same file family, both about the guard answering a question wrongly. Read both findings in docs/history/model-role-split/reports/review-r2.md. (1) guard.rs:55-59 inserts every slot_for_kind slot into known_roles UNCONDITIONALLY, advisor included, configured or not. So classify_marker returns Marker::Role for [bee-tier: advisor] on a host with no advisor, the unconfigured-role refusal never fires, and the dispatch falls through Resolved::Budget to allow with no model param — inheriting the session model. That is verbatim the outcome the refusal text at model_guard.rs:152-163 exists to prevent, and bee dispatch prepare --role advisor REFUSES on the same host, so one question has two doors and two answers. (2) model_guard.rs:760 guards the two-agents ambiguity on the literal t == generation. Every freshly onboarded host now configures code, which aliases to generation, so [bee-tier: code] walks past the check and is repaired onto bee-gather — the READ-ONLY agent — and an execution dispatch then dies later at the write guard with the audit line naming the wrong agent. Derive the condition instead of naming it: the ambiguity exists when more than one rendered agent serves the canonical role, so ask that. The test that should have caught it iterates ROLE_AGENTS keys, so no alias spelling is ever exercised — extend it over ROLE_ALIASES spellings too. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A marker naming a role the host does not configure is refused, whatever that role is called — advisor included",
+      "The guard and dispatch prepare give the same answer for the same role name on the same host",
+      "The two-agent ambiguity is detected by an alias spelling, not only by the table's own key",
+      "The ambiguity condition is derived from the agent table rather than naming a role literal",
+      "The tests exercise alias spellings, and would fail on the pre-fix code"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "06e49368",
+    "8dad7c2e"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w32",
+    "outcome": "Refuse an unconfigured dispatch-door slot as a role name, and derive the two-agent pinned-type refusal from the agent table instead of the literal generation",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+    ],
+    "deviations": [
+      "known_roles now derives from the runtime table plus ceiling only; the slot_for_kind union is deleted rather than gated, because every gated insert would be a strict no-op against the table keys (default_models already seeds generation/review/extraction into every runtime)",
+      "open_role_config() and codex_spawn_rules asserted the defect (an unconfigured advisor accepted on claude and on codex); both fixtures now state their precondition and the negative case moved to a named regression test",
+      "cap ran with --inline-reason: the dispatcher never registered worker mrs-w32 in state.json workers[], and bee state worker add refuses inside a granted feature worktree",
+      "follow-up outside this cell's files: onboard/templates.rs default_config table still reads reachable-with-no-config-key = yes for advisor, now false. Doc comment only; its conclusion (ship no advisor default) is unchanged."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T09:47:24.896Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T09:35:02.809Z",
+    "inline_reason": "Dispatched worker mrs-w32 ran this cell in the granted worktree, but the dispatcher never registered it in state.json workers[]; bee state worker add refuses inside a granted feature worktree (control plane lives in main), so the worker cannot self-register. Not an inline run.",
+    "report": {
+      "outcome": "Refuse an unconfigured dispatch-door slot as a role name, and derive the two-agent pinned-type refusal from the agent table instead of the literal generation",
+      "commit": "c2ef2f9f708b82ff6dfc24e8c52b7f4bf6064767",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (bin unit suite 2654 passed 0 failed, every other target 0 failed; opencode_plugin_contracts fails 2 env-limited, no node on PATH, pre-existing) — the cell's own declared verify, run whole because known_roles is the shared role-legality predicate both dispatch doors read",
+      "deviations": [
+        "known_roles now derives from the runtime table plus ceiling only; the slot_for_kind union is deleted rather than gated, because every gated insert would be a strict no-op against the table keys (default_models already seeds generation/review/extraction into every runtime)",
+        "open_role_config() and codex_spawn_rules asserted the defect (an unconfigured advisor accepted on claude and on codex); both fixtures now state their precondition and the negative case moved to a named regression test",
+        "cap ran with --inline-reason: the dispatcher never registered worker mrs-w32 in state.json workers[], and bee state worker add refuses inside a granted feature worktree",
+        "follow-up outside this cell's files: onboard/templates.rs default_config table still reads reachable-with-no-config-key = yes for advisor, now false. Doc comment only; its conclusion (ship no advisor default) is unchanged."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 262 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
