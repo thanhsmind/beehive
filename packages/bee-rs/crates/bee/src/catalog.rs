@@ -483,7 +483,28 @@ mod tests {
         // this flag deliberately does not grow), and `--tier` is the retired
         // COST word this feature exists to replace — neither means "the job
         // this work is", so neither was the name to reuse.
-        const PINNED_FLAG_COUNT: usize = 181;
+        // 181 -> 182 (mrs-12, the registry↔dispatcher law's OTHER direction):
+        // `herding pane`, `herding agent-start`, `herding pane-id` and
+        // `herding result` were served by the dispatcher and declared
+        // nowhere, so `bee --help --all` reported four verbs the herding role
+        // documents tell an agent to type as unknown commands. Declaring them
+        // documents shapes the binary already serves; it invents nothing new
+        // at the CLI surface. Checked first: `--main-root` (interlock/
+        // command-template/wave/occupancy/record-worker/control-loop),
+        // `--label` (herdr-pane-id — the same pane-label concept),
+        // `--context` (herdr-result — the same error-line label) and `--kind`
+        // (dispatch.prepare — "which kind of thing to start", read the same
+        // way here) are all reused unchanged, no count cost. `--pane` is the
+        // one new spelling: `--pane-id` (herding.record-worker) names the
+        // pane a ledger row RECORDS, and every `--id`/`--path`/`--name` names
+        // a bee entity — none of them means "the already-existing pane to
+        // start this agent IN", which is what agent-start hard-requires.
+        // The subverb-specific pane flags (`--with-status`, `--workspace`,
+        // `--direction`, `--ratio`, `--lines`, `--clear`) are deliberately
+        // NOT declared: each belongs to ONE `pane` subverb, and hanging six
+        // names off the group entry would tell a caller they apply to all
+        // twelve. The entry's description names them instead.
+        const PINNED_FLAG_COUNT: usize = 182;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
