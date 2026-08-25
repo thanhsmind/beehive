@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"role-surface-cleanup\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at b7f511e; reload the product and test \"role-surface-cleanup\", then either approve uat (\"bee gate --name uat --approved true --lane role-surface-cleanup\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"role-surface-cleanup\" (lane).",
   "created_at": "2026-08-25T15:45:14.424Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: role-surface-cleanup",
-    "asked_at": "2026-08-25T15:51:24.492Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for role-surface-cleanup (merged at b7f511e) and still pending: uat for escalate-off-disarm",
+    "asked_at": "2026-08-25T15:51:54.639Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {
     "class": "bugfix",
