@@ -411,10 +411,86 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("- Heaviest: f1 (2 cell(s))."), "{text}");
         assert!(text.contains("Capped with no scribing sync"), "{text}");
         assert!(text.contains("### Capture queue: 1 stub(s) pending flush"), "{text}");
-        assert!(text.contains("### Ceiling-model scarcity: 67% of tiered cells on ceiling"), "{text}");
-        assert!(text.contains("- 2/3 cells tiered ceiling (> 40%)"), "{text}");
+        // D6: same two cells, same 2/3, same 67% — the fixtures still carry
+        // the LEGACY `tier: "ceiling"` spelling and it is still counted. What
+        // changed is the subject: the escalation flag, against the feature's
+        // cells rather than against "cells that recorded a tier".
+        assert!(
+            text.contains("### Ceiling-model scarcity: 67% of this feature's cells escalated"),
+            "{text}"
+        );
+        assert!(text.contains("- 2/3 cells escalated onto the session model (> 40%)"), "{text}");
         assert!(text.contains("### Critical patterns (digest)\n- pattern one"), "{text}");
         assert!(text.contains("### Recent decisions\n- «a» (2026-01-01)"), "{text}");
+    }
+
+    /// model-role-split D6 (store 97ce5225), closing the gap mrs-14 named.
+    ///
+    /// A cell marked the NEW way — `escalate: true`, no `tier` key at all —
+    /// was INVISIBLE to this advice line: the enforcing door at
+    /// `handlers_close.rs` already read the flag, while the preamble still
+    /// matched a tier VALUE. On a fully migrated store every cell looks like
+    /// this, so the section would have vanished and read as all-clear.
+    ///
+    /// The denominator moves with it. It was "cells that recorded a tier",
+    /// which is 0 once `role` is the required field, and a zero denominator
+    /// is a warning that can never fire again.
+    #[test]
+    fn ceiling_scarcity_sees_a_cell_marked_with_the_flag_and_no_tier() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1"}"#);
+        for id in ["e1", "e2"] {
+            write(
+                root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f1","status":"open","lane":"standard","role":"code","escalate":true}}"#
+                ),
+            );
+        }
+        write(
+            root,
+            ".bee/cells/p1.json",
+            r#"{"id":"p1","feature":"f1","status":"open","lane":"standard","role":"read"}"#,
+        );
+        let text = render(root);
+        assert!(
+            text.contains("### Ceiling-model scarcity: 67% of this feature's cells escalated"),
+            "an escalate-flagged cell with no tier must still be counted:\n{text}"
+        );
+        assert!(text.contains("- 2/3 cells escalated onto the session model (> 40%)"), "{text}");
+        assert!(
+            !text.contains("re-tier"),
+            "the remedy may not name a retired tier value:\n{text}"
+        );
+    }
+
+    /// The counter-case, and the one that keeps the line honest: three cells
+    /// of the feature, one escalated. 33% is under the 40% bar, so nothing is
+    /// said. A line that fired here would be noise; a line that never fires
+    /// at all is the defect above.
+    #[test]
+    fn ceiling_scarcity_stays_silent_when_the_escalated_share_is_under_the_bar() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1"}"#);
+        write(
+            root,
+            ".bee/cells/e1.json",
+            r#"{"id":"e1","feature":"f1","status":"open","lane":"standard","role":"code","escalate":true}"#,
+        );
+        for id in ["p1", "p2"] {
+            write(
+                root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f1","status":"open","lane":"standard","role":"code"}}"#
+                ),
+            );
+        }
+        let text = render(root);
+        assert!(!text.contains("### Ceiling-model scarcity"), "{text}");
     }
 
     /// trun-9 rework (D5), FAIL 1's proof: the first pass wired the deferred

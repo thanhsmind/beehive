@@ -57,7 +57,9 @@ const WORKTREE_COMPANION_COMMAND_KEYS: [&str; 3] = [
     "worktree_companion_start", "worktree_companion_end", "worktree_companion_mount",
 ];
 
-const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
+// model-role-split D4/D6: this module's private `MODEL_TIERS` copy is gone.
+// Its one reader was `cells.rs`'s tier mix, which now counts the OPEN role
+// set instead — there is no list of legal names left to keep in step here.
 
 const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
@@ -117,7 +119,11 @@ const CONTENTION_TOP_LOCKS_LIMIT: usize = 5;
 // cells.mjs ~2280-2281
 const CEILING_MAX_SHARE: f64 = 0.4;
 
-const SCARCITY_MIN_TIERED: i64 = 3;
+// model-role-split D6: was SCARCITY_MIN_TIERED, a floor on "cells that
+// recorded a tier". Nothing records a tier any more, so that floor would sit
+// at 0 forever and the advice would never fire. Same number, honest subject:
+// the feature's cells.
+const SCARCITY_MIN_CELLS: i64 = 3;
 
 // claims.mjs
 const DEFAULT_HEARTBEAT_STALE_SECONDS: f64 = 900.0;

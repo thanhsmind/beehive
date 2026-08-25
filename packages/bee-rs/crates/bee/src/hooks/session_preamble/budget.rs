@@ -761,15 +761,18 @@ pub fn build_session_preamble(
         lines.extend(open_maps_lines);
     }
 
-    // P7: keep the ceiling model scarce.
-    if let Some((pct, ceiling, tiered)) = ceiling_scarcity_warning(root) {
+    // P7: keep the ceiling model scarce. D6 — the subject is the escalation
+    // flag and the feature's cells, never a retired tier value; the remedy
+    // line names dropping the escalation, because there is no longer a
+    // "generation/extraction" to re-tier a cell to.
+    if let Some((pct, escalated, cells)) = ceiling_scarcity_warning(root) {
         lines.push(String::new());
         lines.push(format!(
-            "### Ceiling-model scarcity: {}% of tiered cells on ceiling",
+            "### Ceiling-model scarcity: {}% of this feature's cells escalated",
             num_str(pct)
         ));
         lines.push(format!(
-            "- {ceiling}/{tiered} cells tiered ceiling (> {}%) — the cost lever erodes when the strongest model touches most dispatches; re-tier routine cells to generation/extraction (decision 0012).",
+            "- {escalated}/{cells} cells escalated onto the session model (> {}%) — the cost lever erodes when the strongest model touches most dispatches; drop the escalation on routine cells (decision 0012).",
             num_str(js_round(CEILING_MAX_SHARE * 100.0))
         ));
     }

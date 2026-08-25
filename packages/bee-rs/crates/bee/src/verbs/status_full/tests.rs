@@ -3630,7 +3630,13 @@ use crate::version::BEE_VERSION;
         expect_kind("gate_bypass_level", Value::is_string);
         expect_kind("ship_visibility", Value::is_string);
         expect_kind("models", Value::is_object);
-        expect_kind("tier_mix", Value::is_object);
+        // model-role-split D6: `tier_mix` is DELIBERATELY renamed to
+        // `role_mix` — the one breaking key change in that feature, reasoned
+        // at its emit site (`build.rs`) and pinned by
+        // `bee_status_json_renames_tier_mix_to_role_mix` below. It is listed
+        // here under its new name rather than dropped, so this probe keeps
+        // guarding the key it guards.
+        expect_kind("role_mix", Value::is_object);
         expect_kind("handoff", Value::is_null);
         expect_kind("cells", Value::is_object);
         expect_kind("lanes", Value::is_object);
@@ -3659,6 +3665,108 @@ use crate::version::BEE_VERSION;
             let entry = vget(records, g).unwrap_or_else(|| panic!("gate_records missing {g}"));
             assert!(vget(entry, "state").unwrap().is_string());
         }
+    }
+
+    /// model-role-split D6 (store 97ce5225), and the probe the plan asks for
+    /// on the feature's ONE public-output change.
+    ///
+    /// Three things are pinned at once, because the defect this replaces was
+    /// all three failing together and none of them going red:
+    ///
+    /// 1. The RENAME is real: `tier_mix` is gone, `role_mix` is there. A
+    ///    consumer of the old key fails loudly at the read instead of
+    ///    reading zeros out of a retained-but-hollow object.
+    /// 2. The mix counts ROLES, from the open set — `counts` holds exactly
+    ///    the role names the store carries, with no fixed list in between.
+    /// 3. The escalation share is beside it, and it sees a cell that carries
+    ///    `escalate: true` and NO `tier` at all. That cell was invisible to
+    ///    this counter before: the enforcing door already read the flag while
+    ///    the advice still watched a tier value.
+    #[test]
+    fn bee_status_json_renames_tier_mix_to_role_mix_and_counts_the_escalation_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1","mode":"standard"}"#);
+        // Two escalated cells, marked the NEW way: the flag, no `tier` key.
+        write(
+            root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","lane":"standard","title":"t","role":"code","escalate":true}"#,
+        );
+        write(
+            root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"f1","status":"open","lane":"standard","title":"t","role":"code","escalate":true}"#,
+        );
+        write(
+            root,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","feature":"f1","status":"open","lane":"standard","title":"t","role":"read"}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+
+        assert!(status.get("tier_mix").is_none(), "the renamed key must be GONE, not hollow");
+        let rm = status.get("role_mix").expect("role_mix");
+        let counts = vget(rm, "counts").expect("counts");
+        assert_eq!(counts, &json!({"code": 2, "read": 1}), "counts are role names, sorted");
+        assert_eq!(vget(rm, "cells"), Some(&json!(3)), "the denominator is the feature's cells");
+        assert_eq!(vget(rm, "escalated"), Some(&json!(2)), "the flag is seen with no tier present");
+        assert_eq!(
+            vget(rm, "escalationShare").and_then(|v| v.as_f64()).map(|s| (s * 1000.0).round()),
+            Some(667.0)
+        );
+
+        // The scarcity advice fires off the same flag and the same
+        // denominator — it does not report all-clear because its old input
+        // moved out from under it.
+        let cs = status.get("ceiling_scarcity").expect("ceiling_scarcity");
+        assert_eq!(vget(cs, "ceiling"), Some(&json!(2)));
+        assert_eq!(vget(cs, "cells"), Some(&json!(3)));
+        assert_eq!(vget(cs, "pct"), Some(&json!(67)));
+
+        let text = render_status_text(&status);
+        assert!(text.contains("Role mix: code=2 read=1 (escalated 2/3, 67%)"), "{text}");
+        assert!(
+            text.contains("⚠ Ceiling scarcity: 2/3 cells escalated onto the session model (67%)"),
+            "{text}"
+        );
+        assert!(!text.contains("Tier mix"), "no tier vocabulary survives the human line:\n{text}");
+    }
+
+    /// The legacy spelling still counts. A store that was never migrated
+    /// writes `tier: "ceiling"` and no flag; if this counter stopped seeing
+    /// it, every pre-migration repo would read "nothing is escalated" — the
+    /// silent all-clear that is worse than no line at all.
+    #[test]
+    fn role_mix_still_counts_the_legacy_ceiling_tier_spelling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1","mode":"standard"}"#);
+        for id in ["c-1", "c-2"] {
+            write(
+                root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f1","status":"open","lane":"standard","title":"t","tier":"ceiling"}}"#
+                ),
+            );
+        }
+        write(
+            root,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","feature":"f1","status":"open","lane":"standard","title":"t","tier":"generation"}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let rm = status.get("role_mix").expect("role_mix");
+        assert_eq!(vget(rm, "escalated"), Some(&json!(2)));
+        assert_eq!(vget(rm, "cells"), Some(&json!(3)));
+        // No cell carries `role`, so all three land in the honest bucket —
+        // never silently attributed to a role nobody declared.
+        assert_eq!(vget(rm, "counts"), Some(&json!({"unassigned": 3})));
     }
 
     // ── trun-7: run_state, read straight off the projection ────────────────

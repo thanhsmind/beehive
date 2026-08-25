@@ -126,9 +126,34 @@ pub(crate) fn pinned_agent_type(role: &str) -> &'static str {
 /// pinned/unverified/inherited-or-unknown/native-requested split. Key order is
 /// frozen: {logical_tier, requested_model, effective_model,
 /// effective_model_status, channel, enforcement}.
+///
+/// `logical_tier` KEEPS ITS NAME under the model-role split (D4/D6), and that
+/// is a decision rather than an oversight. The VALUE has already moved — it
+/// carries the declared ROLE now, which is why the tests below assert
+/// `logical_tier: "test"` and `logical_tier: "review"` beside the older
+/// `"generation"`. The key does not follow it, for three reasons:
+///
+/// 1. Its destination is `.bee/logs/dispatch.jsonl`, an APPEND-ONLY log.
+///    Renaming the key splits that file into two schemas with no version
+///    marker, so every reader — `docs/decisions/ab-tiny-protocol.md`'s
+///    measurement, documented at `bee-swarming/references/swarming-reference.md`
+///    — would have to handle both spellings forever. One key that spans the
+///    whole log is strictly easier to read correctly than two.
+/// 2. There is a SECOND writer of this key, `hooks/model_guard.rs:994`.
+///    Renaming here and not there splits one field into two; renaming both
+///    is a change to a file this cell does not own, made for tidiness.
+/// 3. "logical" always meant "what the dispatch DECLARED", as against the
+///    `effective_model` it was actually observed to get. A role is exactly
+///    that declaration, so the word is still true of its contents.
+///
+/// Consumers, named so a later rename is a decision and not a surprise:
+/// `.bee/logs/dispatch.jsonl` readers, `hooks/model_guard.rs`'s verdict
+/// output, and `verbs/drivers/tests.rs`'s economics assertions.
 pub(crate) fn derive_economics(
     channel: &str,
-    tier: &str,
+    // The DECLARED role (or `ceiling`, the escalation word). Named for what it
+    // now carries; the emitted key stays `logical_tier` — see above.
+    role: &str,
     param_model: Option<&str>,
     resolved: &Resolved,
     native_confirmed: bool,
@@ -182,7 +207,7 @@ pub(crate) fn derive_economics(
     };
 
     let mut out = Map::new();
-    out.insert("logical_tier".into(), Value::String(tier.to_string()));
+    out.insert("logical_tier".into(), Value::String(role.to_string()));
     out.insert("requested_model".into(), requested_model);
     out.insert("effective_model".into(), effective_model);
     out.insert(

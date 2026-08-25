@@ -380,18 +380,28 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
             format_slot(opencode.and_then(|o| vget(o, "review"))),
         ));
     }
+    // D6: the human line counts ROLES, and the escalation share is reported
+    // beside them rather than folded into a fourth count. The role set is
+    // open (D2), so this renders whatever roles the store actually holds —
+    // it never names a fixed list that a configured role could fall out of.
     {
-        let tm = s("tier_mix");
-        if opt_truthy(tm) && vget(tm.unwrap(), "tiered").and_then(|v| v.as_f64()).unwrap_or(0.0) > 0.0 {
-            let tm = tm.unwrap();
-            let counts = vget(tm, "counts").cloned().unwrap_or(Value::Null);
-            let share = vget(tm, "ceilingShare").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let rm = s("role_mix");
+        if opt_truthy(rm) && vget(rm.unwrap(), "cells").and_then(|v| v.as_f64()).unwrap_or(0.0) > 0.0
+        {
+            let rm = rm.unwrap();
+            let counts = vget(rm, "counts").cloned().unwrap_or(Value::Null);
+            let share = vget(rm, "escalationShare").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let mut parts: Vec<String> = Vec::new();
+            if let Value::Object(map) = &counts {
+                for (role, n) in map {
+                    parts.push(format!("{role}={}", tpl(Some(n))));
+                }
+            }
             lines.push(format!(
-                "Tier mix: extraction={} generation={} ceiling={} untiered={} (ceiling {}%)",
-                tpl(vget(&counts, "extraction")),
-                tpl(vget(&counts, "generation")),
-                tpl(vget(&counts, "ceiling")),
-                tpl(vget(&counts, "untiered")),
+                "Role mix: {} (escalated {}/{}, {}%)",
+                parts.join(" "),
+                tpl(vget(rm, "escalated")),
+                tpl(vget(rm, "cells")),
                 jsjson::js_f64_to_string(js_round(share * 100.0))
             ));
         }
@@ -399,9 +409,9 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
     if opt_truthy(s("ceiling_scarcity")) {
         let cs = s("ceiling_scarcity").unwrap();
         lines.push(format!(
-            "⚠ Ceiling scarcity: {}/{} tiered cells on ceiling ({}%) — re-tier routine cells (decision 0012)",
+            "⚠ Ceiling scarcity: {}/{} cells escalated onto the session model ({}%) — drop the escalation on routine cells (decision 0012)",
             tpl(vget(cs, "ceiling")),
-            tpl(vget(cs, "tiered")),
+            tpl(vget(cs, "cells")),
             tpl(vget(cs, "pct"))
         ));
     }

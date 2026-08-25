@@ -272,20 +272,45 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     );
     let config_models = read_config(ctx)?; // readConfig: `models`
     status.insert("models".into(), Value::Object(config_models.models.clone()));
+    // ── PUBLIC CONTRACT: `tier_mix` is renamed to `role_mix` (D6) ──────────
+    //
+    // `bee status --json` is published output, so this is a BREAKING key
+    // change and it is taken deliberately, not as a side effect of the
+    // internals moving. The three options were: rename, emit both keys for a
+    // period, or keep `tier_mix` and change what is inside it.
+    //
+    // Rename wins because NO truthful content survives under the old key. A
+    // reader of `tier_mix` reads `counts.extraction` / `counts.generation` /
+    // `counts.ceiling` / `counts.untiered`, `tiered`, and `ceilingShare`.
+    // After the split there are no tiers at all: every one of those
+    // sub-fields would be absent, and every consumer that treats an absent
+    // number as 0 — which is what a dashboard does — would report "no
+    // ceiling usage, no untiered cells" forever. That is a SILENT wrong
+    // answer. A key that is simply gone is a loud one: the consumer fails at
+    // the read and its owner is told to look. Keeping the key, or emitting it
+    // as an alias of the new object, buys compatibility of the key name only
+    // while handing every existing field reader a permanent zero — the exact
+    // dead-denominator defect this cell exists to remove.
+    //
+    // Blast radius, checked rather than assumed: no doc surface names
+    // `tier_mix` (`docs/07-contracts.md` does not enumerate it), and the one
+    // in-repo consumer is the published-contract probe in `tests.rs`, which
+    // is updated to pin the rename rather than quietly deleted.
     {
-        let mix = tier_mix(ctx, feature_or_null.as_ref())?;
-        let mut tm = JMap::new();
-        tm.insert("counts".into(), Value::Object(mix.counts));
-        tm.insert("tiered".into(), json!(mix.tiered));
-        tm.insert(
-            "ceilingShare".into(),
-            if mix.ceiling_share.fract() == 0.0 {
-                json!(mix.ceiling_share as i64)
+        let mix = role_mix(ctx, feature_or_null.as_ref())?;
+        let mut rm = JMap::new();
+        rm.insert("counts".into(), Value::Object(mix.counts));
+        rm.insert("cells".into(), json!(mix.cells));
+        rm.insert("escalated".into(), json!(mix.escalated));
+        rm.insert(
+            "escalationShare".into(),
+            if mix.escalation_share.fract() == 0.0 {
+                json!(mix.escalation_share as i64)
             } else {
-                json!(mix.ceiling_share)
+                json!(mix.escalation_share)
             },
         );
-        status.insert("tier_mix".into(), Value::Object(tm));
+        status.insert("role_mix".into(), Value::Object(rm));
     }
     status.insert(
         "ceiling_scarcity".into(),
