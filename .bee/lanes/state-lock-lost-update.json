@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"state-lock-lost-update\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"state-lock-lost-update\" (lane).",
+  "next_action": "Merged into main at fefec29; reload the product and test \"state-lock-lost-update\", then either approve uat (\"bee gate --name uat --approved true --lane state-lock-lost-update\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-25T10:40:43.042Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "A message from another session needs your approval",
-    "asked_at": "2026-08-25T11:16:11.524Z",
-    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+    "subject": "uat: state-lock-lost-update",
+    "asked_at": "2026-08-25T11:18:45.160Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "bugfix",
@@ -28,12 +28,5 @@
     "rationale": "A state worker add entry is lost during a stale-lock steal: w0 dies, state.json stays well-formed, ~9-12% solo on three trees. Two candidate mechanisms already eliminated by reading; needs instrumentation.",
     "updated_at": "2026-08-25T10:40:43.052Z",
     "feature": "state-lock-lost-update"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T11:03:11.925Z",
-    "branch": "wt/state-lock-lost-update",
-    "worktree_id": "beehive--wt--state-lock-lost-update",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
