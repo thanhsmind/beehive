@@ -4515,6 +4515,39 @@ use crate::version::BEE_VERSION;
     /// the built binary before the change — `bee status` printed no
     /// `config validate` row for the invented names at all.
     #[test]
+    /// role-edge-hardening D1: decision 0015 keeps `ceiling` out of config,
+    /// and until now nothing said a word when an operator wrote it anyway —
+    /// a WELL-FORMED value was accepted, ignored by `role_slot_display`,
+    /// and then made `dispatch prepare` stamp a `[bee-tier: ceiling]` marker
+    /// beside a model param, the exact pair the guard denies.
+    #[test]
+    fn a_configured_ceiling_key_is_named_never_silently_accepted() {
+        for value in [json!("opus"), json!({"model": "opus", "effort": "high"}), json!(null)] {
+            let problems = validate_models_config(Some(
+                &json!({"models": {"claude": {"ceiling": value}}}),
+            ));
+            assert_eq!(
+                codes(&problems),
+                vec!["ceiling-not-a-role"],
+                "ceiling={value}: a forbidden key must be named, whatever its value shape"
+            );
+            assert!(
+                problems[0].message.contains("bee cells escalate"),
+                "the problem must teach the real door: {}",
+                problems[0].message
+            );
+        }
+        // The key on one runtime never mutes a real problem on another.
+        let mixed = validate_models_config(Some(&json!({"models": {
+            "claude": {"ceiling": "opus"},
+            "codex": {"generation": 7},
+        }})));
+        let mut seen = codes(&mixed);
+        seen.sort_unstable();
+        assert_eq!(seen, vec!["ceiling-not-a-role", "slot-value-malformed"]);
+    }
+
+    #[test]
     fn a_malformed_value_under_an_invented_role_is_validated_like_any_other() {
         // (a) the exact contrast that made the closed list visible.
         let invented =

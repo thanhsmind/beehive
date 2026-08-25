@@ -2645,6 +2645,46 @@ mod role_flag_tests {
     /// advisor` on the SAME host refused. One question, two doors, two
     /// answers — through the reachable configuration bee ships.
     #[test]
+    /// role-edge-hardening D1: a mis-cased "Advisor" config key answers the
+    /// SAME at both doors, in both directions. Before the case-fold,
+    /// `role_is_declarable` matched the advisor arm exactly and fell through
+    /// to `contains_key`, so "Advisor": null entered `known_roles`, resolved
+    /// as Budget at the marker door, and refused at `--kind advisor` — one
+    /// question, two answers, reopened by a typo.
+    #[test]
+    fn a_mis_cased_advisor_key_answers_the_same_at_both_doors() {
+        // Direction one: "Advisor": null — OFF at both doors.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","Advisor":null}}}"#,
+        );
+        let models = read_models(&root).unwrap();
+        assert!(
+            !known_roles(&models, "claude").iter().any(|k| k.eq_ignore_ascii_case("advisor")),
+            "a null advisor is off whatever the key's case"
+        );
+        let v = envelope(&root, "gather", Some("Advisor"));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        let v = envelope(&root, "advisor", None);
+        assert_eq!(v.get("reason"), Some(&json!("advisor_not_configured")));
+
+        // Direction two: "Advisor": "fable" — ON at both doors.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let on = repo(
+            &tmp2,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","Advisor":"fable"}}}"#,
+        );
+        let v = envelope(&on, "advisor", None);
+        assert_eq!(v.get("reason"), None, "--kind advisor must resolve the mis-cased key: {v}");
+        let models = read_models(&on).unwrap();
+        assert!(
+            known_roles(&models, "claude").iter().any(|k| k.eq_ignore_ascii_case("advisor")),
+            "and the marker door sees the same configured advisor"
+        );
+    }
+
+    #[test]
     fn a_null_advisor_is_off_at_every_door_not_only_at_the_ones_that_resolve() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(

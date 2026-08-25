@@ -671,7 +671,13 @@ pub(crate) fn tier_role_list(slot: &str) -> Vec<&str> {
 /// is a gather purpose by definition.
 pub(crate) fn resolve_advisor(models: &Map<String, Value>, runtime: &str) -> Option<Resolved> {
     let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
-    let value = models.get(rt).and_then(|t| t.get("advisor"))?;
+    // role-edge-hardening D1: the key is found case-insensitively, matching
+    // `role_is_declarable`'s advisor arm — an exact `get("advisor")` read
+    // made a mis-cased "Advisor" key resolve at the marker door (which folds
+    // case) while `--kind advisor` refused, one question with two answers.
+    let value = models.get(rt).and_then(Value::as_object).and_then(|t| {
+        t.iter().find(|(k, _)| k.eq_ignore_ascii_case("advisor")).map(|(_, v)| v)
+    })?;
     resolve_configured(value, "advisor", "advisor")
 }
 
@@ -791,7 +797,55 @@ pub(crate) fn normalize_fallback_chains(raw: Option<&Value>) -> Map<String, Valu
 /// `retry` key costs one map lookup.
 pub(crate) fn read_fallback_chains(root: &Path) -> Map<String, Value> {
     let config = read_config_raw(root);
-    normalize_fallback_chains(config.get("retry").and_then(|r| r.get("fallbackChains")))
+    let chains = normalize_fallback_chains(config.get("retry").and_then(|r| r.get("fallbackChains")));
+    // role-edge-hardening D1: a chain key that names neither a wildcard, a
+    // configured role, nor any model a dispatch can actually resolve is
+    // DEAD — resolve_fallback_chain matches on the RESOLVED role and model,
+    // so a role-keyed chain for a role nothing configures can never fire.
+    // The chain still publishes (junk-drop stays for structural junk only);
+    // the operator just hears about it instead of nothing.
+    if !chains.is_empty() {
+        let models = normalize_models(config.get("models"));
+        for key in dead_chain_keys(&chains, &models) {
+            warn_fallback_chain(
+                &key,
+                "no runtime configures a role or model by this name, so no dispatch ever travels under it and the chain can never fire — key it by a configured role, the concrete model that would fail, or a \"provider/*\" wildcard",
+            );
+        }
+    }
+    chains
+}
+
+/// role-edge-hardening D1: the chain keys no dispatch can ever travel under.
+/// `resolve_fallback_chain` matches on the RESOLVED role and model, so a key
+/// is live only when it is a `provider/*` wildcard, a role name some runtime
+/// configures or seeds by default, or a model string some slot resolves to.
+/// Everything else is accepted, published, and matches nothing — this is the
+/// one word the operator gets about it.
+pub(crate) fn dead_chain_keys(
+    chains: &Map<String, Value>,
+    models: &Map<String, Value>,
+) -> Vec<String> {
+    let mut live: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for rt in RUNTIMES {
+        for (name, value) in default_models(rt)
+            .iter()
+            .chain(models.get(rt).and_then(Value::as_object).into_iter().flatten())
+        {
+            live.insert(name.to_string());
+            if let Value::String(m) = value {
+                live.insert(js_trim(m).to_string());
+            }
+            if let Some(m) = value.get("model").and_then(Value::as_str) {
+                live.insert(js_trim(m).to_string());
+            }
+        }
+    }
+    chains
+        .keys()
+        .filter(|k| !k.contains('/') && !live.contains(k.as_str()))
+        .cloned()
+        .collect()
 }
 
 /// WHICH chain applies to THIS dispatch — most specific key first.
