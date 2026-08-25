@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"decision-attribution\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at d4934fe; reload the product and test \"decision-attribution\", then either approve uat (\"bee gate --name uat --approved true --lane decision-attribution\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at f65da28; reload the product and test \"decision-attribution\", then either approve uat (\"bee gate --name uat --approved true --lane decision-attribution\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-25T12:14:02.772Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: decision-attribution",
+    "asked_at": "2026-08-25T14:37:27.293Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -27,16 +32,5 @@
     "rationale": null,
     "updated_at": "2026-08-25T12:14:34.071Z",
     "feature": "decision-attribution"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T13:31:23.930Z",
-    "branch": "wt/decision-attribution",
-    "worktree_id": "beehive--wt--decision-attribution",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt",
-      "judge-debt",
-      "doc-deferral"
-    ]
   }
 }
