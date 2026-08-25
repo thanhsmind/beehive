@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"doctor-probe-honesty\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"doctor-probe-honesty\" (lane).",
+  "next_action": "Merged into main at a866cbb; capture what settled, then bee close --feature doctor-probe-honesty.",
   "created_at": "2026-08-25T09:33:09.989Z",
   "run_state": "done",
   "waiting_on": null,
@@ -23,12 +23,5 @@
     "rationale": "doctor's binary-freshness row reports ok:Some(true) claiming the binary matches source when the probe never read a version. The Failed arm is empty and falls through to a claim it cannot support.",
     "updated_at": "2026-08-25T09:33:09.998Z",
     "feature": "doctor-probe-honesty"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T09:37:43.781Z",
-    "branch": "wt/doctor-probe-honesty",
-    "worktree_id": "beehive--wt--doctor-probe-honesty",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
