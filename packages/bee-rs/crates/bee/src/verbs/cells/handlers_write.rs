@@ -490,6 +490,18 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
                 )));
             }
         }
+        // Same format door `cells add` runs (validate.rs): a backfill can no
+        // more smuggle in a bare skill name than an add can. Every bad entry
+        // is named in this one refusal; the patch is refused whole.
+        if let Some(value) = patch_map.get("affects_skills") {
+            let problems = affects_skills_path_problems(&root, "updateCell", value);
+            if !problems.is_empty() {
+                return Err(Fail::Thrown(format!(
+                    "{} The whole patch is refused; the cell is untouched.",
+                    problems.join(" ")
+                )));
+            }
+        }
         if let Some(verify) = patch_map.get("verify") {
             assert_verify_sentinel_allowed(&root, "updateCell", verify)?;
         }

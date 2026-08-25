@@ -392,6 +392,58 @@ pub(crate) enum WorkerCount {
     Unresolved(&'static str),
 }
 
+/// gc-2 (wgg-2): an acting-holder string no hold row can ever carry — a
+/// holder is a git-verified worktree id or the literal `"main"`, and neither
+/// can hold a NUL. Handed to `find_foreign_holds`, whose `holder !== acting`
+/// filter then discards nothing, so the "foreign" reader returns EVERY active
+/// hold. That is exactly the trick `bee reservations list` plays for its
+/// `cross_worktree:` section (verbs/reservations/leases.rs
+/// LIST_ALL_HOLDS_SENTINEL); this is the write-guard's own spelling of it, so
+/// the guard reuses the mirrored-holds reader instead of growing a second one.
+const ALL_HOLDS_SENTINEL: &str = "\u{0}bee-write-guard-all-holds\u{0}";
+
+/// The request path that overlaps every hold that carries a path at all:
+/// `paths_overlap` strips a trailing `*` down to an empty prefix, and an empty
+/// prefix overlaps any non-empty path. A hold with no path coerces to `""`,
+/// which `paths_overlap` rejects on both sides — not a hold anyone can hold.
+const ALL_HOLDS_PATH: &str = "*";
+
+/// gc-2 (wgg-2): how many workers actually share a GRANTED worktree's index.
+///
+/// The worktree's own `.bee/reservations.json` is the wrong place to ask: a
+/// wave's reservations are written by the orchestrator from the control root,
+/// so the worktree's store reads empty while three siblings edit its tree
+/// (docs/history/wave-guard-gaps/CONTEXT.md, "Gap 2"). The mirrored-holds
+/// ledger at the control root is the one record that spans both checkouts, and
+/// it already stamps each row with the work stream that owns it — `holder` is
+/// the granted worktree's id for a cell whose feature owns that worktree
+/// (verbs/reservations/reserve.rs, hha-1).
+///
+/// A worker is its cell: bee hands exactly one cell to one worker, so distinct
+/// non-empty `cell` values among this worktree's active holds ARE the sibling
+/// count. A hold with no cell names no worker and is skipped rather than
+/// guessed at — counting it could push a lone worker to two, and blocking a
+/// solo worker is a worse defect than the blindness being fixed.
+fn worktree_hold_cohort_size(control_root: &str, own_workspace: &str) -> R<usize> {
+    let holds = find_foreign_holds(control_root, ALL_HOLDS_SENTINEL, &[ALL_HOLDS_PATH.to_string()])?;
+    let mut cells: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for hold in &holds {
+        match hold.get("holder") {
+            Some(Value::String(h)) if h == own_workspace => {}
+            _ => continue,
+        }
+        let cell = match hold.get("cell") {
+            Some(Value::String(c)) => js_trim(c).to_string(),
+            _ => String::new(),
+        };
+        if cell.is_empty() {
+            continue;
+        }
+        cells.insert(cell);
+    }
+    Ok(cells.len())
+}
+
 pub(crate) fn resolve_live_worker_count(root: &str, control_root: &str, ctx: &JsCtx) -> R<WorkerCount> {
     let own_workspace = ctx.workspace_id.clone().unwrap_or_else(|| "main".to_string());
     if reservation_store_corrupt(root) {
@@ -433,6 +485,31 @@ pub(crate) fn resolve_live_worker_count(root: &str, control_root: &str, ctx: &Js
             continue;
         }
         worker_keys.insert(format!("{}::session", sid_t));
+    }
+    // gc-2 (wgg-2): inside a GRANTED worktree, the two halves above read the
+    // wrong checkout and both resolve to zero — `count > 1` was unreachable in
+    // the one place parallel workers actually run. The mirrored-holds cohort
+    // is the third, cross-checkout half.
+    //
+    // `workspace_id` is the worktree id ONLY for a granted worktree; every
+    // ordinary checkout (and every ungranted one) stamps `"main"`, so this
+    // whole block is skipped there and the main-checkout verdict is unchanged,
+    // byte for byte.
+    //
+    // `max`, never a sum: the cohort is an INDEPENDENT view of the same
+    // workers, not extra ones. A solo worker that reserved its own path is
+    // seen once by the reservation half and once by the cohort; adding them
+    // would deny the one session that must never be denied.
+    if own_workspace != "main" {
+        // Same fail-safe shape the reservation store already takes: an
+        // unreadable record is "more than one worker", never a silent zero.
+        if holds_store_corrupt(control_root) {
+            return Ok(WorkerCount::Unresolved(
+                "the cross-worktree holds ledger .bee/runtime/cross-worktree-holds.json is present but unparseable",
+            ));
+        }
+        let cohort = worktree_hold_cohort_size(control_root, &own_workspace)?;
+        return Ok(WorkerCount::Resolved(worker_keys.len().max(cohort)));
     }
     Ok(WorkerCount::Resolved(worker_keys.len()))
 }

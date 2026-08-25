@@ -815,6 +815,186 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("A genuinely path-scoped `git commit -- <your paths>` is allowed too."));
     }
 
+    // ── gc-2 / wgg-2: the guard inside a GRANTED worktree ──────────────────
+    //
+    // The wave the guard was built for runs INSIDE a granted worktree, and
+    // that is the one place it never fired: the worktree's own reservation
+    // store is empty (the orchestrator writes reservations at the control
+    // root) and the wave's sessions are stamped "main", so both halves of the
+    // old count resolved to zero and `count > 1` was unreachable
+    // (docs/history/wave-guard-gaps/CONTEXT.md, "Gap 2"). The mirrored-holds
+    // ledger at the control root is the record that crosses both checkouts.
+
+    /// One mirrored hold row, appended to the control root's ledger — the same
+    /// shape `bee reservations reserve` writes (verbs/reservations/reserve.rs).
+    fn seed_mirrored_hold(main_root: &Path, holder: &str, cell: &str, path: &str, session: Option<&str>) {
+        let dir = main_root.join(".bee").join("runtime");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("cross-worktree-holds.json");
+        let mut store: Value = std::fs::read_to_string(&file)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .unwrap_or_else(|| json!({ "holds": [] }));
+        store["holds"].as_array_mut().unwrap().push(json!({
+            "path": path,
+            "holder": holder,
+            "feature": "demo",
+            "session": session.map(Value::from).unwrap_or(Value::Null),
+            "cell": cell,
+            "ttl_seconds": 3600,
+            "mirrored_at": ms_to_iso(now_ms()).unwrap(),
+            "released_at": Value::Null,
+        }));
+        std::fs::write(&file, format!("{}\n", serde_json::to_string_pretty(&store).unwrap())).unwrap();
+    }
+
+    /// A live session record stamped with the workspace it runs in — the field
+    /// `session_workspace_id` reads. `add_live_session` leaves it absent, which
+    /// reads as "main".
+    fn add_live_session_in_workspace(root: &Path, id: &str, workspace_id: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let now = ms_to_iso(now_ms()).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id, "started_at": now, "last_heartbeat": now,
+                    "workspace_id": workspace_id
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// The reproduction from CONTEXT.md, as a test: sibling workers live in a
+    /// granted worktree must deny a bare `git commit`, and a genuinely
+    /// path-scoped one must still pass.
+    #[test]
+    fn concurrent_tree_guard_counts_siblings_inside_a_granted_worktree() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        for cell in ["c-1", "c-2", "c-3"] {
+            seed_mirrored_hold(&wtf.root, &wtf.id, cell, &format!("src/{cell}.txt"), Some("s-orch"));
+        }
+        let deny = expect_done(bash("git commit -m wip"), &wtf.wt_root);
+        assert_eq!(deny.code, 2, "{}", deny.stderr);
+        assert!(deny.stderr.contains("bee concurrent-worker git guard"), "{}", deny.stderr);
+        assert!(deny.stderr.contains("3 workers are live in this checkout"), "{}", deny.stderr);
+
+        // Constraint: the escape the refusal names must actually work.
+        let scoped = expect_done(bash("git commit -m wip -- src/mine.txt"), &wtf.wt_root);
+        assert_eq!(scoped.code, 0, "{}", scoped.stderr);
+    }
+
+    /// Deny-more only. The very same ledger read from the MAIN checkout is
+    /// worth nothing to it — those holds belong to the worktree's index, not
+    /// main's — so main's verdict is unchanged.
+    #[test]
+    fn concurrent_tree_guard_leaves_the_main_checkout_verdict_unchanged() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        for cell in ["c-1", "c-2", "c-3"] {
+            seed_mirrored_hold(&wtf.root, &wtf.id, cell, &format!("src/{cell}.txt"), Some("s-orch"));
+        }
+        let e = expect_done(bash("git commit -m wip"), &wtf.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        // A ledger main cannot even parse must not start denying in main
+        // either — the new fail-safe arm belongs to the worktree branch alone.
+        std::fs::write(
+            wtf.root.join(".bee").join("runtime").join("cross-worktree-holds.json"),
+            "{ not json",
+        )
+        .unwrap();
+        let corrupt = expect_done(bash("git commit -m wip"), &wtf.root);
+        assert_eq!(corrupt.code, 0, "{}", corrupt.stderr);
+    }
+
+    /// The constraint that outranks the fix: ONE worker alone in its own
+    /// granted worktree keeps committing. Its single cell is visible three
+    /// times over — a lease in the worktree store, a live session stamped to
+    /// the worktree, and the mirrored hold — and all three are the SAME
+    /// worker, so the count stays 1.
+    #[test]
+    fn concurrent_tree_guard_never_blocks_a_solo_worker_in_its_own_worktree() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        seed_mirrored_hold(&wtf.root, &wtf.id, "c-1", "src/solo.txt", Some("s-solo"));
+        add_live_session_in_workspace(&wtf.root, "s-solo", &wtf.id);
+        seed_lease(&wtf.wt_root, "src/solo.txt", "wk-solo", "c-1", Some("s-solo"), "lease");
+        let e = expect_done(bash("git commit -m wip"), &wtf.wt_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        // Same for the other whole-tree verbs the classifier catches.
+        for cmd in ["git stash", "git reset --hard", "git revert HEAD"] {
+            let solo = expect_done(bash(cmd), &wtf.wt_root);
+            assert_eq!(solo.code, 0, "{cmd}: {}", solo.stderr);
+        }
+    }
+
+    /// Fail-safe, same shape the reservation store already takes: an
+    /// unreadable ledger is "more than one worker", never a silent zero.
+    #[test]
+    fn concurrent_tree_guard_fails_safe_on_an_unparseable_holds_ledger() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        std::fs::create_dir_all(wtf.root.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            wtf.root.join(".bee").join("runtime").join("cross-worktree-holds.json"),
+            "{ not json",
+        )
+        .unwrap();
+        let e = expect_done(bash("git commit -m wip"), &wtf.wt_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee concurrent-worker git guard"), "{}", e.stderr);
+        assert!(e.stderr.contains("cross-worktree-holds.json"), "{}", e.stderr);
+        assert!(
+            e.stderr.contains("treated as more than one worker"),
+            "{}",
+            e.stderr
+        );
+    }
+
+    /// A hold that names no cell names no worker: it is skipped rather than
+    /// counted, because counting it could push a lone worker to two.
+    #[test]
+    fn concurrent_tree_guard_ignores_cell_less_and_foreign_holds() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        // Same worktree, no cell.
+        seed_mirrored_hold(&wtf.root, &wtf.id, "", "src/a.txt", Some("s-1"));
+        seed_mirrored_hold(&wtf.root, &wtf.id, "   ", "src/b.txt", Some("s-2"));
+        // Another checkout's holds — a different index entirely.
+        seed_mirrored_hold(&wtf.root, "main", "c-9", "src/c.txt", Some("s-3"));
+        seed_mirrored_hold(&wtf.root, "some-other-wt", "c-8", "src/d.txt", Some("s-4"));
+        // One real sibling — still one worker, so no denial.
+        seed_mirrored_hold(&wtf.root, &wtf.id, "c-1", "src/e.txt", Some("s-5"));
+        let e = expect_done(bash("git commit -m wip"), &wtf.wt_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        // Add a second real sibling and the guard fires.
+        seed_mirrored_hold(&wtf.root, &wtf.id, "c-2", "src/f.txt", Some("s-6"));
+        let deny = expect_done(bash("git commit -m wip"), &wtf.wt_root);
+        assert_eq!(deny.code, 2, "{}", deny.stderr);
+        assert!(deny.stderr.contains("2 workers are live in this checkout"), "{}", deny.stderr);
+    }
+
+    /// Two holds, one cell: one worker reserving two paths is still one
+    /// worker, and a released or expired hold is nobody.
+    #[test]
+    fn concurrent_tree_guard_counts_workers_not_hold_rows() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        seed_mirrored_hold(&wtf.root, &wtf.id, "c-1", "src/one.txt", Some("s-1"));
+        seed_mirrored_hold(&wtf.root, &wtf.id, "c-1", "src/two.txt", Some("s-1"));
+        assert_eq!(expect_done(bash("git commit -m wip"), &wtf.wt_root).code, 0);
+
+        // A released row and an expired row are both inactive.
+        let file = wtf.root.join(".bee").join("runtime").join("cross-worktree-holds.json");
+        seed_mirrored_hold(&wtf.root, &wtf.id, "c-2", "src/gone.txt", Some("s-2"));
+        seed_mirrored_hold(&wtf.root, &wtf.id, "c-3", "src/old.txt", Some("s-3"));
+        let mut store: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        store["holds"][2]["released_at"] = json!(ms_to_iso(now_ms()).unwrap());
+        store["holds"][3]["mirrored_at"] = json!(ms_to_iso(now_ms() - 7200.0 * 1000.0).unwrap());
+        std::fs::write(&file, format!("{}\n", serde_json::to_string_pretty(&store).unwrap())).unwrap();
+        let e = expect_done(bash("git commit -m wip"), &wtf.wt_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
     // ── linked-worktree matrix (rows 30-34) ────────────────────────────────
 
     struct Linked {
