@@ -24,6 +24,8 @@ pass.
 
 ---
 
+<!-- bee:not-a-deferral: everything below is FINDINGS PROSE — it describes defects the panel found and, where a defect is about deferral itself, says so as an observation. A review report never defers work by contract: it does not repair, decide, or close, and its P2/P3 findings leave as backlog rows (all 19 filed 2026-08-25). No line below promises a later delivery. -->
+
 ## Spec axis — does it do what the locked decisions promised
 
 ### P1-A · A cell declaring `role: "ceiling"` takes the session model and no budget counter sees it
@@ -228,5 +230,7 @@ Stated because a review that lists only defects misreports the work.
   allowed, 43 percent refused.
 - **One test function was deleted repo-wide, with a named replacement.**
   No proof weakening by deletion.
+
+<!-- /bee:not-a-deferral -->
 
 23 finding(s) — P1 2, P2 7, P3 14 · axis: spec 8, standards 15.
