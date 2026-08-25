@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"decision-attribution\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at e12b35a; capture what settled, then bee close --feature decision-attribution.",
+  "next_action": "bee close finished \"decision-attribution\" — feature is closed.",
   "created_at": "2026-08-25T12:14:02.772Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Just the artifact scratch file. The page is published, so the local copy can go.",
+    "asked_at": "2026-08-25T15:33:41.390Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",

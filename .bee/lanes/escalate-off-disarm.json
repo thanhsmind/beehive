@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "escalate-off-disarm",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"escalate-off-disarm\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"escalate-off-disarm\" (lane).",
+  "created_at": "2026-08-25T15:35:39.377Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-08-25T15:35:43.538Z",
+    "feature": "escalate-off-disarm"
+  }
+}
