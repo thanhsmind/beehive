@@ -27,6 +27,7 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
     use super::*;
+    use crate::verbs::state_group::Target;
 
     fn fixture_root() -> tempfile::TempDir {
         let tmp = tempfile::tempdir().unwrap();
@@ -195,6 +196,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into(), "recall".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -216,6 +218,7 @@ use std::time::Instant;
             tags: Some(vec!["Bad_Tag".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -245,6 +248,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -280,6 +284,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:bbbb2222".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -297,6 +302,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:aaaa1111".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), ambiguous, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -317,6 +323,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:deadbeef".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), unknown, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -347,6 +354,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:c1".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), stale, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -374,6 +382,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, SUPERSESSION_PROSE_GUARD_MESSAGE),
@@ -392,6 +401,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_edge, 0) else {
             panic!("expected log emit once --supersedes names the target");
@@ -431,6 +441,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: None,
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), missing, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -452,6 +463,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("sideways:a1".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), malformed, 0) {
             Ok(Out::Thrown(msg)) => assert!(msg.starts_with(RELATION_REQUIRED_MESSAGE), "{msg}"),
@@ -478,6 +490,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("touches:f1".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -504,6 +517,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("touches:deadbeef".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -543,6 +557,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, DEFERRAL_WITHOUT_TRIGGER_MESSAGE),
@@ -565,6 +580,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: Some("g1__deadbeef".to_string()),
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit once a registered --trigger is named");
@@ -585,6 +601,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: Some("no-such-trigger".to_string()),
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert!(
@@ -625,6 +642,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), p, 0) {
             Err(Err2::Msg(msg)) => {
@@ -659,6 +677,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), zero, 0) {
             Err(Err2::Msg(msg)) => assert_eq!(msg, UNTAGGED_REFUSED_MESSAGE),
@@ -674,6 +693,7 @@ use std::time::Instant;
             tags: Some(vec!["newtag".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         assert!(matches!(do_log(tmp.path(), unknown, 0), Ok(Out::Emit(_, _, 0))));
         let tax_after: Value = serde_json::from_str(&std::fs::read_to_string(&tax).unwrap()).unwrap();
@@ -787,6 +807,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         assert!(matches!(do_log(tmp.path(), p, 0), Ok(Out::Emit(_, _, 0))));
     }
@@ -1318,6 +1339,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1354,6 +1376,7 @@ use std::time::Instant;
             tags: Some(vec!["finance".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1386,6 +1409,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1412,6 +1436,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1429,6 +1454,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), unrelated, 0) else {
             panic!("expected log emit");
@@ -1454,6 +1480,7 @@ use std::time::Instant;
             tags: Some(vec!["billing".into()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -1561,6 +1588,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(..)) = do_log(&ctx.root, p, 0) else {
             panic!("expected decisions log to succeed against the worktree's own store");
@@ -1643,7 +1671,7 @@ use std::time::Instant;
     }
 
     #[test]
-    fn log_touches_sweeps_docs_excludes_index_and_own_history_queues_the_rest() {
+    fn log_touches_sweeps_docs_excludes_only_the_index_when_no_lane_is_bound() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         std::fs::create_dir_all(root.join(".git")).unwrap();
@@ -1691,16 +1719,28 @@ use std::time::Instant;
             tags: None,
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
         };
-        // D1a: `feature` rides the new event when the calling context has one bound.
-        assert_eq!(event["feature"], "docfeat");
+        // decision-attribution D1: this fixture has a `.bee/state.json` naming
+        // "docfeat" but NO bound lane, so the event is not stamped at all —
+        // the default record's feature belongs to whoever set it. Before D1
+        // this asserted `event["feature"] == "docfeat"`, which is precisely
+        // the borrow that mis-filed 23 real decisions.
+        assert!(event.get("feature").is_none());
         let new_id = event["id"].as_str().unwrap().to_string();
 
+        // With no feature resolved there is no own-history exclusion, so only
+        // the generated index is excluded and docfeat's own CONTEXT.md is an
+        // ordinary citing doc. The own-history exclusion itself is proved
+        // directly, over an explicit bound feature, by
+        // `touches_sweep_excluded_matches_generated_index_and_bound_own_history_only`, and
+        // the lane arm of the stamp by
+        // `feature_for_stamp_takes_a_lane_and_never_the_default_record`.
         let queue = read_jsonl(&capture_queue_path(root));
-        assert_eq!(queue.len(), 2, "index.md and docfeat's own history excluded: {queue:?}");
+        assert_eq!(queue.len(), 3, "only the generated index is excluded: {queue:?}");
         let mut stub_files: Vec<String> =
             queue.iter().map(|s| s["files"][0].as_str().unwrap().to_string()).collect();
         stub_files.sort();
@@ -1708,6 +1748,7 @@ use std::time::Instant;
             stub_files,
             vec![
                 "docs/area.md".to_string(),
+                "docs/history/docfeat/CONTEXT.md".to_string(),
                 "docs/history/otherfeat/CONTEXT.md".to_string(),
             ]
         );
@@ -1748,6 +1789,7 @@ use std::time::Instant;
             tags: None,
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1756,6 +1798,253 @@ use std::time::Instant;
         assert!(event.get("feature").is_none());
         let queue = read_jsonl(&capture_queue_path(tmp.path()));
         assert_eq!(queue.len(), 1, "unbound history dir is a real citation: {queue:?}");
+    }
+
+    /// decision-attribution D1/D4: the shape the old fallback got wrong.
+    /// `.bee/state.json` EXISTS and names a feature, and the calling session
+    /// has no bound lane — so the only name available belongs to whatever
+    /// other session last made a feature active. That is not this decision's
+    /// feature, and the event must carry no `feature` key at all.
+    ///
+    /// Distinct on purpose from
+    /// `log_touches_sweep_own_history_stays_a_citation_when_no_feature_is_bound`,
+    /// whose fixture has NO state file: that one passes with or without the
+    /// fix, so it is not evidence for this bug.
+    #[test]
+    fn log_never_borrows_a_feature_from_the_default_record_when_no_lane_is_bound() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        // Another session's active feature, sitting in the shared default record.
+        std::fs::write(
+            root.join(".bee").join("state.json"),
+            r#"{"feature":"someone-elses-feature"}"#,
+        )
+        .unwrap();
+
+        let p = LogParams {
+            decision: "A decision that belongs to no lane".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
+            panic!("expected log emit");
+        };
+        assert!(
+            event.get("feature").is_none(),
+            "an unbound session must not inherit the default record's feature, got {:?}",
+            event.get("feature")
+        );
+    }
+
+    /// decision-attribution D5: the predicate reads a claim the record makes
+    /// about itself, and refuses everything else.
+    #[test]
+    fn feature_from_decision_text_reads_only_the_slug_d_number_convention() {
+        assert_eq!(
+            feature_from_decision_text("human-mailbox D17: bee is a harness").as_deref(),
+            Some("human-mailbox")
+        );
+        assert_eq!(
+            feature_from_decision_text("model-role-split D4: role is the selector").as_deref(),
+            Some("model-role-split")
+        );
+        // No D-number: an ordinary decision, never touched.
+        assert_eq!(feature_from_decision_text("The mailbox owns its record shape"), None);
+        assert_eq!(feature_from_decision_text("human-mailbox says hello"), None);
+        // A capital or a space in the slug is not the convention.
+        assert_eq!(feature_from_decision_text("Human-Mailbox D1: x"), None);
+        assert_eq!(feature_from_decision_text("D1: no slug at all"), None);
+        // Digits alone are not a feature name.
+        assert_eq!(feature_from_decision_text("2026 D1: x"), None);
+        assert_eq!(feature_from_decision_text(""), None);
+    }
+
+    /// decision-attribution D5: a stamp is corrected only when the record's
+    /// own text contradicts it. No stamp stays no stamp — post-D1 that is a
+    /// legitimate state, and filling it in from prose is the inference D2
+    /// rejected.
+    #[test]
+    fn plan_reattribution_corrects_only_a_contradiction() {
+        let contradiction = json!({
+            "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "decision": "human-mailbox D17: bee is a harness",
+            "feature": "model-role-split"
+        });
+        let plan = plan_reattribution(&contradiction).expect("a contradiction is corrected");
+        assert_eq!(plan.from, "model-role-split");
+        assert_eq!(plan.to, "human-mailbox");
+
+        // Agrees with its own text — nothing to correct.
+        let agrees = json!({
+            "id": "id2", "decision": "human-mailbox D17: x", "feature": "human-mailbox"
+        });
+        assert!(plan_reattribution(&agrees).is_none());
+
+        // No stamp at all — left unstamped, never inferred.
+        let unstamped = json!({"id": "id3", "decision": "human-mailbox D17: x"});
+        assert!(plan_reattribution(&unstamped).is_none());
+
+        // Stamped, but the text makes no claim — left alone.
+        let no_claim = json!({
+            "id": "id4", "decision": "Some ordinary decision", "feature": "model-role-split"
+        });
+        assert!(plan_reattribution(&no_claim).is_none());
+    }
+
+    /// decision-attribution D5: end to end over a store — corrects the
+    /// contradiction, leaves everything else byte-identical, and is
+    /// idempotent. --dry-run writes nothing.
+    #[test]
+    fn reattribute_corrects_the_contradiction_and_leaves_every_other_line_untouched() {
+        let tmp = fixture_root();
+        let root = tmp.path();
+        let wrong = r#"{"id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:11:06.701Z","decision":"human-mailbox D1: bee owns the mailbox DATA","rationale":"r","feature":"model-role-split"}"#;
+        let right = r#"{"id":"bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:12:00.000Z","decision":"model-role-split D4: role is the sole selector","rationale":"r","feature":"model-role-split"}"#;
+        let plain = r#"{"id":"cccccccc-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:13:00.000Z","decision":"An ordinary decision with no D-number","rationale":"r","feature":"model-role-split"}"#;
+        let unstamped = r#"{"id":"dddddddd-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:14:00.000Z","decision":"human-mailbox D2: every record carries a subject","rationale":"r"}"#;
+        write_events(root, &[wrong, right, plain, unstamped]);
+
+        // --dry-run reports the same single correction and writes nothing.
+        let before = std::fs::read_to_string(decisions_path(root)).unwrap();
+        let Ok(Out::Emit(report, _, 0)) = do_reattribute(root, true, 0) else {
+            panic!("expected a dry-run report");
+        };
+        assert_eq!(report["scanned"], 4);
+        assert_eq!(report["changed"], 1);
+        assert_eq!(report["dry_run"], true);
+        assert_eq!(
+            std::fs::read_to_string(decisions_path(root)).unwrap(),
+            before,
+            "--dry-run must not write"
+        );
+
+        let Ok(Out::Emit(report, _, 0)) = do_reattribute(root, false, 0) else {
+            panic!("expected an apply report");
+        };
+        assert_eq!(report["changed"], 1);
+        assert_eq!(report["changes"][0]["from"], "model-role-split");
+        assert_eq!(report["changes"][0]["to"], "human-mailbox");
+
+        let after: Vec<Value> = read_jsonl(&decisions_path(root));
+        assert_eq!(after[0]["feature"], "human-mailbox", "the contradiction is corrected");
+        // Only `feature` moved on the corrected record.
+        assert_eq!(after[0]["decision"], "human-mailbox D1: bee owns the mailbox DATA");
+        assert_eq!(after[0]["date"], "2026-08-25T10:11:06.701Z");
+        assert_eq!(after[0]["rationale"], "r");
+        // Every other line is untouched, byte-for-byte.
+        let on_disk = std::fs::read_to_string(decisions_path(root)).unwrap();
+        let lines: Vec<&str> = on_disk.lines().collect();
+        assert_eq!(lines.len(), 4);
+        assert_eq!(lines[1], right);
+        assert_eq!(lines[2], plain);
+        assert_eq!(lines[3], unstamped);
+
+        // Idempotent.
+        let Ok(Out::Emit(again, _, 0)) = do_reattribute(root, false, 0) else {
+            panic!("expected a second report");
+        };
+        assert_eq!(again["changed"], 0, "a second run changes nothing");
+    }
+
+    /// decision-attribution D2: an explicit --feature names the decision's
+    /// own feature even when the default record names a different one. This
+    /// is the Discovery case the flag exists for — a wayfinding map locks
+    /// decisions before its effort has a lane to be bound to.
+    #[test]
+    fn log_explicit_feature_outranks_whatever_the_default_record_says() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            root.join(".bee").join("state.json"),
+            r#"{"feature":"someone-elses-feature"}"#,
+        )
+        .unwrap();
+
+        let p = LogParams {
+            decision: "human-mailbox D1: the mailbox owns its own record shape".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: Some("human-mailbox".to_string()),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["feature"], "human-mailbox");
+    }
+
+    /// decision-attribution D2: passing the flag is an act of naming, so a
+    /// blank value is refused. Dropping it silently would stamp the lane
+    /// instead and look like it had obeyed.
+    #[test]
+    fn log_refuses_a_blank_feature_rather_than_ignoring_it() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "A decision".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: Some("   ".to_string()),
+        };
+        let Ok(Out::Thrown(msg)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected a refusal for a blank --feature");
+        };
+        assert!(msg.contains("--feature"), "{msg}");
+        assert!(
+            !decisions_path(tmp.path()).exists()
+                || read_jsonl(&decisions_path(tmp.path())).is_empty(),
+            "a refused log must write nothing"
+        );
+    }
+
+    /// decision-attribution D1: the policy itself, tested over both target
+    /// shapes directly, so the rule is pinned without depending on session
+    /// env resolution.
+    #[test]
+    fn feature_for_stamp_takes_a_lane_and_never_the_default_record() {
+        let mut lane_record = Map::new();
+        lane_record.insert("feature".into(), Value::String("real-lane".into()));
+        let lane = Target::Lane { record: lane_record, lane: "real-lane".into() };
+        assert_eq!(feature_for_stamp(&lane).as_deref(), Some("real-lane"));
+
+        let mut default_record = Map::new();
+        default_record.insert("feature".into(), Value::String("someone-elses-feature".into()));
+        let default = Target::Default {
+            record: default_record,
+            target_feature: Some("someone-elses-feature".into()),
+        };
+        assert_eq!(
+            feature_for_stamp(&default),
+            None,
+            "the default record's feature belongs to whoever set it, never to this decision"
+        );
+
+        let empty_lane =
+            Target::Lane { record: Map::new(), lane: "nameless".into() };
+        assert_eq!(feature_for_stamp(&empty_lane), None);
     }
 
     #[test]
@@ -1774,6 +2063,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1809,6 +2099,7 @@ use std::time::Instant;
             tags: Some(vec!["auth".to_string()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1839,6 +2130,7 @@ use std::time::Instant;
             tags: None,
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), p_scope, 0) else {
             panic!("expected log emit");
@@ -1875,6 +2167,7 @@ use std::time::Instant;
             tags: Some(vec!["payments".to_string()]),
             relation: Some("none".to_string()),
             trigger: None,
+            feature: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
