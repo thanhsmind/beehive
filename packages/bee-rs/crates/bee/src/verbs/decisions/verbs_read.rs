@@ -8,7 +8,7 @@ use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, Read
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
 use crate::textutil::truncate_chars_head;
-use crate::verbs::state_group::resolve_mutation_target;
+use crate::verbs::state_group::{resolve_mutation_target, Target};
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
     js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
@@ -473,6 +473,35 @@ fn parse_relation(raw: &str) -> Option<Relation> {
     None
 }
 
+/// decision-attribution D1: which feature, if any, a new decide event is
+/// stamped with.
+///
+/// ONLY a lane-resolved target names it. `resolve_mutation_target` falls back
+/// to the shared default `.bee/state.json` record when the calling session has
+/// no bound lane, and for the verbs it was built for that fallback is right —
+/// an unbound session *mutating* state should act on the default record. This
+/// call site is different: it reads the target only to borrow a NAME, and the
+/// default record's `feature` is whatever some other session most recently
+/// made active, not the feature this decision is about.
+///
+/// Absent beats wrong. A missing `feature` is already a supported state that
+/// every reader tolerates (legacy pre-stamp lines simply lack the field),
+/// whereas a wrong one is invisible on inspection and misroutes both the
+/// impact and routing doors at close.
+///
+/// Measured before the fix, 2026-08-25: 23 of the 32 decisions stamped
+/// `model-role-split` belonged to other features, and all 18 `human-mailbox`
+/// ones were logged before that feature had a lane at all.
+pub(crate) fn feature_for_stamp(target: &Target) -> Option<String> {
+    match target {
+        Target::Lane { record, .. } => match record.get("feature") {
+            Some(v) if truthy(v) => Some(js_disp(v)),
+            _ => None,
+        },
+        Target::Default { .. } => None,
+    }
+}
+
 pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // handleDecisionsLog's confidence gate runs before logDecision.
     let confidence: Option<f64> = match &p.confidence_raw {
@@ -603,18 +632,17 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // refusal / unknown-tag candidates append (dp-6, D7b).
     classify_decision_tags(root, &normalized.clone().unwrap_or_default(), lock_retries)?;
 
-    // doc-impact-synthesis D1a: the calling context's active feature —
-    // resolved exactly as `state route` resolves it (session-bound lane,
-    // else the default `.bee/state.json` record) — stamps onto the new
-    // event below and bounds the touches-sweep's own-history exclusion.
-    // No resolution (no bound lane, no `feature` on the default record) →
-    // `None`, and the event carries no `feature` field at all.
+    // doc-impact-synthesis D1a: the calling context's active feature stamps
+    // onto the new event below and bounds the touches-sweep's own-history
+    // exclusion.
+    //
+    // decision-attribution D1 narrowed how it resolves: the session-bound
+    // lane ONLY, never the shared default `.bee/state.json` record. No bound
+    // lane → `None`, and the event carries no `feature` field at all. See
+    // `feature_for_stamp` for why borrowing the default record was wrong.
     let bound_feature: Option<String> = {
         let target = resolve_mutation_target(root, None, "decisions log", false)?;
-        match target.record().get("feature") {
-            Some(v) if truthy(v) => Some(js_disp(v)),
-            _ => None,
-        }
+        feature_for_stamp(&target)
     };
 
     let mut event = Map::new();

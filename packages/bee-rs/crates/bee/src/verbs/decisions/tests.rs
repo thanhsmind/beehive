@@ -27,6 +27,7 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
     use super::*;
+    use crate::verbs::state_group::Target;
 
     fn fixture_root() -> tempfile::TempDir {
         let tmp = tempfile::tempdir().unwrap();
@@ -1643,7 +1644,7 @@ use std::time::Instant;
     }
 
     #[test]
-    fn log_touches_sweeps_docs_excludes_index_and_own_history_queues_the_rest() {
+    fn log_touches_sweeps_docs_excludes_only_the_index_when_no_lane_is_bound() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         std::fs::create_dir_all(root.join(".git")).unwrap();
@@ -1695,12 +1696,23 @@ use std::time::Instant;
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
         };
-        // D1a: `feature` rides the new event when the calling context has one bound.
-        assert_eq!(event["feature"], "docfeat");
+        // decision-attribution D1: this fixture has a `.bee/state.json` naming
+        // "docfeat" but NO bound lane, so the event is not stamped at all —
+        // the default record's feature belongs to whoever set it. Before D1
+        // this asserted `event["feature"] == "docfeat"`, which is precisely
+        // the borrow that mis-filed 23 real decisions.
+        assert!(event.get("feature").is_none());
         let new_id = event["id"].as_str().unwrap().to_string();
 
+        // With no feature resolved there is no own-history exclusion, so only
+        // the generated index is excluded and docfeat's own CONTEXT.md is an
+        // ordinary citing doc. The own-history exclusion itself is proved
+        // directly, over an explicit bound feature, by
+        // `touches_sweep_excluded_matches_generated_index_and_bound_own_history_only`, and
+        // the lane arm of the stamp by
+        // `feature_for_stamp_takes_a_lane_and_never_the_default_record`.
         let queue = read_jsonl(&capture_queue_path(root));
-        assert_eq!(queue.len(), 2, "index.md and docfeat's own history excluded: {queue:?}");
+        assert_eq!(queue.len(), 3, "only the generated index is excluded: {queue:?}");
         let mut stub_files: Vec<String> =
             queue.iter().map(|s| s["files"][0].as_str().unwrap().to_string()).collect();
         stub_files.sort();
@@ -1708,6 +1720,7 @@ use std::time::Instant;
             stub_files,
             vec![
                 "docs/area.md".to_string(),
+                "docs/history/docfeat/CONTEXT.md".to_string(),
                 "docs/history/otherfeat/CONTEXT.md".to_string(),
             ]
         );
@@ -1756,6 +1769,78 @@ use std::time::Instant;
         assert!(event.get("feature").is_none());
         let queue = read_jsonl(&capture_queue_path(tmp.path()));
         assert_eq!(queue.len(), 1, "unbound history dir is a real citation: {queue:?}");
+    }
+
+    /// decision-attribution D1/D4: the shape the old fallback got wrong.
+    /// `.bee/state.json` EXISTS and names a feature, and the calling session
+    /// has no bound lane — so the only name available belongs to whatever
+    /// other session last made a feature active. That is not this decision's
+    /// feature, and the event must carry no `feature` key at all.
+    ///
+    /// Distinct on purpose from
+    /// `log_touches_sweep_own_history_stays_a_citation_when_no_feature_is_bound`,
+    /// whose fixture has NO state file: that one passes with or without the
+    /// fix, so it is not evidence for this bug.
+    #[test]
+    fn log_never_borrows_a_feature_from_the_default_record_when_no_lane_is_bound() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        // Another session's active feature, sitting in the shared default record.
+        std::fs::write(
+            root.join(".bee").join("state.json"),
+            r#"{"feature":"someone-elses-feature"}"#,
+        )
+        .unwrap();
+
+        let p = LogParams {
+            decision: "A decision that belongs to no lane".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
+            panic!("expected log emit");
+        };
+        assert!(
+            event.get("feature").is_none(),
+            "an unbound session must not inherit the default record's feature, got {:?}",
+            event.get("feature")
+        );
+    }
+
+    /// decision-attribution D1: the policy itself, tested over both target
+    /// shapes directly, so the rule is pinned without depending on session
+    /// env resolution.
+    #[test]
+    fn feature_for_stamp_takes_a_lane_and_never_the_default_record() {
+        let mut lane_record = Map::new();
+        lane_record.insert("feature".into(), Value::String("real-lane".into()));
+        let lane = Target::Lane { record: lane_record, lane: "real-lane".into() };
+        assert_eq!(feature_for_stamp(&lane).as_deref(), Some("real-lane"));
+
+        let mut default_record = Map::new();
+        default_record.insert("feature".into(), Value::String("someone-elses-feature".into()));
+        let default = Target::Default {
+            record: default_record,
+            target_feature: Some("someone-elses-feature".into()),
+        };
+        assert_eq!(
+            feature_for_stamp(&default),
+            None,
+            "the default record's feature belongs to whoever set it, never to this decision"
+        );
+
+        let empty_lane =
+            Target::Lane { record: Map::new(), lane: "nameless".into() };
+        assert_eq!(feature_for_stamp(&empty_lane), None);
     }
 
     #[test]
