@@ -1,0 +1,65 @@
+{
+  "id": "mrs-18",
+  "feature": "model-role-split",
+  "lane": "small",
+  "role": "test",
+  "title": "Retarget the registration test whose premise the open role set removed",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "FIX-FIRST for a red THIS FEATURE CAUSED, unlike the earlier two which were pre-existing. verbs::drivers::tests::a_registration_failure_never_unwinds_the_standing_claim at drivers/tests.rs:2496 is red: it made a worker registration fail by passing the role name bogus, and sibling commit 81e7a4b4 (mrs-16) retired the worker registry's closed three-value enum, so bogus is now a perfectly legal role name and the test's premise is gone. mrs-17 found it and correctly left it alone — the file was neither in its cell nor reserved by it. The behavior the test guards is REAL and must keep its pin: a registration failure must never unwind a claim that is already standing. So find a registration failure that still exists after the open role set — a blank role, or whatever the shared worker_role_value shape check in verbs/state_group/workers.rs now refuses — and drive the test with that instead. Do NOT delete the test, and do NOT weaken it to assert something smaller; the claim-unwind guarantee is the point, the role name was only ever the trigger. If NO registration failure remains reachable, that is itself a finding: say so on the cap, because it would mean the guarantee is now untestable through this door rather than merely differently triggered. Run your verify with --no-fail-fast; the repo's declared command lacks it and aborts at the first failing target, so without it you may never reach your own test.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "The claim-unwind guarantee is still pinned by a test that actually fails when the guarantee is broken",
+      "The trigger is a registration failure that is reachable under the open role set",
+      "The test is neither deleted nor narrowed; if the guarantee became untestable through this door, the cap says so plainly"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w18",
+    "outcome": "Retarget the claim-unwind pin to a blank-role registration failure and prove it by mutation",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Mutation check needed a temporary edit to verbs/drivers/prepare.rs (not a cell file): reserved it under mrs-w18 first, made the failure path unclaim the cell, confirmed the test goes red, then git checkout -- reverted it to pristine. The committed diff touches tests.rs only.",
+      "FINDING: the pre-existing assertions would NOT have caught a claim unwind. They read status off the Value returned by claim_and_reserve_for_dispatch, which is the pre-registration in-memory copy and still says claimed even when the store was unwound. Under the mutation the first assert passed and only the new on-disk read failed. The guarantee was nominally pinned but actually unpinned before this cell.",
+      "Also corrected a stale doc comment on the sibling test dispatch_prepare_claim_payload_pins_worker_registered_true, which still named an invalid cell tier as the one deterministic registration failure."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T06:50:27.257Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T06:43:36.285Z",
+    "report": {
+      "outcome": "Retarget the claim-unwind pin to a blank-role registration failure and prove it by mutation",
+      "commit": "21174ba8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers — green (234 passed, 0 failed; the retargeted test named in the output) — the cell touches one test in verbs::drivers only, and the cell declares this command",
+      "deviations": [
+        "Mutation check needed a temporary edit to verbs/drivers/prepare.rs (not a cell file): reserved it under mrs-w18 first, made the failure path unclaim the cell, confirmed the test goes red, then git checkout -- reverted it to pristine. The committed diff touches tests.rs only.",
+        "FINDING: the pre-existing assertions would NOT have caught a claim unwind. They read status off the Value returned by claim_and_reserve_for_dispatch, which is the pre-registration in-memory copy and still says claimed even when the store was unwound. Under the mutation the first assert passed and only the new on-disk read failed. The guarantee was nominally pinned but actually unpinned before this cell.",
+        "Also corrected a stale doc comment on the sibling test dispatch_prepare_claim_payload_pins_worker_registered_true, which still named an invalid cell tier as the one deterministic registration failure."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

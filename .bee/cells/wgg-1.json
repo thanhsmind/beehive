@@ -1,0 +1,81 @@
+{
+  "id": "wgg-1",
+  "feature": "wave-guard-gaps",
+  "title": "Catch a wrong affects_skills format at cells add instead of at cap",
+  "action": "Validate that every affects_skills entry is a repo-relative path under skills/ at cells add and cells update, refusing a bare skill name with the exact replacement path; name the format on the affects_skills help line; and make sync_refusal check (c) say so when an unfulfilled prediction is a bare name whose skills/<name>/SKILL.md exists.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells::",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "bee cells add refuses a cell whose affects_skills carries a bare skill name, names that entry, and names skills/<name>/SKILL.md as the replacement when that file exists.",
+      "bee cells update refuses the same wrong format, so a backfill cannot smuggle a name past the door.",
+      "A cell whose affects_skills entries are all paths under skills/ is still accepted exactly as before.",
+      "The affects_skills help line names the path format.",
+      "sync_refusal check (c) keeps its comparison, but names the resolved path when an unfulfilled prediction is a bare name with an existing skills/<name>/SKILL.md.",
+      "The whole-batch validation contract is unchanged: every bad entry is named in one call and nothing is written."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "acceptance": "A cell whose affects_skills carries a bare name is refused at add time, naming the entry and the skills/<name>/SKILL.md replacement; the same refusal covers cells update; the help line names the format; the cap-time refusal names the path when it sees a bare name; existing cells tests stay green.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-wgg-1",
+    "outcome": "affects_skills format is refused at cells add/update with the exact skills/<name>/SKILL.md replacement; the sync door names a bare-name prediction as a format error",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "Added handlers_write.rs (the cells update door) and generated/registry_payload.json (the cells add help line) — both required by the cell action, neither listed in files; reserved before writing",
+      "Committed with git commit --only over my 5 files, per dispatch instruction, because a sibling worker shares this worktree",
+      "Capped with --inline-reason: worker wk-wgg-1 was never registered in state.json workers[] and cannot self-register from inside the worktree",
+      "Capped with --sync-ack: skills/bee-planning/references/planning-reference.md:158 still says only flat arrays — skill sync owed at the wave regen barrier",
+      "sync-ack: Cell scope is the CLI validation plus its help line; the plan declared affects_skills [] and named no skills/ file. The skill-side wording (skills/bee-planning/references/planning-reference.md:158 still says only 'flat arrays') is a docs sync this wave owes at its regen barrier (regen_obligation_ack wave-barrier) — flagged to the orchestrator, not silently dropped."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:54:48.937Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T07:46:03.160Z",
+    "sync_ack": "Cell scope is the CLI validation plus its help line; the plan declared affects_skills [] and named no skills/ file. The skill-side wording (skills/bee-planning/references/planning-reference.md:158 still says only 'flat arrays') is a docs sync this wave owes at its regen barrier (regen_obligation_ack wave-barrier) — flagged to the orchestrator, not silently dropped.",
+    "inline_reason": "Dispatched worker wk-wgg-1 DID run this cell in the worktree; the orchestrator never registered it in state.json workers[], and bee state worker add refuses from inside a granted worktree (control plane lives in the main checkout). Registration is owed by the orchestrator; this cap was not inline.",
+    "report": {
+      "outcome": "affects_skills format is refused at cells add/update with the exact skills/<name>/SKILL.md replacement; the sync door names a bare-name prediction as a format error",
+      "commit": "c76a1ab844a6568e7ac1d9da1d34cdf1e3b5d1f8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells:: — green (215 passed, 0 failed) — the cell verify: every cells-verb test, incl. the 3 new ones; plus --test registry_contracts green (10 passed) for the edited help payload",
+      "deviations": [
+        "Added handlers_write.rs (the cells update door) and generated/registry_payload.json (the cells add help line) — both required by the cell action, neither listed in files; reserved before writing",
+        "Committed with git commit --only over my 5 files, per dispatch instruction, because a sibling worker shares this worktree",
+        "Capped with --inline-reason: worker wk-wgg-1 was never registered in state.json workers[] and cannot self-register from inside the worktree",
+        "Capped with --sync-ack: skills/bee-planning/references/planning-reference.md:158 still says only flat arrays — skill sync owed at the wave regen barrier"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

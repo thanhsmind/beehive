@@ -1,0 +1,60 @@
+{
+  "id": "srs-2",
+  "feature": "skill-report-stamps",
+  "title": "Give bee-grooming a one-line finding stamp, a closed tag list, an end line, and an honesty boundary on numbers",
+  "action": "In skills/bee-grooming/SKILL.md add a one-line finding stamp with a closed tag vocabulary (each tag must name its replacement/action), a mandatory end line with verbatim empty-case wording, and an honesty boundary forbidding any savings figure that was not counted.",
+  "verify": "rg -n 'dead:|Honesty|Lean already' skills/bee-grooming/SKILL.md",
+  "slice": 1,
+  "lane": "small",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [
+    "bee-grooming"
+  ],
+  "affects_specs": [],
+  "files": [
+    "skills/bee-grooming/SKILL.md"
+  ],
+  "acceptance": "SKILL.md carries (a) a one-line finding stamp with a closed tag vocabulary where every tag must name its replacement/action, (b) a mandatory end line plus verbatim empty-case wording, (c) an honesty boundary forbidding any savings figure that was not counted.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-srs-2",
+    "outcome": "bee-grooming carries the one-line finding stamp with a closed tag list, the required count line with its verbatim empty case, and an honesty boundary on uncounted savings figures",
+    "files_changed": [
+      "skills/bee-grooming/SKILL.md"
+    ],
+    "deviations": [
+      "The file content was swept into sibling commit e10e720f (cell srs-3) by a concurrent whole-index commit; this cell ships empty marker commit 421ebf97 carrying the cell: srs-2 trailer",
+      "references/grooming-reference.md still tells the rendered proposal report to end on one top recommendation; the new count line governs the round reported in conversation — out of this cell's file scope, flagged for the orchestrator",
+      "SYNC_DOOR acked: it compares skill names against dirty paths",
+      "sync-ack: SYNC_DOOR compares affects_skills names (bee-grooming) against dirty paths (skills/bee-grooming/SKILL.md), so the two can never match; the prediction is correct in content and this cell touched only that one file."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:34:55.710Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T07:30:12.289Z",
+    "sync_ack": "SYNC_DOOR compares affects_skills names (bee-grooming) against dirty paths (skills/bee-grooming/SKILL.md), so the two can never match; the prediction is correct in content and this cell touched only that one file.",
+    "report": {
+      "outcome": "bee-grooming carries the one-line finding stamp with a closed tag list, the required count line with its verbatim empty case, and an honesty boundary on uncounted savings figures",
+      "commit": "421ebf97db92e121bc7fdab4a7479a11a1916cb7",
+      "files": [
+        "skills/bee-grooming/SKILL.md"
+      ],
+      "tests": "rg -n 'dead:|Nothing worth killing|honesty' skills/bee-grooming/SKILL.md + pointer parity read of grooming mentions in bee-hive SKILL.md and its references — green — docs-only edit to one skill file; the cell verify plus a check that no sibling pointer contradicts the new shapes",
+      "deviations": [
+        "The file content was swept into sibling commit e10e720f (cell srs-3) by a concurrent whole-index commit; this cell ships empty marker commit 421ebf97 carrying the cell: srs-2 trailer",
+        "references/grooming-reference.md still tells the rendered proposal report to end on one top recommendation; the new count line governs the round reported in conversation — out of this cell's file scope, flagged for the orchestrator",
+        "SYNC_DOOR acked: it compares skill names against dirty paths"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "id": "srs-1",
+  "feature": "skill-report-stamps",
+  "title": "Give bee-reviewing a required end line with its empty case and an out-of-scope routing block",
+  "action": "In skills/bee-reviewing/SKILL.md add a mandatory closing scoreboard line (counts per severity and per axis) with its verbatim empty-case wording, and a Boundaries section naming what review does NOT do and where each excluded concern is routed instead.",
+  "verify": "rg -n 'findings —|Boundaries' skills/bee-reviewing/SKILL.md",
+  "slice": 1,
+  "lane": "small",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [
+    "bee-reviewing"
+  ],
+  "affects_specs": [],
+  "files": [
+    "skills/bee-reviewing/SKILL.md"
+  ],
+  "acceptance": "SKILL.md carries (a) a mandatory closing scoreboard line naming counts per severity and per axis, (b) the verbatim empty-case wording when zero findings survive, (c) a Boundaries section naming what review does NOT do and where each excluded concern is routed instead.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-srs-1",
+    "outcome": "bee-reviewing ends on a required per-severity/per-axis count line with a verbatim empty case, plus a Boundaries block routing every excluded concern",
+    "files_changed": [
+      "skills/bee-reviewing/SKILL.md"
+    ],
+    "deviations": [
+      "First commit swept a sibling workers staged skills/bee-capturing/SKILL.md via the shared index; reset --soft and re-committed with --only, restoring that file to staged-uncommitted.",
+      "Capped with --sync-ack: SYNC_DOOR compares skill names to dirty paths and also counts two live sibling workers files.",
+      "sync-ack: SYNC_DOOR compares affects_skills names (bee-reviewing) against dirty paths (skills/bee-reviewing/SKILL.md) so it can never match, and it also attributes two live sibling workers files (bee-capturing, bee-grooming) to this cell. This cell touched only skills/bee-reviewing/SKILL.md; commit 93d799e is path-scoped to that one file. Widening affects_skills would falsely claim sibling work."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:34:08.444Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T07:30:12.286Z",
+    "sync_ack": "SYNC_DOOR compares affects_skills names (bee-reviewing) against dirty paths (skills/bee-reviewing/SKILL.md) so it can never match, and it also attributes two live sibling workers files (bee-capturing, bee-grooming) to this cell. This cell touched only skills/bee-reviewing/SKILL.md; commit 93d799e is path-scoped to that one file. Widening affects_skills would falsely claim sibling work.",
+    "report": {
+      "outcome": "bee-reviewing ends on a required per-severity/per-axis count line with a verbatim empty case, plus a Boundaries block routing every excluded concern",
+      "commit": "93d799ee9b585dbc5713caec2ef03eba79bc1bf4",
+      "files": [
+        "skills/bee-reviewing/SKILL.md"
+      ],
+      "tests": "rg -n verify pattern + grep -F parity of both locked shapes against docs/history/skill-report-stamps/CONTEXT.md + pointer existence check — green — docs-only skill edit: parity with the locked shapes and pointer resolution are the whole risk surface",
+      "deviations": [
+        "First commit swept a sibling workers staged skills/bee-capturing/SKILL.md via the shared index; reset --soft and re-committed with --only, restoring that file to staged-uncommitted.",
+        "Capped with --sync-ack: SYNC_DOOR compares skill names to dirty paths and also counts two live sibling workers files."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

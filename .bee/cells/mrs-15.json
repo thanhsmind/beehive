@@ -1,0 +1,108 @@
+{
+  "id": "mrs-15",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "tier": "generation",
+  "role": "code",
+  "title": "Retire the cells tier verb and its add-time enum",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 5, D4 (store 97ce5225): role is the cell's SOLE model selector, so the tier verb and its enum retire. In scope: bee cells tier itself (set_tier at handlers_close.rs:1114, its writer :1141, run_tier :1146-1166 and the MODEL_TIERS enum check :1152), its routing arm in cells/util.rs and cells/mod.rs, its entry in router.rs:68, its catalog.rs declaration and its generated/registry_payload.json entry, the three cli_shape.rs schema tests that pin it (:675, :725-734, :951-958), the add-time optional tier enum in validate.rs:164-172, and the update-redirect text at handlers_write.rs:437 that tells a caller to use the tier verb. Also here: the cap-refusal FIX text at handlers_close.rs:370 still tells an operator to pass --tier <tier>, and trace.tier_reason (handlers_close.rs:1137) is now the ESCALATION reason — mrs-14 deliberately left the key unrenamed because docs/handbook/register.md publishes it and 20 stored records carry it, so rename it here and carry the stored records and the handbook entry with it (reserve the handbook file first). THREE THINGS THAT MUST NOT BREAK. (1) cell_is_escalated in validate.rs reads BOTH the new escalate flag and the legacy tier ceiling string; that legacy read is what keeps the 40 percent ration firing on an un-migrated store, so it stays until every host has migrated — do not delete it here, and say on the cap that it survives deliberately. (2) mrs-12 proved an undeclared-but-served verb is reported unknown by bee --help --all and has no CLI-shape schema; the inverse is equally true, so a declared-but-unserved verb must not linger in registry_payload.json. (3) A legacy record may still carry a tier string harmlessly — D4 retires tier as a SELECTOR, it does not require deleting the field from stored history. Accounting and the worker registry are SIBLING cells (mrs-17, mrs-16); leave their files alone.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee cells tier no longer exists: not served, not routed, not declared, and registry_dispatch stays green",
+      "No add-time enum constrains a cell's tier, and no shipped text tells a caller to set one",
+      "The escalation reason is no longer named for tier, and the stored records plus the handbook entry moved with it",
+      "cell_is_escalated still reads the legacy ceiling string, so an un-migrated store still charges the ration — stated on the cap as deliberate",
+      "No test is deleted to reach green; the cli_shape tests that pinned the verb are retargeted or retired with a stated reason"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w15",
+    "outcome": "bee cells tier retired with its enum; its escalation half kept the ration as bee cells escalate, and the reason key moved with its surfaces",
+    "files_changed": [
+      "docs/handbook/register.md",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+    ],
+    "deviations": [
+      "The tier verb's escalation half is RENAMED, not deleted: set_tier/run_tier become set_escalation/run_escalate behind `bee cells escalate --id <id> [--reason <text>] [--off]`. Deleting it outright would have deleted the only door that enforces D5's 40 percent ration - which D5 keeps unchanged in force - and would have forced deleting the ten probes that pin it. Named, not silent.",
+      "cell_is_escalated still reads the legacy `tier: ceiling` string, DELIBERATELY. That read is what keeps the ration firing on a store nobody has migrated; it stays until every host has run the migration, and it is not this cell's to remove.",
+      "Two files outside the cell list, each reserved under mrs-w15 first: verbs/cells/tests.rs (ten ration probes retargeted onto set_escalation, two probes added) and docs/handbook/register.md (it publishes trace.tier_reason, the cells verb list and the cell-field table - the rename is half-done without it).",
+      "No test deleted to reach green. The three cli_shape tests that pinned cells.tier move onto backlog.pbi.status, its exact structural twin (two required fields, id first, an enum on the second); every assertion is the original one.",
+      "--off is a new flag name: PINNED_FLAG_COUNT 182 -> 183, with the reuse candidates checked and each rejected by name in catalog.rs. Nothing in the vocabulary meant take this marking back off, and spelling the reversal --tier generation is exactly what D4 retires.",
+      "The stored records are carried by `bee cells backfill-roles`, not by a hand-edit: the pass now renames trace.tier_reason to trace.escalation_reason wherever it finds it, idempotently, beside the role and the flag. It has still not been run against the live store (9 records there carry the key) - an operator run, unchanged from mrs-13.",
+      "A stored record may keep carrying a tier string: D4 retires the field as a SELECTOR and does not order history rewritten. validate.rs now ignores the field entirely rather than refusing it.",
+      "OPEN for the surfaces slice, flagged not touched: five skill trees, README.md and docs/handbook/stages/swarming.md + planning.md still teach `bee cells tier`. Outside this cell's files and reservation; mrs-14 already recorded this as the tier-retirement and surfaces slices shared residue.",
+      "sync-ack: not: bee-swarming's SKILL.md and its swarming-reference still teach the whole tier doctrine — the extraction/generation/ceiling judgement rubric, resolveTier, the per-tier dispatch table — and inside it the now-dead spelling `bee cells tier --id <id> --tier <tier>` (SKILL.md step 2; swarming-reference.md around the \"Record the choice\" line). That spelling is a REAL residue as of this commit, not a false positive: the verb is gone and the sentence now points at nothing. It is not edited here because the fix is not a find-and-replace — the surrounding rubric has to become a ROLE rubric, which is the surfaces slice's design job (plan.md S10), and mrs-14 already recorded this same block as the tier-retirement + surfaces slices' shared residue. Editing only the one command line would leave the instruction layer teaching a cost-tier judgement that nothing in the binary implements any more, which is the worse half-migration. Also still stale for the same reason: README.md:360, docs/handbook/stages/swarming.md:51, docs/handbook/stages/planning.md:50. The one thing that changed here and is fully carried: `docs/handbook/register.md`, which publishes the verb list, the cell fields and `trace.tier_reason` — all three moved with the code in this commit."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T06:36:34.225Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T06:17:08.890Z",
+    "sync_ack": "not: bee-swarming's SKILL.md and its swarming-reference still teach the whole tier doctrine — the extraction/generation/ceiling judgement rubric, resolveTier, the per-tier dispatch table — and inside it the now-dead spelling `bee cells tier --id <id> --tier <tier>` (SKILL.md step 2; swarming-reference.md around the \"Record the choice\" line). That spelling is a REAL residue as of this commit, not a false positive: the verb is gone and the sentence now points at nothing. It is not edited here because the fix is not a find-and-replace — the surrounding rubric has to become a ROLE rubric, which is the surfaces slice's design job (plan.md S10), and mrs-14 already recorded this same block as the tier-retirement + surfaces slices' shared residue. Editing only the one command line would leave the instruction layer teaching a cost-tier judgement that nothing in the binary implements any more, which is the worse half-migration. Also still stale for the same reason: README.md:360, docs/handbook/stages/swarming.md:51, docs/handbook/stages/planning.md:50. The one thing that changed here and is fully carried: `docs/handbook/register.md`, which publishes the verb list, the cell fields and `trace.tier_reason` — all three moved with the code in this commit.",
+    "report": {
+      "outcome": "bee cells tier retired with its enum; its escalation half kept the ration as bee cells escalate, and the reason key moved with its surfaces",
+      "commit": "20a0e5eb",
+      "files": [
+        "docs/handbook/register.md",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --bin bee -- (verbs::cells:: / catalog:: / hooks::cli_shape:: / router::) plus cargo test --release --no-fail-fast --test registry_dispatch — green (278 + 8 + 38 + 17 + 8 passed, 0 failed) — the retired verb's own module and every surface that declared, routed or pinned it, including the registry-dispatcher law in both directions; the full suite is withheld because two sibling workers are mid-edit in this same worktree and its red would not be mine to read",
+      "deviations": [
+        "The tier verb's escalation half is RENAMED, not deleted: set_tier/run_tier become set_escalation/run_escalate behind `bee cells escalate --id <id> [--reason <text>] [--off]`. Deleting it outright would have deleted the only door that enforces D5's 40 percent ration - which D5 keeps unchanged in force - and would have forced deleting the ten probes that pin it. Named, not silent.",
+        "cell_is_escalated still reads the legacy `tier: ceiling` string, DELIBERATELY. That read is what keeps the ration firing on a store nobody has migrated; it stays until every host has run the migration, and it is not this cell's to remove.",
+        "Two files outside the cell list, each reserved under mrs-w15 first: verbs/cells/tests.rs (ten ration probes retargeted onto set_escalation, two probes added) and docs/handbook/register.md (it publishes trace.tier_reason, the cells verb list and the cell-field table - the rename is half-done without it).",
+        "No test deleted to reach green. The three cli_shape tests that pinned cells.tier move onto backlog.pbi.status, its exact structural twin (two required fields, id first, an enum on the second); every assertion is the original one.",
+        "--off is a new flag name: PINNED_FLAG_COUNT 182 -> 183, with the reuse candidates checked and each rejected by name in catalog.rs. Nothing in the vocabulary meant take this marking back off, and spelling the reversal --tier generation is exactly what D4 retires.",
+        "The stored records are carried by `bee cells backfill-roles`, not by a hand-edit: the pass now renames trace.tier_reason to trace.escalation_reason wherever it finds it, idempotently, beside the role and the flag. It has still not been run against the live store (9 records there carry the key) - an operator run, unchanged from mrs-13.",
+        "A stored record may keep carrying a tier string: D4 retires the field as a SELECTOR and does not order history rewritten. validate.rs now ignores the field entirely rather than refusing it.",
+        "OPEN for the surfaces slice, flagged not touched: five skill trees, README.md and docs/handbook/stages/swarming.md + planning.md still teach `bee cells tier`. Outside this cell's files and reservation; mrs-14 already recorded this as the tier-retirement and surfaces slices shared residue."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

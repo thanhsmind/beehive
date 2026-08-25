@@ -1,0 +1,58 @@
+{
+  "id": "srs-3",
+  "feature": "skill-report-stamps",
+  "title": "Make bee-capturing's close line literal, with both the settled and the nothing-settled wording",
+  "action": "In skills/bee-capturing/SKILL.md spell the close line as a literal template and give the verbatim nothing-settled wording, so the rule stops being paraphrasable.",
+  "verify": "rg -n 'captured:|nothing settled' skills/bee-capturing/SKILL.md",
+  "slice": 1,
+  "lane": "small",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [
+    "bee-capturing"
+  ],
+  "affects_specs": [],
+  "files": [
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "acceptance": "SKILL.md spells the close line as a literal template and gives the verbatim nothing-settled wording, so the rule stops being paraphrasable.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-srs-3",
+    "outcome": "bee-capturing's close line is now a literal template with the verbatim nothing-settled case",
+    "files_changed": [
+      "skills/bee-capturing/SKILL.md"
+    ],
+    "deviations": [
+      "A concurrent sibling worker committed the whole git index while my hunk was staged, so the content shipped inside commit 9bccd0b6 (cell srs-1); I added an empty marker commit e10e720f carrying the cell: srs-3 trailer rather than rewrite another worker's commit.",
+      "Capped with --sync-ack: the sync door also saw wk-srs-2's in-flight bee-grooming edit, which this cell did not touch.",
+      "sync-ack: Concurrent-worker race: my staged bee-capturing hunk was swallowed by sibling commit 9bccd0b6 (srs-1), so my own commit e10e720f is an empty trailer marker; the door also sees wk-srs-2's in-flight skills/bee-grooming/SKILL.md edit, which this cell never touched. Prediction bee-capturing is correct in content."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:34:12.342Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T07:30:12.292Z",
+    "sync_ack": "Concurrent-worker race: my staged bee-capturing hunk was swallowed by sibling commit 9bccd0b6 (srs-1), so my own commit e10e720f is an empty trailer marker; the door also sees wk-srs-2's in-flight skills/bee-grooming/SKILL.md edit, which this cell never touched. Prediction bee-capturing is correct in content.",
+    "report": {
+      "outcome": "bee-capturing SKILL.md now spells the close line as a literal template and gives the verbatim nothing-settled wording",
+      "commit": "e10e720f235496f42547c789882b60c6a19493f3",
+      "files": [
+        "skills/bee-capturing/SKILL.md"
+      ],
+      "tests": "rg -n 'captured:|nothing settled' skills/bee-capturing/SKILL.md + grep -F parity against docs/history/skill-report-stamps/CONTEXT.md strings + fence balance check — green — docs-only edit; parity/pointer checks are the proof this change type needs",
+      "deviations": [
+        "A concurrent sibling worker committed the whole git index while my hunk was staged, so the content shipped inside commit 9bccd0b6 (cell srs-1); I added an empty marker commit e10e720f carrying the cell: srs-3 trailer rather than rewrite another worker's commit.",
+        "Capped with --sync-ack: the sync door also saw wk-srs-2's in-flight bee-grooming edit, which this cell did not touch."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
