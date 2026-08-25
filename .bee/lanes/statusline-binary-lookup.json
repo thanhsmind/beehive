@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"statusline-binary-lookup\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"statusline-binary-lookup\" (lane).",
+  "next_action": "Merged into main at 988836c; capture what settled, then bee close --feature statusline-binary-lookup.",
   "created_at": "2026-08-25T03:53:53.440Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,12 +25,5 @@
     "rationale": "The vendored statusline script never finds .bee/bin/bee, so the usage segment is silently dropped; the fix is one shell resolver plus the byte-equality and end-to-end guards that died with the Node test tree",
     "updated_at": "2026-08-25T03:54:52.221Z",
     "feature": "statusline-binary-lookup"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T04:10:44.722Z",
-    "branch": "wt/statusline-binary-lookup",
-    "worktree_id": "beehive--wt--statusline-binary-lookup",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
