@@ -399,10 +399,12 @@ fn render_role(resolved: &Resolved) -> Option<String> {
 ///
 /// Read from the TABLE rather than from `known_roles`, deliberately: the
 /// resolver warns on a name absent from both the table and the built-in
-/// defaults, and `known_roles` adds `advisor` on every host whether or not
-/// one is configured — walking it here would print one stderr warning per
-/// session render on every host with no advisor. Every key of the table is by
-/// definition present in the table, so this walk cannot warn.
+/// defaults, and `known_roles` adds `ceiling`, which no config carries —
+/// walking it here would print one stderr warning per session render on every
+/// host. Every key of the table is by definition present in the table, so this
+/// walk cannot warn. (`known_roles` used to add `advisor` on every host too,
+/// configured or not; that was the P2 this comment already smelled, and it is
+/// fixed at the source — see `verbs::drivers::known_roles`.)
 ///
 /// `ceiling` is excluded: D5 (store 97ce5225) makes it an escalation flag,
 /// never a role, and it selects no model.
@@ -757,17 +759,32 @@ fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> 
     // guard owns outright, so making the caller re-issue the dispatch to
     // supply it buys nothing but a round trip and a chance to guess again.
     if let Some(t) = &tier {
-        if t == "generation" && subagent_type.as_deref() == Some("general-purpose") {
-            // Two agents, one tier: the guard cannot tell a gather from a
-            // cell execution by the tier alone, and guessing picked the
-            // read-only one for years — an execution dispatch that could
-            // never write. The caller says which; that is one word.
-            let reason = "bee-model-guard: [bee-tier: generation] dispatched with subagent_type \
-\"general-purpose\", and the generation tier carries TWO rendered agents — the guard will \
+        // Two agents, one role: the guard cannot tell a gather from a cell
+        // execution by the role alone, and guessing picked the read-only one
+        // for years — an execution dispatch that could never write. The
+        // caller says which; that is one word.
+        //
+        // DERIVED, never named. This condition read `t == "generation"`, and
+        // `generation` is the HISTORICAL spelling: every freshly onboarded
+        // host configures `code`, which aliases onto the same job, so
+        // `[bee-tier: code]` walked past the check and the branch below
+        // repaired it onto `bee-gather` — the read-only agent — and the
+        // execution dispatch died later at the write guard with the audit
+        // line naming an agent that never ran. The ambiguity is a property of
+        // the TABLE ("more than one rendered agent serves this job"), so the
+        // guard asks the table. A new alias, or a second agent rendered for a
+        // role that has one today, is then covered by construction.
+        let agents = crate::verbs::drivers::agents_for_role(t);
+        if agents.len() > 1 && subagent_type.as_deref() == Some("general-purpose") {
+            let reason = format!(
+                "bee-model-guard: [bee-tier: {t}] dispatched with subagent_type \
+\"general-purpose\", and the {t} role carries {} rendered agents ({}) — the guard will \
 not guess which.\n\
 FIX: name the one you mean. subagent_type \"bee-build\" executes a cell (reserves, writes, \
-commits, caps); subagent_type \"bee-gather\" reads and reports (never writes)."
-                .to_string();
+commits, caps); subagent_type \"bee-gather\" reads and reports (never writes).",
+                agents.len(),
+                agents.join(", ")
+            );
             return deny(
                 reason,
                 "generic-type-denied",
@@ -1594,6 +1611,40 @@ mod tests {
                 json!(pinned)
             );
         }
+
+        // EVERY spelling of the job, not just the one this check used to name.
+        // The condition read the literal `"generation"`; a freshly onboarded
+        // host configures `code`, which aliases onto the same two agents, so
+        // `[bee-tier: code]` walked past the refusal and was repaired onto
+        // bee-gather — the READ-ONLY agent — and the execution dispatch died
+        // later at the write guard with the audit line naming an agent that
+        // never ran. Sweeping both tables is what makes an alias spelling
+        // reachable by this test at all.
+        let migrated = fixture(&json!({"models": {"claude": {
+            "code": "sonnet", "read": "haiku",
+            "extraction": "haiku", "generation": "sonnet", "review": "opus"
+        }}}));
+        let spellings = crate::verbs::drivers::ROLE_ALIASES
+            .iter()
+            .map(|(job, _)| *job)
+            .chain(crate::verbs::drivers::ROLE_AGENTS.iter().map(|(role, _)| *role));
+        for role in spellings {
+            let agents = crate::verbs::drivers::agents_for_role(role);
+            let (code, stdout, stderr) = run_full(migrated.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {role}] go"), "subagent_type": "general-purpose"}}));
+            if agents.len() > 1 {
+                assert_ne!(code, 0, "{role} carries {agents:?} and must not be guessed: {stderr}");
+                for agent in &agents {
+                    assert!(stderr.contains(agent), "the refusal names {agent}: {stderr}");
+                }
+            } else {
+                assert_eq!(code, 0, "{role}: {stderr}");
+                assert_eq!(
+                    repair_output(&stdout)["hookSpecificOutput"]["updatedInput"]["subagent_type"],
+                    json!(agents[0]),
+                    "{role}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2010,17 +2061,39 @@ mod tests {
             let (code, _) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": ti}));
             assert_eq!(code, 2);
         }
-        // doc-canonical marked shape + extras tolerated + advisor tier
+        // doc-canonical marked shape + extras tolerated
         for ti in [
             json!({"task_name": "wt-a1", "message": "[bee-tier: generation] gather", "fork_turns": "none"}),
             json!({"agent_type": "worker", "message": "[bee-tier: review] check", "extra": 1, "task_name": "x"}),
-            json!({"agent_type": "worker", "message": "[bee-tier: advisor] consult", "model": "totally-different", "reasoning_effort": "extreme", "fork_turns": "full"}),
         ] {
             let (code, _) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": ti}));
             assert_eq!(code, 0);
         }
-        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        // The advisor tier, on a host that CONFIGURES one. `repo_config`'s
+        // codex table does not, and the row used to run there and pass —
+        // `known_roles` handed every dispatch-door slot out as legal whether
+        // the host configured it or not, so this spawn inherited the session
+        // model in silence. It is a refusal there now, so the acceptance row
+        // states its own precondition.
+        let advisor = fixture(&json!({"models": {
+            "codex": {"extraction": "gpt-5.5", "generation": "gpt-5.5", "advisor": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            advisor.path(),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: advisor] consult", "model": "totally-different", "reasoning_effort": "extreme", "fork_turns": "full"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(advisor.path())).unwrap();
         assert_eq!(d["transport"], "codex-spawn-marker");
+        assert_eq!(d["tier"], "advisor");
+        // Same spawn, same marker, on the host with no codex advisor.
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: advisor] consult", "fork_turns": "full"}}),
+        );
+        assert_eq!(code, 2, "an unconfigured advisor is refused by name: {stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-role-unconfigured");
         assert_eq!(d["tier"], "advisor");
     }
 
@@ -2282,23 +2355,26 @@ mod tests {
 
     // ─── model-role-split D2 (store 06e49368): the open role set ───────────
 
-    /// A config carrying roles bee ships no default for — `test` on claude,
-    /// `design` on codex — beside the seeded ones.
+    /// A config carrying roles bee ships no default for — `test` and an
+    /// `advisor` on claude, `design` on codex — beside the seeded ones. The
+    /// two runtimes deliberately DISAGREE about `advisor`: claude configures
+    /// one, codex does not, which is the pair the role-legality question has
+    /// to answer differently.
     fn open_role_config() -> Value {
         json!({"models": {
-            "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "test": "gpt-test" },
+            "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "test": "gpt-test", "advisor": "fable" },
             "codex": { "generation": "gpt-5.5", "design": "gpt-design" }
         }})
     }
 
     #[test]
-    fn the_known_role_set_is_derived_from_config_and_the_dispatch_door() {
+    fn the_known_role_set_is_derived_from_what_the_host_configures() {
         let models = normalize_models(open_role_config().get("models"));
         let claude = known_roles(&models, "claude");
-        // The operator's own role, the defaults normalize seeds, the slots
-        // `slot_for_kind` can ask for, and the escalation word — every entry
-        // published by something, none of them typed into this file.
-        for name in ["test", "extraction", "generation", "review", "advisor", "ceiling"] {
+        // The operator's own roles, the defaults normalize seeds, and the
+        // escalation word — every entry published by something, none of them
+        // typed into this file.
+        for name in ["test", "advisor", "extraction", "generation", "review", "ceiling"] {
             assert!(claude.contains(name), "{name} missing from {claude:?}");
         }
         assert!(!claude.contains("tset"), "{claude:?}");
@@ -2306,12 +2382,20 @@ mod tests {
         // deleted lists carried cannot come back: the runtimes differ by
         // exactly what each config carries and nothing else.
         let codex = known_roles(&models, "codex");
-        assert!(codex.contains("advisor") && codex.contains("design"), "{codex:?}");
+        assert!(codex.contains("design"), "{codex:?}");
+        // A dispatch-door SLOT is legal only where it is configured. The set
+        // used to union every `slot_for_kind` answer in unconditionally, so
+        // `advisor` was legal on a host with no advisor and a marker naming it
+        // inherited the session model in silence.
+        assert!(!codex.contains("advisor"), "an unconfigured advisor is not a legal role: {codex:?}");
         assert_eq!(
             claude.difference(&codex).cloned().collect::<Vec<_>>(),
-            vec!["test".to_string()],
+            vec!["advisor".to_string(), "test".to_string()],
             "claude {claude:?} / codex {codex:?}"
         );
+        // And the FIX line offers exactly the legal names, so the refusal
+        // cannot advertise a role the same host would then refuse.
+        assert!(!role_list(&models, "codex").contains("advisor"), "{}", role_list(&models, "codex"));
     }
 
     #[test]
@@ -2338,7 +2422,10 @@ mod tests {
         for (payload, role) in [
             (json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: test] run them"}}), "test"),
             // `advisor` on a claude Agent: the exact name the deleted
-            // CLAUDE_TIERS list dropped and CODEX_TIERS kept.
+            // CLAUDE_TIERS list dropped and CODEX_TIERS kept. It is accepted
+            // here because THIS host configures one — see
+            // `an_unconfigured_advisor_marker_is_refused_like_any_other_role`
+            // for the same marker on a host that does not.
             (json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}), "advisor"),
             // Case-insensitive as the old alternation was, answering in the
             // config's own spelling.
@@ -2358,6 +2445,52 @@ mod tests {
         assert_eq!(code, 0, "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "model-param");
+    }
+
+    /// The dispatch-door slots are roles like any other: legal where the host
+    /// configures them, refused where it does not.
+    ///
+    /// `advisor` was the one name `known_roles` added unconditionally, so this
+    /// marker classified as `Marker::Role`, skipped the unconfigured-role
+    /// refusal, resolved to `Resolved::Budget` and was ALLOWED with no model
+    /// param — the subagent inheriting the session model, which is verbatim
+    /// the outcome `unconfigured_role_reason` exists to prevent. The same host
+    /// refused `bee dispatch prepare --role advisor`: one question, two doors,
+    /// two answers.
+    #[test]
+    fn an_unconfigured_advisor_marker_is_refused_like_any_other_role() {
+        // Three seeded slots and nothing else — the shape of a host that
+        // never configured an advisor.
+        let fx = fixture(&json!({"models": {
+            "claude": {"extraction": "haiku", "generation": "sonnet", "review": "opus"},
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}),
+        );
+        assert_eq!(code, 2, "an unconfigured advisor must not inherit the session model: {stderr}");
+        assert!(stderr.contains("[bee-tier: advisor] names a role nothing configures"), "{stderr}");
+        // The FIX teaches the remedy and does not offer the very name it just
+        // refused as one of the roles to use instead.
+        assert!(stderr.contains("models.claude in .bee/config.json"), "{stderr}");
+        assert!(!stderr.contains("(advisor/"), "the FIX must not advertise advisor: {stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "role-not-configured");
+        assert_eq!(d["tier"], "advisor");
+        assert_eq!(d["model"], Value::Null, "nothing was allowed onto the session model");
+
+        // The same marker on a host that DOES configure one is untouched.
+        let with_advisor = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": "fable"
+        }}}));
+        let (code, stderr) = run_payload(
+            with_advisor.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(with_advisor.path())).unwrap();
+        assert_eq!(d["tier"], "advisor");
     }
 
     #[test]
@@ -2491,5 +2624,19 @@ mod tests {
         assert_eq!(pinned_type_for("ceiling"), None);
         assert_eq!(role_for_pinned_type("general-purpose"), None);
         assert_eq!(role_for_pinned_type("some-other-agent"), None);
+
+        // HOW MANY agents serve a job is the question the pinned-type rule
+        // asks, and it must answer the same for both spellings of one job —
+        // the alias is why keying that rule on a literal was wrong.
+        use crate::verbs::drivers::{agents_for_role, ROLE_ALIASES};
+        for (job, keyed) in ROLE_ALIASES {
+            assert_eq!(agents_for_role(job), agents_for_role(keyed), "{job}/{keyed}");
+        }
+        assert_eq!(agents_for_role("code"), vec!["bee-gather", "bee-build"]);
+        assert_eq!(agents_for_role("read"), vec!["bee-extract"]);
+        assert_eq!(agents_for_role("review"), vec!["bee-review"]);
+        // A role with no rendered agent has none, in every spelling.
+        assert!(agents_for_role("advisor").is_empty());
+        assert!(agents_for_role("test").is_empty());
     }
 }

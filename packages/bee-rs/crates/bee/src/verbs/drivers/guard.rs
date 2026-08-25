@@ -32,18 +32,39 @@ pub(crate) const NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY: &str = "native_budget_only
 ///
 /// DERIVED, never listed (model-role-split D2): the keys `models.<runtime>`
 /// carries after `normalize_models` — the operator's own roles plus the
-/// built-in defaults bee seeds there — the slots bee's own dispatch door can
-/// ask for (`slot_for_kind` over `DISPATCH_KINDS`, which is why `advisor` is
-/// legal on a runtime that never configured one), and `ceiling`, which
-/// decision 0015 keeps out of config on purpose and which `resolve_role`
-/// answers with `Resolved::Inherit`. Every entry is a name something in bee
-/// can publish, so the set cannot drift from the resolver the way the two
-/// deleted tier lists drifted from each other.
+/// built-in defaults bee seeds there — and `ceiling`, which decision 0015
+/// keeps out of config on purpose and which `resolve_tier` answers with
+/// `Resolved::Inherit`. Every entry is a name something in bee can publish,
+/// so the set cannot drift from the resolver the way the two deleted tier
+/// lists drifted from each other.
 ///
 /// It lives HERE rather than in the model-guard because both doors ask it
 /// (T012a, store 8ff6e79e): the hook classifies a `[bee-tier: <name>]`
 /// marker with it, and `bee dispatch prepare --role <name>` refuses with it.
 /// Two copies of "is this role legal" is the defect this feature removes.
+///
+/// # Why the dispatch-door slots are NOT unioned in
+///
+/// This set used to add every `slot_for_kind` answer over `DISPATCH_KINDS`
+/// unconditionally, so `advisor` was legal on a runtime that configured no
+/// advisor. Two of those three slots (`generation`, `review`) are seeded into
+/// every runtime table by `default_models`, so the union only ever ADDED one
+/// name — `advisor` — and adding it was wrong in exactly the shape this
+/// feature exists to close: `[bee-tier: advisor]` classified as
+/// `Marker::Role` on a host with no advisor, skipped the unconfigured-role
+/// refusal, resolved `Resolved::Budget`, and the subagent silently inherited
+/// the session model — verbatim the outcome that refusal's own text says it
+/// prevents. `bee dispatch prepare --role advisor` refused on the same host
+/// (`resolve_advisor` never falls back — decision `4faf1de9`), so ONE question
+/// had TWO answers through the two doors that share this predicate: the defect
+/// D1 collapsed the parsers to remove, reappearing one layer up.
+///
+/// A slot is a legal role name when the host CONFIGURES it, and nothing else —
+/// the same question `role_slot_display` (`hooks/model_guard.rs`) already
+/// asked of the table. `--kind advisor` is untouched: it resolves its slot
+/// through `slot_for_kind` and never passes through here, so an advisor
+/// consult still earns the `advisor_not_configured` refusal that names its own
+/// remedy.
 pub(crate) fn known_roles(
     models: &Map<String, Value>,
     runtime: &str,
@@ -52,12 +73,7 @@ pub(crate) fn known_roles(
     if let Some(Value::Object(table)) = models.get(runtime) {
         set.extend(table.keys().cloned());
     }
-    for kind in DISPATCH_KINDS {
-        if let Some(slot) = slot_for_kind(kind) {
-            set.insert(slot.to_string());
-        }
-    }
-    set.insert("ceiling".to_string());
+    set.insert(ESCALATION_WORD.to_string());
     set
 }
 
@@ -154,8 +170,25 @@ pub(crate) fn canonical_role(role: &str) -> &str {
 /// generation agents is meant, and `--kind cell` is still the one signal that
 /// can say so before the lookup is ever reached.
 pub(crate) fn agent_for_role(role: &str) -> Option<&'static str> {
+    agents_for_role(role).first().copied()
+}
+
+/// EVERY rendered bee agent that serves a role's job, in `ROLE_AGENTS` order.
+///
+/// The question `agent_for_role` cannot answer: how MANY agents a role has.
+/// `generation` has two — bee-gather reads, bee-build writes — so a dispatch
+/// naming the role and `general-purpose` has stated no agent at all, and the
+/// guard refuses rather than guessing (`hooks/model_guard.rs`, the pinned-type
+/// rule). That refusal used to be keyed on the literal `"generation"`, which
+/// every freshly onboarded host now spells `code`: the alias walked past the
+/// check and was repaired onto the FIRST entry, the read-only agent, so an
+/// execution dispatch died later at the write guard with the audit line naming
+/// the wrong agent. Asking the table how many agents serve the job cannot go
+/// stale that way — not when a spelling is added, and not when a third agent
+/// is rendered for a role that has one today.
+pub(crate) fn agents_for_role(role: &str) -> Vec<&'static str> {
     let key = canonical_role(role);
-    ROLE_AGENTS.iter().find(|(r, _)| *r == key).map(|(_, agent)| *agent)
+    ROLE_AGENTS.iter().filter(|(r, _)| *r == key).map(|(_, agent)| *agent).collect()
 }
 
 /// The role a rendered bee agent stands for. These files are generated FROM
