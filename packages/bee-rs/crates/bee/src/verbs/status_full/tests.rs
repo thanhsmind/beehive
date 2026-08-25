@@ -2617,6 +2617,133 @@ use crate::version::BEE_VERSION;
         problems.iter().map(|p| p.code).collect()
     }
 
+    // ── one parser (model-role-split D1 store `cd72ec97`, D2 store `06e49368`)
+
+    /// The user-visible half of the third-copy bug. An operator who follows
+    /// this feature's own advice — add `models.claude.test`, mark a cell
+    /// `role: test` — got a working dispatch and then saw NOTHING about
+    /// `test` in `bee status`, because status parsed the same config through
+    /// a private copy keyed on a closed four-word list and dropped every
+    /// other key. status reads the ONE parser now, so the role it reports and
+    /// the role dispatch resolves are the same fact.
+    #[test]
+    fn status_carries_a_role_configured_outside_the_historical_names() {
+        let raw = json!({"claude": {
+            "generation": "sonnet",
+            "test": "opus",
+            "design": {"model": "opus", "effort": "high"},
+        }});
+        let models = normalize_models(Some(&raw));
+        let claude = models.get("claude").and_then(|v| v.as_object()).expect("claude");
+        assert_eq!(claude.get("test"), Some(&json!("opus")));
+        assert_eq!(claude.get("design"), Some(&json!({"model": "opus", "effort": "high"})));
+        // The historical names still read exactly as they did.
+        assert_eq!(claude.get("generation"), Some(&json!("sonnet")));
+        assert_eq!(claude.get("extraction"), Some(&json!("haiku")));
+        assert_eq!(claude.get("review"), Some(&json!("opus")));
+
+        // One parser, one answer: for every runtime status does not seed,
+        // what status reports IS what dispatch resolves — not a copy of it.
+        let shared = crate::verbs::drivers::normalize_models(Some(&raw));
+        assert_eq!(models.get("claude"), shared.get("claude"));
+        assert_eq!(models.get("codex"), shared.get("codex"));
+
+        // A junk value under an invented name is still junk: dropped, exactly
+        // as a junk `generation` is.
+        let junk = json!({"claude": {"test": {"neither": "cli nor model"}}});
+        let dropped = normalize_models(Some(&junk));
+        assert!(dropped
+            .get("claude")
+            .and_then(|v| v.as_object())
+            .and_then(|c| c.get("test"))
+            .is_none());
+    }
+
+    /// The one thing status legitimately keeps of its own is the opencode
+    /// SEED (oc-14), which is a default and not a parser: the rendered
+    /// `.opencode/agent/bee-*.md` files pin real models, so status must
+    /// report the same names the drift check compares against.
+    #[test]
+    fn the_opencode_seed_survives_the_collapse() {
+        // (a) unconfigured -> the baked-in names, not drivers' all-null
+        // dispatch default.
+        let unconfigured = normalize_models(None);
+        let oc = unconfigured.get("opencode").and_then(|v| v.as_object()).expect("opencode");
+        for (slot, model) in crate::onboard::templates::AGENT_TIER_DEFAULTS_OPENCODE {
+            assert_eq!(oc.get(*slot), Some(&json!(model)));
+        }
+
+        // (b) a configured value wins over the seed; untouched slots keep it.
+        let configured =
+            normalize_models(Some(&json!({"opencode": {"generation": "opencode/other-free"}})));
+        let oc = configured.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("generation"), Some(&json!("opencode/other-free")));
+        assert_eq!(oc.get("extraction"), Some(&json!("opencode/ling-3.0-tiny-free")));
+
+        // (c) an explicit null turns the slot OFF — the seed never
+        // resurrects a model the operator just cleared.
+        let cleared = normalize_models(Some(&json!({"opencode": {"review": null}})));
+        let oc = cleared.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("review"), Some(&json!(null)));
+
+        // (d) a junk value is not a value: the seed stands, same as before.
+        let junk = normalize_models(Some(&json!({"opencode": {"review": 7}})));
+        let oc = junk.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("review"), Some(&json!("opencode/nemotron-3-ultra-free")));
+
+        // (e) an operator-invented opencode role reaches status too.
+        let invented =
+            normalize_models(Some(&json!({"opencode": {"test": "opencode/big-pickle"}})));
+        let oc = invented.get("opencode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(oc.get("test"), Some(&json!("opencode/big-pickle")));
+    }
+
+    /// The drift check asks the same question `onboard::agents` asks when it
+    /// RENDERS these files — one role table, one resolver — instead of
+    /// restating the agent/role mapping and the review fall-through.
+    #[test]
+    fn agent_file_drift_reads_the_shared_role_table() {
+        // Every agent the shared table names is checked; no second list in
+        // this file decides which files are looked at.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for (agent, _roles) in crate::onboard::templates::AGENT_ROLES_BY_NAME {
+            write_agent_file(root, agent, &format!("name: {agent}\nmodel: stale-model"));
+        }
+        let problems = validate_agent_files_drift(&ctx_for(root), None);
+        let mut agents: Vec<&str> = problems.iter().filter_map(|p| p.agent).collect();
+        agents.sort();
+        let mut expected: Vec<&str> =
+            crate::onboard::templates::AGENT_ROLES_BY_NAME.iter().map(|(a, _)| *a).collect();
+        expected.sort();
+        assert_eq!(agents, expected);
+
+        // A composite slot renders its PRIMARY model into the agent file
+        // (`onboard::agents` resolves it through `resolve_role`), so the
+        // drift check reads the same primary rather than "no model name" —
+        // the old private copy read `.get("model")` off the composite and
+        // reported a correctly-rendered file as stale.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet-primary");
+        let cfg = json!({"models": {"claude": {"generation": {
+            "primary": {"kind": "native", "model": "sonnet-primary"},
+            "fallback_policy": "explicit-only",
+            "fallback": {"kind": "cli", "command": "codex exec -s read-only -"},
+        }}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+
+        // `bee-review` inherits generation because the TABLE declares
+        // `["review", "generation"]`, not because this file says so.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-review", "name: bee-review\nmodel: my-own-generation");
+        let cfg =
+            json!({"models": {"claude": {"generation": "my-own-generation", "review": null}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+    }
+
+
     #[test]
     fn valid_models_configs_produce_zero_problems() {
         for config in [

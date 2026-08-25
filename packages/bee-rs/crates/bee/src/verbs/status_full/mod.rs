@@ -61,15 +61,17 @@ const WORKTREE_COMPANION_COMMAND_KEYS: [&str; 3] = [
 // Its one reader was `cells.rs`'s tier mix, which now counts the OPEN role
 // set instead — there is no list of legal names left to keep in step here.
 
-const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+// model-role-split D1/D2: this module's private `EFFORT_LEVELS` and
+// `MODEL_NORMALIZE_SLOTS` are gone with the third copy of the models
+// parser that was their only reader (`store::normalize_models`). Value
+// shapes and the set of keys carried are `verbs::drivers`' answer now, so
+// there is nothing left here to keep in step with it.
 
 // opencode-support D1/oc-13: models.opencode is a real config key (oc-11
 // made the reader widen to it); this status/doctor copy of the runtime list
 // follows so bee status's model line and the .claude(/opencode)/agent(s)
 // drift check both see it too — R1 named export, not a hand-kept mirror.
 const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
-
-const MODEL_NORMALIZE_SLOTS: [&str; 4] = ["extraction", "generation", "review", "advisor"];
 
 const MODEL_VALIDATE_SLOTS: [&str; 4] = ["extraction", "generation", "review", "advisor"];
 
