@@ -28,14 +28,60 @@ pub(crate) const NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE: &str = "native_model_ov
 
 pub(crate) const NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY: &str = "native_budget_only";
 
+/// Every rendered bee agent, keyed by the ROLE it serves.
+///
 /// provenance: dispatch-guard.mjs PINNED_AGENT_TYPE (W3 pinned-type rule).
-pub(crate) fn pinned_agent_type(tier: &str) -> &'static str {
-    match tier {
-        "generation" => "bee-gather",
-        "extraction" => "bee-extract",
-        "review" => "bee-review",
-        _ => "general-purpose", // `PINNED_AGENT_TYPE[tier] || 'general-purpose'`
-    }
+///
+/// model-role-split D2/D3 (store 06e49368, 3c9d6262): the key used to be a
+/// COST tier, and this table had a TWIN in `hooks/model_guard.rs` — the same
+/// four pairs written out a second time, in exactly the drift shape the two
+/// tier lists were already caught in (4 entries against 5, with nothing
+/// intending it). This is the ONE table now; the guard hook asks it rather
+/// than restating it, the same collapse D1 made for the config parser.
+///
+/// ORDER IS LOAD-BEARING. `generation` appears twice because two rendered
+/// agents serve it — bee-gather reads, bee-build writes — and a role-only
+/// lookup answers with the FIRST entry, the read-only one. That is the safe
+/// answer when nothing else in the dispatch says which of the two is meant;
+/// the one signal that CAN say so is `--kind cell`, and `prepare.rs` reads it
+/// before it ever reaches this table.
+pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [
+    ("generation", "bee-gather"),
+    ("generation", "bee-build"),
+    ("extraction", "bee-extract"),
+    ("review", "bee-review"),
+];
+
+/// The rendered bee agent a role is served by — `None` when the role has none
+/// of its own.
+///
+/// `None` is a LEGAL answer, never a missing one. Under D2's open role set
+/// most roles a host can configure (`test`, `docs`, `design`, and `advisor`
+/// as shipped) have no rendered agent file at all, so answering one — or
+/// falling back to a generic type — would name an agent that does not exist.
+pub(crate) fn agent_for_role(role: &str) -> Option<&'static str> {
+    ROLE_AGENTS.iter().find(|(r, _)| *r == role).map(|(_, agent)| *agent)
+}
+
+/// The role a rendered bee agent stands for. These files are generated FROM
+/// the role's configured model at onboarding, so naming one IS a role
+/// declaration in every sense that matters.
+pub(crate) fn role_for_agent(agent: &str) -> Option<&'static str> {
+    ROLE_AGENTS.iter().find(|(_, a)| *a == agent).map(|(role, _)| *role)
+}
+
+/// The `subagent_type` a PREPARED claude Agent payload carries for `role`.
+///
+/// The one caller that needs a TOTAL answer: an Agent payload must name some
+/// type, so a role with no rendered agent of its own gets the runtime's own
+/// generic. That is the deliberate answer for `advisor` — bee renders no
+/// advisor agent, and an advisor's model comes from the advisor slot rather
+/// than from an agent file. Every caller that CAN honour "this role has no
+/// agent" — the model-guard's pinned-type repair above all — asks
+/// `agent_for_role` instead, and skips the repair rather than rewriting a
+/// dispatch onto a type that does not exist.
+pub(crate) fn pinned_agent_type(role: &str) -> &'static str {
+    agent_for_role(role).unwrap_or("general-purpose") // `PINNED_AGENT_TYPE[role] || 'general-purpose'`
 }
 
 /// provenance: dispatch-guard.mjs deriveEconomics — the ONE honest

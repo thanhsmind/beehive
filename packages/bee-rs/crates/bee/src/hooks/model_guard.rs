@@ -441,6 +441,18 @@ fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
     // fallback and admitting one would widen the guard past the door it
     // mirrors; `advisor` IS among them, and contributes nothing because
     // `default_models` carries no advisor entry to publish.
+    //
+    // model-role-split, decision 8dad7c2e's second consequence: that decision
+    // said this member set "must widen to the extraction slot, since prepare
+    // can now publish an extraction fallback". It does NOT widen here, and
+    // nothing is left to widen by hand. a2f85972's rule is "exactly the set
+    // prepare can publish — no wider, no narrower", and the loop below is a
+    // DERIVED view of that set rather than a fence around it: the day
+    // `slot_for_kind` can reach the extraction role, this loop admits it in
+    // the same commit, with no edit here and no chance of the two doors
+    // disagreeing again. Until then `prepare` still publishes only
+    // generation/review/advisor, so admitting haiku today would make the
+    // guard wider than the door — the exact defect a2f85972 was logged for.
     for kind in crate::verbs::drivers::DISPATCH_KINDS {
         let Some(slot) = crate::verbs::drivers::slot_for_kind(kind) else { continue };
         // The shared parser carries the flag on the resolved value itself
@@ -526,36 +538,35 @@ fn with_field(tool_input: &Map<String, Value>, key: &str, value: Value) -> Value
     Value::Object(copy)
 }
 
-/// The tier a rendered agent stands for. `generation` appears twice on
-/// purpose: bee-gather reads and bee-build writes, and both run at that
-/// tier's model — which is why `pinned_type_for` refuses to answer for it.
-const PINNED_AGENT_TYPE: [(&str, &str); 4] = [
-    ("generation", "bee-gather"),
-    ("generation", "bee-build"),
-    ("extraction", "bee-extract"),
-    ("review", "bee-review"),
-];
-
-/// `None` = this role has no rendered agent of its own.
+/// The rendered bee agent a ROLE is served by — `None` when the role has none
+/// of its own.
 ///
-/// model-role-split D2: the old `unwrap_or("undefined")` was unreachable
-/// while only four names could reach the lookup. Under an open role set most
-/// roles have no rendered agent at all, so the arm is live — and rewriting a
-/// dispatch's `subagent_type` to the literal "undefined" would be a repair
-/// that breaks the call it repairs. The caller skips the repair instead.
-fn pinned_type_for(tier: &str) -> Option<&'static str> {
-    PINNED_AGENT_TYPE.iter().find(|(t, _)| *t == tier).map(|(_, p)| *p)
+/// model-role-split D2/D3: this hook used to carry its own copy of the
+/// role→agent table, a hand-maintained twin of `verbs::drivers::ROLE_AGENTS`.
+/// One table now, in the drivers module, exactly as D1 did for the config
+/// parser: the guard ASKS it and never restates it, so the two cannot drift
+/// the way the two tier lists already had.
+///
+/// `None` is live and legal. The old `unwrap_or("undefined")` was unreachable
+/// while only four names could reach the lookup; under an open role set most
+/// configured roles have no rendered agent at all, and rewriting a dispatch's
+/// `subagent_type` to a generic — or to the literal "undefined" — would be a
+/// repair that breaks the call it repairs. The caller skips the repair.
+///
+/// `generation` is answered by bee-gather, the read-only one of the two
+/// agents that serve it: the guard cannot tell a gather from a cell execution
+/// by the role alone, so it refuses to guess and asks the caller instead
+/// (the `generic-type-denied` branch below).
+fn pinned_type_for(role: &str) -> Option<&'static str> {
+    crate::verbs::drivers::agent_for_role(role)
 }
 
-/// The tier a rendered bee agent type already stands for. These files are
-/// generated FROM the tier's configured model at onboarding, so naming one is
-/// a tier declaration in every sense that matters — the guard reading it as
-/// one is what keeps the tier decision off the caller's memory.
-fn tier_for_pinned_type(subagent_type: &str) -> Option<&'static str> {
-    PINNED_AGENT_TYPE
-        .iter()
-        .find(|(_, pinned)| *pinned == subagent_type)
-        .map(|(tier, _)| *tier)
+/// The role a rendered bee agent type already stands for. These files are
+/// generated FROM the role's configured model at onboarding, so naming one is
+/// a role declaration in every sense that matters — the guard reading it as
+/// one is what keeps the role decision off the caller's memory.
+fn role_for_pinned_type(subagent_type: &str) -> Option<&'static str> {
+    crate::verbs::drivers::role_for_agent(subagent_type)
 }
 
 fn evaluate_codex_spawn(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
@@ -592,18 +603,31 @@ FIX: begin the spawn message with the marker, e.g. \
 }
 
 /// D1(d): the `--kind` a FIX message hands to `dispatch prepare` so it reads
-/// the same slot the guard just resolved by tier name. `slot_for_kind`
-/// (prepare.rs:33-39) only goes kind -> tier and has no extraction arm, so
-/// there is no `--kind` value that resolves the extraction slot today —
-/// `None` here means exactly that: a FIX for this tier must name the
-/// refused slot's own transport instead of a `--kind` that would silently
-/// resolve a different slot (e.g. `advisor`) than the one just refused.
-fn dispatch_kind_for_tier(tier: &str) -> Option<&'static str> {
-    match tier {
-        "review" => Some("reviewer"),
-        "generation" => Some("gather"),
-        _ => None,
-    }
+/// the same slot the guard just resolved by role name.
+///
+/// DERIVED from `slot_for_kind` over `DISPATCH_KINDS`, never listed here
+/// (model-role-split D2/D3, the same rule `known_roles` and the
+/// herding-fallback loop already follow). The hand-written table this
+/// replaces answered `reviewer` and `gather` and `None` for everything else,
+/// which was already WRONG for `advisor`: `--kind advisor` resolves the
+/// advisor slot and prepare handles every transport it can carry, yet the
+/// FIX told the reader no `--kind` existed. A derived answer cannot go stale
+/// when a kind's slot changes, and it cannot name a `--kind` that would
+/// resolve a DIFFERENT slot than the one just refused.
+///
+/// `cell` is skipped: it is not a door a reader can walk through from a
+/// refusal (it requires an already-claimed cell id and a worker name), and it
+/// shares `gather`'s slot, so skipping it costs no coverage.
+///
+/// `None` means this role has no `--kind` at all — and under D3 it never
+/// will, because a job role is not published as a dispatch kind. A FIX for
+/// such a role names the refused slot's OWN transport, and says nothing about
+/// a `--kind` that is not coming.
+fn dispatch_kind_for_role(role: &str) -> Option<&'static str> {
+    crate::verbs::drivers::DISPATCH_KINDS
+        .into_iter()
+        .filter(|kind| *kind != "cell")
+        .find(|kind| crate::verbs::drivers::slot_for_kind(kind) == Some(role))
 }
 
 fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
@@ -729,19 +753,19 @@ model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
         // Resolved::Inherit) has no remedy to name — appending "or" with
         // nothing after it reads as a dangling clause, so the message ends
         // at "you intended." instead, exactly as it did before dod-1.
-        let door: Option<String> = match dispatch_kind_for_tier(t) {
+        let door: Option<String> = match dispatch_kind_for_role(t) {
             Some(kind) => Some(format!(
                 "run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" \
-for the {t} tier's own transport"
+for the {t} role's own transport"
             )),
             None => match resolved {
                 Resolved::Herding { .. } => Some(format!(
-                    "dispatch prepare has no --kind for the {t} tier yet — run \".bee/bin/bee \
-herding run --task-file - --json\" directly with the prompt on stdin"
+                    "run \".bee/bin/bee herding run --task-file - --json\" directly with the \
+prompt on stdin — the {t} role's own transport"
                 )),
                 Resolved::Refused { .. } => Some(format!(
-                    "dispatch prepare has no --kind for the {t} tier yet — run the configured \
-command verbatim with the prompt on stdin"
+                    "run the configured command verbatim with the prompt on stdin — the {t} \
+role's own transport"
                 )),
                 _ => None,
             },
@@ -789,7 +813,7 @@ prompt/description; or add this model to a configured tier slot in .bee/config.j
         // GUARD_PURPOSE: same cell-execution purpose as branch (1).
         let resolved = resolve_tier(models, t, "claude", GUARD_PURPOSE);
         if matches!(resolved, Resolved::Refused { .. }) {
-            let fix = match dispatch_kind_for_tier(t) {
+            let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
                     "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
 reads .bee/config.json for this slot and returns the tool and exact payload to run \
@@ -797,10 +821,9 @@ reads .bee/config.json for this slot and returns the tool and exact payload to r
 stdin). Do not attach a model param; the cli command names its own model."
                 ),
                 None => format!(
-                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the cli \
-slot's own transport directly instead: a Bash call running the configured command \
-verbatim with the prompt on stdin. Do not attach a model param; the cli command \
-names its own model."
+                    "FIX: run the {t} role's cli slot directly — a Bash call running the \
+configured command verbatim with the prompt on stdin. Do not attach a model param; \
+the cli command names its own model."
                 ),
             };
             let reason = format!(
@@ -815,7 +838,7 @@ not a spawned subagent.\n\
             // herding-tier D5: mirror of the cli-tier-denied wording just
             // above — an Agent/Task subagent cannot BE the pane a herding
             // slot spawns.
-            let fix = match dispatch_kind_for_tier(t) {
+            let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
                     "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
 reads .bee/config.json for this slot and returns the tool and exact payload to run \
@@ -824,11 +847,10 @@ reads .bee/config.json for this slot and returns the tool and exact payload to r
 param; the herding worker names its own model."
                 ),
                 None => format!(
-                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the \
-herding slot's own transport directly instead: a Bash call running \".bee/bin/bee \
-herding run --task-file - --json\" (plus --cwd for a granted worktree) with the \
-prompt on stdin. Do not attach a model param; the herding worker names its own \
-model."
+                    "FIX: run the {t} role's herding slot directly — a Bash call running \
+\".bee/bin/bee herding run --task-file - --json\" (plus --cwd for a granted \
+worktree) with the prompt on stdin. Do not attach a model param; the herding worker \
+names its own model."
                 ),
             };
             let reason = format!(
@@ -850,21 +872,21 @@ external agent in its own pane, not a spawned subagent.\n\
     // into no event at all. Purely additive: it can only fire where the guard
     // used to have nothing to go on, so no dispatch that passes today changes
     // its verdict.
-    if let Some(t) = subagent_type.as_deref().and_then(tier_for_pinned_type) {
+    if let Some(t) = subagent_type.as_deref().and_then(role_for_pinned_type) {
         // GUARD_PURPOSE: same cell-execution purpose as branch (1).
         let resolved = resolve_tier(models, t, "claude", GUARD_PURPOSE);
         if matches!(resolved, Resolved::Refused { .. }) {
-            let fix = match dispatch_kind_for_tier(t) {
+            let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
                     "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
 reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
-running the configured command verbatim with the prompt on stdin), or name a tier \
+running the configured command verbatim with the prompt on stdin), or name a role \
 whose slot is a model."
                 ),
                 None => format!(
-                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the cli \
-slot's own transport directly instead (a Bash call running the configured command \
-verbatim with the prompt on stdin), or name a tier whose slot is a model."
+                    "FIX: run the {t} role's cli slot directly (a Bash call running the \
+configured command verbatim with the prompt on stdin), or name a role whose slot is \
+a model."
                 ),
             };
             let reason = format!(
@@ -879,18 +901,17 @@ to a cli executor — an in-family Agent/Task subagent cannot be an external pro
             // herding-tier D5: same mirror as the marker-only branch above,
             // reached here when the pinned subagent_type itself implies the
             // tier instead of an explicit marker.
-            let fix = match dispatch_kind_for_tier(t) {
+            let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
                     "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
 reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
 running \".bee/bin/bee herding run --task-file - --json\" with the prompt on stdin), \
-or name a tier whose slot is a model."
+or name a role whose slot is a model."
                 ),
                 None => format!(
-                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the \
-herding slot's own transport directly instead (a Bash call running \".bee/bin/bee \
-herding run --task-file - --json\" with the prompt on stdin), or name a tier whose \
-slot is a model."
+                    "FIX: run the {t} role's herding slot directly (a Bash call running \
+\".bee/bin/bee herding run --task-file - --json\" with the prompt on stdin), or name \
+a role whose slot is a model."
                 ),
             };
             let reason = format!(
@@ -1492,7 +1513,9 @@ mod tests {
         let fx = fixture(&repo_config());
         // generation is excluded: it carries two agents and refuses instead
         // of repairing (a_generation_dispatch_names_its_agent_and_bee_build_is_allowed).
-        for &(tier, pinned) in PINNED_AGENT_TYPE.iter().filter(|(t, _)| *t != "generation") {
+        for &(tier, pinned) in
+            crate::verbs::drivers::ROLE_AGENTS.iter().filter(|(t, _)| *t != "generation")
+        {
             let (code, stdout, stderr) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {tier}] go"), "subagent_type": "general-purpose"}}));
             // Repaired, not refused: the tier was stated, so the agent type
             // it implies is the guard's own lookup to perform.
@@ -1534,8 +1557,8 @@ mod tests {
     fn a_rendered_bee_agent_type_declares_its_own_tier() {
         let fx = fixture(&repo_config());
         // The refusal in the field report: a dispatch that names bee-gather
-        // and nothing else. It now carries its tier in the agent type.
-        for (tier, pinned) in PINNED_AGENT_TYPE {
+        // and nothing else. It now carries its role in the agent type.
+        for (tier, pinned) in crate::verbs::drivers::ROLE_AGENTS {
             let (code, stdout, stderr) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": pinned, "description": "map campaign source_type usage", "prompt": "find every caller"}}));
             assert_eq!(code, 0, "{pinned}: {stderr}");
             assert_eq!(stdout, "", "an inferred tier needs no repair");
@@ -1608,10 +1631,20 @@ mod tests {
 
     #[test]
     fn a_herding_shaped_extraction_slot_denies_bee_extract_without_a_wrong_kind() {
-        // D1(d) round 2: dispatch_kind_for_tier has no --kind that resolves
-        // the extraction slot (slot_for_kind in prepare.rs has no extraction
-        // arm), so this FIX must not print --kind advisor — that would
-        // resolve the advisor slot, never the refused extraction one.
+        // D1(d) round 2, retargeted by model-role-split: the behavior guarded
+        // here is that a FIX for a role with no `--kind` names that role's OWN
+        // transport and never a `--kind` resolving a DIFFERENT slot (`--kind
+        // advisor` would resolve the advisor slot, never the refused
+        // extraction one). `dispatch_kind_for_role` now derives its answer
+        // from `slot_for_kind`, so extraction still yields no kind.
+        //
+        // What changed is the WORDING, deliberately: the message used to say
+        // "dispatch prepare has no --kind for the extraction tier yet", which
+        // named a remedy that is not coming — under D3 a job role is never
+        // published as a dispatch kind, so "yet" was a promise bee has
+        // decided not to keep. The assertion below pins the behavior instead
+        // of the sentence: NO --kind at all, and the slot's own transport
+        // named in full.
         let herding = fixture(&json!({"models": {"claude": {
             "extraction": {"kind": "herding"},
             "generation": "sonnet",
@@ -1622,9 +1655,16 @@ mod tests {
             json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-extract", "prompt": "extract"}}),
         );
         assert_eq!(code, 2, "a herding-shaped extraction slot cannot be an in-family subagent");
-        assert!(!stderr.contains("--kind advisor"), "{stderr}");
+        assert!(!stderr.contains("--kind"), "no --kind may be named for a role that has none: {stderr}");
         assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json"));
-        assert!(stderr.contains("dispatch prepare has no --kind for the extraction tier yet"), "{stderr}");
+        assert!(
+            !stderr.contains("has no --kind for the") && !stderr.contains("yet"),
+            "the retired sentence named a remedy that does not exist: {stderr}"
+        );
+        assert!(
+            stderr.contains("the extraction role's herding slot"),
+            "the FIX names the refused role's own transport: {stderr}"
+        );
         let d = last_jsonl(dispatch_log(herding.path())).unwrap();
         assert_eq!(d["transport"], "herding-tier-denied");
         assert_eq!(d["tier"], "extraction");
@@ -2303,5 +2343,65 @@ mod tests {
         assert_eq!(code, 0);
         let out = repair_output(&stdout);
         assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!("bee-review"));
+    }
+
+    #[test]
+    fn the_dispatch_kind_in_a_fix_is_derived_from_the_door_not_listed() {
+        // The hand-written table this replaces answered Some only for
+        // `review` and `generation`, so an `advisor` refusal printed "dispatch
+        // prepare has no --kind for the advisor tier yet" while `--kind
+        // advisor` existed and resolved exactly that slot. Derived from
+        // `slot_for_kind`, the FIX cannot be wrong about the door.
+        assert_eq!(dispatch_kind_for_role("generation"), Some("gather"));
+        assert_eq!(dispatch_kind_for_role("review"), Some("reviewer"));
+        assert_eq!(dispatch_kind_for_role("advisor"), Some("advisor"));
+        // A role no kind resolves — the shipped extraction slot, and any job
+        // role an operator invents. Under D3 no `--kind` is coming for these,
+        // so the FIX names the slot's own transport and promises nothing.
+        assert_eq!(dispatch_kind_for_role("extraction"), None);
+        assert_eq!(dispatch_kind_for_role("test"), None);
+
+        // End to end: a herding-shaped advisor slot is still denied (an
+        // Agent/Task subagent cannot BE a pane), but the FIX now names the
+        // door that resolves it instead of denying that one exists.
+        let herding = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": "sonnet",
+            "review": "opus",
+            "advisor": {"kind": "herding", "agent": "agy-flash"}
+        }}}));
+        let (code, stderr) = run_payload(
+            herding.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}),
+        );
+        assert_eq!(code, 2, "a herding-shaped advisor slot cannot be an in-family subagent");
+        assert!(
+            stderr.contains("--kind advisor"),
+            "the FIX names the door that resolves the refused slot: {stderr}"
+        );
+        assert!(!stderr.contains("has no --kind for the"), "{stderr}");
+        let d = last_jsonl(dispatch_log(herding.path())).unwrap();
+        assert_eq!(d["transport"], "herding-tier-denied");
+        assert_eq!(d["tier"], "advisor");
+    }
+
+    #[test]
+    fn the_role_to_agent_table_has_exactly_one_home() {
+        // model-role-split D2/D3: the hook's own copy is gone. Both lookups
+        // read `verbs::drivers::ROLE_AGENTS`, so the pair cannot drift the
+        // way the two tier lists already had.
+        for (role, agent) in crate::verbs::drivers::ROLE_AGENTS {
+            assert_eq!(role_for_pinned_type(agent), Some(role), "{agent}");
+        }
+        assert_eq!(pinned_type_for("generation"), Some("bee-gather"));
+        assert_eq!(pinned_type_for("extraction"), Some("bee-extract"));
+        assert_eq!(pinned_type_for("review"), Some("bee-review"));
+        // A role with no rendered agent answers None — a legal answer, never
+        // a generic or invented type.
+        assert_eq!(pinned_type_for("advisor"), None);
+        assert_eq!(pinned_type_for("test"), None);
+        assert_eq!(pinned_type_for("ceiling"), None);
+        assert_eq!(role_for_pinned_type("general-purpose"), None);
+        assert_eq!(role_for_pinned_type("some-other-agent"), None);
     }
 }
