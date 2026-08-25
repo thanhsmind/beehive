@@ -915,6 +915,20 @@ use std::time::Instant;
         // Reserved-word probe: `ceiling` is retired as a role name entirely
         // (D5), but nothing in THIS layer knows that — validation stays
         // membership-blind, so it accepts the string like any other name.
+        //
+        // REVIEW P1-A weighed refusing it here and DECLINED, so this
+        // assertion stands unchanged on purpose rather than by oversight.
+        // Two reasons. A reserved word is a closed name inside the open set
+        // D2 (store `06e49368`) spent this feature's first slice opening, and
+        // this very test exists to catch exactly that regression. And it would
+        // not have closed the hole: refusing the name at ADD time leaves every
+        // already-stored cell carrying it, and the defect was that such a cell
+        // took the session model uncounted at DISPATCH time. The fix therefore
+        // landed at the dispatch, and the missing link between the two layers
+        // is asserted in
+        // `verbs::drivers::tests::the_ration_and_the_dispatch_agree_on_which_cells_are_escalated`:
+        // a name accepted here resolves an ordinary model, and only the
+        // escalation flag charges the 40% ration.
         assert!(validate_new_cell_problems(root, &role_probe(Some(json!("ceiling"))))
             .unwrap()
             .is_empty());

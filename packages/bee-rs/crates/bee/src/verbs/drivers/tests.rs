@@ -1942,6 +1942,181 @@ use std::time::Instant;
         );
     }
 
+    /// REVIEW P1-A — the invariant that binds D5's two halves together:
+    /// **the set of cells the ration CHARGES is the set of cells that get the
+    /// session model.** `prepare.rs` states it in prose beside the flag read
+    /// ("the one predicate the 40% ration reads too, so the cell that charges
+    /// the budget and the cell that spends it are the same set"); nothing
+    /// asserted it, and the two sides had drifted.
+    ///
+    /// This is the test the review named as missing: it authors a cell, then
+    /// asks BOTH layers about the same record. Neither half proves anything
+    /// alone — `cell_is_escalated` answering false is only a defect once the
+    /// dispatch hands that same record the session model anyway, which is
+    /// exactly the shape `role: "ceiling"` had.
+    ///
+    /// It fails on the pre-fix code at the `c-role-ceiling` row: `tier_token`
+    /// on the `from_role` path IS the cell's declared role string, so
+    /// `tier_token == ESCALATION_WORD` fired for a record no counter ever
+    /// saw — measured at 86% escalated with the 40% refusal silent.
+    #[test]
+    fn the_ration_and_the_dispatch_agree_on_which_cells_are_escalated() {
+        let tmp = tempfile::tempdir().unwrap();
+        // ONLY `generation` is configured, so the two answers cannot be
+        // confused: a cell that does not escalate resolves a real model on
+        // the `claude-agent` channel, and an escalated one has no `model`
+        // parameter at all.
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+
+        // Every marking a cell can carry, against what D5 says it MEANS.
+        // The third row is review P1-A: `verbs::cells` validation accepts the
+        // name (`role_validation_checks_shape_and_never_membership` — D2's
+        // role set is open and membership-blind), and the dispatch used to
+        // read that accepted name as the escalation word.
+        let rows: [(&str, &str, bool); 4] = [
+            ("c-flag", r#""role":"code","escalate":true"#, true),
+            ("c-legacy-tier", r#""tier":"ceiling""#, true),
+            ("c-role-ceiling", r#""role":"ceiling""#, false),
+            ("c-plain", r#""role":"code""#, false),
+        ];
+
+        for (id, marking, escalated) in rows {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f","title":"t",{marking},"status":"claimed","trace":{{"worker":"w"}}}}"#
+                ),
+            );
+
+            // HALF ONE — what the RATION sees. `cell_is_escalated` is the one
+            // predicate `escalation_share_after`, `role_mix` and
+            // `ceiling_scarcity_warning` all read, so this is every counter.
+            let cell = read_cell(&root, id).unwrap().unwrap();
+            assert_eq!(
+                crate::verbs::cells::cell_is_escalated(&cell),
+                escalated,
+                "{id}: the predicate every escalation counter reads"
+            );
+
+            // HALF TWO — what the DISPATCH actually hands out for that very
+            // same record.
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("{id}: expected an envelope")
+            };
+            let econ = v.get("economics").unwrap();
+            let payload = v.get("payload").unwrap();
+            let prompt = payload.get("prompt").unwrap().as_str().unwrap().to_string();
+            let took_session_model = econ.get("channel") == Some(&json!("session-model"));
+
+            // THE BINDING ASSERTION. Charged and spent are ONE set.
+            assert_eq!(
+                took_session_model, escalated,
+                "{id}: the ration says escalated={escalated}, the dispatch says \
+                 {took_session_model} — a cell that runs on the session model without \
+                 being counted bypasses the 40% ration entirely"
+            );
+
+            if escalated {
+                assert_eq!(payload.get("model"), None, "{id}: escalated means no model param");
+                assert!(
+                    prompt.starts_with("[bee-tier: ceiling]\n"),
+                    "{id}: an escalated dispatch travels under the escalation word: {prompt}"
+                );
+            } else {
+                assert_eq!(
+                    payload.get("model"),
+                    Some(&json!("sonnet")),
+                    "{id}: an uncounted cell must resolve a real model, never the session one"
+                );
+                assert!(
+                    !prompt.starts_with("[bee-tier: ceiling]\n"),
+                    "{id}: an uncounted cell must not travel under the escalation word: {prompt}"
+                );
+                assert_eq!(econ.get("channel"), Some(&json!("claude-agent")), "{id}");
+            }
+        }
+    }
+
+    /// The other direction of P1-A, stated on its own because it is what
+    /// `models.rs` PROMISES in prose: a cell declaring `role: "ceiling"` is
+    /// "just a role nothing configures — it warns and falls through like any
+    /// other". Escalation left the role axis with D5; it lives on the flag.
+    ///
+    /// The escalation doors that MUST stay open are asserted in the same
+    /// test, so a later narrowing cannot close one of them while closing this
+    /// hole: an explicit `--role ceiling` names the slot outright and remains
+    /// the escalation door, with a cell behind it or without one.
+    #[test]
+    fn a_cell_role_of_ceiling_falls_through_the_resolver_but_the_flag_door_stays_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"t","role":"ceiling","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let econ = v.get("economics").unwrap();
+        // It walked `[ceiling, code, generation]` and the TAIL won, exactly as
+        // an operator-invented name would. The marker names the RESOLVED role,
+        // never the unresolved head — `hooks/model_guard.rs` reads it back and
+        // denies a name nothing configures.
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
+        assert_eq!(econ.get("channel"), Some(&json!("claude-agent")));
+        // `tier_source` still records WHO chose it: the cell did.
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+
+        // NO OTHER ESCALATION PATH CLOSED. `--role ceiling` with no cell
+        // behind it is still the session model.
+        let Prepared::Value(g) = prepare_dispatch_with_role(
+            &root, "claude", "gather", Some("ceiling"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            g.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model")),
+            "an explicit --role ceiling is still the escalation door"
+        );
+
+        // And `--role ceiling` aimed AT this cell escalates it, because an
+        // explicit role names the slot outright — the caller saying so is a
+        // different fact from the record saying so.
+        let Prepared::Value(f) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "cell",
+            Some("ceiling"),
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            f.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model"))
+        );
+        assert_eq!(f.get("payload").unwrap().get("model"), None);
+    }
+
     #[test]
     fn cell_with_no_tier_field_has_tier_source_default_and_unchanged_payload() {
         let tmp = tempfile::tempdir().unwrap();

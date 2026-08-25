@@ -95,6 +95,16 @@ pub(crate) const LEGACY_ESCALATION_REASON_KEY: &str = "tier_reason";
 ///
 /// This is not a default merged into a read: absent is still absent. A cell
 /// is escalated only if it says so, in one of the two spellings.
+///
+/// TWO spellings, and `role` is NOT a third — review P1-A. The `role` field
+/// is membership-blind by decision (D2, store `06e49368`: the set is open),
+/// so `role: "ceiling"` is authored freely and means nothing here. That is
+/// correct and must stay correct: the fix for a cell escalating itself under
+/// that name belongs at the dispatch, where `verbs::drivers::prepare` now
+/// guards its escalation arm with `!from_role`, and NOT here as a reserved
+/// word — a closed name in an open set would still leave every already-stored
+/// cell carrying it. If a third spelling of "escalated" is ever added, it is
+/// added HERE, because this predicate is what the 40% ration counts.
 pub(crate) fn cell_is_escalated(cell: &Value) -> bool {
     if matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true))) {
         return true;

@@ -561,6 +561,17 @@ pub(crate) fn resolve_role_named<'a>(
         // The escalation word survives ONE layer up, in `resolve_tier`, as
         // the tier-shaped marker `[bee-tier: ceiling]` that `dispatch
         // prepare` stamps and `hooks/model_guard.rs` reads back.
+        //
+        // REVIEW P1-A: that paragraph described the intent and not the
+        // shipped code for one release — `prepare.rs` short-circuited on
+        // `tier_token == ESCALATION_WORD` BEFORE this walk was reached, and
+        // on the cell-role path `tier_token` is the cell's declared role, so
+        // a cell saying `role: "ceiling"` never arrived here at all. The
+        // caller now guards that arm with `!from_role`, and the promise is
+        // held by test rather than by comment:
+        // `verbs::drivers::tests::the_ration_and_the_dispatch_agree_on_which_cells_are_escalated`
+        // asserts the ration's predicate and the dispatch's channel agree
+        // for every marking a cell can carry.
         let entry = table.and_then(|t| t.get(name));
         if let Some(resolved) = entry.and_then(|v| resolve_configured(v, name, kind)) {
             return (Some(name), resolved);

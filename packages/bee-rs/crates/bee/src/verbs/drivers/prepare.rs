@@ -923,6 +923,36 @@ pub(crate) fn prepare_dispatch_with_role(
     let escalated_cell = role.is_none()
         && kind == "cell"
         && cell.as_ref().map(crate::verbs::cells::cell_is_escalated).unwrap_or(false);
+    // REVIEW P1-A — the escalation word is read off the CALLER or the FLAG,
+    // never off a name the cell DECLARED.
+    //
+    // `tier_token` is one variable carrying three different provenances, and
+    // `from_role` is the only thing that tells them apart. On the `from_role`
+    // path it is the cell's own `role` string, and validation is deliberately
+    // membership-blind there (D2, store `06e49368`: the role set is OPEN, so
+    // any non-empty name is legal at add time). Testing `tier_token ==
+    // ESCALATION_WORD` without this guard therefore let a cell escalate
+    // ITSELF by declaring `role: "ceiling"` — `Resolved::Inherit`, the
+    // session model, no `model` parameter — while `cell_is_escalated` read
+    // false for the same record and every counter that enforces the 40%
+    // ration (`escalation_share_after`, `role_mix`,
+    // `ceiling_scarcity_warning`) missed it. Measured on a seven-cell feature
+    // with six such cells: 86% escalated, and the refusal never fired.
+    //
+    // The two legitimate spellings both survive, because neither is
+    // `from_role`: an explicit `--role ceiling` is `tier_source: "flag"`, and
+    // a pre-migration record's `tier: "ceiling"` is already `escalated_cell`
+    // through `cell_is_escalated`'s legacy read.
+    //
+    // Narrowing HERE rather than refusing the name at `verbs::cells::validate`
+    // is the deliberate call: D5 took `ceiling` off the role axis entirely, so
+    // a cell declaring it is just a role nothing configures, and this arm is
+    // what makes `resolve_role_named`'s standing promise ("it warns and falls
+    // through like any other") true of the shipped code. The alternative —
+    // a reserved name validation rejects — would put one closed word back in
+    // the open set D2 locks, and closes the hole only for cells authored
+    // after it lands.
+    let escalation_asked = tier_token == ESCALATION_WORD && !from_role;
     let (resolved, is_escalated) = if role == Some("advisor") || (role.is_none() && kind == "advisor")
     {
         let r = match resolve_advisor(&models, runtime) {
@@ -938,7 +968,7 @@ pub(crate) fn prepare_dispatch_with_role(
             }
         };
         (r, false)
-    } else if escalated_cell || tier_token == ESCALATION_WORD {
+    } else if escalated_cell || escalation_asked {
         // `Resolved::Inherit` IS "the session model": the payload built
         // below carries no `model` parameter and no herding command, on
         // either runtime. An escalated cell never walks the role list at
