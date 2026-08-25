@@ -1,0 +1,75 @@
+{
+  "id": "eod-1",
+  "feature": "escalate-off-disarm",
+  "lane": "standard",
+  "role": "code",
+  "title": "Make the escalate disarm actually disarm a legacy ceiling cell",
+  "action": "Fix the silent no-op (r3 P2, corroborated by both reviewers; decisions escalate-off-disarm D1/D2). RED FIRST: write a test proving the current failure - a cell with tier ceiling plus escalate:true, disarmed via set_escalation false, still answers cell_is_escalated true - run it against unfixed code and quote the red in the cap. Then: (1) validate.rs cell_is_escalated: an explicit Some(Bool(false)) on ESCALATE_FIELD returns false BEFORE the legacy tier read; (2) session_preamble/store.rs map_is_escalated: the same explicit-false arm, same ordering; (3) handlers_close.rs set_escalation disarm arm: when the cell carries tier == ESCALATION_WORD write Bool(false), otherwise remove the key as today; (4) handlers_write.rs backfill plan derivation: skip escalate when the ESCALATE_FIELD key is PRESENT with either value, so a recorded disarm is never re-armed by a later pass. Tests: the red-first disarm test goes green; backfill does not re-arm an explicitly disarmed legacy cell; an ordinary (no-tier) cell disarm still removes the key; a bare tier-ceiling cell with no flag still reads escalated (pre-backfill compat); the ration counter and the preamble counter agree with the dispatch on a disarmed legacy cell.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "The red-first test fails on unfixed code and its output is quoted in the cap",
+      "Disarming a legacy tier-ceiling cell makes cell_is_escalated, the preamble counter, and the dispatch all answer not-escalated",
+      "A later backfill-roles run leaves an explicitly disarmed legacy cell disarmed",
+      "An ordinary cell disarm still removes the key entirely",
+      "A bare tier-ceiling cell with no flag key still reads escalated",
+      "Re-arming with escalate on still works and the 40 percent ration still gates it"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "escalate-off-disarm D1",
+    "escalate-off-disarm D2"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": "escalate disarm now actually disarms a legacy ceiling cell; an explicit escalate:false outranks the legacy tier read everywhere and survives later backfill passes",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs"
+    ],
+    "deviations": [
+      "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason.",
+      "sync-ack: The change is a predicate and storage-shape fix inside the escalation machinery; no skill teaches the disarm's on-disk spelling, and the operator-facing contract (bee cells escalate --off disarms) is exactly what the skills already describe — the fix makes the code match the taught behavior, not the reverse."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T15:41:27.294Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T15:37:17.504Z",
+    "sync_ack": "The change is a predicate and storage-shape fix inside the escalation machinery; no skill teaches the disarm's on-disk spelling, and the operator-facing contract (bee cells escalate --off disarms) is exactly what the skills already describe — the fix makes the code match the taught behavior, not the reverse.",
+    "inline_reason": "Same named deviation as the decision-attribution cells: this session does not spawn subagents unless the user asks, and the orchestrator held the corroborated r3 diagnosis with exact anchors for all four sites.",
+    "report": {
+      "outcome": "Explicit escalate:false is the recorded disarm: cell_is_escalated and the preamble copy honor it before the legacy tier read, set_escalation writes it on legacy-spelling cells only, and the backfill skips any present flag key so a disarm is never re-armed. Pre-backfill compat preserved: bare tier-ceiling still reads escalated. One old assertion retargeted from key-absence to the false marker, with the reason in place.",
+      "commit": "06eec4b2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (2984 passed, 2 failed) — the 2 are the opencode contract tests refusing to run without node on PATH, environmental and unchanged; the two new tests were shown RED first (disarm: left None right Some(false); re-arm: the pass flipped a recorded false to true)",
+      "deviations": [
+        "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "id": "rsc-1",
+  "feature": "role-surface-cleanup",
+  "lane": "standard",
+  "role": "code",
+  "title": "Fire the fall-through warn once, and say role where the surface means role",
+  "action": "Three review-verified fixes. (1) prepare.rs:98 cell_role_list: never repeat the head - cell_role_list(code) currently returns [code, code, generation] so the warn fires twice and its first copy names the name that just failed; dedup so the list holds distinct names in order (code -> [code, generation]; read -> [read, extraction, generation]; test -> [test, code, generation]). RED FIRST for this one: a test asserting cell_role_list(code) contains no duplicate, shown failing on unfixed code, output quoted in the cap. Check call sites for assumptions about list length. (2) registry_payload.json, the dispatch.prepare TOP-LEVEL description: rewrite the tier-language sentences - kind cell resolves the cell-role-headed ordered list ([<cell role>, code, generation], read cells via read), gather stays the read-only default, reviewer resolves the review role falling through to generation, advisor unchanged. Keep the rest of the prose. Edit as DATA (one-line JSON, reproduce serialization exactly, round-trip check before writing). (3) state_group/workers.rs:78: the refusal opens with: invalid tier - change the opening words to name a ROLE (e.g. invalid role recorded under the tier flag) while leaving the flag spelling, the persisted key, and the recorded rationale at workers.rs:154-190 untouched.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "cell_role_list returns no duplicate name for any role input, pinned by a test shown red first",
+      "A role equal to a tail name still resolves exactly as before - only the duplicate is gone",
+      "The dispatch.prepare registry description mentions the ordered role list and no longer claims kind cell resolves the generation tier",
+      "registry_payload.json still parses, command count unchanged, serialization byte-style preserved",
+      "The workers refusal no longer calls the value an invalid tier; its FIX line and the persisted key stay exactly as recorded",
+      "registry_dispatch tests stay green in both directions"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "role-surface-cleanup D1"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": "the fall-through warn fires once per dispatch, the registry speaks role language, the worker refusal says role",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+    ],
+    "deviations": [
+      "Executed inline; reason on trace.inline_reason.",
+      "sync-ack: workers.rs is a wording-only change inside a refusal string; the flag, key, and recorded rationale are untouched, so no owned skill has anything to update."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T15:51:00.924Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T15:46:01.401Z",
+    "sync_ack": "workers.rs is a wording-only change inside a refusal string; the flag, key, and recorded rationale are untouched, so no owned skill has anything to update.",
+    "inline_reason": "Same named deviation as the previous lanes: no subagents unless the user asks, and the orchestrator held the review-verified anchors for all three sites.",
+    "report": {
+      "outcome": "cell_role_list dedups its tail against the head (backstop reachable as tail or head), the dispatch prepare registry description teaches the ordered role list instead of the generation tier, and the worker refusal opens with invalid role. Three wording assertions retargeted with the fix.",
+      "commit": "c6409330",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (3032 passed; 2 environmental node-missing fails; the one real red was proof_gate parity, resolved in rsc-2) — the new dedup test was shown RED first: cell_role_list(code) repeats code",
+      "deviations": [
+        "Executed inline; reason on trace.inline_reason."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "id": "hm-6",
+  "feature": "human-mailbox",
+  "role": "docs",
+  "title": "Re-word the worker Result form and the swarming reference to match the departure contract",
+  "action": "The worker prompt at packages/bee/prompts/worker-cell.md tells every worker what a deviations line must contain; the swarming reference documents the same Result form. Both still describe the free-form one-line value. Re-word them to D5's three required parts and the closed kind set, and to D8's rule that the plain-language sentence is written at the moment of the event rather than composed later. Change wording only — no behaviour, and no promise the code does not keep.",
+  "verify": "rg -n 'unforeseen obstacle|better route' packages/bee/prompts/worker-cell.md skills/bee-swarming/references/swarming-reference.md",
+  "slice": 2,
+  "lane": "small",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "hm-5"
+  ],
+  "must_haves": {
+    "truths": [
+      "The worker Result form names the three required parts and the closed kind set (D5).",
+      "It states that the plain-language sentence is written at the moment of the event, not composed later (D8).",
+      "The swarming reference matches the prompt word for word on what a deviations line must carry.",
+      "Neither document promises enforcement the code does not have: the requirement is armed-only (D10).",
+      "Wording only — no code path changes in this cell."
+    ]
+  },
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "acceptance": "Prompt and reference both describe D5's three parts and closed kind set, note D8's write-at-the-moment rule, and scope the requirement to an armed run; the two documents agree with each other and with the shipped code.",
+  "status": "capped",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-6",
+    "outcome": "Worker prompt and swarming reference now describe the three-part departure line, the closed four kinds, the explicit plan-followed statement, and the armed-only door",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T16:04:29.009Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T16:01:05.199Z",
+    "inline_reason": "Dispatched worker wk-hm-6 ran this cell; dispatch writes no state.workers row and bee state worker add refuses from a worktree (known P2) — recorded escape, not an inline run",
+    "report": {
+      "outcome": "Worker prompt and swarming reference now describe the three-part departure line, the closed four kinds, the explicit plan-followed statement, and the armed-only door",
+      "commit": "f819d38f",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "rg -n -o \"hit an unforeseen obstacle|found a better route|the plan was wrong about a fact|something else had to be fixed first|followed the plan\" packages/bee/prompts/worker-cell.md skills/bee-swarming/references/swarming-reference.md packages/bee-rs/crates/bee/src/verbs/mailbox.rs — green — docs-only cell: parity check that both documents carry all four DEPARTURE_KINDS and PLAN_FOLLOWED exactly as mailbox.rs spells them",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

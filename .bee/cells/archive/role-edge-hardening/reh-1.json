@@ -1,0 +1,76 @@
+{
+  "id": "reh-1",
+  "feature": "role-edge-hardening",
+  "lane": "standard",
+  "role": "code",
+  "title": "Refuse the forbidden ceiling key, fold the advisor case, warn on a dead chain key",
+  "action": "Three config-layer fixes (role-edge-hardening D1 items 1-3). (a) validate_models_config in verbs/drivers/models.rs: a models.<rt> table carrying the key named by ESCALATION_WORD is refused by name with a FIX teaching bee cells escalate and citing decision 0015 - ceiling is an escalation flag, never a role, and a configured key currently makes prepare stamp marker ceiling PLUS a model param, the exact pair the guard denies (r3 A1). RED FIRST: a validation test with a ceiling key shown passing (accepted) on unfixed code via the current validator, then refused after. (b) verbs/drivers/guard.rs role_is_declarable: match the advisor arm case-insensitively (name.eq_ignore_ascii_case(ADVISOR_ROLE)), and in verbs/drivers/models.rs resolve_advisor: find the advisor key case-insensitively instead of t.get(advisor) - so a mis-cased Advisor key answers the SAME at the marker door and the --kind advisor door (r3 H1). Test: with Advisor:null both doors refuse; with Advisor:fable both doors resolve fable. (c) normalize_fallback_chains in models.rs: when a chain key is role-shaped (not provider/* and not a name that resolves as a concrete model selector in models.<rt>) and that role is not configured in models.<rt>, keep the chain but emit one stderr warn naming the key and why it can never fire (r3: chains are keyed on the RESOLVED role, so an unconfigured role-key is dead). Follow the existing junk-drop warn style in that function.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "A models table with a ceiling key is refused by name, teaching bee cells escalate; shown accepted-then-refused red-first",
+      "A mis-cased advisor key answers identically at the marker door and the kind-advisor door, in both the null and the configured direction",
+      "A role-keyed fallback chain naming an unconfigured role still publishes but warns once on stderr naming the dead key",
+      "No cell-role membership check is added anywhere - D7 untouched",
+      "Existing config fixtures stay green"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "role-edge-hardening D1"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": "the forbidden ceiling key is named with a teach line, the advisor identity folds case at both doors, and a dead chain key warns instead of dying silently",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Executed inline; reason on trace.inline_reason.",
+      "sync-ack: All touches are role-surface code and its own tests; no owned skill describes the ceiling config key, the advisor case rule, or chain-key liveness — the fixes make code match what the docs already teach."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T16:11:44.557Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T16:02:35.689Z",
+    "sync_ack": "All touches are role-surface code and its own tests; no owned skill describes the ceiling config key, the advisor case rule, or chain-key liveness — the fixes make code match what the docs already teach.",
+    "inline_reason": "Same named deviation as the prior lanes: no subagents unless the user asks; the orchestrator held every review anchor.",
+    "report": {
+      "outcome": "validate_models_config names a ceiling key for every value shape with a bee cells escalate teach line (red-first: zero problems before); role_is_declarable and resolve_advisor fold case so a mis-cased Advisor key answers identically at both doors in both directions; dead_chain_keys computes the chain keys nothing can travel under and read_fallback_chains warns them once, pinned by test rather than stderr.",
+      "commit": "faef734d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green, 3040 passed with only the two node-missing environmental fails — the three new tests cover exactly the three changed surfaces",
+      "deviations": [
+        "Executed inline; reason on trace.inline_reason."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "feature": "role-edge-hardening",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"role-edge-hardening\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"role-edge-hardening\" — feature is closed.",
+  "created_at": "2026-08-25T16:01:42.087Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "result: all three hardening features closed on the user's approval — uat recorded, decisions routed into the knowledge layer, judge exemptio",
+    "asked_at": "2026-08-25T23:05:11.636Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 5,
+    "rationale": null,
+    "updated_at": "2026-08-25T16:01:46.887Z",
+    "feature": "role-edge-hardening"
+  },
+  "last_scribing_run": {
+    "feature": "role-edge-hardening",
+    "date": "2026-08-25",
+    "at": "2026-08-25T21:34:09.529Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "close"
+  }
+}

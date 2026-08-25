@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "prune-counts-pending-stubs",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"prune-counts-pending-stubs\" started at phase \"planning\" (lane).",
+  "next_action": "Worktree ready at ../beehive--wt--prune-counts-pending-stubs. Open a session there, read the design (path in the lane's own history), then shape+execution gate before touching prune.rs — this relaxes a deletion guard, so normal bypass does not auto-approve it.",
+  "created_at": "2026-08-25T15:49:16.520Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}

@@ -106,10 +106,17 @@ pub(crate) const LEGACY_ESCALATION_REASON_KEY: &str = "tier_reason";
 /// cell carrying it. If a third spelling of "escalated" is ever added, it is
 /// added HERE, because this predicate is what the 40% ration counts.
 pub(crate) fn cell_is_escalated(cell: &Value) -> bool {
-    if matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true))) {
-        return true;
+    match cell.get(ESCALATE_FIELD) {
+        Some(Value::Bool(true)) => true,
+        // escalate-off-disarm D1: an explicit false is the operator's
+        // recorded disarm and outranks the legacy spelling below —
+        // otherwise disarming a migrated ceiling cell is a silent no-op.
+        Some(Value::Bool(false)) => false,
+        _ => matches!(
+            cell.get("tier"),
+            Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD
+        ),
     }
-    matches!(cell.get("tier"), Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD)
 }
 
 pub(crate) const CHANGE_CLASSES: [&str; 8] =

@@ -574,6 +574,23 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
         // config, and a junk value written there is still worth a word.
         for (slot, value) in src {
             let slot = slot.as_str();
+            // role-edge-hardening D1: decision 0015 keeps the escalation word
+            // out of config, and a silently-accepted key here is what let
+            // `dispatch prepare` stamp a `[bee-tier: ceiling]` marker beside
+            // a model param — the pair the guard denies. Named for EVERY
+            // value shape, null included: the key itself is the mistake.
+            if slot == crate::verbs::drivers::ESCALATION_WORD {
+                problems.push(Problem {
+                    code: "ceiling-not-a-role",
+                    runtime: Some(rt),
+                    slot: Some(slot.to_string()),
+                    message: format!(
+                        "models.{rt}.{slot} is configured, but \"{slot}\" is not a role — it is the escalation flag's wire word (decision 0015), and no dispatch will ever resolve a model through it. Remove the key; a cell that must run on the session model is escalated with `bee cells escalate`."
+                    ),
+                    agent: None,
+                });
+                continue;
+            }
             let value = match value {
                 Value::Null => continue,
                 Value::String(_) => continue,

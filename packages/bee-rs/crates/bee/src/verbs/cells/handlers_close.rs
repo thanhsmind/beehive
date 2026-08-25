@@ -1432,6 +1432,16 @@ pub(crate) fn set_escalation(
                 cell_map.insert("trace".into(), Value::Object(trace));
             }
             cell_map.insert(ESCALATE_FIELD.into(), Value::Bool(true));
+        } else if matches!(
+            cell_map.get("tier"),
+            Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD
+        ) {
+            // escalate-off-disarm D2: this cell carries the legacy
+            // `tier: "ceiling"` spelling, which `cell_is_escalated` would
+            // re-answer true the moment the key is gone — so the disarm is
+            // recorded as an explicit false instead of a removal. The tier
+            // string itself stays: D4 keeps stored history.
+            cell_map.insert(ESCALATE_FIELD.into(), Value::Bool(false));
         } else {
             // Not an escalation, so the cell is not escalated. Removing the
             // key rather than writing `false` keeps absent meaning absent —

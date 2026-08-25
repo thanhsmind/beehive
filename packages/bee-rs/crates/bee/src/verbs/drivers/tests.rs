@@ -2851,7 +2851,7 @@ use std::time::Instant;
         // And the failure travels back by name rather than being dropped.
         assert!(!registered, "a blank role must fail registration, not silently pass");
         let message = err.expect("a failed registration must name why");
-        assert!(message.starts_with("worker add: invalid tier"), "{message}");
+        assert!(message.starts_with("worker add: invalid role"), "{message}");
         assert!(message.contains("FIX:"), "a refusal names its remedy: {message}");
         assert!(dpr1_workers(&root).is_empty(), "the bad record was never written");
     }
@@ -5975,6 +5975,56 @@ use std::time::Instant;
     /// plumbing, not the operator's request — while a job role nothing
     /// configures is still loud. Asked of the real ordered lists against a
     /// real config, because the warn itself writes to stderr.
+    /// role-edge-hardening D1: a chain key no dispatch can travel under is
+    /// named, not silently published. Chains match on the RESOLVED role and
+    /// model, so a role-keyed chain for an unconfigured role is dead on
+    /// arrival — and until now it died without a word.
+    #[test]
+    fn a_chain_key_nothing_resolves_is_named_as_dead() {
+        let models = normalize_models(Some(&json!({
+            "claude": {"code": "sonnet", "test": "opus-custom"},
+        })));
+        let chains = normalize_fallback_chains(Some(&json!({
+            "test": ["sonnet"],          // live: configured role
+            "code": ["haiku"],           // live: configured role
+            "opus-custom": ["sonnet"],   // live: a model some slot resolves to
+            "sonnet": ["haiku"],         // live: a configured model value
+            "anthropic/*": ["local/q"],  // live: wildcard, never checked
+            "design": ["sonnet"],        // DEAD: no runtime configures it
+        })));
+        assert_eq!(dead_chain_keys(&chains, &models), vec!["design".to_string()]);
+
+        // Built-in default names stay live even with an empty config — a
+        // chain keyed on "generation" fires on every host.
+        let empty = normalize_models(None);
+        let generic = normalize_fallback_chains(Some(&json!({"generation": ["sonnet"]})));
+        assert!(dead_chain_keys(&generic, &empty).is_empty());
+    }
+
+    /// role-surface-cleanup D1: the ordered list never repeats a name. A
+    /// duplicate makes the fall-through warn fire twice for one dispatch,
+    /// and the first copy names the very name that just failed — observed
+    /// live for `role: "code"` on a host whose window is shut via `read`.
+    #[test]
+    fn the_ordered_role_list_never_repeats_a_name() {
+        for role in ["code", "read", "generation", "extraction", "review", "test", "design"] {
+            let list = cell_role_list(role);
+            let mut seen = std::collections::HashSet::new();
+            for name in &list {
+                assert!(
+                    seen.insert(*name),
+                    "cell_role_list({role:?}) repeats {name:?}: {list:?}"
+                );
+            }
+            assert_eq!(list.first(), Some(&role), "the cell's own role stays the head");
+            assert!(
+                list.contains(&"generation"),
+                "the historical backstop stays reachable — as the tail, or as the head when \
+                 the role IS the backstop: {list:?}"
+            );
+        }
+    }
+
     #[test]
     fn bees_own_tail_is_silent_while_an_unconfigured_job_role_still_warns() {
         let tmp = tempfile::tempdir().unwrap();
@@ -6019,6 +6069,44 @@ use std::time::Instant;
     /// described was gone. The window keeps mrs-9's silence where it was
     /// earned (a host that configured NEITHER name, where falling through to
     /// the historical model is the intended no-op) and nowhere else.
+    /// role-edge-hardening D1: the null boundary of the opt-in window,
+    /// pinned. The r2 mutation probe narrowed `.is_some()` to non-null and
+    /// the WHOLE suite stayed green, because every window fixture used
+    /// string values — yet `.bee/config-sample.json` seeds codex as
+    /// `"code": null, "read": null`, the exact shape the boundary decides.
+    /// An explicit null IS an opt-in: the operator wrote the key, so they
+    /// know the vocabulary, and the key resolves Budget rather than falling
+    /// through — deliberately unset is not the same as never-heard-of-it.
+    #[test]
+    fn a_null_valued_asked_role_is_an_opt_in_and_the_window_shuts() {
+        // The shape bee itself ships: both asked roles present, both null.
+        let tmp = tempfile::tempdir().unwrap();
+        let nulls = read_models(&repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"opus-custom","code":null,"read":null}}}"#,
+        ))
+        .unwrap();
+        assert!(
+            host_opted_into_roles(&nulls, "claude"),
+            "a null-valued asked role is a written key — the window shuts; \
+             narrowing the check to non-null values must fail HERE"
+        );
+        // …and a present-but-null name is KNOWN, never warned: it resolves
+        // Budget at its own slot instead of falling through.
+        assert!(!role_is_unknown(&nulls, "claude", "code"), "null code is known");
+        assert!(!role_is_unknown(&nulls, "claude", "read"), "null read is known");
+
+        // One null sibling behaves exactly like one string sibling: the
+        // window is shut either way.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let one = read_models(&repo(
+            &tmp2,
+            r#"{"models":{"claude":{"generation":"opus-custom","code":null}}}"#,
+        ))
+        .unwrap();
+        assert!(host_opted_into_roles(&one, "claude"));
+    }
+
     #[test]
     fn opting_into_one_asked_role_makes_the_missing_sibling_warn() {
         // Un-migrated: the window is open, so both of bee's own names are

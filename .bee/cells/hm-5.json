@@ -1,0 +1,80 @@
+{
+  "id": "hm-5",
+  "feature": "human-mailbox",
+  "role": "code",
+  "title": "Give --deviation its three required parts and a closed kind set, enforced only while armed",
+  "action": "Narrow the free-form one-line --deviation value (decision dc6a2d26) to D5's three required parts — what was done differently, why, and which kind — with kind drawn from the closed set: hit an unforeseen obstacle / found a better route / the plan was wrong about a fact / something else had to be fixed first. A cap in an ARMED run must state a departure or state explicitly that the plan was followed; silence and nothing-happened must not read alike (D5). D10 bounds the enforcement: a cap in a run that files no letter keeps the byte-identical flagless behaviour dc6a2d26 promised, so an unarmed cap is unchanged. The letter renders departures through the existing knowledge::deviation_text, never a second renderer.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells",
+  "slice": 2,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A --deviation value carries three required parts: what was done differently, why, and which kind (D5).",
+      "The kind comes from the closed four-value set and a value outside it is refused (D5).",
+      "A cap in an ARMED run that states neither a departure nor its absence is refused (D5).",
+      "A cap that followed its plan states that explicitly rather than leaving the field empty — silence and nothing-happened do not read alike (D5).",
+      "A cap in an UNARMED run is byte-identical to today, including a bare flagless finish (D10, dc6a2d26).",
+      "Departures render through the existing knowledge::deviation_text; no second renderer is introduced.",
+      "Existing finish tests pass UNCHANGED — editing one to make it pass is a [BLOCKED], not a fix."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+  ],
+  "acceptance": "The deviation flag takes three parts with a closed kind set; an armed cap must speak, an unarmed cap is unchanged; departures render through the one existing renderer; the demo in plan.md — a cap with a departure and one without, in both armed and unarmed runs — reads correctly in all four combinations.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-5",
+    "outcome": "An armed cap must state a departure in three parts or state that the plan was followed; an unarmed cap stays byte-identical",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+    ],
+    "deviations": [
+      {
+        "what": "Recorded D5's plan-followed statement on trace.plan_followed and kept it out of trace.deviations, instead of appending it like any other line",
+        "why": "trace.deviations is what bee knowledge promote mines for patterns, and a line saying nothing happened would teach it a pattern out of silence; the lift is armed-only so D10's byte-identical unarmed path is untouched",
+        "kind": "found a better route"
+      },
+      "sync-ack: the skill wording this contract needs (bee-swarming reference, worker prompt) is cell hm-6 by design, so the change reviews against shipped behaviour rather than beside it"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T15:55:52.953Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T15:44:30.925Z",
+    "sync_ack": "the skill wording this contract needs (bee-swarming reference, worker prompt) is cell hm-6 by design, so the change reviews against shipped behaviour rather than beside it",
+    "inline_reason": "dispatch writes no state.workers row and bee state worker add refuses from a worktree (known and filed, P2) — wk-hm-5 executed this cell as a dispatched worker",
+    "report": {
+      "outcome": "An armed cap must state a departure in three parts or state that the plan was followed; an unarmed cap is untouched",
+      "commit": "e89ada129dd97219d8bf0fe5737c208cae1f9252",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells — green — the cell's declared verify; verbs::mailbox and verbs::knowledge also green because the departure shape and the deviation miner read the same entries",
+      "deviations": [
+        {
+          "what": "Recorded D5's plan-followed statement on trace.plan_followed and kept it out of trace.deviations, instead of appending it like any other line",
+          "why": "trace.deviations is what bee knowledge promote mines for patterns, and a line saying nothing happened would teach it a pattern out of silence; the lift is armed-only so D10's byte-identical unarmed path is untouched",
+          "kind": "found a better route"
+        }
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 694 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

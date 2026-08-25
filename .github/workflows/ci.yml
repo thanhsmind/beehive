@@ -99,7 +99,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          cargo test --release --manifest-path packages/bee-rs/Cargo.toml 2>&1 | tee verify-output.log
+          cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml 2>&1 | tee verify-output.log
 
       # Freshness only matters on the green path — the default step condition
       # already skips these after the verify step above fails.

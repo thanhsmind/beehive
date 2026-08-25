@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "feature": "escalate-off-disarm",
+  "feature": "role-surface-cleanup",
   "mode": null,
   "phase": "idle",
   "approved_gates": {
@@ -10,9 +10,9 @@
     "review": false,
     "uat": true
   },
-  "summary": "Feature \"escalate-off-disarm\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"escalate-off-disarm\" — feature is closed.",
-  "created_at": "2026-08-25T15:35:39.377Z",
+  "summary": "Feature \"role-surface-cleanup\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"role-surface-cleanup\" — feature is closed.",
+  "created_at": "2026-08-25T15:45:14.424Z",
   "run_state": "shaping",
   "waiting_on": null,
   "route": {
@@ -21,15 +21,15 @@
     "flags": [
       "covered-contract-change"
     ],
-    "product_files": 4,
+    "product_files": 6,
     "rationale": null,
-    "updated_at": "2026-08-25T15:35:43.538Z",
-    "feature": "escalate-off-disarm"
+    "updated_at": "2026-08-25T15:45:20.188Z",
+    "feature": "role-surface-cleanup"
   },
   "last_scribing_run": {
-    "feature": "escalate-off-disarm",
+    "feature": "role-surface-cleanup",
     "date": "2026-08-25",
-    "at": "2026-08-25T21:34:09.491Z",
+    "at": "2026-08-25T21:34:09.510Z",
     "areas_synced": [
       "doctrine-layer"
     ],

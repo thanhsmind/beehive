@@ -1857,10 +1857,12 @@ fn plan_role_migration(cell: &Map<String, Value>) -> RoleMigration {
         }
     }
     // D5: the legacy escalation spelling, and whether it has already been
-    // converted. A cell that carries the flag is done, whichever pass put
-    // it there.
+    // converted. A cell that carries the flag key AT ALL is done, whichever
+    // pass or operator put it there — escalate-off-disarm D1: an explicit
+    // false is a recorded disarm, and re-deriving true from the tier string
+    // would silently reverse the operator's act on the next run.
     plan.escalate = matches!(tier.map(js_trim), Some(t) if t == crate::verbs::drivers::ESCALATION_WORD)
-        && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true)));
+        && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(_)));
     // D4: the escalation reason under its retired key. Renamed only when
     // the new key is not already there, so a record migrated once is never
     // rewritten and never has its current reason overwritten by a stale one.
@@ -1910,9 +1912,17 @@ fn record_role_migration(report: &mut RoleBackfill, plan: &RoleMigration) {
 }
 
 /// One full pass. Scans EVERY stored cell and builds the whole plan before
-/// it writes a single file, so the counts a caller reads describe the same
-/// store state the writes were derived from — a half-scanned store would
-/// misreport exactly the way a half-migrated one would.
+/// it writes a single file. Count provenance is split, and deliberately so
+/// (role-edge-hardening D1): the mutation counts — `assigned`, `escalated`,
+/// `reasons_renamed`, `written`, `changed_during_pass` — are folded from the
+/// under-lock pass, so they describe what was actually written.
+/// `already_roled` and `unmapped` come from the unlocked scan, corrected for
+/// the one way they can move: a planned cell whose fresh under-lock reading
+/// shows a role it lacked at scan time is counted into `already_roled`
+/// (`role` has no removal door, so the count can drift in no other
+/// direction). Recounting the REST of the store under the lock would hold
+/// the archive lock across a full re-scan — the exact refusal-for-a-second
+/// this design exists to avoid.
 ///
 /// Concurrency: the scan runs UNLOCKED, deliberately. A 40 000-cell store
 /// takes about a second to scan, and holding the archive lock across it
@@ -1951,7 +1961,7 @@ pub(crate) fn backfill_roles_interleaved(
     between_scan_and_write: impl FnOnce(),
 ) -> MR<RoleBackfill> {
     let mut report = RoleBackfill::default();
-    let mut plan: Vec<(PathBuf, RoleMigration)> = Vec::new();
+    let mut plan: Vec<(PathBuf, RoleMigration, bool)> = Vec::new();
 
     for file in stored_cell_files(root) {
         report.scanned += 1;
@@ -1976,11 +1986,11 @@ pub(crate) fn backfill_roles_interleaved(
         if planned.is_noop() {
             continue;
         }
-        plan.push((file, planned));
+        plan.push((file, planned, has_role));
     }
 
     if dry_run {
-        for (_, planned) in &plan {
+        for (_, planned, _) in &plan {
             record_role_migration(&mut report, planned);
         }
         return Ok(report); // `written` stays 0 — nothing was opened for writing
@@ -1993,7 +2003,7 @@ pub(crate) fn backfill_roles_interleaved(
     let mut applied: Vec<RoleMigration> = Vec::new();
     let mut changed: Vec<String> = Vec::new();
     let outcome = (|| -> MR<()> {
-        for (file, planned) in &plan {
+        for (file, planned, had_role_at_scan) in &plan {
             let fresh = match read_json(file) {
                 ReadJson::Parsed(Value::Object(map)) => map,
                 // Gone or unreadable since the scan: archived out from under
@@ -2005,6 +2015,12 @@ pub(crate) fn backfill_roles_interleaved(
                     continue;
                 }
             };
+            // A role gained during the scan window is counted from the fresh
+            // reading — `role` has no removal door, so this is the one
+            // direction `already_roled` can drift (see the fn doc).
+            if !had_role_at_scan && nonblank_string(fresh.get("role")) {
+                report.already_roled += 1;
+            }
             let agreed = planned.still_agreed(&plan_role_migration(&fresh));
             if agreed != *planned {
                 changed.push(store_relative(root, file));

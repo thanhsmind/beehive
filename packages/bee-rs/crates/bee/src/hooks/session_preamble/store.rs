@@ -311,10 +311,18 @@ pub(crate) fn global_scribing_debt(root: &Path) -> (usize, Vec<(String, Vec<Valu
 /// so it reads the same two constants the published predicate reads: a rename
 /// there fails the build here rather than silently zeroing this counter.
 fn map_is_escalated(cell: &JMap) -> bool {
-    if matches!(cell.get(crate::verbs::cells::ESCALATE_FIELD), Some(Value::Bool(true))) {
-        return true;
+    match cell.get(crate::verbs::cells::ESCALATE_FIELD) {
+        Some(Value::Bool(true)) => true,
+        // escalate-off-disarm D1: mirror of cell_is_escalated's
+        // explicit-false arm — a recorded disarm outranks the legacy
+        // spelling here too, or the preamble counts a cell the ration
+        // no longer does.
+        Some(Value::Bool(false)) => false,
+        _ => matches!(
+            cell.get("tier"),
+            Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD
+        ),
     }
-    matches!(cell.get("tier"), Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD)
 }
 
 /// cells.mjs ceilingScarcityWarning -> (pct, escalated, cells).

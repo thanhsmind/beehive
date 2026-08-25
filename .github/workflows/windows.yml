@@ -61,7 +61,7 @@ jobs:
         run: npm i -g opencode-ai@1.18.16
 
       - name: Verify chain (full suite, no exclusions)
-        run: cargo test --release --manifest-path packages/bee-rs/Cargo.toml
+        run: cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml
 
   install-ps1-syntax:
     runs-on: windows-latest

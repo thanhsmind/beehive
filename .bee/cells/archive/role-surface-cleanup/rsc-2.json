@@ -1,0 +1,68 @@
+{
+  "id": "rsc-2",
+  "feature": "role-surface-cleanup",
+  "lane": "standard",
+  "role": "code",
+  "title": "Give CI the no-fail-fast the local suite already learned",
+  "action": "Both CI jobs stop at the first red test TARGET, so later targets go unrun while the summary reads like a full pass - the exact hole that hid a red registry_dispatch locally. Add --no-fail-fast to the cargo test invocation in .github/workflows/ci.yml (:102, inside the set -o pipefail block - keep the pipefail and the tee) and .github/workflows/windows.yml (:64). Touch nothing else in either workflow. The third copy, commands.test in .bee/config.json, is already patched on main - verify it carries --no-fail-fast and say so in the cap rather than re-editing.",
+  "files": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/windows.yml"
+  ],
+  "must_haves": {
+    "truths": [
+      "Both workflow cargo test invocations carry --no-fail-fast",
+      "set -o pipefail and the tee capture in ci.yml are untouched",
+      "Nothing else in either workflow changes - the diff is two lines",
+      "commands.test in .bee/config.json verified to already carry --no-fail-fast"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "role-surface-cleanup D1"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": "both CI jobs and the declared commands.test run with no-fail-fast; a red target can no longer hide the targets behind it",
+    "files_changed": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/windows.yml",
+      ".bee/config.json"
+    ],
+    "deviations": [
+      "Executed inline; reason on trace.inline_reason.",
+      "files declares .bee/config.json though it is state, because the proof-gate parity makes it part of this change contract"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T15:51:20.270Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T15:46:01.414Z",
+    "inline_reason": "Two-line workflow change plus the config parity the proof gate enforces; orchestrator held the whole diagnosis.",
+    "report": {
+      "outcome": "Both workflow cargo test invocations carry no-fail-fast; pipefail and the tee capture untouched; commands.test moved in the same change because proof_gate pins CI byte-for-byte against it and went red the moment the workflows moved alone.",
+      "commit": "870221cd",
+      "files": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/windows.yml",
+        ".bee/config.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test proof_gate — green, 3 passed, and the full suite green in the same run but for the two node-missing environmental fails — the parity test is the exact gate this cell changes, so it is the scope",
+      "deviations": [
+        "Executed inline; reason on trace.inline_reason.",
+        "files declares .bee/config.json though it is state, because the proof-gate parity makes it part of this change contract"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
