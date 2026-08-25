@@ -31,19 +31,44 @@
     "06e49368"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "mrs-w8",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "bee cells add requires a non-empty role with a typed FIX line; membership never checked; 7 dispatched fixtures given roles, 159 never-resolved ones left roleless by rule",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "write_guard/tests.rs was reserved but left untouched: all 7 of its .bee/cells/ mentions are guard INPUT path strings (and one stage_file writing the literal x), never cell-shaped JSON, so it holds zero fixtures the role field can reach",
+      "Fixture sweep scoped by ownership, not abandoned: nothing in production reads a cell role today (proved by grep — the cell record tier is read at prepare.rs:823/:1414/:1699 and status_full/cells.rs:584 only), so the fixtures that will resolve a role live in drivers/tests.rs, which is cell mrs-9 own declared file. Reported rather than reached into.",
+      "D8 vocabulary shipped in the FIX line only; the help string and every authoring surface belong to mrs-11, which is open and names those files",
+      "sync-ack: The authoring-surface half of D7/D8 is cell mrs-11's declared scope (skills/bee-planning/references/planning-reference.md, skills/bee-herding/references/dispatch-dry-run.md, docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md); mrs-8's files list carries only the validator and its tests, so editing those skills here would write through another cell's scope."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T04:31:06.260Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T04:19:34.332Z"
+    "claimed_at": "2026-08-25T04:19:34.332Z",
+    "sync_ack": "The authoring-surface half of D7/D8 is cell mrs-11's declared scope (skills/bee-planning/references/planning-reference.md, skills/bee-herding/references/dispatch-dry-run.md, docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md); mrs-8's files list carries only the validator and its tests, so editing those skills here would write through another cell's scope.",
+    "report": {
+      "outcome": "bee cells add requires a non-empty role with a typed FIX line; validation is presence+shape only, never membership; the exact-problem-string test retargeted; 7 dispatched fixtures given roles, 159 never-resolved ones left roleless by a written rule",
+      "commit": "cb51441c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee — green (2592 passed, 0 failed) — the whole bee unit suite in release, which carries every cells/validate, drivers/prepare and model-guard test the role field can reach; the full declared verify adds crates/bee/tests/opencode_plugin_contracts.rs, whose 4 failures are the orchestrator-verified node-v24.19.0 TypeScript-stripping environment limit and touch no code this cell changed",
+      "deviations": [
+        "write_guard/tests.rs was reserved but left untouched: all 7 of its .bee/cells/ mentions are guard INPUT path strings (and one stage_file writing the literal x), never cell-shaped JSON, so it holds zero fixtures the role field can reach",
+        "Fixture sweep scoped by ownership, not abandoned: nothing in production reads a cell role today (proved by grep — the cell record tier is read at prepare.rs:823/:1414/:1699 and status_full/cells.rs:584 only), so the fixtures that will resolve a role live in drivers/tests.rs, which is cell mrs-9 own declared file. Reported rather than reached into.",
+        "D8 vocabulary shipped in the FIX line only; the help string and every authoring surface belong to mrs-11, which is open and names those files"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

@@ -12,7 +12,7 @@
   "read_first": [
     "docs/history/model-role-split/CONTEXT.md"
   ],
-  "action": "Slice 3, D3 (store 3c9d6262) with its literal lists fixed by decision 561e1bda. A cell-execution dispatch asks for the ordered list [<the cell's own role>, code, generation]; a read dispatch asks [read, extraction, generation]; a review dispatch asks [review, generation]; the advisor asks [advisor] ALONE with no fall-through, preserving decision 4faf1de9. THE TAIL IS LOAD-BEARING AND NOT DECORATION: fall-through walks to the first name that resolves, so ending a list at code would skip past the generation model every existing host has configured for years and land on bee's built-in default — a silent migration onto a different model, the exact defect this feature exists to remove. Read 561e1bda before changing any list. prepare.rs already prefers a cell's own recorded value over the kind default and stamps tier_source cell (the mechanism mrs-5 extended with --role, stamping tier_source flag); reuse it, do not add a second path. Precedence to preserve: an explicit --role names the slot directly; otherwise the cell's role heads the list; otherwise the kind's default. Record on the cap what tier_source values a caller can now observe and when.",
+  "action": "Slice 3, D3 (store 3c9d6262) with its literal lists fixed by decision 561e1bda. A cell-execution dispatch asks for the ordered list [<the cell's own role>, code, generation]; a read dispatch asks [read, extraction, generation]; a review dispatch asks [review, generation]; the advisor asks [advisor] ALONE with no fall-through, preserving 4faf1de9. THE TAIL IS LOAD-BEARING: fall-through walks to the first name that resolves, so ending a list at code would skip past the generation model every existing host has configured for years and land on bee's built-in default — a silent migration onto a different model, the exact defect this feature exists to remove. Read 561e1bda before changing any list. prepare.rs already prefers a cell's own recorded value over the kind default and stamps tier_source cell (the mechanism mrs-5 extended with --role, stamping tier_source flag); reuse it, do not add a second path. Precedence to preserve: an explicit --role names the slot directly; otherwise the cell's role heads the list; otherwise the kind's default. Record on the cap what tier_source values a caller can now observe and when. SECOND JOB, handed over by mrs-10 (commit 6b084dcc) and NOT optional: resolve_role emits a warning for any name absent from BOTH the host config and drivers::default_models. On an EXISTING host, code and read are exactly that, so with these lists every single cell dispatch would warn. A warning that fires on every dispatch is a warning operators learn to ignore, and this feature's entire safety rests on that warning being believed — so silencing it correctly is part of this cell, not a follow-up. Two candidate fixes, and you choose with the reason on the cap. (a) drivers::default_models gains code and read. mrs-10 observed that mid-list entries never consult default_models — resolve_role reaches it only at the LAST entry — so this should silence the membership-based warn WITHOUT changing which model resolves anywhere. VERIFY that claim in the code before relying on it; if it is wrong, (a) is a silent migration and must be rejected. (b) Narrow the warn to the name the CALLER actually asked for — the head of the list, or an explicit --role — and stay silent while walking bee's own tail, since a tail entry is bee's plumbing and not the operator's request. Whichever you take, prove BOTH properties on the cap: no dispatch on an existing host warns routinely, AND a cell naming a genuinely unconfigured job role (say role: test with no models.<runtime>.test) still warns loudly. Losing that second property would defeat the feature.",
   "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "must_haves": {
     "truths": [
@@ -20,7 +20,9 @@
       "A cell whose role nothing configures falls through to the historical name and runs exactly where it ran before this feature — no host sees a model change without opting in",
       "--role still names the slot directly and outranks the cell's role",
       "The advisor list has no fall-through",
-      "The cap names every tier_source value a caller can observe and the condition for each"
+      "No dispatch on an existing host warns routinely — the code/read tail is silent",
+      "A cell naming a genuinely unconfigured job role still warns loudly; the warn is not blanket-silenced",
+      "The cap names every tier_source value a caller can observe and the condition for each, and states which warn fix was taken and why"
     ]
   },
   "affects_skills": [],
@@ -33,9 +35,9 @@
   "deps": [
     "mrs-8"
   ],
-  "status": "open",
+  "status": "claimed",
   "trace": {
-    "worker": null,
+    "worker": "mrs-w9",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -45,6 +47,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:31:50.991Z"
   }
 }

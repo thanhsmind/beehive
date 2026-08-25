@@ -1,0 +1,75 @@
+{
+  "id": "ocr-1",
+  "feature": "opencode-contract-reds",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Stop the belt-parity gate calling a telemetry probe a blocking rule, and unpin the tool anchors from a minifier name",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee/hooks/claude-hooks.json"
+  ],
+  "action": "TWO reds in packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs, already diagnosed. They are DIFFERENT problems and neither is fixed by relaxing an assertion. Both fixes stay inside this one test file; change nothing in src/.\n\n=== RED 1 (real, red in CI since 2026-08-22) ===\nthree_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode panics at :1253 with 'BLOCKING rule \"activity\" has no claude PreToolUse matcher to derive a tool name from'.\nCAUSE: derive_catalog (~:288) sets row.blocking = true for EVERY entry under the PreToolUse event of packages/bee/hooks/claude-hooks.json and hooks.json. bee-activity.mjs is registered on PreToolUse with no matcher (hooks_wiring.rs:97-103 -- and also on UserPromptSubmit, PostToolUse, PostToolUseFailure, PermissionRequest, Notification): it is a pure OBSERVER that records activity and can never deny. Registered-on-PreToolUse is therefore not the same fact as can-block, and the catalog currently conflates them. Verified present at origin/main, so CI has been red on this since f80734ba.\nFIX: make `blocking` mean what the belt gate needs it to mean -- the rule can emit a blocking verdict -- and make the exception NAMED, never silent. Add a documented const beside the catalog, e.g.\n  /// Rules that ride PreToolUse to OBSERVE, never to deny. ...\n  const NON_BLOCKING_PRETOOLUSE_RULES: &[&str] = &[\"activity\"];\nand in derive_catalog only set row.blocking = true for a PreToolUse entry whose rule is not in that list (still record the matchers either way, so nothing else loses information). Write the doc comment so it says WHY activity is there: it is an observer wired on six events, it carries no matcher because it watches every tool, and emittable_shapes (:178) has no emit-path source for it precisely because it has none.\nTHE LIST MUST NOT BECOME A HIDING PLACE. Add a companion #[test] that, for every id in NON_BLOCKING_PRETOOLUSE_RULES, asserts the rule really has no blocking emit path -- i.e. it is NOT one of the rules emittable_shapes knows a source for (write-guard, model-guard), and its own hook source carries none of the three verdict markers emittable_shapes looks for ('emit.code = 2' / 'Ok((2,', '\"updatedInput\".into()', 'Value::String(\"ask\".into())'). If a future rule with a real deny path is added to the list, that test must go red. Also assert the list is non-empty and that every id in it actually appears under PreToolUse in the manifests, so a stale entry cannot rot there unnoticed.\nDo NOT touch emittable_shapes' panic arm -- it is a deliberate tripwire for an unknown BLOCKING rule and must keep firing.\n\n=== RED 2 (local only; CI is green on it, and this fix keeps it that way) ===\nevery_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap panics at :1567 with 'opencode binary: additional tool anchor for \"invalid\" not found'.\nCAUSE: ADDITIONAL_TOOL_ANCHORS (:1497-1501) anchors on `V(\"invalid\",s.succeed({description:\"Do not use\"`, `V(\"plan_exit\",s.gen`, `V(\"lsp\",s.gen`. The leading `V(` is a MINIFIER-GENERATED identifier in the opencode bundle, and it is not stable across opencode builds. .github/workflows/ci.yml:77 pins opencode-ai@1.18.16, where `V` still matches; a developer machine on a newer build (1.18.21 here) gets a different letter and the assert fires. Measured against the installed 1.18.21 binary: `V(\"invalid\"` 0 hits, `V(\"lsp\"` 0 hits, but `\"invalid\",s.succeed({description:\"Do not use\"` 1 hit, `\"plan_exit\",s.gen` 1 hit, `\"lsp\",s.gen` 1 hit. `permission:\"webfetch\"` (an UNMAPPED_SET_TOOL_ANCHORS entry) still matches, which is why only these three broke.\nFIX: drop the leading `V(` from all three ADDITIONAL_TOOL_ANCHORS entries, leaving the quoted tool id and the values-based body that follows. That substring is present in BOTH 1.18.16 (proven by CI being green today with the longer anchor, which contains it) and 1.18.21 (measured above), so the change cannot turn CI red. Update the const's doc comment to record the rule the anchors now follow: anchor on the tool id and its real registration values, never on a minifier-chosen identifier. Leave UNMAPPED_SET_TOOL_ANCHORS alone -- those are already values-based.\n\nPROOF: run the whole opencode_plugin_contracts target and show it green, and run the full declared suite so nothing else moved.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode is green, and write-guard and model-guard are still held to all three belts",
+      "The activity exception is a named const with a doc comment saying why, not a silent skip",
+      "A companion test fails if a rule with a real deny/repair/ask emit path is ever added to the non-blocking list, and if a listed id stops appearing under PreToolUse",
+      "emittable_shapes still panics for an unknown BLOCKING rule",
+      "every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap is green against the installed opencode, with anchors that carry no minifier-generated identifier",
+      "The full declared suite is green"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "ocr-w1",
+    "outcome": "Belt-parity gate derives BLOCKING from PreToolUse plus matcher; opencode tool anchors dropped their minifier prefix",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [
+      "Orchestrator corrected RED 1 mid-flight: no NON_BLOCKING_PRETOOLUSE_RULES const and no companion list-audit test. A name list is what docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-lists.md forbids, and it would let the next matcher-less PreToolUse hook through silently. Narrowed the derived predicate instead: row.blocking is now set inside the matcher Some arm in both derive_catalog loops, so BLOCKING means wired-under-PreToolUse-WITH-a-matcher.",
+      "emittable_shapes is byte-for-byte untouched; its unknown-BLOCKING-rule panic arm stays a tripwire.",
+      "The second row.blocking consumer at :1413 (advisory_gaps_the_plugin_does_not_wire_are_named_not_silent) meant activity became ADVISORY and needed a named gap. Added one table row to docs/history/opencode-support/discovery.md, a file the cell did not list; reserved under ocr-w1 before writing, on the explicit instruction of the orchestrator.",
+      "The cell text said the activity matcher arrives as JSON null. Measured: the matcher key is ABSENT in claude-hooks.json:56-64. Both spellings reach events_map as None; the doc comment records the corrected fact.",
+      "RED 2 root cause refined by measurement: the minified helper identifier is V in opencode-ai@1.18.16 and j in 1.18.21, one character, the rest byte-identical. Each shortened anchor has exactly 1 hit in the installed 1.18.21 bundle. Classification is unchanged by the fix (invalid and plan_exit stay Some(false), lsp stays mapped), so the verdict of the gate does not move.",
+      "s.gen and s.succeed are still minified identifiers and were kept deliberately, because the bare tool ids are not unique anchors. Recorded as a named trade in the doc comment of the const, with the stale 1.18.16-only citations updated to name the drift."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T04:44:47.283Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "49e28775-6532-4090-9f4e-39c083ae7af2",
+    "claimed_at": "2026-08-25T04:36:56.098Z",
+    "report": {
+      "outcome": "Belt-parity gate now derives BLOCKING from PreToolUse plus matcher (the observer probe is reclassified as a named advisory gap), and the three opencode tool anchors dropped their minified-identifier prefix",
+      "commit": "5bbe38b6001d03b4bdd3ccfb537e7d2cccea9f1a",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+        "docs/history/opencode-support/discovery.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts — green — 5/5 in the only target either changed file feeds; the full declared suite was also run and its one red (registry_dispatch::every_namespace_the_dispatcher_serves_is_declared_in_the_registry, undeclared bee herding agent-start/pane/pane-id/result) is pre-existing and unrelated: it compiles from src/generated/registry_payload.json plus the herding dispatcher, and this cell modified neither",
+      "deviations": [
+        "Orchestrator corrected RED 1 mid-flight: no NON_BLOCKING_PRETOOLUSE_RULES const and no companion list-audit test. A name list is what docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-lists.md forbids, and it would let the next matcher-less PreToolUse hook through silently. Narrowed the derived predicate instead: row.blocking is now set inside the matcher Some arm in both derive_catalog loops, so BLOCKING means wired-under-PreToolUse-WITH-a-matcher.",
+        "emittable_shapes is byte-for-byte untouched; its unknown-BLOCKING-rule panic arm stays a tripwire.",
+        "The second row.blocking consumer at :1413 (advisory_gaps_the_plugin_does_not_wire_are_named_not_silent) meant activity became ADVISORY and needed a named gap. Added one table row to docs/history/opencode-support/discovery.md, a file the cell did not list; reserved under ocr-w1 before writing, on the explicit instruction of the orchestrator.",
+        "The cell text said the activity matcher arrives as JSON null. Measured: the matcher key is ABSENT in claude-hooks.json:56-64. Both spellings reach events_map as None; the doc comment records the corrected fact.",
+        "RED 2 root cause refined by measurement: the minified helper identifier is V in opencode-ai@1.18.16 and j in 1.18.21, one character, the rest byte-identical. Each shortened anchor has exactly 1 hit in the installed 1.18.21 bundle. Classification is unchanged by the fix (invalid and plan_exit stay Some(false), lsp stays mapped), so the verdict of the gate does not move.",
+        "s.gen and s.succeed are still minified identifiers and were kept deliberately, because the bare tool ids are not unique anchors. Recorded as a named trade in the doc comment of the const, with the stale 1.18.16-only citations updated to name the drift."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

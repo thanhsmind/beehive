@@ -9,17 +9,19 @@
     "skills/bee-planning/references/planning-reference.md",
     "skills/bee-herding/references/dispatch-dry-run.md",
     "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+    ".bee/config-sample.json",
     "docs/history/codex-harness-hardening/release-manifest.json"
   ],
   "read_first": [
     "docs/history/model-role-split/CONTEXT.md"
   ],
-  "action": "Slice 3, the authoring-surface half of D7 and D8. The moment mrs-8 makes role required, every shipped cell payload example that omits it advertises a payload bee cells add now REFUSES — and this repo builds itself with bee, so an agent following planning-reference.md would author a refused cell. The plan moved this edit into slice 3 beside the field for exactly that reason. Add role to every cell payload example in the named files, and state D8's recommended vocabulary — code, read, test, docs, review, design — as GUIDANCE, explicitly noting that any name is legal and that an unconfigured name falls through with a warning rather than failing. Do NOT hand-edit the mirror trees under .claude/, .codex-plugin/, .opencode/ and .claude-plugin/: skills/ is the source and the mirrors are rendered, differing from it by intended runtime-conditional blocks. Run the regen chain inside this cell — bee dev regen — and let it write them. PROOF NOTE: the mirrors are NOT byte-identical to skills/, so the proof is that regen runs clean and bee dev release-manifest --check passes; never a byte-identity diff.",
+  "action": "Slice 3, the authoring-surface half of D7 and D8. The moment mrs-8 makes role required, every shipped cell payload example that omits it advertises a payload bee cells add now REFUSES — and this repo builds itself with bee, so an agent following planning-reference.md would author a refused cell. The plan moved this edit into slice 3 beside the field for exactly that reason. Add role to every cell payload example in the named files, and state D8's recommended vocabulary — code, read, test, docs, review, design — as GUIDANCE, explicitly noting that any name is legal and that an unconfigured name falls through with a warning rather than failing. SECOND JOB, added after mrs-10 capped: .bee/config-sample.json documents models.<runtime> as extraction/generation/review/advisor and no longer mirrors what a fresh onboarding writes. mrs-10 (commit 6b084dcc) decided a fresh config publishes code and read as well, and deliberately does NOT publish review or advisor — because those two already resolve without a config key, so a default for either would silently decide a product question (review: opus moves a new host's reviews off the documented unset-review-inherits-generation posture, and advisor has no fall-through per 4faf1de9, so a value switches the advisor on for everyone while an explicit null spells off). The sample is embedded by include_str!, so it must match what onboarding writes and must not imply review or advisor are shipped. Do NOT hand-edit the mirror trees under .claude/, .codex-plugin/, .opencode/ and .claude-plugin/: skills/ is the source and the mirrors are rendered, differing from it by intended runtime-conditional blocks. Run the regen chain inside this cell — bee dev regen — and let it write them. PROOF NOTE: the mirrors are NOT byte-identical to skills/, so the proof is that regen runs clean and bee dev release-manifest --check passes; never a byte-identity diff.",
   "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools && .bee/bin/bee dev release-manifest --check",
   "must_haves": {
     "truths": [
       "No shipped cell payload example omits the now-required role field",
       "The recommended vocabulary is stated as guidance, with any-name-is-legal and the fall-through-warns behaviour said plainly",
+      ".bee/config-sample.json mirrors what a fresh onboarding actually writes, and does not imply review or advisor ship as defaults",
       "The mirror trees are written by regen, not by hand, and bee dev release-manifest --check passes"
     ]
   },
@@ -34,18 +36,46 @@
   "deps": [
     "mrs-8"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "mrs-w11",
+    "outcome": "Added role to every cell payload example and stated D8's vocabulary as guidance; brought .bee/config-sample.json's models block in line with a fresh onboarding write",
+    "files_changed": [
+      "skills/bee-planning/references/planning-reference.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      ".bee/config-sample.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "skills/bee-herding/references/dispatch-dry-run.md left untouched: it is a verbatim recorded proof transcript with no cell-payload example and no lane/role/tier field to update (its only lane mentions are PBI-classifier output, unrelated to the cell schema) -- confirmed by full-file search before leaving it out of the commit",
+      "sync-ack: bee-herding predicted but not touched: skills/bee-herding/references/dispatch-dry-run.md was read and confirmed to hold no cell-payload example and no lane/role/tier field needing a change (a verbatim recorded proof transcript whose only lane mentions are PBI-classifier output) -- left untouched by named deviation, not an oversight"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-25T04:39:31.306Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:31:49.295Z",
+    "sync_ack": "bee-herding predicted but not touched: skills/bee-herding/references/dispatch-dry-run.md was read and confirmed to hold no cell-payload example and no lane/role/tier field needing a change (a verbatim recorded proof transcript whose only lane mentions are PBI-classifier output) -- left untouched by named deviation, not an oversight",
+    "report": {
+      "outcome": "Added role to every cell payload example and stated D8's vocabulary as guidance; brought .bee/config-sample.json in line with a fresh onboarding write",
+      "commit": "7c609576",
+      "files": [
+        "skills/bee-planning/references/planning-reference.md",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        ".bee/config-sample.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools && bee dev release-manifest --check — green: 86 devtools tests passed, manifest check reports 270 files matching after regen — scope is the docs/config-sample content this cell touched plus the regen it triggered, not the whole suite",
+      "deviations": [
+        "skills/bee-herding/references/dispatch-dry-run.md left untouched: it is a verbatim recorded proof transcript with no cell-payload example and no lane/role/tier field to update (its only lane mentions are PBI-classifier output, unrelated to the cell schema) -- confirmed by full-file search before leaving it out of the commit"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 155 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
