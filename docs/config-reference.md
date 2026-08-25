@@ -131,7 +131,7 @@ Every role slot — a seeded one, `review`, `advisor`, or a name you invented �
   | `fable` | Fable 5 | `claude-fable-5` |
 
   You **cannot pin an exact sub-version** for a Claude Code subagent — the model param is family-alias only, and it tracks the latest of each family as Anthropic ships new ones. (For **Codex**, the `codex` roles take the runtime's real model ids, e.g. `"gpt-5"`, because that runtime addresses models by id.)
-- `bee status` prints the active map (`Models (claude): code=… read=… extraction=… generation=…`) plus the `role_mix` and its escalated share, and warns when too many cells run escalated — the cost lever erodes when the strongest model touches most dispatches.
+- `bee status` prints the active map — every role the runtime configures, bee's own dispatch roles first and the rest in config order, e.g. `Models (claude): generation=… review=… extraction=… test=…` — plus the `role_mix` and its escalated share, and warns when too many cells run escalated — the cost lever erodes when the strongest model touches most dispatches.
 
 ### Runtimes: Claude Code, Codex, and OpenCode — and everything else (agy, …)
 
