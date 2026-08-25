@@ -658,6 +658,53 @@ use std::time::Instant;
         );
     }
 
+    /// D1 (store `cd72ec97`) — mrs-24 collapsed `resolve_advisor` onto the ONE
+    /// leaf parser, and this is what keeps it collapsed. For every documented
+    /// value shape the advisor slot and an ordinary role slot must resolve to
+    /// the SAME `Resolved`: a second advisor-only parser would have to diverge
+    /// on one of these rows to be worth having, and divergence is precisely
+    /// what D1 removed — the two copies had already been edited in lockstep
+    /// twice (herding-tier D1, then herding-review-slots D1/D2) before this.
+    ///
+    /// What is genuinely the advisor's own is its WALK, not its parse: one
+    /// name, no fall-through, no `Budget` floor (decision `4faf1de9`). That is
+    /// the single asymmetry the `None` arm below pins.
+    #[test]
+    fn the_advisor_slot_parses_a_value_exactly_as_any_other_role_does() {
+        for shape in [
+            r#""opus""#,
+            r#"{"model":"opus"}"#,
+            r#"{"kind":"native","model":"opus"}"#,
+            r#"{"kind":"native","model":"opus","effort":"low","fork_turns":"none","agent_type":"reviewer"}"#,
+            r#"{"kind":"cli","command":"consult me"}"#,
+            r#"{"kind":"herding"}"#,
+            r#"{"kind":"herding","agent":"named-herd","fallback":"default"}"#,
+            r#"{"primary":{"kind":"native","model":"opus"},"fallback_policy":"explicit-only","fallback":{"kind":"cli","command":"consult me"}}"#,
+            "null",
+        ] {
+            let as_advisor = resolve_advisor(
+                &models_from(&format!(r#"{{"claude":{{"advisor":{shape}}}}}"#)),
+                "claude",
+            );
+            // `design` is any other name at all — the point is that nothing
+            // about the WORD "advisor" changes how the leaf is read.
+            let as_role = resolve_role(
+                &models_from(&format!(r#"{{"claude":{{"design":{shape}}}}}"#)),
+                &["design"],
+                "claude",
+                "advisor",
+            );
+            match as_advisor {
+                Some(r) => assert_eq!(r, as_role, "shape {shape}: advisor and role disagree"),
+                None => assert_eq!(
+                    as_role,
+                    Resolved::Budget,
+                    "shape {shape}: the advisor's None is a walk difference, not a parse one"
+                ),
+            }
+        }
+    }
+
     // opencode-support E4/S4: `models.opencode` used to be silently dropped
     // (RUNTIMES only listed claude/codex) — docs/config-reference.md called
     // this "dead config that never resolves". It is now a real third key.
@@ -5684,6 +5731,72 @@ use std::time::Instant;
         let configured = repo(&tmp2, r#"{"models":{"claude":{"generation":"sonnet","test":"grok"}}}"#);
         let models2 = read_models(&configured).unwrap();
         assert!(!role_is_unknown(&models2, "claude", "test"));
+    }
+
+    /// mrs-24 (store `fef79243`) — the silence above is a MIGRATION WINDOW,
+    /// and this is the assertion that it SHUTS.
+    ///
+    /// An audit found the suppression unconditional: `code` and `read` were
+    /// exempt on every host forever, so a host that had opted in and then
+    /// missed one of the two keys resolved that name silently for good —
+    /// exactly the "silently accepted" case D2 (store `06e49368`) forbids,
+    /// sheltering behind mrs-9's noise argument long after the noise it
+    /// described was gone. The window keeps mrs-9's silence where it was
+    /// earned (a host that configured NEITHER name, where falling through to
+    /// the historical model is the intended no-op) and nowhere else.
+    #[test]
+    fn opting_into_one_asked_role_makes_the_missing_sibling_warn() {
+        // Un-migrated: the window is open, so both of bee's own names are
+        // silent — this is the property the test above pins, restated here as
+        // the baseline the rest of this test moves away from.
+        let tmp = tempfile::tempdir().unwrap();
+        let pre = read_models(&repo(&tmp, HOST_BEFORE_ROLES)).unwrap();
+        assert!(!host_opted_into_roles(&pre, "claude"), "the pre-roles fixture has not opted in");
+        for name in ASKED_ROLES {
+            assert!(!role_is_unknown(&pre, "claude", name), "{name}: the window is open");
+        }
+
+        // Half-migrated: `code` is configured, so this operator KNOWS about
+        // the role names. The key they missed is now something they can act
+        // on, so it warns like any other unconfigured name.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let half = read_models(&repo(
+            &tmp2,
+            r#"{"models":{"claude":{"generation":"opus-custom","code":"sonnet-custom"}}}"#,
+        ))
+        .unwrap();
+        assert!(host_opted_into_roles(&half, "claude"));
+        assert!(!role_is_unknown(&half, "claude", "code"), "a configured name never warns");
+        assert!(
+            role_is_unknown(&half, "claude", "read"),
+            "the sibling key a half-migrated host missed must warn — this is the audit's defect"
+        );
+
+        // Fully migrated (what mrs-10 seeds into a fresh config): opted in and
+        // complete, so the window is shut and nothing warns anyway.
+        let tmp3 = tempfile::tempdir().unwrap();
+        let full = read_models(&repo(
+            &tmp3,
+            r#"{"models":{"claude":{"generation":"opus-custom","code":"sonnet-custom","read":"haiku-custom"}}}"#,
+        ))
+        .unwrap();
+        for name in ASKED_ROLES {
+            assert!(!role_is_unknown(&full, "claude", name), "{name} is configured");
+        }
+
+        // The window is PER RUNTIME, because the table is. Opting claude in
+        // says nothing about codex, whose dispatches would otherwise start
+        // warning over a migration their own config never saw.
+        let tmp4 = tempfile::tempdir().unwrap();
+        let mixed = read_models(&repo(
+            &tmp4,
+            r#"{"models":{"claude":{"code":"sonnet-custom"},"codex":{"generation":"gpt-5-custom"}}}"#,
+        ))
+        .unwrap();
+        assert!(host_opted_into_roles(&mixed, "claude"));
+        assert!(!host_opted_into_roles(&mixed, "codex"));
+        assert!(role_is_unknown(&mixed, "claude", "read"), "claude opted in; its gap is loud");
+        assert!(!role_is_unknown(&mixed, "codex", "read"), "codex never opted in; its window is open");
     }
 
     // ── mrs-19: the runtime fallback chain (D10/D11, store 50808d48) ───────

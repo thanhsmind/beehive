@@ -720,7 +720,7 @@ use std::time::Instant;
              addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike. \
-             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs (the dispatch falls through to the next name it asked for and warns)."
+             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it."
         );
         let base = |lane: &str| {
             json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "role": "code", "affects_skills": [], "affects_specs": []})
@@ -802,7 +802,7 @@ use std::time::Instant;
             "addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
                 .to_string(),
-            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs (the dispatch falls through to the next name it asked for and warns)."
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it."
                 .to_string(),
         ];
         assert_eq!(validate_new_cell_problems(root, &broken).unwrap(), expected);

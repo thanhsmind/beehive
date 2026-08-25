@@ -71,7 +71,30 @@ pub(crate) const CONFIGURABLE_SLOTS: [&str; 3] = ["extraction", "generation", "r
 /// single cell dispatch on every existing host, and a warning that always
 /// fires is a warning nobody reads; a name the OPERATOR invented (`test`,
 /// `design`) is in no table at all and still warns loudly.
+///
+/// mrs-24 (store `fef79243`) NARROWED that suppression to the case that
+/// earned it. It is a MIGRATION WINDOW, not a standing exemption: it applies
+/// only on a runtime whose table configures NEITHER of these names — a host
+/// from before the roles existed, where falling through to the historical
+/// name is the intended no-op upgrade and there is no better-fitting model to
+/// have picked. The first asked name an operator configures closes the window
+/// for that runtime, so a HALF-migrated config is loud about the sibling it
+/// missed instead of silent about it forever. That is the line between
+/// suppressing a warning nobody could act on and suppressing D2's
+/// (store `06e49368`) whole point.
 pub(crate) const ASKED_ROLES: [&str; 2] = ["code", "read"];
+
+/// Has this runtime opted into bee's own role names at all?
+///
+/// The one question that bounds the `ASKED_ROLES` migration window. Asked of
+/// the runtime's own table — never of `default_models`, which ships no entry
+/// for either name on any runtime, so a positive answer can only ever mean
+/// "the operator, or mrs-10's fresh-config seed, put it there".
+pub(crate) fn host_opted_into_roles(models: &Map<String, Value>, runtime: &str) -> bool {
+    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
+    let Some(table) = models.get(rt) else { return false };
+    ASKED_ROLES.iter().any(|name| table.get(name).is_some())
+}
 
 /// provenance: state.mjs DEFAULT_MODELS.
 pub(crate) fn default_models(runtime: &str) -> Map<String, Value> {
@@ -420,20 +443,34 @@ fn resolve_configured(value: &Value, name: &str, kind: &str) -> Option<Resolved>
 /// per-dispatch warning storm on an unconfigured runtime while leaving the
 /// misspelling loud.
 /// The exact question `resolve_role_named` asks before it warns — a name
-/// nothing has heard of: absent from `models.<runtime>`, absent from the
-/// built-in defaults, and not one of bee's own `ASKED_ROLES` tail names.
+/// nothing has heard of: absent from `models.<runtime>` and absent from the
+/// built-in defaults, with ONE bounded exception.
 ///
 /// Public because the warn itself goes to stderr, which an in-process test
 /// cannot read: this is how "no dispatch on an existing host warns routinely"
 /// is provable over a REAL config and the real ordered lists, rather than by
 /// re-asserting the constant against itself. One home, one answer — the
 /// resolver below asks this same function.
+///
+/// mrs-24 (store `fef79243`): the `ASKED_ROLES` exception is a MIGRATION
+/// WINDOW and is therefore tested LAST — after the configured check, and only
+/// against a runtime that has opted into neither asked name. The order is the
+/// fix. Asking "is this name configured" first is what makes a half-migrated
+/// host loud about the sibling key it missed, and what keeps this function's
+/// answer a fact about THIS host instead of a fact about two hard-coded
+/// words. The FIX text in `verbs/cells/validate.rs` states this one silent
+/// case out loud rather than promising a warn bee does not give.
 pub(crate) fn role_is_unknown(models: &Map<String, Value>, runtime: &str, name: &str) -> bool {
-    if ASKED_ROLES.contains(&name) {
+    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
+    if models.get(rt).and_then(|t| t.get(name)).is_some() || default_models(rt).contains_key(name) {
         return false;
     }
-    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
-    models.get(rt).and_then(|t| t.get(name)).is_none() && !default_models(rt).contains_key(name)
+    // The pre-roles window. Every ordered list bee asks for puts `code` or
+    // `read` ahead of the historical name, so warning here would fire on
+    // every dispatch of an un-migrated host — over bee's own plumbing, not
+    // over anything the operator wrote. Configure either name and the window
+    // shuts: from then on the missing sibling warns like any other name.
+    !(ASKED_ROLES.contains(&name) && !host_opted_into_roles(models, rt))
 }
 
 fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
@@ -605,56 +642,26 @@ pub(crate) fn tier_role_list(slot: &str) -> Vec<&str> {
 
 /// provenance: state.mjs resolveAdvisor — NEVER budget, NEVER a tier fallback;
 /// `None` unambiguously means "no advisor".
+///
+/// D1 (store `cd72ec97`) — COLLAPSED onto the one parser (mrs-24). What made
+/// this a standalone reader was never the value shapes: it read the identical
+/// string / cli / herding / native / composite / `{model, effort}` set that
+/// `resolve_configured` reads, in a different order, and the two had already
+/// been edited in lockstep twice (herding-tier D1, then herding-review-slots
+/// D1/D2) — the exact lockstep D1 exists to end. What is genuinely the
+/// advisor's own is the LIST it walks, and that list is one name with no
+/// fall-through and no `Budget` floor (decision `4faf1de9`): the advisor
+/// deliberately does not go through `resolve_role`, which always resolves its
+/// last entry. So this is the one-name walk spelled out, and the leaf parse
+/// is shared.
+///
+/// `Resolved::Refused` cannot come back: that arm fires only for a cli slot
+/// on a cell-execution purpose (`purpose_is_gather`), and an advisor consult
+/// is a gather purpose by definition.
 pub(crate) fn resolve_advisor(models: &Map<String, Value>, runtime: &str) -> Option<Resolved> {
     let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
     let value = models.get(rt).and_then(|t| t.get("advisor"))?;
-    if value.is_null() {
-        return None;
-    }
-    if let Value::String(model) = value {
-        return Some(Resolved::Model { model: model.clone(), effort: None });
-    }
-    let obj = value.as_object()?;
-    // herding-review-slots D1/D2: an advisor is one task in, one result out
-    // — the same shape as the herding-exec pane's own read-only job — so a
-    // herding-shaped advisor slot now resolves to Resolved::Herding
-    // (widening herding-tier D1's cell-only scope) instead of reading as
-    // "no advisor".
-    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
-        let agent = match obj.get("agent") {
-            Some(Value::String(s)) => Some(s.clone()),
-            _ => None,
-        };
-        let fallback = match obj.get("fallback") {
-            Some(Value::String(f)) if f == "default" => Some(f.clone()),
-            _ => None,
-        };
-        return Some(Resolved::Herding { agent, fallback });
-    }
-    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
-        return Some(Resolved::Cli {
-            command: match obj.get("command") {
-                Some(Value::String(c)) => c.clone(),
-                _ => return None, // `{type:'cli', command: undefined}` never reaches here post-normalize
-            },
-        });
-    }
-    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "native") {
-        return Some(native_resolved(obj, None));
-    }
-    if let Some(r) = composite_resolved(obj) {
-        return Some(r);
-    }
-    if let Some(Value::String(model)) = obj.get("model") {
-        return Some(Resolved::Model {
-            model: model.clone(),
-            effort: match obj.get("effort") {
-                Some(v) if truthy(v) => Some(jsjson::js_to_string(v)),
-                _ => None,
-            },
-        });
-    }
-    None
+    resolve_configured(value, "advisor", "advisor")
 }
 
 // ═══ the runtime fallback chain (model-role-split D10/D11) ═════════════════
