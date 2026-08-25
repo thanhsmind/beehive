@@ -44,6 +44,16 @@ use std::time::Instant;
         }
     }
 
+    /// A raw cell written STRAIGHT TO DISK — it never passes through
+    /// `validate_new_cell`, so D7's required `role` is deliberately absent
+    /// here and adding one would be noise on the ~130 tests that only claim,
+    /// close, schedule or list this fixture. The rule (recorded on cell
+    /// `mrs-8`): a fixture whose test RESOLVES or DISPATCHES it names its
+    /// role explicitly at the call site — see the `dispatch wave` and
+    /// `claim_and_reserve_for_dispatch` tests below, which set `tier` and
+    /// `role` together for exactly that reason. A fixture that is never
+    /// resolved stays roleless on purpose; the alternative is a blanket
+    /// default that would hide the very silence this feature exists to end.
     fn cell(id: &str, status: &str, feature: &str, deps: Value) -> Value {
         json!({
             "id": id,
@@ -709,10 +719,11 @@ use std::time::Instant;
              addCell: cell is missing required field \"verify\" (non-empty string). \
              addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
-             addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike."
+             addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike. \
+             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs (the dispatch falls through to the next name it asked for and warns)."
         );
         let base = |lane: &str| {
-            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "affects_skills": [], "affects_specs": []})
+            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "role": "code", "affects_skills": [], "affects_specs": []})
         };
         assert_eq!(
             thrown(validate_new_cell(root, &base("mega"))),
@@ -772,8 +783,15 @@ use std::time::Instant;
     fn validate_new_cell_problems_collects_every_problem_in_one_call() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        // Missing id, feature, action, verify, affects_skills, affects_specs —
-        // title present so it does not fire — plus an invalid lane.
+        // Missing id, feature, action, verify, affects_skills, affects_specs,
+        // role — title present so it does not fire — plus an invalid lane.
+        //
+        // RETARGETED for D7 (store `4eaf1b71`), never trimmed: `role` became
+        // required, so the joined list grew one sentence and the contract
+        // this test pins — every schema problem from ONE call, in check
+        // order, verbatim — is asserted over the LONGER list. Deleting an
+        // entry to restore the old string would weaken exactly the thing
+        // the test exists for.
         let broken = json!({"title": "t", "lane": "nope"});
         let expected = vec![
             "addCell: cell is missing required field \"id\" (non-empty string).".to_string(),
@@ -783,6 +801,8 @@ use std::time::Instant;
             "addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
+                .to_string(),
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs (the dispatch falls through to the next name it asked for and warns)."
                 .to_string(),
         ];
         assert_eq!(validate_new_cell_problems(root, &broken).unwrap(), expected);
@@ -798,6 +818,106 @@ use std::time::Instant;
         assert!(!rows[0].ok);
         assert_eq!(rows[0].problems, expected);
         assert!(normalized.is_none());
+    }
+
+    /// A cell that is valid in every way EXCEPT its `role` — the isolating
+    /// fixture for the two `role` tests below. Every other required field is
+    /// filled, so any problem the collector reports is the role's.
+    fn role_probe(role: Option<Value>) -> Value {
+        let mut c = json!({
+            "id": "role-1", "feature": "f", "title": "t", "action": "a",
+            "verify": "echo ok", "lane": "tiny",
+            "affects_skills": [], "affects_specs": [],
+        });
+        if let Some(role) = role {
+            c["role"] = role;
+        }
+        c
+    }
+
+    // D7 (store `4eaf1b71`): `role` is required on a cell exactly as `lane`
+    // is — `bee cells add` refuses without it, and the refusal names the
+    // remedy rather than only the rule.
+    #[test]
+    fn add_cell_refuses_a_cell_with_no_role_and_names_the_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // The ONLY problem on an otherwise-complete cell is the missing role.
+        let problems = validate_new_cell_problems(root, &role_probe(None)).unwrap();
+        assert_eq!(problems.len(), 1, "role is the only thing wrong: {problems:?}");
+        let problem = &problems[0];
+        assert!(
+            problem.starts_with("addCell: cell is missing required field \"role\" (non-empty string)"),
+            "{problem}"
+        );
+        assert!(problem.contains("FIX: add \"role\": \"<name>\" to the cell"), "{problem}");
+        // D8's vocabulary rides the FIX line as an example, and the line says
+        // in its own words that it is not a list — an author who reads only
+        // the refusal must not come away thinking these six are the legal set.
+        assert!(problem.contains("code, read, test, docs, review, design"), "{problem}");
+        assert!(problem.contains("Any non-empty name is legal"), "{problem}");
+        // Decision 561e1bda / D2: an unconfigured role still RUNS (it falls
+        // through and warns), so the FIX must not threaten a failure.
+        assert!(
+            problem.contains("a role nothing configures still runs"),
+            "the FIX must not imply an unconfigured role breaks the dispatch: {problem}"
+        );
+
+        // The real door refuses too, and the batch path writes nothing.
+        assert_eq!(thrown(validate_new_cell(root, &role_probe(None))), *problem);
+        let (ok, rows, normalized) = build_add_cells_report(root, &[role_probe(None)]).unwrap();
+        assert!(!ok);
+        assert_eq!(rows[0].problems, vec![problem.clone()]);
+        assert!(normalized.is_none(), "a refused batch lands nothing on disk");
+    }
+
+    // D2 (store `06e49368`): the role set is OPEN. Validation checks presence
+    // and SHAPE; it never checks membership. This test is the guard against
+    // someone "helpfully" turning `ROLE_VOCABULARY` into an enum later — a
+    // closed list here would undo slice 1 outright.
+    #[test]
+    fn role_validation_checks_shape_and_never_membership() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let refused = |role: Value| {
+            let p = validate_new_cell_problems(root, &role_probe(Some(role))).unwrap();
+            assert_eq!(p.len(), 1, "expected exactly the role problem, got {p:?}");
+            assert!(p[0].contains("missing required field \"role\""), "{}", p[0]);
+        };
+
+        // Shape: empty, whitespace-only, and non-string values are all
+        // refused — a blank or mistyped role would resolve nothing while the
+        // record asserted the cell had chosen a job.
+        refused(json!(""));
+        refused(json!("   "));
+        refused(json!("\t\n "));
+        refused(json!(null));
+        refused(json!(7));
+        refused(json!(["code"]));
+        refused(json!({"name": "code"}));
+
+        // Membership: every recommended name is legal, AND so is a name that
+        // appears in no vocabulary and in no config anywhere. If this half
+        // ever goes red, a membership check was added and D2 is broken.
+        for role in ROLE_VOCABULARY {
+            assert!(
+                validate_new_cell_problems(root, &role_probe(Some(json!(role)))).unwrap().is_empty(),
+                "recommended role {role} must be legal"
+            );
+        }
+        for role in ["migrate", "ops", "Rewrite-The-Parser", "chữa-lỗi", "a", &"x".repeat(500)] {
+            assert!(
+                validate_new_cell_problems(root, &role_probe(Some(json!(role)))).unwrap().is_empty(),
+                "role {role} must be legal — bee holds no fixed list"
+            );
+        }
+        // Reserved-word probe: `ceiling` is retired as a role name entirely
+        // (D5), but nothing in THIS layer knows that — validation stays
+        // membership-blind, so it accepts the string like any other name.
+        assert!(validate_new_cell_problems(root, &role_probe(Some(json!("ceiling"))))
+            .unwrap()
+            .is_empty());
     }
 
     // P3-5: a cell authored with change_class "behavior" and no explicit
@@ -3373,6 +3493,7 @@ use std::time::Instant;
         json!({
             "id": id, "feature": "batch", "title": format!("title {id}"),
             "action": "do the thing", "verify": "echo ok", "lane": "tiny",
+            "role": "code",
             "affects_skills": [], "affects_specs": [],
         })
     }
@@ -3390,6 +3511,7 @@ use std::time::Instant;
                 "action": "action",
                 "verify": "cargo test",
                 "lane": lane,
+                "role": "code",
             });
             if lane == "standard" || lane == "high-risk" {
                 base["must_haves"] = json!({"truths": ["something true"]});
@@ -6177,13 +6299,22 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
         lane_with_route(&root, "f");
+        // `tier` and `role` are set TOGETHER on every fixture this suite
+        // actually dispatches. The reason is the blind spot D7 opens: a raw
+        // fixture bypasses `validate_new_cell`, so it would not go red when
+        // `role` became required — it would quietly resolve whatever the
+        // default is, and the assertion below would still pass while proving
+        // nothing about which model the wave chose. Naming the role keeps
+        // this test's model choice deliberate through the tier retirement.
         let mut a = cell("wa-1", "open", "f", json!([]));
         a["files"] = json!(["docs/wa-1.md"]);
         a["tier"] = json!("generation");
+        a["role"] = json!("code");
         write_cell_fixture(&root, "wa-1", &a);
         let mut b = cell("wa-2", "open", "f", json!([]));
         b["files"] = json!(["docs/wa-2.md"]);
         b["tier"] = json!("generation");
+        b["role"] = json!("code");
         write_cell_fixture(&root, "wa-2", &b);
 
         let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
@@ -6272,10 +6403,12 @@ use std::time::Instant;
         let mut f1 = cell("wc-1", "open", "f", json!([]));
         f1["files"] = json!(["docs/wc-1.md"]);
         f1["tier"] = json!("generation");
+        f1["role"] = json!("code");
         write_cell_fixture(&root, "wc-1", &f1);
         let mut g1 = cell("wg-1", "open", "g", json!([]));
         g1["files"] = json!(["docs/wg-1.md"]);
         g1["tier"] = json!("generation");
+        g1["role"] = json!("code");
         write_cell_fixture(&root, "wg-1", &g1);
 
         let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
@@ -6302,10 +6435,12 @@ use std::time::Instant;
         let mut a = cell("wl-1", "open", "f", json!([]));
         a["files"] = json!(["docs/wl-1.md"]);
         a["tier"] = json!("generation");
+        a["role"] = json!("code");
         write_cell_fixture(&root, "wl-1", &a);
         let mut b = cell("wl-2", "open", "f", json!([]));
         b["files"] = json!(["docs/wl-2.md"]);
         b["tier"] = json!("generation");
+        b["role"] = json!("code");
         write_cell_fixture(&root, "wl-2", &b);
 
         let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f", "--limit", "1"]);
@@ -6405,6 +6540,7 @@ use std::time::Instant;
         let mut c = cell("uw-1", "open", "f", json!([]));
         c["files"] = json!(["docs/uw-1.md"]);
         c["tier"] = json!("generation");
+        c["role"] = json!("code");
         write_cell_fixture(&root, "uw-1", &c);
 
         // A real claim: taken, one file reserved, worker row registered.
@@ -6527,6 +6663,7 @@ use std::time::Instant;
             "action": "edit guard source",
             "verify": "echo ok",
             "lane": lane,
+            "role": "code",
             "files": ["packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"],
             "affects_skills": [],
             "affects_specs": [],

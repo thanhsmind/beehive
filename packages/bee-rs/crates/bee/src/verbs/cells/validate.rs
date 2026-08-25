@@ -28,6 +28,18 @@ pub(crate) const LANES: [&str; 5] = ["tiny", "small", "standard", "high-risk", "
 
 pub(crate) const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
 
+/// D8 (store `4eaf1b71`): the recommended role vocabulary, **authoring
+/// guidance only**. It is printed in the missing-`role` FIX line so an
+/// author has somewhere to start; it is NEVER matched against, and no code
+/// path may turn it into a membership test.
+///
+/// Enforcing a list here would undo D2 (store `06e49368`): the role set is
+/// open, any name present in `models.<runtime>` is legal, and a closed enum
+/// in this file would move drift from author habit into a hand-maintained
+/// list — the exact defect the one-parser work exists to remove. If you are
+/// reaching for `ROLE_VOCABULARY.contains(...)`, stop: that is the bug.
+pub(crate) const ROLE_VOCABULARY: [&str; 6] = ["code", "read", "test", "docs", "review", "design"];
+
 pub(crate) const CHANGE_CLASSES: [&str; 8] =
     ["formatting", "bugfix", "behavior", "api", "security", "migration", "refactor", "test"];
 const BUDGET_KEYS: [&str; 3] = ["max_claims", "max_failed_attempts", "max_same_signature"];
@@ -155,6 +167,23 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
                 ));
             }
         }
+    }
+    // D7 (store `4eaf1b71`): `role` is REQUIRED on a cell, exactly as `lane`
+    // is — the job the work declares is what selects its model. The store's
+    // own natural experiment settles why it is not optional: `lane` (required)
+    // is present on 506 of 506 cells, `tier` (optional) on 291. An optional
+    // role reproduces the `tier` outcome, where a configured per-job model
+    // fires on about half the cells that wanted it and every miss is silent.
+    //
+    // Presence and shape ONLY, never membership. Any non-empty name is legal
+    // (D2, store `06e49368`) because the role set is open — the question a
+    // resolver asks is "is this configured", not "is this one of six words".
+    // `ROLE_VOCABULARY` rides the FIX line as guidance and nothing else.
+    if !nonblank_string(map.get("role")) {
+        problems.push(format!(
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. {}. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs (the dispatch falls through to the next name it asked for and warns).",
+            ROLE_VOCABULARY.join(", ")
+        ));
     }
     if let Some(pbi) = map.get("pbi") {
         if !matches!(pbi, Value::Null | Value::String(_)) {
