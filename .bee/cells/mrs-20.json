@@ -1,0 +1,79 @@
+{
+  "id": "mrs-20",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "role": "code",
+  "title": "Publish roles in the session preamble and record what effort does not deliver",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 7, the last code. TWO JOBS. (1) The session preamble carries a Dispatch door block (decision 46827304 D2) that names the prepare command and the resolved tier slots so a cold agent sees, before its first dispatch, what is configured. It still says --kind cell|gather|reviewer|advisor and still lists TIER slots. Both are now stale: --role <name> exists (decision 8ff6e79e), the role set is open so there is no fixed list to print, and a name nothing configures refuses BY NAME with a FIX. Rewrite that block to publish the roles the host actually configures plus the --role spelling. Keep it SHORT — it is injected into every session and length is a real cost; publishing a long list of names would be worse than the tier list it replaces. (2) Record the effort non-delivery, which CONTEXT.md's open questions require and which no cell has yet discharged: effort parses on a {model, effort} entry and the preamble RENDERS it as model:effort, but the door drops it for every Resolved::Model (prepare.rs sites) and only the codex native branch emits reasoning_effort. So bee prints an effort it does not send on claude, AND drops it on the codex spawn_agent arm too — two different causes, and the earlier claim that this is purely a claude harness limit does not cover the codex half. Either stop rendering what is not sent, or render it with an honest qualifier; choose, and say which on the cap. Do NOT silently keep printing a value the dispatch discards — that is the same silent-lie shape this whole feature exists to remove. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml session_preamble",
+  "must_haves": {
+    "truths": [
+      "The preamble's dispatch block names --role and the roles this host configures, not a fixed tier list",
+      "The block did not grow materially — it is injected into every session",
+      "The preamble no longer prints an effort the dispatch discards, or prints it with an honest qualifier; the cap states which and why",
+      "The codex spawn_agent drop is named, not folded into the claude harness explanation"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "46827304",
+    "8ff6e79e"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w20",
+    "outcome": "The dispatch door publishes the host's configured roles and --role instead of a fixed tier list, and stops printing an effort no dispatch carries",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [
+      "Effort resolution: STOP RENDERING it rather than qualify it. The block is injected into every session and re-injected after every compaction, so a qualifier is repeated length spent on a value nothing sends; the non-delivery is written down at the render site (render_role doc comment) and in decision fbbadad5 instead.",
+      "The codex drop is recorded as its OWN fact, not folded into the claude harness reason: on claude every Resolved::Model site in prepare.rs destructures { model, .. } and the Agent tool takes no effort parameter (harness limit); on codex the spawn_agent arm emits neither model nor reasoning_effort even though the runtime accepts it and the native arm does emit it (bee's own gap, still open).",
+      "Scope: two files beyond the cell, both reserved under mrs-w20 first. hooks/model_guard.rs holds tier_slot_display, the fixed-4-slot renderer that could not serve an open set — replaced by role_slot_display + dispatch_door_lines. hooks/compaction.rs carried a byte-copy of the same two lines and would otherwise have told a compacted session the list the preamble stopped saying; it now calls the one home.",
+      "hooks/session_preamble/store.rs was reserved but needed no change — its D6 escalation-share work already landed.",
+      "No regen needed: no skill, doc or generated artifact carries the old \"Tier slots\" text (rg over the tree, excluding target/). Regen stays with mrs-w21."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:21:05.913Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T07:09:40.460Z",
+    "report": {
+      "outcome": "The dispatch door publishes the host's configured roles and --role instead of a fixed tier list, and stops printing an effort no dispatch carries",
+      "commit": "0c70c676067edcf92e5fd84340a3f8ea289cc160",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml session_preamble (54 pass) + compaction (14 pass) + model_guard (48 pass) — green — the three modules that render or build the dispatch door block; no other module reads it",
+      "deviations": [
+        "Effort resolution: STOP RENDERING it rather than qualify it. The block is injected into every session and re-injected after every compaction, so a qualifier is repeated length spent on a value nothing sends; the non-delivery is written down at the render site (render_role doc comment) and in decision fbbadad5 instead.",
+        "The codex drop is recorded as its OWN fact, not folded into the claude harness reason: on claude every Resolved::Model site in prepare.rs destructures { model, .. } and the Agent tool takes no effort parameter (harness limit); on codex the spawn_agent arm emits neither model nor reasoning_effort even though the runtime accepts it and the native arm does emit it (bee's own gap, still open).",
+        "Scope: two files beyond the cell, both reserved under mrs-w20 first. hooks/model_guard.rs holds tier_slot_display, the fixed-4-slot renderer that could not serve an open set — replaced by role_slot_display + dispatch_door_lines. hooks/compaction.rs carried a byte-copy of the same two lines and would otherwise have told a compacted session the list the preamble stopped saying; it now calls the one home.",
+        "hooks/session_preamble/store.rs was reserved but needed no change — its D6 escalation-share work already landed.",
+        "No regen needed: no skill, doc or generated artifact carries the old \"Tier slots\" text (rg over the tree, excluding target/). Regen stays with mrs-w21."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

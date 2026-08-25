@@ -1,0 +1,79 @@
+{
+  "id": "mrs-16",
+  "feature": "model-role-split",
+  "lane": "small",
+  "tier": "generation",
+  "role": "code",
+  "title": "Retire the worker registry's tier enum",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 5, D4 (store 97ce5225). bee state worker add and worker update carry --tier with the same closed three-value enum the cell verb had (workers.rs:86-101, :125-127, :147-150, :187-193). role is the sole model selector now, so a worker row records the ROLE its dispatch resolved, not a cost tier. Decide and state on the cap whether the field is renamed on the worker row or simply stops being enum-checked — the row is written by dispatch prepare and read by the cap door's registered-worker check, so a rename touches both and a bare de-enum touches neither. Whichever you choose, an existing worker row written before this change must still satisfy the cap door; a migration that strands in-flight workers would refuse correct caps. Sibling cells own the cells verb (mrs-15) and the accounting (mrs-17) — leave their files alone. Run your verify with --no-fail-fast: the repo's declared command lacks it and aborts at the first failing target, so without it your own target may never run.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml state_group",
+  "must_haves": {
+    "truths": [
+      "No closed three-value enum constrains what a worker row records",
+      "A worker row written before this change still satisfies the cap door's registered-worker check",
+      "The cap states whether the field was renamed or de-enumed, and why"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w16",
+    "outcome": "Worker rows record the role their dispatch resolved; the closed three-value enum is gone from both worker doors, the persisted key is unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+    ],
+    "deviations": [
+      "De-enum, NOT rename: the persisted key stays tier. Nothing in the tree reads workers[].tier — the cap door matches nickname plus cell alone — so a rename buys no behavior, while the flag spelling it would have to follow lives in catalog.rs, generated/registry_payload.json, cli_shape.rs and the cap-refusal FIX text, all sibling mrs-15 files.",
+      "Removed the now-dead MODEL_TIERS const from verbs/state_group/mod.rs (outside the cell files, reserved under mrs-w16): the two checks this cell retired were its only users.",
+      "Extracted one shared worker_role_value shape check rather than editing two copies of the same rule in add and update.",
+      "verbs/state_group/tests.rs named by the cell needed no edit: its one tier reference is a node-shape fixture that stays exact with the key unchanged.",
+      "Verify was blocked about 6 minutes by sibling mrs-15 mid-edit: 13 set_tier compile errors in verbs/cells/tests.rs, none in my files. Waited for their fix (13 to 9 to 0) rather than working around it.",
+      "The untested-lines advisory misreads this commit: the three new tests live in workers.rs own cfg(test) mod tests, which is not a test-shaped path.",
+      "sync-ack: No owned skill states anything this cell made untrue. The CLI flag spelling and the persisted record key are both unchanged, so the swarming reference line that spells out a manual worker registration stays exact; only the retired enum membership check changed, which no skill quoted. Re-wording that surface from tier to role is S10 work, in a file mrs-7 already capped."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T06:34:17.136Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T06:17:08.928Z",
+    "sync_ack": "No owned skill states anything this cell made untrue. The CLI flag spelling and the persisted record key are both unchanged, so the swarming reference line that spells out a manual worker registration stays exact; only the retired enum membership check changed, which no skill quoted. Re-wording that surface from tier to role is S10 work, in a file mrs-7 already capped.",
+    "report": {
+      "outcome": "Worker rows record the role their dispatch resolved; the closed three-value enum is gone from both worker doors, the persisted key is unchanged",
+      "commit": "81e7a4b4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml state_group — green (181 passed, 0 failed) — the worker registry lives in verbs/state_group; the six workers::tests cases cover both changed doors plus the pre-change-row cap-door probe",
+      "deviations": [
+        "De-enum, NOT rename: the persisted key stays tier. Nothing in the tree reads workers[].tier — the cap door matches nickname plus cell alone — so a rename buys no behavior, while the flag spelling it would have to follow lives in catalog.rs, generated/registry_payload.json, cli_shape.rs and the cap-refusal FIX text, all sibling mrs-15 files.",
+        "Removed the now-dead MODEL_TIERS const from verbs/state_group/mod.rs (outside the cell files, reserved under mrs-w16): the two checks this cell retired were its only users.",
+        "Extracted one shared worker_role_value shape check rather than editing two copies of the same rule in add and update.",
+        "verbs/state_group/tests.rs named by the cell needed no edit: its one tier reference is a node-shape fixture that stays exact with the key unchanged.",
+        "Verify was blocked about 6 minutes by sibling mrs-15 mid-edit: 13 set_tier compile errors in verbs/cells/tests.rs, none in my files. Waited for their fix (13 to 9 to 0) rather than working around it.",
+        "The untested-lines advisory misreads this commit: the three new tests live in workers.rs own cfg(test) mod tests, which is not a test-shaped path."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 167 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

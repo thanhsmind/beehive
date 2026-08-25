@@ -1,0 +1,89 @@
+{
+  "id": "mrs-22",
+  "feature": "model-role-split",
+  "lane": "small",
+  "role": "docs",
+  "title": "Clear the last four surfaces still teaching the retired cost tiers",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-swarming/references/worker-details.md",
+    "docs/04-skills-spec.md",
+    "docs/01-distillation.md",
+    "docs/knowledge/areas/doctrine-layer/delegation-threshold.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "action": "Slice 7 residue, named precisely by the mrs-21 worker after it rewrote the main rubric in commit c532502a: four surfaces still teach the three cost tiers, and they were outside that cell's declared files. They are worker-details.md:7 (lists model tier among a dispatch's inputs, plus a Trace Field Tiers By Lane heading), docs/04-skills-spec.md:143, docs/01-distillation.md:38 and :146, and docs/knowledge/areas/doctrine-layer/delegation-threshold.md:83. This is dead text teaching a rubric that no longer exists — bee cells tier is gone in all four directions and the cell field is role. READ swarming-reference.md FIRST: mrs-21 already rewrote the canonical rubric there, so your job is to make these four agree with it, not to invent a second wording. What is true: role is required on a cell and is any non-empty name, validation checks presence and shape and never membership; the recommended words code, read, test, docs, design are GUIDANCE; a dispatch asks an ordered list ending in the historical name so no existing host changes model; an unconfigured role falls through and WARNS; escalation is bee cells escalate --id <id> [--reason <text>] [--off] with the 40 percent ration; bee status --json renames tier_mix to role_mix. ONE DELIBERATE EXCEPTION, do not touch it: the phrase down-tier as DELEGATION ALTITUDE (fan the gathering out down-tier) is AGENTS.md's own language for delegating a mechanical step to a cheaper worker, and it survives the model-role split untouched. mrs-21 kept it in gates-and-delegation.md on purpose. Distinguish cost-TIER-the-retired-selector from down-tier-the-delegation-verb and leave the latter alone; if a line is genuinely ambiguous, say so on the cap rather than guessing. Do NOT hand-edit the mirror trees; run bee dev regen and let it write them, then bee dev release-manifest --check.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml devtools && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "No shipped surface teaches the three cost tiers as a cell author's choice",
+      "The four named files agree with the canonical rubric in swarming-reference.md rather than restating it differently",
+      "down-tier as delegation altitude is left intact, and any line the worker judged ambiguous is named on the cap",
+      "regen wrote the mirrors and bee dev release-manifest --check passes"
+    ]
+  },
+  "affects_skills": [
+    "bee-swarming"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225",
+    "4eaf1b71"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w22",
+    "outcome": "Four tier-era surfaces now teach the role rubric; two trace-depth headings renamed off the retired word; down-tier left intact",
+    "files_changed": [
+      "skills/bee-swarming/references/worker-details.md",
+      "docs/04-skills-spec.md",
+      "docs/01-distillation.md",
+      "docs/knowledge/areas/doctrine-layer/delegation-threshold.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Renamed two headings that spelled trace DEPTH as tiers: worker-details.md Trace Field Tiers By Lane -> Trace Field Depth By Lane, and 01-distillation.md:118 Trace tiers by lane -> Trace depth by lane; both inside declared files, so the retired word stops carrying a second meaning",
+      "Pointer parity inside a declared file: 04-skills-spec.md:81 trace field tiers -> trace field depth by lane, and :80 lane-tier trace -> lane-scaled trace depth, following the heading rename",
+      "AMBIGUOUS, LEFT ALONE: 04-skills-spec.md:123 a weaker-tier (Codex / extraction/generation) run reads as model STRENGTH for a pressure re-run, and extraction/generation are still legal configured role names, so it is not the retired selector. Flagged, not edited",
+      "OUT OF SCOPE, OBSERVED: docs/03-workflow.md:128 still says lane-tier trace (trace depth, not cost tier) — undeclared file, left for the orchestrator to triage",
+      "down-tier as delegation altitude left standing in delegation-threshold.md and named there as the different axis; R6 tier marker respelled to the literal [bee-tier:] marker, which keeps its historical spelling",
+      "SYNC_DOOR acked: the R3 rule block is byte-unchanged and its applied_at file gates-and-delegation.md already carries the role rubric from mrs-21",
+      "sync-ack: The rule block itself (R3, doctrine-layer-delegation-threshold) is byte-unchanged; only R6 wording and the implementation pointers below it moved. Its applied_at file skills/bee-hive/references/gates-and-delegation.md already teaches the role rubric after mrs-21 rewrote it in c532502a, and it is outside this cell's declared files."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:29:44.936Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T07:25:19.694Z",
+    "sync_ack": "The rule block itself (R3, doctrine-layer-delegation-threshold) is byte-unchanged; only R6 wording and the implementation pointers below it moved. Its applied_at file skills/bee-hive/references/gates-and-delegation.md already teaches the role rubric after mrs-21 rewrote it in c532502a, and it is outside this cell's declared files.",
+    "report": {
+      "outcome": "Four tier-era surfaces now teach the role rubric; two trace-depth headings renamed off the retired word; down-tier left intact",
+      "commit": "cd4e044970a3e312d6eccd51bfbdf62e225ba9d0",
+      "files": [
+        "skills/bee-swarming/references/worker-details.md",
+        "docs/04-skills-spec.md",
+        "docs/01-distillation.md",
+        "docs/knowledge/areas/doctrine-layer/delegation-threshold.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml devtools && .bee/bin/bee dev release-manifest --check — green — docs-only change; devtools covers the regen/manifest chain that rewrote the mirrors, 86 passed, manifest 270/270 match",
+      "deviations": [
+        "Renamed two headings that spelled trace DEPTH as tiers: worker-details.md Trace Field Tiers By Lane -> Trace Field Depth By Lane, and 01-distillation.md:118 Trace tiers by lane -> Trace depth by lane; both inside declared files, so the retired word stops carrying a second meaning",
+        "Pointer parity inside a declared file: 04-skills-spec.md:81 trace field tiers -> trace field depth by lane, and :80 lane-tier trace -> lane-scaled trace depth, following the heading rename",
+        "AMBIGUOUS, LEFT ALONE: 04-skills-spec.md:123 a weaker-tier (Codex / extraction/generation) run reads as model STRENGTH for a pressure re-run, and extraction/generation are still legal configured role names, so it is not the retired selector. Flagged, not edited",
+        "OUT OF SCOPE, OBSERVED: docs/03-workflow.md:128 still says lane-tier trace (trace depth, not cost tier) — undeclared file, left for the orchestrator to triage",
+        "down-tier as delegation altitude left standing in delegation-threshold.md and named there as the different axis; R6 tier marker respelled to the literal [bee-tier:] marker, which keeps its historical spelling",
+        "SYNC_DOOR acked: the R3 rule block is byte-unchanged and its applied_at file gates-and-delegation.md already carries the role rubric from mrs-21"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

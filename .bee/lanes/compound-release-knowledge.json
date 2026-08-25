@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"compound-release-knowledge\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 62e9dbe; capture what settled, then bee close --feature compound-release-knowledge.",
+  "next_action": "Continue bee-planning for \"compound-release-knowledge\" (lane).",
   "created_at": "2026-08-25T05:34:29.951Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "41 files in the bundle already carry that same cosmetic warning, including many area specs — it is a pre-existing class, not something I int",
+    "asked_at": "2026-08-25T05:38:54.618Z",
+    "session": "49e28775-6532-4090-9f4e-39c083ae7af2"
+  },
   "route": {
     "class": "docs",
     "lane": "docs",
