@@ -14,12 +14,7 @@
   "next_action": "Merged into main at d4934fe; reload the product and test \"decision-attribution\", then either approve uat (\"bee gate --name uat --approved true --lane decision-attribution\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-25T12:14:02.772Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-08-25T12:17:31.890Z",
-    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
-  },
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -38,6 +33,10 @@
     "branch": "wt/decision-attribution",
     "worktree_id": "beehive--wt--decision-attribution",
     "uat": "pending",
-    "blocked_by": []
+    "blocked_by": [
+      "scribing-debt",
+      "judge-debt",
+      "doc-deferral"
+    ]
   }
 }
