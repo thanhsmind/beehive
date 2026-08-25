@@ -402,6 +402,7 @@
     "budget",
     "fallback",
     "retry",
-    "refactor"
+    "refactor",
+    "build"
   ]
 }

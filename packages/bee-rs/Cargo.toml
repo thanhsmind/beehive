@@ -18,3 +18,16 @@ dunce = "1"
 # implementation (foldEncoding) — the one contract in this port that cannot be
 # re-derived from std: Rust has no Unicode normalization in core/std.
 unicode-normalization = "0.1"
+
+# Build economy: the declared test command runs `cargo test --release`, so the
+# release profile is what every cap, close and merge gate compiles. Measured
+# 2026-08-25: at the default opt-level 3 a single rustc for the `bee` test
+# binary sat at 315% CPU / 2.7GB RSS and had not finished after 44s, and two
+# sessions in one worktree serialise on target/release/.cargo-lock behind it.
+# opt-level 1 keeps the optimiser on but drops the expensive passes, and
+# incremental caching makes the edit-test loop reuse codegen. bee is an I/O and
+# JSON CLI, not a compute kernel, so the runtime cost of 3 -> 1 is not on any
+# hot path.
+[profile.release]
+opt-level = 1
+incremental = true
