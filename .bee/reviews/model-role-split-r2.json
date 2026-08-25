@@ -174,13 +174,34 @@
       "detail": "Corroborated by two reviewers — code-quality traced the mechanism, test-coverage demonstrated the loss and raised it from P2. The verb reads every cell at handlers_write.rs:1537 to build its plan, takes the cells-archive lock only at :1607, then writes each whole object back with write_json_atomic at :1613. The lock therefore guards the write phase alone; the scan is unlocked, and every write is a full-object write of a stale clone. Demonstrated on a 40000-cell tempfile store: a real operator door — set_escalation with --off, which is not budget-checked and so performs no store scan — committed a disarm to disk at t=25ms; the backfill finished at t=1.007s and the cell was re-armed on disk, escalate=true. The operator's write was not half-applied, it was fully applied and then fully reversed. The doc block at :1523-1531 asserts the opposite: that a concurrent cells update, cap or claim cannot half-write behind this pass. A budget-checked --on attempt was correctly refused by the lock at 319ms, which is why the defect is invisible to casual testing: only writers completing inside the scan phase are lost. Code-quality additionally traced that a bee close archiving a feature during the scan is not blocked, and the subsequent write recreates .bee/cells/<id>.json as a live duplicate, because read_cell prefers the live copy. Severity is P1 rather than P2 because the loss is silent, the verb has not yet been run against the live 543-cell store, and this repository's stated default is concurrent sessions — main gained commits from a sibling session twice during this feature's own development.",
       "fix": "Take the cells-archive lock before the scan so one lock spans scan and write, or re-read each file under the lock and merge only the three keys the migration owns (role, escalate, trace.escalation_reason) rather than writing the snapshot. Then pin it: hold the lock externally and assert the verb refuses, or mutate a record mid-pass and assert the operator write survives. Falls to P2 only if the migration is run under a documented single-session stop-the-world.",
       "evidence": "verbs/cells/handlers_write.rs:1523-1531 (the claim), :1537 (unlocked scan), :1607 (lock), :1613 (whole-object write); verbs/drivers/guard.rs:325-331 (read_cell prefers the live copy)"
+    },
+    {
+      "id": "DELTA-F1",
+      "severity": "P2",
+      "axis": "spec",
+      "title": "A null-valued role slot reopened the unconfigured-advisor P2 one input later — found by the delta pass, fixed in a7338b24",
+      "detail": "The delta re-review found that c2ef2f9f closed the ABSENT case and left the NULL case. known_roles derived from table.keys(), and a key whose value is null is still a key, so models.claude.advisor = null admitted the marker and inherited the session model while --role advisor refused on the same host. Reachable by the documented configuration: bee's own .bee/config-sample.json teaches null as the off spelling for advisor. Third instance of null-versus-absent in this feature. Fixed in a7338b24 by role_is_declarable, which decides the question ONCE by asking whether the resolution a dispatch would actually perform yields something, rather than testing the key or the value. Worth recording for whoever reads this later: the obvious fix, refusing any null-valued key, would have emptied known_roles on codex, whose default_models seeds every slot null, denying every codex dispatch. The worker found that before writing it.",
+      "fix": "Shipped in a7338b24 with the F3 predicate unification (both doors ask known_role_named, case-insensitive, answering in the config spelling), the F4 documentation correction in onboard/templates.rs, and the F6 derived FIX text.",
+      "evidence": "verbs/drivers/guard.rs role_is_declarable; hooks/model_guard.rs classify_marker; verbs/drivers/prepare.rs known_role_named; .bee/config-sample.json advisor null spelling"
     }
   ],
   "uat": [],
   "decision": {
-    "status": "pending",
-    "review": null
+    "status": "approved",
+    "merge_approved": true,
+    "approved_by": "thanhsmind",
+    "p1_resolutions": [
+      {
+        "finding": 0,
+        "cell": "mrs-30"
+      },
+      {
+        "finding": 1,
+        "cell": "mrs-31"
+      }
+    ],
+    "review": "Panel of four over a frozen 36-commit diff, then a delta pass over the fixes. 23 findings at first synthesis — P1 2, P2 7, P3 14. No reviewer filed a P1 alone; both P1s were corroboration promotions that were then executed rather than left as traces. P1-A (a cell declaring role ceiling took the session model, uncounted by the 40 percent ration) fixed by mrs-30 in commit 06e95097, with a two-layer test checked red first. P1-B (cells backfill-roles scanned outside its lock and fully reversed a concurrent operator write) fixed by mrs-31 in commit 00fd53b6, with a scan/lock seam so the race is pinned deterministically rather than by timing. The guard pair fixed in c2ef2f9f, and the delta pass caught that fix leaving its null-valued twin open — closed in a7338b24. The delta sweep showed the lock class was a genuine outlier by enumerating every other read-then-write in scope, and that the word-means-two-things class is where the siblings live. Three P3s filed to the backlog with fix directions: a ceiling key that now fails closed, a backfill report counting on two clocks, and an unlocked keep-set read in worker prune that predates this feature. Suite at approval: 2659 unit tests and 25 targets green, with three known exceptions each verified rather than assumed — two OpenCode tests that refuse to report green without a TypeScript-capable node, the binary_freshness flake, and a pre-existing claim-file race diagnosed and fixed by a sibling session. Owner approved merge 2026-08-25."
   },
   "created_at": "2026-08-25T09:01:04.124Z",
-  "updated_at": "2026-08-25T09:26:30.701Z"
+  "updated_at": "2026-08-25T10:53:48.799Z"
 }

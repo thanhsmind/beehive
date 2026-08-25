@@ -11,13 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"model-role-split\" started at phase \"exploring\" (lane).",
-  "next_action": "model-role-split: 23 cells capped on wt/model-role-split, but NOT complete — audit found the safety tests do not pin the safety property, D9's migration never ran, 4 decisions have unmet clauses, and the branch is 40 commits behind main and red on 2 non-environmental tests main already fixed.",
+  "next_action": "model-role-split review APPROVED, both P1s fixed, merge BLOCKED on a dirty main owned by other sessions (human-mailbox tickets; beehive-7a's eca-1/sll-1 cells and lanes; test-exec-race lane; deferred-queue). Retry bee worktree merge --id beehive--wt--model-role-split once they commit.",
   "created_at": "2026-08-24T18:50:51.857Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Code-quality and test-coverage still out.",
-    "asked_at": "2026-08-25T09:12:28.423Z",
+    "subject": "Committing mine and attempting the merge you asked for.",
+    "asked_at": "2026-08-25T11:10:33.097Z",
     "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {

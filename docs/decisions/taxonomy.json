@@ -414,6 +414,7 @@
     "sync-door",
     "prompt-work-record",
     "waggledance",
-    "health-checks"
+    "health-checks",
+    "state-store"
   ]
 }

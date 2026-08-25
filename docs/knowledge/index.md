@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 115 concept(s)
-- [patterns/](patterns/index.md) — 142 concept(s)
+- [patterns/](patterns/index.md) — 144 concept(s)
 - [work/](work/index.md) — 19 concept(s)
 
 ## Critical patterns
@@ -66,6 +66,8 @@ never a generation timestamp or any other wall-clock value.
 - [A platform job red on a build error is an unknown number of failures](patterns/20260821-a-platform-job-red-on-a-build-error-is-an-unknown-number-of-failures.md) — A compile error on one platform hides every test behind it, so the visible failure count is one and the real one is unknown until the build is green
 - [A vendored binary is a second place the feature must land](patterns/20260821-a-vendored-binary-is-a-second-place-the-feature-must-land.md) — A vendored binary is a second place the feature must land
 - [Instruction text is an untested code path](patterns/20260821-instruction-text-is-an-untested-code-path.md) — Instruction text is an untested code path
+- [A flake is a defect in the test's mechanism, not noise to retry past](patterns/20260825-a-flake-is-a-defect-in-the-tests-mechanism.md) — A flake is a defect in the test's mechanism, not noise to retry past
 - [A guard deleted with its runtime is a guard removed](patterns/20260825-a-guard-deleted-with-its-runtime-is-a-guard-removed.md) — A guard deleted with its runtime is a guard removed
 - [A guard that cannot pass teaches agents to ack it](patterns/20260825-a-guard-that-cannot-pass-teaches-agents-to-ack-it.md) — A guard that cannot pass teaches agents to ack it
 - [One red hides the rest — cargo test stops at the first failing target](patterns/20260825-cargo-test-stops-at-the-first-failing-target.md) — One red hides the rest — cargo test stops at the first failing target
+- [Plausibility is not evidence, and the author is never the one who catches it](patterns/20260825-plausibility-is-not-evidence-and-only-a-second-reader-catches-it.md) — Plausibility is not evidence, and the author is never the one who catches it

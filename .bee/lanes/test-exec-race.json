@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "test-exec-race",
   "mode": null,
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"test-exec-race\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 88c0b7f; capture what settled, then bee close --feature test-exec-race.",
+  "next_action": "bee close finished \"test-exec-race\" — feature is closed.",
   "created_at": "2026-08-25T09:43:57.029Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
