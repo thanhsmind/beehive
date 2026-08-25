@@ -29,19 +29,53 @@
     "4eaf1b71"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "mrs-w31",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "backfill-roles re-reads under the lock and merges only its three owned keys, so a write that lands during the scan survives",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "Shape 2 chosen over one-lock-spans-both: a lock held across a 40k-cell scan refuses every other writer for ~1s, and this migration must run against a live multi-session store",
+      "Added a scan/lock seam (backfill_roles_interleaved) so the race is pinned deterministically instead of by sleep or thread timing",
+      "Added report field changed_during_pass (JSON + text) to name records that moved under the pass instead of writing over them",
+      "Verified both race tests fail on pre-fix code (whole-object write restored escalate=true on e-1 and recreated g-1) and that the lock test fails when the lock name is mutated",
+      "Reset stale index entries (validate.rs, drivers/models.rs, drivers/prepare.rs, drivers/tests.rs, cells/tests.rs) that held a pre-sibling-commit revert; worktree content untouched",
+      "Capped with --inline-reason: no worker row registered for mrs-w31 and state worker add refuses inside the worktree",
+      "Capped with --sync-ack: no skill documents this verb's locking or report shape",
+      "sync-ack: Concurrency fix inside cells backfill-roles' write half. No bee skill teaches this verb's locking or its report shape, and the operator-facing contract is unchanged: same flags, still idempotent, still re-runnable. The only new surface is one report line naming records another writer moved."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T10:03:15.432Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T09:35:02.802Z"
+    "claimed_at": "2026-08-25T09:35:02.802Z",
+    "sync_ack": "Concurrency fix inside cells backfill-roles' write half. No bee skill teaches this verb's locking or its report shape, and the operator-facing contract is unchanged: same flags, still idempotent, still re-runnable. The only new surface is one report line naming records another writer moved.",
+    "inline_reason": "Dispatched execution worker mrs-w31, but no worker row exists in state.json for this cell and bee state worker add refuses inside a granted feature worktree (control plane lives in the main checkout) — the registration gap is the dispatcher's, not an inline run",
+    "report": {
+      "outcome": "backfill-roles re-reads each planned record under the cells-archive lock and merges only role/escalate/trace.escalation_reason, so a concurrent write that completes during the unlocked scan is no longer reversed and an archived cell is not recreated",
+      "commit": "00fd53b6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --offline -p bee --bin bee --no-fail-fast — green (2657 passed, 0 failed) — the change is confined to verbs::cells; the bin target carries every unit test that reads the backfill report, and the two failing opencode_plugin_contracts tests live in a separate integration target this machine cannot run",
+      "deviations": [
+        "Shape 2 chosen over one-lock-spans-both: a lock held across a 40k-cell scan refuses every other writer for ~1s, and this migration must run against a live multi-session store",
+        "Added a scan/lock seam (backfill_roles_interleaved) so the race is pinned deterministically instead of by sleep or thread timing",
+        "Added report field changed_during_pass (JSON + text) to name records that moved under the pass instead of writing over them",
+        "Verified both race tests fail on pre-fix code (whole-object write restored escalate=true on e-1 and recreated g-1) and that the lock test fails when the lock name is mutated",
+        "Reset stale index entries (validate.rs, drivers/models.rs, drivers/prepare.rs, drivers/tests.rs, cells/tests.rs) that held a pre-sibling-commit revert; worktree content untouched",
+        "Capped with --inline-reason: no worker row registered for mrs-w31 and state worker add refuses inside the worktree",
+        "Capped with --sync-ack: no skill documents this verb's locking or report shape"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
