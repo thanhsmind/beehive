@@ -377,14 +377,21 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[8], "Active reservations: 0");
         assert_eq!(lines[9], "Active workers: 0");
         assert_eq!(lines[10], "Critical patterns file: absent");
-        assert!(lines[11].starts_with("Models (claude): generation=sonnet extraction=haiku review=opus"));
+        // model-role-split D2 (store 06e49368): the printed order is DERIVED
+        // now — the slots bee's own dispatch kinds resolve first
+        // (`slot_for_kind` over `DISPATCH_KINDS`), then the rest in map
+        // order. `extraction` reads third rather than second because no
+        // dispatch kind resolves it any more (`gather` goes to
+        // `generation`), not because a list was re-typed.
+        assert!(lines[11]
+            .starts_with("Models (claude): generation=sonnet review=opus extraction=haiku"));
         // opencode-support oc-14: opencode now carries a built-in default
         // too (the free `opencode/*` provider names oc-14 bakes into every
         // rendered `.opencode/agent/bee-*.md`), so its line prints even
         // unconfigured — same as claude's line above.
         assert_eq!(
             lines[12],
-            "Models (opencode): generation=opencode/big-pickle extraction=opencode/ling-3.0-tiny-free review=opencode/nemotron-3-ultra-free"
+            "Models (opencode): generation=opencode/big-pickle review=opencode/nemotron-3-ultra-free extraction=opencode/ling-3.0-tiny-free"
         );
         // Idle repo with no next_action override -> defaultState's line.
         assert_eq!(
@@ -416,10 +423,11 @@ use crate::version::BEE_VERSION;
         let status = build_status(&mut ctx, false).unwrap();
         let text = render_status_text(&status);
         let lines: Vec<&str> = text.split('\n').collect();
-        assert!(lines[10].starts_with("Models (claude): generation=sonnet extraction=haiku review=opus"));
+        assert!(lines[10]
+            .starts_with("Models (claude): generation=sonnet review=opus extraction=haiku"));
         assert_eq!(
             lines[11],
-            "Models (opencode): generation=opencode/big-pickle extraction=opencode/ling-3.0-tiny-free review=opencode/nemotron-3-ultra-free"
+            "Models (opencode): generation=opencode/big-pickle review=opencode/nemotron-3-ultra-free extraction=opencode/ling-3.0-tiny-free"
         );
     }
 
@@ -2801,7 +2809,7 @@ use crate::version::BEE_VERSION;
             assert_eq!(unsafe_rows.len(), 1, "flag {flag}: {:?}", codes(&problems));
             assert!(unsafe_rows[0].message.contains(flag), "row must name {flag}");
             assert_eq!(unsafe_rows[0].runtime, Some("claude"));
-            assert_eq!(unsafe_rows[0].slot, Some("generation"));
+            assert_eq!(unsafe_rows[0].slot.as_deref(), Some("generation"));
         }
         // Two aliases in one command -> one row each.
         let problems = validate_models_config(Some(&json!({"models": {"codex": {
@@ -2932,7 +2940,7 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-gather"));
-        assert_eq!(problems[0].slot, Some("generation"));
+        assert_eq!(problems[0].slot.as_deref(), Some("generation"));
         assert!(problems[0].message.contains("model: \"opus\""));
         assert!(problems[0].message.contains("is \"sonnet\""));
 
@@ -2972,7 +2980,7 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-build"));
-        assert_eq!(problems[0].slot, Some("generation"));
+        assert_eq!(problems[0].slot.as_deref(), Some("generation"));
         assert!(problems[0].message.contains("is now a herding executor"));
         assert!(!problems[0].message.contains("cli"));
         assert!(problems[0].message.contains("bee onboard --apply"));
@@ -4332,4 +4340,216 @@ use crate::version::BEE_VERSION;
             Some(&json!("bee-wayfinding")),
             "the handoff rule wins over the D5 override"
         );
+    }
+
+    // ── the PRINTED line over the open role set (mrs-27) ───────────────────
+
+    /// The half of the third-copy bug that `bee status --json` never fixed.
+    ///
+    /// Before this cell, `bee status` printed the claude line from a FIXED
+    /// three-slot format string. An operator who did exactly what this
+    /// feature tells them to do — add `models.claude.test`, mark a cell
+    /// `role: test` — saw `test` in `--json` and NOT in the line they
+    /// actually read, which is the only place most people look. Verified
+    /// against the built binary before the change: the line read
+    /// `generation=sonnet extraction=haiku review=opus` and said nothing
+    /// about `test`.
+    #[test]
+    fn the_printed_models_line_names_a_role_the_operator_invented() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"claude":{"test":"opus","design":{"model":"opus","effort":"high"}}}}"#,
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        let claude = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (claude): "))
+            .expect("claude models line");
+
+        // Both invented names are PRINTED, with their values — not counted,
+        // not dropped, not left to `--json`.
+        assert!(claude.contains(" test=opus"), "{claude}");
+        assert!(claude.contains(" design=opus@high"), "{claude}");
+        // And the historical names still read exactly as before.
+        assert!(claude.contains("generation=sonnet"), "{claude}");
+        assert!(claude.contains("extraction=haiku"), "{claude}");
+        assert!(claude.contains("review=opus"), "{claude}");
+
+        // The printed line and the JSON are the same fact, name for name.
+        let json_roles: Vec<&String> = status
+            .get("models")
+            .and_then(|m| m.get("claude"))
+            .and_then(|c| c.as_object())
+            .expect("claude table")
+            .keys()
+            .collect();
+        for name in json_roles {
+            assert!(claude.contains(&format!(" {name}=")), "{name} missing from {claude}");
+        }
+    }
+
+    /// The bound, and the promise it makes: a host with a dozen roles still
+    /// prints ONE scannable line, the names bee's own dispatch kinds resolve
+    /// are never the ones counted away, and the remainder is stated out loud
+    /// rather than silently dropped.
+    #[test]
+    fn the_printed_models_line_stays_scannable_on_a_twelve_role_host() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        // Twelve roles with LONG model names — the case a count-based cap
+        // cannot tell from twelve short ones (about 380 characters of role
+        // text unbounded, five wrapped lines for one status row).
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"opencode":{
+                "generation":"opencode/big-pickle",
+                "extraction":"opencode/ling-3.0-tiny-free",
+                "review":"opencode/nemotron-3-ultra-free",
+                "code":"opencode/qwen-3-coder-free",
+                "read":"opencode/ling-3.0-tiny-free",
+                "test":"opencode/deepseek-v3-free",
+                "design":"opencode/nemotron-3-ultra-free",
+                "docs":"opencode/ling-3.0-tiny-free",
+                "migrate":"opencode/qwen-3-coder-free",
+                "triage":"opencode/deepseek-v3-free",
+                "perf":"opencode/nemotron-3-ultra-free",
+                "audit":"opencode/big-pickle"}}}"#,
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        let line = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (opencode): "))
+            .expect("opencode models line");
+
+        // ONE line, and a bounded one.
+        assert!(line.chars().count() < 200, "{} chars: {line}", line.chars().count());
+        // The remainder is COUNTED, never silently dropped, and it names
+        // where the rest lives.
+        assert!(line.contains(" +9 more (--json)"), "{line}");
+        // Truncation can never eat the slots bee's own dispatch kinds
+        // resolve: those are ordered first for exactly this reason.
+        assert!(line.contains("generation=opencode/big-pickle"), "{line}");
+        assert!(line.contains("review=opencode/nemotron-3-ultra-free"), "{line}");
+    }
+
+    /// A short-named host of the same size loses nothing it did not have to:
+    /// the budget is spent on TEXT, so cheap names buy more roles.
+    #[test]
+    fn the_models_line_budget_is_width_not_a_role_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":"sonnet","extraction":"haiku","review":"opus",
+                "advisor":"opus","code":"sonnet","read":"haiku","test":"opus","design":"opus",
+                "docs":"haiku","migrate":"sonnet","triage":"haiku","perf":"opus"}}}"#,
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        let line = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (claude): "))
+            .expect("claude models line");
+        // Same twelve roles as the opencode case above; short names, so NINE
+        // are named instead of three. A count-based cap would have shown the
+        // same number on both.
+        let named = line.matches('=').count();
+        assert!(named >= 9, "only {named} roles named: {line}");
+        assert!(line.contains(" +3 more (--json)"), "{line}");
+    }
+
+    /// codex had no printed line at all — two runtimes rendered by hand out
+    /// of the three status itself carries, so an operator who configured
+    /// `models.codex` read a status page silent about the runtime they
+    /// configured. It prints when configured, and stays absent when not, so
+    /// no existing host reads a new all-null row.
+    #[test]
+    fn a_configured_codex_runtime_gets_its_own_printed_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+
+        // (a) unconfigured codex: all-null defaults, no line.
+        write(root, ".bee/config.json", r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        let mut ctx = ctx_for(root);
+        let text = render_status_text(&build_status(&mut ctx, false).unwrap());
+        assert!(!text.contains("Models (codex):"), "{text}");
+
+        // (b) configured codex, invented role included: its own line.
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{"codex":{"generation":"gpt-5-codex","test":"gpt-5"}}}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let text = render_status_text(&build_status(&mut ctx, false).unwrap());
+        let line = text
+            .split('\n')
+            .find(|l| l.starts_with("Models (codex): "))
+            .expect("codex models line");
+        assert!(line.contains("generation=gpt-5-codex"), "{line}");
+        assert!(line.contains(" test=gpt-5"), "{line}");
+    }
+
+    /// The validation half. A malformed value under a role the operator
+    /// invented was checked by NOBODY: `validate_models_config` walked a
+    /// closed four-name list, so `models.claude.test: 7` earned silence while
+    /// the identical `models.claude.generation: 7` warned. Verified against
+    /// the built binary before the change — `bee status` printed no
+    /// `config validate` row for the invented names at all.
+    #[test]
+    fn a_malformed_value_under_an_invented_role_is_validated_like_any_other() {
+        // (a) the exact contrast that made the closed list visible.
+        let invented =
+            validate_models_config(Some(&json!({"models": {"claude": {"test": 7}}})));
+        let historical =
+            validate_models_config(Some(&json!({"models": {"claude": {"generation": 7}}})));
+        assert_eq!(codes(&invented), vec!["slot-value-malformed"]);
+        assert_eq!(codes(&invented), codes(&historical));
+        assert_eq!(invented[0].slot.as_deref(), Some("test"));
+        assert!(invented[0].message.contains("models.claude.test"), "{}", invented[0].message);
+
+        // (b) every check below the entry point reaches an invented name too,
+        // not just the value-shape one at the top.
+        let deeper = validate_models_config(Some(&json!({"models": {"claude": {
+            "design": {"neither": "cli nor model"},
+            "migrate": {"kind": "cli"},
+            "audit": {"primary": {"kind": "native", "model": "opus"}},
+        }}})));
+        let mut seen: Vec<(&str, &str)> =
+            deeper.iter().map(|p| (p.code, p.slot.as_deref().unwrap_or(""))).collect();
+        seen.sort_unstable();
+        assert_eq!(
+            seen,
+            vec![
+                ("cli-malformed", "migrate"),
+                ("composite-fallback-policy-missing", "audit"),
+                ("model-shape-malformed", "design"),
+            ]
+        );
+
+        // (c) a well-formed invented role is silent, exactly like a
+        // well-formed historical one — the walk widened, the bar did not move.
+        assert!(validate_models_config(Some(&json!({"models": {"claude": {
+            "test": "opus",
+            "design": {"model": "opus", "effort": "high"},
+        }}})))
+        .is_empty());
     }

@@ -112,7 +112,7 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         // explicitly null on runtime-level rows, templating as "null".
         let runtime_part = match (problem.runtime, problem.slot) {
             (Some(rt), slot) if !rt.is_empty() => {
-                format!(" models.{rt}.{}:", slot.unwrap_or("null"))
+                format!(" models.{rt}.{}:", slot.as_deref().unwrap_or("null"))
             }
             _ => String::new(),
         };
@@ -127,7 +127,7 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
             "config validate [{}] {} ({}): {}",
             problem.code,
             problem.agent.unwrap_or("undefined"),
-            problem.slot.unwrap_or("undefined"),
+            problem.slot.as_deref().unwrap_or("undefined"),
             problem.message
         )));
     }

@@ -73,7 +73,16 @@ const WORKTREE_COMPANION_COMMAND_KEYS: [&str; 3] = [
 // drift check both see it too — R1 named export, not a hand-kept mirror.
 const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
 
-const MODEL_VALIDATE_SLOTS: [&str; 4] = ["extraction", "generation", "review", "advisor"];
+// model-role-split D2 (store 06e49368): this module's private
+// `MODEL_VALIDATE_SLOTS` is gone. It was the LAST closed list of role names
+// in the status surface, and it stood where an open set lives: config
+// validation walked those four names, so a malformed value under any role
+// the operator invented (`models.claude.test: 7`) was never looked at and
+// earned NO warning at all — silence for a typo in exactly the shape D3
+// tells an operator to write, while the identical typo under `generation`
+// warned. `validate_models_config` walks the keys the config actually
+// carries now, so a role is validated because it is configured, never
+// because it is one of four words.
 
 const ADVICE_CLASS_SLOTS: [&str; 2] = ["advisor", "review"];
 

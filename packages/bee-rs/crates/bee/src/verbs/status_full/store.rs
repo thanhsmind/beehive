@@ -503,7 +503,13 @@ pub(crate) fn read_raw_config_for_validation(ctx: &Ctx) -> R<Option<Value>> {
 pub(crate) struct Problem {
     pub(crate) code: &'static str,
     pub(crate) runtime: Option<&'static str>,
-    pub(crate) slot: Option<&'static str>,
+    /// The role the finding is filed under.
+    ///
+    /// model-role-split D2 (store 06e49368): OWNED, not `&'static str`. The
+    /// role set is open, so the name a finding names is whatever key the
+    /// operator's config carries — there is no list of legal names left for
+    /// a borrowed literal to point into.
+    pub(crate) slot: Option<String>,
     pub(crate) message: String,
     /// Only for validateAgentFilesDrift rows.
     pub(crate) agent: Option<&'static str>,
@@ -555,11 +561,23 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                 continue;
             }
         };
-        for slot in MODEL_VALIDATE_SLOTS {
-            let value = match src.get(slot) {
-                None | Some(Value::Null) => continue,
-                Some(Value::String(_)) => continue,
-                Some(v) => v,
+        // model-role-split D2 (store 06e49368): DERIVED, never listed. This
+        // walked `MODEL_VALIDATE_SLOTS` — `extraction`/`generation`/`review`/
+        // `advisor` — so every check below (value shape, composite primary,
+        // fallback policy, native model, cli transport, unsafe flags) simply
+        // never ran on a role the operator invented. `models.claude.test: 7`
+        // was dropped by the parser and reported by nobody, while the
+        // identical `models.claude.generation: 7` warned. Walking `src`
+        // asks the config what it carries instead of asking a list what is
+        // allowed, so a role is validated because it is CONFIGURED. `ceiling`
+        // is deliberately not carved out: decision 0015 keeps it out of
+        // config, and a junk value written there is still worth a word.
+        for (slot, value) in src {
+            let slot = slot.as_str();
+            let value = match value {
+                Value::Null => continue,
+                Value::String(_) => continue,
+                v => v,
             };
             let vobj = match value {
                 Value::Object(m) => m,
@@ -567,7 +585,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "slot-value-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is not a string, object, or null — ignored; defaults apply."),
                         agent: None,
                     });
@@ -586,7 +604,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "composite-primary-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a composite (primary/fallback) but its primary is not a valid native override {{kind:\"native\", model}} — ignored; today this silently reverts to the seeded default (D2)."),
                         agent: None,
                     });
@@ -598,7 +616,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                             problems.push(Problem {
                                 code: "native-fork-turns-unknown",
                                 runtime: Some(rt),
-                                slot: Some(slot),
+                                slot: Some(slot.to_string()),
                                 message: format!(
                                     "models.{rt}.{slot} composite primary has fork_turns:{} — only \"none\" is valid; a full-history fork rejects model overrides (E2/D2).",
                                     jsjson::stringify(ft)
@@ -612,7 +630,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "composite-fallback-policy-missing",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a composite but has no fallback_policy:\"explicit-only\" — its cli fallback is silently dropped and no fallback is ever taken; silent native->cli fallback is forbidden (D1). Set fallback_policy:\"explicit-only\" to opt in."),
                         agent: None,
                     });
@@ -625,7 +643,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "composite-fallback-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} composite declares fallback_policy:\"explicit-only\" but its fallback is not a valid cli executor {{kind:\"cli\", command}} — the fallback is silently dropped; fix or remove it (D2)."),
                         agent: None,
                     });
@@ -638,7 +656,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "native-model-missing",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a native override (kind:\"native\") but has no non-empty model — the exact catalog model id is required; today this silently reverts to the seeded default (D2)."),
                         agent: None,
                     });
@@ -649,7 +667,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                         problems.push(Problem {
                             code: "native-fork-turns-unknown",
                             runtime: Some(rt),
-                            slot: Some(slot),
+                            slot: Some(slot.to_string()),
                             message: format!(
                                 "models.{rt}.{slot} native override has fork_turns:{} — only \"none\" is valid; a full-history fork rejects model overrides (E2/D2).",
                                 jsjson::stringify(ft)
@@ -677,7 +695,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "cli-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} looks like a cli executor but is missing kind:\"cli\" or a non-empty command — today this silently reverts to the seeded default; fix or remove it (W-e)."),
                         agent: None,
                     });
@@ -688,7 +706,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "cli-prompt-transport-missing",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a cli executor with no declared prompt transport — set promptVia (e.g. \"stdin\") so the prompt reliably reaches it; never inferred from the command string (B2)."),
                         agent: None,
                     });
@@ -699,19 +717,30 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                         problems.push(Problem {
                             code: "cli-unsafe-flag",
                             runtime: Some(rt),
-                            slot: Some(slot),
+                            slot: Some(slot.to_string()),
                             message: format!("models.{rt}.{slot} command contains \"{flag}\" — a known auto-approve/sandbox-bypass flag; remove it (B6/B7). This is a blocklist of KNOWN-BAD flags, not a positive read-only guarantee."),
                             agent: None,
                         });
                     }
                 }
+                // ADVICE_CLASS_SLOTS stays a closed TWO-name list on
+                // purpose, and it is not the defect D2 removed above. Those
+                // two names are bee's OWN doors — the advisor kind and the
+                // reviewer kind of `bee dispatch prepare` — and read-only is
+                // a property of what bee does at those doors (AO8), not of
+                // any name an operator may choose. bee cannot know that an
+                // invented `critique` role is advice-class, so widening this
+                // would either guess or ask a list to mean something the
+                // config never said. A closed list of bee's own door names
+                // is a fact about bee; a closed list standing in for the
+                // operator's names is the bug.
                 if ADVICE_CLASS_SLOTS.contains(&slot) {
                     for token in ADVICE_CLASS_WRITABLE_TOKENS {
                         if command.contains(token) {
                             problems.push(Problem {
                                 code: "cli-advice-slot-writable",
                                 runtime: Some(rt),
-                                slot: Some(slot),
+                                slot: Some(slot.to_string()),
                                 message: format!("models.{rt}.{slot} is an advice-class cli slot (advisor/review must run read-only, AO8) and its command contains \"{token}\" — a known write-granting sandbox token; remove it. This is a blocklist of KNOWN write-granting tokens, not a positive read-only guarantee."),
                                 agent: None,
                             });
@@ -725,7 +754,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                 problems.push(Problem {
                     code: "model-shape-malformed",
                     runtime: Some(rt),
-                    slot: Some(slot),
+                    slot: Some(slot.to_string()),
                     message: format!("models.{rt}.{slot} is an object but neither a valid cli executor nor a valid {{model}} shape — ignored; today this silently reverts to the seeded default."),
                     agent: None,
                 });
@@ -824,7 +853,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                 problems.push(Problem {
                     code: "agent-file-malformed",
                     runtime: None,
-                    slot: Some(slot),
+                    slot: Some(slot.to_string()),
                     message: format!("{rel_prefix}/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 });
@@ -864,7 +893,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                     problems.push(Problem {
                         code: "agent-file-drift",
                         runtime: None,
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now {slot_desc} (no model name) — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to remove the stale file.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                         agent: Some(agent_name),
                     })
@@ -872,7 +901,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                 Some(expected) if expected != file_model => problems.push(Problem {
                     code: "agent-file-drift",
                     runtime: None,
-                    slot: Some(slot),
+                    slot: Some(slot.to_string()),
                     message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 }),

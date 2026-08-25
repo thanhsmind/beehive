@@ -19,6 +19,109 @@ use std::process::ExitCode;
 use std::time::Instant;
 use crate::version::BEE_VERSION;
 
+/// How many characters of `name=model` text the printed models line spends
+/// before it stops naming roles and starts counting them.
+///
+/// model-role-split D2 (store 06e49368). The role set is OPEN, so this line
+/// has no upper bound on entries and "print them all" is not automatically
+/// the right answer: `bee status` is read at a glance and this is one line
+/// of it. The number is MEASURED, not chosen — the longest role list bee
+/// itself ships today is opencode's own seeded default (oc-14), which
+/// renders 105 characters, so 120 keeps every default bee ships whole and
+/// still leaves room for a role or two the operator added before it
+/// truncates. Past it the line says `+N more` and points at
+/// `bee status --json`, which carries every role unabridged; the human line
+/// is a glance, the JSON is the record.
+///
+/// Bounding by WIDTH rather than by a count is what makes that promise hold,
+/// and the difference is MEASURED on a real 12-role host, not argued:
+///
+/// * 12 claude roles (`generation=sonnet`, short names) render 153 characters
+///   of role text — long, but no wall, and the budget trims it to 9 named
+///   roles plus a count.
+/// * the SAME 12 roles on opencode (`design=opencode/nemotron-3-ultra-free`)
+///   render about 380, five wrapped terminal lines for one status row. The
+///   budget renders 3 names plus `+9 more` at 143 characters total.
+///
+/// A count-based cap cannot tell those two apart, which is why this is not
+/// one. The `+N more` suffix is kept SHORT for the same measured reason: at
+/// its first spelling (`+N more (bee status --json for all)`) it cost 35
+/// characters to drop 3 short claude entries worth 35 — a bound that bounded
+/// nothing on exactly the host where names are cheap.
+const MODELS_ROLE_LIST_BUDGET: usize = 120;
+
+/// The roles one runtime configures, in the order the printed line names
+/// them.
+///
+/// model-role-split D2 (store 06e49368): DERIVED from the config, never
+/// listed. This line used to be a FIXED three-slot format string, so an
+/// operator who followed this feature's own advice — add
+/// `models.claude.test`, mark a cell `role: test` — saw `test` in
+/// `bee status --json` and NOTHING in the line they actually read.
+///
+/// The ORDER is derived too, and it is load-bearing because the list can be
+/// truncated: the slots bee's own dispatch door resolves come first, in
+/// `DISPATCH_KINDS` order, so the names most dispatches land on can never be
+/// the ones counted away; whatever else the host configures follows in map
+/// order. That is the same rule the dispatch door itself orders by
+/// (`hooks::model_guard::role_slot_display`) — one rule, two surfaces, so a
+/// reader who compares them is comparing the same fact. It is also why the
+/// printed order changed: `extraction` is no longer a slot any dispatch kind
+/// resolves (`slot_for_kind` sends `gather` to `generation`), so it reads
+/// with the rest instead of second.
+///
+/// `ceiling` is skipped: decision 0015 keeps it out of config and it names
+/// the session model, not a role.
+fn models_role_pairs(runtime_table: Option<&Value>) -> Vec<(String, String)> {
+    use crate::verbs::drivers::{slot_for_kind, DISPATCH_KINDS, ESCALATION_WORD};
+    let Some(Value::Object(table)) = runtime_table else { return Vec::new() };
+    let mut order: Vec<&String> = Vec::new();
+    for kind in DISPATCH_KINDS {
+        if let Some(slot) = slot_for_kind(kind) {
+            if let Some((name, _)) = table.get_key_value(slot) {
+                if !order.iter().any(|n| n.as_str() == slot) {
+                    order.push(name);
+                }
+            }
+        }
+    }
+    for name in table.keys() {
+        if name == ESCALATION_WORD || order.iter().any(|n| *n == name) {
+            continue;
+        }
+        order.push(name);
+    }
+    order.into_iter().map(|name| (name.clone(), format_slot(table.get(name)))).collect()
+}
+
+/// The role list as the human line prints it — every configured role by name,
+/// bounded by `MODELS_ROLE_LIST_BUDGET` and counting the remainder.
+fn models_role_list(runtime_table: Option<&Value>) -> String {
+    let pairs = models_role_pairs(runtime_table);
+    if pairs.is_empty() {
+        return "none configured".to_string();
+    }
+    let mut out = String::new();
+    let mut shown = 0usize;
+    for (name, value) in &pairs {
+        let entry = format!("{name}={value}");
+        // The first entry always prints: a budget must never render an empty
+        // line, however long one model name is.
+        if shown > 0 && out.chars().count() + 1 + entry.chars().count() > MODELS_ROLE_LIST_BUDGET {
+            break;
+        }
+        if shown > 0 {
+            out.push(' ');
+        }
+        out.push_str(&entry);
+        shown += 1;
+    }
+    if shown < pairs.len() {
+        out.push_str(&format!(" +{} more (--json)", pairs.len() - shown));
+    }
+    out
+}
+
 // ─── renderStatusText (bee.mjs ~1081-1206) ─────────────────────────────────
 
 /// bee.mjs formatSlot.
@@ -360,25 +463,35 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
         if opt_truthy(s("critical_patterns_present")) { "present" } else { "absent" }
     ));
     if opt_truthy(s("models")) {
-        let claude = s("models").and_then(|m| vget(m, "claude"));
+        let models = s("models");
         lines.push(format!(
-            "Models (claude): generation={} extraction={} review={} · ceiling = the session model (keep it scarce; decisions 0012/0015/0021)",
-            format_slot(claude.and_then(|c| vget(c, "generation"))),
-            format_slot(claude.and_then(|c| vget(c, "extraction"))),
-            format_slot(claude.and_then(|c| vget(c, "review"))),
+            "Models (claude): {} · ceiling = the session model (keep it scarce; decisions 0012/0015/0021)",
+            models_role_list(models.and_then(|m| vget(m, "claude")))
         ));
         // opencode-support oc-13/oc-14: printed unconditionally, same as
         // claude's line above — opencode now carries a built-in default too
         // (the free `opencode/*` provider names baked into every rendered
         // `.opencode/agent/bee-*.md`, oc-14), so an unconfigured repo has a
         // real answer to print, not an all-null line nobody asked for.
-        let opencode = s("models").and_then(|m| vget(m, "opencode"));
         lines.push(format!(
-            "Models (opencode): generation={} extraction={} review={}",
-            format_slot(opencode.and_then(|o| vget(o, "generation"))),
-            format_slot(opencode.and_then(|o| vget(o, "extraction"))),
-            format_slot(opencode.and_then(|o| vget(o, "review"))),
+            "Models (opencode): {}",
+            models_role_list(models.and_then(|m| vget(m, "opencode")))
         ));
+        // model-role-split (mrs-27): codex had NO line at all. Two runtimes
+        // were printed by hand out of the three `RUNTIMES` names status
+        // itself carries, so an operator who configured `models.codex` read a
+        // status page that reported on everything except the runtime they
+        // configured — the same invisibility as the closed role list, one
+        // axis over. It is guarded rather than unconditional because codex,
+        // unlike claude and opencode, ships no built-in default: `bee status`
+        // gains a line only on a host that actually configured one, so no
+        // existing host reads a new all-null row it never asked for.
+        let codex = models.and_then(|m| vget(m, "codex"));
+        let codex_configured = matches!(codex, Some(Value::Object(t))
+            if t.values().any(|v| !matches!(v, Value::Null)));
+        if codex_configured {
+            lines.push(format!("Models (codex): {}", models_role_list(codex)));
+        }
     }
     // D6: the human line counts ROLES, and the escalation share is reported
     // beside them rather than folded into a fourth count. The role set is
