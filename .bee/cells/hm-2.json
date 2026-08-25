@@ -1,0 +1,48 @@
+{
+  "id": "hm-2",
+  "feature": "human-mailbox",
+  "title": "Append an entry at a clean stop while the run is armed",
+  "action": "Append one raw entry the moment a clean stop happens (D4), starting with a cell cap. Recognise whether the run is armed from .bee/config.json's herding block (D9). Every session appends its entries whether attended or not (D9); only an armed run will later compose a letter. The plain-language sentence is written at the moment of the event, not at composition (D8). Resolve plan.md's deferred question of how each clean stop reaches the append hook by tracing outward from handlers_close.rs, and record what you find for the remaining stop kinds even if only the cap lands in this cell.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "hm-1"
+  ],
+  "must_haves": {
+    "truths": [
+      "Capping a cell appends one entry to the store at the moment of the cap (D4).",
+      "Entries are appended whether the session is attended or unattended; only arming decides whether a letter is later composed (D9).",
+      "Arming is read from the existing .bee/config.json herding block rather than a new signal.",
+      "The entry carries the plain-language sentence written at the moment of the event (D8).",
+      "An unarmed run's cap path stays byte-identical to today (D10).",
+      "How the other clean stops — feature close and blocker — reach the append hook is traced and recorded, even where only the cap is wired in this cell."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "acceptance": "A cap in any run appends its entry; arming is read from the herding block; the unarmed cap path is byte-identical to today; the route from every clean stop to the append hook is recorded.",
+  "role": "code",
+  "status": "open",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

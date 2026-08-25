@@ -418,6 +418,7 @@
     "state-store",
     "contract",
     "escalation",
-    "judge-deferral"
+    "judge-deferral",
+    "data-model"
   ]
 }

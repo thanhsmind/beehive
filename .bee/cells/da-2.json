@@ -1,0 +1,78 @@
+{
+  "id": "da-2",
+  "feature": "decision-attribution",
+  "lane": "standard",
+  "role": "code",
+  "title": "Give decisions log an explicit --feature so Discovery can attribute its own work",
+  "action": "Add --feature <slug> to bee decisions log (decision-attribution D2). An explicit value ALWAYS wins over the calling session's bound lane; with neither, the event carries no feature key (D1, already landed in da-1). Steps: (1) add `feature: Option<String>` to LogParams in verbs/decisions/verbs_read.rs and update every constructor - 33 in decisions/tests.rs, plus verbs_read.rs:238 and three in state_group/set_gate.rs - passing None where the caller has no opinion. (2) parse the flag in run_log and pass it through. (3) in do_log, prefer the explicit value over feature_for_stamp(&target). (4) validate the slug: reject empty or whitespace-only with a typed FIX line naming the flag - never silently ignore it. (5) DECLARE the flag in generated/registry_payload.json - a flag served but not declared gives the CLI-shape guard no schema, and tests/registry_dispatch.rs enforces both directions. Edit that file as DATA, never as text: it is one line of JSON.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "must_haves": {
+    "truths": [
+      "An explicit --feature stamps that value even when the session is bound to a different lane",
+      "An explicit --feature stamps that value when no lane is bound at all - the Discovery case D2 exists for",
+      "With no --feature and a bound lane, the lane still wins (da-1 behaviour unchanged)",
+      "With no --feature and no bound lane, the event still carries no feature key",
+      "An empty or whitespace-only --feature refuses with a typed FIX line naming the flag, and writes nothing",
+      "bee --help shows the flag, and tests/registry_dispatch.rs stays green in both directions"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "decision-attribution D2"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "da-1"
+  ],
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": "bee decisions log gains --feature; explicit value outranks the bound lane, a blank one refuses",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason.",
+      "Sync door acknowledged: the workflow-state file touched is a mechanical struct-field update with no gate behaviour change.",
+      "sync-ack: The workflow-state touch is state_group/set_gate.rs, and it is purely mechanical: three LogParams literals gained feature: None because the struct grew a field. No gate behaviour, wording, or contract changed, so none of the area's owned skills has anything to say about it. The behavioural change in this cell is confined to decisions log, whose surface is documented in the command registry that ships with it."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T13:25:13.666Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T13:22:13.750Z",
+    "sync_ack": "The workflow-state touch is state_group/set_gate.rs, and it is purely mechanical: three LogParams literals gained feature: None because the struct grew a field. No gate behaviour, wording, or contract changed, so none of the area's owned skills has anything to say about it. The behavioural change in this cell is confined to decisions log, whose surface is documented in the command registry that ships with it.",
+    "inline_reason": "Same named deviation as da-1: this session does not spawn subagents unless the user asks, and the orchestrator held the diagnosis and the two-place wiring law already.",
+    "report": {
+      "outcome": "--feature added to bee decisions log, served in run_log and declared in registry_payload.json. Explicit value outranks the bound lane; a blank value refuses with a typed FIX line and writes nothing. 38 LogParams constructors updated across 3 files.",
+      "commit": "d4bf49dd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (2978 passed, 2 failed) — the 2 are the opencode contract tests needing node on PATH, environmental and unchanged; registry_dispatch green proves the flag is both served and declared",
+      "deviations": [
+        "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason.",
+        "Sync door acknowledged: the workflow-state file touched is a mechanical struct-field update with no gate behaviour change."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

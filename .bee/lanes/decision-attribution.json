@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "feature": "decision-attribution",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"decision-attribution\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"decision-attribution\" (lane).",
+  "created_at": "2026-08-25T12:14:02.772Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-08-25T12:17:31.890Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-08-25T12:14:34.071Z",
+    "feature": "decision-attribution"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T13:21:08.314Z",
+    "branch": "wt/decision-attribution",
+    "worktree_id": "beehive--wt--decision-attribution",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

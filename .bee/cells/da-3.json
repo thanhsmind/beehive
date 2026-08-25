@@ -1,0 +1,51 @@
+{
+  "id": "da-3",
+  "feature": "decision-attribution",
+  "lane": "standard",
+  "role": "code",
+  "title": "Add a narrow reattribute verb and correct the mis-stamped decisions",
+  "action": "Add `bee decisions reattribute` (decision-attribution D5) to correct decisions whose feature stamp contradicts their own text. PREDICATE, deliberately narrow: act only where the record's `decision` text opens with `<slug> D<n>` (the convention the 23 provable cases all follow) AND that slug differs from the record's stamped `feature`. Anything else is left alone - the verb corrects a contradiction the record itself carries, it NEVER invents an attribution. Writes ONLY the `feature` field; never decision, rationale, alternatives, date, id, tags, relation, supersedes or touches. Offer --dry-run and report scanned/would-change/changed counts plus each id with its old and new value. Idempotent: a second run reports zero. Hold the decisions lock across the WHOLE pass and re-read each record inside the lock before writing it - cells backfill-roles shipped a scan-outside-the-lock that silently reversed a concurrent write, and that is a live risk here because sibling sessions append to decisions.jsonl continuously. Serve the verb in decisions try_native AND declare it in generated/registry_payload.json in the same change; registry_dispatch enforces both directions. Edit that payload as DATA, it is one line of JSON. Finally run it for real against the live store and report the counts in the cap.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "must_haves": {
+    "truths": [
+      "A record whose text opens with another feature's `<slug> D<n>` and whose stamp differs is corrected to that slug",
+      "A record whose text names its OWN stamped feature is left untouched",
+      "A record with no `<slug> D<n>` prefix is left untouched whatever its stamp says",
+      "Only the feature field changes - every other field on a corrected record is byte-identical",
+      "--dry-run reports the same counts and writes nothing",
+      "A second run reports zero changes",
+      "The scan and the writes both happen under the decisions lock, with each record re-read inside the lock",
+      "The verb is both served and declared, and registry_dispatch stays green"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "decision-attribution D5"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "da-1"
+  ],
+  "status": "claimed",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T13:25:33.039Z"
+  }
+}

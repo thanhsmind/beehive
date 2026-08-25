@@ -15,9 +15,9 @@
   "created_at": "2026-08-24T18:50:51.857Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-08-25T11:47:57.090Z",
+    "kind": "turn-end",
+    "subject": "result: model-role-split fully closed — UAT approved, all five blocking close doors settled, knowledge concept and learnings landed, 34 cell",
+    "asked_at": "2026-08-25T12:03:46.911Z",
     "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {
