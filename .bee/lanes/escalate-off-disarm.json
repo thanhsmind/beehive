@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "escalate-off-disarm",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"escalate-off-disarm\" started at phase \"exploring\" (lane).",
-  "next_action": "close",
+  "next_action": "bee close finished \"escalate-off-disarm\" — feature is closed.",
   "created_at": "2026-08-25T15:35:39.377Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
