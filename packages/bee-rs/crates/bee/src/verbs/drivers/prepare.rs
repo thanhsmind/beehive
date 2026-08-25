@@ -1280,6 +1280,37 @@ pub(crate) fn prepare_dispatch_with_role(
         return Ok(Prepared::Value(refusal));
     }
 
+    // model-role-split D10/D11 (store 50808d48), scoped for this codebase by
+    // 51341f84: the runtime fallback chain is a contract bee PUBLISHES on the
+    // payload, never a loop bee runs. prepare builds a payload and returns —
+    // the orchestrator or the worker executes it — so bee never sees the 429,
+    // the 5xx or the stall a chain step answers. What travels here is the
+    // chain that applies to THIS dispatch plus D11's gate in both directions,
+    // beside the model, in the same shape and the same neighbourhood as the
+    // herding slot's `fallback` + `fallback_when` above.
+    //
+    // Gated on the payload ACTUALLY carrying a model, which is the literal
+    // reading of "beside the model" and the honest one: an escalated dispatch
+    // (session model, no `model` parameter), a cli-exec command and a herding
+    // pane carry no model to fall FROM, so a list of model selectors would be
+    // advice none of them could take. `marker_role` is the role the dispatch
+    // travels under — the same name the `[bee-tier: …]` marker and
+    // `economics.logical_tier` carry, so a role-keyed chain is keyed on the
+    // channel that can actually fail rather than on a name that fell through.
+    //
+    // EXPLICIT-ONLY: with no `retry.fallbackChains` configured,
+    // `read_fallback_chains` hands back an empty map, `resolve_fallback_chain`
+    // answers None, and nothing at all is inserted — every payload stays
+    // byte-identical to before this block existed, the advisor included.
+    if let Some(model) = payload.get("model").and_then(Value::as_str).map(str::to_string) {
+        if !model.is_empty() {
+            let chains = read_fallback_chains(root);
+            if let Some((key, steps)) = resolve_fallback_chain(&chains, marker_role, &model) {
+                payload.insert("fallback_chain".into(), fallback_chain_payload(&key, &steps));
+            }
+        }
+    }
+
     let param_model = match (&channel[..], &resolved) {
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
         _ => None,

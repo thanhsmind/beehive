@@ -656,3 +656,190 @@ pub(crate) fn resolve_advisor(models: &Map<String, Value>, runtime: &str) -> Opt
     }
     None
 }
+
+// ═══ the runtime fallback chain (model-role-split D10/D11) ═════════════════
+//
+// WHAT THIS LAYER IS, AND WHAT IT IS NOT. Decision 51341f84 scopes store
+// 50808d48 for this codebase: bee never executes a dispatch. `dispatch
+// prepare` builds a payload and RETURNS; the orchestrator or the worker runs
+// it. So bee cannot observe the quota wall, the 5xx or the stream stall a
+// chain step answers, and nothing below is a retry loop, an error classifier
+// or any code that decides a step has been earned. What bee owns is the
+// CONTRACT: parse the config, resolve the chain that applies to THIS
+// dispatch, and publish it — with the gate that says when a step is
+// earned — beside the model on the payload. Advancing a step, and recording
+// the step that was taken, belong wherever the dispatch is actually executed.
+//
+// The shape is the one `prepare.rs` already uses for the herding slot's
+// `fallback` (herding-review-slots D3) and `fallback_when` (af17e217): the
+// condition travels WITH the fallback, never as a rule the caller re-derives.
+
+/// D11 (store 50808d48) — the error classes that MAY advance a chain step.
+/// Transient and infrastructural, every one of them: the failure happened
+/// BEFORE the model got to be wrong.
+pub(crate) const CHAIN_ADVANCE_ON: [&str; 6] = [
+    "quota_or_rate_limit",
+    "provider_auth_or_policy_rejection",
+    "empty_response",
+    "malformed_tool_call_replay_safe",
+    "stream_stall_or_connection_reset",
+    "server_error_5xx",
+];
+
+/// D11 — the classes that may NEVER advance a step. Every one is a SEMANTIC
+/// failure: the model was reached, answered, and answered badly. Falling to
+/// another model there would hide the defect, which is the one thing bee's
+/// loud posture exists to refuse. Published as its own list rather than left
+/// as "everything not in `advance_on`", because the negative is the half a
+/// caller gets wrong.
+pub(crate) const CHAIN_NEVER_ADVANCE_ON: [&str; 4] =
+    ["tool_error", "wrong_or_unwanted_result", "failed_proof", "red_test"];
+
+/// The condition, in one line, carried beside the chain — the `fallback_when`
+/// precedent (af17e217) applied to D11's gate.
+pub(crate) const CHAIN_FALLBACK_WHEN: &str = "the dispatch failed with one of advance_on; a never_advance_on failure stays loud and never advances a step";
+
+fn chain_class_list(classes: &[&str]) -> Value {
+    Value::Array(classes.iter().map(|c| Value::String((*c).to_string())).collect())
+}
+
+fn warn_fallback_chain(key: &str, why: &str) {
+    eprintln!("bee: retry.fallbackChains[\"{key}\"] in .bee/config.json is ignored — {why}");
+}
+
+/// Parse and validate `retry.fallbackChains`: a map whose KEY names a role, a
+/// concrete model selector, or a `provider/*` wildcard, and whose VALUE is an
+/// ordered list of model selectors.
+///
+/// EXPLICIT-ONLY (D10). There is no built-in chain for any role, so this
+/// function answers an absent config with an EMPTY map and every dispatch
+/// payload stays byte-identical to a bee that had never heard of chains. A
+/// `default` key is refused out loud for the same reason: the source product
+/// this shape is adapted from lets every role inherit a `default` chain, and
+/// inheriting one is exactly what D10 declined — it would change advisor
+/// behaviour that decision 4faf1de9 settled by live evidence, without the
+/// owner asking.
+///
+/// Junk drops rather than throws, the same posture `normalize_tier_value`
+/// holds one screen up — but it drops LOUDLY here. A mistyped chain is not a
+/// slot somebody deliberately turned off; it is a safety net the operator
+/// believes is under them.
+pub(crate) fn normalize_fallback_chains(raw: Option<&Value>) -> Map<String, Value> {
+    let mut out = Map::new();
+    let Some(Value::Object(src)) = raw else { return out };
+    for (raw_key, value) in src {
+        let key = js_trim(raw_key);
+        if key.is_empty() {
+            continue;
+        }
+        if key == "default" {
+            warn_fallback_chain(
+                key,
+                "bee has no default chain and no role inherits one (model-role-split D10); key a chain by role name, by concrete model selector, or by a \"provider/*\" wildcard",
+            );
+            continue;
+        }
+        let Some(items) = value.as_array() else {
+            warn_fallback_chain(key, "a chain must be an ordered ARRAY of model selectors");
+            continue;
+        };
+        let mut steps: Vec<Value> = Vec::new();
+        for item in items {
+            let Value::String(step) = item else { continue };
+            let step = js_trim(step);
+            // A step naming the key's own model is not a step: a chain that
+            // loops to its own head would have the executor "advance" onto
+            // the model that just hit the wall.
+            if step.is_empty() || step == key {
+                continue;
+            }
+            if steps.iter().any(|s| s.as_str() == Some(step)) {
+                continue;
+            }
+            steps.push(Value::String(step.to_string()));
+        }
+        if steps.is_empty() {
+            warn_fallback_chain(key, "it names no model selector bee can use as a step");
+            continue;
+        }
+        out.insert(key.to_string(), Value::Array(steps));
+    }
+    out
+}
+
+/// The `retry.fallbackChains` slice of the repo config. Reads the raw config
+/// directly rather than through `read_models`, so a repo shape that makes
+/// `read_models` delegate is not this reader's business, and an absent
+/// `retry` key costs one map lookup.
+pub(crate) fn read_fallback_chains(root: &Path) -> Map<String, Value> {
+    let config = read_config_raw(root);
+    normalize_fallback_chains(config.get("retry").and_then(|r| r.get("fallbackChains")))
+}
+
+/// WHICH chain applies to THIS dispatch — most specific key first.
+///
+/// 1. the concrete model selector this dispatch carries,
+/// 2. the `provider/*` wildcard that selector falls under,
+/// 3. the role the dispatch travels under.
+///
+/// A model-keyed chain outranks a role-keyed one because D10 says a
+/// model-keyed chain "follows that model wherever it is assigned": it is
+/// keyed on the thing that actually failed, and it survives the model being
+/// reassigned to another role. A wildcard sits between the two — it is the
+/// same model axis, one step wider.
+///
+/// The FIRST key that matches answers, and the walk stops there even when its
+/// steps clean away to nothing (a chain naming only the model already in
+/// hand). Continuing would let a broader key overrule the more specific one
+/// the operator wrote, which is the opposite of "most specific wins".
+pub(crate) fn resolve_fallback_chain(
+    chains: &Map<String, Value>,
+    role: &str,
+    model: &str,
+) -> Option<(String, Vec<String>)> {
+    if chains.is_empty() {
+        return None;
+    }
+    let model = js_trim(model);
+    let role = js_trim(role);
+    let mut keys: Vec<String> = Vec::new();
+    if !model.is_empty() {
+        keys.push(model.to_string());
+        if let Some((provider, _)) = model.split_once('/') {
+            if !provider.is_empty() {
+                keys.push(format!("{provider}/*"));
+            }
+        }
+    }
+    if !role.is_empty() && !keys.iter().any(|k| k == role) {
+        keys.push(role.to_string());
+    }
+    for key in keys {
+        let Some(Value::Array(items)) = chains.get(&key) else { continue };
+        let steps: Vec<String> = items
+            .iter()
+            .filter_map(|v| v.as_str())
+            .filter(|s| *s != model)
+            .map(|s| s.to_string())
+            .collect();
+        return if steps.is_empty() { None } else { Some((key, steps)) };
+    }
+    None
+}
+
+/// The published contract, as one payload field: the chain, the key it was
+/// resolved by, and D11's gate in both directions. The executor is TOLD which
+/// failures may advance a step and which may not — an unpublished rule is one
+/// every caller invents differently.
+pub(crate) fn fallback_chain_payload(key: &str, steps: &[String]) -> Value {
+    let mut out = Map::new();
+    out.insert("key".into(), Value::String(key.to_string()));
+    out.insert(
+        "chain".into(),
+        Value::Array(steps.iter().map(|s| Value::String(s.clone())).collect()),
+    );
+    out.insert("fallback_when".into(), Value::String(CHAIN_FALLBACK_WHEN.to_string()));
+    out.insert("advance_on".into(), chain_class_list(&CHAIN_ADVANCE_ON));
+    out.insert("never_advance_on".into(), chain_class_list(&CHAIN_NEVER_ADVANCE_ON));
+    Value::Object(out)
+}

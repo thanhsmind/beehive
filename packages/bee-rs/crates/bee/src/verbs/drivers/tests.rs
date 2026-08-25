@@ -5535,3 +5535,318 @@ use std::time::Instant;
         let models2 = read_models(&configured).unwrap();
         assert!(!role_is_unknown(&models2, "claude", "test"));
     }
+
+    // ── mrs-19: the runtime fallback chain (D10/D11, store 50808d48) ───────
+    //
+    // Scoped by 51341f84: bee PUBLISHES a chain and its gate, it never walks
+    // one. So every test below asks what the payload SAYS — there is no retry
+    // loop here to exercise, and adding one would be the decision's rejected
+    // alternative.
+
+    const CHAIN_MODELS: &str = r#""models":{"claude":{"code":"sonnet","read":"haiku","generation":"sonnet","review":"opus","advisor":"fable"}}"#;
+
+    const CHAIN_CELL: &str =
+        r#"{"id":"c-1","feature":"f","status":"claimed","role":"code","trace":{"worker":"w"}}"#;
+
+    fn chain_repo(tmp: &tempfile::TempDir, retry: &str) -> PathBuf {
+        let config = if retry.is_empty() {
+            format!("{{{CHAIN_MODELS}}}")
+        } else {
+            format!("{{{CHAIN_MODELS},{retry}}}")
+        };
+        let root = repo(tmp, &config);
+        w(&root, ".bee/cells/c-1.json", CHAIN_CELL);
+        root
+    }
+
+    fn chain_payload(root: &Path, kind: &str) -> Value {
+        let (cell, worker) = if kind == "cell" { (Some("c-1"), Some("w")) } else { (None, None) };
+        let Prepared::Value(v) =
+            prepare_dispatch(root, "claude", kind, cell, worker, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("{kind} dispatch did not produce a payload")
+        };
+        v.get("payload").cloned().unwrap()
+    }
+
+    /// The whole payload, as the bytes it serializes to. Byte equality is the
+    /// question this feature has to answer, so the assertion asks it directly
+    /// rather than comparing parsed maps (which compare order-blind).
+    fn chain_payload_bytes(root: &Path, kind: &str) -> String {
+        serde_json::to_string(&chain_payload(root, kind)).unwrap()
+    }
+
+    /// D10, the load-bearing one: with NO `retry.fallbackChains` configured,
+    /// every dispatch payload is byte-identical to a bee that had never heard
+    /// of chains.
+    ///
+    /// Two halves, because "identical to BEFORE" is not a thing a test can
+    /// re-derive from the code it is testing. The three goldens are the exact
+    /// bytes captured from the build one commit before this cell — a whole
+    /// payload each, not a key spot-check. The loop then pins that every
+    /// shape of chain config that matches NOTHING (absent, empty, unmatched,
+    /// junk, and the refused `default` key) leaves all four kinds on those
+    /// same bytes.
+    #[test]
+    fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
+        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: generation]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (sonnet)","model":"sonnet"}"#;
+        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"advisor (fable)","model":"fable"}"#;
+
+        let t0 = tempfile::tempdir().unwrap();
+        let none = chain_repo(&t0, "");
+        assert_eq!(chain_payload_bytes(&none, "gather"), GATHER);
+        assert_eq!(chain_payload_bytes(&none, "reviewer"), REVIEWER);
+        assert_eq!(chain_payload_bytes(&none, "advisor"), ADVISOR);
+
+        for retry in [
+            r#""retry":{}"#,
+            r#""retry":{"fallbackChains":{}}"#,
+            r#""retry":"nonsense""#,
+            // configured, but nothing here keys THIS host's dispatches
+            r#""retry":{"fallbackChains":{"nowhere/*":["x"],"design":["y"],"gpt-5.5":["z"]}}"#,
+            // every validation refusal at once: the `default` key D10 declined,
+            // a non-array chain, an empty chain, a whitespace-only step, and a
+            // chain looping to its own head
+            r#""retry":{"fallbackChains":{"default":["sonnet"],"code":"opus","review":[],"advisor":["  "],"generation":["generation"]}}"#,
+        ] {
+            let t = tempfile::tempdir().unwrap();
+            let root = chain_repo(&t, retry);
+            for kind in ["cell", "gather", "reviewer", "advisor"] {
+                assert_eq!(
+                    chain_payload_bytes(&root, kind),
+                    chain_payload_bytes(&none, kind),
+                    "the {kind} payload moved under {retry}"
+                );
+            }
+        }
+    }
+
+    /// A chain that DOES match adds exactly one payload key and moves nothing
+    /// else — asked of the cell payload, the big one the goldens above leave
+    /// out. Remove `fallback_chain` and the bytes are the no-chain bytes again.
+    #[test]
+    fn a_matching_chain_adds_exactly_one_payload_key_and_moves_nothing_else() {
+        let t0 = tempfile::tempdir().unwrap();
+        let none = chain_repo(&t0, "");
+        let t1 = tempfile::tempdir().unwrap();
+        let with = chain_repo(&t1, r#""retry":{"fallbackChains":{"code":["opus","haiku"]}}"#);
+
+        let mut payload = chain_payload(&with, "cell");
+        let obj = payload.as_object_mut().unwrap();
+        assert!(obj.remove("fallback_chain").is_some(), "the chain was never published");
+        assert_eq!(
+            serde_json::to_string(&payload).unwrap(),
+            chain_payload_bytes(&none, "cell")
+        );
+    }
+
+    /// D10: a chain key may name a role, a concrete model selector, or a
+    /// `provider/*` wildcard, and the most specific key wins — model, then
+    /// wildcard, then role.
+    #[test]
+    fn a_chain_resolves_by_role_by_model_and_by_provider_wildcard_most_specific_first() {
+        let chains = normalize_fallback_chains(Some(&json!({
+            "code": ["by-role"],
+            "anthropic/*": ["by-wildcard"],
+            "anthropic/opus": ["by-model"],
+            "sonnet": ["by-plain-model"],
+        })));
+
+        // each key kind resolves on its own …
+        assert_eq!(
+            resolve_fallback_chain(&chains, "code", "haiku"),
+            Some(("code".into(), vec!["by-role".to_string()]))
+        );
+        assert_eq!(
+            resolve_fallback_chain(&chains, "review", "sonnet"),
+            Some(("sonnet".into(), vec!["by-plain-model".to_string()]))
+        );
+        assert_eq!(
+            resolve_fallback_chain(&chains, "review", "anthropic/haiku"),
+            Some(("anthropic/*".into(), vec!["by-wildcard".to_string()]))
+        );
+        // … and where several match, the narrowest key answers.
+        assert_eq!(
+            resolve_fallback_chain(&chains, "code", "anthropic/opus"),
+            Some(("anthropic/opus".into(), vec!["by-model".to_string()]))
+        );
+        assert_eq!(
+            resolve_fallback_chain(&chains, "code", "anthropic/haiku"),
+            Some(("anthropic/*".into(), vec!["by-wildcard".to_string()]))
+        );
+        // A model-keyed chain follows the MODEL, whatever role carries it.
+        assert_eq!(
+            resolve_fallback_chain(&chains, "read", "sonnet"),
+            Some(("sonnet".into(), vec!["by-plain-model".to_string()]))
+        );
+        // Nothing keyed for this dispatch is no chain, never a borrowed one.
+        assert_eq!(resolve_fallback_chain(&chains, "read", "haiku"), None);
+
+        // end to end: the role key on a real cell dispatch (role `code`
+        // resolves models.claude.code = sonnet) …
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        let payload = chain_payload(&root, "cell");
+        assert_eq!(payload.get("model"), Some(&json!("sonnet")));
+        assert_eq!(payload.get("fallback_chain").unwrap().get("key"), Some(&json!("code")));
+        assert_eq!(payload.get("fallback_chain").unwrap().get("chain"), Some(&json!(["opus"])));
+
+        // … and the model key outranking it on the same dispatch.
+        let t2 = tempfile::tempdir().unwrap();
+        let root2 =
+            chain_repo(&t2, r#""retry":{"fallbackChains":{"code":["opus"],"sonnet":["haiku"]}}"#);
+        let by_model = chain_payload(&root2, "cell");
+        assert_eq!(by_model.get("fallback_chain").unwrap().get("key"), Some(&json!("sonnet")));
+        assert_eq!(by_model.get("fallback_chain").unwrap().get("chain"), Some(&json!(["haiku"])));
+
+        // … and a provider wildcard, on a host whose models carry providers.
+        let t3 = tempfile::tempdir().unwrap();
+        let root3 = repo(
+            &t3,
+            r#"{"models":{"claude":{"code":"anthropic/opus"}},"retry":{"fallbackChains":{"anthropic/*":["local/qwen"]}}}"#,
+        );
+        w(&root3, ".bee/cells/c-1.json", CHAIN_CELL);
+        let wild = chain_payload(&root3, "cell");
+        assert_eq!(wild.get("model"), Some(&json!("anthropic/opus")));
+        assert_eq!(wild.get("fallback_chain").unwrap().get("key"), Some(&json!("anthropic/*")));
+    }
+
+    /// D11: the payload publishes the gate in BOTH directions — the classes
+    /// that may advance a step and the classes that may never. The executor
+    /// must not have to re-derive that list; an unpublished rule is one every
+    /// caller invents differently.
+    #[test]
+    fn the_published_chain_carries_both_halves_of_the_error_gate() {
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        let payload = chain_payload(&root, "cell");
+        let chain = payload.get("fallback_chain").unwrap();
+
+        assert_eq!(
+            chain.get("advance_on"),
+            Some(&json!([
+                "quota_or_rate_limit",
+                "provider_auth_or_policy_rejection",
+                "empty_response",
+                "malformed_tool_call_replay_safe",
+                "stream_stall_or_connection_reset",
+                "server_error_5xx"
+            ]))
+        );
+        assert_eq!(
+            chain.get("never_advance_on"),
+            Some(&json!(["tool_error", "wrong_or_unwanted_result", "failed_proof", "red_test"]))
+        );
+        assert_eq!(chain.get("fallback_when"), Some(&json!(CHAIN_FALLBACK_WHEN)));
+
+        // The negative half is the point: no semantic failure is ever an
+        // advance, and the two lists cannot overlap.
+        for semantic in CHAIN_NEVER_ADVANCE_ON {
+            assert!(
+                !CHAIN_ADVANCE_ON.contains(&semantic),
+                "{semantic} is a semantic failure and must never advance a step"
+            );
+        }
+    }
+
+    /// D10 preserving 4faf1de9: the advisor has no fallback by design — the
+    /// consult that hit a quota wall was recorded NOT OBTAINED rather than
+    /// substituted. A chain configured for other roles must not reach it; only
+    /// a chain the operator keys to the advisor itself does.
+    #[test]
+    fn the_advisor_carries_no_chain_unless_one_is_configured_for_it() {
+        let t = tempfile::tempdir().unwrap();
+        let others =
+            chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"],"review":["sonnet"]}}"#);
+        assert_eq!(chain_payload(&others, "advisor").get("fallback_chain"), None);
+
+        let t2 = tempfile::tempdir().unwrap();
+        let by_role = chain_repo(&t2, r#""retry":{"fallbackChains":{"advisor":["opus"]}}"#);
+        assert_eq!(
+            chain_payload(&by_role, "advisor").get("fallback_chain").unwrap().get("key"),
+            Some(&json!("advisor"))
+        );
+
+        let t3 = tempfile::tempdir().unwrap();
+        let by_model = chain_repo(&t3, r#""retry":{"fallbackChains":{"fable":["opus"]}}"#);
+        assert_eq!(
+            chain_payload(&by_model, "advisor").get("fallback_chain").unwrap().get("key"),
+            Some(&json!("fable"))
+        );
+    }
+
+    /// A dispatch with no model of its own has nothing to fall FROM: an
+    /// escalated cell runs the session model with no `model` parameter, and a
+    /// herding slot runs a pane. Publishing a list of model selectors beside
+    /// a payload that names no model would be advice none of them could take.
+    #[test]
+    fn a_dispatch_that_names_no_model_carries_no_chain() {
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"],"ceiling":["opus"]}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","role":"code","escalate":true,"trace":{"worker":"w"}}"#,
+        );
+        let escalated = chain_payload(&root, "cell");
+        assert_eq!(escalated.get("model"), None);
+        assert_eq!(escalated.get("fallback_chain"), None);
+
+        let t2 = tempfile::tempdir().unwrap();
+        let herding = repo(
+            &t2,
+            r#"{"models":{"claude":{"code":{"kind":"herding"}}},"retry":{"fallbackChains":{"code":["opus"]}}}"#,
+        );
+        w(&herding, ".bee/cells/c-1.json", CHAIN_CELL);
+        assert_eq!(chain_payload(&herding, "cell").get("fallback_chain"), None);
+    }
+
+    /// Parsing and validation, at the door. Junk drops — loudly, on stderr —
+    /// rather than reaching a payload half-formed, and `default` is refused
+    /// outright: D10 ships no default chain and no role inherits one.
+    #[test]
+    fn fallback_chain_config_validation_drops_what_it_cannot_use() {
+        let chains = normalize_fallback_chains(Some(&json!({
+            "  code  ": ["  opus  ", "opus", "", "haiku"],
+            "review": "opus",
+            "read": [],
+            "extraction": [null, 7],
+            "sonnet": ["sonnet", "haiku"],
+            "default": ["opus"],
+            "   ": ["opus"],
+        })));
+
+        // trimmed key, trimmed steps, duplicates collapsed, order kept
+        assert_eq!(chains.get("code"), Some(&json!(["opus", "haiku"])));
+        // a step naming the key's own model is not a step
+        assert_eq!(chains.get("sonnet"), Some(&json!(["haiku"])));
+        for dropped in ["review", "read", "extraction", "default", "   ", ""] {
+            assert_eq!(chains.get(dropped), None, "{dropped} should not have survived");
+        }
+        assert_eq!(chains.len(), 2);
+
+        // Absent, non-object and empty all read as "no chains configured" —
+        // the same answer, so nothing can mistake one for a partial default.
+        assert!(normalize_fallback_chains(None).is_empty());
+        assert!(normalize_fallback_chains(Some(&json!("chains"))).is_empty());
+        assert!(normalize_fallback_chains(Some(&json!({}))).is_empty());
+        assert!(resolve_fallback_chain(&Map::new(), "code", "sonnet").is_none());
+
+        // A matched key whose steps clean away to nothing STOPS the walk: the
+        // most specific key the operator wrote is the one that answers, and a
+        // broader key never overrules it.
+        let self_loop = normalize_fallback_chains(Some(&json!({
+            "anthropic/*": ["anthropic/opus"],
+            "code": ["haiku"],
+        })));
+        assert_eq!(resolve_fallback_chain(&self_loop, "code", "anthropic/opus"), None);
+
+        // And the whole config path reads the same way `read_models` does.
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        assert_eq!(read_fallback_chains(&root).get("code"), Some(&json!(["opus"])));
+        let t2 = tempfile::tempdir().unwrap();
+        assert!(read_fallback_chains(&chain_repo(&t2, "")).is_empty());
+    }
