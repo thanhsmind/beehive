@@ -1,0 +1,50 @@
+{
+  "id": "mrs-9",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Head each dispatch's role list with the cell's own role",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 3, D3 (store 3c9d6262) with its literal lists fixed by decision 561e1bda. A cell-execution dispatch asks for the ordered list [<the cell's own role>, code, generation]; a read dispatch asks [read, extraction, generation]; a review dispatch asks [review, generation]; the advisor asks [advisor] ALONE with no fall-through, preserving decision 4faf1de9. THE TAIL IS LOAD-BEARING AND NOT DECORATION: fall-through walks to the first name that resolves, so ending a list at code would skip past the generation model every existing host has configured for years and land on bee's built-in default — a silent migration onto a different model, the exact defect this feature exists to remove. Read 561e1bda before changing any list. prepare.rs already prefers a cell's own recorded value over the kind default and stamps tier_source cell (the mechanism mrs-5 extended with --role, stamping tier_source flag); reuse it, do not add a second path. Precedence to preserve: an explicit --role names the slot directly; otherwise the cell's role heads the list; otherwise the kind's default. Record on the cap what tier_source values a caller can now observe and when.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A cell carrying role test resolves models.<runtime>.test when configured",
+      "A cell whose role nothing configures falls through to the historical name and runs exactly where it ran before this feature — no host sees a model change without opting in",
+      "--role still names the slot directly and outranks the cell's role",
+      "The advisor list has no fall-through",
+      "The cap names every tier_source value a caller can observe and the condition for each"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "3c9d6262",
+    "561e1bda",
+    "4faf1de9"
+  ],
+  "deps": [
+    "mrs-8"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

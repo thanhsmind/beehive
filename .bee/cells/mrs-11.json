@@ -1,0 +1,51 @@
+{
+  "id": "mrs-11",
+  "feature": "model-role-split",
+  "lane": "small",
+  "tier": "extraction",
+  "title": "Teach the cell payload's role field wherever a cell is authored",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-herding/references/dispatch-dry-run.md",
+    "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 3, the authoring-surface half of D7 and D8. The moment mrs-8 makes role required, every shipped cell payload example that omits it advertises a payload bee cells add now REFUSES — and this repo builds itself with bee, so an agent following planning-reference.md would author a refused cell. The plan moved this edit into slice 3 beside the field for exactly that reason. Add role to every cell payload example in the named files, and state D8's recommended vocabulary — code, read, test, docs, review, design — as GUIDANCE, explicitly noting that any name is legal and that an unconfigured name falls through with a warning rather than failing. Do NOT hand-edit the mirror trees under .claude/, .codex-plugin/, .opencode/ and .claude-plugin/: skills/ is the source and the mirrors are rendered, differing from it by intended runtime-conditional blocks. Run the regen chain inside this cell — bee dev regen — and let it write them. PROOF NOTE: the mirrors are NOT byte-identical to skills/, so the proof is that regen runs clean and bee dev release-manifest --check passes; never a byte-identity diff.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "No shipped cell payload example omits the now-required role field",
+      "The recommended vocabulary is stated as guidance, with any-name-is-legal and the fall-through-warns behaviour said plainly",
+      "The mirror trees are written by regen, not by hand, and bee dev release-manifest --check passes"
+    ]
+  },
+  "affects_skills": [
+    "bee-planning",
+    "bee-herding"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "4eaf1b71"
+  ],
+  "deps": [
+    "mrs-8"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

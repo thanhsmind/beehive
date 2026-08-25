@@ -1,0 +1,45 @@
+{
+  "id": "mrs-10",
+  "feature": "model-role-split",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Ship config defaults only for the roles bee itself asks for",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 3, the publishing half of D3 (store 3c9d6262): bee ships config defaults ONLY for the role names its own dispatch sites ask for, and every other job name is the user's to invent. With decision 561e1bda the asked-for names are code, read, review, advisor plus the historical tail names generation and extraction. Decide, and state the reasoning on the cap, which of those a FRESH onboarding writes into a new host's .bee/config.json — a name bee asks for but does not ship as a default is legal and resolves by fall-through, so shipping fewer is a real option and may be the better one. DO NOT change what an EXISTING host's config means: mrs-6 already rebased agent rendering onto roles, and an existing config carrying generation and extraction must keep resolving exactly as it does today. A published default is a name bee consumes, never a suggestion nobody reads — if you cannot justify a name as consumed, do not ship it.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard",
+  "must_haves": {
+    "truths": [
+      "A fresh onboarding writes config defaults only for names bee's own dispatch sites ask for, and the cap justifies each one as consumed",
+      "An existing config carrying the historical names resolves exactly as it does today",
+      "No name is shipped as a default merely as a suggestion"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "3c9d6262",
+    "561e1bda"
+  ],
+  "deps": [],
+  "status": "claimed",
+  "trace": {
+    "worker": "mrs-w10",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:19:36.443Z"
+  }
+}
