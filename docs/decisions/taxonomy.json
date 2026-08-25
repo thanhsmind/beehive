@@ -403,6 +403,15 @@
     "fallback",
     "retry",
     "refactor",
+    "build",
+    "model-role-split",
+    "reporting",
+    "bee-reviewing",
+    "bee-grooming",
+    "bee-capturing",
+    "honesty",
+    "boundaries",
+    "sync-door",
     "contract"
   ]
 }

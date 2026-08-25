@@ -15,19 +15,25 @@ bee:
 
 # Onboarding — The Opt-In Status Display
 
-This concept owns one mechanism end to end: the pair of scripts that render the
-assistant's per-session status line, which onboarding vendors **only** into projects
-that already opted in. The defining property is restraint — onboarding never creates
-the opt-in, never edits the settings file that declares it, and a project that never
-opted in is untouched by this mechanism's existence.
+This concept owns one mechanism end to end: the script that renders the assistant's
+per-session status line, which onboarding vendors **only** into projects that already
+opted in. The defining property is restraint — onboarding never creates the opt-in,
+never edits the settings file that declares it, and a project that never opted in is
+untouched by this mechanism's existence.
+
+The vendored script is the whole of what this mechanism copies. It was one half of a
+two-file pair until the R6 cutover; the other half, a Node usage aggregator, is now
+`bee dev statusline`, a subcommand of the bee binary that the script resolves at
+render time. Onboarding vendors that binary through a different mechanism, and a host
+that resolves none simply renders the first line without the token/cost line.
 
 ## Data Dictionary
 
 | Element | Meaning |
 |---|---|
-| status-display pair | Two scripts that render the assistant's per-session status line: the display command and its usage/cost aggregator. Canonical copies live with bee's source; each opted-in project holds a vendored copy. |
+| status-display script | The script that renders the assistant's per-session status line. It draws the session facts itself and asks `bee dev statusline` for the optional token/cost line. The canonical copy lives with bee's source; each opted-in project holds a vendored copy. |
 | opt-in signal | The project's assistant-settings file declares a status-display command that points at the **project's own** copy of the display script — either anchored by the project-directory variable or written as a bare project-relative path. A reference to a user-level (home-directory) copy is NOT an opt-in. |
-| managed status-display record | A fingerprint per pair file, stored in the project's onboarding record **only when the project opts in**, so later runs can tell current from drifted. Projects that never opted in carry no such record. |
+| managed status-display record | A fingerprint per vendored file, stored in the project's onboarding record **only when the project opts in**, so later runs can tell current from drifted. Projects that never opted in carry no such record. |
 
 ## Behaviors & Operations
 
@@ -35,26 +41,27 @@ opted in is untouched by this mechanism's existence.
 derives the opt-in signal. What blocks it: nothing — an absent, unreadable,
 unparseable, or unexpectedly-shaped settings file simply means "not opted in";
 detection never fails a run. What the agent observes: opted-in projects with a
-missing or altered pair file see one planned copy action per affected file;
+missing or altered vendored file see one planned copy action per affected file;
 non-opted projects see zero status-display actions, always.
 
-**Vendor (apply run, opted-in projects only).** Each planned pair file is written
-from the canonical copy, whole-file, atomically. Side effects: none beyond the two
-files — the settings file is never created, modified, or backed up by this
-behavior. Afterwards the project's status display renders with the canonical
+**Vendor (apply run, opted-in projects only).** Each planned file is written from
+the canonical copy, whole-file, atomically. The plan walks the canonical directory,
+so the count follows that directory rather than a fixed number. Side effects: none
+beyond the files it copies — the settings file is never created, modified, or backed
+up by this behavior. Afterwards the project's status display renders with the canonical
 behavior, and an immediate re-check reports up to date.
 
-**Heal drift.** A locally edited pair file is treated as drift, not preference: the
-next apply overwrites it with the canonical copy (same contract as every vendored
+**Heal drift.** A locally edited vendored file is treated as drift, not preference:
+the next apply overwrites it with the canonical copy (same contract as every vendored
 helper — the canonical source is bee's tree). A project that wants local
 status-display behavior keeps its settings pointing at a user-level copy instead.
 
 **Stay out (non-opted projects).** Projects without the opt-in signal never receive
-the pair files, never gain a managed status-display record, and their up-to-date
+the vendored file, never gain a managed status-display record, and their up-to-date
 status is entirely unaffected by this mechanism's existence. Such a project still
 shows a status line if the human's user-level settings name a user-level copy — but
 that copy is outside onboarding's reach and may be arbitrarily stale. Keeping it
-current is a manual copy from the canonical pair, and nothing in bee detects or
+current is a manual copy from the canonical source, and nothing in bee detects or
 reports its drift.
 
 ### What the status display renders
@@ -71,7 +78,7 @@ version control, a model without an effort setting — each simply drops its seg
 | context | Percentage of the context window **remaining** — never the percentage used |
 | session usage | Percentage of the rolling short-window subscription limit consumed, when the runtime reports one |
 | weekly usage | Percentage of the rolling weekly subscription limit consumed, when the runtime reports one |
-| cost | Per-model new/cached token totals and their billed cost, aggregated over the session and every subagent transcript |
+| cost | Per-model new/cached token totals and their billed cost, aggregated over the session and every subagent transcript. Rendered by `bee dev statusline`; the whole line is omitted when the script resolves no bee binary |
 
 **Context colour is a workflow signal, not a gauge.** The colour of the context
 segment answers one question — "does the human need to think about a handoff?" —
@@ -105,7 +112,7 @@ the first; a re-run plans nothing.
 
 ## Business Rules
 
-- **R1** — Onboarding syncs the status-display pair only into projects already
+- **R1** — Onboarding syncs the status-display script only into projects already
   opted in; it never creates the opt-in and never touches the settings file in
   this stage (decision 102efe08).
 - **R2** — Detection is fail-safe: any settings shape it does not positively
@@ -115,10 +122,11 @@ the first; a re-run plans nothing.
   not be preceded by another path segment. A user-level path containing the same
   script name, or the project-directory variable appearing elsewhere in the
   command, is not an opt-in (decision c6ee6b6e, review finding P2-1).
-- **R4** — The canonical pair and an opted-in project's vendored copies must be
-  byte-identical; a one-sided edit anywhere (including deleting the vendored
-  copies while still opted in) is drift and fails the standing verification suite
-  (decision c6ee6b6e, review finding P2-3).
+- **R4** — The canonical script and an opted-in project's vendored copy must be
+  byte-identical; a one-sided edit anywhere (including deleting the vendored copy
+  while still opted in) is drift and fails the standing guard
+  (`packages/bee-rs/crates/bee/tests/statusline_contract.rs`) (decision c6ee6b6e,
+  review finding P2-3).
 
 ## Edge Cases Settled
 
@@ -126,7 +134,7 @@ the first; a re-run plans nothing.
 - Status-display command present but not a text value → not opted in.
 - Project-directory variable used elsewhere in the command while the script path
   is user-level → not opted in (the review's adversarial case).
-- Exactly one pair file drifted → exactly that file is re-planned, the other
+- Exactly one vendored file drifted → exactly that file is re-planned, any other
   untouched.
 - Opting out after having been opted in → the stale managed record is inert but
   currently survives; recorded as a known gap (backlog, paired with the
@@ -138,18 +146,34 @@ the first; a re-run plans nothing.
 ## Open Gaps
 
 - Opt-out manifest cleanup (see Edge Cases) — backlog item filed 2026-07-11.
+- The vendoring path itself (plan stage 3b and the `copy_statusline` apply case)
+  has no live test. The Node sandbox cases that covered it were deleted at the R6
+  cutover and never ported; only opt-in detection and canonical/vendored
+  byte-equality are guarded today.
 
 ## Pointers (implementation)
 
-- `packages/bee/scripts/bee onboard` — `statuslineOptIn()`, plan stage 3b,
-  `copy_statusline` apply case, `buildManagedVersions`/`subsetManaged` conditional
-  `statusline` key.
-- `packages/bee/statusline/` — canonical pair
-  (`statusline-command.sh`, `statusline-usage.mjs`).
-- `packages/bee/scripts/tests/test_bee onboard` — section 9c sandbox cases.
-- `packages/bee/tests/test_lib.mjs` — statusline byte-equality sweep.
+All Rust paths below are relative to `packages/bee-rs/crates/bee/`.
+
+- `src/onboard/hooks_wiring.rs:584-598` — `statusline_opt_in()`, the anchored and
+  bare-relative detection of R3.
+- `src/onboard/source.rs:56` — `templates_statusline_dir`, the canonical source
+  directory.
+- `src/onboard/plan.rs:537-546` — plan stage 3b, the `copy_statusline` items;
+  `list_template_statusline()` (l. 81) walks the canonical directory, and
+  `build_managed_versions()` / `subset_managed()` (l. 236, l. 298) carry the
+  conditional `statusline` key.
+- `src/onboard/apply.rs:372-378` — the `copy_statusline` apply case.
+- `packages/bee/statusline/statusline-command.sh` — the canonical script, one file.
+- `src/devtools/statusline.rs` — `bee dev statusline`, the token/cost line the
+  script appends when it resolves a bee binary.
+- `tests/statusline_contract.rs` — the standing guard: canonical/vendored
+  byte-equality plus the script's binary lookup.
+- `src/onboard/hooks_wiring.rs:1023` — the opt-in detection cases. The vendoring
+  plan/apply path has no live test (see Open Gaps).
 - Host-side settings contract: `.claude/settings.json` → `statusLine.command`.
-- `packages/bee/scripts/bee onboard` — `CODEX_STATUS_LINE_BLOCK`,
-  `codexUserConfigPath()`, `codexStatuslineMissing()`,
-  `ensure_codex_statusline` plan/apply action (machine-level: `~/.codex/config.toml`,
-  never repoRoot-joined).
+- Second runtime, machine-level: `src/onboard/templates.rs:179`
+  (`CODEX_STATUS_LINE_BLOCK`), `src/onboard/hooks_wiring.rs:521-546`
+  (`codex_user_config_path()`, `codex_statusline_missing()`,
+  `codex_statusline_next_text()`), `src/onboard/plan.rs:679-680` (the
+  `ensure_codex_statusline` action — `~/.codex/config.toml`, never repoRoot-joined).

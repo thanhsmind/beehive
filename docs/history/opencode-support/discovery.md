@@ -563,6 +563,7 @@ path (oc-8)".)
 | session-close | `event` on `session.idle` and `session.deleted` | ADVISORY — swallow + log, never throws | Wired; no crash observed |
 | tools-logger | `tool.execute.after`, every tool call | ADVISORY — swallow + log, never throws | Live-proved: new `"tool_name":"Read"` / `"tool_name":"Task"` entries in this worktree's `.bee/logs/tools.jsonl`, `agent_id`/`agent_type`/`duration_ms` all `null`/absent (see gap below) |
 | codex-subagent-audit | n/a | NAMED EXCLUSION — codex-specific; no OpenCode session ever carries Codex SubagentStart/SubagentStop evidence | Not wired (unchanged from oc-2/oc-3) |
+| activity | n/a | NAMED EXCLUSION — Claude-only telemetry probe (ACTIVITY is CLAUDE_ONLY in hook_manifests.rs:111); matcher-less on every event it rides, so it observes every tool and can never deny | Not wired |
 | chain-nudge | plan.md names `event: session.idle` | **NOT WIRED in this cell** — see "Deferred: chain-nudge" below | Deferred |
 
 ### Field-shape confirmations (live probes, scratch project outside the repo)

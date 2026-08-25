@@ -1,0 +1,77 @@
+{
+  "id": "mrs-1",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Collapse the two config parsers into one resolve_role",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md",
+    "docs/history/model-role-split/plan.md"
+  ],
+  "action": "Per D1 (store cd72ec97), make the drivers module the ONE parser of the models.<runtime> config shape and have the model-guard call it instead of carrying a second implementation. Delete the guard's private resolve_tier (model_guard.rs:442-467) and its resolve_advisor (:470-483); route all guard call sites through the drivers implementation (models.rs:318-383, :387-437). Two behaviors need a DECISION, not a lift, and the cap must record which you chose and why: (a) the guard's parser is purpose-blind and refuses every cli-shaped slot unconditionally (model_guard.rs:441 comment, :456 Slot::Cli => Resolved::Refused) while the surviving one is purpose-parameterized via purpose_is_gather (models.rs:341-348, prepare.rs:44-45) — each guard call site (model_guard.rs:497, 725, 818, 882, 936, 978) must be given a purpose deliberately, and :978, driven by a [bee-tier] marker on a claude Task, is genuinely ambiguous between cell and gather; (b) configured_model_set (:495-510) matches only Resolved::Model today, deliberately excluding Resolved::Native — the drivers enum carries an equally readable model string on Native (models.rs:268-288), so a naive port silently widens what the guard admits. Keep Native out. This cell changes NO behavior: it is a collapse. Four tests call the guard's private three-arg resolve_tier directly (model_guard.rs:1252, 1256, 1260, 1266) against the guard's own Resolved enum, whose variants differ in shape from the drivers enum — retarget them, keeping every assertion. Do not open the role set, do not touch the closed lists, do not change any refusal text: those are mrs-2 and mrs-3.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Exactly one implementation parses the models.<runtime> shape; the guard has no private resolve_tier or resolve_advisor left",
+      "Every assertion the four private-resolve_tier tests made is still made from the new call site — none deleted",
+      "A cli-shaped slot behaves in the guard exactly as the cap's recorded purpose choice implies, and that choice is written on the cap per call site",
+      "Resolved::Native still contributes no model to configured_model_set",
+      "The full suite is green and no refusal text changed"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "cd72ec97"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w1",
+    "outcome": "The model-guard's private models parser is deleted; verbs::drivers is now the one parser, called with an explicit purpose at every guard call site",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "PURPOSE CHOICE (a): all six guard call sites take GUARD_PURPOSE = \"cell\", the one non-gather purpose (purpose_is_gather is kind != \"cell\"), so a cli-shaped slot still resolves to Resolved::Refused exactly as the deleted purpose-blind parser refused it. Reason: the guard's whole surface is Agent/Task/spawn_agent, an in-family subagent that can no more BE an external cli process than it can be a herding pane. Per site: :725 marker+param, :818 marker-only, :882 pinned-type, :936 bare-FIX all reach a subagent verdict, so cell. configured_model_set is cell so a cli slot contributes no member, as today. derive_dispatch_economics (the ambiguous [bee-tier]-on-a-claude-Task site) is cell because the audit line must record the model the verdict above was reached on; it is behavior-free either way, since Resolved::Refused and Resolved::Cli both name no model.",
+      "NATIVE KEPT OUT (b): configured_model_set matches Resolved::Model only, on both the slot loop and the advisor arm; Resolved::Native carries a readable model string in the drivers enum and a naive port would have widened membership. Commented in place as deliberate.",
+      "Herding fallback now reads the resolved value (Resolved::Herding { fallback }) instead of the raw slot; the deleted enum's Herding was a unit variant, which is the only reason the old code peeked at the raw slot. Same review-falls-back-to-generation rule, applied inside the shared resolve_tier.",
+      "Deleted more than the cell named literally: the guard's Slot/Slots/Models types and its normalize_tier_value/normalize_models went with resolve_tier/resolve_advisor. They ARE the second parser of the models.<runtime> shape, so leaving them would break must-have 1.",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs was reserved and read but needed NO change: it already holds the surviving purpose-parameterized implementation. A collapse deletes the duplicate; it does not edit the survivor.",
+      "PRE-EXISTING RED for the orchestrator: verbs::status_full::tests::lanes_summary_vs_full asserts rows[0].feature == \"alpha\" and gets \"beta\" — an unsorted lane-directory read. Verified red at HEAD without this change. The file (verbs/status_full/) is not in this cell's scope, so it is a fix-first cell to triage, not a write I may make."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T02:53:58.804Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T02:45:01.390Z",
+    "report": {
+      "outcome": "The model-guard's private models parser is deleted; verbs::drivers is now the one parser, called with an explicit purpose at every guard call site",
+      "commit": "9d1bece70acd68314f13f16a7f97119bf8ca9a8b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard — green — 38/38 model_guard unit rows plus the 2 hook-boundary integration rows, the whole surface this collapse touches; the cell verify (full --release suite) also ran: 2566 passed, 1 failed, and that one (verbs::status_full::tests::lanes_summary_vs_full) fails identically at HEAD with this change stashed — pre-existing red in an unrelated file this cell does not name",
+      "deviations": [
+        "PURPOSE CHOICE (a): all six guard call sites take GUARD_PURPOSE = \"cell\", the one non-gather purpose (purpose_is_gather is kind != \"cell\"), so a cli-shaped slot still resolves to Resolved::Refused exactly as the deleted purpose-blind parser refused it. Reason: the guard's whole surface is Agent/Task/spawn_agent, an in-family subagent that can no more BE an external cli process than it can be a herding pane. Per site: :725 marker+param, :818 marker-only, :882 pinned-type, :936 bare-FIX all reach a subagent verdict, so cell. configured_model_set is cell so a cli slot contributes no member, as today. derive_dispatch_economics (the ambiguous [bee-tier]-on-a-claude-Task site) is cell because the audit line must record the model the verdict above was reached on; it is behavior-free either way, since Resolved::Refused and Resolved::Cli both name no model.",
+        "NATIVE KEPT OUT (b): configured_model_set matches Resolved::Model only, on both the slot loop and the advisor arm; Resolved::Native carries a readable model string in the drivers enum and a naive port would have widened membership. Commented in place as deliberate.",
+        "Herding fallback now reads the resolved value (Resolved::Herding { fallback }) instead of the raw slot; the deleted enum's Herding was a unit variant, which is the only reason the old code peeked at the raw slot. Same review-falls-back-to-generation rule, applied inside the shared resolve_tier.",
+        "Deleted more than the cell named literally: the guard's Slot/Slots/Models types and its normalize_tier_value/normalize_models went with resolve_tier/resolve_advisor. They ARE the second parser of the models.<runtime> shape, so leaving them would break must-have 1.",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs was reserved and read but needed NO change: it already holds the surviving purpose-parameterized implementation. A collapse deletes the duplicate; it does not edit the survivor.",
+        "PRE-EXISTING RED for the orchestrator: verbs::status_full::tests::lanes_summary_vs_full asserts rows[0].feature == \"alpha\" and gets \"beta\" — an unsorted lane-directory read. Verified red at HEAD without this change. The file (verbs/status_full/) is not in this cell's scope, so it is a fix-first cell to triage, not a write I may make."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 367 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

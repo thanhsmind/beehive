@@ -10,7 +10,7 @@ This area's current truth now lives in the knowledge bundle:
 [`docs/knowledge/areas/onboarding/`](../knowledge/areas/onboarding/index.md)
 (okf-foundation D20/D29/D37). Eight concepts, split by TOPIC rather than the old spec's
 headings: `overview.md` owns what onboarding is, its check/apply run modes and its actors;
-`status-display-vendoring.md` owns the opt-in status-display pair — detecting the opt-in,
+`status-display-vendoring.md` owns the opt-in status-display script — detecting the opt-in,
 vendoring it, healing drift, staying out otherwise, what the line renders, and the second
 runtime's machine-level status block; `managed-ignore-section.md` owns the delimited block
 onboarding owns inside the project's ignore list; `distribution-source-exclusivity.md` owns
@@ -47,10 +47,10 @@ into the concept whose topic it matches.
 
 | Anchor | Now owned by | Was |
 |---|---|---|
-| R1 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the status-display pair is synced only into projects already opted in |
+| R1 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the status-display script is synced only into projects already opted in |
 | R2 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | detection is fail-safe: an unrecognized settings shape means "not opted in" |
 | R3 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | only project-level references count as opt-in |
-| R4 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the canonical pair and an opted-in project's vendored copies must be byte-identical |
+| R4 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the canonical script and an opted-in project's vendored copy must be byte-identical |
 | R5 | [docs/knowledge/areas/onboarding/distribution-source-exclusivity.md](../knowledge/areas/onboarding/distribution-source-exclusivity.md) | plugin-capable runtimes receive bee primarily as one installable package |
 | R6 | [docs/knowledge/areas/onboarding/repo-local-guardrails.md](../knowledge/areas/onboarding/repo-local-guardrails.md) | on Codex, every compatibly exposed lifecycle capability joins bee's mechanical belt |
 | R7 | [docs/knowledge/areas/onboarding/repo-local-guardrails.md](../knowledge/areas/onboarding/repo-local-guardrails.md) | a nested Codex worker starts with write access limited to the active workspace |
@@ -79,7 +79,7 @@ into the concept whose topic it matches.
 | E2 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | settings file unparseable → not opted in, run proceeds normally |
 | E3 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | status-display command present but not a text value → not opted in |
 | E4 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the project-directory variable used elsewhere while the path is user-level → not opted in |
-| E5 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | exactly one pair file drifted → exactly that file is re-planned |
+| E5 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | exactly one vendored file drifted → exactly that file is re-planned |
 | E6 | [docs/knowledge/areas/onboarding/host-project-artifacts.md](../knowledge/areas/onboarding/host-project-artifacts.md) | a host config still carrying the removed `advisor` key → warn, never error |
 | E7 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | opting out after having been opted in → the stale managed record is inert |
 | E8 | [docs/knowledge/areas/onboarding/release-identity-and-version-parity.md](../knowledge/areas/onboarding/release-identity-and-version-parity.md) | a partial upgrade that reports success is worse than one that fails |
@@ -96,10 +96,10 @@ into the concept whose topic it matches.
 | P4 | [docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md](../knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md) | package wiring, cross-platform entrypoints, metadata, inventory, cachebuster proof |
 | P5 | [docs/knowledge/areas/onboarding/release-identity-and-version-parity.md](../knowledge/areas/onboarding/release-identity-and-version-parity.md) | release-version single-source — `scripts/lib/release-tuple.mjs` |
 | P6 | [docs/knowledge/areas/onboarding/distribution-source-exclusivity.md](../knowledge/areas/onboarding/distribution-source-exclusivity.md) | fresh-host handler-delivery proof |
-| P7 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline opt-in, plan stage 3b, `copy_statusline` — `bee onboard` |
-| P8 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | canonical pair — `packages/bee/statusline/` |
-| P9 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | section 9c sandbox cases — `test_bee onboard` |
-| P10 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline byte-equality sweep — `packages/bee/tests/test_lib.mjs` |
+| P7 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline opt-in, plan stage 3b, `copy_statusline` — `onboard/plan.rs`, `onboard/apply.rs` |
+| P8 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | canonical script — `packages/bee/statusline/statusline-command.sh` |
+| P9 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | opt-in detection cases — `onboard/hooks_wiring.rs`; the vendoring sandbox cases have no live port |
+| P10 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | canonical/vendored byte-equality guard — `packages/bee-rs/crates/bee/tests/statusline_contract.rs` |
 | P11 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | host-side settings contract — `.claude/settings.json` |
 | P12 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the second runtime's machine-level status block — `ensure_codex_statusline` |
 | P13 | [docs/knowledge/areas/onboarding/repo-local-guardrails.md](../knowledge/areas/onboarding/repo-local-guardrails.md) | Codex hook render/merge plus the create-only specs-stub action |

@@ -1,0 +1,97 @@
+{
+  "id": "mrs-14",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "tier": "generation",
+  "role": "code",
+  "title": "Turn ceiling into an escalation flag and move the ration onto it in one step",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 4, D5 and D6 (store 97ce5225). ceiling stops being a tier VALUE and becomes an explicit escalation flag on the cell: run on the session model, and charge the ration. THE WHOLE POINT OF THIS CELL IS ATOMICITY — introducing the flag, converting the stored ceiling cells onto it, and moving the ration to read it must land TOGETHER. Between any two of those steps the 40 percent share reads zero and the refusal at handlers_close.rs:1126-1133 can never fire, which is the reviewer-found hazard that reordered this whole slice. If you cannot do all three in one commit, BLOCK and say why rather than landing a window. What must keep working, unchanged in force: CEILING_SHARE_REFUSAL_MAX at handlers_close.rs:1063, the refusal itself, and the persisted reason on the trace (today trace.tier_reason — if you rename it, the rename covers the stored records too). The OTHER half of what ceiling meant is run-on-the-session-model: models.rs:322 short-circuits a ceiling slot to Resolved::Inherit, and prepare.rs:761-762 turns that into a session-model channel with no herding command. Both must follow the flag. This also removes ceiling's awkwardness under the open role set (decision 0015 keeps it non-configurable): once it is a flag rather than a name, the open set needs no carve-out for it. Mind that mrs-13 leaves stored ceiling cells carrying BOTH their tier and a role — converting them is yours.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The 40 percent ration refusal fires on the escalation flag exactly as it fired on the tier value, including the reason requirement",
+      "There is no commit in which the ration can read a zero share because nothing is marked — flag, conversion and ration move together",
+      "An escalated cell still resolves to the session model with no herding command",
+      "The persisted reason survives for the stored records, under whatever name it now has",
+      "ceiling is no longer a role name, so the open role set needs no exception for it"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225"
+  ],
+  "deps": [
+    "mrs-13"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w14",
+    "outcome": "ceiling became an escalation flag; flag, stored-record conversion and the 40% ration moved in one commit",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/handbook/register.md"
+    ],
+    "deviations": [
+      "Five files outside the cell list, each reserved under mrs-w14 first: handlers_write.rs (the conversion extends `cells backfill-roles` rather than adding a second migration verb — one pass, so no store can answer half flag and half tier), cells/tests.rs and drivers/tests.rs (probes), generated/registry_payload.json (the verb description had to follow its behaviour), docs/handbook/register.md (the refusal row named the old denominator).",
+      "trace.tier_reason is NOT renamed. docs/handbook/register.md publishes the key and 20 stored records carry it; renaming it here without those surfaces is a migration half-done. The tier-retirement slice renames it with the field.",
+      "The `tier` string is still written beside the flag and left on stored records. status_full/cells.rs and session_preamble/store.rs still count it for their advice lines and are outside this cell; dropping it here would blind two counters this cell cannot fix.",
+      "The ration denominator moved from `cells that recorded a tier` to `the feature's cells`. Named, not silent: `role` is required now, so no new cell records a tier and a tier-shaped denominator would be 0 for every new feature — the refusal could never fire again. All five existing ration probes keep their exact arithmetic.",
+      "One test retargeted, none deleted: resolve_role over [ceiling, generation] now falls through instead of ending the walk, because D5 makes ceiling not a role. The Inherit assertion moves to resolve_tier, where the marker callers live.",
+      "Open for the tier-retirement slice: status_full/cells.rs and session_preamble/store.rs still key their advice off `tier`, so a cell authored with `escalate: true` and no tier is invisible to those two ADVICE lines. The enforcing door (the 40% refusal) reads the flag.",
+      "sync-ack: No instruction in the area's skills went stale from this change. bee-swarming's reference teaches escalation through bee cells tier --tier ceiling and the anchored [bee-tier: ceiling] marker, and both still read and behave exactly as written — only what the verb WRITES moved onto the flag. The reference's remaining tier doctrine (resolveTier, the tier-judgement rubric, the per-tier dispatch table) is retired wholesale by the tier-retirement and surfaces slices; editing it piecemeal now would leave the instruction layer half-migrated while bee cells tier and the tier field both still exist."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T05:51:21.198Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T05:27:55.746Z",
+    "sync_ack": "No instruction in the area's skills went stale from this change. bee-swarming's reference teaches escalation through bee cells tier --tier ceiling and the anchored [bee-tier: ceiling] marker, and both still read and behave exactly as written — only what the verb WRITES moved onto the flag. The reference's remaining tier doctrine (resolveTier, the tier-judgement rubric, the per-tier dispatch table) is retired wholesale by the tier-retirement and surfaces slices; editing it piecemeal now would leave the instruction layer half-migrated while bee cells tier and the tier field both still exist.",
+    "report": {
+      "outcome": "ceiling became an escalation flag; flag, stored-record conversion and the 40% ration moved in one commit",
+      "commit": "b39d045f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/handbook/register.md"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — whole declared suite: 2617 bin-bee unit tests and every integration target pass; the only reds are opencode_plugin_contracts x4, which fail on `node` not found on PATH and say so themselves (pre-declared environment limit, untouched by this change), and one concurrency timing flake that passed on re-run",
+      "deviations": [
+        "Five files outside the cell list, each reserved under mrs-w14 first: handlers_write.rs (the conversion extends `cells backfill-roles` rather than adding a second migration verb — one pass, so no store can answer half flag and half tier), cells/tests.rs and drivers/tests.rs (probes), generated/registry_payload.json (the verb description had to follow its behaviour), docs/handbook/register.md (the refusal row named the old denominator).",
+        "trace.tier_reason is NOT renamed. docs/handbook/register.md publishes the key and 20 stored records carry it; renaming it here without those surfaces is a migration half-done. The tier-retirement slice renames it with the field.",
+        "The `tier` string is still written beside the flag and left on stored records. status_full/cells.rs and session_preamble/store.rs still count it for their advice lines and are outside this cell; dropping it here would blind two counters this cell cannot fix.",
+        "The ration denominator moved from `cells that recorded a tier` to `the feature's cells`. Named, not silent: `role` is required now, so no new cell records a tier and a tier-shaped denominator would be 0 for every new feature — the refusal could never fire again. All five existing ration probes keep their exact arithmetic.",
+        "One test retargeted, none deleted: resolve_role over [ceiling, generation] now falls through instead of ending the walk, because D5 makes ceiling not a role. The Inherit assertion moves to resolve_tier, where the marker callers live.",
+        "Open for the tier-retirement slice: status_full/cells.rs and session_preamble/store.rs still key their advice off `tier`, so a cell authored with `escalate: true` and no tier is invisible to those two ADVICE lines. The enforcing door (the 40% refusal) reads the flag."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

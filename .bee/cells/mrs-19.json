@@ -1,0 +1,76 @@
+{
+  "id": "mrs-19",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Publish a per-role fallback chain and the gate that says when a step is earned",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 6, D10 and D11 (store 50808d48), scoped by decision 51341f84 which you must read first: bee does NOT execute dispatches, so this cell publishes a contract and does not build a retry loop. Deliver four things. (1) CONFIG: parse and validate retry.fallbackChains, a map whose key is a role name, a concrete model selector, or a provider wildcard, and whose value is an ordered list of model selectors. EXPLICIT-ONLY per D10 — there is NO built-in default chain for any role, so absent configuration every payload is byte-identical to today. That is a test, not a promise. (2) RESOLUTION: work out which chain applies to THIS dispatch, most specific key first, and publish it on the payload beside the model — prepare already publishes a herding fallback and a fallback_when condition around prepare.rs:1190-1226, so put the chain in that same neighbourhood and follow its shape rather than inventing a second one. (3) THE GATE: publish, with the chain, the error classes that may advance a step — quota or rate limit, provider auth or policy rejection, empty response, a malformed tool call where replay is safe, stream stall or connection reset, 5xx — and the classes that may NEVER advance one: a tool error, a wrong or unwanted result, a failed proof, a red test. The executor must not have to re-derive that list; an unpublished rule is one every caller invents differently. (4) The advisor keeps NO chain unless the operator configures one explicitly, preserving 4faf1de9, under which an advisor consult was recorded NOT OBTAINED rather than substituted. Document the config shape in .bee/config-sample.json, which mrs-11 already brought in line with what onboarding writes. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "With no retry.fallbackChains configured, every dispatch payload is byte-identical to before this cell — pinned by a test that compares whole payloads",
+      "A chain keyed by role, by concrete model, and by provider wildcard each resolve, and the most specific key wins",
+      "The published gate names both lists: what may advance a step and what may never",
+      "The advisor carries no chain unless one is configured for it explicitly",
+      "No retry loop, error classifier or execution code is added — the cap says plainly what bee publishes and what the executor still owns"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "50808d48",
+    "51341f84",
+    "4faf1de9"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w19",
+    "outcome": "dispatch prepare publishes an explicit-only retry.fallbackChains contract with D11's error gate beside the model; no retry loop, and no chain at all when unconfigured",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [
+      "Chain published only when the payload actually names a model — an escalated, cli-exec or herding dispatch has nothing to fall from",
+      "Byte-identity pinned by pre-change whole-payload goldens for gather/reviewer/advisor plus an add-exactly-one-key equality for the cell payload, whose prompt golden would churn on every worker-contract edit"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:08:12.877Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T06:55:24.341Z",
+    "report": {
+      "outcome": "prepare publishes retry.fallbackChains + the D11 gate on the payload; explicit-only, byte-identical when unconfigured",
+      "commit": "d2bae2a3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        ".bee/config-sample.json"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — the cell verb; lib 2633/2633 pass including 6 new chain tests, the only 4 failures are the pre-declared opencode_plugin_contracts environment limit (no node that strips TypeScript), unrelated to these files",
+      "deviations": [
+        "Chain published only when the payload actually names a model — an escalated, cli-exec or herding dispatch has nothing to fall from",
+        "Byte-identity pinned by pre-change whole-payload goldens for gather/reviewer/advisor plus an add-exactly-one-key equality for the cell payload, whose prompt golden would churn on every worker-contract edit"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

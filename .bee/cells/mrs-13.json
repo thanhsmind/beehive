@@ -1,0 +1,91 @@
+{
+  "id": "mrs-13",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "tier": "generation",
+  "role": "code",
+  "title": "Give every stored cell a role through a dry-runnable migration verb",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 4, D9 (store 4eaf1b71). Ship a migration verb that gives every stored cell a role, since mrs-8 made role required for NEW cells while the store is full of records written before it. Shape, per the plan's answer to its own deferred question: a verb with --dry-run, IDEMPOTENT, reporting its counts before it writes anything. Not lazy-on-read — three counters scan the whole store, so a half-migrated store would misreport. Mapping, per D9: a cell recording tier generation or no tier takes role code; a cell recording tier extraction takes role read; a cell recording tier ceiling takes role code AND KEEPS ITS tier ceiling untouched. That last clause matters — the escalation flag of D5 does not exist yet, it is the NEXT cell, and the 40 percent ration still reads tier ceiling today. Removing or rewriting ceiling here would blind the ration between this cell and the next. Touch role only. COUNTS: the decision recorded 484 / 2 / 20 measured on 2026-08-24. Do not hardcode them and do not assert them — this feature has since added its own cells, so recompute from the store and report what you find. A cell that already carries a role is left exactly as it is; running the verb twice must change nothing the second time, and that is a test, not a hope. Declare the verb in catalog.rs AND in generated/registry_payload.json: mrs-12 (commit ff134363) proved that an undeclared-but-served verb is reported unknown by bee --help --all and has no schema for the CLI-shape guard to validate a call against — do not repeat that. Do NOT run the migration against this repo's live store; the orchestrator will dry-run it and decide when to apply.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The verb reports its counts under --dry-run and writes nothing in that mode",
+      "Running it twice changes nothing the second time, pinned by a test rather than asserted in prose",
+      "A cell already carrying a role is left byte-identical",
+      "Cells recording tier ceiling keep that tier — only role is added",
+      "The verb is declared in catalog.rs and registry_payload.json, and registry_dispatch stays green",
+      "No count from the 2026-08-24 decision is hardcoded; the verb computes from the store it is given"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4eaf1b71"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w13",
+    "outcome": "bee cells backfill-roles gives every stored cell a role: dry-runnable, idempotent to the byte, ceiling tiers untouched, declared in the registry",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "verbs/cells/util.rs added to scope (reserved under mrs-w13 first): try_mutating dispatch table lives there, so the verb would be unreachable without one routing arm",
+      "named the verb bee cells backfill-roles rather than migrate-roles: backfill is D9 own word and cannot be misread as routine maintenance",
+      "archived cells (.bee/cells/archive/<feature>/) are migrated too, since D9 says the stored cells and readCell/unarchive reach them",
+      "a tier outside the legal three is counted and named as unmapped rather than defaulted to code, so a not-fully-migrated store says so",
+      "did not run the migration against this repo live store, per the cell — proof is unit-level over tempfile fixture stores",
+      "sync door acked: no workflow-state owned skill teaches a one-time operator migration; S10 carries the author-facing role guidance",
+      "sync-ack: No owned skill of workflow-state teaches this verb: bee cells backfill-roles is a one-time operator migration over stored records, not a step in the planning/swarming/reviewing/capturing loop, and the cell scoped no skill file. The feature plan puts author-facing role guidance and surface text in S10; teaching a migration an orchestrator runs once would be noise in a worker skill."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T05:26:54.568Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T05:13:14.418Z",
+    "sync_ack": "No owned skill of workflow-state teaches this verb: bee cells backfill-roles is a one-time operator migration over stored records, not a step in the planning/swarming/reviewing/capturing loop, and the cell scoped no skill file. The feature plan puts author-facing role guidance and surface text in S10; teaching a migration an orchestrator runs once would be noise in a worker skill.",
+    "report": {
+      "outcome": "bee cells backfill-roles gives every stored cell a role: dry-runnable, idempotent to the byte, ceiling tiers untouched, declared in the registry",
+      "commit": "5b901f7924424cd4889a92ad6467ac0309924bd2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (2608 bin-unit incl. 9 new backfill tests, registry_dispatch 8, catalog flag ratchet; only pre-existing opencode_plugin_contracts 4 fail on the node-cannot-strip-TypeScript env limit) — full declared suite with --no-fail-fast, since the change adds a store-wide migration verb plus a registry entry that registry_dispatch and the catalog ratchet both walk",
+      "deviations": [
+        "verbs/cells/util.rs added to scope (reserved under mrs-w13 first): try_mutating dispatch table lives there, so the verb would be unreachable without one routing arm",
+        "named the verb bee cells backfill-roles rather than migrate-roles: backfill is D9 own word and cannot be misread as routine maintenance",
+        "archived cells (.bee/cells/archive/<feature>/) are migrated too, since D9 says the stored cells and readCell/unarchive reach them",
+        "a tier outside the legal three is counted and named as unmapped rather than defaulted to code, so a not-fully-migrated store says so",
+        "did not run the migration against this repo live store, per the cell — proof is unit-level over tempfile fixture stores",
+        "sync door acked: no workflow-state owned skill teaches a one-time operator migration; S10 carries the author-facing role guidance"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "id": "wgg-2",
+  "feature": "wave-guard-gaps",
+  "title": "Make the concurrent-worker git guard count siblings inside a granted worktree",
+  "action": "Fix resolve_live_worker_count so a granted worktree resolves the workers that actually share its index, reaching the control root's mirrored holds/lease data instead of the worktree's empty store. Deny-more only, a solo worktree session stays unblocked, and unresolvable state keeps failing safe.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "With two or more sibling workers live in a granted worktree, the write-guard hook exits 2 for a bare git commit and names how many workers are live.",
+      "In the same state a genuinely path-scoped git commit -- <path> still exits 0.",
+      "A solo session in its own granted worktree is never blocked from committing.",
+      "Every verdict reachable from the main checkout today is unchanged.",
+      "Unresolvable reservation state still resolves as more than one worker, never as zero.",
+      "New tests cover all four cases above and the existing write_guard suite stays green."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "acceptance": "With sibling workers live in a granted worktree, the write-guard hook exits 2 for a bare git commit and exits 0 for a path-scoped git commit -- <path>; a solo session in a worktree is never blocked; every main-checkout verdict is unchanged; unresolvable state still counts as more than one worker. New tests cover all four cases.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-wgg-2",
+    "outcome": "The concurrent-worker git guard now counts siblings inside a granted worktree via the control root's mirrored-holds ledger",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "The cell files were not pre-reserved on dispatch; reserved both under wk-wgg-2 before the first write.",
+      "The dispatch never registered wk-wgg-2 in state.workers[]; registered it via bee state worker add per the cap refusal FIX rather than recording a false inline run.",
+      "Reused the write-guard own mirrored-holds reader (find_foreign_holds, hooks/write_guard/store.rs) with an all-holds sentinel instead of verbs/reservations/leases.rs, which is a private module whose export would need verbs/reservations/mod.rs — outside this cell files. Same sentinel trick bee reservations list already uses, so no second reader was written.",
+      "Capped with --sync-ack: the workflow-state area owns four skills, none of which change here; the cell declares affects_skills [] and names only the two guard files.",
+      "sync-ack: No skill text changes: the whole-tree denial and its temp-index remedy are already taught in skills/bee-swarming and AGENTS.md. This cell only makes the existing guard see the checkout it was blind to — no new agent-facing rule. The cell declares affects_skills [] and scopes its files to the two write_guard files, so a skill edit is out of scope for this worker."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:54:40.515Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T07:46:03.162Z",
+    "sync_ack": "No skill text changes: the whole-tree denial and its temp-index remedy are already taught in skills/bee-swarming and AGENTS.md. This cell only makes the existing guard see the checkout it was blind to — no new agent-facing rule. The cell declares affects_skills [] and scopes its files to the two write_guard files, so a skill edit is out of scope for this worker.",
+    "report": {
+      "outcome": "The concurrent-worker git guard now counts siblings inside a granted worktree via the control root mirrored-holds ledger",
+      "commit": "336b3641",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green (199 passed, 0 failed) — the cell verify filter; the change is confined to the write-guard live-worker count, and every gc-2, worktree-first and linked-worktree case rides that filter",
+      "deviations": [
+        "The cell files were not pre-reserved on dispatch; reserved both under wk-wgg-2 before the first write.",
+        "The dispatch never registered wk-wgg-2 in state.workers[]; registered it via bee state worker add per the cap refusal FIX rather than recording a false inline run.",
+        "Reused the write-guard own mirrored-holds reader (find_foreign_holds, hooks/write_guard/store.rs) with an all-holds sentinel instead of verbs/reservations/leases.rs, which is a private module whose export would need verbs/reservations/mod.rs — outside this cell files. Same sentinel trick bee reservations list already uses, so no second reader was written.",
+        "Capped with --sync-ack: the workflow-state area owns four skills, none of which change here; the cell declares affects_skills [] and names only the two guard files."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

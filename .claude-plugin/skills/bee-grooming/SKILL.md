@@ -66,18 +66,57 @@ What you are hunting:
 
 ## Propose
 
-Each kill candidate: **pain** (what it costs today) / **predicted
-impact** (what removal buys) / **risk lane** (tiny or small). Rank by
-pain × impact and present the top few — never the full dump. Approval
-is per-candidate and mandatory: no recorded approval, no kill, however
-obvious the candidate looks, and approving one kill never covers its
-"related" neighbors.
+Each kill candidate carries **pain** (what it costs today) / **predicted
+impact** (what removal buys) / **risk lane** (tiny or small), and is
+reported as ONE line:
+
+```
+<tag> <what to cut>. <what replaces it>. [<path>]
+```
+
+The tag list is closed — `dead:` `stale:` `dupe:` `stub:` `prune:`
+`structural:` — and nothing outside it. Every row names its replacement;
+`dead:` names `nothing`. A candidate that fits no tag is not yet a
+candidate: hunt it into one or drop it.
+
+Rank by pain × impact and present the top few — never the full dump.
+Approval is per-candidate and mandatory: no recorded approval, no kill,
+however obvious the candidate looks, and approving one kill never covers
+its "related" neighbors.
 
 When the round carries three or more candidates, or any structural
 one, render the proposal report
 (`references/grooming-reference.md` ("Proposal report")) and hand the
 user its viewer URL — the report is for looking, never for deciding:
 every approval still happens per-candidate in the conversation.
+
+## End every round on the count line
+
+The round's last line in the conversation, with nothing after it — the
+rendered proposal file keeps its own ending
+(`references/grooming-reference.md` ("Proposal report")):
+
+```
+<N> candidate(s) — <k> proposed, <r> ranked out. entropy <e> (<trend>).
+```
+
+Found nothing? Write exactly this, and stop:
+
+```
+Nothing worth killing. Ship.
+```
+
+Never pad a clean repo with weak candidates to fill the line.
+
+## Numbers — the honesty boundary
+
+Never print hours saved, lines saved, or a percent of debt removed. What
+a kept thing costs you was never measured, so there is no baseline to
+subtract from — any such figure is invented. Print only counted numbers:
+candidates, files, hits, and the entropy score with its trend. Write
+"3 unused functions across 2 files", never "saves ~4 hours a month".
+Predicted impact stays prose ("drops one import cycle"), never a
+fabricated figure.
 
 ## Execute
 

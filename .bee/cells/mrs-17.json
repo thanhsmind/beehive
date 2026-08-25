@@ -1,0 +1,96 @@
+{
+  "id": "mrs-17",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "tier": "generation",
+  "role": "code",
+  "title": "Count roles and escalations instead of tiers",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/devtools/statusline.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 5, D6 (store 97ce5225): accounting follows the split — the tier-mix count becomes a role mix plus an escalation share. Sites: status_full/cells.rs:578-600, build.rs:276-288, render.rs:384-405, session_preamble/store.rs:303-328 and budget.rs:765-772, and devtools/statusline.rs:368-372 (the tiered flag). mrs-14 left a NAMED GAP for you: those advice lines still key off tier, so a cell carrying escalate true and NO tier is invisible to them today — the enforcing door already reads the flag, only the advice lags. Close that. PUBLIC CONTRACT, handle deliberately: build.rs:288 emits the tier_mix key in bee status --json. Renaming it is a breaking change for anything parsing that output. Decide — rename, or emit both for a period, or keep the key and change its contents — and justify it on the cap; do not rename it silently because the internals moved. SEPARATE JUDGMENT: verbs/drivers/guard.rs:43 and :101 carry logical_tier inside an object its own comment marks FROZEN. Frozen means a reader depends on the shape. Read that comment and the object's consumers before touching it; leaving it named logical_tier with role-shaped contents may be the honest answer, and if so say why on the cap rather than renaming for tidiness. Sibling cells own the cells verb (mrs-15) and the worker registry (mrs-16) — leave their files alone. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A cell carrying the escalation flag and no tier is visible to every advice line that used to watch ceiling",
+      "The mix reported to a human counts roles, and the escalation share is reported beside it",
+      "The bee status --json key change is a stated decision on the cap, not a side effect",
+      "The frozen logical_tier object is either left alone with a reason or changed with its consumers named",
+      "No advice line silently reports zero because its input moved"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w17",
+    "outcome": "The mix counts roles with the escalation share beside it; both advice lines read the flag and count against the feature's cells; tier_mix renamed to role_mix as a stated public-contract decision; logical_tier deliberately left named",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+    ],
+    "deviations": [
+      "devtools/statusline.rs left untouched: the cell listed it for a `tiered` flag at :368-372, but that flag classifies prompt-cache ephemeral 5m/1h token buckets, not model tiers. The plan inventory misclassified it. No model-tier reference exists in that file.",
+      "Reserved 4 paths beyond the cell's list, all consequences of the assigned change: status_full/mod.rs and session_preamble/mod.rs (their private MODEL_TIERS copies became dead and SCARCITY_MIN_TIERED had to become SCARCITY_MIN_CELLS), and status_full/tests.rs and session_preamble/tests.rs (the published-contract probe and the scarcity-wording assertions go red on the rename; updated to pin the new contract, plus 4 new probes).",
+      "tier_mix -> role_mix is a clean rename, not a dual-emit. Reasoned at the emit site: no truthful content survives the split, so a retained key would hand every existing field reader a permanent silent zero, where a missing key fails loudly.",
+      "logical_tier in drivers/guard.rs left named, per its FROZEN comment. Consumers named at the site: .bee/logs/dispatch.jsonl readers, hooks/model_guard.rs:994 (a second writer of the same key), and verbs/drivers/tests.rs. Only the parameter and the doc comment changed.",
+      "Base red NOT mine and NOT fixed: verbs::drivers::tests::a_registration_failure_never_unwinds_the_standing_claim asserts an invalid tier refuses worker registration. Sibling commit 81e7a4b4 opened that enum, so \"bogus\" is now a legal role and the test is stale. The file is neither in this cell nor reserved by me — it belongs to the cell that landed 81e7a4b4."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T06:42:32.869Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T06:17:08.960Z",
+    "report": {
+      "outcome": "The mix counts roles with the escalation share beside it; both advice lines read the flag and count against the feature's cells; tier_mix renamed to role_mix as a stated public-contract decision; logical_tier deliberately left named",
+      "commit": "4adc0ef3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::status_full:: hooks::session_preamble:: verbs::drivers::guard:: derive_economics economics — green (151 passed, 0 failed) — every module this cell touched plus the economics assertions over the renamed derive_economics param; the declared full-suite run was also made (--no-fail-fast) and its only bin failure is a stale test left red by sibling commit 81e7a4b4, plus the 4 known opencode_plugin_contracts env failures (no node)",
+      "deviations": [
+        "devtools/statusline.rs left untouched: the cell listed it for a `tiered` flag at :368-372, but that flag classifies prompt-cache ephemeral 5m/1h token buckets, not model tiers. The plan inventory misclassified it. No model-tier reference exists in that file.",
+        "Reserved 4 paths beyond the cell's list, all consequences of the assigned change: status_full/mod.rs and session_preamble/mod.rs (their private MODEL_TIERS copies became dead and SCARCITY_MIN_TIERED had to become SCARCITY_MIN_CELLS), and status_full/tests.rs and session_preamble/tests.rs (the published-contract probe and the scarcity-wording assertions go red on the rename; updated to pin the new contract, plus 4 new probes).",
+        "tier_mix -> role_mix is a clean rename, not a dual-emit. Reasoned at the emit site: no truthful content survives the split, so a retained key would hand every existing field reader a permanent silent zero, where a missing key fails loudly.",
+        "logical_tier in drivers/guard.rs left named, per its FROZEN comment. Consumers named at the site: .bee/logs/dispatch.jsonl readers, hooks/model_guard.rs:994 (a second writer of the same key), and verbs/drivers/tests.rs. Only the parameter and the doc comment changed.",
+        "Base red NOT mine and NOT fixed: verbs::drivers::tests::a_registration_failure_never_unwinds_the_standing_claim asserts an invalid tier refuses worker registration. Sibling commit 81e7a4b4 opened that enum, so \"bogus\" is now a legal role and the test is stale. The file is neither in this cell nor reserved by me — it belongs to the cell that landed 81e7a4b4."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

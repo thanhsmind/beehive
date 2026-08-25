@@ -216,17 +216,45 @@ fn emittable_shapes(hook: &str) -> Vec<&'static str> {
 #[derive(Debug, Clone)]
 struct CatalogRow {
     hook: String,
-    /// True iff this hook is wired under a `PreToolUse` event in EITHER
-    /// projection — `PreToolUse` is the only event a `tool.execute.before`-
-    /// style belt can block on; every other event this catalog uses
-    /// (`SessionStart`, `UserPromptSubmit`, `PostToolUse`, `SubagentStart`,
-    /// `SubagentStop`, `PreCompact`, `Stop`) is advisory-only by
-    /// construction (`hook_manifests.rs`'s own `PostToolUse` comment: "this
-    /// hook can never deny or block").
+    /// True iff this hook is wired under a `PreToolUse` event WITH A MATCHER
+    /// in EITHER projection. Both halves of that predicate are load-bearing,
+    /// and both are DERIVED from the manifests' own data — never from a
+    /// hand-authored name list, per `docs/knowledge/patterns/20260722-a-
+    /// coverage-gate-derives-ground-truth-it-never-compares-two-hand-
+    /// lists.md`, which this file already leans on for its rule inventory.
+    ///
+    /// `PreToolUse` is the only event a `tool.execute.before`-style belt can
+    /// block on; every other event this catalog uses (`SessionStart`,
+    /// `UserPromptSubmit`, `PostToolUse`, `SubagentStart`, `SubagentStop`,
+    /// `PreCompact`, `Stop`) is advisory-only by construction.
+    ///
+    /// The MATCHER half is the codebase's own stated rule about this exact
+    /// data, quoted from `devtools/hook_manifests.rs:166-167`:
+    ///
+    ///   // No matcher = every tool. Passive measurement only; this hook can
+    ///   // never deny or block.
+    ///
+    /// So a matcher-less `PreToolUse` row is an OBSERVER wired on every
+    /// tool, not a gate — registered-under-`PreToolUse` and can-block are
+    /// two different facts, and only the second one is what the three-belt
+    /// parity test means by BLOCKING. `activity` is today's instance
+    /// (`hook_manifests.rs:104-111`: matcher-less on every event it appears
+    /// on, by construction, and `hook_manifests.rs:638-641` actively asserts
+    /// it stays matcher-less), but nothing here NAMES it: the next
+    /// matcher-less `PreToolUse` hook is classified by the same derived
+    /// predicate, with no list to remember to update.
+    ///
+    /// Both an ABSENT `matcher` key and an explicit JSON `null` arrive as
+    /// `None` through `events_map`, so either spelling classifies the same
+    /// way. In the real artifact the key is ABSENT — see the activity group
+    /// at `packages/bee/hooks/claude-hooks.json:56-64`, which carries only
+    /// `"hooks"`.
     blocking: bool,
     /// The `|`-split matcher tokens (e.g. `["Edit","Write",...]`) the CLAUDE
-    /// projection uses to reach this hook under `PreToolUse`, empty if this
-    /// hook is not claude-blocking.
+    /// projection uses to reach this hook under `PreToolUse`, empty when
+    /// this hook is not wired under claude's `PreToolUse` at all OR is wired
+    /// there matcher-less (the observer case above — an empty matcher list
+    /// is exactly what makes such a row non-`blocking`).
     claude_pretooluse_matchers: Vec<String>,
     /// Same, for the CODEX projection.
     codex_pretooluse_matchers: Vec<String>,
@@ -294,8 +322,13 @@ fn derive_catalog() -> BTreeMap<String, CatalogRow> {
         for (matcher, name) in list {
             let row = rows.entry(name.clone()).or_insert_with(|| CatalogRow::new(name));
             if event == "PreToolUse" {
-                row.blocking = true;
+                // A matcher-less PreToolUse row is a passive OBSERVER wired
+                // on every tool, never a gate — see `CatalogRow::blocking`
+                // for the manifest comment that states it. `blocking` is set
+                // INSIDE this arm so the predicate stays derived from the
+                // manifest's own data, with no rule name written down here.
                 if let Some(m) = matcher {
+                    row.blocking = true;
                     row.claude_pretooluse_matchers = m.split('|').map(str::to_string).collect();
                 }
             }
@@ -305,8 +338,9 @@ fn derive_catalog() -> BTreeMap<String, CatalogRow> {
         for (matcher, name) in list {
             let row = rows.entry(name.clone()).or_insert_with(|| CatalogRow::new(name));
             if event == "PreToolUse" {
-                row.blocking = true;
+                // Same derived predicate as the claude loop above.
                 if let Some(m) = matcher {
+                    row.blocking = true;
                     row.codex_pretooluse_matchers = m.split('|').map(str::to_string).collect();
                 }
             }
@@ -1469,20 +1503,43 @@ fn opencode_binary_text() -> Result<String, String> {
 
 /// The 14-element tool-id `Set` OpenCode's own icon-lookup helper builds
 /// (`var Ea=new Set([...]);function Ia(U){return Ea.has(U)?U:"generic"}` in
-/// the installed `opencode-ai@1.18.16` binary) — a VALUES-based literal, so
-/// it survives the surrounding minified variable name (`Ea`) changing on a
-/// rebuild. This is the primary derivation anchor: every element is a real,
-/// binary-confirmed OpenCode tool id.
+/// `opencode-ai@1.18.16`, the version `.github/workflows/ci.yml` pins) — a
+/// VALUES-based literal, so it survives the surrounding minified variable
+/// name (`Ea`) changing on a rebuild. That is not hypothetical: the very
+/// same rebuild drift hit `ADDITIONAL_TOOL_ANCHORS` below between 1.18.16
+/// and 1.18.21, and this literal rode through it untouched — the case FOR
+/// anchoring on values. This is the primary derivation anchor: every element
+/// is a real, binary-confirmed OpenCode tool id.
 const TOOL_SET_LITERAL: &str =
     "[\"bash\",\"glob\",\"read\",\"grep\",\"webfetch\",\"websearch\",\"write\",\"edit\",\"task\",\"apply_patch\",\"todowrite\",\"question\",\"skill\",\"execute\"]";
 
 /// Three further registered tool ids the `Set` above omits, each confirmed
 /// by ITS OWN independent literal anchor from that tool's registration body
-/// in the same binary (`V("<id>",s.gen(function*(){...` / `V("<id>",s.
+/// in the same binary (`"<id>",s.gen(function*(){...` / `"<id>",s.
 /// succeed(...`) — plus, for the ones `mapToolCall` does not already map,
 /// whether that same body reveals a caller-supplied `filePath` parameter
 /// (the exact shape `lsp` — this cell's finding — and `apply_patch` before
 /// oc-3 closed it, both carry).
+///
+/// ANCHOR RULE, learned the hard way: anchor on the tool id and the real
+/// registration VALUES that follow it, never on a minifier-chosen
+/// identifier. These three anchors used to start with the registration
+/// helper's minified name, `V(` — which is not stable across opencode
+/// builds. It is `V` in the `opencode-ai@1.18.16` that
+/// `.github/workflows/ci.yml` pins and `j` in 1.18.21; one character
+/// changed, everything after it byte-identical. CI stayed green on the old
+/// anchors while any developer on a newer build got a hard failure that
+/// says nothing about opencode's actual tool registry. The shortened
+/// anchors match BOTH versions and are each still unique (one hit apiece,
+/// measured in the installed 1.18.21 bundle).
+///
+/// `s.succeed` and `s.gen` are themselves minified identifiers, kept
+/// DELIBERATELY: `"plan_exit"` and `"lsp"` alone are far too weak to anchor
+/// on — those strings appear all over the bundle. So this is a named trade,
+/// not an oversight: enough minified text to stay unique, never the leading
+/// identifier that the minifier renumbers. If a future rebuild renames `s`
+/// too, this same assert fires and the fix is the same one line of
+/// reasoning, diagnosed in seconds instead of re-derived from scratch.
 ///
 /// `id` and `anchor` are independent binary evidence; `filepath_evidence`
 /// records whether a scan of the text FOLLOWING `anchor` (bounded, since
@@ -1495,9 +1552,9 @@ struct AdditionalToolAnchor {
 }
 
 const ADDITIONAL_TOOL_ANCHORS: &[AdditionalToolAnchor] = &[
-    AdditionalToolAnchor { id: "invalid", anchor: "V(\"invalid\",s.succeed({description:\"Do not use\"" },
-    AdditionalToolAnchor { id: "plan_exit", anchor: "V(\"plan_exit\",s.gen" },
-    AdditionalToolAnchor { id: "lsp", anchor: "V(\"lsp\",s.gen" },
+    AdditionalToolAnchor { id: "invalid", anchor: "\"invalid\",s.succeed({description:\"Do not use\"" },
+    AdditionalToolAnchor { id: "plan_exit", anchor: "\"plan_exit\",s.gen" },
+    AdditionalToolAnchor { id: "lsp", anchor: "\"lsp\",s.gen" },
 ];
 
 /// For the tool ids inside `TOOL_SET_LITERAL` that `mapToolCall` does not

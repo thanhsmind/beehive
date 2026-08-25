@@ -1,0 +1,68 @@
+{
+  "id": "mrs-12",
+  "feature": "model-role-split",
+  "lane": "small",
+  "tier": "generation",
+  "role": "code",
+  "title": "Declare the herding namespaces the dispatcher already serves",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/router.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "action": "FIX-FIRST cell: the base is red and nothing may build on it (AGENTS.md, never build on a red base). registry_dispatch::every_namespace_the_dispatcher_serves_is_declared_in_the_registry FAILS — bee herding agent-start, pane, pane-id and result are served by the dispatcher but declared nowhere in the registry. Verified pre-existing twice: the mrs-9 worker reproduced it with its own three files stashed, and the orchestrator reproduced it on a clean tree at f60710da. It is unrelated to model-role-split and carries no decision of this feature. HOW IT HID FOR SO LONG, and the thing to keep in mind while fixing it: the repo's declared commands.test has no --no-fail-fast, so cargo aborts at the first failing target — always crates/bee/tests/opencode_plugin_contracts.rs on this machine, whose 4 failures are an environment limit (node v24.19.0 cannot strip TypeScript) — and never reaches registry_dispatch at all. Run YOUR verify with --no-fail-fast or you will not see your own result. Decide which side is wrong and fix that side: either these four namespaces belong in the registry (the likely answer — the test's name says the registry is meant to be a complete description of what the dispatcher serves), or the dispatcher should not serve them. Do not weaken the test to make it pass. Start from the served-set scan the sibling test the_served_set_scan_bites_on_a_new_arm_and_refuses_an_empty_one exercises, and follow it to wherever declarations live; reserve any additional file before writing.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "every_namespace_the_dispatcher_serves_is_declared_in_the_registry passes, and the whole registry_dispatch target is green",
+      "The registry describes every namespace the dispatcher serves, or the dispatcher stops serving what the registry does not describe — the cap names which side was wrong",
+      "No assertion is deleted or weakened to reach green",
+      "The verify was run with --no-fail-fast, so the result is the target's own and not an abort from an earlier target"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w12",
+    "outcome": "The registry now declares bee herding pane, agent-start, pane-id and result; the registry side was the wrong one",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "router.rs was in the cell file list but needed no change: its PORTED list already named all four verbs, so only the registry was out of date",
+      "registry_payload.json is not in the cell file list; reserved it before writing (it is where declarations live and is edited by hand, no generator remains)",
+      "No regen chain was run: bee dev regen renders skill trees, onboard and the release manifest, none of which writes registry_payload.json"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T05:01:22.476Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:53:36.222Z",
+    "report": {
+      "outcome": "The registry now declares bee herding pane, agent-start, pane-id and result; the registry side was the wrong one",
+      "commit": "ff134363",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch (8/8) plus -p bee --bins --test registry_contracts --test front_door --test installer_invocations (2599+5+2+10) — green — the assigned target plus every other target that reads the registry payload or the flag ratchet",
+      "deviations": [
+        "router.rs was in the cell file list but needed no change: its PORTED list already named all four verbs, so only the registry was out of date",
+        "registry_payload.json is not in the cell file list; reserved it before writing (it is where declarations live and is edited by hand, no generator remains)",
+        "No regen chain was run: bee dev regen renders skill trees, onboard and the release manifest, none of which writes registry_payload.json"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

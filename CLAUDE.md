@@ -22,15 +22,24 @@ When running as Opus 5: optimize for wall-clock speed. Finish tasks quickly.
 
 ## Release
 
-When the user asks for a release: bump the version in BOTH
-`.claude-plugin/plugin.json` AND `.codex-plugin/plugin.json` (onboard
-reads them as one authoritative tuple — a mismatch blocks it), run
-`bee dev regen` so the ledger, skill-version stamps, and release
-manifest carry the new version, make the release commit, then run
-`scripts/release.sh` to the end. The release is done ONLY when the script
-prints its final `OK` line — tag pushed, release-binaries CI green, GitHub
-release carrying the binaries. A release commit without that OK is NOT a
-release; never report a release as done without it.
+When the user asks for a release, run `scripts/release.sh <VERSION>`.
+That is the whole release: it bumps both plugin manifests, runs
+`bee dev regen`, runs the declared test suite BEFORE anything is
+tagged, makes the release commit, then tags, pushes, waits for
+release-binaries and verifies the published assets. Never walk those
+steps by hand — the script exists because a hand-walked checklist is a
+step that gets skipped.
+
+Two flags: `--no-test` skips the suite and says so loudly (own the
+risk), and `-m <subject>` overrides the default `Release <VERSION>`
+commit subject. Re-running at a version that is already committed is
+idempotent — it picks the release back up, so a run that died waiting
+on CI just gets run again.
+
+The release is done ONLY when the script prints its final `OK` line —
+tag pushed, release-binaries CI green, GitHub release carrying the
+binaries. A release commit without that OK is NOT a release; never
+report a release as done without it.
 
 ## Short responses
 

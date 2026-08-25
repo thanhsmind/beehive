@@ -472,67 +472,54 @@ mod tests {
         // cap door's ESCAPE from a skill obligation, not the answer to one —
         // none of them carries "whether the owned skill changed", so
         // `--skill-answer` is new.
-        // 181 -> 181 (model-role-split T012a, store 8ff6e79e):
-        // `dispatch.prepare` gained `--role`, the job the work is, naming the
-        // model slot to resolve outright. The count is deliberately
-        // UNCHANGED because the ratchet's whole point is reuse and this is
-        // reuse: `herding.control-loop --role` already spells "which named
-        // role this run takes", and a caller who has learned that word on one
-        // command reads it correctly on the next. Checked first: `--kind` is
-        // the dispatch's SHAPE (cell/gather/reviewer/advisor, a closed enum
-        // this flag deliberately does not grow), and `--tier` is the retired
-        // COST word this feature exists to replace — neither means "the job
-        // this work is", so neither was the name to reuse.
-        // 181 -> 182 (mrs-12, the registry↔dispatcher law's OTHER direction):
-        // `herding pane`, `herding agent-start`, `herding pane-id` and
-        // `herding result` were served by the dispatcher and declared
-        // nowhere, so `bee --help --all` reported four verbs the herding role
-        // documents tell an agent to type as unknown commands. Declaring them
-        // documents shapes the binary already serves; it invents nothing new
-        // at the CLI surface. Checked first: `--main-root` (interlock/
-        // command-template/wave/occupancy/record-worker/control-loop),
-        // `--label` (herdr-pane-id — the same pane-label concept),
-        // `--context` (herdr-result — the same error-line label) and `--kind`
-        // (dispatch.prepare — "which kind of thing to start", read the same
-        // way here) are all reused unchanged, no count cost. `--pane` is the
-        // one new spelling: `--pane-id` (herding.record-worker) names the
-        // pane a ledger row RECORDS, and every `--id`/`--path`/`--name` names
-        // a bee entity — none of them means "the already-existing pane to
-        // start this agent IN", which is what agent-start hard-requires.
-        // The subverb-specific pane flags (`--with-status`, `--workspace`,
-        // `--direction`, `--ratio`, `--lines`, `--clear`) are deliberately
-        // NOT declared: each belongs to ONE `pane` subverb, and hanging six
-        // names off the group entry would tell a caller they apply to all
-        // twelve. The entry's description names them instead.
-        // 182 -> 182 (model-role-split D9, mrs-13): `cells backfill-roles`
-        // lands — the one-time migration that gives every stored cell
-        // written before `role` existed the role it would have carried. The
-        // count is deliberately UNCHANGED: it declares `--dry-run` and
-        // `--json` and nothing else, and both already mean here exactly what
-        // they mean everywhere else. Checked first: `--dry-run`
-        // (cells.add/close/tmp.sweep/worktree.prune/state.worker.prune/
-        // herding.run) already spells "report what this would do and write
-        // nothing", which is the whole of what this verb needs before it is
-        // applied; `--json` is the report switch every cells verb carries.
-        // Nothing new was invented, and nothing was needed: a migration verb
-        // that had to teach a caller a NEW word for "show me first" would be
-        // a worse migration verb.
-        // 182 -> 183 (model-role-split D4, mrs-15, store 97ce5225): `bee
-        // cells tier` retires with the selector it wrote, and its escalation
-        // half lands as `bee cells escalate`. Three of that verb's four flags
-        // are pure reuse — `--id`, `--reason` (the same budget override, the
-        // same trace record) and `--json`. `--off` is the one new spelling,
-        // and it is new because nothing in this vocabulary meant "take this
-        // marking back off". Checked first, and each rejected for a reason:
-        // `--set` (state.route) is a WRITE-MODE switch that turns a read verb
-        // into a write verb, not a value; `--clear` is a subverb everywhere
-        // it appears (`state worker clear`, `intent clear`), never a flag;
-        // `--without` (close) means "exclude this from a set"; `--force-
-        // downgrade` and `--waive-*` are permissions to proceed, not
-        // reversals. Spelling the reversal as `--tier generation` is exactly
-        // what D4 retires. `--off` reads the same on any future flag-shaped
-        // marking, which is the property this ratchet is protecting.
-        const PINNED_FLAG_COUNT: usize = 183;
+        // 181 -> 188 (herding-registry-gap hrg-1): the four cockpit-vocabulary
+        // verbs the dispatcher has served since tmux-herding-cockpit D2 landed
+        // — `herding pane`, `agent-start`, `pane-id` and `result` — were
+        // declared in the registry, which had missed them. These seven
+        // spellings are NOT chosen here: they are read off the argument
+        // parsing in herding/pane_verbs.rs, so reuse was never available —
+        // renaming a flag the binary already accepts is a different change
+        // from declaring it. Checked anyway, one by one: `--workspace` is the
+        // terminal container above a tab, and `--lane`/`--feature`/`--scope`
+        // all name a bee-side grouping, never a herdr workspace or tmux
+        // session; `--direction` and `--ratio` are the side and the share of a
+        // pane split, and nothing in the vocabulary was geometric before;
+        // `--lines` trims a pane capture to its LAST N lines, where `--limit`
+        // caps how many rows a listing returns (a tail, not a cap); `--clear`
+        // unsets a pane's label, and no prior flag means "drop this value" —
+        // `--no-lane` selects the default record and `--force` overrides a
+        // refusal; `--with-status` buys one extra classification call per
+        // pane, where the nearest neighbours `--brief`/`--detail`/
+        // `--lanes-full` only reshape an answer already computed.
+        //
+        // `--pane` is the one real divergence, named here rather than left to
+        // be rediscovered: `herding record-worker` spells the same concept
+        // `--pane-id`. Both are live surface and neither is renamed here — the
+        // same shape as the `--worker`/`--agent` split asserted below.
+        // 188 -> 189 (model-role-split, store 97ce5225 / 8ff6e79e): merged
+        // with main, which had declared the same four cockpit verbs
+        // independently and more completely — seven spellings where this
+        // branch had declared one. That +7 is main's above; only ONE of
+        // this feature's own spellings survives the merge as new.
+        // `--role` (dispatch.prepare) is reuse: `herding.control-loop`
+        // already spells "which named role" the same way, and the whole
+        // point of the role split is that one word means one thing at
+        // every door. `--pane` was this branch's only other candidate and
+        // main's declaration already carries it. `bee cells backfill-roles`
+        // invented nothing: `--dry-run` and `--json` are the vocabulary
+        // every cells verb already speaks.
+        // `--off` is the one new word, on `bee cells escalate`, which is
+        // where `bee cells tier`'s escalation half landed when D4 retired
+        // the selector. Nothing in this vocabulary meant "take this
+        // marking back off": `--set` (state.route) switches a read verb
+        // into a write verb rather than naming a value; `--clear` is a
+        // subverb everywhere it appears, never a flag; `--without`
+        // (close) excludes a member from a set; `--force-downgrade` and
+        // `--waive-*` are permissions to proceed, not reversals. Spelling
+        // the reversal as `--tier generation` is precisely what D4
+        // retires. `--off` reads the same on any future flag-shaped
+        // marking, which is the property this ratchet protects.
+        const PINNED_FLAG_COUNT: usize = 189;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

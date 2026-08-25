@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "lane-row-order",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"lane-row-order\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"lane-row-order\" (lane).",
+  "created_at": "2026-08-25T04:20:58.549Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Tell me 1 or 2. If 1, I start now; you can run `gh auth login` while I work.",
+    "asked_at": "2026-08-25T04:31:05.557Z",
+    "session": "49e28775-6532-4090-9f4e-39c083ae7af2"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "lanes_summary_vs_full asserts rows[0]==alpha against a readdir that documents itself as unordered; the test is the defect, not the reader",
+    "updated_at": "2026-08-25T04:20:58.578Z",
+    "feature": "lane-row-order"
+  }
+}

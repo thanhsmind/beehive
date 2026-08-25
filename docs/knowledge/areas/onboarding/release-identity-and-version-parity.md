@@ -22,6 +22,44 @@ authoritative-looking source that is really a rendered copy, a refusal that hide
 what forcing it would overwrite — each is the same defect wearing a different face,
 and the strongest of them is the one that reports success.
 
+## Cutting a Release
+
+**One command owns the whole chain.** Hand the release script a version and it
+does every step in order: write that version into **both** plugin manifests
+(onboarding reads them as one tuple, so both move or neither does), run the regen
+chain so the ledger, skill-version stamps and release manifest carry it, run the
+project's **declared test suite**, make the release commit path-scoped to what it
+itself wrote, tag, push, wait for the binaries workflow, and verify the published
+release actually carries the binaries and their checksums.
+
+Nothing in that list is walked by hand. The chain exists because the prologue
+used to live as a prose checklist, and a checklist walked by hand is a step that
+gets skipped — which is exactly how two releases were once committed locally and
+never tagged, leaving installers serving an older version indefinitely.
+
+| Property | Behaviour |
+|---|---|
+| Test gate | The declared suite runs **before** the tag is created. A red suite tags nothing and pushes nothing. |
+| Where the suite comes from | Read from the project's declared test command — the same field the pipeline reads — never a second copy that can drift from it. |
+| Skipping the gate | Possible, explicit, and loud. Never the default, never silent. |
+| No version given | The old tail-only behaviour: take the committed version and resume from tagging. |
+| Version already committed | Idempotent. It says so and resumes, so a run that died waiting on the pipeline is re-run, not repaired. |
+| Refusals | Wrong branch, malformed version, a version not strictly newer, a tag that already exists anywhere, or any dirty file — each refuses by name **before** a byte is written. |
+| Abort part-way | Anything that fails between the version write and the commit restores the manifests, so a failed release leaves nothing half-bumped. |
+| Done | Only when the final success line prints. A release commit without it is **not** a release. |
+
+**Why the test gate is placed where it is.** Tagging before testing makes a red
+build into a published tag, and a published tag never moves — the one mistake a
+release cannot take back. Ordering the gate ahead of the tag costs a suite run and
+removes that failure entirely.
+
+**Before starting, confirm the whole board is green, not just the first red.**
+The test runner stops at the first failing target, so one reported failure can be
+hiding several ([`one-red-hides-the-rest`](../../patterns/20260825-cargo-test-stops-at-the-first-failing-target.md)).
+A red that only reproduces locally is also not automatically a blocker: pinned
+third-party dependencies mean a developer machine and the pipeline can legitimately
+disagree.
+
 ## Business Rules
 
 - **R15** — Onboarding never downgrades a project's vendored runtime. Before
@@ -204,6 +242,14 @@ and the strongest of them is the one that reports success.
 
 ## Pointers (implementation)
 
+- The release chain: `scripts/release.sh` — `scripts/release.sh <VERSION>` runs
+  the whole thing, `--no-test` skips the gate loudly, `-m <subject>` overrides the
+  default commit subject. The regen step calls `bee dev regen`
+  (`packages/bee-rs/crates/bee/src/devtools/mod.rs`), and the test gate reads
+  `commands.test` from `.bee/config.json`, the same field
+  `.github/workflows/ci.yml` runs. The version tuple it writes is
+  `.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`. Agent-facing
+  instruction: `CLAUDE.md` ("Release").
 - Source-identity geometry and the falsifiable anchor (R17 post-move):
   `ENGINE_DIR`/`PLUGIN_ROOT`/`SKILLS_ROOT` constants and the `identityOk`
   check in `packages/bee/scripts/bee onboard` (`computeSkillSync`'s

@@ -1,0 +1,98 @@
+{
+  "id": "mrs-21",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Rewrite the tier rubric as a role rubric everywhere it is taught",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "README.md",
+    "docs/handbook/stages/swarming.md",
+    "docs/handbook/stages/planning.md",
+    "docs/handbook/register.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 7, the surfaces. mrs-15 named this residue precisely: the bee-swarming skill tree, README.md around :360, docs/handbook/stages/swarming.md around :51 and planning.md around :50 still teach the whole TIER rubric including the now-dead bee cells tier spelling. That verb no longer exists in any of the four directions — not served, not routed, not declared — so those lines are dead text, not a false positive. This is a RUBRIC REWRITE, not a find-and-replace: the old rubric taught an author to pick a cost tier, and the new one teaches them to name the JOB the work is. What is true now, all of it verified live by the orchestrator against the built binary: role is REQUIRED on a cell and is any non-empty name (validation checks presence and shape, never membership); bee ships config defaults only for code, read, extraction and generation and deliberately NOT review or advisor; a consumer asks an ordered list ending in the historical name so no existing host changes model; an unconfigured role falls through and WARNS rather than failing; bee dispatch prepare takes --role <name>, so --kind gather --role extraction returns bee-extract; escalation is now bee cells escalate --id <id> [--reason <text>] [--off] and the 40 percent ration watches it; bee status --json renames tier_mix to role_mix. Teach the recommended vocabulary — code, read, test, docs, review, design — as GUIDANCE with any-name-is-legal said plainly. Do NOT teach the retry chain as if bee walks it: decision 51341f84 makes it a contract bee PUBLISHES and an executor follows. Do NOT hand-edit the mirror trees under .claude/, .codex-plugin/, .opencode/ and .claude-plugin/; run bee dev regen and let it write them. PROOF NOTE: the mirrors are not byte-identical to skills/ by design, so the proof is that regen runs clean and bee dev release-manifest --check passes.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml devtools && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "No shipped text teaches bee cells tier or asks an author to choose a cost tier",
+      "The rubric teaches naming the job, with the recommended vocabulary as guidance and any-name-is-legal stated",
+      "Escalation, --role, the fall-through warn and the role_mix rename are each taught where the old behaviour was taught",
+      "The retry chain is described as published contract, never as something bee retries",
+      "regen wrote the mirrors and bee dev release-manifest --check passes"
+    ]
+  },
+  "affects_skills": [
+    "bee-swarming",
+    "bee-hive"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225",
+    "4eaf1b71",
+    "8ff6e79e",
+    "51341f84"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w21",
+    "outcome": "Rewrote the tier rubric as a role rubric across the swarming skill tree, README, the two handbook stage pages, the delegation transport bullet and register.md; regen wrote the mirrors",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "README.md",
+      "docs/handbook/stages/swarming.md",
+      "docs/handbook/stages/planning.md",
+      "docs/handbook/register.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "skills/bee-swarming/references/worker-details.md:7 still lists model tier among the dispatch inputs and keeps its Trace Field Tiers By Lane heading — file not in this cell files, left for the orchestrator",
+      "docs/04-skills-spec.md:143, docs/01-distillation.md:38 and :146, docs/knowledge/areas/doctrine-layer/delegation-threshold.md:83 still teach the three cost tiers — same reason, out of this cell declared files",
+      "down-tier survives in gates-and-delegation.md:125 and :128 as delegation-altitude language, kept for parity with AGENTS.md rather than split vocabulary",
+      "sync-ack: affects_skills named the two skills by name (bee-swarming, bee-hive) while the door matches path-shaped entries; both predicted skills WERE touched, at skills/bee-swarming/SKILL.md, skills/bee-swarming/references/swarming-reference.md and skills/bee-hive/references/gates-and-delegation.md, and the cell is claimed so cells update refuses the repair"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T07:24:09.463Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T07:09:40.487Z",
+    "sync_ack": "affects_skills named the two skills by name (bee-swarming, bee-hive) while the door matches path-shaped entries; both predicted skills WERE touched, at skills/bee-swarming/SKILL.md, skills/bee-swarming/references/swarming-reference.md and skills/bee-hive/references/gates-and-delegation.md, and the cell is claimed so cells update refuses the repair",
+    "report": {
+      "outcome": "Tier rubric rewritten as a role rubric on every shipped teaching surface; regen wrote the five mirror trees and the release manifest",
+      "commit": "c532502a",
+      "files": [
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "README.md",
+        "docs/handbook/stages/swarming.md",
+        "docs/handbook/stages/planning.md",
+        "docs/handbook/register.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml devtools (86 passed, 0 failed) + bee dev regen (3/3 green) + bee dev release-manifest --check (270 files match) — green — docs-only change; the devtools/manifest pair is what proves the mirrors and manifest agree with the edited skills tree",
+      "deviations": [
+        "skills/bee-swarming/references/worker-details.md:7 still lists model tier among the dispatch inputs and keeps its Trace Field Tiers By Lane heading — file not in this cell files, left for the orchestrator",
+        "docs/04-skills-spec.md:143, docs/01-distillation.md:38 and :146, docs/knowledge/areas/doctrine-layer/delegation-threshold.md:83 still teach the three cost tiers — same reason, out of this cell declared files",
+        "down-tier survives in gates-and-delegation.md:125 and :128 as delegation-altitude language, kept for parity with AGENTS.md rather than split vocabulary"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1168 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

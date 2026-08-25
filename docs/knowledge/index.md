@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 114 concept(s)
-- [patterns/](patterns/index.md) — 139 concept(s)
+- [patterns/](patterns/index.md) — 141 concept(s)
 - [work/](work/index.md) — 19 concept(s)
 
 ## Critical patterns
@@ -66,3 +66,5 @@ never a generation timestamp or any other wall-clock value.
 - [A platform job red on a build error is an unknown number of failures](patterns/20260821-a-platform-job-red-on-a-build-error-is-an-unknown-number-of-failures.md) — A compile error on one platform hides every test behind it, so the visible failure count is one and the real one is unknown until the build is green
 - [A vendored binary is a second place the feature must land](patterns/20260821-a-vendored-binary-is-a-second-place-the-feature-must-land.md) — A vendored binary is a second place the feature must land
 - [Instruction text is an untested code path](patterns/20260821-instruction-text-is-an-untested-code-path.md) — Instruction text is an untested code path
+- [A guard deleted with its runtime is a guard removed](patterns/20260825-a-guard-deleted-with-its-runtime-is-a-guard-removed.md) — A guard deleted with its runtime is a guard removed
+- [One red hides the rest — cargo test stops at the first failing target](patterns/20260825-cargo-test-stops-at-the-first-failing-target.md) — One red hides the rest — cargo test stops at the first failing target

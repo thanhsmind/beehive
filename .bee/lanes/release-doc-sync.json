@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-doc-sync",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-doc-sync\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"release-doc-sync\" (lane).",
+  "created_at": "2026-08-25T05:26:40.426Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Pushed. One thing is now stale: `CLAUDE.md` still tells an agent to do the release by hand. That is exactly the rot we spent today fixing, s",
+    "asked_at": "2026-08-25T05:27:48.350Z",
+    "session": "49e28775-6532-4090-9f4e-39c083ae7af2"
+  },
+  "route": {
+    "class": "docs",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "CLAUDE.md still spells out the hand-run release prologue that scripts/release.sh <VERSION> now performs",
+    "updated_at": "2026-08-25T05:26:40.463Z",
+    "feature": "release-doc-sync"
+  }
+}
