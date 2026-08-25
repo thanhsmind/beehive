@@ -797,6 +797,106 @@ use std::time::Instant;
         assert_eq!(pinned_agent_type("review"), "bee-review");
         // 'advisor' has no rendered agent — `|| 'general-purpose'`.
         assert_eq!(pinned_agent_type("advisor"), "general-purpose");
+
+        // mrs-29: the JOB decides, not the spelling. Both words for one job
+        // reach the one agent that serves it, so the lookup cannot answer
+        // differently depending on which vocabulary a host speaks.
+        assert_eq!(pinned_agent_type("read"), pinned_agent_type("extraction"));
+        assert_eq!(pinned_agent_type("code"), pinned_agent_type("generation"));
+        // A name that is nobody's alias is untouched — the open role set has
+        // no rendered agent for an operator-invented job, and inventing one
+        // would name a file that does not exist.
+        assert_eq!(agent_for_role("test"), None);
+        assert_eq!(agent_for_role("design"), None);
+        assert_eq!(canonical_role("test"), "test");
+        // The inverse lookup is deliberately NOT aliased: its answer is
+        // resolved against `models.<runtime>`, so it must name the role the
+        // agent was rendered from — the one every host still carries.
+        assert_eq!(role_for_agent("bee-extract"), Some("extraction"));
+        assert_eq!(role_for_agent("bee-gather"), Some("generation"));
+    }
+
+    /// mrs-29, the audit's finding, pinned where a caller can feel it: ONE
+    /// request gets ONE agent, whatever vocabulary the host's config speaks.
+    ///
+    /// Measured on the release binary BEFORE the fix, `dispatch prepare
+    /// --runtime claude --kind gather --role read` answered
+    /// `subagent_type: "general-purpose"` on a host seeded by today's
+    /// `default_config`, while `--role extraction` answered `bee-extract` —
+    /// the same read job, two agents, decided by config drift rather than by
+    /// the request. This asks the DOOR, over the payload a caller actually
+    /// receives, on all three host shapes the migration produces.
+    #[test]
+    fn the_same_job_gets_the_same_rendered_agent_on_every_host_vocabulary() {
+        // The three configs a host can be in mid-migration.
+        const PRE_ROLES: &str =
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus"}}}"#;
+        // What `onboard/templates.rs::default_config` seeds into a fresh host.
+        const SEEDED: &str = r#"{"models":{"claude":{"code":"sonnet","read":"haiku","extraction":"haiku","generation":"sonnet"}}}"#;
+        // An operator who finished the move and dropped the historical keys.
+        const MIGRATED: &str =
+            r#"{"models":{"claude":{"code":"sonnet","read":"haiku","review":"opus"}}}"#;
+
+        // Every (host, spelling) pair the door can ANSWER for the read job,
+        // and the one agent every one of them must name.
+        for (config, role) in [
+            (PRE_ROLES, "extraction"),
+            (SEEDED, "extraction"),
+            (SEEDED, "read"),
+            (MIGRATED, "read"),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "gather", Some(role), None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("--role {role} did not produce a payload")
+            };
+            assert_eq!(
+                v.get("payload").and_then(|p| p.get("subagent_type")),
+                Some(&json!("bee-extract")),
+                "--role {role} on {config} must reach the rendered read agent"
+            );
+        }
+
+        // The same for the generation job, whose FIRST entry (the read-only
+        // bee-gather) is the answer a role-only lookup owes on either word.
+        for (config, role) in
+            [(PRE_ROLES, "generation"), (SEEDED, "generation"), (SEEDED, "code"), (MIGRATED, "code")]
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "gather", Some(role), None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("--role {role} did not produce a payload")
+            };
+            assert_eq!(
+                v.get("payload").and_then(|p| p.get("subagent_type")),
+                Some(&json!("bee-gather")),
+                "--role {role} on {config} must reach the read-only generation agent"
+            );
+        }
+
+        // The pair this does NOT silently repair, recorded so it is a
+        // decision rather than a gap: a spelling the host configures NO model
+        // for is still refused by name (D2, store 06e49368) — there is no
+        // model to select, and answering an agent while selecting none is the
+        // silent-migration defect this feature exists to remove. The refusal
+        // is loud and carries its FIX, which is the honest answer; what mrs-29
+        // fixes is the case where the door DOES answer.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PRE_ROLES);
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root, "claude", "gather", Some("read"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected a refusal envelope")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
     }
 
     // ── prepareDispatch envelopes ──────────────────────────────────────────
@@ -6003,13 +6103,108 @@ use std::time::Instant;
             Some(&json!(["tool_error", "wrong_or_unwanted_result", "failed_proof", "red_test"]))
         );
         assert_eq!(chain.get("fallback_when"), Some(&json!(CHAIN_FALLBACK_WHEN)));
+    }
 
-        // The negative half is the point: no semantic failure is ever an
-        // advance, and the two lists cannot overlap.
-        for semantic in CHAIN_NEVER_ADVANCE_ON {
-            assert!(
-                !CHAIN_ADVANCE_ON.contains(&semantic),
-                "{semantic} is a semantic failure and must never advance a step"
+    /// D11's negative half (store `50808d48`), pinned on the PUBLISHED gate.
+    ///
+    /// mrs-29, from an independent audit. What stood here asserted that
+    /// `CHAIN_NEVER_ADVANCE_ON` and `CHAIN_ADVANCE_ON` are disjoint — two
+    /// constants in the same crate agreeing with each other, which no caller
+    /// can rely on and which stays green through any edit that moves a class
+    /// out of BOTH lists. The pin belongs on the payload a caller receives.
+    ///
+    /// The oracle is D11's own sentence, transcribed here rather than read
+    /// back out of the code under test: "A step **never** fires on a semantic
+    /// failure — a tool error, a wrong or unwanted result, a failed proof, a
+    /// red test." Delete a class from `CHAIN_NEVER_ADVANCE_ON` and this test
+    /// goes red; move one into `CHAIN_ADVANCE_ON` and it goes red twice.
+    ///
+    /// THE CEILING, stated because the plan overstated it: bee PUBLISHES the
+    /// chain and never walks one (decision `51341f84`), so nothing on bee's
+    /// side can prove an executor OBEYS the gate. What is provable — and what
+    /// this asserts — is that every dispatch bee publishes carries the gate
+    /// correctly and in both directions. An executor that ignores it is
+    /// outside bee's reach, and a test claiming otherwise would be the
+    /// self-agreeing kind this one replaces.
+    #[test]
+    fn every_published_chain_refuses_to_advance_on_a_semantic_failure() {
+        // D11's four semantic classes, from the decision text.
+        const SEMANTIC: [&str; 4] =
+            ["tool_error", "wrong_or_unwanted_result", "failed_proof", "red_test"];
+
+        // Every shape of chain a dispatch can publish: role-keyed, model-keyed,
+        // provider-wildcard, and a non-cell kind resolving its own slot. The
+        // gate is a property of the published contract, never of one fixture.
+        let t1 = tempfile::tempdir().unwrap();
+        let by_role = chain_repo(&t1, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        let t2 = tempfile::tempdir().unwrap();
+        let by_model = chain_repo(&t2, r#""retry":{"fallbackChains":{"sonnet":["haiku"]}}"#);
+        let t3 = tempfile::tempdir().unwrap();
+        let by_review = chain_repo(&t3, r#""retry":{"fallbackChains":{"review":["sonnet"]}}"#);
+        let t4 = tempfile::tempdir().unwrap();
+        let wildcard = repo(
+            &t4,
+            r#"{"models":{"claude":{"code":"anthropic/opus"}},"retry":{"fallbackChains":{"anthropic/*":["local/qwen"]}}}"#,
+        );
+        w(&wildcard, ".bee/cells/c-1.json", CHAIN_CELL);
+
+        for (root, kind) in [
+            (&by_role, "cell"),
+            (&by_model, "cell"),
+            (&by_review, "reviewer"),
+            (&wildcard, "cell"),
+        ] {
+            let payload = chain_payload(root, kind);
+            let chain = payload
+                .get("fallback_chain")
+                .unwrap_or_else(|| panic!("{kind}: the dispatch published no chain to gate"));
+
+            // Read BOTH halves off the payload — never off the constants that
+            // built it. A caller has only these two arrays.
+            let advance: Vec<&str> = chain
+                .get("advance_on")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("{kind}: the published chain carries no advance_on"))
+                .iter()
+                .filter_map(Value::as_str)
+                .collect();
+            let never: Vec<&str> = chain
+                .get("never_advance_on")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("{kind}: the published chain carries no never_advance_on"))
+                .iter()
+                .filter_map(Value::as_str)
+                .collect();
+
+            for class in SEMANTIC {
+                assert!(
+                    never.contains(&class),
+                    "{kind}: the published gate omits the semantic failure {class} from \
+never_advance_on — an executor reading this payload would have to invent the rule"
+                );
+                assert!(
+                    !advance.contains(&class),
+                    "{kind}: the published gate lists the semantic failure {class} in \
+advance_on — falling to another model there hides the defect (D11)"
+                );
+            }
+
+            // And the positive half stays what it is for: only failures that
+            // happened BEFORE the model got to be wrong may move a step, so
+            // no class is ever published on both sides at once.
+            for class in &advance {
+                assert!(
+                    !never.contains(class),
+                    "{kind}: {class} is published as both an advance and a never-advance"
+                );
+            }
+
+            // The gate travels WITH the chain (the `fallback_when` precedent,
+            // af17e217): a caller that reads the chain has read the condition.
+            assert_eq!(
+                chain.get("fallback_when").and_then(Value::as_str),
+                Some(CHAIN_FALLBACK_WHEN),
+                "{kind}: the chain published without its condition"
             );
         }
     }

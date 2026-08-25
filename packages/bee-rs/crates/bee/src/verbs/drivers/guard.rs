@@ -90,6 +90,55 @@ pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [
     ("review", "bee-review"),
 ];
 
+/// The two spellings of one JOB: the word an operator now writes, and the
+/// historical word the table above is keyed on.
+///
+/// mrs-29, from an independent audit of this feature. A rendered bee agent
+/// serves a JOB — bee-extract reads, bee-build writes — and while the
+/// historical cost words were the only vocabulary bee spoke, keying the table
+/// on them made a role-to-agent lookup total. It is not any more: `read` and
+/// `code` are what `default_config` seeds into a fresh host
+/// (`onboard/templates.rs`), what D8's recommended vocabulary teaches, and
+/// what `cell_role_list` puts at the HEAD of every ordered list bee's own
+/// dispatch sites ask for. Both vocabularies stay legal indefinitely — the
+/// historical name is the deliberate TAIL of those same lists, so no existing
+/// host's upgrade moves it onto a different model — so a lookup that
+/// understands only one of them is wrong for somebody either way.
+///
+/// What that cost, measured on the release binary before this fix, is that
+/// ONE request got TWO answers decided by the host's migration state rather
+/// than by the request: `dispatch prepare --runtime claude --kind gather
+/// --role read` returned `subagent_type: "general-purpose"` on a host seeded
+/// by today's `default_config`, while the same call on a pre-roles host was
+/// refused `role_not_configured` and only `--role extraction` reached
+/// `bee-extract` there. One rendered read agent, reachable only through
+/// whichever word the host happened to speak.
+///
+/// So the LOOKUP keys on the job, not on the spelling. `read` and
+/// `extraction` are one job; `code` and `generation` are one job. `review` is
+/// already a job word and needs no second spelling.
+///
+/// The TABLE is deliberately left alone. Its rows stay agent-unique because
+/// `role_for_agent` is the inverse lookup and its answer is fed straight back
+/// into `resolve_tier` (`hooks/model_guard.rs`'s pinned-type branch), where
+/// it must keep naming the role that resolves a MODEL on every host —
+/// migrated or not — and the historical name is the one that does. Aliasing
+/// is a property of the question "which agent serves this job", never of the
+/// answer "which role was this agent rendered from".
+pub(crate) const ROLE_ALIASES: [(&str, &str); 2] =
+    [("read", "extraction"), ("code", "generation")];
+
+/// The name `ROLE_AGENTS` keys a job on, given either of the job's spellings.
+/// A name that is nobody's alias is its own key, so an operator-invented role
+/// (`test`, `design`) reaches the table exactly as it did.
+pub(crate) fn canonical_role(role: &str) -> &str {
+    ROLE_ALIASES
+        .iter()
+        .find(|(job, _)| *job == role)
+        .map(|(_, keyed)| *keyed)
+        .unwrap_or(role)
+}
+
 /// The rendered bee agent a role is served by — `None` when the role has none
 /// of its own.
 ///
@@ -97,13 +146,26 @@ pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [
 /// most roles a host can configure (`test`, `docs`, `design`, and `advisor`
 /// as shipped) have no rendered agent file at all, so answering one — or
 /// falling back to a generic type — would name an agent that does not exist.
+///
+/// mrs-29: the role is normalized to its job first, so both spellings of one
+/// job answer with the one agent that serves it. `code` answers `bee-gather`
+/// for the same reason `generation` does — the FIRST entry, the read-only one,
+/// is the safe answer when nothing else in the dispatch says which of the two
+/// generation agents is meant, and `--kind cell` is still the one signal that
+/// can say so before the lookup is ever reached.
 pub(crate) fn agent_for_role(role: &str) -> Option<&'static str> {
-    ROLE_AGENTS.iter().find(|(r, _)| *r == role).map(|(_, agent)| *agent)
+    let key = canonical_role(role);
+    ROLE_AGENTS.iter().find(|(r, _)| *r == key).map(|(_, agent)| *agent)
 }
 
 /// The role a rendered bee agent stands for. These files are generated FROM
 /// the role's configured model at onboarding, so naming one IS a role
 /// declaration in every sense that matters.
+///
+/// NOT alias-normalized, and that is the point of the split: this answer is
+/// resolved against `models.<runtime>` by the caller, so it has to be the
+/// name the agent was rendered from — the historical one every host still
+/// carries. See `ROLE_ALIASES`.
 pub(crate) fn role_for_agent(agent: &str) -> Option<&'static str> {
     ROLE_AGENTS.iter().find(|(_, a)| *a == agent).map(|(role, _)| *role)
 }
