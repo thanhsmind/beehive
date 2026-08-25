@@ -60,6 +60,12 @@ pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[
     // (hashed into the managed ledger), so a new pattern joins at the tail
     // rather than reordering any existing one.
     ".bee/mailbox/",
+    // human-mailbox: the letters an unattended run files, and the per-run
+    // entry logs they are composed from — runtime data a cap writes on every
+    // finish, never committed. Joined at the tail for the same reason as the
+    // line above: the block's order is hashed into the managed ledger, so a
+    // new pattern must not displace an existing one.
+    ".bee/human-mailbox/",
 ];
 
 /// onboard_bee.mjs HOOK_FILENAMES (l. 225–248) — the vendoring order is the
