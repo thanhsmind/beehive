@@ -12,6 +12,7 @@
 .bee/sessions/
 .bee/claims/
 .bee/runtime/
+.bee/human-mailbox/
 .bee/cache/
 .bee/intent/
 .bee/locks/
