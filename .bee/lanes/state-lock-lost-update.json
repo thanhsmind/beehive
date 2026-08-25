@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"state-lock-lost-update\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at fefec29; reload the product and test \"state-lock-lost-update\", then either approve uat (\"bee gate --name uat --approved true --lane state-lock-lost-update\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-planning for \"state-lock-lost-update\" (lane).",
   "created_at": "2026-08-25T10:40:43.042Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: state-lock-lost-update",
-    "asked_at": "2026-08-25T11:18:45.160Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "turn-end",
+    "subject": "Resolved. Re-proving on the merged base — which now carries **both** fixes for the first time, so the concurrency file should finally be ful",
+    "asked_at": "2026-08-25T11:18:59.673Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
   },
   "route": {
     "class": "bugfix",

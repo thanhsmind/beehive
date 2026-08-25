@@ -843,5 +843,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-25T11:12:31.035Z"
+  },
+  "exclusive-create-atomic": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T11:20:42.847Z"
   }
 }

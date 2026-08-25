@@ -73,6 +73,57 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "solo-race-fixed-at-the-rate-the-defect-demands",
+            "status": "PASS",
+            "evidence": "Orchestrator ran the claim-election test solo 20 consecutive times against the built binary: 0 failures, versus ~4 in 5 failing before. Script and per-run exits captured."
+          },
+          {
+            "id": "c2",
+            "name": "no-temp-files-leaked",
+            "status": "PASS",
+            "evidence": "fd over both .bee trees for '*.publish.tmp' returned 0 after the solo runs. Most races lose here, so a leak would have accumulated visibly."
+          },
+          {
+            "id": "c3",
+            "name": "expired-invariant-untouched",
+            "status": "PASS",
+            "evidence": "git diff of reserve.rs contains no line mentioning 'expired'. An unparseable lease still yields expired=false and is never taken over, so a partial read cannot steal a live lease."
+          },
+          {
+            "id": "c4",
+            "name": "pre-check-is-ordering-not-exclusivity",
+            "status": "PASS",
+            "evidence": "Read the site: the symlink_metadata pre-check exists to preserve EACCES-vs-EEXIST ordering under a read-only store directory, and the comment says so. Exclusivity rests on link(2); a target appearing after the check is still refused. Verified rather than accepted."
+          },
+          {
+            "id": "c5",
+            "name": "scope-held-to-the-two-content-reading-sites",
+            "status": "PASS",
+            "evidence": "Only claims.rs and reserve.rs changed. The ten existence-only create_new sites were left alone, and claims.rs:166 — which looks like the same pattern but whose loser returns Ok(false) — was explicitly excluded."
+          },
+          {
+            "id": "c6",
+            "name": "declared-suite-green-on-the-merged-base",
+            "status": "PASS",
+            "evidence": "cargo test --release on the merged base carrying both this fix and state-lock-lost-update: CARGO_EXIT=0, 2883 passed, 0 failed. Exit code read from cargo directly."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-25T11:20:24.379Z"
+      }
+    ]
   }
 }
