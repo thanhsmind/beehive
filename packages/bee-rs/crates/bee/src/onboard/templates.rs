@@ -138,24 +138,33 @@ pub fn default_state() -> Value {
 /// > carry for bee's own dispatch door to accept it.
 ///
 /// `verbs::drivers::guard::known_roles` is that door — the keys of
-/// `models.<runtime>`, union every `slot_for_kind` answer, union `ceiling` —
-/// and `bee dispatch prepare` REFUSES (`role_not_configured`) any role
-/// outside it. The six names bee asks for, run through it:
+/// `models.<runtime>` that DECLARE a role (`role_is_declarable`: every key
+/// there, except an `advisor` whose own floor-less resolver answers nothing),
+/// union `ceiling` — and `bee dispatch prepare` REFUSES
+/// (`role_not_configured`) any role outside it. The union over every
+/// `slot_for_kind` answer that used to sit in that derivation is gone
+/// (`c2ef2f9f`), and with it the reachability it lent `advisor`. Note what
+/// `models.<runtime>`'s keys already include after `normalize_models`:
+/// everything `drivers::default_models` seeds for that runtime, which is why
+/// three of the six names below are reachable with no config key at all. The
+/// six names bee asks for, run through it:
 ///
 /// | role | who asks for it | reachable with no config key? | shipped |
 /// |---|---|---|---|
-/// | `code` | the execution default in every cell dispatch's list; D9 backfills 504 of 506 cells onto it | **no** — no `slot_for_kind` answers it and `drivers::default_models` has no entry | **added** |
+/// | `code` | the execution default in every cell dispatch's list; D9 backfills 504 of 506 cells onto it | **no** — `drivers::default_models` has no entry on any runtime | **added** |
 /// | `read` | the head of the read dispatch's list; D9's `role` for the extraction cells | **no** — same | **added** |
-/// | `review` | `slot_for_kind("reviewer")`, `bee-review`'s role list | yes | no |
-/// | `advisor` | `slot_for_kind("advisor")`, `resolve_advisor` | yes | no |
-/// | `generation` | the tail every ordered list ends with; `slot_for_kind("cell")` today | yes | kept |
-/// | `extraction` | `bee-extract`'s sole role; the read list's middle entry | **no** — this key is its only route into `known_roles` | kept |
+/// | `review` | `slot_for_kind("reviewer")`, `bee-review`'s role list | yes — `default_models` seeds it | no |
+/// | `advisor` | `slot_for_kind("advisor")`, `resolve_advisor` | **no** — nothing seeds it, and a null-valued key is OFF rather than a configuration | no |
+/// | `generation` | the tail every ordered list ends with; `slot_for_kind("cell")` today | yes — `default_models` seeds it | kept |
+/// | `extraction` | `bee-extract`'s sole role; the read list's middle entry | yes — `default_models` seeds it | kept |
 ///
-/// Two names are added; none is removed. The removals were considered and
-/// refused on the same test: dropping `extraction` would make `--role
-/// extraction` a refusal on every fresh host, and dropping `generation` would
-/// take the historical tail out of a file whose whole job (`561e1bda`) is to
-/// keep that tail reachable.
+/// Two names are added; none is removed. Dropping `extraction` or
+/// `generation` was considered and refused: both are what the historical role
+/// lists END on (`cell_role_list`, `tier_role_list`), and a file that
+/// publishes the job names without the tail they fall through to teaches half
+/// the resolution. Neither would become UNREACHABLE by being dropped —
+/// `default_models` seeds both on every runtime — which corrects an earlier
+/// version of this note rather than changing the call.
 ///
 /// `review` and `advisor` are asked for and deliberately NOT shipped:
 /// - `review` already resolves without a key, and the documented unset-review
@@ -163,10 +172,11 @@ pub fn default_state() -> Value {
 ///   `"review": "opus"` here would silently move every new host's reviews onto
 ///   the expensive model — a product call, not a publishing one.
 /// - `advisor` has NO fall-through (decision `4faf1de9`): unconfigured means
-///   "no advisor". A value would switch the advisor on for every new host, and
-///   an explicit `null` would spell that same "off" as a REFUSAL instead of an
-///   absence — the distinction `resolve_role` exists to protect. Neither is
-///   shippable, so the key stays out.
+///   "no advisor", and since `role_is_declarable` an explicit `null` means the
+///   same thing at every door rather than only at some of them. A value would
+///   switch the advisor on for every new host; a `null` would publish an
+///   off-switch for something that is already off. Neither is shippable, so
+///   the key stays out.
 ///
 /// The two added values are today's models on purpose, so nothing moves:
 /// `code` takes what cell execution runs on now (`generation` -> sonnet) and

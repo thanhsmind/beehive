@@ -837,6 +837,45 @@ pub(crate) fn prepare_dispatch_with_role(
     let Some(default_slot) = slot_for_kind(kind) else {
         return Ok(Prepared::Value(unmapped_kind_refusal(kind)));
     };
+    let models = read_models(root)?;
+    // T012a: a `--role` naming a role nothing configures is REFUSED, never
+    // resolved onto some other role's model. Same FIX shape as the
+    // model-guard's marker refusal, and — the part that used to be a comment
+    // rather than a fact — the SAME predicate, `known_role_named`, answer and
+    // all. This door asked a plain `contains` while the guard asked
+    // `eq_ignore_ascii_case`, so `--role Generation` was refused here while
+    // `[bee-tier: Generation]` was admitted and resolved there: one typo, two
+    // answers, through the two doors that share this predicate precisely so
+    // that cannot happen.
+    //
+    // The answer carries the CONFIG's own spelling, and `role` is rebound to
+    // it for the rest of this function. That is load-bearing rather than
+    // cosmetic: every downstream read — the advisor branch's `role ==
+    // Some(ADVISOR_ROLE)`, the resolved role list, the `[bee-tier: …]` marker
+    // stamped on the payload, `economics.logical_tier` — has to be a key the
+    // resolver can look up, exactly as `classify_marker` hands the guard one.
+    // Admitting a spelling here without normalizing it would have moved the
+    // two-answers defect one line down instead of closing it.
+    let canonical_role: Option<String> = match role {
+        Some(declared) => match known_role_named(&models, runtime, declared) {
+            Some(canonical) => Some(canonical),
+            None => {
+                let roles = role_list(&models, runtime);
+                let mut refusal = Map::new();
+                refusal.insert("ok".into(), Value::Bool(false));
+                refusal.insert("type".into(), Value::String("refused".into()));
+                refusal.insert("reason".into(), Value::String("role_not_configured".into()));
+                refusal.insert("role".into(), Value::String(declared.to_string()));
+                refusal.insert("fix".into(), Value::String(format!(
+                    "--role \"{declared}\" names a role nothing configures — models.{runtime} in .bee/config.json carries no \"{declared}\" entry, so the dispatch would select no model while the record asserted the caller had chosen one. FIX: name a configured role ({roles}), or configure this one — add \"{declared}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you configure is legal; bee holds no fixed list."
+                )));
+                return Ok(Prepared::Value(Value::Object(refusal)));
+            }
+        },
+        None => None,
+    };
+    // Unreachable as `None` when `role` was `Some` — that arm returned above.
+    let role: Option<&str> = canonical_role.as_deref();
     // T012a (store 8ff6e79e): an explicit `--role` names the slot to resolve
     // OUTRIGHT, so neither the kind's default slot nor the cell's own
     // recorded value is consulted — the caller stating the job is the most
@@ -878,24 +917,6 @@ pub(crate) fn prepare_dispatch_with_role(
             }
         }
     };
-    let models = read_models(root)?;
-    // T012a: a `--role` naming a role nothing configures is REFUSED, never
-    // resolved onto some other role's model. Same predicate and same FIX
-    // shape as the model-guard's marker refusal, asked through the one
-    // `known_roles` derivation both doors share — a typo at the door and a
-    // typo in a marker are the same mistake and must not get two answers.
-    if tier_source == "flag" && !known_roles(&models, runtime).contains(tier_token) {
-        let roles = role_list(&models, runtime);
-        let mut refusal = Map::new();
-        refusal.insert("ok".into(), Value::Bool(false));
-        refusal.insert("type".into(), Value::String("refused".into()));
-        refusal.insert("reason".into(), Value::String("role_not_configured".into()));
-        refusal.insert("role".into(), Value::String(tier_token.to_string()));
-        refusal.insert("fix".into(), Value::String(format!(
-            "--role \"{tier_token}\" names a role nothing configures — models.{runtime} in .bee/config.json carries no \"{tier_token}\" entry, so the dispatch would select no model while the record asserted the caller had chosen one. FIX: name a configured role ({roles}), or configure this one — add \"{tier_token}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you configure is legal; bee holds no fixed list."
-        )));
-        return Ok(Prepared::Value(Value::Object(refusal)));
-    }
     // The advisor slot keeps its own resolver (never budget, never a tier
     // fallback). The condition reads the ROLE rather than the kind so an
     // explicit `--role advisor` reaches it too, and `--kind advisor --role
@@ -953,7 +974,7 @@ pub(crate) fn prepare_dispatch_with_role(
     // the open set D2 locks, and closes the hole only for cells authored
     // after it lands.
     let escalation_asked = tier_token == ESCALATION_WORD && !from_role;
-    let (resolved, is_escalated) = if role == Some("advisor") || (role.is_none() && kind == "advisor")
+    let (resolved, is_escalated) = if role == Some(ADVISOR_ROLE) || (role.is_none() && kind == "advisor")
     {
         let r = match resolve_advisor(&models, runtime) {
             Some(r) => r,
@@ -2601,5 +2622,96 @@ mod role_flag_tests {
             "the role the caller named, not the kind's slot"
         );
         assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("haiku")));
+    }
+
+    /// A null-valued `advisor` is the OFF spelling bee itself teaches
+    /// (`.bee/config-sample.json`: "Set null to skip the advisor line"), and
+    /// EVERY door has to read it as off — not only the two that happen to
+    /// resolve through the advisor's own floor-less walk.
+    ///
+    /// `c2ef2f9f` closed the case where the key is ABSENT. A present-but-null
+    /// key is still a key, so `known_roles` kept handing the name out as
+    /// legal: `[bee-tier: advisor]` classified as a configured role, skipped
+    /// the unconfigured-role refusal, resolved `Resolved::Budget` and let the
+    /// subagent inherit the session model, while `--role advisor` and `--kind
+    /// advisor` on the SAME host refused. One question, two doors, two
+    /// answers — through the reachable configuration bee ships.
+    #[test]
+    fn a_null_advisor_is_off_at_every_door_not_only_at_the_ones_that_resolve() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus","advisor":null}}}"#,
+        );
+        // The derivation both doors share no longer calls it a role at all,
+        // which is what the model guard reads when it classifies the marker.
+        let models = read_models(&root).unwrap();
+        assert!(
+            !known_roles(&models, "claude").contains("advisor"),
+            "a null advisor is a slot switched OFF, not a declarable role"
+        );
+        assert!(known_role_named(&models, "claude", "advisor").is_none());
+        assert!(!role_list(&models, "claude").contains("advisor"), "nor is it offered as a FIX");
+        // …so the flag door refuses…
+        let v = envelope(&root, "gather", Some("advisor"));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        // …and case-insensitivity does not smuggle the off slot back in.
+        let v = envelope(&root, "gather", Some("ADVISOR"));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        // …exactly as `--kind advisor` already did, through `resolve_advisor`.
+        let v = envelope(&root, "advisor", None);
+        assert_eq!(v.get("reason"), Some(&json!("advisor_not_configured")));
+
+        // Every OTHER role keeps its documented prompt-budget floor, null
+        // value and all: a blanket non-null rule here would refuse every
+        // codex dispatch bee makes, since `default_models` seeds every codex
+        // slot null.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let off = repo(&tmp2, r#"{"models":{"claude":{"generation":null},"codex":{}}}"#);
+        let models = read_models(&off).unwrap();
+        for name in ["generation", "extraction", "review"] {
+            assert!(known_roles(&models, "codex").contains(name), "codex {name}");
+        }
+        assert!(known_roles(&models, "claude").contains("generation"));
+        let v = envelope(&off, "gather", Some("generation"));
+        assert_eq!(v.get("ok"), None, "a null ordinary slot is prompt-budget, not a refusal: {v}");
+
+        // A CONFIGURED advisor is untouched by all of it.
+        let tmp3 = tempfile::tempdir().unwrap();
+        let on = repo(&tmp3, r#"{"models":{"claude":{"generation":"sonnet","advisor":"fable"}}}"#);
+        assert_eq!(
+            envelope(&on, "advisor", None).get("payload").and_then(|p| p.get("model")),
+            Some(&json!("fable"))
+        );
+    }
+
+    /// One typo, one answer. The guard's marker door has always matched a
+    /// role name case-insensitively (`[BEE-TIER: Generation]` declares the
+    /// `generation` role); this door asked a case-SENSITIVE `contains`, so
+    /// `--role Generation` was refused here while the marker was admitted and
+    /// resolved there — the two doors sharing a derivation but not a
+    /// predicate. Nothing exercised a mixed-case `--role` before.
+    #[test]
+    fn a_mixed_case_role_is_admitted_and_normalized_to_the_configs_spelling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, THREE_SLOTS);
+        let v = envelope(&root, "gather", Some("Generation"));
+        assert_eq!(v.get("ok"), None, "the guard admits this spelling, so this door does: {v}");
+        // The CONFIG's spelling is what travels, never the caller's: the
+        // marker the guard reads back, the audit line and the model that
+        // actually runs all name one key the resolver can look up.
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("generation"))
+        );
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("sonnet")));
+        let prompt =
+            v.get("payload").and_then(|p| p.get("prompt")).and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: generation]"), "{prompt}");
+        // A name nothing configures is still refused in the spelling the
+        // caller typed, so the FIX names what they wrote.
+        let v = envelope(&root, "gather", Some("Generatoin"));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        assert_eq!(v.get("role"), Some(&json!("Generatoin")));
     }
 }

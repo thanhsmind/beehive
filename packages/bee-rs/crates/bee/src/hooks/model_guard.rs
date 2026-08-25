@@ -233,14 +233,16 @@ enum Marker {
     Unconfigured(String),
 }
 
-/// Every role name a dispatch on this runtime may legally declare.
+/// Is this declared name a role — and under which spelling?
 ///
-/// The derivation itself lives in `verbs::drivers` (T012a, store 8ff6e79e):
+/// The predicate itself lives in `verbs::drivers` (T012a, store 8ff6e79e):
 /// `bee dispatch prepare --role` asks the SAME question at the door that this
 /// hook asks at the guard, and two copies of "is this role legal" is the
-/// defect this whole feature exists to remove. One home, two callers.
-fn known_roles(models: &Map<String, Value>, runtime: &str) -> BTreeSet<String> {
-    crate::verbs::drivers::known_roles(models, runtime)
+/// defect this whole feature exists to remove. One home, two callers — and
+/// the shared thing is the ANSWER, matching included, not just the set the
+/// two doors then matched against differently.
+fn known_role_named(models: &Map<String, Value>, runtime: &str, name: &str) -> Option<String> {
+    crate::verbs::drivers::known_role_named(models, runtime, name)
 }
 
 /// The configured roles as one FIX-line fragment.
@@ -252,9 +254,14 @@ fn role_list(models: &Map<String, Value>, runtime: &str) -> String {
 /// Generation]` declares the `generation` role — and the answer is the
 /// CONFIG's own spelling, so every downstream read (the audit line,
 /// `resolve_role`, the FIX text) gets a key it can look up.
+///
+/// The match itself is `verbs::drivers::known_role_named`, which is what
+/// `bee dispatch prepare --role` now asks too: the two doors share the ANSWER
+/// and not merely the set, so a mixed-case name cannot be admitted at one and
+/// refused at the other.
 fn classify_marker(name: &str, models: &Map<String, Value>, runtime: &str) -> Marker {
-    match known_roles(models, runtime).iter().find(|k| k.eq_ignore_ascii_case(name)) {
-        Some(canonical) => Marker::Role(canonical.clone()),
+    match known_role_named(models, runtime, name) {
+        Some(canonical) => Marker::Role(canonical),
         None => Marker::Unconfigured(name.to_string()),
     }
 }
@@ -776,12 +783,26 @@ fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> 
         // role that has one today, is then covered by construction.
         let agents = crate::verbs::drivers::agents_for_role(t);
         if agents.len() > 1 && subagent_type.as_deref() == Some("general-purpose") {
+            // The FIX tail is DERIVED from the same `agents` the condition
+            // above is, for the same reason the condition stopped being keyed
+            // on the literal `"generation"`: it used to spell out the
+            // bee-build/bee-gather pair by hand under a condition that no
+            // longer names them, so a second ambiguous role — a third agent
+            // rendered for this one, or a new role with two of its own —
+            // would have been told to name a pair that does not serve it.
+            let choices = agents
+                .iter()
+                .map(|a| match crate::verbs::drivers::agent_job_summary(a) {
+                    Some(job) => format!("subagent_type \"{a}\" {job}"),
+                    None => format!("subagent_type \"{a}\""),
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
             let reason = format!(
                 "bee-model-guard: [bee-tier: {t}] dispatched with subagent_type \
 \"general-purpose\", and the {t} role carries {} rendered agents ({}) — the guard will \
 not guess which.\n\
-FIX: name the one you mean. subagent_type \"bee-build\" executes a cell (reserves, writes, \
-commits, caps); subagent_type \"bee-gather\" reads and reports (never writes).",
+FIX: name the one you mean. {choices}.",
                 agents.len(),
                 agents.join(", ")
             );
@@ -2370,7 +2391,7 @@ mod tests {
     #[test]
     fn the_known_role_set_is_derived_from_what_the_host_configures() {
         let models = normalize_models(open_role_config().get("models"));
-        let claude = known_roles(&models, "claude");
+        let claude = crate::verbs::drivers::known_roles(&models, "claude");
         // The operator's own roles, the defaults normalize seeds, and the
         // escalation word — every entry published by something, none of them
         // typed into this file.
@@ -2381,7 +2402,7 @@ mod tests {
         // One derivation for both runtimes, so the 4-against-5 drift the two
         // deleted lists carried cannot come back: the runtimes differ by
         // exactly what each config carries and nothing else.
-        let codex = known_roles(&models, "codex");
+        let codex = crate::verbs::drivers::known_roles(&models, "codex");
         assert!(codex.contains("design"), "{codex:?}");
         // A dispatch-door SLOT is legal only where it is configured. The set
         // used to union every `slot_for_kind` answer in unconditionally, so
@@ -2491,6 +2512,38 @@ mod tests {
         assert_eq!(code, 0, "{stderr}");
         let d = last_jsonl(dispatch_log(with_advisor.path())).unwrap();
         assert_eq!(d["tier"], "advisor");
+    }
+
+    /// The same refusal, through the spelling bee actually ships. Dropping the
+    /// dispatch-door slot union closed the case where the advisor key is
+    /// ABSENT; a present-but-NULL key is still a key, so the marker went on
+    /// classifying as `Marker::Role` and inheriting the session model on the
+    /// off-switch `.bee/config-sample.json` documents ("Set null to skip the
+    /// advisor line"). The flag door refused the same host, so the fix is not
+    /// a stricter guard — it is the two doors agreeing.
+    #[test]
+    fn a_null_advisor_marker_is_refused_exactly_as_an_absent_one_is() {
+        let fx = fixture(&json!({"models": {
+            "claude": {"extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": Value::Null}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}),
+        );
+        assert_eq!(code, 2, "a null advisor must not inherit the session model: {stderr}");
+        assert!(stderr.contains("[bee-tier: advisor] names a role nothing configures"), "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "role-not-configured");
+        assert_eq!(d["model"], Value::Null, "nothing was allowed onto the session model");
+        // Every OTHER null slot keeps its documented prompt-budget meaning —
+        // on codex that is the only meaning there is, since `default_models`
+        // seeds all of its slots null.
+        let codex = fixture(&json!({"models": {"claude": {"generation": Value::Null}}}));
+        let (code, stderr) = run_payload(
+            codex.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "subagent_type": "bee-gather"}}),
+        );
+        assert_eq!(code, 0, "a null ordinary slot is prompt-budget, not a refusal: {stderr}");
     }
 
     #[test]
