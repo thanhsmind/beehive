@@ -112,17 +112,23 @@ pub(crate) fn read_lane(ctx: &mut Ctx, feature: &str) -> R<Option<JMap>> {
     Ok(record)
 }
 
-/// state.mjs listLanes — fail-open enumeration in directory order.
+/// state.mjs listLanes — fail-open enumeration, in lane-id order.
 pub(crate) fn list_lanes(ctx: &mut Ctx) -> R<Vec<JMap>> {
     let Ok(entries) = std::fs::read_dir(lanes_dir(ctx)) else {
         return Ok(Vec::new());
     };
-    // Node readdirSync returns the OS enumeration order; Rust read_dir uses
-    // the same OS API, so the order is preserved rather than re-sorted.
-    let names: Vec<String> = entries
+    // Sorted, not readdir order. This used to preserve Node readdirSync's OS
+    // enumeration order for parity; R6 deleted the runtime that parity served,
+    // and what was left was a status surface whose row order — and the ids
+    // list and summary line built from it — changed with the filesystem.
+    // lanes_summary_vs_full asserted that order and went red the first time a
+    // two-entry directory came back the other way. Everything downstream reads
+    // this as a display list, so a stable order is the contract now.
+    let mut names: Vec<String> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
+    names.sort();
     let mut lanes = Vec::new();
     for entry in names {
         let Some(stem) = entry.strip_suffix(".json") else { continue };
