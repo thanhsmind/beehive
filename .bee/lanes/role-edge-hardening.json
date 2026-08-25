@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All three closed. Committing the close output.",
-    "asked_at": "2026-08-25T21:35:11.515Z",
+    "subject": "result: all three hardening features closed on the user's approval — uat recorded, decisions routed into the knowledge layer, judge exemptio",
+    "asked_at": "2026-08-25T23:05:11.636Z",
     "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {
