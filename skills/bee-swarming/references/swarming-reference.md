@@ -101,20 +101,26 @@ single worker — never wave analysis or multi-cell assignment.
    else, never session history, never a literal session id**. Use the
    template below.
 <!-- bee:only claude -->
-   **Spawn the tier-matched pinned type when its rendered agent exists**:
-   `subagent_type: "bee-build"` for a `generation` cell execution and
-   `"bee-gather"` for a `generation` read-only gather,
-   `"bee-extract"` for `extraction`, `"bee-review"` for `review` — these are
-   bee's own rendered agent definitions (`.claude/agents/bee-*.md`,
-   config-sourced at onboarding), never another plugin's type. `ceiling` has
-   no rendered agent (it IS the session model) — spawn it as the runtime's
-   default/general subagent type. A slot that resolves to no model (a cli- or
-   herding-shaped slot) is not a subagent at all — resolve the transport with
+   **Resolve through the one door, then run exactly what it returns.**
    `.bee/bin/bee dispatch prepare --runtime claude --kind
-   <cell|gather|reviewer|advisor> --json` and run the Bash payload it returns
-   (per D1). NEVER pair a `[bee-tier: generation|extraction|review]` marker with
+   <cell|gather|reviewer|advisor> [--role <name>] --json` returns the
+   Agent/Bash payload to run (per D1) — `--role extraction` is how a
+   read-only `gather` asks for the extraction-tier model; a `--role`
+   naming a name nothing configures is refused by name, with a FIX,
+   never silently resolved. `subagent_type: "bee-build"` (a `generation`
+   cell execution), `"bee-gather"` (a `generation` read-only gather),
+   `"bee-extract"` (`extraction`), `"bee-review"` (`review`) are bee's
+   own rendered agent definitions (`.claude/agents/bee-*.md`,
+   config-sourced at onboarding) and appear ONLY as what `prepare`
+   returns — never type one by hand, and never another plugin's type.
+   `ceiling` has no rendered agent (it IS the session model); `prepare`
+   returns the runtime's default/general subagent type for it. A slot
+   that resolves to no model (a cli- or herding-shaped slot) is not a
+   subagent at all — `prepare`'s payload carries that transport too.
+   NEVER pair a `[bee-tier: generation|extraction|review]` marker with
    `subagent_type: "general-purpose"` — `bee-model-guard` denies it
-   (`generic-type-denied`) precisely so this rule cannot be skipped by habit.
+   (`generic-type-denied`) precisely so this rule cannot be skipped by
+   habit.
 <!-- bee:end -->
 <!-- bee:only codex -->
    Codex has no per-agent `subagent_type` equivalent — its tier is
@@ -291,7 +297,7 @@ that acceptance, not on an ordinary wave.
 | Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
 | Isolation guarantee | Fresh context per Agent call; include only the contract fields |
-| Subagent type | `subagent_type: "bee-build"` (generation, executes a cell) or `"bee-gather"` (generation, reads only) · `"bee-extract"` (extraction) · `"bee-review"` (review), when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling` uses the runtime default (`general-purpose`); a cli- or herding-shaped slot goes through `bee dispatch prepare` (per D1). The guard repairs a generic type for extraction and review; at generation it refuses, because the tier alone does not say whether the work writes |
+| Subagent type | Resolved by the one door, never hand-typed: `.bee/bin/bee dispatch prepare --runtime claude --kind <cell|gather|reviewer|advisor> [--role <name>] --json` returns `subagent_type: "bee-build"` (generation, executes a cell), `"bee-gather"` (generation, reads only), `"bee-extract"` (extraction — `--role extraction` on a `gather`), or `"bee-review"` (review), when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling` returns the runtime default (`general-purpose`); a cli- or herding-shaped slot returns that transport instead (per D1). The guard repairs a generic type for extraction and review; at generation it refuses, because the tier alone does not say whether the work writes |
 <!-- bee:end -->
 <!-- bee:only codex -->
 | | Codex |
