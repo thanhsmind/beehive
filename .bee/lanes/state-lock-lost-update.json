@@ -14,7 +14,12 @@
   "next_action": "Continue bee-planning for \"state-lock-lost-update\" (lane).",
   "created_at": "2026-08-25T10:40:43.042Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "No name hints. But the timing narrows it: tickets landed 10:12–10:26Z and the lane was created 10:57Z — bracketed by the five sessions start",
+    "asked_at": "2026-08-25T11:12:18.265Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -23,5 +28,12 @@
     "rationale": "A state worker add entry is lost during a stale-lock steal: w0 dies, state.json stays well-formed, ~9-12% solo on three trees. Two candidate mechanisms already eliminated by reading; needs instrumentation.",
     "updated_at": "2026-08-25T10:40:43.052Z",
     "feature": "state-lock-lost-update"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T11:03:11.925Z",
+    "branch": "wt/state-lock-lost-update",
+    "worktree_id": "beehive--wt--state-lock-lost-update",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

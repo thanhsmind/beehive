@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "needs input: have that session commit `docs/discovery/human-mailbox/`, `docs/history/human-mailbox/` and its trigger file — or tell me to co",
-    "asked_at": "2026-08-25T11:06:50.412Z",
+    "subject": "Committing mine and attempting the merge you asked for.",
+    "asked_at": "2026-08-25T11:10:33.097Z",
     "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {

@@ -838,5 +838,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-25T09:42:24.300Z"
+  },
+  "test-exec-race": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T11:12:31.035Z"
   }
 }
