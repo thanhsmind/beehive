@@ -30,9 +30,9 @@
     "8dad7c2e"
   ],
   "deps": [],
-  "status": "open",
+  "status": "claimed",
   "trace": {
-    "worker": null,
+    "worker": "mrs-w32",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -42,6 +42,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T09:35:02.809Z"
   }
 }

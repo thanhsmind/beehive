@@ -1,0 +1,36 @@
+{
+  "id": "dph-1",
+  "feature": "doctor-probe-honesty",
+  "title": "Stop reporting a binary as fresh when doctor could not probe it",
+  "action": "In binary_freshness_row, stop the ProbedBeeVersion::Failed arm from falling through into the row that asserts the binary matches source. Keep the mtime scan running and still winning when it finds a newer input; when the probe failed and nothing is newer, return ok: None with a detail naming the failed probe and its remedy, never a version it did not read. Add a test for that one new cell of the matrix.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml doctor::",
+  "slice": 1,
+  "lane": "small",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "acceptance": "A tree whose binary cannot be probed with nothing newer yields ok:None naming the failed probe and never the words 'matches source'; the same tree with a newer source input still yields ok:Some(false) with its existing detail; Present-equal, Present-differing and Missing keep their current rows with the existing tests unedited and green.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-dph-1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T09:34:03.631Z"
+  }
+}

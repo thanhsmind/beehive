@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "doctor-probe-honesty",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"doctor-probe-honesty\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"doctor-probe-honesty\" (lane).",
+  "created_at": "2026-08-25T09:33:09.989Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "doctor's binary-freshness row reports ok:Some(true) claiming the binary matches source when the probe never read a version. The Failed arm is empty and falls through to a claim it cannot support.",
+    "updated_at": "2026-08-25T09:33:09.998Z",
+    "feature": "doctor-probe-honesty"
+  }
+}
