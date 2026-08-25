@@ -858,5 +858,10 @@
     "capped": 34,
     "dropped": 0,
     "archived_at": "2026-08-25T11:49:48.687Z"
+  },
+  "decision-attribution": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-25T14:39:36.802Z"
   }
 }

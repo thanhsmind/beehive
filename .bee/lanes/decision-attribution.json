@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"decision-attribution\" started at phase \"exploring\" (lane).",
   "next_action": "Awaiting the user's uat gate.",
   "created_at": "2026-08-25T12:14:02.772Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
