@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"release-doc-sync\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"release-doc-sync\" (lane).",
+  "next_action": "Merged into main at eafe2a0; capture what settled, then bee close --feature release-doc-sync.",
   "created_at": "2026-08-25T05:26:40.426Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "docs",
@@ -23,12 +23,5 @@
     "rationale": "CLAUDE.md still spells out the hand-run release prologue that scripts/release.sh <VERSION> now performs",
     "updated_at": "2026-08-25T05:26:40.463Z",
     "feature": "release-doc-sync"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T05:27:28.433Z",
-    "branch": "wt/release-doc-sync",
-    "worktree_id": "beehive--wt--release-doc-sync",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
