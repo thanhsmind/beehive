@@ -118,7 +118,7 @@ Per-repo configuration.
 | `hooks` | toggle map over the nine handlers: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard`, `model-guard`, `tools-logger`, `codex-subagent-audit` — each default-on |
 | `guards` | write-guard tuning: `idle_gate`, `max_read_lines` |
 | `gate_bypass` | `off` · `normal` · `full` · `total` — the opt-in gate autopilot level |
-| `models` | per-runtime tier→model map: `{claude:{extraction, generation, review, advisor}, codex:{…}}`. A tier may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor |
+| `models` | per-runtime **role→model** map: `{claude:{code, read, extraction, generation, review, advisor}, codex:{…}}`. The key is the job a dispatch asks for; a fresh config seeds `code`/`read` beside the historical `extraction`/`generation` tail, and any role name you add is legal — bee holds no fixed list, and asks "is this name configured", never "is it one of four words". A role value may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor — or `{kind:"herding", agent, fallback}`. `retry.fallbackChains` is a separate key: an explicit-only, role- or model-keyed chain bee PUBLISHES on the payload and never walks itself |
 | `product_root` | subdirectory the product lives in, when the repo root is not it — the product-file count that picks the lane is measured against it |
 | `worktree_first` | whether a code-touching route must open its feature worktree before execution |
 | `cells_archive_on_close` | default true — a capped cell is relocated to `.bee/cells/archive/<feature>/` at close |
@@ -130,7 +130,7 @@ Per-repo configuration.
 | `staging_before_merge` | boolean, absent means ON — whether the repo uses the staging mixing ground at all; explicit `false` makes `bee staging add`/`bee staging rebuild` refuse `STAGING_DISABLED`, so the repo runs feature worktree -> `uat` gate -> main with no staging step; a non-boolean value refuses `STAGING_CONFIG_INVALID` rather than guessing. Independent of `uat_stop` — the `uat` gate itself is unaffected |
 | `doc_viewer` | `{base_url, project}` — an opt-in URL prefix. When set, the session preamble and the compaction capsule give doc links as this URL plus the repo-relative path, instead of the bare path |
 
-Read by hive (bypass level), planning (test scoping), swarming (model tiers),
+Read by hive (bypass level), planning (test scoping), swarming (model roles),
 and `bee test` (`commands.test`, its own runner). `bee close` and `bee
 worktree merge` no longer run `commands.test` — each checks the cap's own
 recorded proof line instead; `bee cells finish` is commit-only proof and
@@ -141,7 +141,7 @@ copy of the whole schema — its `_doc` block is the per-key contract.
 **Config is the one hand-edited register.** The `config get/set/unset/validate`
 verbs are [declared but not built](#declared-but-not-built), and `config.json` is
 deliberately absent from the write guard's direct-edit deny list — so changing
-`gate_bypass` or a model tier means editing the file, preserving every other
+`gate_bypass` or a model role means editing the file, preserving every other
 field, and logging a one-line audit decision in the same turn. This is a named
 exception to invariant 1, not a licence that generalizes.
 
@@ -481,7 +481,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `state handoff adopt` | the session started from `resume` or `compact`, not a fresh-session boundary; or the record's `kind` is `pause` | **none** — present the handoff and wait for the user. A session with no recorded start source warns and proceeds |
 | `reviews record` (`approved`) | a `P1` finding is not named in the decision's `p1_resolutions[]` with a fixing cell | none — land the fix cell, then record with `p1_resolutions` |
 | write-guard, `docs/history/<feature>/plan.md` | that feature's `approved_gates.shape` is true — plan.md freezes once shape is locked | `bee state plan-rev bump --lane <feature>`, or unapprove shape to redraft |
-| model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
+| model-guard, `Agent`/`Task` | the dispatch declares no role and names no pinned subagent type, **or** its `[bee-tier: <name>]` marker names a role nothing configures (`role-not-configured`). A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` *derives* its role from the agent file instead of refusing | declare `[bee-tier: <role>]` (the marker keeps its historical spelling and carries a role name) or a `model` param; for an unconfigured name, add it to `models.<runtime>` or open with one that is configured. A derived `cli` role still refuses — an external process is not dispatchable as an agent |
 | `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
 | `worktree merge` (`WORKTREE_MERGE_UAT_PENDING`) | under `uat_stop: "merge"` (default), the feature's lane is standard/high-risk (missing/unrecognized lane fails closed as standard) and its `uat` gate is not approved | approve it (`bee gate --name uat --approved true`), or skip uat for JUST this merge (`bee worktree merge --id <id> --skip-uat`), or turn the door off repo-wide (`uat_stop: "off"`). Never auto-approved — `uat` is user-only at every `gate_bypass` level (uat-gate-before-merge D1) |
 | `bee close` (`uat` door, headline "Uat gate pending for") | under `uat_stop: "close"`, standard/high-risk lane (same fail-closed rule), the merged feature's `uat` gate is not yet approved | approve it (`bee gate --name uat --approved true`), or log a `uat-deferral` decision naming the feature (uat-stop-placement D2) |

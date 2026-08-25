@@ -47,7 +47,7 @@ source edits happen until `approved_gates.execution` is true.
 
 ## State touched
 [`bee route --set`](../register.md#beestatejson), `bee worktree new`,
-[`cells add --stdin` / `cells tier`](../register.md#beecellsfeature-njson),
+[`cells add --stdin`](../register.md#beecellsfeature-njson),
 `bee gate --name shape` / `--merge`,
 [`decisions log`](../register.md#beedecisionsjsonl) (scoping synthesis),
 `state set --owner planning --phase swarming`.
@@ -65,6 +65,14 @@ source edits happen until `approved_gates.execution` is true.
   write guard enforces it: an edit to `docs/history/<feature>/plan.md` is denied once
   that feature's shape gate is approved, whoever is editing.
 - **Cells only for the current slice** — a future-slice cell does not exist yet.
+- **Every cell names the job it is.** `role` is required (`bee cells add` refuses
+  without it) and it is the cell's sole model selector: the JOB the work is, never
+  how expensive the work is. `code`, `read`, `test`, `docs`, `review`, `design` are
+  the recommended words, guidance only — **any non-empty name is legal**, because
+  bee checks presence and shape, never membership, and a name nothing configures
+  still runs (the dispatch falls through to the next name it asked for and warns).
+  Cost is a separate lever the orchestrator pulls at dispatch, not a role:
+  `bee cells escalate --id <id>` puts a cell on the session model.
 - **A user-visible surface makes slice 1 a walking skeleton** — end to end, real
   behavior, no stubs.
 - **Tests are the writer's, TDD-style, inside each cell** — coverage judgment
