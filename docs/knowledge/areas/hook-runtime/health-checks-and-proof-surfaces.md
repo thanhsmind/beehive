@@ -67,6 +67,24 @@ against isolated fixtures, asserting that a denied action changed nothing.
   probe. Package version and release version stay separate answers — the
   binary reports both, and only the release one is compared.
 
+- **A probe that FAILED is no longer read as agreement (doctor-probe-honesty,
+  cell dph-1, 2026-08-25).** The version arm has three outcomes — the binary
+  reports a version, reports none, or cannot be run at all — and the third had
+  an empty branch. A binary that could not be executed skipped the comparison
+  entirely and fell through to the closing row, which announced "installed
+  binary matches source (version X)" — a claim about a version nothing had
+  read. So the one row whose whole job is to notice a stale installed binary
+  reported freshness precisely when it had learned nothing. The failed probe
+  now ends in `unknown`, naming the failed probe and the rebuild remedy and
+  quoting no version; the mtime arm still runs first and still wins with
+  not_ok when it finds a newer input, because real evidence of drift beats an
+  honest "I do not know". Proven before and after on one identical tree whose
+  installed binary was a text file: `ok` / "matches source (version 9.9.9)"
+  became `unknown` / "could not run the installed binary to read its release
+  version". This is the THIRD blindness found in this row, and all three had
+  the same shape — a path that could not learn the answer reported the
+  reassuring one.
+
 - Doctor's overall verdict is THREE-STATE (gh22-completion g22-3, supersedes
   the binary ready/not_ready): `blocked` = a mechanical blocking row is
   not-ok (hooks file missing, baseline drift, handlers unresolvable, skills
