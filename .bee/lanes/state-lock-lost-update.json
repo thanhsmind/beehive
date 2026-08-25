@@ -14,7 +14,12 @@
   "next_action": "The takeover claims are tombstones swept past HARD_STALE_MS; watch that the sweep keeps pace under sustained contention.",
   "created_at": "2026-08-25T10:40:43.042Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "`state-lock-lost-update` stops at the **UAT gate** — and that one is yours, not mine to approve.",
+    "asked_at": "2026-08-25T11:21:41.248Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
