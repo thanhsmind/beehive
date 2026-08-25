@@ -1,0 +1,69 @@
+{
+  "id": "hrg-1",
+  "feature": "herding-registry-gap",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Declare the four cockpit-vocabulary herding shapes the dispatcher already serves",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/pane_verbs.rs",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "action": "THE RED, already diagnosed. `cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch` fails at registry_dispatch.rs:393: 'the dispatcher serves these shapes and the registry does not declare them, so `bee --help --all` reports them as unknown commands' -- naming `bee herding agent-start`, `bee herding pane`, `bee herding pane-id`, `bee herding result`. The test derives `served` by scanning the match arms of `pub fn try_native` in src/herding.rs (:122-139, where all four are wired to pane_verbs::) and compares against every `commands[].invoke` in src/generated/registry_payload.json. Red at origin/main since the tmux-herding-cockpit work landed; it stayed invisible because cargo test stops at the first failing target and two earlier reds masked it.\n\nTHE DECISION IS ALREADY MADE -- these are COMMANDS, not internal plumbing, so they get declared. Evidence, do not re-litigate it: pane_verbs.rs opens by naming itself 'the transport-neutral cockpit vocabulary (tmux-herding-cockpit D2)' and states 'a cockpit role document and bootstrap-cockpit.sh act on panes ONLY through these verbs -- never a raw `herdr` or `tmux` line. A cold control agent then reads ONE vocabulary, whatever `herding.transport` names.' They are the transport-neutral twins of `herding herdr-result` and `herding herdr-pane-id`, BOTH of which are already declared in the registry. src/router.rs:100-105 already lists all four in PORTED under the comment 'tmux-herding-cockpit D2 -- the transport-neutral cockpit vocabulary'; only the registry was missed. Do NOT add anything to NOT_A_COMMAND_SURFACE (registry_dispatch.rs:321) -- it excludes whole namespaces, herding is a real command surface, and excluding it would hide every herding verb.\n\nTHE WORK. Add exactly four entries to the `commands` array of packages/bee-rs/crates/bee/src/generated/registry_payload.json, named `herding.agent-start`, `herding.pane`, `herding.pane-id`, `herding.result`, each matching the shape the file's existing herding entries already use (see herding.herdr-pane-id and herding.run as the closest templates): `name`, `invoke`, `description`, `parameters` (JSON-Schema object with `properties` and `required`), and `examples`. Place them beside the other herding entries, keeping the file's existing ordering convention. Write each `description` from the REAL behaviour in src/herding/pane_verbs.rs -- the verb list for `pane` is current|list|split|run|send-text|read|rename|close|layout|tab-create|tab-list|tab-focus; `agent-start <job> --kind <k> --pane <id> -- <args...>`; `pane-id --label <label>`; `result <dotted.path>` reads one `{ok,transport,result}` envelope on stdin and prints `result.<path>`, sharing herdr-result's own reader so the two cannot drift. Every verb prints exactly one JSON envelope: {\"ok\":true,\"transport\":\"herdr|tmux\",\"result\":{...}} exit 0, or {\"ok\":false,...,\"error\":{...}} exit 1. Do not invent flags -- read them off the argument parsing in pane_verbs.rs.\n\nEXAMPLES ARE EXECUTED, so get them right. registry_dispatch.rs:19-27 and :143-152 state the contract: every entry carries `examples[0]`, the test RUNS it in a sandbox cwd, and an entry with NO `unavailable` marker must not be refused, while an entry WITH one must hit the unavailable path. Follow `herding.herdr-pane-id` (`bee herding herdr-pane-id --label x`) and `herding.run` (`bee herding run --dry-run ... --main-root . --json`) -- both run clean today. Pick the cheapest side-effect-free invocation for each of the four and VERIFY each one by hand before you commit. If a verb genuinely cannot run without a live tmux or herdr transport, give that entry an `unavailable` marker in the same shape herding.enable and herding.disable already use ({reason, fix}) rather than inventing a new mechanism or weakening the test -- and say on the cap which of the four you marked and why.\n\nDo NOT edit registry_dispatch.rs, herding.rs, pane_verbs.rs, or router.rs. The registry is the only thing missing.\n\nAlso run `bee dev release-manifest --check` before you cap: the payload is compiled into the binary, so confirm nothing else drifted.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch --test registry_contracts --test front_door",
+  "must_haves": {
+    "truths": [
+      "every_namespace_the_dispatcher_serves_is_declared_in_the_registry is green",
+      "All four entries carry an examples[0] that the registry suite actually executes without an unknown-command refusal, or an unavailable marker in the existing {reason, fix} shape",
+      "registry_contracts and front_door are green -- the embedded payload's shape and freshness pins still hold",
+      "No test file, dispatcher, or router source was edited; only the registry payload changed",
+      "NOT_A_COMMAND_SURFACE is unchanged",
+      "The full declared suite is green"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "hrg-w1",
+    "outcome": "Declared herding pane/agent-start/pane-id/result in the command registry, clearing the dispatcher-vs-registry red",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "Edited packages/bee-rs/crates/bee/src/catalog.rs, one file beyond the cell's declared list (reserved under hrg-w1 first). Declaring the four entries grew the registry's distinct flag vocabulary 181->188, which fails catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision — a unit test masked by the same first-failing-target effect that hid the cell's own red. That test's own message prescribes the remedy (bump PINNED_FLAG_COUNT and say why), and the cell's must-haves require the full declared suite green, so this is fix-blocking-breakage, not scope creep. catalog.rs is not on the cell's do-not-edit list.",
+      "No entry took an `unavailable` marker. The cell offered one as a fallback for a verb needing a live transport, but that fallback cannot apply here: registry_dispatch asserts the OTHER direction too — a marked entry MUST hit the `bee: not built into this binary` refusal, and all four verbs are built, so a marker would have failed as `marked_but_alive`. Instead each example is side-effect-free by construction and was run by hand against a live herdr transport before commit.",
+      "Recorded for the next reader: the four verbs never emit a router-level refusal at all — they print their own {ok:false,...} envelope — so the registry-dispatch walk cannot detect a wrong example for them. Example safety here rests on the hand-run check, not on the suite."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T05:08:15.921Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "49e28775-6532-4090-9f4e-39c083ae7af2",
+    "claimed_at": "2026-08-25T04:56:36.577Z",
+    "report": {
+      "outcome": "Declared herding pane/agent-start/pane-id/result in the command registry; bumped the pinned flag vocabulary 181->188 with its per-flag reuse check",
+      "commit": "e8bc86f75138333d1f3612c6fe6321e18ef5f829",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — full declared suite (2567 unit + every integration target, exit 0); the cell's own verify (registry_dispatch/registry_contracts/front_door) is inside it and every_namespace_the_dispatcher_serves_is_declared_in_the_registry went red->green",
+      "deviations": [
+        "Edited packages/bee-rs/crates/bee/src/catalog.rs, one file beyond the cell's declared list (reserved under hrg-w1 first). Declaring the four entries grew the registry's distinct flag vocabulary 181->188, which fails catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision — a unit test masked by the same first-failing-target effect that hid the cell's own red. That test's own message prescribes the remedy (bump PINNED_FLAG_COUNT and say why), and the cell's must-haves require the full declared suite green, so this is fix-blocking-breakage, not scope creep. catalog.rs is not on the cell's do-not-edit list.",
+        "No entry took an `unavailable` marker. The cell offered one as a fallback for a verb needing a live transport, but that fallback cannot apply here: registry_dispatch asserts the OTHER direction too — a marked entry MUST hit the `bee: not built into this binary` refusal, and all four verbs are built, so a marker would have failed as `marked_but_alive`. Instead each example is side-effect-free by construction and was run by hand against a live herdr transport before commit.",
+        "Recorded for the next reader: the four verbs never emit a router-level refusal at all — they print their own {ok:false,...} envelope — so the registry-dispatch walk cannot detect a wrong example for them. Example safety here rests on the hand-run check, not on the suite."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

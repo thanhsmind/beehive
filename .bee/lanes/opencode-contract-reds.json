@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"opencode-contract-reds\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 631f57c; capture what settled, then bee close --feature opencode-contract-reds.",
+  "next_action": "Continue bee-planning for \"opencode-contract-reds\" (lane).",
   "created_at": "2026-08-25T04:33:34.860Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The third red needs a judgment call in another feature's command surface, so I am landing what is proven first.",
+    "asked_at": "2026-08-25T04:47:02.907Z",
+    "session": "49e28775-6532-4090-9f4e-39c083ae7af2"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",

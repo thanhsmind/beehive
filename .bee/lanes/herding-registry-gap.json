@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-registry-gap",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-registry-gap\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"herding-registry-gap\" (lane).",
+  "created_at": "2026-08-25T04:55:56.708Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 1,
+    "rationale": "The dispatcher serves four pane_verbs shapes the registry never declared, so bee --help --all calls them unknown; their own module names them the cockpit vocabulary a cold agent types",
+    "updated_at": "2026-08-25T04:56:01.901Z",
+    "feature": "herding-registry-gap"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T05:08:15.940Z",
+    "branch": "wt/herding-registry-gap",
+    "worktree_id": "beehive--wt--herding-registry-gap",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
