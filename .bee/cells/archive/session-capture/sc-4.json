@@ -35,5 +35,6 @@
     "verify_passed": null,
     "claim_session": null,
     "dropped_reason": "docs lane runs without cells; the route guard cannot be satisfied without a session record"
-  }
+  },
+  "role": "code"
 }

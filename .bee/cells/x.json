@@ -26,5 +26,6 @@
     "verify_passed": null,
     "claim_session": null,
     "dropped_reason": "junk probe cell, added by mistake"
-  }
+  },
+  "role": "code"
 }

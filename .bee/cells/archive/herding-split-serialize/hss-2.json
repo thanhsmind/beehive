@@ -52,7 +52,7 @@
     "verify_passed": null,
     "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
     "claimed_at": "2026-08-21T13:45:51.103Z",
-    "tier_reason": "same as hss-1: generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "tests": "boundary",
     "report": {
       "outcome": "Pane split now holds a cross-process lock across the layout read and the split, so concurrent spawns stop all splitting right",
       "commit": "5f42381e",
@@ -70,8 +70,10 @@
     "warnings": [
       "advisory: this cap's commit changes 335 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "escalation_reason": "same as hss-1: generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier"
   },
   "decisions": [],
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }

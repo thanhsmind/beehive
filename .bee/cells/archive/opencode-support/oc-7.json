@@ -114,5 +114,6 @@
     },
     "verify_command": null,
     "verified_at": null
-  }
+  },
+  "role": "code"
 }

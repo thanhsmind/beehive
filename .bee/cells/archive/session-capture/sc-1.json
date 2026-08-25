@@ -36,5 +36,6 @@
     "claim_session": "8ce76840-0a14-4fc0-919a-6887bb9d38f1",
     "claimed_at": "2026-08-04T15:20:11.370Z",
     "dropped_reason": "docs lane runs without cells; the route guard cannot be satisfied without a session record"
-  }
+  },
+  "role": "code"
 }

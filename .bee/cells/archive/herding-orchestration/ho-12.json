@@ -168,5 +168,6 @@
     "verify_command": null,
     "verified_at": null
   },
-  "tier": "generation"
+  "tier": "generation",
+  "role": "code"
 }

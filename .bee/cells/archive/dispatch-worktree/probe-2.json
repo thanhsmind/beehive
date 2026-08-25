@@ -32,5 +32,6 @@
     "verify_passed": null,
     "claim_session": null,
     "dropped_reason": "probe complete"
-  }
+  },
+  "role": "code"
 }

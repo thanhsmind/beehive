@@ -124,5 +124,7 @@
       }
     ]
   },
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }

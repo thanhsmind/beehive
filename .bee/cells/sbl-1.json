@@ -45,5 +45,6 @@
     "verify_passed": null,
     "claim_session": null,
     "dropped_reason": "re-adding after the lane record exists (start-feature refuses with nonterminal cells)"
-  }
+  },
+  "role": "code"
 }

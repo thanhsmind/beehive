@@ -42,5 +42,6 @@
     "results": ".bee/logs/test-results.json",
     "ran_at": "2026-08-04T06:47:35.248Z"
   },
-  "tier": "generation"
+  "tier": "generation",
+  "role": "code"
 }

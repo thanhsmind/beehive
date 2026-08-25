@@ -28,5 +28,6 @@
     "claimed_at": "2026-08-17T23:53:32.376Z",
     "warnings": [],
     "tests": "boundary"
-  }
+  },
+  "role": "code"
 }

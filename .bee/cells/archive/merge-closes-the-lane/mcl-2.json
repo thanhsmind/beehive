@@ -175,5 +175,6 @@
       }
     ],
     "inline_reason": "trace.worker was unset on this reopened cell (the NEEDS_REVISION rework cleared it) even though the dispatch registered mcl-2-fix-worker in state.json workers[] with cell mcl-2, status running, before hand-off; recording this cap under that already-registered worker rather than re-running cells claim, which this worker's contract forbids for a cell already handed to it."
-  }
+  },
+  "role": "code"
 }

@@ -36,5 +36,6 @@
     "tests": "green",
     "results": ".bee/logs/test-results.json",
     "ran_at": "2026-08-07T05:31:33.212Z"
-  }
+  },
+  "role": "code"
 }

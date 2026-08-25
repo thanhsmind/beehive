@@ -51,7 +51,7 @@
     "verify_passed": null,
     "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
     "claimed_at": "2026-08-21T14:47:58.088Z",
-    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "tests": "boundary",
     "report": {
       "outcome": "bee backlog add refuses honestly: per-problem messages naming the real flag, no store write on any refusal",
       "commit": "9880250",
@@ -68,8 +68,10 @@
     "warnings": [
       "advisory: this cap's commit changes 314 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "escalation_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier"
   },
   "decisions": [],
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }

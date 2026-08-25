@@ -59,5 +59,6 @@
     },
     "warnings": [],
     "tests": "boundary"
-  }
+  },
+  "role": "code"
 }

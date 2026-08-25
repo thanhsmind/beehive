@@ -87,30 +87,6 @@
     "verify_passed": null,
     "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
     "claimed_at": "2026-08-22T05:25:15.924Z",
-    "tier_reason": "generation worker idled out once and failed to ack on resume; rescue ladder rung 2",
-    "report": {
-      "outcome": "Sync door (D3/D4) implemented: sync_refusal runs ownership/applied_at/prediction checks at cap, escaped by --sync-ack, legacy cells skip prediction with a visible deviation line only when it mattered; docs and regen chain updated",
-      "commit": "e8a0732557841153ba2134981ec3cf9939f5af7a",
-      "files": [
-        "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
-        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
-        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
-        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
-        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
-        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
-        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
-        "packages/bee-rs/crates/bee/src/catalog.rs",
-        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
-        "skills/bee-swarming/references/worker-details.md",
-        "docs/history/codex-harness-hardening/release-manifest.json"
-      ],
-      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells — green — 241 cells tests incl. 8 new sync_door tests, plus registry_contracts (10) and catalog (9) green; full -p bee suite 2361 passed, only a pre-existing unrelated opencode_plugin_contracts failure present on the clean tree too",
-      "deviations": [
-        "fixed a pre-existing KNOWN RED: the legacy-cell deviation line was unconditional and broke 9 existing deviation-pipeline tests; scoped it to fire only when the touched set actually carries a skills/** path"
-      ]
-    },
-    "warnings": [],
-    "tests": "boundary",
     "semantic_judge": [
       {
         "schema": "judge-verdict/1",
@@ -170,7 +146,33 @@
         "model_independence": "unverified",
         "recorded_at": "2026-08-22T06:08:23.928Z"
       }
-    ]
+    ],
+    "report": {
+      "outcome": "Sync door (D3/D4) implemented: sync_refusal runs ownership/applied_at/prediction checks at cap, escaped by --sync-ack, legacy cells skip prediction with a visible deviation line only when it mattered; docs and regen chain updated",
+      "commit": "e8a0732557841153ba2134981ec3cf9939f5af7a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/sync_door.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells — green — 241 cells tests incl. 8 new sync_door tests, plus registry_contracts (10) and catalog (9) green; full -p bee suite 2361 passed, only a pre-existing unrelated opencode_plugin_contracts failure present on the clean tree too",
+      "deviations": [
+        "fixed a pre-existing KNOWN RED: the legacy-cell deviation line was unconditional and broke 9 existing deviation-pipeline tests; scoped it to fire only when the touched set actually carries a skills/** path"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "escalation_reason": "generation worker idled out once and failed to ack on resume; rescue ladder rung 2"
   },
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }

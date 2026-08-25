@@ -48,5 +48,6 @@
     "warnings": [],
     "tests": "boundary",
     "dropped_reason": "live-verification probe for the claim-reserves-files door; not real work"
-  }
+  },
+  "role": "code"
 }

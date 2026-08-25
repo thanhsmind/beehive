@@ -47,5 +47,6 @@
     "verify_passed": null,
     "claim_session": null,
     "dropped_reason": "Dead as written: it names three deleted JS test files (test_workflow_store.mjs, test_state.mjs, test_bee_cli.mjs). The coverage it wanted is re-stated against the Rust tree as a P2 debt row in .bee/backlog.jsonl."
-  }
+  },
+  "role": "code"
 }

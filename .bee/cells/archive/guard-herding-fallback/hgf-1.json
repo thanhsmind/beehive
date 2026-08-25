@@ -119,5 +119,7 @@
     },
     "warnings": [],
     "tests": "boundary"
-  }
+  },
+  "role": "code",
+  "escalate": true
 }

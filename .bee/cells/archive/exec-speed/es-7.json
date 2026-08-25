@@ -48,5 +48,7 @@
     "warnings": [],
     "feature_verify": "pending"
   },
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }
