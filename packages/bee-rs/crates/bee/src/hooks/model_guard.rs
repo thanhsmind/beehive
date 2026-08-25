@@ -16,6 +16,7 @@ use crate::hooks::Outcome;
 use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
+use crate::verbs::drivers::{normalize_models, resolve_advisor, resolve_tier, Resolved};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -223,101 +224,38 @@ fn marker_tier(tool_input: &Map<String, Value>) -> Option<String> {
         .or_else(|| tool_input.get("prompt").and_then(|p| starts_with_tier_marker(p, &CLAUDE_TIERS)))
 }
 
-// ─── model config (normalize_tier_value / normalize_models) ────────────────
+// ─── model config (the ONE parser lives in verbs::drivers) ────────────────
+//
+// model-role-split D1 (store cd72ec97): this hook used to carry a SECOND
+// implementation of the `models.<runtime>` shape — its own Slot/Slots/Models
+// normalize plus a private resolve_tier/resolve_advisor. The two copies had
+// already drifted (four tier names against five) with nothing intending it,
+// so `verbs::drivers` is now the single parser and this hook calls it. No
+// behavior moved with the deletion; see GUARD_PURPOSE for the one place the
+// two parsers were not interchangeable.
 
-#[derive(Clone, Debug, PartialEq)]
-enum Slot {
-    /// Key absent after normalize (only the advisor slot defaults here).
-    Unset,
-    Null,
-    /// A plain model name, or a {model[, effort]} object (same resolution).
-    Name(String),
-    Cli(String),
-    /// {kind:'native',...} or an explicit-fallback composite's native primary.
-    Native(String),
-    /// herding-tier D1: `{kind:"herding"}` — the dispatch seam turns this
-    /// into a `bee herding run` Bash payload; an Agent/Task subagent can no
-    /// more be a herding pane than it can be a cli executor (D5).
-    /// hgf-1: `fallback` is true only for the literal `fallback:"default"`,
-    /// the flag `dispatch prepare` reads to publish this slot's default model
-    /// as the failed-herding re-dispatch target — so the guard must admit that
-    /// same model into `configured_model_set`.
-    Herding { agent: Option<String>, fallback: bool },
-}
+/// The dispatch purpose every resolution in this hook asks with.
+///
+/// The surviving parser is purpose-parameterized (`purpose_is_gather`, which
+/// is `kind != "cell"`); the deleted one was purpose-BLIND and refused every
+/// `{kind:"cli"}` slot unconditionally. This hook's whole surface is
+/// Agent/Task/spawn_agent — an in-family subagent, which can no more BE an
+/// external cli process than it can be a herding pane — so "cell", the one
+/// non-gather purpose, is the deliberate choice at every call site here: it
+/// is exactly the purpose under which a cli slot resolves to
+/// `Resolved::Refused`, reproducing the deleted parser's blanket refusal.
+/// Widening any call site to a gather purpose would hand an Agent/Task
+/// dispatch a `Resolved::Cli` it has no transport for.
+const GUARD_PURPOSE: &str = "cell";
 
-#[derive(Clone, Debug)]
-struct Slots {
-    extraction: Slot,
-    generation: Slot,
-    review: Slot,
-    advisor: Slot,
-}
-
-struct Models {
-    claude: Slots,
-    codex: Slots,
-    // opencode-support E4/S4: parsed and resolvable exactly like claude/codex
-    // (docs/config-reference.md's models.<rt> schema). NOTE: the dispatch
-    // verdicts below (evaluate_claude_dispatch's model-param branches) still
-    // resolve against a literal "claude" — OpenCode's Task payload carries no
-    // runtime marker to key off of (confirmed live: its `task` tool has no
-    // `model` argument at all, so those branches never fire for an OpenCode
-    // dispatch either way). The structural half of OpenCode's model-guard
-    // mapping is the per-agent `model:` pin in each `.opencode/agent/bee-*.md`
-    // file, not a runtime switch here — see plan.md's model-guard fallback row.
-    opencode: Slots,
-}
-
-/// None means "undefined" (invalid shape, keep default).
-fn normalize_tier_value(value: &Value) -> Option<Slot> {
-    match value {
-        Value::String(s) if !s.trim().is_empty() => Some(Slot::Name(s.trim().to_string())),
-        Value::Null => Some(Slot::Null),
-        Value::Object(obj) => {
-            let str_field = |key: &str| -> Option<String> {
-                obj.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(String::from)
-            };
-            let kind = obj.get("kind").and_then(Value::as_str);
-            if kind == Some("cli") {
-                if let Some(command) = str_field("command") {
-                    return Some(Slot::Cli(command));
-                }
-            }
-            if kind == Some("native") {
-                if let Some(model) = str_field("model") {
-                    return Some(Slot::Native(model));
-                }
-            }
-            // herding-tier D1: no other field is required — `kind` alone
-            // routes the slot. hgf-1: `fallback` recognizes exactly one
-            // value, the literal string "default" — same exact-match posture
-            // drivers/models.rs normalize_tier_value uses when it round-trips
-            // the field; absent, empty, mistyped, or non-string is false.
-            if kind == Some("herding") {
-                let fallback = obj.get("fallback").and_then(Value::as_str) == Some("default");
-                let agent = str_field("agent");
-                return Some(Slot::Herding { agent, fallback });
-            }
-            // Explicit-fallback composite: {primary:{kind:'native', model}, ...}.
-            if let Some(Value::Object(primary)) = obj.get("primary") {
-                if primary.get("kind").and_then(Value::as_str) == Some("native") {
-                    if let Some(model) = primary
-                        .get("model")
-                        .and_then(Value::as_str)
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                    {
-                        return Some(Slot::Native(model.to_string()));
-                    }
-                }
-            }
-            if obj.get("kind").is_none() {
-                if let Some(model) = str_field("model") {
-                    return Some(Slot::Name(model));
-                }
-            }
-            None
-        }
+/// The model name a resolved slot names, if it names one — the accessor the
+/// deleted private enum carried as `Resolved::model_name`. Native counts
+/// here (it carries an equally readable model string) exactly as it did
+/// before; `configured_model_set` deliberately does NOT use this, because
+/// membership admits `Resolved::Model` only.
+fn resolved_model_name(resolved: &Resolved) -> Option<&str> {
+    match resolved {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => Some(model),
         _ => None,
     }
 }
@@ -371,117 +309,6 @@ pub(crate) fn tier_slot_display(
     ]
 }
 
-fn normalize_models(raw: Option<&Value>) -> Models {
-    // Default model set.
-    let mut out = Models {
-        claude: Slots {
-            extraction: Slot::Name("haiku".into()),
-            generation: Slot::Name("sonnet".into()),
-            review: Slot::Name("opus".into()),
-            advisor: Slot::Unset,
-        },
-        codex: Slots {
-            extraction: Slot::Null,
-            generation: Slot::Null,
-            review: Slot::Null,
-            advisor: Slot::Unset,
-        },
-        opencode: Slots {
-            extraction: Slot::Null,
-            generation: Slot::Null,
-            review: Slot::Null,
-            advisor: Slot::Unset,
-        },
-    };
-    let Some(Value::Object(raw)) = raw else { return out };
-    for rt in ["claude", "codex", "opencode"] {
-        let Some(Value::Object(src)) = raw.get(rt) else { continue };
-        let dst = match rt {
-            "claude" => &mut out.claude,
-            "codex" => &mut out.codex,
-            _ => &mut out.opencode,
-        };
-        for slot in ["extraction", "generation", "review", "advisor"] {
-            let Some(value) = src.get(slot) else { continue };
-            if let Some(v) = normalize_tier_value(value) {
-                match slot {
-                    "extraction" => dst.extraction = v,
-                    "generation" => dst.generation = v,
-                    "review" => dst.review = v,
-                    _ => dst.advisor = v,
-                }
-            }
-        }
-    }
-    out
-}
-
-#[derive(Clone, Debug, PartialEq)]
-enum Resolved {
-    Inherit,
-    Model(String),
-    Budget,
-    Refused,
-    Native(String),
-    /// herding-tier D5: the slot is `{kind:"herding"}` — an Agent/Task
-    /// subagent cannot BE the herding pane; only the herding-exec Bash
-    /// path (dispatch prepare's Resolved::Herding arm) may run it.
-    Herding,
-}
-
-impl Resolved {
-    fn model_name(&self) -> Option<&str> {
-        match self {
-            Resolved::Model(m) | Resolved::Native(m) => Some(m),
-            _ => None,
-        }
-    }
-}
-
-/// No purpose => cli slots refuse.
-fn resolve_tier(models: &Models, slot: &str, runtime: &str) -> Resolved {
-    if slot == "ceiling" {
-        return Resolved::Inherit;
-    }
-    let slots = match runtime {
-        "codex" => &models.codex,
-        "opencode" => &models.opencode,
-        _ => &models.claude,
-    };
-    let s = if matches!(slot, "extraction" | "generation" | "review") { slot } else { "generation" };
-    let mut value = match s {
-        "extraction" => &slots.extraction,
-        "review" => &slots.review,
-        _ => &slots.generation,
-    };
-    if matches!(value, Slot::Null | Slot::Unset) && s == "review" {
-        value = &slots.generation; // review falls back to generation
-    }
-    match value {
-        Slot::Null | Slot::Unset => Resolved::Budget,
-        Slot::Name(m) => Resolved::Model(m.clone()),
-        Slot::Cli(_) => Resolved::Refused,
-        Slot::Native(m) => Resolved::Native(m.clone()),
-        Slot::Herding { .. } => Resolved::Herding,
-    }
-}
-
-/// None = "no advisor".
-fn resolve_advisor(models: &Models, runtime: &str) -> Option<Resolved> {
-    let slots = match runtime {
-        "codex" => &models.codex,
-        "opencode" => &models.opencode,
-        _ => &models.claude,
-    };
-    match &slots.advisor {
-        Slot::Unset | Slot::Null => None,
-        Slot::Name(m) => Some(Resolved::Model(m.clone())),
-        Slot::Cli(_) => Some(Resolved::Refused), // {type:'cli'} — never a model member
-        Slot::Native(m) => Some(Resolved::Native(m.clone())),
-        Slot::Herding { .. } => Some(Resolved::Herding), // never a model member either
-    }
-}
-
 /// The configurable-slot models plus the advisor slot's own resolved model.
 ///
 /// hgf-1: a herding slot carrying `fallback:"default"` also contributes its
@@ -491,12 +318,19 @@ fn resolve_advisor(models: &Models, runtime: &str) -> Option<Resolved> {
 /// — so refusing it here would deny a dispatch bee itself prepared. The name
 /// comes from drivers::models::default_models, the same table prepare reads;
 /// a second copy in this hook would drift the moment either door moved.
-fn configured_model_set(models: &Models) -> BTreeSet<String> {
+fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
     for slot in ["extraction", "generation", "review"] {
-        if let Resolved::Model(m) = resolve_tier(models, slot, "claude") {
-            if !m.trim().is_empty() {
-                set.insert(m.trim().to_string());
+        // Resolved::Model ONLY. A native slot carries a model string too, and
+        // matching it here would silently widen what a bare `model:` param may
+        // name — a native slot is a transport this hook's Agent/Task surface
+        // does not dispatch, so it contributes no member. Deliberate, and the
+        // reason the port is a match on one variant rather than a model_name()
+        // call.
+        if let Resolved::Model { model, .. } = resolve_tier(models, slot, "claude", GUARD_PURPOSE)
+        {
+            if !model.trim().is_empty() {
+                set.insert(model.trim().to_string());
             }
         }
     }
@@ -509,19 +343,17 @@ fn configured_model_set(models: &Models) -> BTreeSet<String> {
     // for the {t} tier yet"), so admitting one would widen the guard past the
     // door it is mirroring.
     for slot in ["generation", "review"] {
-        // The raw slot, not the resolved one: Resolved::Herding is a unit
-        // variant on purpose (the transport refusals read it and must not
-        // change), so the fallback flag is only legible here.
-        let mut raw = if slot == "review" { &models.claude.review } else { &models.claude.generation };
-        if matches!(raw, Slot::Null | Slot::Unset) && slot == "review" {
-            // Same review-falls-back-to-generation rule resolve_tier applies,
-            // and only for an explicitly null/absent review slot. The lookup
-            // key stays "review": prepare resolves the reviewer purpose to
-            // the review tier_token, so the model it publishes is
-            // default_models("claude")["review"], not the generation one.
-            raw = &models.claude.generation;
-        }
-        if matches!(raw, Slot::Herding { fallback: true, .. }) {
+        // The shared parser carries the flag on the resolved value itself
+        // (`Resolved::Herding { fallback }` mirrors the normalized
+        // `"fallback": "default"` verbatim), so the raw-slot peek the deleted
+        // private enum forced — its Herding was a unit variant — is gone. The
+        // review-falls-back-to-generation rule for an explicitly null or
+        // absent review slot rides along inside resolve_tier, the same rule
+        // applied at the same moment as before.
+        if matches!(
+            resolve_tier(models, slot, "claude", GUARD_PURPOSE),
+            Resolved::Herding { fallback: Some(ref f), .. } if f == "default"
+        ) {
             if let Some(Value::String(m)) =
                 crate::verbs::drivers::default_models("claude").get(slot)
             {
@@ -531,9 +363,10 @@ fn configured_model_set(models: &Models) -> BTreeSet<String> {
             }
         }
     }
-    if let Some(Resolved::Model(m)) = resolve_advisor(models, "claude") {
-        if !m.trim().is_empty() {
-            set.insert(m.trim().to_string());
+    // Resolved::Model only here too, for the same reason as the slot loop.
+    if let Some(Resolved::Model { model, .. }) = resolve_advisor(models, "claude") {
+        if !model.trim().is_empty() {
+            set.insert(model.trim().to_string());
         }
     }
     set
@@ -665,7 +498,7 @@ fn dispatch_kind_for_tier(tier: &str) -> Option<&'static str> {
     }
 }
 
-fn evaluate_claude_dispatch(tool_input: &Value, models: &Models) -> Verdict {
+fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
 
     let model_param: Option<String> = obj
@@ -722,8 +555,10 @@ not the rendered bee agent for this tier)"
 
     // (1) Marker + model param — AO5 strict equality.
     if let (Some(t), Some(param)) = (&tier, &model_param) {
-        let resolved = resolve_tier(models, t, "claude");
-        if let Resolved::Model(resolved_model) = &resolved {
+        // GUARD_PURPOSE: an Agent/Task dispatch is a cell-execution-shaped
+        // subagent, never a cli process — the cli slot must refuse here.
+        let resolved = resolve_tier(models, t, "claude", GUARD_PURPOSE);
+        if let Resolved::Model { model: resolved_model, .. } = &resolved {
             if param == resolved_model {
                 return allow("model-param", tier, model_param, subagent_type);
             }
@@ -745,7 +580,8 @@ model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
                 note,
             );
         }
-        let cli_note = if resolved == Resolved::Refused { " (the slot is a cli executor)" } else { "" };
+        let cli_note =
+            if matches!(resolved, Resolved::Refused { .. }) { " (the slot is a cli executor)" } else { "" };
         // param-on-nameless-tier nit (round 2): the first two options both
         // demand a second dispatch attempt before the caller reaches a
         // working door. Naming the resolving verb directly closes that gap
@@ -764,11 +600,11 @@ model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
 for the {t} tier's own transport"
             )),
             None => match resolved {
-                Resolved::Herding => Some(format!(
+                Resolved::Herding { .. } => Some(format!(
                     "dispatch prepare has no --kind for the {t} tier yet — run \".bee/bin/bee \
 herding run --task-file - --json\" directly with the prompt on stdin"
                 )),
-                Resolved::Refused => Some(format!(
+                Resolved::Refused { .. } => Some(format!(
                     "dispatch prepare has no --kind for the {t} tier yet — run the configured \
 command verbatim with the prompt on stdin"
                 )),
@@ -815,8 +651,9 @@ prompt/description; or add this model to a configured tier slot in .bee/config.j
 
     // (3) Marker, no param — B4(1)/W10.
     if let Some(t) = &tier {
-        let resolved = resolve_tier(models, t, "claude");
-        if resolved == Resolved::Refused {
+        // GUARD_PURPOSE: same cell-execution purpose as branch (1).
+        let resolved = resolve_tier(models, t, "claude", GUARD_PURPOSE);
+        if matches!(resolved, Resolved::Refused { .. }) {
             let fix = match dispatch_kind_for_tier(t) {
                 Some(kind) => format!(
                     "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
@@ -839,7 +676,7 @@ not a spawned subagent.\n\
             );
             return deny(reason, "cli-tier-denied", tier, None, subagent_type);
         }
-        if resolved == Resolved::Herding {
+        if matches!(resolved, Resolved::Herding { .. }) {
             // herding-tier D5: mirror of the cli-tier-denied wording just
             // above — an Agent/Task subagent cannot BE the pane a herding
             // slot spawns.
@@ -879,8 +716,9 @@ external agent in its own pane, not a spawned subagent.\n\
     // used to have nothing to go on, so no dispatch that passes today changes
     // its verdict.
     if let Some(t) = subagent_type.as_deref().and_then(tier_for_pinned_type) {
-        let resolved = resolve_tier(models, t, "claude");
-        if resolved == Resolved::Refused {
+        // GUARD_PURPOSE: same cell-execution purpose as branch (1).
+        let resolved = resolve_tier(models, t, "claude", GUARD_PURPOSE);
+        if matches!(resolved, Resolved::Refused { .. }) {
             let fix = match dispatch_kind_for_tier(t) {
                 Some(kind) => format!(
                     "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
@@ -902,7 +740,7 @@ to a cli executor — an in-family Agent/Task subagent cannot be an external pro
             );
             return deny(reason, "cli-tier-denied", Some(t.to_string()), None, subagent_type);
         }
-        if resolved == Resolved::Herding {
+        if matches!(resolved, Resolved::Herding { .. }) {
             // herding-tier D5: same mirror as the marker-only branch above,
             // reached here when the pinned subagent_type itself implies the
             // tier instead of an explicit marker.
@@ -933,8 +771,10 @@ pane worker.\n\
     }
 
     // (4) Bare — deny; resolve the generation slot for the FIX.
-    let gen_resolved = resolve_tier(models, "generation", "claude");
-    let bare_fix = if let Resolved::Model(gen_model) = &gen_resolved {
+    // GUARD_PURPOSE: the FIX text names the generation slot's own transport,
+    // so it must read the slot exactly as the branches above refuse it.
+    let gen_resolved = resolve_tier(models, "generation", "claude", GUARD_PURPOSE);
+    let bare_fix = if let Resolved::Model { model: gen_model, .. } = &gen_resolved {
         format!(
             "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
 bee-extract = extraction, bee-review = review) — that alone declares the tier. \
@@ -943,8 +783,8 @@ prompt/description with [bee-tier: ceiling] (or generation/extraction/review)."
         )
     } else {
         let slot_kind = match gen_resolved {
-            Resolved::Herding => "a herding executor",
-            Resolved::Refused => "a cli executor",
+            Resolved::Herding { .. } => "a herding executor",
+            Resolved::Refused { .. } => "a cli executor",
             _ => "unconfigured",
         };
         format!(
@@ -969,14 +809,22 @@ expensive session model.\n{bare_fix}"
 // ─── dispatch economics (g22-2) ─────────────────────────────────────────────
 
 fn derive_dispatch_economics(
-    models: &Models,
+    models: &Map<String, Value>,
     is_codex_spawn: bool,
     verdict: &Verdict,
 ) -> Option<Map<String, Value>> {
     let channel = if is_codex_spawn { "codex-native" } else { "claude-agent" };
     let runtime = if is_codex_spawn { "codex" } else { "claude" };
-    let resolved = verdict.tier.as_ref().map(|t| resolve_tier(models, t, runtime));
-    let resolved_model = resolved.as_ref().and_then(|r| r.model_name());
+    // GUARD_PURPOSE — the one genuinely ambiguous site: this line is driven
+    // by a [bee-tier] marker on a claude Task, which may be a cell execution
+    // or a gather, and the marker does not say which. Resolved either way
+    // yields the SAME audit value (a cli slot resolves to Resolved::Refused
+    // under "cell" and to Resolved::Cli under a gather purpose, and neither
+    // names a model), so the choice is free of behavior. It is made "cell"
+    // for one reason: the audit line must record the model the verdict above
+    // was reached on, and every verdict branch resolved with GUARD_PURPOSE.
+    let resolved = verdict.tier.as_ref().map(|t| resolve_tier(models, t, runtime, GUARD_PURPOSE));
+    let resolved_model = resolved.as_ref().and_then(resolved_model_name);
     let param_model = verdict.model.as_deref();
 
     // nativeConfirmed is never passed by the hook => always false.
@@ -1234,10 +1082,16 @@ mod tests {
     }
 
     // opencode-support E4/S4: models.opencode used to be silently dropped by
-    // this hook's own normalize_models (only ["claude", "codex"] were parsed)
-    // — docs/config-reference.md called that "dead config that never
-    // resolves". It is now a real third key, resolved exactly like
-    // claude/codex.
+    // this hook's own second normalize_models (only ["claude", "codex"] were
+    // parsed) — docs/config-reference.md called that "dead config that never
+    // resolves". model-role-split D1 deleted that copy, so these rows now
+    // read the ONE parser through the exact call this hook makes
+    // (GUARD_PURPOSE); every assertion is the one the private-resolver test
+    // made.
+    fn model(name: &str) -> Resolved {
+        Resolved::Model { model: name.to_string(), effort: None }
+    }
+
     #[test]
     fn opencode_models_block_is_parsed_and_resolved() {
         let raw = json!({
@@ -1249,21 +1103,24 @@ mod tests {
         });
         let models = normalize_models(Some(&raw));
         assert_eq!(
-            resolve_tier(&models, "generation", "opencode"),
-            Resolved::Model("opencode/big-pickle".into())
+            resolve_tier(&models, "generation", "opencode", GUARD_PURPOSE),
+            model("opencode/big-pickle")
         );
         assert_eq!(
-            resolve_tier(&models, "extraction", "opencode"),
-            Resolved::Model("opencode/ling-3.0-tiny-free".into())
+            resolve_tier(&models, "extraction", "opencode", GUARD_PURPOSE),
+            model("opencode/ling-3.0-tiny-free")
         );
         assert_eq!(
-            resolve_tier(&models, "review", "opencode"),
-            Resolved::Model("opencode/nemotron-3-ultra-free".into())
+            resolve_tier(&models, "review", "opencode", GUARD_PURPOSE),
+            model("opencode/nemotron-3-ultra-free")
         );
         // Unconfigured (no models.opencode key at all) resolves to Budget on
         // every slot — same no-baked-in-default treatment codex gets.
         let models = normalize_models(None);
-        assert_eq!(resolve_tier(&models, "generation", "opencode"), Resolved::Budget);
+        assert_eq!(
+            resolve_tier(&models, "generation", "opencode", GUARD_PURPOSE),
+            Resolved::Budget
+        );
     }
 
     #[test]
@@ -1688,7 +1545,7 @@ mod tests {
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "model-param");
         assert_eq!(d["model"], "sonnet");
-        // The flag reads off the raw slot, so the set is directly checkable.
+        // The flag rides on the resolved slot, so the set is directly checkable.
         let models = normalize_models(herding_generation(Some(json!("default"))).get("models"));
         assert!(configured_model_set(&models).contains("sonnet"));
     }
