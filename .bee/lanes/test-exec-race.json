@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"test-exec-race\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"test-exec-race\" (lane).",
+  "next_action": "Merged into main at 88c0b7f; capture what settled, then bee close --feature test-exec-race.",
   "created_at": "2026-08-25T09:43:57.029Z",
   "run_state": "done",
   "waiting_on": null,
@@ -23,12 +23,5 @@
     "rationale": "Doctor test helpers hold the exec target open for writing; a sibling test's fork inherits the fd and exec returns ETXTBSY. Write-temp-then-rename removes the race structurally.",
     "updated_at": "2026-08-25T09:44:03.021Z",
     "feature": "test-exec-race"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T09:47:27.072Z",
-    "branch": "wt/test-exec-race",
-    "worktree_id": "beehive--wt--test-exec-race",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
