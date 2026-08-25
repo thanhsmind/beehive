@@ -4,7 +4,7 @@ Open this when the compact worker loop needs exact fields or commands.
 
 ## Parent Context
 
-The orchestrator supplies: agent nickname (reservation identity), assigned cell id, feature name, paths to `CONTEXT.md` and `plan.md`, global constraints, model tier, and the status-token protocol. Nothing else arrives — if the cell is not executable from that plus the repo, return `[BLOCKED]`; do not guess.
+The orchestrator supplies: agent nickname (reservation identity), assigned cell id, feature name, paths to `CONTEXT.md` and `plan.md`, global constraints, the cell's role (the job the work is) with the model that role resolved to, and the status-token protocol. Nothing else arrives — if the cell is not executable from that plus the repo, return `[BLOCKED]`; do not guess.
 
 The assigned cell arrives **already claimed** under the worker's nickname — the orchestrator claims before spawning, never the worker. No literal session id is ever handed down in the prompt: reservation and claim verbs resolve the session from `CLAUDE_CODE_SESSION_ID` in the worker's own environment when one is needed, never from prompt text.
 
@@ -89,7 +89,7 @@ nothing here is a required output artifact, and none of it is written up anywher
 - Does it match the pattern its neighbours use?
 - Does it introduce an import cycle?
 
-## Trace Field Tiers By Lane
+## Trace Field Depth By Lane
 
 | Lane | Required trace on cap |
 |---|---|
