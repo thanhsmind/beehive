@@ -1350,7 +1350,7 @@
     },
     {
       "path": "packages/bee/statusline/statusline-command.sh",
-      "sha256": "87c173a6e61aed9aa4d76ab59f0b3f18fdb2a12931fdb37e5ef8910b853a7f1d",
+      "sha256": "2b74f863a261598c95d4bfcdc5a7de8b67b2e965b9232846d4b91d92412b1165",
       "mode": "755",
       "role": "package_payload",
       "packagePath": "packages/bee/statusline/statusline-command.sh"
