@@ -21,12 +21,18 @@
 // prompt is the user's text and bee stores what it is given; the acceptance is
 // the agent's own sentence, and a credential inside one is a bug to report,
 // not to swallow.
+//
+// hm-3 (docs/history/human-mailbox/CONTEXT.md D4/D9/D11): this group also
+// carries the END of a run — see `file_letter_at_run_end` at the foot of the
+// file, and the store itself in `verbs/mailbox.rs`.
 
 use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::hooks::activity::well_formed_id;
 use crate::lock::{acquire_store_lock_once, AcquireOnce};
+use crate::verbs::cells::resolve_session_flag_env;
 use crate::verbs::decisions::scanners::SECRET_PATTERNS;
 use crate::verbs::knowledge::{g_prelude, pre_json_scan, GPre};
+use crate::verbs::mailbox;
 use crate::verbs::reservations::{js_trim, keys_known, now_iso, parse_flags, FlagV};
 use serde_json::{Map, Value};
 use std::ffi::OsString;
@@ -165,7 +171,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         GPre::Emitted(code) => return Some(code),
     };
 
-    let sink = match resolve_sink(&ctx.root, str_flag("session").as_deref()) {
+    let session_flag = str_flag("session");
+    let sink = match resolve_sink(&ctx.root, session_flag.as_deref()) {
         Ok(sink) => sink,
         Err(message) => return Some(ctx.fail(&message)),
     };
@@ -187,7 +194,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(ctx.emit(&Value::Object(result), &text, 0));
     }
 
-    Some(run_set(&ctx, &sink, str_flag("acceptance"), str_flag("status")))
+    Some(run_set(&ctx, &sink, str_flag("acceptance"), str_flag("status"), session_flag))
 }
 
 fn run_set(
@@ -195,6 +202,7 @@ fn run_set(
     sink: &Sink,
     acceptance: Option<String>,
     status: Option<String>,
+    session_flag: Option<String>,
 ) -> ExitCode {
     let acceptance = acceptance.map(|a| js_trim(&a).to_string());
     let status = status.map(|s| js_trim(&s).to_string());
@@ -284,8 +292,159 @@ fn run_set(
         }
     };
 
+    // The record is on disk and the ask is over — see `file_letter_at_run_end`.
+    file_letter_at_run_end(&ctx.root, session_flag.as_deref(), status.as_deref());
+
     let mut result = Map::new();
     result.insert("target".into(), Value::String(sink.label()));
     result.insert("work".into(), Value::Object(written.clone()));
     ctx.emit(&Value::Object(result), &describe(&written), 0)
+}
+
+// ── the human mailbox: the end of a run (hm-3) ─────────────────────────────
+//
+// D4 has two layers: every clean stop appends its raw entry the moment it
+// happens (wired at the cap by hm-2, in `cells/handlers_close.rs`), and the
+// letter is composed from those entries WHEN THE RUN ENDS. This is that second
+// half. The composing itself, the five sections and the authorship ban all
+// live in `verbs/mailbox.rs`; nothing about a letter's content is decided here.
+
+/// The statuses that END a run's ask. `open` and `active` are mid-run and file
+/// nothing; `dropped` counts as much as `done` — a run that abandoned its ask
+/// still did work worth reading about, and the entries it left are the same
+/// entries either way.
+fn run_ended(status: &str) -> bool {
+    status == "done" || status == "dropped"
+}
+
+/// D4/D9/D11: at the end of an armed run, compose the run's stored entries
+/// into ONE letter and file it.
+///
+/// WHICH MOMENT. A run is a SESSION's span, not a herding job (`mailbox::
+/// run_id`) — one unattended night dispatches many jobs, and a letter per job
+/// would shatter the night D11 exists to keep whole. The moment this group can
+/// see the span end is the work record reaching a terminal status, so that is
+/// the hook. A run that ends more than once re-composes its one letter in
+/// place; `mailbox::file_run_letter` owns that rule, not this call site.
+///
+/// WHICH RUN. The session id, through `resolve_session_flag_env` — the SAME
+/// chain (`--session`, then `BEE_SESSION_ID`, then `CLAUDE_CODE_SESSION_ID`)
+/// the cap used to name the run it appended under. A second, nearly-identical
+/// resolution here would silently compose an empty letter the day the two
+/// drifted. Deliberately NOT `Sink`: a herded pane addresses its job mailbox,
+/// and the job is not the run.
+///
+/// WHICH ROOT. The control root — the main checkout for a linked worktree.
+/// `cells finish` resolves its store root to `StoreRoots::main_root()` before
+/// the cap appends, so the entries this letter is composed from are there and
+/// not under a worktree. From the main checkout the two are the same path.
+///
+/// FAIL-OPEN: `mailbox::record_run_end` warns and returns. Setting a work
+/// record's status is the caller's actual ask; a mailbox that cannot be
+/// written must not turn it into a refusal.
+fn file_letter_at_run_end(root: &Path, session_flag: Option<&str>, status: Option<&str>) {
+    if !status.is_some_and(run_ended) {
+        return;
+    }
+    let control = crate::hooks::session_init::control_root_for(root);
+    let run = mailbox::run_id(resolve_session_flag_env(session_flag).as_deref());
+    mailbox::record_run_end(&control, &run);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::verbs::mailbox::{
+        append_entry, list_letter_files, read_letter, Entry, KIND_CAP, STATUS_UNREAD,
+    };
+
+    fn arm(root: &Path) {
+        std::fs::create_dir_all(root.join(".bee").join("tmp")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            r#"{"herding": {"agent_command": "claude-sonnet"}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join(".bee").join("tmp").join("bee-herding.enable"), "").unwrap();
+    }
+
+    fn entry(at: &str, what: &str) -> Entry {
+        Entry {
+            at: at.to_string(),
+            kind: KIND_CAP.to_string(),
+            what: what.to_string(),
+            files: vec!["x.rs".to_string()],
+            commit: Some("deadbee".to_string()),
+            proof: Some("cargo test — green — one module".to_string()),
+            departure: None,
+            needs_you: vec![],
+        }
+    }
+
+    #[test]
+    fn a_terminal_status_is_what_ends_a_run_for_the_mailbox() {
+        assert!(run_ended("done"));
+        assert!(run_ended("dropped"));
+        assert!(!run_ended("open"));
+        assert!(!run_ended("active"));
+    }
+
+    #[test]
+    fn an_armed_run_that_ends_files_its_mailbox_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm(root);
+        append_entry(root, "sess-9", &entry("2026-08-25T01:00:00.000Z", "Fixed the slow start")).unwrap();
+        append_entry(root, "sess-9", &entry("2026-08-25T02:00:00.000Z", "Wrote down what changed")).unwrap();
+
+        file_letter_at_run_end(root, Some("sess-9"), Some("done"));
+
+        let letters = list_letter_files(root);
+        assert_eq!(letters.len(), 1, "one run, one letter");
+        let letter = read_letter(&letters[0]).unwrap();
+        assert_eq!(letter.run, "sess-9");
+        assert_eq!(letter.status, STATUS_UNREAD);
+        assert_eq!(letter.items.len(), 2);
+        assert_eq!(letter.subject, "Fixed the slow start");
+    }
+
+    #[test]
+    fn a_run_still_going_writes_no_mailbox_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm(root);
+        append_entry(root, "sess-9", &entry("2026-08-25T01:00:00.000Z", "Fixed the slow start")).unwrap();
+        for status in [None, Some("open"), Some("active")] {
+            file_letter_at_run_end(root, Some("sess-9"), status);
+        }
+        assert!(list_letter_files(root).is_empty());
+    }
+
+    #[test]
+    fn an_attended_run_that_ends_writes_no_mailbox_letter() {
+        // D9: the owner never armed the loop, so this session is attended.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            r#"{"herding": {"agent_command": "claude-sonnet"}}"#,
+        )
+        .unwrap();
+        append_entry(root, "sess-9", &entry("2026-08-25T01:00:00.000Z", "Fixed the slow start")).unwrap();
+        file_letter_at_run_end(root, Some("sess-9"), Some("done"));
+        assert!(list_letter_files(root).is_empty());
+    }
+
+    #[test]
+    fn two_runs_in_one_night_each_end_with_their_own_mailbox_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm(root);
+        append_entry(root, "sess-a", &entry("2026-08-25T01:00:00.000Z", "Fixed the slow start")).unwrap();
+        append_entry(root, "sess-b", &entry("2026-08-25T05:00:00.000Z", "Wrote down what changed")).unwrap();
+        file_letter_at_run_end(root, Some("sess-a"), Some("done"));
+        file_letter_at_run_end(root, Some("sess-b"), Some("dropped"));
+        assert_eq!(list_letter_files(root).len(), 2, "one letter per run, never one per night (D11)");
+    }
 }

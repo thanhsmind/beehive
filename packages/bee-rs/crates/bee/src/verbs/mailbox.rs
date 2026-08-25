@@ -63,10 +63,14 @@
 // checkout — unlike a claim or a reservation, nothing coordinates across
 // worktrees through it, so it never re-roots onto the control root.
 
-#![allow(dead_code)] // The store lands first (hm-1); its callers arrive with
-// hm-2 (append at a clean stop) and hm-3 (compose and file at run end).
+#![allow(dead_code)] // The store landed first (hm-1), the append at a clean
+// stop second (hm-2), the composing pass third (hm-3). What is still unused is
+// the surface D6's read flip and D12's recovery consume, both phase 3.
 
 use crate::fsutil::{append_jsonl, warn_corrupt_jsonl_line, write_text_atomic};
+use crate::hooks::session_close::project_name;
+use crate::verbs::knowledge::deviation_text;
+use crate::verbs::reservations::now_iso;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
@@ -992,6 +996,289 @@ pub(crate) fn read_letter(path: &Path) -> Result<Letter, LetterReadError> {
     Ok(letter)
 }
 
+// ─── composing the letter at the end of a run (D4, D7, D8, D9, D11) ─────
+//
+// THE AUTHORSHIP BAN (D8) is the whole shape of this section. The composing
+// pass is a RENDERER, never a summarizer: it may reorder, group and drop, and
+// it may NEVER state a fact no stored entry carries. The plain-language
+// sentences were already written at the moment of each event (`cap_sentence`,
+// hm-2), so nothing below writes prose about what a run did — it sorts stored
+// sentences into D7's sections, and every word it adds of its own is either a
+// section heading D7 names or one fixed connective.
+//
+// That is also why there is no "and overall the night went well" line, no
+// count, and no judgement anywhere here: each of those would be a fact the
+// composer invented, and a letter is only worth reading if every sentence in
+// it was true at the moment it was written down.
+
+/// D7's five sections, in D7's own words and D7's own order. They are
+/// constants because the headings ARE the decision — renaming one here renames
+/// it in the decision, and that is not a formatting choice.
+pub(crate) const SECTION_DONE: &str = "Done";
+pub(crate) const SECTION_DEPARTED: &str = "Where I departed from the plan and why";
+pub(crate) const SECTION_BROKEN: &str = "Broken or unfinished";
+pub(crate) const SECTION_NEEDS_YOU: &str = "Needs your call";
+pub(crate) const SECTION_NEXT: &str = "Next";
+pub(crate) const SECTIONS: [&str; 5] =
+    [SECTION_DONE, SECTION_DEPARTED, SECTION_BROKEN, SECTION_NEEDS_YOU, SECTION_NEXT];
+
+/// The subject of a letter whose every stored sentence is unusable as one.
+///
+/// D2 makes the subject a VALIDITY rule, so a letter must have one; D8 forbids
+/// authoring a fact no entry carries. Between those two, the last resort can
+/// only say what is true by the letter's own existence: this run recorded
+/// something, and it is here. It states nothing about WHAT the run did —
+/// that is what the body and the frontmatter are for.
+///
+/// It fires rarely. Every stored sentence is a candidate first, and only a run
+/// whose sentences are all multi-line, empty, or written in harness words
+/// (`BEE_VOCABULARY`) reaches this line.
+pub(crate) const FALLBACK_SUBJECT: &str = "The run left something for you to read.";
+
+/// Whitespace normalised to single spaces on one line. A bullet is one line,
+/// and collapsing runs of blanks changes no fact — it is the only edit this
+/// pass makes to a stored sentence.
+fn one_line(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn bullet(text: &str) -> String {
+    format!("- {}", one_line(text))
+}
+
+/// A departure, rendered through `knowledge::deviation_text` — which
+/// `cells/handlers_close.rs:13` names "the ONE rendering of a deviation entry",
+/// already shared with the promote miner. A second idea of what a deviation
+/// reads like is the defect this avoids, so D5's three parts are mapped onto
+/// the `{type, description}` shape that function already understands and it
+/// does the rendering.
+///
+/// The mapping joins two stored facts with a dash and invents neither (D8).
+fn departure_line(d: &Departure) -> String {
+    deviation_text(&json!({
+        "type": d.kind.trim(),
+        "description": format!("{} — {}", d.what.trim(), d.why.trim()),
+    }))
+}
+
+/// D7: a section with nothing to report is DROPPED, never printed empty.
+fn push_section(out: &mut String, heading: &str, lines: &[String]) {
+    if lines.is_empty() {
+        return;
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str("## ");
+    out.push_str(heading);
+    out.push_str("\n\n");
+    for line in lines {
+        out.push_str(line);
+        out.push('\n');
+    }
+}
+
+/// The human prose of a letter: D7's five sections over the stored entries.
+///
+/// Where each entry goes, and why nothing is invented on the way:
+///
+///   * `Done` — every entry that is not a blocker, by its own sentence. Not a
+///     whitelist of kinds: an entry of some kind this build does not know is
+///     still a thing the run did, and dropping it would lose a stored fact.
+///   * `Where I departed from the plan and why` — every entry carrying D5's
+///     three parts, through `departure_line`.
+///   * `Broken or unfinished` — every `KIND_BLOCKER` entry, by its sentence.
+///   * `Needs your call` — every stored `NeedsYou`, with its stable id and
+///     what it blocks (D13). This feature ships no path to answer one; the id
+///     is what keeps that surface reachable later.
+///   * `Next` — DROPPED, always, today. No stored entry carries a next step:
+///     an `Entry` has no such field, so the only way to print this section
+///     would be to author it, which D8 forbids. D7 already says a section with
+///     nothing to report is dropped, so the honest render of "no entry knows
+///     what comes next" is silence. A later phase that gives an entry a next
+///     step gives this section its source; until then the empty list below is
+///     the decision, written out rather than left implicit.
+pub(crate) fn compose_body(entries: &[Entry]) -> String {
+    let mut done: Vec<String> = Vec::new();
+    let mut departed: Vec<String> = Vec::new();
+    let mut broken: Vec<String> = Vec::new();
+    let mut needs_you: Vec<String> = Vec::new();
+
+    for entry in entries {
+        if entry.kind == KIND_BLOCKER {
+            broken.push(bullet(&entry.what));
+        } else {
+            done.push(bullet(&entry.what));
+        }
+        if let Some(departure) = &entry.departure {
+            departed.push(bullet(&departure_line(departure)));
+        }
+        for n in &entry.needs_you {
+            // "blocks" is the ONE connective this pass adds of its own; D13
+            // requires the item to name what it blocks, and the id leads so a
+            // human can quote it back.
+            needs_you.push(bullet(&format!(
+                "[{}] {} — blocks: {}",
+                n.id.trim(),
+                one_line(&n.what),
+                one_line(&n.blocks)
+            )));
+        }
+    }
+    let next: Vec<String> = Vec::new();
+
+    let mut out = String::new();
+    for (heading, lines) in [
+        (SECTION_DONE, &done),
+        (SECTION_DEPARTED, &departed),
+        (SECTION_BROKEN, &broken),
+        (SECTION_NEEDS_YOU, &needs_you),
+        (SECTION_NEXT, &next),
+    ] {
+        push_section(&mut out, heading, lines);
+    }
+    out
+}
+
+/// D2's inbox row, CHOSEN out of the stored sentences rather than written.
+///
+/// The first stored sentence that is a valid subject on its own wins, taken
+/// verbatim — never re-worded, because the words belong to whoever wrote them
+/// at the moment of the stop (D8). Append order, so the choice is stable: a
+/// run re-composed after two more stops keeps the subject it already had.
+fn choose_subject(entries: &[Entry]) -> String {
+    entries
+        .iter()
+        .map(|e| e.what.trim())
+        .find(|s| check_subject(s).is_ok())
+        .map(str::to_string)
+        .unwrap_or_else(|| FALLBACK_SUBJECT.to_string())
+}
+
+/// Compose this run's stored entries into ONE letter (D4, D7, D8, D11).
+///
+/// `None` when the run stored nothing: a letter is composed FROM the entries,
+/// so a run with no entry carries no fact to write one from, and a letter
+/// about it could only be authored. A run that recorded nothing gets no
+/// letter, and `runs_with_entries` never lists it — so D12's later recovery
+/// pass does not see a hole either.
+///
+/// The status is always [`STATUS_UNREAD`]; a re-composed letter's caller puts
+/// the human's own read state back (see [`file_run_letter`]).
+pub(crate) fn compose_letter(
+    project: &str,
+    run: &str,
+    filed_at: &str,
+    entries: &[Entry],
+) -> Option<Letter> {
+    if entries.is_empty() {
+        return None;
+    }
+    Some(Letter {
+        subject: choose_subject(entries),
+        run: run.to_string(),
+        project: project.to_string(),
+        filed_at: filed_at.to_string(),
+        status: STATUS_UNREAD.to_string(),
+        // D8 again, at the machine contract: an item is exactly what one entry
+        // already held (`Entry::to_item`), reordered and grouped at most.
+        items: entries.iter().map(Entry::to_item).collect(),
+        needs_you: entries.iter().flat_map(|e| e.needs_you.iter().cloned()).collect(),
+        body: compose_body(entries),
+    })
+}
+
+/// What the end of a run did about its letter.
+#[derive(Debug)]
+pub(crate) enum RunEnd {
+    /// D9: an attended run records its entries and files NO letter.
+    NotArmed,
+    /// The run stored nothing, so there is no fact to compose from.
+    NoEntries,
+    /// Written — or re-written in place, keeping D11's one letter per run.
+    Filed(PathBuf),
+    /// Nothing was written, and the human will miss this run's letter. The
+    /// string names what to fix.
+    Failed(String),
+}
+
+/// The project a letter is about: the checkout's own name, through the same
+/// `project_name` the session record already uses, so bee has one idea of
+/// which project a run happened in.
+fn project_of(root: &Path) -> String {
+    project_name(&Value::String(root.to_string_lossy().into_owned()))
+}
+
+/// Compose and file this run's ONE letter — the end-of-run half of D4.
+///
+/// ARMING (D9) is asked HERE and nowhere earlier: every session appends its
+/// entries, attended or not, and only an unattended run files a letter. A
+/// session that started attended and became an overnight run therefore carries
+/// its whole span into the letter it files.
+///
+/// D11 — one letter maps to one RUN, never one night, and never one job. A run
+/// that reaches its end more than once (an agent that finishes an ask, works
+/// on, and finishes another) RE-COMPOSES the letter it already has, in place:
+/// the original `filed_at` keeps the filename stable, and the human's own read
+/// state survives the rewrite. Filing a second file would be a second letter
+/// for one run; dropping the later entries would lose facts the run recorded.
+/// Both are refused, so the run's letter is always all of the run.
+///
+/// An existing letter that cannot be READ stops the write instead of routing
+/// around it — writing beside it is how one run ends up with two letters.
+pub(crate) fn file_run_letter(root: &Path, run: &str) -> RunEnd {
+    if !armed(root) {
+        return RunEnd::NotArmed;
+    }
+    let entries = read_entries(root, run);
+    if entries.is_empty() {
+        return RunEnd::NoEntries;
+    }
+
+    let mut filed_at = now_iso();
+    let mut status = STATUS_UNREAD.to_string();
+    if let Some(existing) = letter_files_for_run(root, run).into_iter().next() {
+        match read_letter(&existing) {
+            Ok(old) => {
+                filed_at = old.filed_at;
+                status = old.status;
+            }
+            Err(why) => {
+                return RunEnd::Failed(format!(
+                    "this run already has a letter at {} that cannot be read ({}) — remedy: fix or delete that file; writing a second letter for one run is refused (D11)",
+                    existing.display(),
+                    why.message()
+                ))
+            }
+        }
+    }
+
+    let Some(mut letter) = compose_letter(&project_of(root), run, &filed_at, &entries) else {
+        return RunEnd::NoEntries;
+    };
+    letter.status = status;
+    match write_letter(root, &letter) {
+        Ok(path) => RunEnd::Filed(path),
+        Err(why) => RunEnd::Failed(why.message()),
+    }
+}
+
+/// [`file_run_letter`], FAIL-OPEN — the shape [`record_stop`] already has.
+///
+/// The run has ended; nothing about a letter may turn that into a refusal
+/// (D10). The failure is still SAID, because a silently missing letter is
+/// worse than a noisy one: the human would read an empty mailbox as a quiet
+/// night rather than as a broken store.
+pub(crate) fn record_run_end(root: &Path, run: &str) -> RunEnd {
+    let outcome = file_run_letter(root, run);
+    if let RunEnd::Failed(why) = &outcome {
+        eprintln!(
+            "bee: could not file the human-mailbox letter for run \"{run}\" ({why}) — the work itself is recorded; that run has no letter to read."
+        );
+    }
+    outcome
+}
+
 // ─── small value helpers ────────────────────────────────────────────────
 
 fn string_list(m: &Map<String, Value>, key: &str) -> Vec<String> {
@@ -1488,6 +1775,279 @@ mod tests {
         assert_eq!(cap_sentence(Some("   "), Some("a job.")), "Finished a job.");
         // Nothing to go on: say only what is certainly true.
         assert_eq!(cap_sentence(None, None), "Finished a piece of work.");
+    }
+
+    // ── D7/D8/D9/D11: composing and filing the letter at run end ────────
+
+    fn full_run() -> Vec<Entry> {
+        let mut first = sample_entry("2026-08-25T01:00:00.000Z", "Taught the tool to leave you a note");
+        first.departure = Some(Departure {
+            what: "Kept one file per run instead of one file per event".to_string(),
+            why: "A run that dies is findable by name that way".to_string(),
+            kind: "found a better route".to_string(),
+        });
+        let second = sample_entry("2026-08-25T02:00:00.000Z", "Wired the note into every clean stop");
+        let mut blocked = sample_entry("2026-08-25T03:00:00.000Z", "Stopped short of the rename");
+        blocked.kind = KIND_BLOCKER.to_string();
+        blocked.needs_you = vec![NeedsYou {
+            id: "ny-7".to_string(),
+            what: "Which name do you want for the folder?".to_string(),
+            blocks: "the rename".to_string(),
+        }];
+        vec![first, second, blocked]
+    }
+
+    /// Lowercase word tokens — the unit "a fact this text states" is checked in.
+    fn words(s: &str) -> Vec<String> {
+        s.split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect()
+    }
+
+    #[test]
+    fn composition_never_states_a_fact_no_entry_carries() {
+        // D8's authorship ban, as a test that FAILS the moment the composing
+        // pass writes prose of its own. Every word the body says must come
+        // from a stored entry, from one of D7's five headings, or be the one
+        // fixed connective the Needs-your-call bullet adds.
+        let entries = full_run();
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &entries).unwrap();
+
+        let mut allowed: Vec<String> = Vec::new();
+        for e in &entries {
+            allowed.extend(words(&e.what));
+            allowed.extend(words(&e.kind));
+            allowed.extend(words(&e.at));
+            for f in &e.files {
+                allowed.extend(words(f));
+            }
+            if let Some(c) = &e.commit {
+                allowed.extend(words(c));
+            }
+            if let Some(p) = &e.proof {
+                allowed.extend(words(p));
+            }
+            if let Some(d) = &e.departure {
+                allowed.extend(words(&d.what));
+                allowed.extend(words(&d.why));
+                allowed.extend(words(&d.kind));
+            }
+            for n in &e.needs_you {
+                allowed.extend(words(&n.id));
+                allowed.extend(words(&n.what));
+                allowed.extend(words(&n.blocks));
+            }
+        }
+        for heading in SECTIONS {
+            allowed.extend(words(heading));
+        }
+        allowed.push("blocks".to_string());
+
+        for word in words(&letter.body) {
+            assert!(
+                allowed.contains(&word),
+                "the body says {word:?}, which no stored entry carries — that is authoring (D8)"
+            );
+        }
+        // The subject is CHOSEN out of the stored sentences, never re-worded.
+        assert!(
+            entries.iter().any(|e| e.what == letter.subject),
+            "the subject {:?} is not one of the stored sentences",
+            letter.subject
+        );
+    }
+
+    #[test]
+    fn the_body_sorts_every_entry_into_one_of_the_sections_d7_names() {
+        let entries = full_run();
+        let body = compose_body(&entries);
+        assert!(body.contains(&format!("## {SECTION_DONE}")));
+        assert!(body.contains(&format!("## {SECTION_DEPARTED}")));
+        assert!(body.contains(&format!("## {SECTION_BROKEN}")));
+        assert!(body.contains(&format!("## {SECTION_NEEDS_YOU}")));
+        // Done carries the two finished stops; the blocker is NOT among them.
+        assert!(body.contains("- Taught the tool to leave you a note"));
+        assert!(body.contains("- Wired the note into every clean stop"));
+        // The blocker landed under "Broken or unfinished", not under Done.
+        let broken_at = body.find(&format!("## {SECTION_BROKEN}")).unwrap();
+        assert!(body.find("- Stopped short of the rename").unwrap() > broken_at);
+        // D13: the stable id leads, and the item names what it blocks.
+        assert!(body.contains("- [ny-7] Which name do you want for the folder? — blocks: the rename"));
+    }
+
+    #[test]
+    fn a_departure_renders_through_the_one_deviation_renderer() {
+        // knowledge::deviation_text is "the ONE rendering of a deviation
+        // entry" — a second renderer here would be the defect. Its own
+        // `{type, description}` arm reads "type: description".
+        let entries = full_run();
+        let body = compose_body(&entries);
+        let d = entries[0].departure.clone().unwrap();
+        let expected = deviation_text(&json!({
+            "type": d.kind,
+            "description": format!("{} — {}", d.what, d.why),
+        }));
+        assert!(body.contains(&format!("- {expected}")), "body was:\n{body}");
+        assert!(expected.starts_with("found a better route: "));
+    }
+
+    #[test]
+    fn a_section_with_nothing_to_report_is_absent_never_printed_empty() {
+        // One plain cap: no departure, no blocker, no question, no next step.
+        let body = compose_body(&[sample_entry("2026-08-25T01:00:00.000Z", "Did one thing")]);
+        assert!(body.contains(&format!("## {SECTION_DONE}")));
+        for heading in [SECTION_DEPARTED, SECTION_BROKEN, SECTION_NEEDS_YOU, SECTION_NEXT] {
+            assert!(
+                !body.contains(&format!("## {heading}")),
+                "section {heading:?} has nothing to report and must be dropped (D7)\n{body}"
+            );
+        }
+        assert!(!body.contains("\n\n\n"), "a dropped section leaves no hole");
+    }
+
+    #[test]
+    fn the_next_section_is_dropped_rather_than_invented() {
+        // No stored entry carries a next step, so printing this section would
+        // mean authoring one — D8 forbids it, and D7 already says a section
+        // with nothing to report is dropped.
+        let body = compose_body(&full_run());
+        assert!(!body.contains(&format!("## {SECTION_NEXT}")));
+    }
+
+    #[test]
+    fn a_run_whose_sentences_cannot_be_a_subject_still_gets_a_valid_one() {
+        // Every stored sentence here fails D2 — harness words, and a
+        // multi-line one. The letter still needs a subject, and the last
+        // resort says only what is true by the letter's own existence.
+        let mut a = sample_entry("2026-08-25T01:00:00.000Z", "Capped cell hm-1 in the standard lane");
+        a.needs_you = vec![];
+        let b = sample_entry("2026-08-25T02:00:00.000Z", "two lines\nof outcome");
+        let letter = compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[a, b]).unwrap();
+        assert_eq!(letter.subject, FALLBACK_SUBJECT);
+        assert!(check_subject(FALLBACK_SUBJECT).is_ok(), "the last resort must pass D2 itself");
+        // The unusable sentences are still IN the letter — dropped as the
+        // subject, never dropped as facts.
+        assert!(letter.body.contains("Capped cell hm-1 in the standard lane"));
+    }
+
+    #[test]
+    fn a_run_with_nothing_stored_composes_no_letter() {
+        assert!(compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[]).is_none());
+    }
+
+    #[test]
+    fn an_armed_run_files_exactly_one_letter_when_it_ends() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        arm_the_loop(root);
+
+        for entry in full_run() {
+            append_entry(root, "run-one", &entry).unwrap();
+        }
+        let RunEnd::Filed(path) = file_run_letter(root, "run-one") else {
+            panic!("an armed run that ends files its letter (D4, D9)");
+        };
+
+        // D11's name: timestamp-led, run-slugged, no subject in it.
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.ends_with("-run-one.md"), "{name}");
+        assert_eq!(list_letter_files(root).len(), 1, "one run, one letter (D11)");
+
+        // Every D3 field, with a non-empty subject.
+        let letter = read_letter(&path).unwrap();
+        assert!(!letter.subject.trim().is_empty());
+        assert_eq!(letter.run, "run-one");
+        assert!(!letter.project.trim().is_empty());
+        assert!(!letter.filed_at.trim().is_empty());
+        assert_eq!(letter.status, STATUS_UNREAD);
+        assert_eq!(letter.items.len(), 3, "every stored entry is an item");
+        assert_eq!(letter.needs_you.len(), 1);
+        assert_eq!(letter.needs_you[0].id, "ny-7");
+    }
+
+    #[test]
+    fn an_attended_run_records_its_entries_and_files_no_letter() {
+        // D9: the herding block alone says the checkout CAN run unattended;
+        // without the owner's switch this session is attended.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        for entry in full_run() {
+            append_entry(root, "run-one", &entry).unwrap();
+        }
+        assert!(matches!(file_run_letter(root, "run-one"), RunEnd::NotArmed));
+        assert!(list_letter_files(root).is_empty());
+        assert_eq!(read_entries(root, "run-one").len(), 3, "the entries are kept");
+    }
+
+    #[test]
+    fn an_armed_run_that_stored_nothing_files_no_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        arm_the_loop(root);
+        assert!(matches!(file_run_letter(root, "run-empty"), RunEnd::NoEntries));
+        assert!(list_letter_files(root).is_empty());
+    }
+
+    #[test]
+    fn two_runs_in_one_night_each_file_their_own_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        arm_the_loop(root);
+        append_entry(root, "run-one", &sample_entry("2026-08-25T01:00:00.000Z", "The first run")).unwrap();
+        append_entry(root, "run-two", &sample_entry("2026-08-25T05:00:00.000Z", "The second run")).unwrap();
+
+        assert!(matches!(file_run_letter(root, "run-one"), RunEnd::Filed(_)));
+        assert!(matches!(file_run_letter(root, "run-two"), RunEnd::Filed(_)));
+        assert_eq!(list_letter_files(root).len(), 2, "one letter per run, never one per night (D11)");
+        assert_eq!(letter_files_for_run(root, "run-one").len(), 1);
+        assert_eq!(letter_files_for_run(root, "run-two").len(), 1);
+    }
+
+    #[test]
+    fn a_run_that_ends_twice_keeps_one_letter_and_loses_no_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        arm_the_loop(root);
+        append_entry(root, "run-one", &sample_entry("2026-08-25T01:00:00.000Z", "The first thing")).unwrap();
+        let RunEnd::Filed(first) = file_run_letter(root, "run-one") else { panic!("filed") };
+
+        // The human reads it, then the same run works on and ends again.
+        let mut read_back = read_letter(&first).unwrap();
+        read_back.status = STATUS_READ.to_string();
+        write_letter(root, &read_back).unwrap();
+        append_entry(root, "run-one", &sample_entry("2026-08-25T04:00:00.000Z", "The second thing")).unwrap();
+
+        let RunEnd::Filed(second) = file_run_letter(root, "run-one") else { panic!("re-filed") };
+        assert_eq!(second, first, "one run keeps ONE letter, rewritten in place (D11)");
+        assert_eq!(list_letter_files(root).len(), 1);
+        let letter = read_letter(&second).unwrap();
+        assert_eq!(letter.items.len(), 2, "the later entry is not lost");
+        assert!(letter.body.contains("- The second thing"));
+        assert_eq!(letter.status, STATUS_READ, "the human's read state survives the rewrite");
+    }
+
+    #[test]
+    fn an_unreadable_existing_letter_stops_the_write_rather_than_doubling_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        arm_the_loop(root);
+        append_entry(root, "run-one", &sample_entry("2026-08-25T01:00:00.000Z", "The first thing")).unwrap();
+        let RunEnd::Filed(path) = file_run_letter(root, "run-one") else { panic!("filed") };
+        std::fs::write(&path, "someone deleted the fence\n").unwrap();
+
+        let RunEnd::Failed(why) = record_run_end(root, "run-one") else {
+            panic!("a second letter for one run is refused (D11)")
+        };
+        assert!(why.contains("remedy"), "a refusal names what to fix: {why}");
+        assert_eq!(list_letter_files(root).len(), 1);
     }
 
     // ── the frontmatter reader ──────────────────────────────────────────
