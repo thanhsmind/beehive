@@ -212,26 +212,44 @@ fn source_checkout(tmp: &Path, workspace_version: &str, release_version: &str) -
 /// probe it exactly the way it probes the real binary.
 #[cfg(unix)]
 fn write_executable_binary(path: &Path, package_version: &str, bee_version: &str) {
-    use std::os::unix::fs::PermissionsExt;
     let script = format!(
         "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{{\"version\":\"{package_version}\",\"bee_version\":\"{bee_version}\"}}'\nfi\n"
     );
-    std::fs::write(path, script).unwrap();
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
+    install_executable_script(path, &script);
 }
 
 #[cfg(unix)]
 fn write_executable_binary_raw(path: &Path, stdout_json: &str) {
-    use std::os::unix::fs::PermissionsExt;
     let script = format!(
         "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{stdout_json}'\nfi\n"
     );
-    std::fs::write(path, script).unwrap();
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    install_executable_script(path, &script);
+}
+
+/// Install an executable script at `path` WITHOUT ever holding `path` itself
+/// open for writing.
+///
+/// Writing the final path directly is what made these tests flaky. `cargo
+/// test` runs them on many threads; while one thread holds the script open
+/// for writing, another thread's `Command::spawn` forks and the child
+/// inherits that write fd. Linux then refuses to execute the file with
+/// `ETXTBSY` ("text file busy") until the child execs or exits. `O_CLOEXEC`
+/// does not help — it closes the fd at exec, which is already after the fork.
+///
+/// Writing a sibling temp file and renaming it into place removes the race
+/// structurally rather than papering over it with a retry: the path the test
+/// later executes is only ever created by `rename`, so no process can hold it
+/// open for writing at all. Losing the only test that noticed a real doctor
+/// bug to a retry loop would have cost more than the flake did.
+#[cfg(unix)]
+fn install_executable_script(path: &Path, script: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let staged = path.with_extension("staging");
+    std::fs::write(&staged, script).unwrap();
+    let mut perms = std::fs::metadata(&staged).unwrap().permissions();
     perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
+    std::fs::set_permissions(&staged, perms).unwrap();
+    std::fs::rename(&staged, path).unwrap();
 }
 
 /// Present, version-matched, and newest on disk: nothing to report.
