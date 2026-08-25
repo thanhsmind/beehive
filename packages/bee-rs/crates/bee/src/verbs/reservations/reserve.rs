@@ -18,6 +18,74 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+// ─── eca-1: exclusive publish by link(2) ───────────────────────────────────
+//
+// `create_new(true).open(...)` followed by a separate `write_all` elects one
+// winner correctly, but between the two the target path EXISTS and is EMPTY.
+// Every loser of that race reads the same path to learn who won, so a loser
+// can read a half-written record: the claims site then reports "no session
+// (sessionless claim)" as the winner's identity, and the lease site takes its
+// unparseable branch and names nobody.
+//
+// Publishing instead writes the COMPLETE body to a uniquely named temp in the
+// SAME directory as the target and hard-links the temp into place. `link(2)`
+// fails with `EEXIST` exactly where `O_EXCL` did, so exclusivity is preserved
+// verb-for-verb, and the target name never exists without its full content —
+// the partial read stops being possible rather than becoming unlikely.
+//
+// The temp lives beside the target because a hard link cannot cross a
+// filesystem, and it is removed on EVERY path, `EEXIST` included: most racers
+// here lose, so a leak would accumulate fast.
+
+static PUBLISH_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// A temp name in the target's own directory that no concurrent racer can
+/// collide with: process id, a per-process monotonic counter (two threads of
+/// one process can never share one), and a clock tail. Same collision-immunity
+/// shape as `fsutil::write_json_atomic`'s tmp naming. The `.tmp` suffix keeps
+/// it out of every store listing here, all of which filter on `.json`.
+fn publish_tmp_path(file: &Path) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let unique = format!(
+        "{}-{:x}-{:08x}",
+        std::process::id(),
+        PUBLISH_COUNTER.fetch_add(1, Ordering::Relaxed),
+        nanos
+    );
+    let mut name = file.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".{unique}.publish.tmp"));
+    file.with_file_name(name)
+}
+
+/// Publish `body` at `file` atomically AND exclusively: full write to a temp
+/// beside the target, then `link(2)`. Returns `ErrorKind::AlreadyExists` when
+/// a winner already holds the name — the same error kind the `create_new`
+/// this replaces returned, so callers keep their existing refusal branch. The
+/// temp is removed before returning, on success and on every failure.
+pub(crate) fn publish_exclusive(file: &Path, body: &str) -> std::io::Result<()> {
+    // `O_EXCL` refused on an existing name BEFORE it needed anything else of
+    // the directory, so a loser could report its conflict from a store it
+    // cannot write to. Keep that ordering: an existing name (a dangling
+    // symlink included, which is why this is `symlink_metadata`) refuses here,
+    // ahead of the temp. This is not a tolerated window — it only fixes WHICH
+    // error a loser sees first; a target that appears after this check is
+    // still refused by `link` below, with the same `AlreadyExists`.
+    if std::fs::symlink_metadata(file).is_ok() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("File exists (os error 17): {}", file.display()),
+        ));
+    }
+    let tmp = publish_tmp_path(file);
+    let result =
+        std::fs::write(&tmp, body.as_bytes()).and_then(|()| std::fs::hard_link(&tmp, file));
+    let _ = std::fs::remove_file(&tmp);
+    result
+}
+
 // ─── reservations reserve ──────────────────────────────────────────────────
 
 pub(crate) struct ReserveParams {
@@ -297,10 +365,10 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
         std::fs::create_dir_all(dir).map_err(|_| Err2::Ex)?;
     }
     let body = format!("{}\n", jsjson::stringify_pretty(&Value::Object(record.clone())));
-    let mut create = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&lease_file);
+    // eca-1: published by link(2) from a fully-written temp, so the lease file
+    // never exists without its body — the loser below reads a complete record
+    // or none at all.
+    let mut create = publish_exclusive(&lease_file, &body);
     // D3 (dirty-main-conflicts dmc-4): a lost exact-path race is reported as a
     // conflict UNLESS the stale lease itself is already expired, in which case
     // it is taken over — the create is retried exactly once. A live
@@ -309,11 +377,7 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
     let mut took_over = false;
     loop {
         match create {
-            Ok(mut f) => {
-                use std::io::Write;
-                f.write_all(body.as_bytes()).map_err(|_| Err2::Ex)?;
-                break;
-            }
+            Ok(()) => break,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 let parsed: Option<Map<String, Value>> = match std::fs::read_to_string(&lease_file)
                 {
@@ -345,10 +409,7 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
                     // harmless no-op — same discipline sweep_expired_leases
                     // already uses.
                     let _ = std::fs::remove_file(&lease_file);
-                    create = std::fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(&lease_file);
+                    create = publish_exclusive(&lease_file, &body);
                     continue;
                 }
                 // Lost the race to a live holder (or lost the retry) —
