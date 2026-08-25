@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 115 concept(s)
-- [patterns/](patterns/index.md) — 141 concept(s)
+- [patterns/](patterns/index.md) — 142 concept(s)
 - [work/](work/index.md) — 19 concept(s)
 
 ## Critical patterns
@@ -67,4 +67,5 @@ never a generation timestamp or any other wall-clock value.
 - [A vendored binary is a second place the feature must land](patterns/20260821-a-vendored-binary-is-a-second-place-the-feature-must-land.md) — A vendored binary is a second place the feature must land
 - [Instruction text is an untested code path](patterns/20260821-instruction-text-is-an-untested-code-path.md) — Instruction text is an untested code path
 - [A guard deleted with its runtime is a guard removed](patterns/20260825-a-guard-deleted-with-its-runtime-is-a-guard-removed.md) — A guard deleted with its runtime is a guard removed
+- [A guard that cannot pass teaches agents to ack it](patterns/20260825-a-guard-that-cannot-pass-teaches-agents-to-ack-it.md) — A guard that cannot pass teaches agents to ack it
 - [One red hides the rest — cargo test stops at the first failing target](patterns/20260825-cargo-test-stops-at-the-first-failing-target.md) — One red hides the rest — cargo test stops at the first failing target
