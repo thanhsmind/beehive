@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"escalate-off-disarm\" started at phase \"exploring\" (lane).",
   "next_action": "Continue bee-exploring for \"escalate-off-disarm\" (lane).",
   "created_at": "2026-08-25T15:35:39.377Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat for escalate-off-disarm — merged at 33da613, binary installed",
-    "asked_at": "2026-08-25T15:41:59.769Z",
-    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",

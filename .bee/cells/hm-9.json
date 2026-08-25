@@ -1,0 +1,50 @@
+{
+  "id": "hm-9",
+  "feature": "human-mailbox",
+  "role": "code",
+  "title": "File an unfinished letter for a run that went silent, at the next session start",
+  "action": "D12: a run that dies without reaching its own end gets its letter from the NEXT session that starts. That letter is marked plainly as an unfinished run, lists entries up to the last one, and names the moment the run went silent. No background scheduler is added — a scheduler shares the failure mode it would exist to cover. This cell also settles plan.md's deferred question of how a later session recognises orphaned entries WITHOUT scanning the whole store on every start; hm-1 left runs_with_entries as a bounded directory listing for exactly this.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "slice": 3,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "hm-8"
+  ],
+  "must_haves": {
+    "truths": [
+      "A run whose entries exist but which never reached its own end is detected at the NEXT session start (D12).",
+      "Its letter is marked plainly as an unfinished run — a reader can tell it apart from a run that ended cleanly.",
+      "The letter lists the entries up to the last one, and names the moment the run went silent (D12).",
+      "No background process or scheduler is added (D12).",
+      "Detection is BOUNDED — it does not scan the whole store on every session start; the cost is stated and tested.",
+      "A live run in progress is never mistaken for a silent one.",
+      "A run that already has its letter is not filed twice (D11).",
+      "Composition still states no fact no stored entry carries (D8) — an unfinished letter invents nothing about why the run stopped."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/work.rs"
+  ],
+  "acceptance": "A killed run leaves entries; the next session start files one unfinished letter naming the moment it went silent, without a scheduler and without an unbounded scan; a live run is never swept; an already-filed run is not filed twice.",
+  "status": "open",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

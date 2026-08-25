@@ -1,0 +1,49 @@
+{
+  "id": "hm-8",
+  "feature": "human-mailbox",
+  "role": "code",
+  "title": "Ship the one command this feature owes: flip a letter's read state",
+  "action": "D6 makes read/unread a field bee owns inside the letter file, flipped by a bee command — the consuming inbox calls it and never writes the file itself. This cell settles the deferred question of what that command is called and where it sits in the verb tree, then ships it: a verb that takes a filed letter and sets its read state, writing through the store rather than editing the markdown by hand. Register it in the verb tree the same way the other file-backed groups are (verbs/triggers/ is the precedent hm-1 followed for the store).",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "slice": 3,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A bee command flips a filed letter's read state, and the letter file is the only home of that state (D6).",
+      "The command's name and its place in the verb tree are settled and recorded — plan.md left this open.",
+      "The flip writes through the mailbox store, never by hand-editing the markdown, so bee stays the only writer of its own store (D6).",
+      "Flipping a letter that does not exist refuses typed, and says which letter.",
+      "The flip preserves every other frontmatter field and the body verbatim — only the read state changes.",
+      "Flipping an already-flipped letter is not an error.",
+      "The command appears in the CLI surface the same way sibling verb groups do, with help text that matches the shipped behaviour."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "acceptance": "A named bee command flips a filed letter's read state through the store; the name and tree position are recorded; a missing letter refuses typed; every other field and the body survive the flip byte-for-byte; a repeat flip is a no-op rather than an error.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-8",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T21:32:47.075Z"
+  }
+}
