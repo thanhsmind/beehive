@@ -218,19 +218,48 @@ pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] = &[
     ("repo-opencode", &[".opencode", "skills"]),
 ];
 
-/// onboard_bee.mjs AGENT_TIER_BY_NAME (l. 1933–1937).
-pub const AGENT_TIER_BY_NAME: &[(&str, &str)] = &[
-    // Two agents share the generation tier: bee-gather reads, bee-build
-    // writes. The tier decides the model; what the agent may DO is the
+/// onboard_bee.mjs AGENT_TIER_BY_NAME (l. 1933–1937), rebased onto ROLE by
+/// model-role-split D2/D3 (store `06e49368`, `3c9d6262`).
+///
+/// An agent no longer names a COST TIER that a private table turns into a
+/// model. It declares the ORDERED ROLE LIST it serves, best first, and
+/// `onboard::agents` walks that list through the one shared resolver
+/// (`verbs::drivers::resolve_role`) — the same resolver `bee dispatch
+/// prepare` and the model guard read. A host that configures a role in
+/// `models.<runtime>` therefore sees that role in the rendered agent file,
+/// with no second parser to keep in step.
+///
+/// The NAMES here are today's names on purpose. Which role names bee
+/// publishes as shipped config defaults is decision D3 (store `3c9d6262`)
+/// and belongs to the cell that gives a cell its `role` field; this table
+/// only changes the MECHANISM, so it introduces no name bee did not already
+/// resolve. When D3 lands its published names, it prepends them to these
+/// lists and fall-through keeps every existing host rendering exactly what
+/// it renders today.
+///
+/// The lists are also where `resolveAgentTierModel`'s one hard-coded
+/// special case went: `bee-review` used to fall back to the generation model
+/// through an `if tier == "review"` branch, which is plain fall-through
+/// spelled by hand. `bee-extract` deliberately does NOT fall through — a
+/// null extraction slot removes the file today and must keep removing it.
+pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
+    // Two agents share the generation role: bee-gather reads, bee-build
+    // writes. The role decides the model; what the agent may DO is the
     // agent file's own contract.
-    ("bee-build", "generation"),
-    ("bee-gather", "generation"),
-    ("bee-extract", "extraction"),
-    ("bee-review", "review"),
+    ("bee-build", &["generation"]),
+    ("bee-gather", &["generation"]),
+    ("bee-extract", &["extraction"]),
+    ("bee-review", &["review", "generation"]),
 ];
 
-/// onboard_bee.mjs AGENT_TIER_DEFAULTS_CLAUDE (l. 1946) — order matters: it
-/// drives `resolved`'s iteration in resolveAgentTierModel.
+/// onboard_bee.mjs AGENT_TIER_DEFAULTS_CLAUDE (l. 1946) — bee's own baked-in
+/// model per role for the claude agent files. It is the SEED the host's
+/// `models.claude` overlays, never a resolver: `onboard::agents` hands the
+/// seeded map to `verbs::drivers::resolve_role` and reads the answer.
+///
+/// The `TIER` in the name is the retiring cost word and outlives this cell on
+/// purpose — the identifier sweep is the `tier`-retirement slice's, and
+/// `verbs::status_full::store` reads the opencode twin below by this name.
 pub const AGENT_TIER_DEFAULTS_CLAUDE: &[(&str, &str)] =
     &[("extraction", "haiku"), ("generation", "sonnet"), ("review", "opus")];
 
@@ -245,6 +274,11 @@ pub const CODEX_AGENTS_NOTE: &str = "Codex has no per-agent model selection (DEF
 /// model-guard dispatch default of Null, because these agent files pin a
 /// real model regardless (structural enforcement, plan.md's model-guard
 /// fallback row).
+///
+/// model-role-split D2: this stays a SEED, not a second resolver. It is why
+/// `onboard::agents` seeds the map it hands `resolve_role` instead of letting
+/// the resolver fall to `drivers::default_models`, whose opencode entries are
+/// all null — an opencode agent file with no `model:` line is not a file.
 pub const AGENT_TIER_DEFAULTS_OPENCODE: &[(&str, &str)] = &[
     ("extraction", "opencode/ling-3.0-tiny-free"),
     ("generation", "opencode/big-pickle"),
