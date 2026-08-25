@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"escalate-off-disarm\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 33da613; reload the product and test \"escalate-off-disarm\", then either approve uat (\"bee gate --name uat --approved true --lane escalate-off-disarm\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"escalate-off-disarm\" (lane).",
   "created_at": "2026-08-25T15:35:39.377Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: escalate-off-disarm",
-    "asked_at": "2026-08-25T15:41:31.439Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for escalate-off-disarm — merged at 33da613, binary installed",
+    "asked_at": "2026-08-25T15:41:59.769Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {
     "class": "bugfix",
