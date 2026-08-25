@@ -6,6 +6,8 @@ fix the r3 delta review's top P2.
 
 ## What was asked
 
+<!-- bee:not-a-deferral: this paragraph DESCRIBES the pre-fix defect the lane fixed the same day — "a later run re-derived" is findings prose about the bug's second facet, not a promise of future work. -->
+
 `bee cells escalate --off` reported success but disarmed nothing on a
 migrated ceiling cell. Both r3 reviewers found it independently: `--off`
 removed only the `escalate` key (`handlers_close.rs:1186-1190`), and
@@ -15,6 +17,8 @@ cell kept burning the 40% ration, kept dispatching on the session model, and
 the preamble kept counting it. This hit exactly the 20 live cells the D9
 backfill converted. Second facet: a later `backfill-roles` run re-derived the
 flag from the tier string and re-armed even a hypothetically effective disarm.
+
+<!-- /bee:not-a-deferral -->
 
 ## Locked Decisions
 
