@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "No name hints. But the timing narrows it: tickets landed 10:12–10:26Z and the lane was created 10:57Z — bracketed by the five sessions start",
-    "asked_at": "2026-08-25T11:12:18.265Z",
+    "subject": "**Next: I merge both the moment `claude-d3` commits. Nothing else of mine is blocked, and I am not going to resolve this by committing someo",
+    "asked_at": "2026-08-25T11:13:40.663Z",
     "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
   },
   "route": {
