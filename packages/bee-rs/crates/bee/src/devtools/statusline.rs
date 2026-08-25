@@ -1,22 +1,30 @@
-// bee dev statusline — Rust port of packages/bee/statusline/statusline-usage.mjs.
+// bee dev statusline — the per-model token/cost segment of the status line.
 //
-// Per-model token/cost segment for the Claude Code status line: reads the
-// statusline JSON on stdin, aggregates usage from the session's main
+// PROVENANCE. A Rust port of `statusline-usage.mjs`, the Node half of the old
+// status-display pair, deleted at the R6 cutover. The `provenance:` notes
+// through this file still name its functions because they are what this
+// behaviour is bound to; nothing in the tree ships that file any more.
+//
+// Reads the statusline JSON on stdin, aggregates usage from the session's main
 // transcript AND every subagent transcript, prints two lines. Fail-open on
 // EVERY error: print nothing, exit 0, never break the line.
 //
-// THE .sh CONTRACT (packages/bee/statusline/statusline-command.sh, line 66):
+// THE .sh CONTRACT (packages/bee/statusline/statusline-command.sh). The script
+// renders line one itself, then resolves a bee binary — `.bee/bin/bee` (or
+// `bee.exe`) under `$CLAUDE_PROJECT_DIR` first, else the same path beside the
+// main checkout that `git rev-parse --git-common-dir` names from a linked
+// worktree, else `bee` on PATH — and appends this command's output as a
+// second line only when it is non-empty:
 //
-//     usage_seg=$(echo "$input" | "$NODE" "$(dirname …)/statusline-usage.mjs" 2>/dev/null)
+//     usage_seg=$(echo "$input" | "$BEE" dev statusline 2>/dev/null)
 //     [ -n "$usage_seg" ] && line="${line}\n${yellow}${usage_seg}${reset}"
 //
-// so the contract this port must keep is exactly: JSON on stdin, the segment
-// (or NOTHING) on stdout, stderr ignored, exit code ignored. `bee dev
-// statusline` is a drop-in for `"$NODE" …/statusline-usage.mjs` — same stdin,
-// byte-identical stdout, always exit 0. The .sh is not edited here (it is not
-// this port's file); swapping the two lines that resolve $NODE for a `bee`
-// lookup is the whole cutover, and until then both invocations agree byte for
-// byte.
+// So the contract this command must keep is exactly: JSON on stdin, the segment
+// (or NOTHING) on stdout, stderr ignored, exit code ignored. The leg is
+// optional by design — a host that resolves no binary renders line one and no
+// usage segment, because a status line must never be the reason a prompt fails
+// to render. `packages/bee-rs/crates/bee/tests/statusline_contract.rs` holds
+// that lookup and this contract; the .sh is not edited here.
 //
 // SHARED CACHE. The signature cache file in os.tmpdir() is READ AND WRITTEN
 // BY BOTH runtimes during the two-runtime window, so `js_tmpdir`, the cache
