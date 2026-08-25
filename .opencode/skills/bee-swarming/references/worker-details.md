@@ -40,7 +40,7 @@ Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the st
 
 ```text
 .bee/bin/bee reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
-.bee/bin/bee finish --id <id> --report '<json with the tests proof line>' [--outcome TEXT] [--files a,b] [--deviation "ONE LINE"] [--deviations-file F] [--friction TEXT]
+.bee/bin/bee finish --id <id> --report '<json with the tests proof line>' [--outcome TEXT] [--files a,b] [--deviation "<what> — <why> — <kind>"] [--deviations-file F] [--friction TEXT]
 .bee/bin/bee decisions active --recent 3
 ```
 
@@ -76,18 +76,37 @@ nothing here is a required output artifact, and none of it is written up anywher
 4. Verify the interface contracts the cell names — signatures and call sites as
    they actually are, not as the cell describes them.
 5. Cross-check the cell's declared `files` inventory against what the work truly
-   needs; a real mismatch is a deviation to record, and an architectural one is
-   `[BLOCKED]`. Record it STRUCTURALLY at cap time — `--deviation "<one line>"`
-   (or `--deviations-file` for several) — never only in the prose report: the
-   promote proposer mines `trace.deviations`, and a deviation that lives only
-   in prose is invisible to the pattern loop
-   (pattern: a cell's declared file list is a hypothesis).
+   needs; a real mismatch is a departure to record, and an architectural one is
+   `[BLOCKED]`. Record it STRUCTURALLY at cap time — `--deviation "<what was
+   done differently> — <why> — <kind>"`, or the `--deviations-file` entries, or
+   the `deviations` array of your `--report` — never only in the prose report:
+   the promote proposer mines `trace.deviations`, and a departure that lives
+   only in prose is invisible to the pattern loop
+   (pattern: a cell's declared file list is a hypothesis). What those three
+   parts must say is "The departure line" below.
 
 **After editing each file**, three cheap checks:
 
 - Does it compile / type-check?
 - Does it match the pattern its neighbours use?
 - Does it introduce an import cycle?
+
+## The departure line
+
+Decisions D5/D8/D10 (`docs/history/human-mailbox/CONTEXT.md`). A departure carries THREE required parts — what was done differently, why, and which kind — on the same ` — ` separator the proof line already uses. The FIRST separator ends `what` and the LAST starts `kind`, so a `why` may carry the separator itself. A `--report` entry may spell the same three parts structurally instead, as `{what, why, kind}`.
+
+The kind comes from a CLOSED set of four, quoted here as the code spells them:
+
+- `hit an unforeseen obstacle`
+- `found a better route`
+- `the plan was wrong about a fact`
+- `something else had to be fixed first`
+
+A fifth kind is a new locked decision, never a worker's choice of words at 3am. Write each sentence in plain language AT THE MOMENT of the stop, never composed from memory at the end: the pass that writes the human's letter may reorder, group and drop, and may never state a fact no recorded entry carries — so a sentence not written at the stop is a sentence the human never reads.
+
+Followed the plan? SAY so — one line reading `followed the plan` — rather than leaving the field empty: silence and nothing-happened must not read alike. That statement is recorded SEPARATELY, on `trace.plan_followed`, and is kept OUT of `trace.deviations`: it is a statement about deviations, never one of them, and the promote proposer mines `trace.deviations` — a line saying nothing happened would teach it a pattern out of silence.
+
+The requirement is ARMED-ONLY. In a run that files a letter for the human, a cap that states neither a departure nor its absence is refused; a `--deviation` value that is neither statement is refused; and a structured entry that reaches for those three part names and misses one — or names a kind outside the four — is refused. Every other run caps byte-identically to before this contract. A free-form note stays a free-form note in both, and is refused in neither: the contract narrowed what a DEPARTURE is, not what may be written down.
 
 ## Trace Field Depth By Lane
 

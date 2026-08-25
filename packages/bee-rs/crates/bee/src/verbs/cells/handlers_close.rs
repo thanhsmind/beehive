@@ -221,6 +221,15 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
     };
 
+    // D5 + D10 (docs/history/human-mailbox/CONTEXT.md): the departure door.
+    // ARMED-ONLY, and read ONCE here so every branch below agrees about it —
+    // a run that files no letter keeps the byte-identical flagless behaviour
+    // dc6a2d26 promised, which is D10 in one line.
+    let armed = mailbox::armed(root);
+    if armed {
+        departure_door(id, f, &report_value)?;
+    }
+
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
     // to run the declared command HERE and refuse a red cap — that run and
     // its red-refusal path are gone, for both `cells finish` and
@@ -383,14 +392,36 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
         cell_map.insert("status".into(), Value::String("capped".into()));
         trace.insert("files_changed".into(), Value::Array(f.files_changed.clone()));
+        // D5/D10: while ARMED, D5's explicit "followed the plan" statement
+        // is a statement ABOUT deviations, never one of them. It is lifted
+        // out of every source into `trace.plan_followed` below, because
+        // `trace.deviations` is what `bee knowledge promote` mines for
+        // patterns and a line saying nothing happened would teach it a
+        // pattern out of silence. Unarmed, NOTHING here changes: every line
+        // is appended exactly as dc6a2d26 appended it (D10).
+        let mut plan_followed = false;
+        let mut lift_plan_followed = |value: &Value| -> bool {
+            let stated = armed
+                && matches!(mailbox::read_departure(value), mailbox::DeparturePart::PlanFollowed);
+            plan_followed = plan_followed || stated;
+            stated
+        };
         // frd-1: `--deviations-file` first (unchanged order), then the
         // single `--deviation` line, already validated non-empty above —
         // both may be passed together, each contributes its own lines.
-        let mut deviations = f.deviations.clone();
+        let mut deviations: Vec<Value> = Vec::new();
+        for entry in &f.deviations {
+            if !lift_plan_followed(entry) {
+                deviations.push(entry.clone());
+            }
+        }
         if let Some(raw) = &f.deviation {
             let trimmed = js_trim(raw);
             if !trimmed.is_empty() {
-                deviations.push(Value::String(trimmed.to_string()));
+                let line = Value::String(trimmed.to_string());
+                if !lift_plan_followed(&line) {
+                    deviations.push(line);
+                }
             }
         }
         // dol-1: last, the worker's OWN structured deviations — the
@@ -428,6 +459,11 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                     }
                     other => other.clone(),
                 };
+                // D5/D10: the plan-followed statement is lifted here too,
+                // for the same reason and on the same armed-only terms.
+                if lift_plan_followed(&candidate) {
+                    continue;
+                }
                 let text = deviation_text(&candidate);
                 if !deviations.iter().any(|d| deviation_text(d) == text) {
                     deviations.push(candidate);
@@ -446,6 +482,13 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             }
         }
         trace.insert("deviations".into(), Value::Array(deviations));
+        // D5: a cell that followed its plan SAID so, and the record keeps
+        // the difference between "said nothing happened" and "said nothing".
+        // Written only when the statement was actually made — an absent key
+        // is an unarmed cap or a cap that recorded a departure instead.
+        if plan_followed {
+            trace.insert("plan_followed".into(), Value::Bool(true));
+        }
         trace.insert(
             "friction".into(),
             f.friction.clone().map(Value::String).unwrap_or(Value::Null),
@@ -626,6 +669,86 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
 // unclaim` and `cells reopen` (a claim moved; nothing finished), and
 // `bee close --dry-run` above. A letter reports what a run DID.
 
+/// D5 + D10 (docs/history/human-mailbox/CONTEXT.md): the departure door.
+///
+/// D5 narrows the free-form one-line `--deviation` of decision dc6a2d26 to
+/// THREE required parts — what was done differently, why, and which kind,
+/// the kind from `mailbox::DEPARTURE_KINDS` — and makes a cell that followed
+/// its plan SAY so rather than leave the field empty. CONTEXT.md's own
+/// reason: "Silence and nothing-happened must not read alike." An empty
+/// field cannot be told apart from a worker who never looked, and the
+/// letter's most-read section is where that difference decides whether the
+/// human trusts the record at all.
+///
+/// D10 bounds it: this runs ONLY while the mailbox is armed for the run.
+/// An unarmed cap never reaches here, so it keeps the byte-identical
+/// flagless behaviour dc6a2d26 promised and every existing caller keeps
+/// working. The narrowing is a rule for runs that file a letter, not a
+/// retroactive rewrite of a published flag.
+///
+/// Three refusals, each naming the flag and the fix (frd-1's own posture),
+/// and all of them BEFORE any write:
+///
+///   1. `--deviation` was passed but is neither statement — the free-form
+///      line D5 stopped accepting.
+///   2. A recorded deviation reaches for D5's parts and misses one, or names
+///      a kind outside the closed four. A free-form note is NOT refused: D5
+///      narrowed what a departure is, never what may be written down.
+///   3. The cap states neither a departure nor its absence — D5's teeth.
+fn departure_door(id: &str, f: &CapFlags, report: &Value) -> MR<()> {
+    let kinds = mailbox::departure_kinds_line();
+    let mut stated = false;
+
+    // 1. The flag D5 narrows. Passed at all, it must BE one of the two
+    //    statements.
+    if let Some(raw) = &f.deviation {
+        match mailbox::read_departure_line(js_trim(raw)) {
+            mailbox::DeparturePart::Departure(_) | mailbox::DeparturePart::PlanFollowed => {
+                stated = true
+            }
+            _ => {
+                return Err(Fail::Thrown(format!(
+                    "capCell: cell \"{id}\" refused — this run files a letter for the human, so --deviation must record D5's three parts: \"<what was done differently> {sep} <why> {sep} <kind>\", kind one of: {kinds}. If the plan was followed, say so: --deviation \"{plan}\".",
+                    sep = mailbox::DEPARTURE_SEPARATOR.trim(),
+                    plan = mailbox::PLAN_FOLLOWED,
+                )))
+            }
+        }
+    }
+
+    // 2. Every recorded deviation: the `--deviations-file` entries first,
+    //    then the worker's own `--report` entries — the same two sources,
+    //    in the same order, the cap already unions into trace.deviations.
+    let reported = report
+        .get("deviations")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    for entry in f.deviations.iter().chain(reported.iter()) {
+        match mailbox::read_departure(entry) {
+            mailbox::DeparturePart::Departure(_) | mailbox::DeparturePart::PlanFollowed => {
+                stated = true
+            }
+            mailbox::DeparturePart::Malformed(problem) => {
+                return Err(Fail::Thrown(format!(
+                    "capCell: cell \"{id}\" refused — a recorded deviation states a departure but {problem}: a departure is what was done differently, why, and which kind, kind one of: {kinds}."
+                )))
+            }
+            mailbox::DeparturePart::NotADeparture => {}
+        }
+    }
+
+    // 3. D5's teeth: the cap must have SAID something.
+    if !stated {
+        return Err(Fail::Thrown(format!(
+            "capCell: cell \"{id}\" refused — this run files a letter for the human, so the cap must say what it did off-plan or say that it did nothing off-plan (D5): pass --deviation \"<what> {sep} <why> {sep} <kind>\" with kind one of: {kinds}, or --deviation \"{plan}\" when the plan was followed. Silence and nothing-happened must not read alike.",
+            sep = mailbox::DEPARTURE_SEPARATOR.trim(),
+            plan = mailbox::PLAN_FOLLOWED,
+        )));
+    }
+    Ok(())
+}
+
 /// D4/D8/D9 (docs/history/human-mailbox/CONTEXT.md): record this cap as one
 /// human-mailbox entry, THE MOMENT the cap lands.
 ///
@@ -676,14 +799,33 @@ fn record_cap_in_mailbox(root: &Path, f: &CapFlags, capped: &Value, report: &Val
         commit: report_line("commit").filter(|c| c != "none"),
         // D8's proof line, exactly as the worker recorded it.
         proof: report_line("tests"),
-        // Only a report deviation that already carries D5's three parts can
-        // be read as a departure. A free-form line has no `why` and no
-        // `kind`, and inventing either would be authoring (D8) — phase 2
-        // makes the three parts the required shape.
-        departure: report
-            .get("deviations")
-            .and_then(Value::as_array)
-            .and_then(|entries| entries.iter().find_map(mailbox::Departure::from_value)),
+        // D5: only a statement that already carries the three parts is a
+        // departure — inventing a `why` or a `kind` for a free-form line
+        // would be authoring, which D8 forbids. The `--deviation` flag is
+        // read FIRST because it is the one an armed cap is refused without,
+        // then the worker's own report entries, then any deviations-file
+        // entry. The plan-followed statement is not a departure and reads as
+        // none here, so the letter's departure section stays silent about a
+        // cell that had nothing to report — which is the honest render.
+        //
+        // UNCONDITIONAL, like the rest of this entry (D9): the door above is
+        // armed-only, but the READING is not, so an attended session that
+        // becomes an overnight run still carries the departures it recorded
+        // before it was armed.
+        departure: f
+            .deviation
+            .as_deref()
+            .and_then(mailbox::Departure::parse_line)
+            .or_else(|| {
+                report
+                    .get("deviations")
+                    .and_then(Value::as_array)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .chain(f.deviations.iter())
+                    .find_map(mailbox::Departure::from_deviation)
+            }),
         // D13's Needs-your-call items have no source at a cap: a cap records
         // finished work, and a question that blocks something is a blocker
         // (stop kind 2 above) or a gate. Empty rather than guessed.
@@ -1462,5 +1604,224 @@ mod tests {
         cap_cell_from_flags(root, &flags, false).unwrap();
         let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
         assert_eq!(entries[0].what, "Finished the store that holds a letter.");
+    }
+    // ── D5 + D10: the departure contract, enforced only while armed ─────
+
+    const DEPARTURE: &str =
+        "Split the store in two — one file per run survives a run that dies — found a better route";
+
+    /// Both arming signals (hm-2): the config's herding block says this
+    /// checkout CAN run unattended, the owner's marker says this run IS.
+    fn arm_the_mailbox(root: &Path) {
+        std::fs::create_dir_all(root.join(".bee").join("tmp")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            r#"{"herding": {"agent_command": "claude-sonnet"}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join(".bee").join("tmp").join("bee-herding.enable"), "").unwrap();
+        assert!(mailbox::armed(root), "both arming signals are set");
+    }
+
+    /// The same cap flags as above, but with an EMPTY report deviations
+    /// array — the state a cell that recorded nothing arrives in.
+    fn quiet_cap_flags(id: &str) -> CapFlags {
+        let mut flags = mailbox_cap_flags(id, "Did the work");
+        flags.report = Some(
+            json!({"outcome": "o", "commit": "abc1234", "files": [], "tests": PROOF, "deviations": []})
+                .to_string(),
+        );
+        flags
+    }
+
+    fn trace_deviations(capped: &Value) -> Vec<String> {
+        capped["trace"]["deviations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| jsjson::js_to_string(d))
+            .collect()
+    }
+
+    #[test]
+    fn the_four_combinations_of_arming_and_a_departure_all_read_correctly() {
+        // plan.md's demo for this phase: one cap WITH a departure and one
+        // WITHOUT, in both an armed and an unarmed run.
+
+        // 1. ARMED + a departure — stated in D5's three parts, kept as the
+        //    line it was, and read into the letter's own departure field.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm_the_mailbox(root);
+        mailbox_cell(root, "dep-1");
+        let mut flags = quiet_cap_flags("dep-1");
+        flags.deviation = Some(DEPARTURE.to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(trace_deviations(&capped), vec![DEPARTURE.to_string()]);
+        assert_eq!(capped["trace"].get("plan_followed"), None, "a departure is not a no-departure");
+        let entry = &crate::verbs::mailbox::read_entries(root, "mb-run")[0];
+        let departure = entry.departure.as_ref().expect("the three parts reach the letter");
+        assert_eq!(departure.what, "Split the store in two");
+        assert_eq!(departure.why, "one file per run survives a run that dies");
+        assert_eq!(departure.kind, "found a better route");
+
+        // 2. ARMED + no departure — the cell SAYS the plan was followed. The
+        //    statement is not a deviation (it would teach the miner a
+        //    pattern out of silence), so it is recorded as its own fact.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm_the_mailbox(root);
+        mailbox_cell(root, "dep-2");
+        let mut flags = quiet_cap_flags("dep-2");
+        flags.deviation = Some("Followed the plan.".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert!(trace_deviations(&capped).is_empty(), "a no-departure is not a deviation");
+        assert_eq!(capped["trace"]["plan_followed"], json!(true));
+        assert!(
+            crate::verbs::mailbox::read_entries(root, "mb-run")[0].departure.is_none(),
+            "nothing to report renders as nothing, never as an empty departure"
+        );
+
+        // The worker's own report may carry the statement instead of the
+        // flag — same reading, same record.
+        mailbox_cell(root, "dep-3");
+        let mut flags = quiet_cap_flags("dep-3");
+        flags.report = Some(
+            json!({"outcome": "o", "commit": "abc1234", "files": [], "tests": PROOF,
+                   "deviations": ["followed the plan"]})
+            .to_string(),
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert!(trace_deviations(&capped).is_empty());
+        assert_eq!(capped["trace"]["plan_followed"], json!(true));
+
+        // 3. UNARMED + a departure — nothing about the flag changes, and the
+        //    entry layer still reads the three parts (D9: every session
+        //    records its span, armed or not).
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        assert!(!mailbox::armed(root));
+        mailbox_cell(root, "dep-4");
+        let mut flags = quiet_cap_flags("dep-4");
+        flags.deviation = Some(DEPARTURE.to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(trace_deviations(&capped), vec![DEPARTURE.to_string()]);
+        assert!(crate::verbs::mailbox::read_entries(root, "mb-run")[0].departure.is_some());
+
+        // 4. UNARMED + nothing said at all — the byte-identical flagless
+        //    behaviour dc6a2d26 promised, which is exactly what D10 bounds
+        //    the new rule to protect.
+        mailbox_cell(root, "dep-5");
+        let capped = cap_cell_from_flags(root, &quiet_cap_flags("dep-5"), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert!(trace_deviations(&capped).is_empty());
+        assert_eq!(capped["trace"].get("plan_followed"), None);
+    }
+
+    #[test]
+    fn an_armed_cap_that_says_nothing_is_refused_and_writes_nothing() {
+        // D5's teeth: an empty field cannot be told apart from a worker who
+        // never looked, so the armed cap must state one or the other.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm_the_mailbox(root);
+        mailbox_cell(root, "dep-6");
+        let err = cap_cell_from_flags(root, &quiet_cap_flags("dep-6"), false).unwrap_err();
+        let Fail::Thrown(refusal) = err else { panic!("expected a named refusal") };
+        assert!(refusal.contains("--deviation"), "{refusal}");
+        assert!(refusal.contains("followed the plan"), "{refusal}");
+        assert!(refusal.contains("found a better route"), "the four kinds are named: {refusal}");
+
+        // Nothing was written: the cell stays exactly as it was claimed, and
+        // no entry reached the mailbox.
+        let cell = read_cell_norm(root, "dep-6").unwrap().unwrap();
+        assert_eq!(cell["status"], json!("claimed"));
+        assert!(crate::verbs::mailbox::read_entries(root, "mb-run").is_empty());
+    }
+
+    #[test]
+    fn an_armed_cap_refuses_a_free_form_line_and_a_kind_outside_the_four() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm_the_mailbox(root);
+
+        // The free-form one-line value dc6a2d26 accepted is what D5 narrows.
+        mailbox_cell(root, "dep-7");
+        let mut flags = quiet_cap_flags("dep-7");
+        flags.deviation = Some("worked around a thing".to_string());
+        let Fail::Thrown(refusal) = cap_cell_from_flags(root, &flags, false).unwrap_err() else {
+            panic!("expected a named refusal")
+        };
+        assert!(refusal.contains("three parts"), "{refusal}");
+        assert!(refusal.contains("hit an unforeseen obstacle"), "{refusal}");
+
+        // A worker's structured deviation with a kind nobody agreed on.
+        mailbox_cell(root, "dep-8");
+        let mut flags = quiet_cap_flags("dep-8");
+        flags.report = Some(
+            json!({"outcome": "o", "commit": "abc1234", "files": [], "tests": PROOF,
+                   "deviations": [{"what": "did x", "why": "y", "kind": "felt like it"}]})
+            .to_string(),
+        );
+        let Fail::Thrown(refusal) = cap_cell_from_flags(root, &flags, false).unwrap_err() else {
+            panic!("expected a named refusal")
+        };
+        assert!(refusal.contains("felt like it"), "{refusal}");
+
+        // A departure attempt missing one of the three parts.
+        mailbox_cell(root, "dep-9");
+        let mut flags = quiet_cap_flags("dep-9");
+        flags.report = Some(
+            json!({"outcome": "o", "commit": "abc1234", "files": [], "tests": PROOF,
+                   "deviations": [{"what": "did x", "kind": "found a better route"}]})
+            .to_string(),
+        );
+        let Fail::Thrown(refusal) = cap_cell_from_flags(root, &flags, false).unwrap_err() else {
+            panic!("expected a named refusal")
+        };
+        assert!(refusal.contains("why"), "{refusal}");
+
+        // A free-form NOTE beside a real departure is still fine: D5
+        // narrowed what a departure IS, never what may be written down.
+        mailbox_cell(root, "dep-10");
+        let mut flags = quiet_cap_flags("dep-10");
+        flags.report = Some(
+            json!({"outcome": "o", "commit": "abc1234", "files": [], "tests": PROOF,
+                   "deviations": ["a note about the day", DEPARTURE]})
+            .to_string(),
+        );
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            trace_deviations(&capped),
+            vec!["a note about the day".to_string(), DEPARTURE.to_string()]
+        );
+    }
+
+    #[test]
+    fn an_unarmed_cap_keeps_the_free_form_line_dc6a2d26_promised() {
+        // D10 in one test: the same value the armed run refuses is recorded
+        // unchanged when no letter will be filed.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        mailbox_cell(root, "dep-11");
+        let mut flags = quiet_cap_flags("dep-11");
+        flags.deviation = Some("worked around a thing".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(trace_deviations(&capped), vec!["worked around a thing".to_string()]);
+        // Even the plan-followed statement is left where it was written: an
+        // unarmed cap is not asked for it, so nothing lifts it out.
+        mailbox_cell(root, "dep-12");
+        let mut flags = quiet_cap_flags("dep-12");
+        flags.deviation = Some("followed the plan".to_string());
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(trace_deviations(&capped), vec!["followed the plan".to_string()]);
+        assert_eq!(capped["trace"].get("plan_followed"), None);
     }
 }

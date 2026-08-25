@@ -202,9 +202,49 @@ pub(crate) fn letter_files_for_run(root: &Path, run: &str) -> Vec<PathBuf> {
 
 // ─── record parts ───────────────────────────────────────────────────────
 
-/// D5's three required parts. The CLOSED KIND SET and the "a cell that
-/// followed its plan says so explicitly" rule are the departure contract of
-/// phase 2 (D5, D10) — this shape only has to carry them.
+/// D5's CLOSED kind set, in the human's own words. CONTEXT.md's "Specific
+/// Ideas And References" says where the four came from: they read the
+/// mailbox to see "where the agent decided something off-plan, and why" —
+/// an unforeseen blocker, or a better route that only appeared during the
+/// work. These four are that reading, written down.
+///
+/// Closed on purpose. An open kind field gives the same four situations
+/// four vocabularies, and the human then has to read every line of the
+/// letter's most-read section to learn which situation they are looking at.
+/// A fifth kind is a DECISION (a new locked row), never a worker's choice
+/// of words at 3am.
+pub(crate) const DEPARTURE_KINDS: [&str; 4] = [
+    "hit an unforeseen obstacle",
+    "found a better route",
+    "the plan was wrong about a fact",
+    "something else had to be fixed first",
+];
+
+/// D5's three part names, in the order the decision says them. Used to tell
+/// a departure ATTEMPT (an entry that reaches for these names and misses
+/// one) from an entry that was never about a departure at all.
+pub(crate) const DEPARTURE_PARTS: [&str; 3] = ["what", "why", "kind"];
+
+/// D5's explicit no-departure statement: what a cell that followed its plan
+/// SAYS, rather than staying quiet. CONTEXT.md's own words for why it must
+/// be said out loud: "Silence and nothing-happened must not read alike." An
+/// empty field cannot be told apart from a worker who never looked, and the
+/// letter's most-read section is exactly the place that difference matters.
+///
+/// Matched as a PREFIX of the normalised line, so "Followed the plan." and
+/// "followed the plan — nothing surprising came up" both count. The rule is
+/// that the words were SAID, never that they were said in one exact
+/// spelling.
+pub(crate) const PLAN_FOLLOWED: &str = "followed the plan";
+
+/// The separator between a departure's three parts: the same `" — "` the D8
+/// proof string (`<command> — <result> — <scope reason>`) already asks a
+/// worker to type, borrowed rather than re-declared so there is ONE
+/// separator to learn and the two can never drift apart.
+pub(crate) const DEPARTURE_SEPARATOR: &str = crate::verbs::cells::PROOF_SEPARATOR;
+
+/// D5's three required parts — what was done differently, why, and which
+/// kind, the kind from [`DEPARTURE_KINDS`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Departure {
     pub what: String,
@@ -220,8 +260,14 @@ impl Departure {
     /// Crate-visible because the moment a departure can be READ is the
     /// moment of the stop itself (D8): the cap turns a worker's own
     /// structured `{what, why, kind}` report entry into this shape while it
-    /// still has it in hand. A free-form one-line deviation carries no three
-    /// parts to read, so it stays out — narrowing it here would be authoring.
+    /// still has it in hand.
+    ///
+    /// PERMISSIVE on purpose, and the only reader that is: this is also how
+    /// an ALREADY-FILED letter is read back (`LetterItem::from_value`), and
+    /// a letter on disk is a record, never an input to validate. The kind
+    /// set is closed at the door where a departure is WRITTEN
+    /// ([`read_departure`]), so a letter filed by an older build keeps its
+    /// departure instead of losing it on read.
     pub(crate) fn from_value(v: &Value) -> Option<Self> {
         let m = v.as_object()?;
         Some(Self {
@@ -230,6 +276,155 @@ impl Departure {
             kind: m.get("kind")?.as_str()?.to_string(),
         })
     }
+
+    /// Trimmed, inner whitespace collapsed, lowercased, trailing sentence
+    /// punctuation dropped — how a human's typing is compared against a
+    /// closed set without asking them to reproduce it byte for byte.
+    fn normalise(s: &str) -> String {
+        s.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+            .trim_end_matches(['.', '!'])
+            .to_string()
+    }
+
+    /// The CANONICAL spelling of `kind`, when it is one of
+    /// [`DEPARTURE_KINDS`]. Canonical rather than as-typed so every letter
+    /// says the four kinds the same way: the human scans that column, and a
+    /// column that changes its wording per entry stops being scannable.
+    pub(crate) fn canonical_kind(kind: &str) -> Option<&'static str> {
+        let normalised = Self::normalise(kind);
+        DEPARTURE_KINDS.into_iter().find(|known| *known == normalised)
+    }
+
+    /// Does this line state, explicitly, that the plan was followed (D5)?
+    pub(crate) fn plan_followed(line: &str) -> bool {
+        Self::normalise(line).starts_with(PLAN_FOLLOWED)
+    }
+
+    /// D5's three parts out of ONE line: `<what> — <why> — <kind>`.
+    ///
+    /// Split at the FIRST separator for `what` and the LAST for `kind`, so
+    /// everything between them is `why` and a why may carry the separator
+    /// itself. That is the mirror image of the D8 proof string's own split
+    /// (first two, reason last) and for the same reason: the segment that
+    /// may contain anything is the one nobody has to match.
+    ///
+    /// `None` when a part is missing or empty, or when the kind is outside
+    /// [`DEPARTURE_KINDS`] — a free-form line that happens to carry two
+    /// dashes is a note, never a departure with an invented kind.
+    pub(crate) fn parse_line(line: &str) -> Option<Self> {
+        let (what, rest) = line.split_once(DEPARTURE_SEPARATOR)?;
+        let (why, kind) = rest.rsplit_once(DEPARTURE_SEPARATOR)?;
+        let (what, why) = (what.trim(), why.trim());
+        if what.is_empty() || why.is_empty() {
+            return None;
+        }
+        Some(Self {
+            what: what.to_string(),
+            why: why.to_string(),
+            kind: Self::canonical_kind(kind)?.to_string(),
+        })
+    }
+
+    /// A departure read out of ONE recorded deviation entry, in whichever
+    /// of the two recorded shapes it arrived: the worker's structured
+    /// `{what, why, kind}` object, or a one-line `<what> — <why> — <kind>`
+    /// string. Anything else — a free-form note, a `{type, description}`
+    /// mining entry, the plan-followed statement — reads as no departure.
+    pub(crate) fn from_deviation(v: &Value) -> Option<Self> {
+        match read_departure(v) {
+            DeparturePart::Departure(d) => Some(d),
+            _ => None,
+        }
+    }
+}
+
+/// What ONE recorded deviation entry says about D5's departure contract.
+///
+/// The door that enforces D5 lives at the cap
+/// (`verbs/cells/handlers_close.rs`), because that is where a departure is
+/// written; the READING of an entry lives here, with the shape, so the door
+/// and the letter can never disagree about what counts as a departure.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum DeparturePart {
+    /// Not about a departure at all: a free-form note, a `{type,
+    /// description}` mining entry, a number. Recorded as it always was,
+    /// never refused — D5 narrowed what a DEPARTURE is, not what may be
+    /// written down.
+    NotADeparture,
+    /// The explicit "I followed my plan" statement (D5).
+    PlanFollowed,
+    /// All three parts present, kind from the closed set.
+    Departure(Departure),
+    /// A departure ATTEMPT that misses a part or names a kind outside the
+    /// closed set. The string says what is wrong, in the words a refusal
+    /// hands back to the worker who has to fix it.
+    Malformed(String),
+}
+
+/// Read one recorded deviation entry (a report entry, a deviations-file
+/// entry) against D5's contract.
+pub(crate) fn read_departure(v: &Value) -> DeparturePart {
+    match v {
+        Value::String(s) => read_departure_line(s),
+        Value::Object(m) => {
+            // Not a departure attempt at all unless it reaches for at least
+            // one of D5's part names. `{type, description}` — the shape the
+            // knowledge miner and every deviations-file already use — names
+            // none of them and passes straight through.
+            if !DEPARTURE_PARTS.iter().any(|part| m.contains_key(*part)) {
+                return DeparturePart::NotADeparture;
+            }
+            let missing: Vec<&str> = DEPARTURE_PARTS
+                .into_iter()
+                .filter(|part| {
+                    m.get(*part).and_then(Value::as_str).map(str::trim).unwrap_or("").is_empty()
+                })
+                .collect();
+            if !missing.is_empty() {
+                return DeparturePart::Malformed(format!(
+                    "it is missing D5's required part(s) {}",
+                    missing.join(", ")
+                ));
+            }
+            let kind = m.get("kind").and_then(Value::as_str).unwrap_or("");
+            match Departure::canonical_kind(kind) {
+                Some(canonical) => DeparturePart::Departure(Departure {
+                    what: m.get("what").and_then(Value::as_str).unwrap_or("").trim().to_string(),
+                    why: m.get("why").and_then(Value::as_str).unwrap_or("").trim().to_string(),
+                    kind: canonical.to_string(),
+                }),
+                None => DeparturePart::Malformed(format!(
+                    "its kind \"{kind}\" is not one of D5's four"
+                )),
+            }
+        }
+        _ => DeparturePart::NotADeparture,
+    }
+}
+
+/// Read one line — a `--deviation` value, or a string deviation entry —
+/// against D5's contract.
+///
+/// A line that is neither statement reads as [`DeparturePart::NotADeparture`]
+/// rather than malformed: a recorded line is free to be an ordinary note.
+/// The `--deviation` FLAG is the one place that is not enough, and its door
+/// says so itself.
+pub(crate) fn read_departure_line(line: &str) -> DeparturePart {
+    if Departure::plan_followed(line) {
+        return DeparturePart::PlanFollowed;
+    }
+    match Departure::parse_line(line) {
+        Some(d) => DeparturePart::Departure(d),
+        None => DeparturePart::NotADeparture,
+    }
+}
+
+/// D5's closed kind set, rendered for a refusal or a prompt.
+pub(crate) fn departure_kinds_line() -> String {
+    DEPARTURE_KINDS.join(" / ")
 }
 
 /// D13: each Needs-your-call item carries a stable id and names what it
@@ -2073,5 +2268,113 @@ nested:
         assert_eq!(v["list"], json!(["one", "two"]));
         assert_eq!(v["nested"][0]["a"], json!("1"));
         assert_eq!(v["nested"][0]["b"]["c"], json!("2"));
+    }
+    // ── D5: the departure contract ──────────────────────────────────────
+
+    #[test]
+    fn a_departure_needs_all_three_parts_and_a_kind_from_the_closed_set() {
+        let d = Departure::parse_line(
+            "Used one file per run — a dead run's record stays findable by name — found a better route",
+        )
+        .expect("three parts, closed kind");
+        assert_eq!(d.what, "Used one file per run");
+        assert_eq!(d.why, "a dead run's record stays findable by name");
+        assert_eq!(d.kind, "found a better route");
+
+        // The WHY may carry the separator itself: what is everything before
+        // the first, kind everything after the last.
+        let d = Departure::parse_line("did x — because a — b — c — hit an unforeseen obstacle")
+            .expect("the middle may hold separators");
+        assert_eq!(d.what, "did x");
+        assert_eq!(d.why, "because a — b — c");
+
+        // The kind is compared loosely — case, spacing and a full stop are
+        // typing, not meaning — and STORED canonically.
+        assert_eq!(
+            Departure::parse_line("did x — because y — The Plan Was  Wrong About A Fact.")
+                .unwrap()
+                .kind,
+            "the plan was wrong about a fact"
+        );
+
+        for refused in [
+            "just a free-form line",                       // no parts at all
+            "did x — because y",                           // two parts only
+            "did x — because y — because I felt like it",   // kind outside the four
+            " — because y — found a better route",          // empty what
+            "did x —  — found a better route",              // empty why
+        ] {
+            assert!(
+                Departure::parse_line(refused).is_none(),
+                "must not read as a departure: {refused}"
+            );
+        }
+
+        // All four kinds are live, and nothing else is.
+        for kind in DEPARTURE_KINDS {
+            assert_eq!(Departure::canonical_kind(kind), Some(kind));
+        }
+        assert_eq!(Departure::canonical_kind("something else"), None);
+    }
+
+    #[test]
+    fn a_cell_that_followed_its_plan_says_so_and_that_is_not_silence() {
+        // D5: "Silence and nothing-happened must not read alike." The
+        // statement is matched by its words, not by one exact spelling.
+        for said in [
+            "followed the plan",
+            "Followed the plan.",
+            "  Followed   the   plan  ",
+            "followed the plan — nothing surprising came up",
+        ] {
+            assert!(Departure::plan_followed(said), "must count as said: {said}");
+            assert_eq!(read_departure_line(said), DeparturePart::PlanFollowed);
+        }
+        assert!(!Departure::plan_followed(""), "silence is not a statement");
+        assert!(!Departure::plan_followed("the plan was followed by nobody"));
+    }
+
+    #[test]
+    fn a_recorded_entry_is_read_as_note_departure_or_malformed() {
+        // A note stays a note — D5 narrowed what a DEPARTURE is, never what
+        // may be written down.
+        assert_eq!(read_departure(&json!("a free-form note")), DeparturePart::NotADeparture);
+        // The shape the knowledge miner and every deviations-file use names
+        // none of D5's parts, so it passes straight through.
+        assert_eq!(
+            read_departure(&json!({"type": "scope", "description": "why"})),
+            DeparturePart::NotADeparture
+        );
+        assert_eq!(read_departure(&json!(7)), DeparturePart::NotADeparture);
+
+        // Reaching for the parts and missing one is an ATTEMPT, and the
+        // reading says which part is missing.
+        let missing = read_departure(&json!({"what": "did x", "kind": "found a better route"}));
+        match missing {
+            DeparturePart::Malformed(problem) => assert!(problem.contains("why"), "{problem}"),
+            other => panic!("expected a malformed reading, got {other:?}"),
+        }
+        let bad_kind =
+            read_departure(&json!({"what": "did x", "why": "y", "kind": "felt like it"}));
+        match bad_kind {
+            DeparturePart::Malformed(problem) => {
+                assert!(problem.contains("felt like it"), "{problem}")
+            }
+            other => panic!("expected a malformed reading, got {other:?}"),
+        }
+
+        // Both recorded shapes read as the same departure.
+        let from_object = Departure::from_deviation(
+            &json!({"what": "did x", "why": "y", "kind": "Found a better route"}),
+        );
+        let from_line = Departure::from_deviation(&json!("did x — y — found a better route"));
+        assert_eq!(from_object, from_line);
+        assert_eq!(from_object.unwrap().kind, "found a better route");
+
+        // An already-filed letter is a record, never an input to validate:
+        // the permissive reader keeps a departure an older build wrote.
+        let filed = Departure::from_value(&json!({"what": "a", "why": "b", "kind": "an old kind"}))
+            .expect("a filed letter keeps its departure");
+        assert_eq!(filed.kind, "an old kind");
     }
 }

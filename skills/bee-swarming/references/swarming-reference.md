@@ -530,6 +530,7 @@ Nickname: <name>
 Files modified: <paths>
 Reservations: reserved <paths>; released yes|no
 Tests: <command> — <result> — <scope reason>
+Departure: <what was done differently> — <why> — <kind>, or "followed the plan"
 Commit: <hash>
 Next action: <suggestion for the orchestrator>
 ```
@@ -557,6 +558,19 @@ Suggested next action: <re-check ready set, fix assignment, respawn later>
 ```
 
 On each result: update the cell if the worker could not (`block` with reason), clear the worker from `.bee/state.json`, and confirm with `.bee/bin/bee reservations list --active-only` that nothing leaked.
+
+**The departure line** (decisions D5/D8/D10, `docs/history/human-mailbox/CONTEXT.md`). The `Departure:` line of a `[DONE]` result and the `deviations` entries of the same worker's `--report` carry one thing in THREE required parts — what was done differently, why, and which kind — on the same ` — ` separator the proof line uses (first separator ends `what`, last starts `kind`, so a `why` may carry the separator itself). A report entry may also spell those parts structurally, as `{what, why, kind}`.
+
+The kind comes from a CLOSED set of four, quoted here as the code spells them:
+
+- `hit an unforeseen obstacle`
+- `found a better route`
+- `the plan was wrong about a fact`
+- `something else had to be fixed first`
+
+A fifth kind is a new locked decision, never a worker's choice of words at 3am. A cell that FOLLOWED its plan states that explicitly — a line reading `followed the plan` — rather than leaving the field empty: silence and nothing-happened must not read alike. Each sentence is written in plain language AT THE MOMENT of the event; the pass that composes the human's letter may reorder, group and drop, and may never state a fact no recorded entry carries, so a sentence not written at the stop is a sentence the human never reads.
+
+The requirement is ARMED-ONLY. In a run that files a letter for the human, a cap that states neither a departure nor its absence is refused, a `--deviation` value that is neither statement is refused, and a structured entry that reaches for those parts and misses one — or names a kind outside the four — is refused. Every other run caps byte-identically to before this contract: the same lines are recorded, and nothing is refused. A free-form note stays a free-form note in both — the contract narrowed what a DEPARTURE is, not what may be written down.
 
 ## Handoff JSON
 
