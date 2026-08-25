@@ -472,7 +472,31 @@ mod tests {
         // cap door's ESCAPE from a skill obligation, not the answer to one —
         // none of them carries "whether the owned skill changed", so
         // `--skill-answer` is new.
-        const PINNED_FLAG_COUNT: usize = 181;
+        // 181 -> 188 (herding-registry-gap hrg-1): the four cockpit-vocabulary
+        // verbs the dispatcher has served since tmux-herding-cockpit D2 landed
+        // — `herding pane`, `agent-start`, `pane-id` and `result` — were
+        // declared in the registry, which had missed them. These seven
+        // spellings are NOT chosen here: they are read off the argument
+        // parsing in herding/pane_verbs.rs, so reuse was never available —
+        // renaming a flag the binary already accepts is a different change
+        // from declaring it. Checked anyway, one by one: `--workspace` is the
+        // terminal container above a tab, and `--lane`/`--feature`/`--scope`
+        // all name a bee-side grouping, never a herdr workspace or tmux
+        // session; `--direction` and `--ratio` are the side and the share of a
+        // pane split, and nothing in the vocabulary was geometric before;
+        // `--lines` trims a pane capture to its LAST N lines, where `--limit`
+        // caps how many rows a listing returns (a tail, not a cap); `--clear`
+        // unsets a pane's label, and no prior flag means "drop this value" —
+        // `--no-lane` selects the default record and `--force` overrides a
+        // refusal; `--with-status` buys one extra classification call per
+        // pane, where the nearest neighbours `--brief`/`--detail`/
+        // `--lanes-full` only reshape an answer already computed.
+        //
+        // `--pane` is the one real divergence, named here rather than left to
+        // be rediscovered: `herding record-worker` spells the same concept
+        // `--pane-id`. Both are live surface and neither is renamed here — the
+        // same shape as the `--worker`/`--agent` split asserted below.
+        const PINNED_FLAG_COUNT: usize = 188;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
