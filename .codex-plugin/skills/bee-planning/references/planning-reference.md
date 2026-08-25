@@ -165,7 +165,9 @@ history.
     only; any non-empty name is legal, validation checks presence and shape,
     never membership. A role nothing in `models.<runtime>` configures still
     runs: it falls through to the next name the dispatch asks for and warns,
-    it never fails.
+    it never fails. The one silent case is `code` or `read` on a runtime whose
+    `models.<runtime>` configures NEITHER of them — the pre-roles window, where
+    falling through is the intended no-op; configuring either key closes it.
 
 ## Example cell JSON
 
@@ -212,7 +214,8 @@ stays the source of truth:
    legal only in a repo whose `commands.test` declares itself no-test (the
    `"none"` sentinel). `role` is any non-empty name — `code`, `read`, `test`,
    `docs`, `review`, `design` are the recommended vocabulary, guidance only;
-   an unconfigured name still runs (fall-through, plus a warning), never a
+   an unconfigured name still runs (fall-through, plus a warning — silent only
+   for `code` or `read` on a runtime that configures neither), never a
    refusal.
 3. **Lane.** One of `tiny`/`small`/`standard`/`high-risk`/`spike`;
    `standard`/`high-risk` cells carry non-empty `must_haves.truths`.

@@ -70,7 +70,9 @@ source edits happen until `approved_gates.execution` is true.
   how expensive the work is. `code`, `read`, `test`, `docs`, `review`, `design` are
   the recommended words, guidance only — **any non-empty name is legal**, because
   bee checks presence and shape, never membership, and a name nothing configures
-  still runs (the dispatch falls through to the next name it asked for and warns).
+  still runs (the dispatch falls through to the next name it asked for and warns —
+  silent only for `code` or `read` on a runtime that configures neither, the
+  pre-roles window).
   Cost is a separate lever the orchestrator pulls at dispatch, not a role:
   `bee cells escalate --id <id>` puts a cell on the session model.
 - **A user-visible surface makes slice 1 a walking skeleton** — end to end, real

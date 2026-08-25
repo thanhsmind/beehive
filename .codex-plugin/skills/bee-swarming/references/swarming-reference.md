@@ -131,7 +131,9 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    `[<cell role>, code, generation]`, or `[read, extraction, generation]`
    for a read job. **An unconfigured role never fails**: it yields to the
    next name in the list and WARNS on stderr, naming what it fell through
-   to. That tail is why this costs no host its current model.
+   to — silent only for `code` or `read` on a runtime whose
+   `models.<runtime>` configures neither of them, the pre-roles window.
+   That tail is why this costs no host its current model.
 
    **Escalation is a separate lever, not a role name.** Integration across
    modules, architecture/design calls, security-sensitive or
@@ -318,10 +320,10 @@ Read the configured roles for the active runtime before spawning:
 .bee/bin/bee status --json    # .models shows both runtime maps
 ```
 
-**Resolution is a walk down an ordered list, and the walk is ONE function.** `resolve_role(models, roles, runtime, kind)` (`verbs/drivers/models.rs` — the single parser the dispatcher, the model guard and onboarding's agent renderer all call) takes the names the consumer will accept, best first, and returns a typed dispatch for the first that carries a resolvable configuration: a model, a prompt budget (anchored `[bee-tier: <role>]` marker), a cli executor (external, below — gather purposes only), or a refusal for a cli-shaped role asked for cell execution (`cli_tier_gather_only`). An unset or unresolvable name YIELDS to the next; a name nothing has heard of also **warns on stderr**, naming what it fell through to. The last entry always resolves, so the walk cannot dead-end. No name resolves a model the config does not carry for it, and no unknown name resolves silently — an unrecognized slot quietly reading as `generation` is exactly what this feature deleted.
+**Resolution is a walk down an ordered list, and the walk is ONE function.** `resolve_role(models, roles, runtime, kind)` (`verbs/drivers/models.rs` — the single parser the dispatcher, the model guard and onboarding's agent renderer all call) takes the names the consumer will accept, best first, and returns a typed dispatch for the first that carries a resolvable configuration: a model, a prompt budget (anchored `[bee-tier: <role>]` marker), a cli executor (external, below — gather purposes only), or a refusal for a cli-shaped role asked for cell execution (`cli_tier_gather_only`). An unset or unresolvable name YIELDS to the next; a name nothing has heard of also **warns on stderr**, naming what it fell through to. The last entry always resolves, so the walk cannot dead-end. No name resolves a model the config does not carry for it, and the ONE unknown name that resolves silently is `code` or `read` on a runtime whose `models.<runtime>` configures NEITHER of them — the pre-roles window, where falling through to the historical name is the intended no-op and a warning would fire on every dispatch. The window is per runtime, because the table is, and the first of the two keys an operator configures shuts it, so a half-migrated config is loud about the sibling it missed. Every other unrecognized slot quietly reading as `generation` is exactly what this feature deleted.
 
 Two doors ask the same question and answer it differently, on purpose:
-- a **cell's** declared role heads an ordered list → an unconfigured name falls through and warns, and the work still runs;
+- a **cell's** declared role heads an ordered list → an unconfigured name falls through and warns (silent only inside the pre-roles window above), and the work still runs;
 - an explicit **`--role <name>`** on `dispatch prepare`, and a `[bee-tier: <name>]` marker at the guard, name the slot OUTRIGHT → an unconfigured name is REFUSED by name, its FIX listing the roles that runtime resolves and ending "Any role name you configure is legal; bee holds no fixed list."
 
 Every dispatch still carries an explicit marker: an escalated dispatch needs the [bee-tier: ceiling] marker anchored to the first non-whitespace token of the prompt, or the description must start with it; a prompt-budget dispatch needs the matching [bee-tier: <role>] marker anchored the same way, stated alongside the budget in the prompt. A marker anywhere else — embedded mid-prompt or mid-description — never satisfies the transport, and a bare dispatch with neither the model param nor an anchored marker is denied by the model-guard hook.
