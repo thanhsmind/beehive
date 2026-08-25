@@ -75,7 +75,7 @@ pub(crate) fn thrown_ok(out: R2<Out>) -> R2<Out> {
 fn worker_role_value(verb: &str, role: &str) -> Result<Value, Err2> {
     if role.trim().is_empty() {
         return Err(Err2::Msg(format!(
-            "{verb}: invalid tier \"{role}\" — the value records the ROLE this worker's dispatch resolved, and must be a non-empty name (store 97ce5225: role is the sole model selector; the closed extraction/generation/ceiling enum is retired). FIX: pass the cell's own role, e.g. --tier code."
+            "{verb}: invalid role \"{role}\" under --tier — the value records the ROLE this worker's dispatch resolved, and must be a non-empty name (store 97ce5225: role is the sole model selector; the closed extraction/generation/ceiling enum is retired; the flag and the persisted key keep the historical spelling `tier` on purpose). FIX: pass the cell's own role, e.g. --tier code."
         )));
     }
     Ok(json!(role))
@@ -727,12 +727,12 @@ mod tests {
             let Err(Err2::Msg(m)) = worker_role_value("worker add", blank) else {
                 panic!("a blank role must refuse, not record: {blank:?}");
             };
-            assert!(m.starts_with("worker add: invalid tier"), "{m}");
+            assert!(m.starts_with("worker add: invalid role"), "{m}");
             assert!(m.contains("FIX:"), "the refusal must name its remedy: {m}");
             let Err(Err2::Msg(m)) = worker_role_value("worker update", blank) else {
                 panic!("a blank role must refuse on update too: {blank:?}");
             };
-            assert!(m.starts_with("worker update: invalid tier"), "{m}");
+            assert!(m.starts_with("worker update: invalid role"), "{m}");
         }
         let mut workers: Vec<Value> = Vec::new();
         assert!(
