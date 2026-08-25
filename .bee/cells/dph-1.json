@@ -15,22 +15,48 @@
     "packages/bee-rs/crates/bee/src/doctor/tests.rs"
   ],
   "acceptance": "A tree whose binary cannot be probed with nothing newer yields ok:None naming the failed probe and never the words 'matches source'; the same tree with a newer source input still yields ok:Some(false) with its existing detail; Present-equal, Present-differing and Missing keep their current rows with the existing tests unedited and green.",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "read_first": [],
   "trace": {
     "worker": "wk-dph-1",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "A failed probe with nothing newer now reports ok: None naming the failed rs-info probe, never 'matches source'",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "Added a second test (probe Failed AND a newer source input) to pin the unchanged row next to the new one, per CONTEXT acceptance",
+      "Added three doc-comment lines above binary_freshness_row so the doc states the new unknown case",
+      "First run hit the known ETXTBSY probe flake in binary_freshness_reports_not_ok_on_a_version_mismatch (CONTEXT lines 34-46); pre-existing and out of scope, green on the next three runs",
+      "Capped with --inline-reason: worker not registered in state.json workers[] by the orchestrator"
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T09:37:43.762Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
-    "claimed_at": "2026-08-25T09:34:03.631Z"
+    "claimed_at": "2026-08-25T09:34:03.631Z",
+    "inline_reason": "dispatched generation worker wk-dph-1; the orchestrator never registered it in state.json workers[] and state worker add refuses from inside the granted worktree — execution was NOT inline",
+    "report": {
+      "outcome": "A failed probe with nothing newer now reports ok: None naming the failed rs-info probe, never \"matches source\"",
+      "commit": "36174f85e775b160f2d258c5af428f16fe5bd25d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml doctor:: — green (17 passed, 0 failed; 3 consecutive runs, exit 0) — the cell only touches doctor::binary_freshness_row and its tests",
+      "deviations": [
+        "Added a second test (probe Failed AND a newer source input) to pin the unchanged row next to the new one, per CONTEXT acceptance",
+        "Added three doc-comment lines above binary_freshness_row so the doc states the new unknown case",
+        "First run hit the known ETXTBSY probe flake in binary_freshness_reports_not_ok_on_a_version_mismatch (CONTEXT lines 34-46); pre-existing and out of scope, green on the next three runs",
+        "Capped with --inline-reason: worker not registered in state.json workers[] by the orchestrator"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
