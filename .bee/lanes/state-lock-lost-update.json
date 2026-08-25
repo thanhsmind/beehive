@@ -15,9 +15,9 @@
   "created_at": "2026-08-25T10:40:43.042Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**Next: I merge both the moment `claude-d3` commits. Nothing else of mine is blocked, and I am not going to resolve this by committing someo",
-    "asked_at": "2026-08-25T11:13:40.663Z",
+    "kind": "gate",
+    "subject": "A message from another session needs your approval",
+    "asked_at": "2026-08-25T11:16:11.524Z",
     "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
   },
   "route": {
