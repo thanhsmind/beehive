@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "role-edge-hardening",
   "mode": null,
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"role-edge-hardening\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at ea03f28; capture what settled, then bee close --feature role-edge-hardening.",
+  "next_action": "close",
   "created_at": "2026-08-25T16:01:42.087Z",
   "run_state": "done",
   "waiting_on": null,
@@ -25,5 +25,14 @@
     "rationale": null,
     "updated_at": "2026-08-25T16:01:46.887Z",
     "feature": "role-edge-hardening"
+  },
+  "last_scribing_run": {
+    "feature": "role-edge-hardening",
+    "date": "2026-08-25",
+    "at": "2026-08-25T21:34:09.529Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "close"
   }
 }

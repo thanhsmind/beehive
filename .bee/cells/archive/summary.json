@@ -863,5 +863,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-25T14:39:36.802Z"
+  },
+  "escalate-off-disarm": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T21:34:40.565Z"
   }
 }
