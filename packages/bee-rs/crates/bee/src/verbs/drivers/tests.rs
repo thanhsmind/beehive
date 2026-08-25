@@ -5115,3 +5115,227 @@ use std::time::Instant;
         assert_eq!(code, 0, "nothing blocks this close: {text}");
         assert_eq!(read_merge_ready(&root, "demo")["blocked_by"], json!([]));
     }
+
+    // ═══ the WORK declares its job role ════════════════════════════════════
+    //
+    // model-role-split D3 (store 3c9d6262) with its literal lists fixed by
+    // 561e1bda: a cell execution asks for [<the cell's own role>, code,
+    // generation]; a read-shaped cell asks [read, extraction, generation]; a
+    // review dispatch asks [review, generation]; the advisor asks [advisor]
+    // ALONE (4faf1de9).
+
+    /// A host that carries no `code` and no `read` key — every host that
+    /// onboarded before mrs-10, and the one the fall-through tail exists for.
+    const HOST_BEFORE_ROLES: &str =
+        r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus"}}}"#;
+
+    fn cell_with(root: &Path, id: &str, fields: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"f","title":"some work",{fields},"status":"claimed","trace":{{"worker":"w"}}}}"#
+            ),
+        );
+    }
+
+    fn cell_envelope(root: &Path, id: &str, role: Option<&str>) -> Value {
+        let out = prepare_dispatch_with_role(
+            root,
+            "claude",
+            "cell",
+            role,
+            Some(id),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected an envelope for {id}") };
+        v
+    }
+
+    /// The whole point of the feature: the cell names its job, the host names
+    /// a model for that job, and the dispatch gets it.
+    #[test]
+    fn a_cell_role_the_host_configures_resolves_that_hosts_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","test":"grok-code"}}}"#,
+        );
+        cell_with(&root, "c-1", r#""role":"test""#);
+
+        let v = cell_envelope(&root, "c-1", None);
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), Some(&json!("grok-code")), "the job's own model");
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert!(payload
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: test]\n"));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("logical_tier"), Some(&json!("test")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+    }
+
+    /// …and a host that configured nothing for that job runs EXACTLY where it
+    /// ran before this feature. No refusal, no built-in default: the tail
+    /// walks to `generation`, and the marker names the role that RESOLVED so
+    /// the model-guard — which denies a marker naming an unconfigured role —
+    /// still lets through the dispatch bee itself prepared.
+    #[test]
+    fn a_cell_role_nothing_configures_falls_through_to_the_historical_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HOST_BEFORE_ROLES);
+        cell_with(&root, "c-1", r#""role":"code""#);
+        cell_with(&root, "c-2", r#""role":"design""#);
+
+        for id in ["c-1", "c-2"] {
+            let v = cell_envelope(&root, id, None);
+            assert_eq!(v.get("ok"), None, "{id}: a role nothing configures is not a refusal");
+            assert_eq!(v.get("tool"), Some(&json!("Agent")), "{id}");
+            let payload = v.get("payload").unwrap();
+            assert_eq!(
+                payload.get("model"),
+                Some(&json!("sonnet")),
+                "{id}: the model this host has run for years"
+            );
+            assert!(
+                payload
+                    .get("prompt")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .starts_with("[bee-tier: generation]\n"),
+                "{id}: the marker names the role that resolved"
+            );
+            let econ = v.get("economics").unwrap();
+            assert_eq!(econ.get("logical_tier"), Some(&json!("generation")), "{id}");
+            assert_eq!(econ.get("tier_source"), Some(&json!("cell")), "{id}");
+        }
+    }
+
+    /// A read-shaped cell takes the READ consumer's list, so it lands on the
+    /// historical read model rather than on generation — D9 backfills every
+    /// `tier: extraction` cell to `role: read`, and this is where they land.
+    #[test]
+    fn a_read_cell_falls_through_to_the_historical_read_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HOST_BEFORE_ROLES);
+        cell_with(&root, "c-1", r#""role":"read""#);
+
+        let v = cell_envelope(&root, "c-1", None);
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), Some(&json!("haiku")));
+        assert!(payload
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: extraction]\n"));
+    }
+
+    /// Precedence: an explicit `--role` names the slot directly and outranks
+    /// the cell's own declared role (store 8ff6e79e over D3).
+    #[test]
+    fn an_explicit_role_outranks_the_cells_recorded_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","review":"opus","test":"grok-code"}}}"#,
+        );
+        cell_with(&root, "c-1", r#""role":"test""#);
+
+        let v = cell_envelope(&root, "c-1", Some("review"));
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("opus")));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("logical_tier"), Some(&json!("review")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("flag")), "the caller chose it");
+    }
+
+    /// A pre-mrs-8 record — no `role` at all — keeps the exact path it had:
+    /// its recorded `tier` selects, stamps `cell`, and an unconfigured one is
+    /// still the typed refusal, never a fall-through.
+    #[test]
+    fn a_role_less_cell_still_resolves_and_refuses_on_its_recorded_tier() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        cell_with(&root, "c-1", r#""tier":"generation""#);
+        cell_with(&root, "c-2", r#""tier":"quantum""#);
+
+        let v = cell_envelope(&root, "c-1", None);
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        assert_eq!(
+            v.get("economics").unwrap().get("tier_source"),
+            Some(&json!("cell")),
+            "the recorded tier still selects"
+        );
+
+        let refused = cell_envelope(&root, "c-2", None);
+        assert_eq!(refused.get("ok"), Some(&json!(false)));
+        assert_eq!(refused.get("reason"), Some(&json!("tier_not_configured")));
+    }
+
+    /// The advisor list is ONE name with no fall-through (4faf1de9): an
+    /// unconfigured advisor refuses, it never walks on to code or generation,
+    /// and no cell's role can drag it into one.
+    #[test]
+    fn the_advisor_list_has_no_fall_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet-code"}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "claude", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)));
+        assert_eq!(v.get("reason"), Some(&json!("advisor_not_configured")));
+    }
+
+    /// The warn has to stay BELIEVABLE. On a host that never opted in, every
+    /// name a cell dispatch walks is silent — bee's own tail is bee's
+    /// plumbing, not the operator's request — while a job role nothing
+    /// configures is still loud. Asked of the real ordered lists against a
+    /// real config, because the warn itself writes to stderr.
+    #[test]
+    fn bees_own_tail_is_silent_while_an_unconfigured_job_role_still_warns() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HOST_BEFORE_ROLES);
+        let models = read_models(&root).unwrap();
+
+        for role in ["code", "read", "generation", "extraction", "review"] {
+            for name in cell_role_list(role) {
+                assert!(
+                    !role_is_unknown(&models, "claude", name),
+                    "role {role}: walking {name} would warn on every dispatch"
+                );
+            }
+        }
+        for name in tier_role_list("review") {
+            assert!(!role_is_unknown(&models, "claude", name), "a review dispatch warns on {name}");
+        }
+
+        // …and the names nobody configured stay loud, head or tail.
+        for invented in ["test", "design", "migrate"] {
+            assert!(
+                role_is_unknown(&models, "claude", invented),
+                "{invented} names no configured job and must warn"
+            );
+        }
+
+        // Membership, never a fixed list: configure it and it goes quiet.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let configured = repo(&tmp2, r#"{"models":{"claude":{"generation":"sonnet","test":"grok"}}}"#);
+        let models2 = read_models(&configured).unwrap();
+        assert!(!role_is_unknown(&models2, "claude", "test"));
+    }

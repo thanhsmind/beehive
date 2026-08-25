@@ -51,6 +51,28 @@ pub(crate) const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
 /// of the old four names for its own display path.
 pub(crate) const CONFIGURABLE_SLOTS: [&str; 3] = ["extraction", "generation", "review"];
 
+/// The role names BEE ITSELF asks for and seeds into a fresh config, but
+/// ships no built-in model for.
+///
+/// model-role-split D3 (store 3c9d6262) / 561e1bda: every ordered role list
+/// bee's own dispatch sites ask for ENDS with a historical name, and the
+/// entries before that tail are `code` (cell execution) and `read` (a read
+/// dispatch). mrs-10 seeds both into a FRESH host's config; a host that
+/// onboarded earlier carries neither key, and neither has a `default_models`
+/// entry — which is exactly the membership `warn_unknown_role` reads as "this
+/// name is a typo".
+///
+/// So this list is a WARN-SUPPRESSION list and nothing else. It gates no
+/// normalization and no resolution: adding either name to `default_models`
+/// instead would seed it into the table `normalize_models` builds, where a
+/// MID-list `code` would then RESOLVE and quietly outrank the `generation`
+/// model every existing host has configured for years — the silent migration
+/// 561e1bda exists to prevent. Absent from here, `code` would warn on every
+/// single cell dispatch on every existing host, and a warning that always
+/// fires is a warning nobody reads; a name the OPERATOR invented (`test`,
+/// `design`) is in no table at all and still warns loudly.
+pub(crate) const ASKED_ROLES: [&str; 2] = ["code", "read"];
+
 /// provenance: state.mjs DEFAULT_MODELS.
 pub(crate) fn default_models(runtime: &str) -> Map<String, Value> {
     let mut m = Map::new();
@@ -397,6 +419,23 @@ fn resolve_configured(value: &Value, name: &str, kind: &str) -> Option<Resolved>
 /// yields without a word. Keeping those two apart is what stops a
 /// per-dispatch warning storm on an unconfigured runtime while leaving the
 /// misspelling loud.
+/// The exact question `resolve_role_named` asks before it warns — a name
+/// nothing has heard of: absent from `models.<runtime>`, absent from the
+/// built-in defaults, and not one of bee's own `ASKED_ROLES` tail names.
+///
+/// Public because the warn itself goes to stderr, which an in-process test
+/// cannot read: this is how "no dispatch on an existing host warns routinely"
+/// is provable over a REAL config and the real ordered lists, rather than by
+/// re-asserting the constant against itself. One home, one answer — the
+/// resolver below asks this same function.
+pub(crate) fn role_is_unknown(models: &Map<String, Value>, runtime: &str, name: &str) -> bool {
+    if ASKED_ROLES.contains(&name) {
+        return false;
+    }
+    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
+    models.get(rt).and_then(|t| t.get(name)).is_none() && !default_models(rt).contains_key(name)
+}
+
 fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
     let tail = match next {
         Some(next) => format!(" — falling through to \"{next}\""),
@@ -436,6 +475,31 @@ pub(crate) fn resolve_role(
     runtime: &str,
     kind: &str,
 ) -> Resolved {
+    resolve_role_named(models, roles, runtime, kind).1
+}
+
+/// `resolve_role` plus the ONE fact its caller cannot recompute afterwards:
+/// WHICH name in the list actually won.
+///
+/// model-role-split D3 (store 3c9d6262) puts the cell's own role at the head
+/// of the list, so the name a dispatch ASKS for and the name that RESOLVES
+/// are no longer the same word — a cell declaring `role: "test"` on a host
+/// that configures no `test` runs on the `generation` model. The
+/// `[bee-tier: <role>]` marker that dispatch stamps has to name the resolved
+/// one: `hooks/model_guard.rs` classifies the marker against `known_roles`
+/// and DENIES any name nothing configures, so a marker carrying the
+/// unresolved head would refuse every cell dispatch on every host that has
+/// not opted into the new names — a louder spelling of the same silent
+/// migration 561e1bda's tail exists to prevent.
+///
+/// It is the same walk, never a second one: `resolve_role` is this function
+/// with the name dropped, so the two cannot drift.
+pub(crate) fn resolve_role_named<'a>(
+    models: &Map<String, Value>,
+    roles: &[&'a str],
+    runtime: &str,
+    kind: &str,
+) -> (Option<&'a str>, Resolved) {
     let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
     let table = models.get(rt);
     for (i, name) in roles.iter().enumerate() {
@@ -443,14 +507,18 @@ pub(crate) fn resolve_role(
         // decision 0015: `ceiling` is the escalation word, never a slot — it
         // is not configurable, so it terminates the walk on its own.
         if name == "ceiling" {
-            return Resolved::Inherit;
+            return (Some(name), Resolved::Inherit);
         }
         let entry = table.and_then(|t| t.get(name));
         if let Some(resolved) = entry.and_then(|v| resolve_configured(v, name, kind)) {
-            return resolved;
+            return (Some(name), resolved);
         }
         let defaults = default_models(rt);
-        if entry.is_none() && !defaults.contains_key(name) {
+        // `ASKED_ROLES`: bee's OWN tail names (`code`, `read`) are absent from
+        // both tables on every host that onboarded before mrs-10, and warning
+        // on them would fire on every dispatch — see the constant. An
+        // operator-invented name still warns.
+        if role_is_unknown(models, rt, name) {
             warn_unknown_role(name, rt, roles.get(i + 1).copied());
         }
         if i + 1 == roles.len() {
@@ -462,15 +530,19 @@ pub(crate) fn resolve_role(
             // very model the config just cleared. Absent and refused are not
             // the same read.
             if entry.is_none() {
-                return defaults
-                    .get(name)
-                    .and_then(|v| resolve_configured(v, name, kind))
-                    .unwrap_or(Resolved::Budget);
+                return (
+                    Some(name),
+                    defaults
+                        .get(name)
+                        .and_then(|v| resolve_configured(v, name, kind))
+                        .unwrap_or(Resolved::Budget),
+                );
             }
-            return Resolved::Budget;
+            return (Some(name), Resolved::Budget);
         }
     }
-    Resolved::Budget
+    // An empty list: no name asked, so no name won and no model is selected.
+    (None, Resolved::Budget)
 }
 
 /// provenance: state.mjs resolveTier(root, slot, runtime, purpose) — kept as
@@ -488,10 +560,20 @@ pub(crate) fn resolve_tier(
     runtime: &str,
     kind: &str,
 ) -> Resolved {
+    resolve_role(models, &tier_role_list(slot), runtime, kind)
+}
+
+/// The ordered list a SINGLE-SLOT (tier-shaped) caller asks for — today's
+/// exact bytes, kept in ONE place so `resolve_tier` and the caller that needs
+/// the resolved NAME back (`prepare.rs`) ask the identical question. 561e1bda
+/// names this list for the review consumer: `[review, generation]`. A second
+/// hand-written copy beside this one is exactly the drift D1 collapsed the
+/// two parsers to remove.
+pub(crate) fn tier_role_list(slot: &str) -> Vec<&str> {
     if slot == "review" {
-        return resolve_role(models, &["review", "generation"], runtime, kind);
+        return vec![slot, "generation"];
     }
-    resolve_role(models, &[slot], runtime, kind)
+    vec![slot]
 }
 
 /// provenance: state.mjs resolveAdvisor — NEVER budget, NEVER a tier fallback;
