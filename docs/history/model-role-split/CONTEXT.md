@@ -145,9 +145,10 @@ From the discovery reads. Downstream agents read these before planning.
 
 - [ ] None. The map closed with no fog and no open tickets.
 
+<!-- bee:not-a-deferral: all five questions were answered by planning and shipped on 2026-08-25; each carries its outcome inline below, so this section is a closed record of what planning decided, not a promise to act later. -->
+
 ### Deferred To Planning
 
-<!-- bee:not-a-deferral: all five questions were answered by planning and shipped on 2026-08-25; each carries its outcome inline below, so this is a closed record of what planning decided, not a promise to act later. -->
 
 All five resolved. Outcomes recorded at close:
 
@@ -201,9 +202,10 @@ All five resolved. Outcomes recorded at close:
 
 <!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: these three are recorded NON-GOALS, not postponed work — each names why it is out of scope (no consumer, charted out of scope, or settled by an existing decision) and none promises a later delivery. -->
+
 ## Deferred Ideas
 
-<!-- bee:not-a-deferral: these three are recorded NON-GOALS, not postponed work — each names why it is out of scope (no consumer, charted out of scope, or settled by an existing decision) and none promises a later delivery. -->
 
 - **Capability as a declarative requirement** ("this work needs vision",
   "this needs long context") — the source read expresses capability as
