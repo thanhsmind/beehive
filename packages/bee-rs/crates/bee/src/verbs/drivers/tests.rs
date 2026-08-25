@@ -2851,7 +2851,7 @@ use std::time::Instant;
         // And the failure travels back by name rather than being dropped.
         assert!(!registered, "a blank role must fail registration, not silently pass");
         let message = err.expect("a failed registration must name why");
-        assert!(message.starts_with("worker add: invalid tier"), "{message}");
+        assert!(message.starts_with("worker add: invalid role"), "{message}");
         assert!(message.contains("FIX:"), "a refusal names its remedy: {message}");
         assert!(dpr1_workers(&root).is_empty(), "the bad record was never written");
     }
@@ -5975,6 +5975,30 @@ use std::time::Instant;
     /// plumbing, not the operator's request — while a job role nothing
     /// configures is still loud. Asked of the real ordered lists against a
     /// real config, because the warn itself writes to stderr.
+    /// role-surface-cleanup D1: the ordered list never repeats a name. A
+    /// duplicate makes the fall-through warn fire twice for one dispatch,
+    /// and the first copy names the very name that just failed — observed
+    /// live for `role: "code"` on a host whose window is shut via `read`.
+    #[test]
+    fn the_ordered_role_list_never_repeats_a_name() {
+        for role in ["code", "read", "generation", "extraction", "review", "test", "design"] {
+            let list = cell_role_list(role);
+            let mut seen = std::collections::HashSet::new();
+            for name in &list {
+                assert!(
+                    seen.insert(*name),
+                    "cell_role_list({role:?}) repeats {name:?}: {list:?}"
+                );
+            }
+            assert_eq!(list.first(), Some(&role), "the cell's own role stays the head");
+            assert!(
+                list.contains(&"generation"),
+                "the historical backstop stays reachable — as the tail, or as the head when \
+                 the role IS the backstop: {list:?}"
+            );
+        }
+    }
+
     #[test]
     fn bees_own_tail_is_silent_while_an_unconfigured_job_role_still_warns() {
         let tmp = tempfile::tempdir().unwrap();

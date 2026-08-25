@@ -96,10 +96,18 @@ pub(crate) fn recorded_str<'a>(cell: Option<&'a Value>, field: &str) -> Option<&
 /// The advisor is deliberately NOT here: it keeps `resolve_advisor`, one name
 /// and no fall-through at all (decision 4faf1de9).
 pub(crate) fn cell_role_list(role: &str) -> Vec<&str> {
-    if role == "read" {
-        return vec![role, "extraction", "generation"];
+    // role-surface-cleanup D1: the tail names skip anything already in the
+    // list — a duplicate made the fall-through warn fire twice for one
+    // dispatch, and its first copy named the very name that just failed.
+    let tail: &[&str] =
+        if role == "read" { &["extraction", "generation"] } else { &["code", "generation"] };
+    let mut list = vec![role];
+    for name in tail {
+        if !list.contains(name) {
+            list.push(name);
+        }
     }
-    vec![role, "code", "generation"]
+    list
 }
 
 /// provenance: dispatch-prepare.mjs purposeForKind — only 'cell' is
