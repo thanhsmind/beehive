@@ -31,12 +31,41 @@ pub(crate) const DISPATCH_RUNTIMES: [&str; 2] = ["codex", "claude"];
 pub(crate) const DISPATCH_KINDS: [&str; 4] = ["cell", "gather", "reviewer", "advisor"];
 
 /// provenance: dispatch-prepare.mjs slotForKind (the PURPOSE MAP, advisor A1).
-pub(crate) fn slot_for_kind(kind: &str) -> &'static str {
+///
+/// D2 (decision 06e49368) — the second silent-resolve site, closed. This map
+/// used to end in a catch-all `_ => "advisor"`, so ANY kind without its own
+/// arm resolved the advisor slot. `kind` is enum-gated against
+/// `DISPATCH_KINDS` (at the flag parse and again at `prepare_dispatch`'s
+/// entry), so a typo could never reach it — the hazard was a kind added to
+/// `DISPATCH_KINDS` later with no arm here, which would have routed that work
+/// to the advisor model with nothing red to show for it. Every kind now names
+/// its slot EXPLICITLY; an unhandled kind returns `None` and its caller
+/// refuses (`unmapped_kind_refusal`).
+pub(crate) fn slot_for_kind(kind: &str) -> Option<&'static str> {
     match kind {
-        "cell" | "gather" => "generation",
-        "reviewer" => "review",
-        _ => "advisor",
+        "cell" | "gather" => Some("generation"),
+        "reviewer" => Some("review"),
+        "advisor" => Some("advisor"),
+        _ => None,
     }
+}
+
+/// The typed refusal a kind with no `slot_for_kind` arm earns: `{ok:false}`
+/// naming its remedy, in the same shape as every other prepare refusal —
+/// never a silent resolution onto some other consumer's model.
+pub(crate) fn unmapped_kind_refusal(kind: &str) -> Value {
+    let mut refusal = Map::new();
+    refusal.insert("ok".into(), Value::Bool(false));
+    refusal.insert("type".into(), Value::String("refused".into()));
+    refusal.insert("reason".into(), Value::String("kind_slot_unmapped".into()));
+    refusal.insert("kind".into(), Value::String(kind.to_string()));
+    refusal.insert(
+        "fix".into(),
+        Value::String(format!(
+            "dispatch kind \"{kind}\" has no slot mapping — add an explicit arm for it to slot_for_kind (verbs/drivers/prepare.rs) beside its DISPATCH_KINDS entry. An unmapped kind is refused, never resolved onto the advisor slot."
+        )),
+    );
+    Value::Object(refusal)
 }
 
 /// provenance: dispatch-prepare.mjs purposeForKind — only 'cell' is
@@ -728,6 +757,14 @@ pub(crate) fn prepare_dispatch(
                 .map(|(_id, worktree_root)| (worktree_root, root.to_string_lossy().into_owned()))
         });
 
+    // D2 (06e49368): the default slot resolves ONCE, through an explicit arm.
+    // A kind with no arm refuses here — it never falls through onto the
+    // advisor slot. Unreachable today (both gates enum-check `kind` against
+    // DISPATCH_KINDS); it exists so that adding a fifth kind without its
+    // mapping is a typed refusal instead of silent work on the wrong model.
+    let Some(default_slot) = slot_for_kind(kind) else {
+        return Ok(Prepared::Value(unmapped_kind_refusal(kind)));
+    };
     let (tier_token, tier_source) = if kind == "cell" {
         match cell
             .as_ref()
@@ -738,10 +775,10 @@ pub(crate) fn prepare_dispatch(
             })
         {
             Some(t) => (t, "cell"),
-            None => (slot_for_kind(kind), "default"),
+            None => (default_slot, "default"),
         }
     } else {
-        (slot_for_kind(kind), "default")
+        (default_slot, "default")
     };
     let models = read_models(root)?;
     let (resolved, is_ceiling) = if kind == "advisor" {
@@ -1998,4 +2035,68 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     let result = Value::Object(result);
     let text = jsjson::stringify_pretty(&result);
     finish(&ctx, Ok(Out::Emit(result, text, 0)))
+}
+
+// ═══ tests — the slot map's explicit arms (D2 / 06e49368) ══════════════════
+
+#[cfg(test)]
+mod slot_map_tests {
+    use super::*;
+
+    /// The four live kinds keep exactly the slots they resolved before the
+    /// catch-all went away — cell/gather → generation, reviewer → review,
+    /// advisor → advisor.
+    #[test]
+    fn every_dispatch_kind_keeps_its_slot() {
+        assert_eq!(slot_for_kind("cell"), Some("generation"));
+        assert_eq!(slot_for_kind("gather"), Some("generation"));
+        assert_eq!(slot_for_kind("reviewer"), Some("review"));
+        assert_eq!(slot_for_kind("advisor"), Some("advisor"));
+        // Every declared kind has an arm: no member of DISPATCH_KINDS may
+        // reach the unmapped branch.
+        for kind in DISPATCH_KINDS {
+            assert!(slot_for_kind(kind).is_some(), "kind {kind:?} has no slot arm");
+        }
+    }
+
+    /// `advisor` is the one gate onto the advisor slot. Nothing else — not a
+    /// live kind, not a name that could plausibly be added later — resolves
+    /// it by falling through.
+    #[test]
+    fn only_the_advisor_arm_resolves_the_advisor_slot() {
+        for kind in ["cell", "gather", "reviewer", "extract", "judge", "", "advisorr", "ADVISOR"] {
+            assert_ne!(
+                slot_for_kind(kind),
+                Some("advisor"),
+                "kind {kind:?} resolved the advisor slot"
+            );
+        }
+        assert_eq!(slot_for_kind("advisor"), Some("advisor"));
+    }
+
+    /// An unhandled kind resolves NOTHING: it returns None so the caller can
+    /// refuse, rather than silently landing on some other consumer's model.
+    #[test]
+    fn an_unhandled_kind_resolves_no_slot_at_all() {
+        for kind in ["extract", "judge", "scribe", "", "  ", "Cell"] {
+            assert_eq!(slot_for_kind(kind), None, "kind {kind:?} resolved a slot");
+        }
+    }
+
+    /// The refusal is typed and names its remedy — the shape a caller can
+    /// branch on, not free prose.
+    #[test]
+    fn the_unmapped_kind_refusal_is_typed_and_names_its_remedy() {
+        let refusal = unmapped_kind_refusal("extract");
+        assert_eq!(refusal.get("ok"), Some(&Value::Bool(false)));
+        assert_eq!(refusal.get("type"), Some(&Value::String("refused".into())));
+        assert_eq!(
+            refusal.get("reason"),
+            Some(&Value::String("kind_slot_unmapped".into()))
+        );
+        assert_eq!(refusal.get("kind"), Some(&Value::String("extract".into())));
+        let fix = refusal.get("fix").and_then(|v| v.as_str()).unwrap_or_default();
+        assert!(fix.contains("extract"), "fix must name the kind: {fix}");
+        assert!(fix.contains("slot_for_kind"), "fix must name the remedy: {fix}");
+    }
 }
