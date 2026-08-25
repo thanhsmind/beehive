@@ -1,0 +1,186 @@
+{
+  "id": "model-role-split-r2",
+  "requested_by": "thanhsmind",
+  "requested_at": "2026-08-25T09:01:04.124Z",
+  "scope_description": "model-role-split, the whole feature: bee selects a worker model by the job a cell declares rather than by a cost tier. 36 commits on wt/model-role-split from the merge-base with main, 83 files, 7653 insertions. The baseline is the merge-base rather than the branch point on purpose: main was merged into this branch mid-flight, and main's own 40 commits are neither this feature's work nor unreviewed. Twelve locked decisions D1-D12 in docs/history/model-role-split/CONTEXT.md, plus agent decisions taken under the owner's delegation: 8ff6e79e, 561e1bda, fef79243, 51341f84, 647b6f7b. Every cell is enumerated rather than named by feature, because a feature-typed entry skips the verification-evidence preflight entirely (logged as a P2 finding) and listing the cells is what makes that check real. An independent audit already ran against the twelve decisions and its findings were fixed in mrs-23 through mrs-29 — this is the panel pass, not a re-run of that audit.",
+  "included": [
+    {
+      "type": "cell",
+      "id": "mrs-0"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-1"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-2"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-3"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-4"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-5"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-6"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-7"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-8"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-9"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-10"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-11"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-12"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-13"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-14"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-15"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-16"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-17"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-18"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-19"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-20"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-21"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-22"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-23"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-24"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-25"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-26"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-27"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-28"
+    },
+    {
+      "type": "cell",
+      "id": "mrs-29"
+    }
+  ],
+  "excluded": [],
+  "baseline": "0075e2e04225558db964631ba13f8b6e17a5d4a9",
+  "head": "7b14a72fbe75da9ddb5f495d84f4c12d6f43c330",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-08-25T09:01:04.124Z",
+    "cells_checked": [
+      "mrs-0",
+      "mrs-2",
+      "mrs-3",
+      "mrs-4",
+      "mrs-5",
+      "mrs-6",
+      "mrs-8",
+      "mrs-9",
+      "mrs-10",
+      "mrs-12",
+      "mrs-13",
+      "mrs-14",
+      "mrs-15",
+      "mrs-16",
+      "mrs-17",
+      "mrs-19",
+      "mrs-20",
+      "mrs-24",
+      "mrs-26",
+      "mrs-27",
+      "mrs-29"
+    ],
+    "passed": true
+  },
+  "findings": [
+    {
+      "id": "P1-A",
+      "severity": "P1",
+      "axis": "spec",
+      "title": "A cell declaring role ceiling takes the session model and is invisible to the 40 percent escalation ration",
+      "detail": "Corroborated by three reviewers independently — security and code-quality traced it, test-coverage executed it. prepare.rs:941 reads `else if escalated_cell || tier_token == ESCALATION_WORD`, and on the from_role path tier_token IS the cell's own declared role string, so the arm fires before resolve_role_named is ever called: Resolved::Inherit, channel session-model, no model param. Meanwhile cell_is_escalated (validate.rs:98) reads only escalate==true or the legacy tier==ceiling, so the same record is invisible to all three counters that enforce D5 — escalation_share_after (handlers_close.rs:1113), role_mix (status_full/cells.rs:622) and ceiling_scarcity_warning (session_preamble/store.rs:314). Executed proof on a 7-cell feature with six such cells: model=None, channel=session-model, cell_is_escalated=false, and set_escalation on the seventh was ALLOWED at 86 percent escalated. Two things make this a door rather than an oversight: cells/tests.rs asserts role ceiling is accepted at add time, and models.rs:530-538 carries a comment stating the opposite of what ships — that such a cell warns and falls through like any other. D5 locks the ration as unchanged in force and plan.md:187 rates it HIGH with the proof that the 40 percent refusal fires on the flag exactly as on the tier value. It does, and is bypassable around it. No test connects add-time acceptance to the dispatch interception.",
+      "fix": "Either refuse ceiling in the role field at validate.rs:252 (the reserved-name option CONTEXT.md:154 already contemplated), or narrow prepare.rs:941 so a cell role falls through the resolver exactly as models.rs:530-538 promises. Whichever is chosen, add the test that connects the two layers, and correct the comment.",
+      "evidence": "verbs/drivers/prepare.rs:941; verbs/cells/validate.rs:98,252; verbs/cells/handlers_close.rs:1113; verbs/status_full/cells.rs:622; hooks/session_preamble/store.rs:314; verbs/drivers/models.rs:530-538"
+    },
+    {
+      "id": "P1-B",
+      "severity": "P1",
+      "axis": "standards",
+      "title": "cells backfill-roles scans outside its lock, so a concurrent write is silently overwritten by the pre-scan snapshot",
+      "detail": "Corroborated by two reviewers — code-quality traced the mechanism, test-coverage demonstrated the loss and raised it from P2. The verb reads every cell at handlers_write.rs:1537 to build its plan, takes the cells-archive lock only at :1607, then writes each whole object back with write_json_atomic at :1613. The lock therefore guards the write phase alone; the scan is unlocked, and every write is a full-object write of a stale clone. Demonstrated on a 40000-cell tempfile store: a real operator door — set_escalation with --off, which is not budget-checked and so performs no store scan — committed a disarm to disk at t=25ms; the backfill finished at t=1.007s and the cell was re-armed on disk, escalate=true. The operator's write was not half-applied, it was fully applied and then fully reversed. The doc block at :1523-1531 asserts the opposite: that a concurrent cells update, cap or claim cannot half-write behind this pass. A budget-checked --on attempt was correctly refused by the lock at 319ms, which is why the defect is invisible to casual testing: only writers completing inside the scan phase are lost. Code-quality additionally traced that a bee close archiving a feature during the scan is not blocked, and the subsequent write recreates .bee/cells/<id>.json as a live duplicate, because read_cell prefers the live copy. Severity is P1 rather than P2 because the loss is silent, the verb has not yet been run against the live 543-cell store, and this repository's stated default is concurrent sessions — main gained commits from a sibling session twice during this feature's own development.",
+      "fix": "Take the cells-archive lock before the scan so one lock spans scan and write, or re-read each file under the lock and merge only the three keys the migration owns (role, escalate, trace.escalation_reason) rather than writing the snapshot. Then pin it: hold the lock externally and assert the verb refuses, or mutate a record mid-pass and assert the operator write survives. Falls to P2 only if the migration is run under a documented single-session stop-the-world.",
+      "evidence": "verbs/cells/handlers_write.rs:1523-1531 (the claim), :1537 (unlocked scan), :1607 (lock), :1613 (whole-object write); verbs/drivers/guard.rs:325-331 (read_cell prefers the live copy)"
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-08-25T09:01:04.124Z",
+  "updated_at": "2026-08-25T09:26:30.701Z"
+}

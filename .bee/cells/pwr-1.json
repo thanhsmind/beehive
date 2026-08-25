@@ -1,0 +1,83 @@
+{
+  "id": "pwr-1",
+  "feature": "prompt-work-record",
+  "lane": "standard",
+  "role": "code",
+  "title": "Record the user's prompt as open work on the session record",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+  ],
+  "read_first": [
+    "docs/history/prompt-work-record/CONTEXT.md",
+    "docs/history/prompt-work-record/plan.md"
+  ],
+  "action": "A session that never calls a bee flow verb — a plain question, a bee-researching run — leaves no record of WHAT it was asked to do, so a dashboard reading .bee/sessions/<id>.json can say the session is working but not on what. Close that. On UserPromptSubmit, hook activity writes a `work` object beside `activity` on the same record: {title, text, status, opened_at, updated_at, turns}. D1: status starts \"open\" and this cell writes no other value — moving it is the agent's job in a later slice. D3: the FIRST prompt's text becomes `title` and never changes while the record is open; a follow-up prompt appends to `text` and bumps turns/updated_at instead of opening a second record. D5: `text` keeps the user's wording, but absolute paths are scrubbed and a secret-shaped prompt is stored as \"[redacted]\" — reuse SECRET_PATTERNS from verbs/decisions/scanners.rs (private key, AKIA, ghp, sk-, JWT, key=value) and ONLY that half: assert_safe_content also runs INJECTION_PATTERNS (\"ignore previous instructions\"), which a user types legitimately every day and which must NOT redact ordinary work. TWO PLACEMENT RULES, both load-bearing. First: the prompt write happens BEFORE the state machine's suppression and no-transition early returns in record_activity — a prompt arriving is a fact about the session no matter what the state machine concludes, and routing it through the transition logic drops prompts whenever the prior state was sticky (blocked, waiting_input). Second: both sinks, same as the state — a herded pane has no session record, only .bee/mailbox/<job-id>/activity.json through write_activity_herded, and the work object goes there too. Keep the hook's posture exactly: never deny, never print on stdout, always exit 0, every failure swallowed into the crash log. D4 needs NO code — the record hangs off the session file and every reader already drops a session whose last_heartbeat is stale; prove that with a test rather than building an expiry.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A UserPromptSubmit event writes work{title,text,status:open,opened_at,updated_at,turns} on the session record",
+      "The first prompt's text is the title and stays the title across follow-up prompts, which append to text and bump turns",
+      "An absolute path in the prompt does not reach the stored text",
+      "Each of the six SECRET_PATTERNS shapes redacts the prompt to [redacted]",
+      "An injection-shaped prompt is stored normally, never redacted",
+      "A prompt arriving while the prior state is sticky (blocked or waiting_input) is still recorded",
+      "A herded pane records the work object into its job mailbox, not a session file",
+      "The hook still exits 0 and prints nothing on stdout on every failure path"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "bd78f64a",
+    "856789db",
+    "5944ebbb",
+    "34944b7a",
+    "f9bf6456"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "pwr-w1",
+    "outcome": "UserPromptSubmit now records the user's verbatim prompt as an open work object on the session record and on the herded mailbox record, path-scrubbed and secret-redacted",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs"
+    ],
+    "deviations": [
+      "Reserved and edited one file beyond the cell list: verbs/decisions/mod.rs, a one-word visibility bump (mod scanners -> pub(crate) mod scanners) so the hook layer can reach SECRET_PATTERNS at all",
+      "Reserved and edited verbs/decisions/mod.rs beyond the cell file list: a one-word visibility bump so the hook layer can reach SECRET_PATTERNS",
+      "The full declared suite also ran: 2590 pass in the lib target and every integration target green EXCEPT opencode_plugin_contracts::every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap, which fails identically on beehive main with this change absent. Pre-existing red, already owned by the opencode-contract-reds lane, untouched by this cell",
+      "Folded the work write into the existing activity write rather than adding a second lock acquisition ahead of the state machine early-returns, as plan.md described. UserPromptSubmit maps to working and is a turn boundary, so it provably reaches the write past both the no-transition return and the sticky suppression; a second acquire_store_lock_once could silently drop a prompt on a busy lock, which is worse than the case the ordering rule guarded. The invariant is pinned by a test that fires a prompt while the prior state is blocked",
+      "D4 needed no code: the work record hangs off the session file, so it expires with the session. Proved by a test rather than built"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T08:54:35.461Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "270feb28-122a-470a-8dab-14fab621a5ce",
+    "claimed_at": "2026-08-25T08:46:09.135Z",
+    "inline_reason": "This session runs under a standing instruction not to call the Agent tool unless the user asks for it, so the standard-lane dispatch of an execution worker was not available; the cell was executed inline by the orchestrator, in the feature worktree, under its own reservations.",
+    "report": {
+      "outcome": "UserPromptSubmit records the verbatim prompt as an open work object on both sinks, path-scrubbed and secret-redacted",
+      "commit": "341c5da7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml hooks::activity — green, 52 passed 0 failed — the change is one hook file plus a one-word visibility bump, and these are that hook own tests, 13 of them new for the work record",
+      "deviations": [
+        "Reserved and edited verbs/decisions/mod.rs beyond the cell file list: a one-word visibility bump so the hook layer can reach SECRET_PATTERNS",
+        "The full declared suite also ran: 2590 pass in the lib target and every integration target green EXCEPT opencode_plugin_contracts::every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap, which fails identically on beehive main with this change absent. Pre-existing red, already owned by the opencode-contract-reds lane, untouched by this cell",
+        "Folded the work write into the existing activity write rather than adding a second lock acquisition ahead of the state machine early-returns, as plan.md described. UserPromptSubmit maps to working and is a turn boundary, so it provably reaches the write past both the no-transition return and the sticky suppression; a second acquire_store_lock_once could silently drop a prompt on a busy lock, which is worse than the case the ordering rule guarded. The invariant is pinned by a test that fires a prompt while the prior state is blocked",
+        "D4 needed no code: the work record hangs off the session file, so it expires with the session. Proved by a test rather than built"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 610 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

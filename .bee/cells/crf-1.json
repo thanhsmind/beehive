@@ -1,0 +1,77 @@
+{
+  "id": "crf-1",
+  "feature": "claim-reserves-files",
+  "title": "Reserve a claimed cell's declared files at claim time, matching the release the cap already performs",
+  "action": "Make bee cells claim (and claim-next) reserve the cell's declared files under the claiming --worker identity for that cell id, the same (agent, cell) key finish_cap_and_release already releases by. A reservation conflict refuses the claim, typed and zero-mutation, rolling back any partial reservations. A cell with no files claims exactly as today. Then correct packages/bee/prompts/worker-cell.md so the sentence matches shipped behavior.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells::",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "Claiming a cell that declares files creates reservations for exactly those paths under the --worker identity; bee reservations list shows them.",
+      "Capping that cell releases exactly those reservations through the EXISTING release path, with no edit to finish_cap_and_release or release_reservations_for_agent.",
+      "A claim whose declared files conflict with another agent's active hold is refused, names the holder, and leaves both the claim store and the reservation store byte-untouched.",
+      "A cell declaring files [] claims exactly as it does today, with no new refusal.",
+      "Re-claiming a cell the same agent already holds does not error on its own prior reservations.",
+      "claim-next takes the same path, so the cross-session door never hands out an unreserved cell.",
+      "packages/bee/prompts/worker-cell.md line 37 describes what actually happens after this change.",
+      "Every claim that succeeds today with no overlapping hold still succeeds with byte-identical output."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "acceptance": "Claim reserves the declared files under the worker identity and the cap's existing release frees them; a conflicting claim is refused zero-mutation naming the holder; an empty files list is unchanged; the worker-cell prompt matches shipped behavior; the cells:: suite is green.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-crf-1",
+    "outcome": "cells claim and claim-next now reserve the claimed cell's declared files under the claiming worker, matching the release the cap already performs; a conflict refuses typed and rolls the store back",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee/prompts/worker-cell.md"
+    ],
+    "deviations": [
+      "reserve_path_atomic hardcodes session: None, so the claim calls the same shared pair one layer down (reserve_prechecks + reserve_exec) to thread its --session-id; without it every claim in concurrent mode would refuse with reserve's own SESSION_REQUIRED",
+      "rollback releases by (worker, cell), the only scoping the shared release door offers: if this call created a lease AND the worker also held an older lease for the same cell, the older one goes too. Recorded in the function doc; nothing is released when this call created nothing",
+      "sync-ack: skills/bee-swarming/SKILL.md:105 already states the guarantee this cell implements ('its listed files reserved under your nickname') — the skill was right and the code was wrong, so there is nothing in the area's skills to change; the cell declares affects_skills: []"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T09:15:32.780Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T09:00:12.204Z",
+    "sync_ack": "skills/bee-swarming/SKILL.md:105 already states the guarantee this cell implements ('its listed files reserved under your nickname') — the skill was right and the code was wrong, so there is nothing in the area's skills to change; the cell declares affects_skills: []",
+    "report": {
+      "outcome": "cells claim and claim-next reserve the cell's declared files under the claiming worker for that cell id, the same (agent, cell) key finish_cap_and_release releases by; a conflict refuses typed and zero-mutation, and the worker-cell prompt now matches shipped behavior",
+      "commit": "492f8fa9c372d3326bb6a9b110d7c58b5eb1e43e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee/prompts/worker-cell.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells:: — green — the cell's own verify, 220 passed including 5 new crf-1 tests; reservations:: (38) and drivers:: (214) also green as the shared reserve door",
+      "deviations": [
+        "reserve_path_atomic hardcodes session: None, so the claim calls the same shared pair one layer down (reserve_prechecks + reserve_exec) to thread its --session-id; without it every claim in concurrent mode would refuse with reserve's own SESSION_REQUIRED",
+        "rollback releases by (worker, cell), the only scoping the shared release door offers: if this call created a lease AND the worker also held an older lease for the same cell, the older one goes too. Recorded in the function doc; nothing is released when this call created nothing"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

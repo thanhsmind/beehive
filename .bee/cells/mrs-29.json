@@ -29,19 +29,46 @@
     "51341f84"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "mrs-w29",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "One job now gets one rendered agent on any host vocabulary, and the chain gate is pinned on the published payload",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "The audit's before-state was half wrong and the cap records the measured one: an un-migrated host does not return bee-extract for --role read, it refuses role_not_configured. The divergence is real either way (general-purpose vs a refusal) and the fix is the same.",
+      "ROLE_AGENTS rows left unchanged rather than re-keyed: model_guard.rs and prepare.rs iterate the constant and depend on its rows being agent-unique, and both files are outside this cell. The job normalization lives in agent_for_role instead, which is also the honest split — role_for_agent's answer is resolved against models.<runtime> and must stay the name the agent was rendered from.",
+      "CEILING ON THE CHAIN TEST, so the plan can be corrected rather than satisfied: bee publishes a chain and never walks one (51341f84), so no bee-side test can prove an executor obeys the gate. The new test pins what is provable — every published dispatch carries the gate correctly in both directions. The plan's claim that this test makes the feature \"implemented\" overstates it.",
+      "--role read on a host that configures no read model is still refused by name (D2). Left as is deliberately and pinned in the test: there is no model to select, and answering an agent while selecting none is the silent-migration defect this feature removes.",
+      "Verify ran ~4 min late: the shared crate was transiently red from sibling mrs-w27's in-flight status_full/tests.rs (their reservation). Polled until it compiled rather than writing through it; zero errors in my files at any point."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T08:43:31.148Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T08:31:49.153Z"
+    "claimed_at": "2026-08-25T08:31:49.153Z",
+    "report": {
+      "outcome": "One job now gets one rendered agent on any host vocabulary, and the chain gate is pinned on the published payload",
+      "commit": "7cdae0f1a2396b1a948d329d31859246aea784fd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --bin bee -- verbs::drivers (247 passed, 0 failed) + hooks::model_guard (46 passed, 0 failed) — green — drivers owns both changed files; model_guard is the only other consumer of the agent_for_role lookup I changed",
+      "deviations": [
+        "The audit's before-state was half wrong and the cap records the measured one: an un-migrated host does not return bee-extract for --role read, it refuses role_not_configured. The divergence is real either way (general-purpose vs a refusal) and the fix is the same.",
+        "ROLE_AGENTS rows left unchanged rather than re-keyed: model_guard.rs and prepare.rs iterate the constant and depend on its rows being agent-unique, and both files are outside this cell. The job normalization lives in agent_for_role instead, which is also the honest split — role_for_agent's answer is resolved against models.<runtime> and must stay the name the agent was rendered from.",
+        "CEILING ON THE CHAIN TEST, so the plan can be corrected rather than satisfied: bee publishes a chain and never walks one (51341f84), so no bee-side test can prove an executor obeys the gate. The new test pins what is provable — every published dispatch carries the gate correctly in both directions. The plan's claim that this test makes the feature \"implemented\" overstates it.",
+        "--role read on a host that configures no read model is still refused by name (D2). Left as is deliberately and pinned in the test: there is no model to select, and answering an agent while selecting none is the silent-migration defect this feature removes.",
+        "Verify ran ~4 min late: the shared crate was transiently red from sibling mrs-w27's in-flight status_full/tests.rs (their reservation). Polled until it compiled rather than writing through it; zero errors in my files at any point."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

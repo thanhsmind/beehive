@@ -1,0 +1,37 @@
+{
+  "id": "probe-b",
+  "feature": "claim-reserves-files",
+  "title": "probe b",
+  "action": "probe",
+  "verify": "true",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/probeA.rs"
+  ],
+  "acceptance": "probe",
+  "status": "dropped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": "live-verification probe for the claim-reserves-files door; not real work"
+  }
+}

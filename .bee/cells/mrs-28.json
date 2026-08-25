@@ -36,19 +36,54 @@
     "06e49368"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "mrs-w28",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Every shipped statement of the role fall-through rule now names mrs-24's pre-roles migration window, matching validate.rs",
+    "files_changed": [
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "docs/handbook/stages/planning.md",
+      "docs/config-reference.md",
+      ".bee/config-sample.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Reserved the 15 regen-written mirror paths under .agents/, .claude/, .claude-plugin/, .codex-plugin/, .opencode/ before commit; all granted, none hand-edited",
+      "Left .bee/decisions.jsonl and .bee/onboarding.json unstaged: a sibling store write and a regen timestamp, not this cell work",
+      "Capped with --sync-ack: affects_skills predicted the two skills by name, the door wants reference paths; bee cells update refuses inside a granted worktree",
+      "sync-ack: affects_skills predicted the two skills by NAME (bee-planning, bee-swarming); the touched paths are those same two skills spelled as reference paths, so the prediction is correct and the mirrors are in step (bee dev regen ran, release-manifest --check 270/270). The spelling fix needs bee cells update, which refuses inside a granted feature worktree and is unreachable from this isolated worker session."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-25T08:36:48.729Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T08:31:49.119Z"
+    "claimed_at": "2026-08-25T08:31:49.119Z",
+    "sync_ack": "affects_skills predicted the two skills by NAME (bee-planning, bee-swarming); the touched paths are those same two skills spelled as reference paths, so the prediction is correct and the mirrors are in step (bee dev regen ran, release-manifest --check 270/270). The spelling fix needs bee cells update, which refuses inside a granted feature worktree and is unreachable from this isolated worker session.",
+    "report": {
+      "outcome": "Every shipped statement of the role fall-through rule now names mrs-24 pre-roles migration window, matching validate.rs FIX text",
+      "commit": "f01594fb",
+      "files": [
+        "skills/bee-planning/references/planning-reference.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+        "docs/handbook/stages/planning.md",
+        "docs/config-reference.md",
+        ".bee/config-sample.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml devtools && bee dev release-manifest --check — green (86 passed, 0 failed; manifest 270 files match) — docs change plus regen-written mirrors: devtools covers the render/manifest chain and the manifest check proves the mirrors are regen output, not hand edits",
+      "deviations": [
+        "Reserved the 15 regen-written mirror paths under .agents/, .claude/, .claude-plugin/, .codex-plugin/, .opencode/ before commit; all granted, none hand-edited",
+        "Left .bee/decisions.jsonl and .bee/onboarding.json unstaged: a sibling store write and a regen timestamp, not this cell work",
+        "Capped with --sync-ack: affects_skills predicted the two skills by name, the door wants reference paths; bee cells update refuses inside a granted worktree"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

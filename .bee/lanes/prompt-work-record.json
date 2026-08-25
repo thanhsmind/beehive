@@ -2,17 +2,36 @@
   "schema_version": "1.0",
   "feature": "prompt-work-record",
   "mode": null,
-  "phase": "exploring",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
   "summary": "Feature \"prompt-work-record\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"prompt-work-record\" (lane).",
+  "next_action": "Slice 3 in the waggledance repo: parse the work object beside BeeActivity and render it. Needs this branch merged and the binary reinstalled first.",
   "created_at": "2026-08-25T08:29:10.360Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": null,
+  "merge_ready": {
+    "since": "2026-08-25T08:54:35.483Z",
+    "branch": "wt/prompt-work-record",
+    "worktree_id": "beehive--wt--prompt-work-record",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 4,
+    "rationale": "The session record is a contract waggledance parses (public-contracts), and the change spans the hook layer, the decisions scanners and a new agent-facing verb group (multi-domain). Not audit-security and so not hard-gate: no auth or authorization path is touched, no validation is removed, and the redaction rule ADDS a protection over the user's own text on the user's own machine.",
+    "updated_at": "2026-08-25T09:03:01.283Z",
+    "feature": "prompt-work-record"
+  }
 }

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "claim-reserves-files",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"claim-reserves-files\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"claim-reserves-files\" (lane).",
+  "created_at": "2026-08-25T08:59:08.924Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 4,
+    "rationale": "The worker-cell prompt promises files are reserved at claim time; claims.rs reserves nothing, while finish_cap_and_release releases by (agent, cell). Close the asymmetry at the claim side.",
+    "updated_at": "2026-08-25T08:59:14.690Z",
+    "feature": "claim-reserves-files"
+  }
+}

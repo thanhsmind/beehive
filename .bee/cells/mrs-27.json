@@ -31,19 +31,52 @@
     "06e49368"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "mrs-w27",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "bee status prints every configured role and validates every configured role",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+    ],
+    "deviations": [
+      "Bound justification, measured not asserted: the printed role list is capped by a 120-character WIDTH budget, not a role count, then +N more (--json). Measured on the built binary — 12 short-named claude roles cost 153 chars of role text, the same 12 on opencode cost ~380; a count cannot tell those apart. The first suffix spelling (+N more (bee status --json for all)) cost 35 chars to drop 35 chars of short entries, so it was shortened.",
+      "Printed order changed and two existing assertions with it: order is now derived (slot_for_kind over DISPATCH_KINDS first, then map order), the same rule hooks::model_guard::role_slot_display uses. extraction reads third rather than second because no dispatch kind resolves it any more.",
+      "Fourth defect fixed, same family, one axis over: render.rs printed claude and opencode by hand out of the three RUNTIMES status carries, so a configured models.codex was invisible. A codex line prints when configured; absent when not, so no existing host gains an all-null row.",
+      "Reserved and edited one file outside the cell: status_full/build.rs, two call sites, because Problem.slot had to stop being &'static str for an open name set. Reserved under mrs-w27 before writing.",
+      "ADVICE_CLASS_SLOTS (advisor/review) deliberately LEFT closed, with the reason in code: those are bee's own door names and read-only is a property of what bee does there, not of any name an operator may choose."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T08:43:39.351Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T08:31:49.090Z"
+    "claimed_at": "2026-08-25T08:31:49.090Z",
+    "report": {
+      "outcome": "bee status prints every configured role and validates every configured role",
+      "commit": "a651b404",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee — green (2651 passed, 0 failed) — the bin target carries every status_full and drivers test the change reaches; the full declared run adds only the 2 pre-existing env-limited opencode_plugin_contracts reds (node cannot strip TypeScript natively), unchanged by this cell",
+      "deviations": [
+        "Bound justification, measured not asserted: the printed role list is capped by a 120-character WIDTH budget, not a role count, then +N more (--json). Measured on the built binary — 12 short-named claude roles cost 153 chars of role text, the same 12 on opencode cost ~380; a count cannot tell those apart. The first suffix spelling (+N more (bee status --json for all)) cost 35 chars to drop 35 chars of short entries, so it was shortened.",
+        "Printed order changed and two existing assertions with it: order is now derived (slot_for_kind over DISPATCH_KINDS first, then map order), the same rule hooks::model_guard::role_slot_display uses. extraction reads third rather than second because no dispatch kind resolves it any more.",
+        "Fourth defect fixed, same family, one axis over: render.rs printed claude and opencode by hand out of the three RUNTIMES status carries, so a configured models.codex was invisible. A codex line prints when configured; absent when not, so no existing host gains an all-null row.",
+        "Reserved and edited one file outside the cell: status_full/build.rs, two call sites, because Problem.slot had to stop being &'static str for an open name set. Reserved under mrs-w27 before writing.",
+        "ADVICE_CLASS_SLOTS (advisor/review) deliberately LEFT closed, with the reason in code: those are bee's own door names and read-only is a property of what bee does there, not of any name an operator may choose."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
