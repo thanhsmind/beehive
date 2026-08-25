@@ -92,7 +92,9 @@ every approval still happens per-candidate in the conversation.
 
 ## End every round on the count line
 
-The round's last line, with nothing after it:
+The round's last line in the conversation, with nothing after it — the
+rendered proposal file keeps its own ending
+(`references/grooming-reference.md` ("Proposal report")):
 
 ```
 <N> candidate(s) — <k> proposed, <r> ranked out. entropy <e> (<trend>).

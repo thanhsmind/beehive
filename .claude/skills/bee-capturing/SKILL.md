@@ -45,8 +45,16 @@ announce what settled, then record it:
 - A settlement that contradicts shipped behavior is recorded as "not
   yet implemented — see backlog", never stated as current.
 
-Close every task with a capture line or an explicit "nothing settled"
-(rule: agents-capture-line-at-close) — smallness is not an exemption. What deserves a record at all, and at what grain:
+Close every task with the capture line (rule:
+agents-capture-line-at-close) — smallness is not an exemption:
+
+```
+captured: <what settled> → <where it landed>.
+```
+
+When nothing settled, the line is verbatim and alone:
+`nothing settled.` — never padded into a summary of the work. What
+deserves a record at all, and at what grain:
 `.bee/expertise/decisions.md`.
 
 ## Scribe — keep area specs current

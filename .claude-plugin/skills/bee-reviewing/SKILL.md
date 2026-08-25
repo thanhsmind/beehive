@@ -66,6 +66,16 @@ report, grouped by axis, spec-axis group first — axes are never
 collapsed back into one undifferentiated ranked list. Record each
 finding as it settles: `bee reviews record --kind finding`.
 
+The report ends with ONE required line, the last line in the document:
+
+```
+<N> finding(s) — P1 <a>, P2 <b>, P3 <c> · axis: spec <s>, standards <t>.
+```
+
+When zero findings survive verification, that last line is verbatim —
+`No findings. Scope clean — <N> file(s), <M> capped cell(s) verified.` —
+never padded with observations to look like work.
+
 ## Verify the artifacts, not the story
 
 - Every capped behavior-change cell: read the verification evidence in
@@ -100,6 +110,22 @@ to the backlog (`bee backlog add`), never as blockers; if filing fails,
 write findings to `docs/history/<feature>/reports/residual-findings.md` —
 nothing evaporates. Close with `bee reviews record --kind decision`: that
 closes the review, not any feature; their already-closed state stays untouched.
+
+## Boundaries
+
+Review reports; it does not repair, decide, or close. Every excluded
+concern has one route:
+
+- **Fixing a finding** → a cell in the feature's worktree, claimed after
+  the report lands; a reviewer never edits the scope it read.
+- **Changing a locked decision** → the user, via `bee decisions log`. A
+  spec-axis finding names the gap against `CONTEXT.md` and stops there.
+- **Merging** → the human's answer to the merge question, then
+  `bee worktree merge`.
+- **Closing the feature** → `bee close`. Review closes its own record only.
+- **A learning worth keeping** → `bee-capturing`, never the report body.
+- **Work still in progress** → the next review, with this one stating the
+  exclusion reason.
 
 ## Hard rules
 
