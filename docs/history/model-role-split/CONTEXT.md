@@ -147,10 +147,7 @@ From the discovery reads. Downstream agents read these before planning.
 
 ### Deferred To Planning
 
-<!-- bee:not-a-deferral: every question in this section was answered by planning
-     and shipped on 2026-08-25; each carries its outcome inline below. The
-     section is a closed record of what planning decided, not a promise to act
-     later. -->
+<!-- bee:not-a-deferral: all five questions were answered by planning and shipped on 2026-08-25; each carries its outcome inline below, so this is a closed record of what planning decided, not a promise to act later. -->
 
 All five resolved. Outcomes recorded at close:
 
@@ -206,10 +203,7 @@ All five resolved. Outcomes recorded at close:
 
 ## Deferred Ideas
 
-<!-- bee:not-a-deferral: these three are recorded NON-GOALS, not postponed work.
-     Each names why it is out of scope — no consumer, charted out of scope, or
-     settled by an existing decision — and none promises a later delivery, so
-     none of them owes a trigger. -->
+<!-- bee:not-a-deferral: these three are recorded NON-GOALS, not postponed work — each names why it is out of scope (no consumer, charted out of scope, or settled by an existing decision) and none promises a later delivery. -->
 
 - **Capability as a declarative requirement** ("this work needs vision",
   "this needs long context") — the source read expresses capability as
@@ -225,9 +219,7 @@ All five resolved. Outcomes recorded at close:
 
 ## Handoff Note
 
-<!-- bee:not-a-deferral: this note describes which sections each downstream
-     stage READS. It documents the record's own machinery; it promises no
-     later work and owes no trigger. -->
+<!-- bee:not-a-deferral: this note describes which sections each downstream stage READS — it documents the record's own machinery and promises no later work. -->
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
