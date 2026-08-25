@@ -33,19 +33,53 @@
     "06e49368"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "mrs-w30",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Narrowed the dispatch escalation arm with !from_role so a cell declared role ceiling can no longer take the session model uncounted; added the two-layer test binding the ration predicate to the dispatch channel",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "Took fix (b) narrow prepare.rs over fix (a) reserve the name in validate.rs; recorded as decision 52ac81bf touching 97ce5225 — (a) puts a closed word back in D2 open set, inverts the existing D2-guard assertion in cells/tests.rs, and protects only cells authored after it lands while every stored role-ceiling cell keeps the bypass. The add-time assertion is therefore unchanged, deliberately, with the reason written beside it.",
+      "Chose fix (b) narrow prepare.rs over fix (a) reserve the name in validate.rs; recorded as decision 52ac81bf touching 97ce5225. (a) would put a closed word back in D2 open role set, invert the existing D2-guard assertion, and leave every already-stored role-ceiling cell bypassing the ration. The add-time assertion in cells/tests.rs is unchanged on purpose, with the reason written beside it.",
+      "New tests confirmed RED on pre-fix code before the fix landed: the_ration_and_the_dispatch_agree_on_which_cells_are_escalated failed at the c-role-ceiling row (ration says escalated=false, dispatch said true), and a_cell_role_of_ceiling_falls_through_the_resolver_but_the_flag_door_stays_open failed with model None instead of sonnet.",
+      "Landed the commit through the guard-prescribed temp-index route (GIT_INDEX_FILE plus commit-tree plus update-ref) because the plain staging and commit verbs are refused while 2 workers are live in this checkout; the commit carries only my five files.",
+      "Noted but NOT touched: verbs/drivers/guard.rs known_roles doc still says resolve_role answers ceiling with Resolved::Inherit, which the D5 resolver no longer does. That file is reserved by mrs-w32 and their in-flight diff already rewrites that same doc block.",
+      "sync-ack: No skill edit is owed: skills/bee-swarming/references/swarming-reference.md:368 already publishes the correct rule — Escalation is not a role, running on the session model is the cell escalate FLAG. This cell fixes the CODE to match that published text; the skill was right and the dispatch was wrong, so nothing the skills teach changes."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T09:45:58.794Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T09:33:30.760Z"
+    "claimed_at": "2026-08-25T09:33:30.760Z",
+    "sync_ack": "No skill edit is owed: skills/bee-swarming/references/swarming-reference.md:368 already publishes the correct rule — Escalation is not a role, running on the session model is the cell escalate FLAG. This cell fixes the CODE to match that published text; the skill was right and the dispatch was wrong, so nothing the skills teach changes.",
+    "report": {
+      "outcome": "Narrowed the dispatch escalation arm with !from_role so a cell declaring role ceiling falls through the resolver instead of taking the session model uncounted; the ration predicate and the dispatch channel now agree for every cell marking, proven by a new two-layer test checked red first",
+      "commit": "06e9509721c9c6a8267bdfbb58f8066c9a0b7ac3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=$HOME/.cargo/bin:$PATH cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs:: — green (1425 passed, 0 failed) — covers verbs::drivers (dispatch/resolver), verbs::cells (validation) and verbs::status_full (role_mix, ceiling_scarcity_warning), the three modules this fix touches or is read by; the 4 reds elsewhere in the binary are sibling worker mrs-w32 in-flight on hooks/model_guard.rs plus drivers/guard.rs (advisor removed from known_roles), not this cell",
+      "deviations": [
+        "Chose fix (b) narrow prepare.rs over fix (a) reserve the name in validate.rs; recorded as decision 52ac81bf touching 97ce5225. (a) would put a closed word back in D2 open role set, invert the existing D2-guard assertion, and leave every already-stored role-ceiling cell bypassing the ration. The add-time assertion in cells/tests.rs is unchanged on purpose, with the reason written beside it.",
+        "New tests confirmed RED on pre-fix code before the fix landed: the_ration_and_the_dispatch_agree_on_which_cells_are_escalated failed at the c-role-ceiling row (ration says escalated=false, dispatch said true), and a_cell_role_of_ceiling_falls_through_the_resolver_but_the_flag_door_stays_open failed with model None instead of sonnet.",
+        "Landed the commit through the guard-prescribed temp-index route (GIT_INDEX_FILE plus commit-tree plus update-ref) because the plain staging and commit verbs are refused while 2 workers are live in this checkout; the commit carries only my five files.",
+        "Noted but NOT touched: verbs/drivers/guard.rs known_roles doc still says resolve_role answers ceiling with Resolved::Inherit, which the D5 resolver no longer does. That file is reserved by mrs-w32 and their in-flight diff already rewrites that same doc block."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

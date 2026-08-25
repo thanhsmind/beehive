@@ -30,19 +30,47 @@
     "8dad7c2e"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "mrs-w32",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Refuse an unconfigured dispatch-door slot as a role name, and derive the two-agent pinned-type refusal from the agent table instead of the literal generation",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+    ],
+    "deviations": [
+      "known_roles now derives from the runtime table plus ceiling only; the slot_for_kind union is deleted rather than gated, because every gated insert would be a strict no-op against the table keys (default_models already seeds generation/review/extraction into every runtime)",
+      "open_role_config() and codex_spawn_rules asserted the defect (an unconfigured advisor accepted on claude and on codex); both fixtures now state their precondition and the negative case moved to a named regression test",
+      "cap ran with --inline-reason: the dispatcher never registered worker mrs-w32 in state.json workers[], and bee state worker add refuses inside a granted feature worktree",
+      "follow-up outside this cell's files: onboard/templates.rs default_config table still reads reachable-with-no-config-key = yes for advisor, now false. Doc comment only; its conclusion (ship no advisor default) is unchanged."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T09:47:24.896Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T09:35:02.809Z"
+    "claimed_at": "2026-08-25T09:35:02.809Z",
+    "inline_reason": "Dispatched worker mrs-w32 ran this cell in the granted worktree, but the dispatcher never registered it in state.json workers[]; bee state worker add refuses inside a granted feature worktree (control plane lives in main), so the worker cannot self-register. Not an inline run.",
+    "report": {
+      "outcome": "Refuse an unconfigured dispatch-door slot as a role name, and derive the two-agent pinned-type refusal from the agent table instead of the literal generation",
+      "commit": "c2ef2f9f708b82ff6dfc24e8c52b7f4bf6064767",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (bin unit suite 2654 passed 0 failed, every other target 0 failed; opencode_plugin_contracts fails 2 env-limited, no node on PATH, pre-existing) — the cell's own declared verify, run whole because known_roles is the shared role-legality predicate both dispatch doors read",
+      "deviations": [
+        "known_roles now derives from the runtime table plus ceiling only; the slot_for_kind union is deleted rather than gated, because every gated insert would be a strict no-op against the table keys (default_models already seeds generation/review/extraction into every runtime)",
+        "open_role_config() and codex_spawn_rules asserted the defect (an unconfigured advisor accepted on claude and on codex); both fixtures now state their precondition and the negative case moved to a named regression test",
+        "cap ran with --inline-reason: the dispatcher never registered worker mrs-w32 in state.json workers[], and bee state worker add refuses inside a granted feature worktree",
+        "follow-up outside this cell's files: onboard/templates.rs default_config table still reads reachable-with-no-config-key = yes for advisor, now false. Doc comment only; its conclusion (ship no advisor default) is unchanged."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 262 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
