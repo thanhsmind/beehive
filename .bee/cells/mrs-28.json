@@ -1,0 +1,53 @@
+{
+  "id": "mrs-28",
+  "feature": "model-role-split",
+  "lane": "small",
+  "role": "docs",
+  "title": "Make the fall-through promise true everywhere it is written",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+    "docs/handbook/stages/planning.md",
+    "docs/config-reference.md",
+    ".bee/config-sample.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+  ],
+  "action": "mrs-24 (commit bc518499, decision fef79243) narrowed the code/read warn exemption into a MIGRATION WINDOW: an unconfigured role falls through and WARNS, except for the names code and read on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, which shuts the moment the operator configures either key. mrs-24 fixed the FIX text in validate.rs to say exactly that, and capped with --sync-ack because the same un-narrowed promise is written in six other places it did not own: planning-reference.md around :167 and :215, swarming-reference.md around :378, cells-authoring-and-revision.md, docs/handbook/stages/planning.md, and .bee/config-sample.json. docs/config-reference.md is also in scope: mrs-25 rewrote it an hour before mrs-24 landed, so its fall-through-and-warns sentence is now incomplete rather than wrong. READ validate.rs's FIX text first and make every one of these agree with it — do not invent a seventh wording. Keep it proportionate: most of these want one clause, not a paragraph; only the config reference plausibly wants the full window explained. Do NOT hand-edit the mirror trees under .claude/, .codex-plugin/, .opencode/ and .claude-plugin/; run bee dev regen and let it write them, then bee dev release-manifest --check.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml devtools && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Every shipped statement of the fall-through rule matches validate.rs's FIX text, including the migration window",
+      "No seventh wording is invented; the surfaces agree with the code, not merely with each other",
+      "The mirrors are written by regen and release-manifest --check passes"
+    ]
+  },
+  "affects_skills": [
+    "bee-planning",
+    "bee-swarming"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "fef79243",
+    "06e49368"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

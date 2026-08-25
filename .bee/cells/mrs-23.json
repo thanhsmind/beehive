@@ -1,0 +1,65 @@
+{
+  "id": "mrs-23",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "test",
+  "title": "Make the safety tests able to fail",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "action": "An independent audit found the two tests that guard THE safety property of this whole feature cannot fail. The property: no existing host's dispatch changes model until the operator opts in. The tests are a_cell_role_nothing_configures_falls_through_to_the_historical_model and a_read_cell_falls_through_to_the_historical_read_model in drivers/tests.rs, and both drive off the fixture HOST_BEFORE_ROLES around tests.rs:5325, whose values are extraction haiku, generation sonnet, review opus. Those are BYTE-IDENTICAL to default_models(claude) at models.rs:79-83, and normalize_models seeds that same map before any config overlay — so the fixture is indistinguishable from an EMPTY config. What the tests actually assert is an unconfigured role lands on sonnet, which is true whether the resolver reads the host's table or ignores it entirely. If the tail lookup regressed to always reading default_models, both tests stay green. FIX: give the fixture model names that no default names — the audit suggests a value like opus-custom for generation — and assert the payload carries the HOST's value, so the test fails if the resolver stops reading the host table. Then do the same for the read path. ALSO: there is no codex variant anywhere in that block, and codex is where the bug would show, because its defaults are all null — add one. MUTATION CHECK, not optional: before you finish, break the property on purpose in your working copy (make the tail resolution ignore the host config and read default_models), confirm your retargeted tests go RED, then revert the break. Say on the cap that you ran it and what it showed. A test that passes for the wrong reason is exactly the silence this feature exists to remove — the mrs-18 worker ran the same check on a different test and found it had been unpinned for as long as it had existed. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "The fall-through tests fail when the resolver stops reading the host's configured model — proven by mutation, with the result stated on the cap",
+      "The fixture uses model names that appear in no built-in default, so config and default can be told apart",
+      "A codex variant exists, where the built-in defaults are null",
+      "No test is deleted or weakened; the assertions get stronger, not narrower"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "561e1bda",
+    "3c9d6262"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w23",
+    "outcome": "Retargeted the role fall-through tests onto host-only model values, added the codex variant and a fixture-integrity guard; mutation-checked red",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Mutation applied to verbs/drivers/models.rs (outside the cell files) as a temporary working-copy break; reserved it first, reverted it, and git status confirms it carries no diff",
+      "First mutation attempt (tail-only) was too broad and left the read path passing, because the read list falls through at index 1, not at the tail; narrowed it to any post-head step so all three tests bite"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T08:18:03.132Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T08:10:44.856Z",
+    "report": {
+      "outcome": "Retargeted the role fall-through tests onto host-only model values, added the codex variant and a fixture-integrity guard; mutation-checked red",
+      "commit": "f53c110f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers — green (243 passed, 0 failed, 4 ignored); mutation check: with a fall-through step reading default_models instead of the host table, all three fall-through tests went RED (claude sonnet vs opus-custom, read sonnet vs haiku-custom, codex null vs gpt-5-custom), green again after revert — the drivers target is the only module the fixture and these tests live in",
+      "deviations": [
+        "Mutation applied to verbs/drivers/models.rs (outside the cell files) as a temporary working-copy break; reserved it first, reverted it, and git status confirms it carries no diff",
+        "First mutation attempt (tail-only) was too broad and left the read path passing, because the read list falls through at index 1, not at the tail; narrowed it to any post-head step so all three tests bite"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

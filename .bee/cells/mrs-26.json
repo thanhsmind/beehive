@@ -1,0 +1,73 @@
+{
+  "id": "mrs-26",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "role": "code",
+  "title": "Delete the third copy of the config parser",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "action": "D1 (store cd72ec97) exists because two parsers of one config shape had already drifted, and it says ONE parser owns the models.<runtime> shape. An audit found a THIRD live copy that no cell touched: normalize_models is re-implemented in verbs/status_full/store.rs around :465-494, hardcoding haiku, sonnet and opus as literals and keyed on a closed four-word list. Consequence, and this is a real user-visible bug rather than tidiness: bee status silently DROPS any role the operator configured outside those four words — so the operator who followed this feature's own advice and added models.claude.test sees nothing about it in status. The same file also hand-re-implements the review-inherits-generation fall-through in validate_agent_files_drift around :892-928, beside the AGENT_ROLES_BY_NAME table that already knows it. Collapse both onto the one parser in verbs/drivers. If status needs a different VIEW of the same data, that is a different function over one parse, not a second parse. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee status shows a role the operator configured outside the historical four names",
+      "One parser owns the models.<runtime> shape; status_full holds no second copy",
+      "The review-inherits-generation rule is read from the shared table, not restated",
+      "No closed list of model names remains in status_full"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "cd72ec97",
+    "06e49368"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w26",
+    "outcome": "status reads the one models parser; the third copy and its closed four-slot list are gone",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "Widened scope to status_full/mod.rs (deleted MODEL_NORMALIZE_SLOTS and EFFORT_LEVELS, dead once the copy went) and status_full/tests.rs (3 regression tests); both reserved under mrs-w26 first.",
+      "Kept the opencode SEED in status: drivers::default_models leaves opencode null, but the drift check compares against agent files that pin AGENT_TIER_DEFAULTS_OPENCODE. It is a default, not a parser — same split onboard::agents already uses.",
+      "Behaviour improvement not named by the cell: a composite {primary,fallback_policy,fallback} slot now resolves to its primary model in the drift check. The old copy read .get(\"model\") off the composite and reported a correctly-rendered file as stale.",
+      "Did not run a red-first demo of the bug: siblings mrs-w24/mrs-w25 are live in this worktree, so stashing to rebuild the old code was unsafe. The drop is a code-level fact — the old overlay walked MODEL_NORMALIZE_SLOTS and could not insert any other key."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T08:30:16.177Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T08:19:33.604Z",
+    "report": {
+      "outcome": "status reads the one models parser; the third copy and its closed four-slot list are gone",
+      "commit": "dc6e0c6d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — full suite as the cell demanded; only the 2 known env-limited opencode_plugin_contracts failures (no TS-capable node) remain, and the concurrency target passes alone (parallel-load flake)",
+      "deviations": [
+        "Widened scope to status_full/mod.rs (deleted MODEL_NORMALIZE_SLOTS and EFFORT_LEVELS, dead once the copy went) and status_full/tests.rs (3 regression tests); both reserved under mrs-w26 first.",
+        "Kept the opencode SEED in status: drivers::default_models leaves opencode null, but the drift check compares against agent files that pin AGENT_TIER_DEFAULTS_OPENCODE. It is a default, not a parser — same split onboard::agents already uses.",
+        "Behaviour improvement not named by the cell: a composite {primary,fallback_policy,fallback} slot now resolves to its primary model in the drift check. The old copy read .get(\"model\") off the composite and reported a correctly-rendered file as stale.",
+        "Did not run a red-first demo of the bug: siblings mrs-w24/mrs-w25 are live in this worktree, so stashing to rebuild the old code was unsafe. The drop is a code-level fact — the old overlay walked MODEL_NORMALIZE_SLOTS and could not insert any other key."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

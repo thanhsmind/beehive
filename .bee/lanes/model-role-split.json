@@ -14,12 +14,7 @@
   "next_action": "model-role-split: 23 cells capped on wt/model-role-split, but NOT complete — audit found the safety tests do not pin the safety property, D9's migration never ran, 4 decisions have unmet clauses, and the branch is 40 commits behind main and red on 2 non-environmental tests main already fixed.",
   "created_at": "2026-08-24T18:50:51.857Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "My 23 rows are closed. Nine remain from other sessions — not mine to touch.",
-    "asked_at": "2026-08-25T07:56:02.904Z",
-    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",

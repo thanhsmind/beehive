@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "wave-guard-gaps",
   "mode": null,
-  "phase": "planning",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"wave-guard-gaps\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at ed4f3b6; capture what settled, then bee close --feature wave-guard-gaps.",
+  "next_action": "Vendored .bee/bin/bee still carries the old guard; it picks up the fix at the next scripts/release.sh run.",
   "created_at": "2026-08-25T07:43:41.395Z",
   "run_state": "done",
   "waiting_on": null,
@@ -23,5 +23,15 @@
     "rationale": "Two guard gaps found by the skill-report-stamps wave: (1) affects_skills has an undocumented, unvalidated path format that only explodes at cap; (2) the concurrent-worker git guard resolves zero workers inside a granted worktree, so it is blind exactly where parallel workers run.",
     "updated_at": "2026-08-25T07:44:29.120Z",
     "feature": "wave-guard-gaps"
+  },
+  "last_scribing_run": {
+    "feature": "wave-guard-gaps",
+    "date": "2026-08-25",
+    "at": "2026-08-25T08:31:14.113Z",
+    "areas_synced": [
+      "worktree-parallelism",
+      "workflow-state"
+    ],
+    "next_action": "Vendored .bee/bin/bee still carries the old guard; it picks up the fix at the next scripts/release.sh run."
   }
 }

@@ -1,0 +1,82 @@
+{
+  "id": "mrs-24",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Close the warn gap that lets code and read resolve in silence",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "An audit found a locked decision violated and a user-facing text that lies about it. D2 (store 06e49368) says a role name nothing configures is WARNED, never silently accepted. ASKED_ROLES in models.rs exempts code and read from that warn, via role_is_unknown. On any host that has not opted in, a cell declaring role code — the FIRST word of the recommended vocabulary — resolves the generation model with NO warning: exactly the silently-accepted case D2 forbids. Worse, validate.rs's own FIX text promises the author that an unconfigured role falls through AND WARNS, which is false for the two names bee recommends first. The suppression was not arbitrary: mrs-9 added it because without it EVERY dispatch on an existing host warns, and a warning that always fires is one nobody reads — that reasoning is sound and is why this is a judgment cell, not a revert. Since then mrs-10 made a FRESH config ship code and read, so the gap only affects hosts that have not migrated. Weigh at least these and pick one, recording the choice as a decision with bee decisions log before you code: (a) warn once per process or per config rather than per dispatch, so it is heard without becoming noise; (b) keep the per-dispatch silence but make bee doctor or onboarding tell an un-migrated host to add the two keys, so the gap closes by migration rather than by warning; (c) narrow the exemption to the exact case that motivated it and let every other unconfigured name warn. Whatever you choose, validate.rs's FIX text must become TRUE — if some names do not warn, it must not promise they do. SECOND JOB, same file: D1 (store cd72ec97) says resolve_advisor collapses into the one parser, and it did not — it is still a standalone parser of the same value shapes beside resolve_configured. Collapse it, or record why it cannot be. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "No role name resolves silently in a way D2 forbids, or the exemption is narrowed to a case a recorded decision justifies",
+      "The FIX text a cell author reads is true for every name, including code and read",
+      "A warning that fires on every dispatch of an un-migrated host is not the outcome",
+      "resolve_advisor no longer duplicates the one parser, or the cap records why it must stay",
+      "The chosen resolution is logged with bee decisions log, not only explained on the cap"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "06e49368",
+    "4eaf1b71",
+    "cd72ec97"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w24",
+    "outcome": "Narrowed the code/read warn exemption to a per-runtime pre-roles migration window, made the missing-role FIX text true, and collapsed resolve_advisor onto the one leaf parser",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "Reserved and edited 2 files beyond the cell list: drivers/tests.rs (new window and advisor-parity tests) and cells/tests.rs (2 copies of the FIX string are pinned there byte-for-byte, so changing validate.rs alone is a red)",
+      "Chose option (c) narrowing over (a) and (b): a bee process IS one dispatch, so a per-process warn still fires every dispatch; (b) needs doctor.rs, outside this cell files. Recorded with alternatives as store fef79243",
+      "Left option (b) unbuilt: bee doctor should tell an un-migrated host to add the two keys. doctor.rs is outside this cell files and knows nothing of models config today — needs its own cell",
+      "Same promise, uncorrected, in 3 owned-skill lines (skills/bee-planning/references/planning-reference.md:167,:215; skills/bee-swarming/references/swarming-reference.md:378), 2 docs (docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md, docs/handbook/stages/planning.md) and .bee/config-sample.json. Capped with --sync-ack: the fix is a regen chain over 6 rendered trees and mrs-w25 holds the regen output reservation",
+      "resolve_advisor collapse adopts resolve_configured cli leniency for a {kind:cli} value with no command string (Cli with empty command instead of None). Unreachable through read_models: normalize_tier_value drops that leaf, so the slot is absent",
+      "sync-ack: The area's owned skills DO carry the same now-narrowed promise (skills/bee-planning/references/planning-reference.md:167,:215 and skills/bee-swarming/references/swarming-reference.md:378 all say an unconfigured role falls through and warns, with no exception), but that sentence is rendered into 6 skill trees plus .bee/config-sample.json and the fix is a bee dev regen chain — whose output tree is reserved by live sibling mrs-w25 (registry_payload.json) right now. Editing through that reservation is refused by contract, so the skill/doc sweep is handed back as its own cell rather than half-done here."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T08:30:04.320Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T08:19:33.547Z",
+    "sync_ack": "The area's owned skills DO carry the same now-narrowed promise (skills/bee-planning/references/planning-reference.md:167,:215 and skills/bee-swarming/references/swarming-reference.md:378 all say an unconfigured role falls through and warns, with no exception), but that sentence is rendered into 6 skill trees plus .bee/config-sample.json and the fix is a bee dev regen chain — whose output tree is reserved by live sibling mrs-w25 (registry_payload.json) right now. Editing through that reservation is refused by contract, so the skill/doc sweep is handed back as its own cell rather than half-done here.",
+    "report": {
+      "outcome": "Narrowed the code/read warn exemption to a per-runtime pre-roles migration window, made the missing-role FIX text true, and collapsed resolve_advisor onto the one leaf parser",
+      "commit": "bc518499",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (2641 unit + every integration target passed; only opencode_plugin_contracts fails 2, both self-reporting env-limited: node v24.19.0 cannot strip TypeScript natively) — the cell declared the full suite because the change touches the resolver every dispatch reads plus a FIX string pinned in another module",
+      "deviations": [
+        "Reserved and edited 2 files beyond the cell list: drivers/tests.rs (new window and advisor-parity tests) and cells/tests.rs (2 copies of the FIX string are pinned there byte-for-byte, so changing validate.rs alone is a red)",
+        "Chose option (c) narrowing over (a) and (b): a bee process IS one dispatch, so a per-process warn still fires every dispatch; (b) needs doctor.rs, outside this cell files. Recorded with alternatives as store fef79243",
+        "Left option (b) unbuilt: bee doctor should tell an un-migrated host to add the two keys. doctor.rs is outside this cell files and knows nothing of models config today — needs its own cell",
+        "Same promise, uncorrected, in 3 owned-skill lines (skills/bee-planning/references/planning-reference.md:167,:215; skills/bee-swarming/references/swarming-reference.md:378), 2 docs (docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md, docs/handbook/stages/planning.md) and .bee/config-sample.json. Capped with --sync-ack: the fix is a regen chain over 6 rendered trees and mrs-w25 holds the regen output reservation",
+        "resolve_advisor collapse adopts resolve_configured cli leniency for a {kind:cli} value with no command string (Cli with empty command instead of None). Unreachable through read_models: normalize_tier_value drops that leaf, so the slot is absent"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

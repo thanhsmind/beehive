@@ -1,0 +1,46 @@
+{
+  "id": "mrs-29",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "role": "code",
+  "title": "Give one request one agent, and make the chain-gate test bite",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Two findings from an independent audit of this feature. (1) ROLE_AGENTS in drivers/guard.rs is still keyed on the HISTORICAL names, so which rendered agent a request gets depends on whether the host has migrated: on a host seeded by the new default_config, bee dispatch prepare --kind gather --role read returns general-purpose, while the SAME call on an un-migrated host returns bee-extract. One request, two answers, decided by config drift rather than by the request. Decide what the mapping should key on now that roles are open — the audit's framing is that a rendered agent serves a JOB, and the job words are the ones an operator now writes — and make one request give one agent. Verify the two-host claim yourself with the built binary at packages/bee-rs/target/release/bee before fixing, so the cap records the real before-state. (2) The plan named a test without which this feature is not implemented: a red test result never advances a fallback chain. What shipped at drivers/tests.rs around :5744 asserts that two constants in the same file are disjoint sets — a spelling check, not a behaviour pin. Since decision 51341f84 makes the chain a contract bee PUBLISHES rather than a loop bee runs, the honest pin is on the PUBLISHED payload: a dispatch's published gate must place every semantic failure class in never_advance_on and none of them in advance_on, asserted against the payload a caller actually receives, not against the constants that built it. Write that. If you conclude the behaviour genuinely cannot be pinned from bee's side because bee never executes, say so plainly on the cap — that is a real finding and better than a test that agrees with itself. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "The same dispatch request returns the same rendered agent on a migrated and an un-migrated host",
+      "The chain-gate test asserts over a published payload a caller receives, not over two constants in the test's own file",
+      "If the semantic-failure guarantee cannot be pinned from bee's side, the cap says so plainly rather than shipping a self-agreeing test"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "8dad7c2e",
+    "50808d48",
+    "51341f84"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
