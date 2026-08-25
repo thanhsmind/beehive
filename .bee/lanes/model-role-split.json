@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "model-role-split",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"model-role-split\" started at phase \"exploring\" (lane).",
-  "next_action": "Judge door is the only blocker left: 25 behavior_change cells need independent judge verdicts.",
+  "next_action": "bee close finished \"model-role-split\" — feature is closed.",
   "created_at": "2026-08-24T18:50:51.857Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
