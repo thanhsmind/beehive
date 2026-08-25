@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12]
+  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1]
   sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
 ---
@@ -71,7 +71,25 @@ unchanged in force — the 40 percent share refusal and its persisted reason,
 where exactly 40 percent passes and 43 percent refuses. All 22 cells that carried
 information in `tier` meant budget rather than model choice, and 20 of them said
 `ceiling`. Holding cost apart also preserves decision `0015` with no carve-out:
-`ceiling` is not a role name at all, so the open set needs no exception for it.
+`ceiling` is not a role name at all, so the open set needs no exception for it —
+and since role-edge-hardening D1, `0015` has teeth: a configured
+`models.<rt>.ceiling` key is named by the config validator for every value
+shape, with a teach line pointing at `bee cells escalate`, instead of being
+silently accepted and then poisoning a dispatch with the marker-plus-model
+pair the guard denies.
+
+**B5a — The escalation answer has three spellings, and the explicit false
+wins** (escalate-off-disarm D1, escalate-off-disarm D2). `escalate: true`
+means escalated; the legacy `tier: "ceiling"` string still reads as escalated
+so a store that never ran the migration is unchanged; and an explicit
+`escalate: false` means **disarmed** and outranks the legacy read everywhere —
+the ration counter, the preamble's counter, and the migration pass, which
+treats a present flag key of either value as final. The disarm door writes the
+explicit false only on cells that carry the legacy spelling; every other cell
+keeps absent-means-absent. Before this, `bee cells escalate --off` reported
+success and disarmed nothing on exactly the 20 cells the live backfill
+converted, and a later pass re-armed even a hypothetically effective disarm —
+the red test's own output showed a recorded `false` flipped back to `true`.
 
 **B6 — Accounting follows the split** (model-role-split D6, store `97ce5225`).
 The tier-mix count at close becomes a role mix plus an escalation share, and the
@@ -131,9 +149,20 @@ silently dropped — the answer is in `docs/history/model-role-split/plan.md`
 Every rule above refuses or warns rather than resolving silently, with a single
 exception that is deliberate and bounded: `code` or `read` asked on a runtime
 whose `models.<runtime>` configures neither of them. That is the pre-roles
-migration window, and it closes the moment either key is configured. It exists so
-that a host which has not yet opted into roles keeps working unchanged. Its
-boundary is currently unpinned by any test — a known gap, filed as a P2.
+migration window, and it closes the moment either key is **written** — an
+explicit null counts, because a written key means the operator knows the
+vocabulary, and a present-but-null name resolves Budget at its own slot rather
+than falling through (role-edge-hardening D1). The boundary is pinned by a
+test proven to fail under the exact mutation the r2 review said the suite
+would miss.
+
+Three more edges hardened by the same decision and by role-surface-cleanup D1:
+the ordered list never repeats a name, so the fall-through warn fires once per
+genuinely distinct next name; the advisor identity folds case at both doors,
+so a mis-cased `"Advisor"` key cannot make the marker door and `--kind
+advisor` answer differently; and a fallback-chain key that names neither a
+wildcard, a configured role, nor any resolvable model — a chain no dispatch
+can ever travel under — is warned by name instead of dying silently.
 
 ## Boundaries
 
