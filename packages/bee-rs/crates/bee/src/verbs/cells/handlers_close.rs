@@ -15,6 +15,10 @@ use crate::state as bstate;
 // copies of those match arms would drift, and the cap's dedup must agree
 // with the miner's own idea of what counts as the same deviation.
 use crate::verbs::knowledge::deviation_text;
+// hm-2 (docs/history/human-mailbox/CONTEXT.md D4): the entry layer a
+// clean stop appends to the moment it happens. See the three-stops map
+// above `record_cap_in_mailbox`.
+use crate::verbs::mailbox;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -559,6 +563,11 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     guard.release();
     let mut saved = saved?;
     release_claim_file_best_effort(root, id); // D1 Δ2: cap clears the claim
+    // D4 (human-mailbox): the cap is on disk and the claim is released —
+    // this stop has HAPPENED, so its entry is appended now, not gathered
+    // at the end of the run. Never refuses (D10), never conditional on
+    // arming (D9). See `record_cap_in_mailbox`.
+    record_cap_in_mailbox(root, f, &saved, &report_value);
     // merge-ready-fact D1: the cap that leaves NOTHING outstanding for this
     // feature is the one moment bee can know the feature is finished in its
     // worktree, so this is where the stored fact is written. Everything about
@@ -582,6 +591,105 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         map.insert("merge_ready".into(), merge_ready.unwrap_or(Value::Null));
     }
     Ok(saved)
+}
+
+// ── the human mailbox: D4's three clean stops ──────────────────────────────
+//
+// plan.md deferred one question to this cell: "cap, feature close and blocker
+// are three code paths; missing one silently truncates a letter." Traced
+// outward from this file, and written down here for the cells that wire the
+// two kinds hm-2 does not:
+//
+//   1. cap — `bee cells cap` and `bee cells finish` are ONE door.
+//      `run_cap(finish)` (this file) parses the flags; with `finish == false`
+//      it calls `cap_cell_from_flags(root, f, false)` directly, and with
+//      `finish == true` it detours through `run_finish` ->
+//      `finish_cap_and_release` (which re-roots the cell ledger onto the main
+//      checkout and releases reservations afterwards) into
+//      `cap_cell_from_flags(root, f, true)`. So ONE hook inside that function
+//      covers both verbs, and that hook is `record_cap_in_mailbox` below —
+//      the only stop wired today.
+//   2. feature close — `bee close --feature <f>`: `verbs/drivers/close.rs`
+//      `run_close` -> `close_handler(root, feature, dry_run, …)`. One door
+//      too, but with a fork the cap has no equivalent of: `--dry-run` lists
+//      the doors, writes nothing and stops nothing, so it must append
+//      NOTHING. The entry belongs on the non-dry-run tail, once the doors
+//      have passed. (D14's feature-close LETTER is phase 4; the feature-close
+//      ENTRY is what `mailbox::KIND_FEATURE_CLOSE` is for.)
+//   3. blocker — `bee cells block --id <id> --reason <why>`: `run_block`
+//      (this file) -> `mutate_cell(root, id, "blockCell", …)`, which writes
+//      `status: "blocked"` and `trace.blocked_reason` under the per-cell
+//      lock. The stop is complete when `mutate_cell` returns the cell, and
+//      the reason it just stored is the sentence's raw material.
+//
+// Deliberately NOT stops: `cells drop` (work abandoned, not done), `cells
+// unclaim` and `cells reopen` (a claim moved; nothing finished), and
+// `bee close --dry-run` above. A letter reports what a run DID.
+
+/// D4/D8/D9 (docs/history/human-mailbox/CONTEXT.md): record this cap as one
+/// human-mailbox entry, THE MOMENT the cap lands.
+///
+/// Called after the cell file is written and the claim released — the stop
+/// has happened, and nothing below may undo it. That ordering is the whole
+/// point of D4's entry layer: a run that dies at 3am must still leave
+/// everything up to the moment it died, so an entry is appended per stop
+/// rather than gathered at the end of a run.
+///
+/// UNCONDITIONAL, by D9: every session appends its entries, attended or not.
+/// Arming (`mailbox::armed`) decides only whether a letter is composed at the
+/// end of the run — a session that starts attended and becomes an overnight
+/// run must carry a complete record of its whole span, which it cannot do if
+/// the appends waited for the arming answer.
+///
+/// FAIL-OPEN, by D10: `mailbox::record_stop` warns and returns. A cap in a
+/// run that files no letter keeps the byte-identical behaviour it had before
+/// this feature — nothing here refuses a cap, and no cap flag changes shape.
+fn record_cap_in_mailbox(root: &Path, f: &CapFlags, capped: &Value, report: &Value) {
+    // The run is the SESSION's span (D9, D12 — see `mailbox::run_id`): the
+    // caller's own session, resolved through the ordinary chain, and the
+    // claim's recorded session when this process has no session of its own
+    // (a cap typed in a plain shell for a cell a session claimed).
+    let session = resolve_session_flag_env(f.session_flag.as_deref()).or_else(|| {
+        match capped.get("trace").and_then(|t| t.get("claim_session")) {
+            Some(Value::String(s)) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
+            _ => None,
+        }
+    });
+    let run = mailbox::run_id(session.as_deref());
+
+    // Everything below is already in hand — the cap invents nothing.
+    let report_line = |key: &str| match report.get(key) {
+        Some(Value::String(s)) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
+        _ => None,
+    };
+    let entry = mailbox::Entry {
+        at: utc_now(),
+        kind: mailbox::KIND_CAP.to_string(),
+        // D8: the plain-language sentence is written HERE, at the moment of
+        // the event, never at composition.
+        what: mailbox::cap_sentence(
+            f.outcome.as_deref(),
+            capped.get("title").and_then(Value::as_str),
+        ),
+        files: f.files_changed.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+        // "none" is the Result form's own word for "no commit", not a sha.
+        commit: report_line("commit").filter(|c| c != "none"),
+        // D8's proof line, exactly as the worker recorded it.
+        proof: report_line("tests"),
+        // Only a report deviation that already carries D5's three parts can
+        // be read as a departure. A free-form line has no `why` and no
+        // `kind`, and inventing either would be authoring (D8) — phase 2
+        // makes the three parts the required shape.
+        departure: report
+            .get("deviations")
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.iter().find_map(mailbox::Departure::from_value)),
+        // D13's Needs-your-call items have no source at a cap: a cap records
+        // finished work, and a question that blocks something is a blocker
+        // (stop kind 2 above) or a gate. Empty rather than guessed.
+        needs_you: Vec::new(),
+    };
+    mailbox::record_stop(root, &run, &entry);
 }
 
 pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
@@ -1167,4 +1275,130 @@ pub(crate) fn run_tier(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option
         );
         Ok(Out::Emit(cell, text, 0))
     })
+}
+
+// ── the mailbox hook at a cap (hm-2) ───────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const PROOF: &str = "cargo test -p bee — green — the cap hook only";
+
+    fn mailbox_cell(root: &Path, id: &str) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({
+            "id": id, "feature": "human-mailbox", "title": "the store that holds a letter",
+            "action": "a", "verify": "cargo test", "lane": "tiny", "status": "claimed",
+            "deps": [], "files": [], "trace": {},
+        });
+        std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    fn mailbox_cap_flags(id: &str, outcome: &str) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: Some(outcome.to_string()),
+            friction: None,
+            files_changed: vec![json!("packages/bee-rs/crates/bee/src/verbs/mailbox.rs")],
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            // Pinned so the run this test reads back can never depend on a
+            // BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID the test process inherited.
+            session_flag: Some("mb-run".to_string()),
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: Some(
+                json!({
+                    "outcome": "o",
+                    "commit": "abc1234",
+                    "files": [],
+                    "tests": PROOF,
+                    "deviations": [
+                        "a free-form line with no three parts",
+                        {
+                            "what": "Recorded the sentence at the stop",
+                            "why": "The composing pass may not author",
+                            "kind": "found a better route",
+                        },
+                    ],
+                })
+                .to_string(),
+            ),
+            sync_ack: None,
+        }
+    }
+
+    #[test]
+    fn a_cap_appends_its_mailbox_entry_the_moment_it_lands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+
+        // D9: this checkout is not armed — no herding block, no owner
+        // switch — and it still records everything.
+        assert!(!crate::verbs::mailbox::armed(root));
+
+        mailbox_cell(root, "mb-1");
+        let capped =
+            cap_cell_from_flags(root, &mailbox_cap_flags("mb-1", "Taught bee to write a note"), false)
+                .unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 1, "the cap appended exactly one entry");
+        let entry = &entries[0];
+        assert_eq!(entry.kind, "cap");
+        // D8: the sentence, written at the moment, is the human line the cap
+        // already carried.
+        assert_eq!(entry.what, "Taught bee to write a note");
+        assert_eq!(entry.files, vec!["packages/bee-rs/crates/bee/src/verbs/mailbox.rs".to_string()]);
+        assert_eq!(entry.commit.as_deref(), Some("abc1234"));
+        assert_eq!(entry.proof.as_deref(), Some(PROOF));
+        let departure = entry.departure.as_ref().expect("the three-part report deviation is read");
+        assert_eq!(departure.kind, "found a better route");
+        assert!(!entry.at.is_empty(), "the moment is recorded");
+
+        // A second stop in the same run appends beside the first, in order —
+        // one file per run, never one letter per stop (D11).
+        mailbox_cell(root, "mb-2");
+        cap_cell_from_flags(root, &mailbox_cap_flags("mb-2", "Wired the second stop"), false)
+            .unwrap();
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[1].what, "Wired the second stop");
+    }
+
+    #[test]
+    fn a_cap_whose_mailbox_cannot_be_written_still_caps() {
+        // D10: a cap in a run that files no letter behaves exactly as it did
+        // before this feature. `entries` occupied by a plain file makes every
+        // append fail; the cap must land anyway.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(crate::verbs::mailbox::mailbox_dir(root)).unwrap();
+        std::fs::write(crate::verbs::mailbox::entries_dir(root), "not a directory").unwrap();
+
+        mailbox_cell(root, "mb-3");
+        let capped =
+            cap_cell_from_flags(root, &mailbox_cap_flags("mb-3", "Landed anyway"), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert!(crate::verbs::mailbox::read_entries(root, "mb-run").is_empty());
+    }
+
+    #[test]
+    fn a_cap_with_no_outcome_falls_back_to_the_title_in_the_mailbox() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-4");
+        let mut flags = mailbox_cap_flags("mb-4", "");
+        flags.outcome = None;
+        cap_cell_from_flags(root, &flags, false).unwrap();
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries[0].what, "Finished the store that holds a letter.");
+    }
 }

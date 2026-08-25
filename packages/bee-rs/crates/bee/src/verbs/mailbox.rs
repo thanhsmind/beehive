@@ -213,7 +213,12 @@ impl Departure {
         json!({ "what": self.what, "why": self.why, "kind": self.kind })
     }
 
-    fn from_value(v: &Value) -> Option<Self> {
+    /// Crate-visible because the moment a departure can be READ is the
+    /// moment of the stop itself (D8): the cap turns a worker's own
+    /// structured `{what, why, kind}` report entry into this shape while it
+    /// still has it in hand. A free-form one-line deviation carries no three
+    /// parts to read, so it stays out — narrowing it here would be authoring.
+    pub(crate) fn from_value(v: &Value) -> Option<Self> {
         let m = v.as_object()?;
         Some(Self {
             what: m.get("what")?.as_str()?.to_string(),
@@ -283,9 +288,16 @@ impl LetterItem {
 
 // ─── the entry (D4, D8) ─────────────────────────────────────────────────
 
-/// The three clean stops D4 names. Which code path reaches which is hm-2's
-/// question; the store only has to name them.
-pub(crate) const ENTRY_KINDS: [&str; 3] = ["cap", "feature-close", "blocker"];
+/// The three clean stops D4 names.
+///
+/// Which code path reaches which is answered in
+/// `verbs/cells/handlers_close.rs`, above `record_cap_in_mailbox` — one map
+/// of all three, written beside the hook that exists. Only [`KIND_CAP`] is
+/// wired today (hm-2); the other two are wired by the cells that own them.
+pub(crate) const KIND_CAP: &str = "cap";
+pub(crate) const KIND_FEATURE_CLOSE: &str = "feature-close";
+pub(crate) const KIND_BLOCKER: &str = "blocker";
+pub(crate) const ENTRY_KINDS: [&str; 3] = [KIND_CAP, KIND_FEATURE_CLOSE, KIND_BLOCKER];
 
 /// One raw append written at a clean stop, before any letter exists.
 ///
@@ -404,6 +416,143 @@ pub(crate) fn runs_with_entries(root: &Path) -> Vec<String> {
     };
     names.sort();
     names
+}
+
+// ─── arming, and the run a stop belongs to (D4, D9, D11) ────────────────
+
+/// D9: is the mailbox ARMED for this run — will a letter be composed and
+/// filed when the run ends?
+///
+/// This NEVER gates an append. Every session appends its entries, attended
+/// or not (D9): a session that starts attended and becomes an overnight run
+/// must keep a complete record of its whole span, so the question below is
+/// asked at the END of a run, by the composing pass, and never at the moment
+/// of a stop.
+///
+/// TWO existing signals, both required, neither invented here:
+///
+///   1. `.bee/config.json`'s `herding` block (CONTEXT.md, Integration
+///      Points) — this checkout is set up to run unattended at all. Read
+///      through `state::read_config_raw`, so a `.bee/config.local.json`
+///      overlay counts here exactly as it does everywhere else.
+///   2. The owner's enable marker, `<main-root>/.bee/tmp/bee-herding.enable`,
+///      read through `herding::enable_marker_state` — the one function that
+///      already answers it. `docs/knowledge/areas/bee-herding/overview.md`
+///      calls that marker "the switch that arms the loop", and only the
+///      human ever sets it: it is this feature's own word "armed", already
+///      implemented and already understood.
+///
+/// Why both. Signal 1 alone answers "this checkout CAN run unattended",
+/// never "this run IS unattended" — any repo that configures herding would
+/// file a letter for every attended session, the exact case D9 excludes.
+/// Signal 2 alone would arm the mailbox in a checkout that never herds. No
+/// new switch is added for the human to learn, and no new key is read.
+pub(crate) fn armed(root: &Path) -> bool {
+    herding_configured(root) && owner_armed_the_loop(root)
+}
+
+/// Signal 1: a non-empty `herding` block in the merged config.
+fn herding_configured(root: &Path) -> bool {
+    match crate::state::read_config_raw(root).get("herding") {
+        Some(Value::Object(block)) => !block.is_empty(),
+        _ => false,
+    }
+}
+
+/// Signal 2: the owner's enable marker under `root`.
+///
+/// `root` is handed to `enable_marker_state` as the MAIN checkout root
+/// explicitly, which is both correct and cheap on this path: every caller
+/// today is a cap, and a cap resolves its store root to the main checkout
+/// already (`cells cap` refuses inside a granted worktree; `cells finish`
+/// resolves the cell ledger to `StoreRoots::main_root()`). Passing it
+/// explicitly also keeps the answer free of the `git rev-parse
+/// --git-common-dir` child process the `None` form spawns — a stop must not
+/// pay for a subprocess to learn whether a letter will be written.
+fn owner_armed_the_loop(root: &Path) -> bool {
+    let Some(main_root) = root.to_str() else { return false };
+    crate::herding::enable_marker_state(Some(main_root)).get("enabled").and_then(Value::as_bool)
+        == Some(true)
+}
+
+/// The run of a stop that resolves no session of its own. A nameless run
+/// still gets its entries (D4 — the record must survive everything), just in
+/// one clearly-labelled bucket rather than silently dropped.
+pub(crate) const UNATTRIBUTED_RUN: &str = "unattributed";
+
+/// The run this stop belongs to (D11: one letter, one run).
+///
+/// A run is a SESSION's span. Both decisions that speak about a run's edges
+/// say so in sessions: D9 ("every session appends its entries … its whole
+/// span") and D12 ("gets its letter from the NEXT session that starts").
+/// So the run id is the caller's session id, resolved by the caller through
+/// the ordinary chain (`--session-id`, then `BEE_SESSION_ID`, then
+/// `CLAUDE_CODE_SESSION_ID`, then the claim's own recorded session) and
+/// handed in here — this function only normalises it, so nothing about
+/// reading the environment hides inside the store.
+///
+/// Deliberately NOT the herding job id (`BEE_HERDING_JOB_ID`): one
+/// unattended night dispatches many jobs, and a letter per job would shatter
+/// the night into fragments D11 exists to keep whole.
+pub(crate) fn run_id(session: Option<&str>) -> String {
+    match session.map(str::trim) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => UNATTRIBUTED_RUN.to_string(),
+    }
+}
+
+/// D8's plain-language sentence for a capped piece of work, written HERE —
+/// at the moment of the stop. The end-of-run pass may reorder, group and
+/// drop, and may never state a fact no stored entry carries, so the sentence
+/// cannot be deferred to it: an entry that stored only raw material would
+/// force the composer to author, which D8 forbids.
+///
+/// Preference order is "the most human line already on hand": the cap's own
+/// `--outcome` (a person wrote it as one line about what happened), then the
+/// cell's title, then a last resort that says only what is certainly true.
+/// The line is taken VERBATIM — never re-worded — for the same reason: this
+/// is the one moment the words may be chosen, and they belong to whoever
+/// wrote them.
+///
+/// The [`BEE_VOCABULARY`] floor is NOT applied here. That floor is D2's
+/// validity rule for a letter's SUBJECT (`check_subject`), the row a human
+/// reads in an inbox; an entry is raw material and keeps the human's own
+/// words even when they say "cell". Choosing a readable subject out of these
+/// sentences is the composing pass's own job.
+pub(crate) fn cap_sentence(outcome: Option<&str>, title: Option<&str>) -> String {
+    if let Some(line) = first_line(outcome) {
+        return line;
+    }
+    match first_line(title) {
+        Some(t) if t.ends_with('.') || t.ends_with('!') || t.ends_with('?') => {
+            format!("Finished {t}")
+        }
+        Some(t) => format!("Finished {t}."),
+        None => "Finished a piece of work.".to_string(),
+    }
+}
+
+/// The first non-empty line of `s`, trimmed. A subject is one line (D2), and
+/// a subject is later chosen out of these sentences.
+fn first_line(s: Option<&str>) -> Option<String> {
+    let s = s?;
+    s.lines().map(str::trim).find(|l| !l.is_empty()).map(str::to_string)
+}
+
+/// Append at a clean stop, FAIL-OPEN.
+///
+/// The stop being recorded has ALREADY happened — the cap is on disk, the
+/// blocker is recorded, the feature is closed. D10's promise that a run
+/// which files no letter behaves exactly as it did before this feature is
+/// unconditional, so no failure to record a mailbox entry may turn a landed
+/// stop into a refusal. The failure is still SAID (a silent gap in a letter
+/// is worse than a noisy one) and it names what the human will miss.
+pub(crate) fn record_stop(root: &Path, run: &str, entry: &Entry) {
+    if let Err(err) = append_entry(root, run, entry) {
+        eprintln!(
+            "bee: could not record the human-mailbox entry for run \"{run}\" ({err}) — the work itself is recorded; this step will be missing from that run's letter."
+        );
+    }
 }
 
 // ─── the letter (D2, D3, D6) ────────────────────────────────────────────
@@ -1227,6 +1376,118 @@ mod tests {
             write_letter(root, &letter).unwrap_err(),
             LetterWriteError::Invalid(LetterInvalid::UnknownStatus(_))
         ));
+    }
+
+    // ── D9: arming, and D11's run identity ──────────────────────────────
+
+    fn write_config(root: &Path, text: &str) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), text).unwrap();
+    }
+
+    fn arm_the_loop(root: &Path) {
+        std::fs::create_dir_all(root.join(".bee").join("tmp")).unwrap();
+        std::fs::write(root.join(".bee").join("tmp").join("bee-herding.enable"), "").unwrap();
+    }
+
+    #[test]
+    fn arming_needs_both_the_herding_block_and_the_owner_switch() {
+        // Neither signal on its own arms the mailbox: a configured checkout
+        // that nobody switched on is an ATTENDED session (D9 files no letter
+        // for it), and an owner switch in a checkout with no herding block
+        // has no unattended run to describe.
+        for (config, switch, expected) in [
+            (r#"{}"#, false, false),
+            (r#"{"herding": {"agent_command": "claude-sonnet"}}"#, false, false),
+            (r#"{}"#, true, false),
+            (r#"{"herding": {}}"#, true, false),
+            (r#"{"herding": {"agent_command": "claude-sonnet"}}"#, true, true),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_config(root, config);
+            if switch {
+                arm_the_loop(root);
+            }
+            assert_eq!(
+                armed(root),
+                expected,
+                "config {config} with switch={switch} must read armed={expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_local_overlay_can_carry_the_herding_block() {
+        // The merged config is what everything else in bee reads, so an
+        // untracked `.bee/config.local.json` arms the mailbox exactly as the
+        // tracked file does.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{}"#);
+        std::fs::write(
+            root.join(".bee").join("config.local.json"),
+            r#"{"herding": {"agent_command": "claude-sonnet"}}"#,
+        )
+        .unwrap();
+        arm_the_loop(root);
+        assert!(armed(root), "the overlay's herding block counts");
+    }
+
+    #[test]
+    fn arming_never_gates_the_append() {
+        // D9: EVERY session appends its entries, attended or not — a session
+        // that starts attended and becomes an overnight run must keep a
+        // complete record of its whole span, so an unarmed checkout still
+        // records everything.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{}"#);
+        assert!(!armed(root));
+        record_stop(root, "run-attended", &sample_entry("2026-08-25T01:00:00.000Z", "Did a thing"));
+        let entries = read_entries(root, "run-attended");
+        assert_eq!(entries.len(), 1, "an unarmed run records its entries too");
+        assert_eq!(entries[0].what, "Did a thing");
+    }
+
+    #[test]
+    fn a_failed_append_is_said_out_loud_and_never_thrown() {
+        // The stop already happened, so the record can only ever warn (D10):
+        // `entries` occupied by a plain file makes every append fail.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(mailbox_dir(root)).unwrap();
+        std::fs::write(entries_dir(root), "not a directory").unwrap();
+        record_stop(root, "run-blocked", &sample_entry("2026-08-25T01:00:00.000Z", "Did a thing"));
+        assert!(read_entries(root, "run-blocked").is_empty());
+    }
+
+    #[test]
+    fn a_run_with_no_session_still_has_a_name() {
+        assert_eq!(run_id(Some("sess-9")), "sess-9");
+        assert_eq!(run_id(Some("  sess-9  ")), "sess-9");
+        assert_eq!(run_id(Some("   ")), UNATTRIBUTED_RUN);
+        assert_eq!(run_id(None), UNATTRIBUTED_RUN);
+    }
+
+    // ── D8: the sentence is written at the moment of the event ──────────
+
+    #[test]
+    fn the_sentence_prefers_the_human_line_already_on_hand() {
+        assert_eq!(
+            cap_sentence(Some("Taught bee to write a note when it stops"), Some("t")),
+            "Taught bee to write a note when it stops"
+        );
+        // Multi-line and padded outcomes still make ONE line (D2's shape).
+        assert_eq!(cap_sentence(Some("\n  first line \nsecond"), None), "first line");
+        // No outcome: the title, made into a sentence, punctuation kept.
+        assert_eq!(
+            cap_sentence(None, Some("the store that holds a letter")),
+            "Finished the store that holds a letter."
+        );
+        assert_eq!(cap_sentence(Some("   "), Some("a job.")), "Finished a job.");
+        // Nothing to go on: say only what is certainly true.
+        assert_eq!(cap_sentence(None, None), "Finished a piece of work.");
     }
 
     // ── the frontmatter reader ──────────────────────────────────────────
