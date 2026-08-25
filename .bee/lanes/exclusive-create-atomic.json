@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature": "exclusive-create-atomic",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"exclusive-create-atomic\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"exclusive-create-atomic\" (lane).",
+  "created_at": "2026-08-25T10:16:42.698Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Nothing to add. Checking whether the merge is unblocked yet.",
+    "asked_at": "2026-08-25T10:35:51.474Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "Two exclusive-create sites publish a visible empty file before writing its record, so a loser reading it gets a wrong holder (claims.rs:735) or no holder (reserve.rs:317). Fix both with temp-plus-link(2).",
+    "updated_at": "2026-08-25T10:16:42.709Z",
+    "feature": "exclusive-create-atomic"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T10:28:30.741Z",
+    "branch": "wt/exclusive-create-atomic",
+    "worktree_id": "beehive--wt--exclusive-create-atomic",
+    "uat": "approved",
+    "blocked_by": []
+  }
+}

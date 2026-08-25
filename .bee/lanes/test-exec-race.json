@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"test-exec-race\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 88c0b7f; capture what settled, then bee close --feature test-exec-race.",
+  "next_action": "Continue bee-planning for \"test-exec-race\" (lane).",
   "created_at": "2026-08-25T09:43:57.029Z",
-  "run_state": "done",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "I would take **1**. The scope is now small and well-understood, and the peer has offered an independent re-measure on a tree that never carr",
+    "asked_at": "2026-08-25T10:10:03.051Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+  },
   "route": {
     "class": "bugfix",
     "lane": "tiny",

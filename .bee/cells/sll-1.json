@@ -1,0 +1,46 @@
+{
+  "id": "sll-1",
+  "feature": "state-lock-lost-update",
+  "title": "Diagnose and fix the lost state.json entry during a stale-lock takeover",
+  "action": "Reproduce store_lock_survives_a_pre_seeded_stale_lock_without_wedging_or_double_entry solo with repetition, instrument the takeover in lock.rs to capture the actual interleaving that admits a second lock holder, name the mechanism from that evidence, then fix it. Remove all temporary instrumentation before capping. Two mechanisms are already eliminated in CONTEXT and must not be re-proposed without new evidence.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test concurrency",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "The mechanism that admits a second lock holder is named and backed by captured evidence, not inferred from reading.",
+      "store_lock_survives_a_pre_seeded_stale_lock_without_wedging_or_double_entry passes 40 consecutive SOLO runs with zero failures (pre-fix rate is about 1 in 10, so 20 runs would be too weak).",
+      "store_lock_serializes_concurrent_state_mutators_with_no_lost_update passes 20 consecutive solo runs.",
+      "A stale lock still never wedges the store: takeover keeps working and at least one racer completes.",
+      "No temporary instrumentation remains in the shipped diff.",
+      "One full-suite run is recorded green, offered as a record and never as the proof."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/lock.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+  ],
+  "acceptance": "The mechanism is evidenced and stated in the commit body; the stale-lock test passes 40/40 solo and its sibling 20/20; the takeover still prevents wedging; no instrumentation ships.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-sll-1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T10:41:43.446Z"
+  }
+}

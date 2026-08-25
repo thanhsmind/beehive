@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "state-lock-lost-update",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"state-lock-lost-update\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"state-lock-lost-update\" (lane).",
+  "created_at": "2026-08-25T10:40:43.042Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "A state worker add entry is lost during a stale-lock steal: w0 dies, state.json stays well-formed, ~9-12% solo on three trees. Two candidate mechanisms already eliminated by reading; needs instrumentation.",
+    "updated_at": "2026-08-25T10:40:43.052Z",
+    "feature": "state-lock-lost-update"
+  }
+}
