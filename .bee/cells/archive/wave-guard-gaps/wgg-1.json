@@ -76,6 +76,63 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "bare-name-refused-at-add-with-exact-replacement",
+            "status": "PASS",
+            "evidence": "Orchestrator ran the binary built from this cell's source against a probe cell carrying affects_skills [\"bee-reviewing\"]. Refusal: 'addCell: \"affects_skills\" entry \"bee-reviewing\" is not a repo-relative path under \"skills/\" ... FIX: \"bee-reviewing\" is a bare skill name; use \"skills/bee-reviewing/SKILL.md\" instead.' Nothing was written."
+          },
+          {
+            "id": "c2",
+            "name": "update-door-covered-too",
+            "status": "PASS",
+            "evidence": "Cell extended handlers_write.rs, the cells update door, so a backfill cannot smuggle a bare name past validation; covered by the cell's own new tests."
+          },
+          {
+            "id": "c3",
+            "name": "valid-paths-still-accepted",
+            "status": "PASS",
+            "evidence": "The three srs-* cells and both wgg-* cells were authored and capped through the same door with path-form or empty affects_skills and were accepted unchanged."
+          },
+          {
+            "id": "c4",
+            "name": "help-line-names-the-format",
+            "status": "PASS",
+            "evidence": "registry_payload.json was edited for the affects_skills help line; the cell ran --test registry_contracts green (10 passed) for the edited payload."
+          },
+          {
+            "id": "c5",
+            "name": "cap-door-comparison-unchanged",
+            "status": "PASS",
+            "evidence": "Scope limit held: sync_door.rs check (c) keeps its set comparison; only the refusal wording gained the bare-name resolution. No test asserting the comparison changed."
+          },
+          {
+            "id": "c6",
+            "name": "whole-batch-validation-contract-preserved",
+            "status": "PASS",
+            "evidence": "The probe dry-run reported both the new affects_skills failure AND the pre-existing regen-obligation failure in one call, then wrote nothing — the documented whole-batch behavior."
+          },
+          {
+            "id": "c7",
+            "name": "declared-suite-green",
+            "status": "PASS",
+            "evidence": "cargo test --release on the merged base: CARGO_EXIT=0, 2846 passed, 0 failed. Exit code read from cargo directly, not through a pipeline."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-25T08:32:44.742Z"
+      }
+    ]
   }
 }

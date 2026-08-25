@@ -823,5 +823,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-25T08:31:46.576Z"
+  },
+  "wave-guard-gaps": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-25T08:32:59.181Z"
   }
 }

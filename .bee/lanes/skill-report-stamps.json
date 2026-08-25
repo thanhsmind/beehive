@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "skill-report-stamps",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"skill-report-stamps\" started at phase \"planning\" (lane).",
-  "next_action": "Report shape is now a doctrine-layer concept; a fourth report-shaped skill should inherit or restate it.",
+  "next_action": "bee close finished \"skill-report-stamps\" — feature is closed.",
   "created_at": "2026-08-25T07:28:36.401Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "docs",
