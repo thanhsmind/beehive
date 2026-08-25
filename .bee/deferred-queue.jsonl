@@ -282,3 +282,4 @@
 {"ts":"2026-08-25T11:47:11.586Z","event":"complete","id":"49710bbd-0cbd-4f2f-b1ef-1cd9ea51e78b"}
 {"ts":"2026-08-25T11:47:12.056Z","event":"complete","id":"dd7541b5-3c09-4230-a1e7-12d7fa6a67d2"}
 {"ts":"2026-08-25T11:49:18.056Z","event":"add","id":"6a7df5c2-73d4-44f2-b8b9-0b9c0b1b8d4d","kind":"promote","feature":"state-lock-lost-update","cells":[],"areas":[],"files":["docs/history/state-lock-lost-update/promote-proposals.md"],"reason":"Promote proposal for \"state-lock-lost-update\" awaiting apply — docs/history/state-lock-lost-update/promote-proposals.md."}
+{"ts":"2026-08-25T11:49:48.688Z","event":"add","id":"ed163f9a-a297-4bc1-8ba2-f4b41f244ca9","kind":"promote","feature":"model-role-split","cells":[],"areas":[],"files":["docs/history/model-role-split/promote-proposals.md"],"reason":"Promote proposal for \"model-role-split\" awaiting apply — docs/history/model-role-split/promote-proposals.md."}
