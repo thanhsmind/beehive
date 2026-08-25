@@ -392,6 +392,71 @@ fn binary_freshness_catches_release_drift_when_package_versions_agree() {
     assert!(row.detail.contains("cargo build"), "{}", row.detail);
 }
 
+/// A file at `.bee/bin/bee` that cannot be executed at all — so
+/// `installed_binary_bee_version` returns `Failed` and no version is ever read.
+#[cfg(unix)]
+fn write_unprobeable_binary(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, "#!/bin/sh\nexit 0\n").unwrap();
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o644);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+/// A probe that could not run read no version, so the row must not claim the
+/// binary matches source. With nothing newer on disk there is no other
+/// evidence either, so the honest answer is unknown.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_is_unknown_when_the_probe_fails_and_nothing_is_newer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
+    let bin = root.join(".bee/bin/bee");
+    write_unprobeable_binary(&bin);
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
+    for path in source_inputs(&root) {
+        filetime::set_file_mtime(&path, older).unwrap();
+    }
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, None, "a failed probe must never report the binary as fresh: {}", row.detail);
+    assert!(
+        !row.detail.contains("matches source"),
+        "the detail must not claim a match it never read: {}",
+        row.detail
+    );
+    assert!(!row.detail.contains("2.18.0"), "no version was read: {}", row.detail);
+    assert!(row.detail.contains("rs-info"), "{}", row.detail);
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// A source input newer than the binary is real evidence of drift, and it still
+/// wins over a failed probe: not_ok with the existing newer-input detail.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_reports_not_ok_when_the_probe_fails_and_a_source_input_is_newer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
+    let bin = root.join(".bee/bin/bee");
+    write_unprobeable_binary(&bin);
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let newer = filetime::FileTime::from_system_time(bin_time + std::time::Duration::from_secs(60));
+    let stale_input = root.join("packages/bee-rs/crates/bee/src/main.rs");
+    filetime::set_file_mtime(&stale_input, newer).unwrap();
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, Some(false), "{}", row.detail);
+    assert!(
+        row.detail.contains("packages/bee-rs/crates/bee/src/main.rs"),
+        "{}",
+        row.detail
+    );
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
 /// No binary installed is `hook_handler`'s not_ok to report; this row stays
 /// unknown rather than repeating the same verdict under a second name.
 #[test]
