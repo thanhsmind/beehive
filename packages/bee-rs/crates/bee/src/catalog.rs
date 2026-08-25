@@ -504,6 +504,19 @@ mod tests {
         // NOT declared: each belongs to ONE `pane` subverb, and hanging six
         // names off the group entry would tell a caller they apply to all
         // twelve. The entry's description names them instead.
+        // 182 -> 182 (model-role-split D9, mrs-13): `cells backfill-roles`
+        // lands — the one-time migration that gives every stored cell
+        // written before `role` existed the role it would have carried. The
+        // count is deliberately UNCHANGED: it declares `--dry-run` and
+        // `--json` and nothing else, and both already mean here exactly what
+        // they mean everywhere else. Checked first: `--dry-run`
+        // (cells.add/close/tmp.sweep/worktree.prune/state.worker.prune/
+        // herding.run) already spells "report what this would do and write
+        // nothing", which is the whole of what this verb needs before it is
+        // applied; `--json` is the report switch every cells verb carries.
+        // Nothing new was invented, and nothing was needed: a migration verb
+        // that had to teach a caller a NEW word for "show me first" would be
+        // a worse migration verb.
         const PINNED_FLAG_COUNT: usize = 182;
 
         let names: std::collections::BTreeSet<&str> =

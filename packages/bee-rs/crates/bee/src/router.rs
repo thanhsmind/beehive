@@ -67,6 +67,8 @@ pub const PORTED: &[&str] = &[
     "test",
     "cells add|update|claim|unclaim|cap|finish|block|drop|reopen|tier",
     "cells judge|judge-record|reset-budget|schedule|archive|unarchive",
+    // model-role-split D9 — the one-time role backfill over the stored cells.
+    "cells backfill-roles [--dry-run]",
     "state worker add|update|remove|clear|prune",
     "state lanes",
     "state session list|bind|unbind|release",

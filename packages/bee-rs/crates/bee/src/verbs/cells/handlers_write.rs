@@ -1327,3 +1327,322 @@ pub(crate) fn claim_cell_cross_session_ex(
         }
     }
 }
+
+// ── cells backfill-roles ───────────────────────────────────────────────────
+//
+// D9 (store `4eaf1b71`, plan.md S5) — the ONE-TIME backfill that gives every
+// cell written before `role` existed the role it would have carried.
+//
+// WHY A VERB AND NOT LAZY-ON-READ. Three counters scan the whole store and
+// divide by what they find — `ceiling_share_after` (handlers_close.rs, the
+// 40% refusal), `status_full/cells.rs` and `hooks/session_preamble/store.rs`.
+// A store where half the records answer "role" and half answer nothing makes
+// every one of those denominators a lie, and the lie is silent. So the
+// migration is a single pass with a single answer: after it runs, every
+// readable stored cell carries a role.
+//
+// WHY IT IS IDEMPOTENT AND NOT MERELY RE-RUNNABLE. A cell that already
+// carries a non-blank `role` is not re-derived, not re-normalized and not
+// rewritten — its file is never opened for writing at all. That is what
+// makes a second run a no-op down to the byte, and it is what makes an
+// INTERRUPTED first run safe to finish by simply running again: the cells
+// already done are indistinguishable from cells authored with a role.
+//
+// WHY `ceiling` KEEPS ITS TIER. D5 turns `ceiling` into an escalation flag,
+// but that flag does not exist yet — it is the next slice. Until it lands,
+// the 40% ration still reads `cell["tier"]`, so a migration that rewrote or
+// dropped `ceiling` here would blind the ration in the window between this
+// change and the next. This verb touches exactly one field: `role`.
+//
+// NO COUNT IS HARDCODED. The decision measured 484 / 2 / 20 on 2026-08-24;
+// the store has grown since and will grow again. Every number below is
+// computed from the store the verb is handed, and nothing asserts a
+// remembered total.
+
+/// D9's mapping, in D9's own order, as `(source label, role)`. The label is
+/// the REASON a cell takes its role, reported per-source so an operator sees
+/// the shape of what is about to change rather than one lump total — and so
+/// a source with zero cells is reported AS zero rather than omitted (an
+/// absent row and an empty row must not read the same).
+pub(crate) const ROLE_BACKFILL_SOURCES: [(&str, &str); 4] = [
+    ("tier:generation", "code"),
+    ("no-tier", "code"),
+    ("tier:ceiling", "code"),
+    ("tier:extraction", "read"),
+];
+
+/// D9's mapping as a function of the cell's recorded `tier`.
+///
+/// `None` in, `Some("code")` out: an absent (or blank) tier is the 215-cell
+/// majority D4 measured, and D9 gives it the same role as `generation`.
+/// `None` OUT is the deliberate hole: a tier value outside the three legal
+/// ones is data this mapping has no answer for, and guessing "code" for it
+/// would be exactly the silent default D7 exists to end. Those cells are
+/// counted and NAMED instead, so a store that is not fully migrated says so.
+pub(crate) fn d9_role_for_tier(tier: Option<&str>) -> Option<&'static str> {
+    match tier.map(js_trim) {
+        None | Some("") => Some("code"),
+        Some("generation") => Some("code"),
+        Some("ceiling") => Some("code"),
+        Some("extraction") => Some("read"),
+        Some(_) => None,
+    }
+}
+
+/// The source label for a cell's recorded tier — the left column of
+/// `ROLE_BACKFILL_SOURCES`.
+pub(crate) fn d9_source_for_tier(tier: Option<&str>) -> &'static str {
+    match tier.map(js_trim) {
+        None | Some("") => "no-tier",
+        Some("generation") => "tier:generation",
+        Some("ceiling") => "tier:ceiling",
+        Some("extraction") => "tier:extraction",
+        Some(_) => "unmapped",
+    }
+}
+
+/// What one full pass found. `written` is separate from `assigned` on
+/// purpose: under `--dry-run` they differ (assigned N, written 0), and a
+/// reader who would otherwise confuse "planned" with "done" is the reader
+/// this split protects.
+#[derive(Default)]
+pub(crate) struct RoleBackfill {
+    pub(crate) scanned: u64,
+    pub(crate) already_roled: u64,
+    pub(crate) assigned: u64,
+    pub(crate) written: u64,
+    /// Per-source counts, positionally aligned with `ROLE_BACKFILL_SOURCES`.
+    pub(crate) by_source: [u64; 4],
+    /// `(id, tier)` for every cell whose tier D9's mapping does not cover.
+    pub(crate) unmapped: Vec<(String, String)>,
+    /// Store-relative paths of files that are absent, corrupt, or not a JSON
+    /// object — skipped and named, never guessed at.
+    pub(crate) unreadable: Vec<String>,
+}
+
+impl RoleBackfill {
+    /// Role totals folded out of the per-source counts, so the two can never
+    /// disagree.
+    pub(crate) fn by_role(&self) -> Vec<(&'static str, u64)> {
+        let mut out: Vec<(&'static str, u64)> = Vec::new();
+        for (i, (_, role)) in ROLE_BACKFILL_SOURCES.iter().enumerate() {
+            match out.iter_mut().find(|(r, _)| r == role) {
+                Some(slot) => slot.1 += self.by_source[i],
+                None => out.push((role, self.by_source[i])),
+            }
+        }
+        out
+    }
+
+    /// The `ceiling` cells whose tier this pass deliberately left in place.
+    pub(crate) fn ceiling_preserved(&self) -> u64 {
+        self.by_source[2]
+    }
+}
+
+/// Every stored cell file: the hot `.bee/cells/*.json` scan path AND
+/// `.bee/cells/archive/<feature>/*.json`.
+///
+/// The archive is in scope because D9 says "the stored cells", and a capped
+/// cell that was archived is stored history exactly as an active one is —
+/// `readCell` reaches it, `cells unarchive` brings it back live, and a role
+/// count taken after an unarchive would otherwise find a hole. Sorted by
+/// path so two runs over one store report their findings in one order.
+pub(crate) fn stored_cell_files(root: &Path) -> Vec<PathBuf> {
+    fn push_json_files(d: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(d) else { return };
+        for entry in entries.flatten() {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let name = entry.file_name();
+            if name.to_str().map(|n| n.ends_with(".json")).unwrap_or(false) {
+                out.push(entry.path());
+            }
+        }
+    }
+    let mut out: Vec<PathBuf> = Vec::new();
+    let dir = cells_dir(root);
+    push_json_files(&dir, &mut out);
+    let archive_root = dir.join(ARCHIVE_DIR_NAME);
+    if let Ok(features) = std::fs::read_dir(&archive_root) {
+        let mut feature_dirs: Vec<PathBuf> = features
+            .flatten()
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .map(|e| e.path())
+            .collect();
+        feature_dirs.sort();
+        for feature_dir in feature_dirs {
+            push_json_files(&feature_dir, &mut out);
+        }
+    }
+    out.sort();
+    out
+}
+
+/// A path rendered relative to the store root when it sits under one, so a
+/// report names `.bee/cells/x.json` rather than a machine-specific absolute.
+fn store_relative(root: &Path, file: &Path) -> String {
+    file.strip_prefix(root).unwrap_or(file).to_string_lossy().replace('\\', "/")
+}
+
+/// One full pass. Scans EVERY stored cell and builds the whole plan before
+/// it writes a single file, so the counts a caller reads describe the same
+/// store state the writes were derived from — a half-scanned store would
+/// misreport exactly the way a half-migrated one would.
+///
+/// Concurrency: the write half holds the `cells-archive` store lock for its
+/// duration — the same lock `writeCell` acquires (single-attempt) on every
+/// cell write and the same lock `archiveFeature` holds across a whole
+/// feature's move. So a concurrent `cells update`/`cap`/`claim` cannot
+/// half-write behind this pass: it takes its own `cells:<id>` lock, reaches
+/// `writeCell`, finds the archive lock held, and refuses with the typed
+/// CELLS_ARCHIVE_BUSY message that tells the caller to retry.
+pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
+    let mut report = RoleBackfill::default();
+    let mut plan: Vec<(PathBuf, Value)> = Vec::new();
+
+    for file in stored_cell_files(root) {
+        report.scanned += 1;
+        let cell = match read_json(&file) {
+            ReadJson::Parsed(Value::Object(map)) => map,
+            ReadJson::Parsed(_) | ReadJson::Missing | ReadJson::Corrupt => {
+                report.unreadable.push(store_relative(root, &file));
+                continue;
+            }
+        };
+        if nonblank_string(cell.get("role")) {
+            // Already carries a role — not re-derived, not rewritten, not
+            // even opened for writing. This IS the idempotence guarantee.
+            report.already_roled += 1;
+            continue;
+        }
+        let tier = cell.get("tier").and_then(|t| t.as_str());
+        let Some(role) = d9_role_for_tier(tier) else {
+            report
+                .unmapped
+                .push((js_string_or_undefined(cell.get("id")), tier.unwrap_or("").to_string()));
+            continue;
+        };
+        let source = d9_source_for_tier(tier);
+        if let Some(i) = ROLE_BACKFILL_SOURCES.iter().position(|(s, _)| *s == source) {
+            report.by_source[i] += 1;
+        }
+        report.assigned += 1;
+        let mut migrated = cell.clone();
+        // The ONLY field this migration touches. `tier` — `ceiling`
+        // included — is left exactly as the store recorded it: the D5
+        // escalation flag does not exist yet, and the 40% ration still
+        // counts `tier` until it does.
+        migrated.insert("role".into(), Value::String(role.to_string()));
+        plan.push((file, Value::Object(migrated)));
+    }
+
+    if dry_run {
+        return Ok(report); // `written` stays 0 — nothing was opened for writing
+    }
+
+    let mut guard = acquire_named_lock(root, "cells-archive")?;
+    let outcome = (|| -> MR<u64> {
+        let mut written = 0u64;
+        for (file, cell) in &plan {
+            write_json_atomic(file, cell).map_err(|e| {
+                Fail::Thrown(format!("cells backfill-roles: writing {} — {e}", file.display()))
+            })?;
+            written += 1;
+        }
+        Ok(written)
+    })();
+    guard.release();
+    report.written = outcome?;
+    Ok(report)
+}
+
+/// The report as JSON. `dry_run` leads because every other number is read
+/// differently depending on it.
+pub(crate) fn role_backfill_json(report: &RoleBackfill, dry_run: bool) -> Value {
+    let mut by_source = Map::new();
+    for (i, (source, _)) in ROLE_BACKFILL_SOURCES.iter().enumerate() {
+        by_source.insert((*source).to_string(), json!(report.by_source[i]));
+    }
+    let mut by_role = Map::new();
+    for (role, count) in report.by_role() {
+        by_role.insert(role.to_string(), json!(count));
+    }
+    json!({
+        "dry_run": dry_run,
+        "scanned": report.scanned,
+        "already_roled": report.already_roled,
+        "assigned": report.assigned,
+        "written": report.written,
+        "by_role": Value::Object(by_role),
+        "by_source": Value::Object(by_source),
+        "ceiling_preserved": report.ceiling_preserved(),
+        "unmapped": report
+            .unmapped
+            .iter()
+            .map(|(id, tier)| json!({"id": id, "tier": tier}))
+            .collect::<Vec<_>>(),
+        "unreadable": report.unreadable.clone(),
+    })
+}
+
+/// The human report. Every line is a count this pass measured; none of it is
+/// remembered from the decision that ordered the migration.
+pub(crate) fn role_backfill_text(report: &RoleBackfill, dry_run: bool) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "cells backfill-roles{}: {} stored cell(s) scanned, {} already carry a role, {} {} a role.",
+        if dry_run { " --dry-run" } else { "" },
+        report.scanned,
+        report.already_roled,
+        report.assigned,
+        if dry_run { "would take" } else { "took" }
+    ));
+    for (i, (source, role)) in ROLE_BACKFILL_SOURCES.iter().enumerate() {
+        lines.push(format!(
+            "  {:<16} -> role {:<5} {:>5}{}",
+            source,
+            role,
+            report.by_source[i],
+            if *source == "tier:ceiling" { "  (tier \"ceiling\" left untouched)" } else { "" }
+        ));
+    }
+    if !report.unmapped.is_empty() {
+        lines.push(format!(
+            "  {} cell(s) carry a tier D9 does not map and were left alone: {}",
+            report.unmapped.len(),
+            report
+                .unmapped
+                .iter()
+                .map(|(id, tier)| format!("{id} (tier \"{tier}\")"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !report.unreadable.is_empty() {
+        lines.push(format!(
+            "  {} unreadable file(s) skipped: {}",
+            report.unreadable.len(),
+            report.unreadable.join(", ")
+        ));
+    }
+    lines.push(if dry_run {
+        "Nothing was written. Re-run without --dry-run to apply; running it twice changes nothing the second time.".to_string()
+    } else {
+        format!("{} cell file(s) written. Re-running changes nothing.", report.written)
+    });
+    lines.join("\n")
+}
+
+/// `bee cells backfill-roles [--dry-run] [--json]`.
+pub(crate) fn run_backfill_roles(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["dry-run"]) {
+        return None;
+    }
+    let dry_run = bool_flag(&flags, "dry-run")?;
+    dispatch("cells backfill-roles", use_json, t0, move |ctx| {
+        let report = backfill_roles(&ctx.root, dry_run)?;
+        Ok(Out::Emit(role_backfill_json(&report, dry_run), role_backfill_text(&report, dry_run), 0))
+    })
+}

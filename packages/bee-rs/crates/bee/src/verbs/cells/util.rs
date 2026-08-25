@@ -83,6 +83,13 @@ pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option
         "archive" => run_archive(flags, use_json, t0),
         "unarchive" => run_unarchive(flags, use_json, t0),
         "claim-next" => run_claim_next(flags, use_json, t0),
+        // D9 (store `4eaf1b71`) — the one-time role backfill. Served here
+        // and DECLARED in generated/registry_payload.json in the same
+        // change: mrs-12 proved that a verb the dispatcher serves and the
+        // registry does not describe is reported unknown by
+        // `bee --help --all` and gives the CLI-shape guard no schema to
+        // validate a call against.
+        "backfill-roles" => run_backfill_roles(flags, use_json, t0),
         _ => None, // every unknown verb stays with Node
     }
 }

@@ -7307,3 +7307,289 @@ use std::time::Instant;
             "a reopen is a reopen, whichever door performs it"
         );
     }
+
+    // ── cells backfill-roles (model-role-split D9, store 4eaf1b71) ────────
+
+    /// Every stored cell file's exact bytes, keyed by path. Byte-level on
+    /// purpose: "the store did not change" is the claim these tests make,
+    /// and a parsed comparison would hide a reordered key or a rewritten
+    /// separator that a `git diff` on 500 files would not.
+    fn store_bytes(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+        let mut out = std::collections::BTreeMap::new();
+        for file in stored_cell_files(root) {
+            out.insert(file.to_string_lossy().into_owned(), std::fs::read(&file).unwrap());
+        }
+        out
+    }
+
+    fn write_archived_cell_fixture(root: &Path, feature: &str, id: &str, body: &Value) {
+        let dir = cells_archive_dir(root, feature);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(body)).unwrap();
+    }
+
+    fn roleless(id: &str, tier: Value) -> Value {
+        let mut cell = json!({"id": id, "title": id, "status": "capped", "lane": "tiny", "feature": "demo"});
+        if !tier.is_null() {
+            cell.as_object_mut().unwrap().insert("tier".into(), tier);
+        }
+        cell
+    }
+
+    /// A store whose shape is deliberately NOT the 484 / 2 / 20 the decision
+    /// measured on 2026-08-24: 11 cells — 3 `generation`, 3 no-tier,
+    /// 3 `ceiling`, 1 `extraction`, and 1 that already carries a role. If any
+    /// count in the verb were remembered rather than measured, this store is
+    /// where it shows.
+    fn backfill_store() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        std::fs::create_dir_all(cells_dir(&root)).unwrap();
+        for id in ["g-1", "g-2", "g-3"] {
+            write_cell_fixture(&root, id, &roleless(id, json!("generation")));
+        }
+        for id in ["n-1", "n-2"] {
+            write_cell_fixture(&root, id, &roleless(id, Value::Null));
+        }
+        for id in ["c-1", "c-2"] {
+            write_cell_fixture(&root, id, &roleless(id, json!("ceiling")));
+        }
+        write_cell_fixture(&root, "x-1", &roleless("x-1", json!("extraction")));
+        // Already roled, and roled AGAINST what D9 would have picked for its
+        // tier ("design" on a `generation` cell, where D9 says "code") —
+        // which is what proves the verb reads the role that is there rather
+        // than re-deriving one over the top of it.
+        let mut roled = roleless("r-1", json!("generation"));
+        roled.as_object_mut().unwrap().insert("role".into(), json!("design"));
+        write_cell_fixture(&root, "r-1", &roled);
+        // Archived history is stored history — D9 says "the stored cells".
+        write_archived_cell_fixture(&root, "old-feature", "a-1", &roleless("a-1", json!("ceiling")));
+        write_archived_cell_fixture(&root, "old-feature", "a-2", &roleless("a-2", Value::Null));
+        (tmp, root)
+    }
+
+    #[test]
+    fn d9_maps_every_legal_tier_and_refuses_to_guess_at_any_other() {
+        // The three legal tiers plus the absent one — D9's whole mapping.
+        assert_eq!(d9_role_for_tier(Some("generation")), Some("code"));
+        assert_eq!(d9_role_for_tier(None), Some("code"));
+        assert_eq!(d9_role_for_tier(Some("")), Some("code"));
+        assert_eq!(d9_role_for_tier(Some("  ")), Some("code"), "a blank tier is no tier");
+        assert_eq!(d9_role_for_tier(Some("ceiling")), Some("code"));
+        assert_eq!(d9_role_for_tier(Some("extraction")), Some("read"));
+        // The deliberate hole. A value outside the legal three is data this
+        // mapping has no answer for, and "code" is not a safe guess — it is
+        // the silent default D7 exists to end.
+        assert_eq!(d9_role_for_tier(Some("premium")), None);
+        assert_eq!(d9_role_for_tier(Some("Generation")), None, "the match is exact, not fuzzy");
+        // The source labels line up with the mapping, entry for entry.
+        for (source, role) in ROLE_BACKFILL_SOURCES {
+            let tier = match source {
+                "no-tier" => None,
+                other => Some(other.trim_start_matches("tier:")),
+            };
+            assert_eq!(d9_source_for_tier(tier), source, "{source}");
+            assert_eq!(d9_role_for_tier(tier), Some(role), "{source}");
+        }
+    }
+
+    #[test]
+    fn backfill_dry_run_reports_its_counts_and_writes_nothing() {
+        let (_tmp, root) = backfill_store();
+        let before = store_bytes(&root);
+        let report = backfill_roles(&root, true).expect("dry run must not refuse");
+
+        // Every number is measured off THIS store: 11 files, 1 already
+        // roled, 10 to assign. Nothing here is the decision's 484 / 2 / 20.
+        assert_eq!(report.scanned, 11);
+        assert_eq!(report.already_roled, 1);
+        assert_eq!(report.assigned, 10);
+        assert_eq!(report.written, 0, "--dry-run writes nothing, so `written` must stay 0");
+        assert_eq!(report.by_source, [3, 3, 3, 1], "generation / no-tier / ceiling / extraction");
+        assert_eq!(report.by_role(), vec![("code", 9), ("read", 1)]);
+        assert_eq!(report.ceiling_preserved(), 3);
+        assert!(report.unmapped.is_empty());
+        assert!(report.unreadable.is_empty());
+
+        assert_eq!(store_bytes(&root), before, "--dry-run must leave every byte of the store alone");
+        let text = role_backfill_text(&report, true);
+        assert!(text.contains("11 stored cell(s) scanned"), "{text}");
+        assert!(text.contains("10 would take a role"), "{text}");
+        assert!(text.contains("Nothing was written"), "{text}");
+        let obj = role_backfill_json(&report, true);
+        assert_eq!(obj["dry_run"], json!(true));
+        assert_eq!(obj["written"], json!(0));
+        assert_eq!(obj["by_source"]["tier:extraction"], json!(1));
+        assert_eq!(obj["by_role"]["read"], json!(1));
+    }
+
+    #[test]
+    fn backfill_applies_d9_and_leaves_ceiling_tiers_untouched() {
+        let (_tmp, root) = backfill_store();
+        let report = backfill_roles(&root, false).expect("apply must not refuse");
+        assert_eq!(report.assigned, 10);
+        assert_eq!(report.written, 10, "assigned and written agree once it is applied");
+
+        for id in ["g-1", "g-2", "g-3", "n-1", "n-2", "c-1", "c-2"] {
+            assert_eq!(read_cell_fixture(&root, id)["role"], json!("code"), "{id}");
+        }
+        assert_eq!(read_cell_fixture(&root, "x-1")["role"], json!("read"));
+        // D5's escalation flag does not exist yet and the 40% ration still
+        // counts `tier`, so `ceiling` must survive this pass intact.
+        for id in ["c-1", "c-2"] {
+            assert_eq!(read_cell_fixture(&root, id)["tier"], json!("ceiling"), "{id}");
+        }
+        assert_eq!(read_cell_fixture(&root, "g-1")["tier"], json!("generation"));
+        assert_eq!(read_cell_fixture(&root, "x-1")["tier"], json!("extraction"));
+        assert!(
+            read_cell_fixture(&root, "n-1").get("tier").is_none(),
+            "a cell that recorded no tier must not acquire one"
+        );
+        // The role is the ONLY new key: everything else is byte-for-byte the
+        // value the store already held.
+        let migrated = read_cell_fixture(&root, "c-1");
+        assert_eq!(migrated["status"], json!("capped"));
+        assert_eq!(migrated["lane"], json!("tiny"));
+        assert_eq!(migrated["feature"], json!("demo"));
+
+        // Archived history is migrated too.
+        let archived = |id: &str| {
+            let file = cells_archive_dir(&root, "old-feature").join(format!("{id}.json"));
+            match read_json(&file) {
+                ReadJson::Parsed(v) => v,
+                _ => panic!("archived cell {id} is missing or corrupt at {}", file.display()),
+            }
+        };
+        assert_eq!(archived("a-1")["role"], json!("code"));
+        assert_eq!(archived("a-1")["tier"], json!("ceiling"), "an archived ceiling keeps its tier too");
+        assert_eq!(archived("a-2")["role"], json!("code"));
+    }
+
+    #[test]
+    fn a_cell_that_already_carries_a_role_is_left_byte_identical() {
+        let (_tmp, root) = backfill_store();
+        let file = cell_file(&root, "r-1");
+        let before = std::fs::read(&file).unwrap();
+        let report = backfill_roles(&root, false).unwrap();
+        assert_eq!(report.already_roled, 1);
+        assert_eq!(
+            std::fs::read(&file).unwrap(),
+            before,
+            "r-1 already carried \"design\"; the migration must not open it for writing at all"
+        );
+        assert_eq!(
+            read_cell_fixture(&root, "r-1")["role"],
+            json!("design"),
+            "an existing role is never re-derived from tier"
+        );
+    }
+
+    /// The property the plan asks for by name: run it, run it again, and the
+    /// second run changes nothing. Byte-identity, not prose.
+    #[test]
+    fn backfill_is_idempotent_down_to_the_byte() {
+        let (_tmp, root) = backfill_store();
+        let first = backfill_roles(&root, false).unwrap();
+        assert_eq!(first.written, 10);
+        let after_first = store_bytes(&root);
+
+        let second = backfill_roles(&root, false).unwrap();
+        assert_eq!(second.scanned, 11, "the second pass still scans the whole store");
+        assert_eq!(second.assigned, 0, "there is nothing left to assign");
+        assert_eq!(second.written, 0, "and therefore nothing to write");
+        assert_eq!(second.already_roled, 11, "every cell now carries a role");
+        assert_eq!(second.by_source, [0, 0, 0, 0]);
+        assert_eq!(store_bytes(&root), after_first, "the second run must change nothing");
+
+        // A dry run over an already-migrated store agrees, and still writes
+        // nothing.
+        let third = backfill_roles(&root, true).unwrap();
+        assert_eq!((third.assigned, third.written, third.already_roled), (0, 0, 11));
+        assert_eq!(store_bytes(&root), after_first);
+    }
+
+    /// An interrupted first pass is finished by running again — the cells
+    /// already done are indistinguishable from cells authored with a role.
+    #[test]
+    fn a_partially_migrated_store_is_finished_by_a_re_run() {
+        let (_tmp, root) = backfill_store();
+        // Stand in for the interrupted run: two cells landed, the rest did not.
+        for id in ["g-1", "n-1"] {
+            let mut cell = read_cell_fixture(&root, id);
+            cell.as_object_mut().unwrap().insert("role".into(), json!("code"));
+            write_json_atomic(&cell_file(&root, id), &cell).unwrap();
+        }
+        let done_bytes = std::fs::read(cell_file(&root, "g-1")).unwrap();
+        let report = backfill_roles(&root, false).unwrap();
+        assert_eq!(report.already_roled, 3, "r-1 plus the two the interrupted run finished");
+        assert_eq!(report.written, 8, "only the remainder is written");
+        assert_eq!(
+            std::fs::read(cell_file(&root, "g-1")).unwrap(),
+            done_bytes,
+            "a cell the interrupted run already finished is not touched a second time"
+        );
+        assert_eq!(backfill_roles(&root, false).unwrap().written, 0);
+    }
+
+    #[test]
+    fn an_unmapped_tier_and_an_unreadable_file_are_named_never_guessed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(cells_dir(root)).unwrap();
+        write_cell_fixture(root, "ok-1", &roleless("ok-1", json!("generation")));
+        write_cell_fixture(root, "odd-1", &roleless("odd-1", json!("premium")));
+        std::fs::write(cells_dir(root).join("broken-1.json"), "{not json").unwrap();
+        std::fs::write(cells_dir(root).join("array-1.json"), "[]").unwrap();
+
+        let report = backfill_roles(root, false).unwrap();
+        assert_eq!(report.scanned, 4);
+        assert_eq!(report.assigned, 1);
+        assert_eq!(report.written, 1);
+        assert_eq!(
+            report.unmapped,
+            vec![("odd-1".to_string(), "premium".to_string())],
+            "a tier D9 does not map is reported by id, not silently defaulted to \"code\""
+        );
+        assert!(
+            read_cell_fixture(root, "odd-1").get("role").is_none(),
+            "and the cell itself is left alone"
+        );
+        let unreadable: Vec<&str> = report.unreadable.iter().map(String::as_str).collect();
+        assert_eq!(unreadable.len(), 2, "{unreadable:?}");
+        assert!(unreadable.iter().any(|p| p.ends_with(".bee/cells/broken-1.json")), "{unreadable:?}");
+        assert!(unreadable.iter().any(|p| p.ends_with(".bee/cells/array-1.json")), "{unreadable:?}");
+        let text = role_backfill_text(&report, false);
+        assert!(text.contains("odd-1 (tier \"premium\")"), "{text}");
+        assert!(text.contains("2 unreadable file(s) skipped"), "{text}");
+    }
+
+    #[test]
+    fn backfill_over_an_empty_store_reports_zero_and_refuses_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let report = backfill_roles(tmp.path(), true).expect("a store with no cells dir is not an error");
+        assert_eq!((report.scanned, report.assigned, report.written), (0, 0, 0));
+        // Every source is reported AS zero — an absent row and an empty row
+        // must not read the same.
+        let obj = role_backfill_json(&report, true);
+        for (source, _) in ROLE_BACKFILL_SOURCES {
+            assert_eq!(obj["by_source"][source], json!(0), "{source}");
+        }
+    }
+
+    /// The registry↔dispatcher law, the direction mrs-12 was the other half
+    /// of: the verb this cell serves must also be DECLARED, or `bee --help
+    /// --all` calls it unknown and the CLI-shape guard has no schema to
+    /// check a call against.
+    #[test]
+    fn backfill_roles_is_declared_in_the_registry() {
+        let (entry, rest) = crate::catalog::resolve(&["cells", "backfill-roles"])
+            .expect("cells backfill-roles must be in the registry payload");
+        assert_eq!(entry.name, "cells.backfill-roles");
+        assert!(rest.is_empty(), "{rest:?}");
+        assert!(entry.unavailable.is_none(), "the dispatcher serves it, so no unavailable marker");
+        assert!(entry.required.is_empty(), "both flags are optional");
+        for flag in ["dry-run", "json"] {
+            assert!(entry.properties.contains_key(flag), "--{flag} is undeclared");
+        }
+        assert_eq!(entry.examples[0], "bee cells backfill-roles --dry-run --json");
+    }
