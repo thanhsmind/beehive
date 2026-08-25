@@ -1,0 +1,80 @@
+{
+  "id": "sbl-3",
+  "feature": "statusline-binary-lookup",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Point the statusline template at .bee/bin/bee and guard it with a test",
+  "behavior_change": true,
+  "files": [
+    "packages/bee/statusline/statusline-command.sh",
+    ".claude/statusline-command.sh",
+    "packages/bee-rs/crates/bee/tests/statusline_contract.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+    "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+  ],
+  "action": "THE BUG, already reproduced. packages/bee/statusline/statusline-command.sh:66-73 hunts the bee binary with SELF_DIR=$(dirname \"${BASH_SOURCE[0]}\") and the four candidates \"$SELF_DIR/../bee\", \"$SELF_DIR/../bee.exe\", \"$SELF_DIR/../../bee\", \"$SELF_DIR/../../bee.exe\". The script is vendored into a host at <repo>/.claude/statusline-command.sh, so SELF_DIR is <repo>/.claude and those candidates resolve to <repo>/bee, <repo>/bee.exe, <repo>/../bee, <repo>/../bee.exe. The vendored binary is at <repo>/.bee/bin/bee. Nothing matches, usage_seg stays empty, and the per-model token/cost line is dropped in silence, exit 0. HISTORY, so you do not re-introduce it: 09286b47 added the SELF_DIR loop to the template while a `node statusline-usage.mjs` fallback still stood behind it and masked the miss; 00a8fdf4 (R6 cutover) deleted that fallback AND fixed the vendored .claude copy to the CLAUDE_PROJECT_DIR form, but left the canonical template on the broken loop. The two files have been out of sync since, violating onboarding R4 (canonical and vendored copies must be byte-identical), and the byte-equality sweep that would have caught it lived in packages/bee/tests/test_lib.mjs, which the same cutover deleted. NOTE the canonical file is the ONLY real edit site: onboard/plan.rs:537-546 + apply.rs:372-378 re-vendor canonical over .claude/statusline-command.sh on every `bee onboard --apply`, and devtools/mod.rs:141-149 makes `bee dev regen` run that apply, so any hand-edit of the .claude copy alone is erased.\n\nFIX 1 -- the lookup. In packages/bee/statusline/statusline-command.sh replace the SELF_DIR candidate loop with the SAME resolver shape the hook commands already use and that hooks_wiring.rs:680-683 asserts, adapted to shell: try \"${CLAUDE_PROJECT_DIR:-.}/.bee/bin/bee\" and its .exe first; then derive the repo from git -- g=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) -- and try \"$g/../.bee/bin/bee\" and its .exe, which is what makes a linked worktree resolve to the MAIN checkout's binary; then `command -v bee` as the last resort. Set BEE to the first executable candidate, then usage_seg=$(echo \"$input\" | \"$BEE\" dev statusline 2>/dev/null). Keep the leg silenced and optional: a statusline must never be why a prompt fails to render, so no candidate found must still exit 0 and still print line one. Change nothing else in the file.\n\nFIX 2 -- re-sync. Copy the corrected canonical file over .claude/statusline-command.sh so the two are byte-identical (R4).\n\nFIX 3 -- the guard, and this is the part that stops the next regression. Add packages/bee-rs/crates/bee/tests/statusline_contract.rs modelled on tests/installer_contracts.rs: same repo_root()/read() helpers, same 'WHY THIS FILE EXISTS' header, which must name that both guards this file restores died with the Node tree (packages/bee/tests/test_lib.mjs byte-equality sweep, and no test ever ran the script at all). Two tests: (a) canonical_and_vendored_statusline_are_byte_identical -- compare packages/bee/statusline/statusline-command.sh and .claude/statusline-command.sh as BYTES, restoring R4's sweep; (b) statusline_reaches_the_bee_binary -- #[cfg(unix)] -- build a tempdir host containing .claude/statusline-command.sh (the real canonical file copied in) and an executable .bee/bin/bee stub shell script that echoes a known marker, run `bash <tmp>/.claude/statusline-command.sh` with CLAUDE_PROJECT_DIR=<tmp> and a minimal statusline JSON payload on stdin, and assert the marker is in stdout AND the exit status is 0. Add a third if it is cheap: the same fixture with the stub REMOVED still exits 0 and still prints the first line.\n\nPROOF ORDER, required: run test (b) against the UNFIXED template first, capture that RED output, and put it in the cap's verification_evidence -- it is the evidence that the guard actually catches this bug. Then apply FIX 1 and 2 and show it green. REGEN, required and NOT optional here: packages/bee is a release-manifest root, so after FIX 1 run the full chain in order -- bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write). Step 2 of that chain is what performs FIX 2 for you: onboard --apply re-vendors the corrected canonical file over .claude/statusline-command.sh. Commit the regenerated docs/history/codex-harness-hardening/release-manifest.json with the rest. Do NOT touch the onboard vendoring code, the Rust dev statusline renderer, or any other script -- the stale pointers and the stale comment in devtools/statusline.rs belong to sbl-4.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test statusline_contract && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "packages/bee/statusline/statusline-command.sh finds the binary at <repo>/.bee/bin/bee for a copy vendored at <repo>/.claude/, with CLAUDE_PROJECT_DIR set and via the git-common-dir leg when it is unset",
+      "packages/bee/statusline/statusline-command.sh and .claude/statusline-command.sh are byte-identical",
+      "A test asserts that byte-identity and fails if either file is edited alone",
+      "A test executes the real script against a stub binary and asserts the usage segment reaches stdout -- proven by its RED output against the unfixed template, recorded on the cap",
+      "The script still exits 0 and still prints the first line when no binary is found anywhere"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "sbl-w1",
+    "outcome": "Statusline finds the vendored bee binary again, and a new contract test guards both the lookup and the canonical/vendored byte-identity",
+    "files_changed": [
+      "packages/bee/statusline/statusline-command.sh",
+      ".claude/statusline-command.sh",
+      "packages/bee-rs/crates/bee/tests/statusline_contract.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Cold-pickup inputs partly absent: docs/history/statusline-binary-lookup/CONTEXT.md and plan.md do not exist in this repo. Executed from the self-contained cell action text rather than blocking; recorded as an environment gap, not a guess.",
+      "FIX 2 was done by hand, not by regen step 2 as the cell predicted. bee dev regen ran all 3 steps green but onboard --apply planned ZERO statusline actions: this repo .claude/settings.json carries no statusLine key, so onboarding reads it as not opted in (spec onboarding R3) and never touches the pair. Copied canonical over .claude/statusline-command.sh directly to satisfy R4. Worth flagging upward: the bee checkout itself is not opted in, so nothing here will ever self-heal that pair — the new byte-equality test is now the only thing holding it.",
+      "Added a fourth test beyond the three the action named: statusline_reaches_the_main_checkout_from_a_linked_worktree builds a real git worktree fixture whose binary lives only in the main checkout. must_have 1 names the git-common-dir leg explicitly and the fixture is cheap; the three named tests never exercised that leg.",
+      "Committed one undeclared file: .bee/onboarding.json carries a one-line updated_at bump written by the bee dev regen the cell required. Committed with the rest rather than left dirty in the worktree."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T04:03:05.381Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "49e28775-6532-4090-9f4e-39c083ae7af2",
+    "claimed_at": "2026-08-25T03:54:44.726Z",
+    "report": {
+      "outcome": "Statusline template now resolves the host vendored bee binary (project dir, then main checkout via git-common-dir, then PATH); canonical and .claude copy re-synced; new statusline_contract.rs restores the byte-equality sweep and executes the real script in three fixture hosts.",
+      "commit": "8d92e427",
+      "files": [
+        "packages/bee/statusline/statusline-command.sh",
+        ".claude/statusline-command.sh",
+        "packages/bee-rs/crates/bee/tests/statusline_contract.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test statusline_contract — green — 4 passed / 0 failed: byte-identity, direct .bee/bin/bee lookup, linked-worktree git-common-dir fallback, and no-binary fail-open; scope is the one script plus its new guard. RED FIRST, required by the cell and captured against the UNFIXED template: running 3 tests / test canonical_and_vendored_statusline_are_byte_identical ... FAILED / test runs::statusline_renders_line_one_without_any_binary ... ok / test runs::statusline_reaches_the_bee_binary ... FAILED. The byte comparison panicked with: packages/bee/statusline/statusline-command.sh and .claude/statusline-command.sh have drifted apart (onboarding R4). The execution test panicked with: the usage segment never reached stdout — the script did not find the repo .bee/bin/bee from the repo .claude/. stdout was: /tmp/fixture-host | Test Model | ctx: 80% — line one rendered, usage segment absent, exit 0, exactly the silent failure. Final line of the red run: test result: FAILED. 1 passed; 2 failed; 0 ignored. Also green after the fix: bee dev release-manifest --check (270 files match stored manifest, 1 unhashed artifact) and cargo test --release --bin bee onboard:: (133 passed, 0 failed) for the vendoring path the fix rides on.",
+      "deviations": [
+        "Cold-pickup inputs partly absent: docs/history/statusline-binary-lookup/CONTEXT.md and plan.md do not exist in this repo. Executed from the self-contained cell action text rather than blocking; recorded as an environment gap, not a guess.",
+        "FIX 2 was done by hand, not by regen step 2 as the cell predicted. bee dev regen ran all 3 steps green but onboard --apply planned ZERO statusline actions: this repo .claude/settings.json carries no statusLine key, so onboarding reads it as not opted in (spec onboarding R3) and never touches the pair. Copied canonical over .claude/statusline-command.sh directly to satisfy R4. Worth flagging upward: the bee checkout itself is not opted in, so nothing here will ever self-heal that pair — the new byte-equality test is now the only thing holding it.",
+        "Added a fourth test beyond the three the action named: statusline_reaches_the_main_checkout_from_a_linked_worktree builds a real git worktree fixture whose binary lives only in the main checkout. must_have 1 names the git-common-dir leg explicitly and the fixture is cheap; the three named tests never exercised that leg.",
+        "Committed one undeclared file: .bee/onboarding.json carries a one-line updated_at bump written by the bee dev regen the cell required. Committed with the rest rather than left dirty in the worktree."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

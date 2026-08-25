@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "statusline-binary-lookup",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"statusline-binary-lookup\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"statusline-binary-lookup\" (lane).",
+  "created_at": "2026-08-25T03:53:53.440Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 7,
+    "rationale": "The vendored statusline script never finds .bee/bin/bee, so the usage segment is silently dropped; the fix is one shell resolver plus the byte-equality and end-to-end guards that died with the Node test tree",
+    "updated_at": "2026-08-25T03:54:52.221Z",
+    "feature": "statusline-binary-lookup"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T04:10:44.722Z",
+    "branch": "wt/statusline-binary-lookup",
+    "worktree_id": "beehive--wt--statusline-binary-lookup",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

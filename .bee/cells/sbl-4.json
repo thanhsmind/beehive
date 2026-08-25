@@ -1,0 +1,74 @@
+{
+  "id": "sbl-4",
+  "feature": "statusline-binary-lookup",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Repoint the statusline docs and comment at surfaces that still exist",
+  "behavior_change": false,
+  "files": [
+    "docs/specs/onboarding.md",
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+    "packages/bee-rs/crates/bee/src/devtools/statusline.rs"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md"
+  ],
+  "action": "Three stale surfaces found while diagnosing the statusline binary-lookup bug. They are what let the bug stay invisible: every pointer a reader would follow to find the guard leads to a deleted file.\n\n(1) docs/specs/onboarding.md:101-102 -- P9 points at `packages/bee/scripts/tests/test_bee onboard` and P10 at `packages/bee/tests/test_lib.mjs` ('statusline byte-equality sweep'). Both paths were deleted with the JS suites in the R6 cutover. Repoint them at the surviving guards: the onboard unit tests in packages/bee-rs/crates/bee/src/onboard/ and the new packages/bee-rs/crates/bee/tests/statusline_contract.rs from sbl-1. If a pointer has no live equivalent, say so in place rather than naming a dead path.\n\n(2) docs/knowledge/areas/onboarding/status-display-vendoring.md:144-153 ('Pointers (implementation)') repeats the same dead paths plus `packages/bee/scripts/bee onboard` and a canonical pair that still names statusline-usage.mjs -- that file is gone, the pair is now ONE script plus `bee dev statusline`. Rewrite the block against the real tree: onboard/source.rs:56 (source dir), onboard/hooks_wiring.rs:584-598 (statusline_opt_in), onboard/plan.rs:537-546 (copy_statusline plan), onboard/apply.rs:372-378 (apply), devtools/statusline.rs (the renderer), tests/statusline_contract.rs (the guard). Also correct any body text that still describes a two-file pair.\n\n(3) packages/bee-rs/crates/bee/src/devtools/statusline.rs:8-19 -- the header still documents the .sh contract as invoking \"$NODE\" .../statusline-usage.mjs at 'line 66' and says 'swapping the two lines that resolve $NODE for a bee lookup is the whole cutover'. The cutover already happened. Rewrite the comment to describe what the script does now, and do NOT quote a line number that will drift -- name the resolver by what it looks for.\n\nDocs and one comment only: change no behavior, no test logic, no shell.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test specs_fence",
+  "must_haves": {
+    "truths": [
+      "No pointer in docs/specs/onboarding.md P9/P10 or the knowledge area's Pointers block names a path that does not exist in the tree",
+      "Nothing still describes the status display as a two-file pair with statusline-usage.mjs",
+      "The devtools/statusline.rs header describes the current script and quotes no line number",
+      "pointer_integrity and specs_fence are green"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/onboarding.md"
+  ],
+  "decisions": [],
+  "deps": [
+    "sbl-3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "sbl-w2",
+    "outcome": "Repointed the statusline spec anchors, knowledge Pointers block and devtools header at surfaces that still exist",
+    "files_changed": [
+      "docs/specs/onboarding.md",
+      "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+      "packages/bee-rs/crates/bee/src/devtools/statusline.rs"
+    ],
+    "deviations": [
+      "Extended beyond P9/P10 to P7, P8, R1, R4, E5 and the spec intro: those rows still called the status display a two-file pair, which must_haves truth 2 forbids. Same file, same reservation.",
+      "Added an Open Gaps bullet to the knowledge area: the copy_statusline plan/apply path has no live test, so P9 could not name one honestly.",
+      "Left the knowledge frontmatter description (and its mirror in docs/knowledge/areas/onboarding/index.md plus docs/specs/reading-map.md:29) untouched — they say \"the pair\" without naming statusline-usage.mjs, and index.md/reading-map.md are outside this cell's reserved files."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T04:10:44.705Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "49e28775-6532-4090-9f4e-39c083ae7af2",
+    "claimed_at": "2026-08-25T04:04:58.464Z",
+    "report": {
+      "outcome": "Repointed the statusline spec anchors, knowledge Pointers block and devtools header at surfaces that still exist",
+      "commit": "75538918c0381dbc42c96b82d65cde4cb7d985ca",
+      "files": [
+        "docs/specs/onboarding.md",
+        "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+        "packages/bee-rs/crates/bee/src/devtools/statusline.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test specs_fence — green — docs-only change plus one Rust comment; the cell's own verify, and the release build compiling bee proves the comment edit",
+      "deviations": [
+        "Extended beyond P9/P10 to P7, P8, R1, R4, E5 and the spec intro: those rows still called the status display a two-file pair, which must_haves truth 2 forbids. Same file, same reservation.",
+        "Added an Open Gaps bullet to the knowledge area: the copy_statusline plan/apply path has no live test, so P9 could not name one honestly.",
+        "Left the knowledge frontmatter description (and its mirror in docs/knowledge/areas/onboarding/index.md plus docs/specs/reading-map.md:29) untouched — they say \"the pair\" without naming statusline-usage.mjs, and index.md/reading-map.md are outside this cell's reserved files."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

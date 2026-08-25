@@ -1,0 +1,82 @@
+{
+  "id": "mrs-6",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Render each bee agent from its role instead of its cost tier",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md",
+    "docs/history/model-role-split/plan.md"
+  ],
+  "action": "Slice 2. Onboarding renders each agent file with a model chosen from the tier tables: AGENT_TIER_BY_NAME (onboard/templates.rs:222-230) maps agent to tier, AGENT_TIER_DEFAULTS_CLAUDE and the opencode twin (:234-249) map tier to a default model, and agents.rs:129-147 substitutes {{TIER_MODEL}} from the slot map. Rebase that chain onto ROLE: an agent declares the role it serves, and its rendered model comes from resolving that role through the shared resolver of mrs-2, so a host that configures a role gets it in the rendered agent file with no second code path. SCOPE FENCE: this cell changes the MECHANISM only. Which role names bee publishes as shipped config defaults is decision D3 (store 3c9d6262) and belongs to the cell that adds the cell role field — do not invent or publish a default name list here. If the rebase forces a naming choice you cannot make without D3, return BLOCKED with the proposal rather than guessing. Onboarding writes files a host depends on, so a rendered file that changes shape must be named on the cap with what a host sees differently.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "An agent's rendered model comes from resolving its declared role through the one shared resolver, not from a tier table",
+      "A host that configures a role sees it in the rendered agent file",
+      "No new default role-name list is introduced here; that is D3's cell",
+      "Any change in a rendered file's shape is named on the cap in terms of what a host sees"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "06e49368"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w6",
+    "outcome": "Agent files render from the role an agent declares, resolved through the one shared resolver",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+    ],
+    "deviations": [
+      "plan.md is absent from the worktree; read the copy in the main checkout at docs/history/model-role-split/plan.md",
+      "Edited onboard/apply.rs beyond the cell files, reserved first: it held the two call sites of the retired tier lookup, and leaving them would make the new resolver dead code",
+      "Kept the AGENT_TIER_DEFAULTS_CLAUDE/_OPENCODE identifiers: renaming forces an edit in verbs/status_full/store.rs, and the identifier sweep belongs to the tier-retirement slice",
+      "Kept the {{TIER_MODEL}} template token: renaming it rewrites packages/bee/agents/*.md.tmpl and the release-manifest-hashed trees, which the regen cell owns",
+      "HOST-VISIBLE: a models.<rt>.<role> value of {kind:cli} with no command is junk to the shared parser, so the role default stands and the agent file is now rendered instead of removed",
+      "HOST-VISIBLE: a models.<rt>.<role> value of {kind:native,model:x} now renders x; the retired local normalizer dropped the shape and shipped the default",
+      "This repo .claude/agents and .opencode/agent trees are byte unchanged; the committed-projection pin test proves it"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T03:46:47.259Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T03:30:14.324Z",
+    "report": {
+      "outcome": "Agent files render from the role an agent declares, resolved through the one shared resolver",
+      "commit": "8b641325",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+      ],
+      "tests": "PATH=$HOME/.cargo/bin:$PATH cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard:: verbs::drivers:: — green, 354 passed 0 failed — covers the agent-render path and the shared resolver it now walks; the declared full command is red only in a sibling worker mid-cell hooks::model_guard test plus the known doctor::binary_freshness flake, both green or foreign on re-run",
+      "deviations": [
+        "plan.md is absent from the worktree; read the copy in the main checkout at docs/history/model-role-split/plan.md",
+        "Edited onboard/apply.rs beyond the cell files, reserved first: it held the two call sites of the retired tier lookup, and leaving them would make the new resolver dead code",
+        "Kept the AGENT_TIER_DEFAULTS_CLAUDE/_OPENCODE identifiers: renaming forces an edit in verbs/status_full/store.rs, and the identifier sweep belongs to the tier-retirement slice",
+        "Kept the {{TIER_MODEL}} template token: renaming it rewrites packages/bee/agents/*.md.tmpl and the release-manifest-hashed trees, which the regen cell owns",
+        "HOST-VISIBLE: a models.<rt>.<role> value of {kind:cli} with no command is junk to the shared parser, so the role default stands and the agent file is now rendered instead of removed",
+        "HOST-VISIBLE: a models.<rt>.<role> value of {kind:native,model:x} now renders x; the retired local normalizer dropped the shape and shipped the default",
+        "This repo .claude/agents and .opencode/agent trees are byte unchanged; the committed-projection pin test proves it"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 383 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
