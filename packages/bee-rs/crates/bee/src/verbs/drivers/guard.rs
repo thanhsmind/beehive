@@ -121,7 +121,11 @@ pub(crate) const ADVISOR_ROLE: &str = "advisor";
 /// point: the advisor's null-versus-absent rule stays in exactly one place —
 /// its own resolver — so this door cannot drift from the door that resolves.
 pub(crate) fn role_is_declarable(models: &Map<String, Value>, runtime: &str, name: &str) -> bool {
-    if name == ADVISOR_ROLE {
+    // role-edge-hardening D1: the advisor arm matches like the doors around
+    // it — `known_role_named` folds case, so an exact-match arm here let a
+    // mis-cased "Advisor" key fall to `contains_key`, enter `known_roles`,
+    // and answer differently at the marker door than at `--kind advisor`.
+    if name.eq_ignore_ascii_case(ADVISOR_ROLE) {
         return resolve_advisor(models, runtime).is_some();
     }
     models.get(runtime).and_then(Value::as_object).is_some_and(|t| t.contains_key(name))

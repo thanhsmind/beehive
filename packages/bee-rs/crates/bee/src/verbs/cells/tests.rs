@@ -8415,6 +8415,35 @@ use std::time::Instant;
         assert!(!cell_is_escalated(&after));
     }
 
+    /// role-edge-hardening D1: `already_roled` counts a role GAINED during
+    /// the scan window from the fresh under-lock reading — before this, the
+    /// count described a store state the writes no longer saw, while the doc
+    /// claimed otherwise.
+    #[test]
+    fn a_role_gained_during_the_scan_window_is_counted_from_the_fresh_reading() {
+        let (_tmp, root) = backfill_store();
+        let write_root = root.clone();
+        let before = backfill_roles(&root, true).expect("dry run");
+        let report = backfill_roles_interleaved(&root, false, || {
+            // A concurrent writer gives c-1 a role while the plan is built
+            // and the lock not yet held.
+            let mut cell = read_cell_fixture(&write_root, "c-1");
+            cell.as_object_mut().unwrap().insert("role".into(), json!("code"));
+            write_cell_fixture(&write_root, "c-1", &cell);
+        })
+        .expect("the pass must not refuse");
+        assert_eq!(
+            report.already_roled,
+            before.already_roled + 1,
+            "the fresh reading carries c-1's new role and the count says so"
+        );
+        assert!(
+            report.changed_during_pass.iter().any(|f| f.contains("c-1")),
+            "and the dropped plan is still named for the next run: {:?}",
+            report.changed_during_pass
+        );
+    }
+
     #[test]
     fn an_operator_write_that_lands_before_the_lock_is_never_reversed() {
         let (_tmp, root) = escalated_backfill_store();
