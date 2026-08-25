@@ -831,6 +831,18 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
                 return Err(Fail::Thrown(format!("claim-next: {code} — {reason}")));
             }
         };
+        // crf-1: the cross-session door inherits the same acquire `cells claim`
+        // takes. `candidate_ok` already skipped every cell whose declared files
+        // sit under a foreign hold, so this fires only on a race — but a cell
+        // handed out here must never be left claimed-and-unreserved.
+        let topology = claim_hold_topology();
+        let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+        match reserve_claimed_files(&root, topo, &cell, &worker, Some(session.as_str()))? {
+            ClaimReserve::Held => {}
+            ClaimReserve::Refused { code, reason } => {
+                return Err(Fail::Thrown(format!("claim-next: {code} — {reason}")));
+            }
+        }
         let mut text = format!(
             "Claimed {} for {worker} (session {session}).",
             js_string_or_undefined(cell.get("id"))

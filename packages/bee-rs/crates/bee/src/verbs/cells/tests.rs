@@ -1474,6 +1474,254 @@ use std::time::Instant;
         assert!(!refusal.contains("RED_BASE"), "{refusal}");
     }
 
+    // ══ crf-1 — the claim ACQUIRES what the cap already releases ══════════
+    //
+    // docs/history/claim-reserves-files/CONTEXT.md: `finish_cap_and_release`
+    // has always released by `(trace.worker, cell.id)` against reservations no
+    // claim door ever took, so every dispatched worker wrote unreserved. These
+    // pin the acquire half — one per locked constraint — through
+    // `claim_cell_with_reservations`, the exact composition `run_claim` runs
+    // (`run_claim` itself resolves its root off `std::env::current_dir()`, so
+    // the door under it is what a test can address).
+
+    /// Every ACTIVE lease in the store, as `(path, agent, cell)` — the shape
+    /// these assertions actually read.
+    fn held_paths(root: &Path) -> Vec<(String, String, String)> {
+        let list = match rsv::list_reservations(root.to_str().unwrap(), true, rsv::now_ms()) {
+            Ok(v) => v,
+            Err(_) => panic!("list_reservations hit an unproven shape"),
+        };
+        let mut out: Vec<(String, String, String)> = list
+            .iter()
+            .map(|r| {
+                (
+                    r.path.clone(),
+                    r.agent.as_ref().map_or("?".into(), jsjson::js_to_string),
+                    r.cell.as_ref().map_or("?".into(), jsjson::js_to_string),
+                )
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    fn cell_with_files(id: &str, feature: &str, files: Value) -> Value {
+        let mut c = cell(id, "open", feature, json!([]));
+        c["files"] = files;
+        c
+    }
+
+    fn main_topo(root: &Path) -> Option<(&Path, &str)> {
+        Some((root, "main"))
+    }
+
+    /// Reserve one path for someone else, through the same shared door the
+    /// claim now uses.
+    fn foreign_lease(root: &Path, agent: &str, cell_id: &str, path: &str) {
+        let params = rsv::ReserveParams {
+            agent: agent.to_string(),
+            cell: cell_id.to_string(),
+            path: path.to_string(),
+            ttl: None,
+            session: Some("sess-other".to_string()),
+            kind: None,
+        };
+        let topo = Some(rsv::Topo { main_root: root, holder: "main" });
+        assert!(
+            matches!(rsv::reserve_exec(topo, root.to_str().unwrap(), &params, 1), Ok(Out::Emit(_, _, 0))),
+            "the fixture lease for {path} must be taken"
+        );
+    }
+
+    /// The acceptance criterion, both halves in one test: claiming a cell with
+    /// declared files creates one lease per path under the `--worker` identity
+    /// and the claimed cell id — the SAME `(agent, cell)` key
+    /// `finish_cap_and_release` releases by — and capping that cell then
+    /// releases exactly those, with no new code in the release path.
+    #[test]
+    fn claim_reserves_the_declared_files_and_the_cap_releases_exactly_those() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        lane_with_route(root, "crf");
+        write_cell_fixture(
+            root,
+            "crf-a",
+            &cell_with_files("crf-a", "crf", json!(["src/one.rs", "src/two.rs"])),
+        );
+
+        let door =
+            claim_cell_with_reservations(root, main_topo(root), "crf-a", "wk-1", Some("sess-1"), None, None)
+                .unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert_eq!(door.cell["trace"]["worker"], json!("wk-1"));
+        assert_eq!(
+            held_paths(root),
+            vec![
+                ("src/one.rs".to_string(), "wk-1".to_string(), "crf-a".to_string()),
+                ("src/two.rs".to_string(), "wk-1".to_string(), "crf-a".to_string()),
+            ]
+        );
+
+        // The pair closes: the release half, untouched by this cell, names
+        // exactly the paths the claim half took.
+        let mut cap = wf_cap_flags("crf-a");
+        cap.session_flag = Some("sess-1".to_string()); // the claim's own session caps it
+        let out = finish_cap_and_release(root, main_topo(root), cap, None).expect("a clean finish");
+        let Out::Emit(result, _, 0) = out else { panic!("expected a green finish") };
+        // The release half walks the lease store, so its order is the store's,
+        // not the declaration's — the SET is the contract.
+        let mut released: Vec<String> = result["released"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(jsjson::js_to_string)
+            .collect();
+        released.sort();
+        assert_eq!(released, vec!["src/one.rs".to_string(), "src/two.rs".to_string()]);
+        assert!(held_paths(root).is_empty(), "the cap releases every lease the claim took");
+    }
+
+    /// Constraint 1: a claim with no overlapping hold succeeds exactly as it
+    /// did before this cell — the acquire adds NO key to the emitted cell
+    /// record, so `run_claim`'s payload and text are byte-identical.
+    #[test]
+    fn a_free_claim_emits_the_same_cell_record_it_always_did() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "crfb");
+        let files = json!(["src/new.rs"]);
+        write_cell_fixture(root, "crfb-new", &cell_with_files("crfb-new", "crfb", files.clone()));
+        write_cell_fixture(root, "crfb-old", &cell_with_files("crfb-old", "crfb", json!(["src/old.rs"])));
+
+        let with_reserve =
+            claim_cell_with_reservations(root, main_topo(root), "crfb-new", "wk-1", Some("sess-1"), None, None)
+                .unwrap()
+                .cell;
+        // The pre-crf-1 door, over the same fixture shape.
+        let without = claim_cell_from_flags(root, "crfb-old", "wk-1", Some("sess-1"), None)
+            .unwrap()
+            .cell;
+
+        let keys = |v: &Value| {
+            let mut k: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
+            k.sort();
+            k
+        };
+        assert_eq!(keys(&with_reserve), keys(&without), "no new key rides the claim payload");
+        assert_eq!(keys(&with_reserve["trace"]), keys(&without["trace"]));
+        assert_eq!(with_reserve["status"], without["status"]);
+        assert_eq!(with_reserve["files"], files);
+    }
+
+    /// Constraint 3: a cell declaring `files: []` — or no `files` key at all —
+    /// claims exactly as today, with no new refusal and nothing reserved.
+    #[test]
+    fn a_cell_with_no_declared_files_claims_exactly_as_before() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "crfe");
+        write_cell_fixture(root, "crfe-empty", &cell_with_files("crfe-empty", "crfe", json!([])));
+        // No `files` key whatsoever — `cell()`'s own shape.
+        write_cell_fixture(root, "crfe-none", &cell("crfe-none", "open", "crfe", json!([])));
+
+        for id in ["crfe-empty", "crfe-none"] {
+            let door =
+                claim_cell_with_reservations(root, main_topo(root), id, "wk-1", Some("sess-1"), None, None)
+                    .unwrap_or_else(|_| panic!("{id} must claim with no new refusal"));
+            assert_eq!(door.cell["status"], json!("claimed"));
+        }
+        assert!(held_paths(root).is_empty(), "zero declared paths reserves nothing");
+    }
+
+    /// Constraint 2: a conflicting claim is refused TYPED and ZERO-MUTATION.
+    /// The conflict sits on the SECOND declared path on purpose, so the first
+    /// one is genuinely reserved before the refusal — the rollback has real
+    /// work to undo, and the store still comes back exactly as found.
+    #[test]
+    fn a_conflicting_claim_is_refused_typed_and_rolls_the_store_back() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "crfc");
+        write_cell_fixture(
+            root,
+            "crfc-1",
+            &cell_with_files("crfc-1", "crfc", json!(["src/free.rs", "src/taken.rs"])),
+        );
+        foreign_lease(root, "other-agent", "other-1", "src/taken.rs");
+        let before = held_paths(root);
+
+        let refusal = thrown(claim_cell_with_reservations(
+            root,
+            main_topo(root),
+            "crfc-1",
+            "wk-1",
+            Some("sess-1"),
+            None,
+            None,
+        ));
+        assert!(refusal.starts_with("claim: RESERVATION_CONFLICT — "), "{refusal}");
+        assert!(refusal.contains("nothing claimed"), "{refusal}");
+        assert!(
+            refusal.contains("the claim was rolled back and the store restored as found"),
+            "{refusal}"
+        );
+        assert!(!refusal.contains("ROLLBACK FAILED"), "{refusal}");
+        // The refusal NAMES the holder.
+        assert!(refusal.contains("- other-agent holds \"src/taken.rs\" (cell other-1)"), "{refusal}");
+
+        // Zero mutation: the cell is open again, no claim file was left owned,
+        // the partial lease is gone and the other agent's is untouched.
+        assert_eq!(read_cell_fixture(root, "crfc-1")["status"], json!("open"));
+        assert!(!claims_dir(root).join("crfc-1.json").exists());
+        assert_eq!(held_paths(root), before);
+    }
+
+    /// Constraint 4: re-claiming a cell whose lease this same worker already
+    /// holds is NOT a conflict — that is the claim-expired/swept-then-retaken
+    /// path, and the lease is already the right one. A same-agent lease for a
+    /// DIFFERENT cell stays a real conflict: that cell's own cap releases it.
+    #[test]
+    fn a_workers_own_lease_for_the_same_cell_never_refuses_the_re_claim() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "crfo");
+        write_cell_fixture(root, "crfo-1", &cell_with_files("crfo-1", "crfo", json!(["src/mine.rs"])));
+        write_cell_fixture(root, "crfo-2", &cell_with_files("crfo-2", "crfo", json!(["src/other.rs"])));
+
+        // Ours already, for this very cell — the claim file expired or was
+        // swept, the lease outlived it.
+        foreign_lease(root, "wk-1", "crfo-1", "src/mine.rs");
+        let door =
+            claim_cell_with_reservations(root, main_topo(root), "crfo-1", "wk-1", Some("sess-1"), None, None)
+                .expect("our own lease for this cell must not refuse the claim");
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert!(
+            held_paths(root).contains(&(
+                "src/mine.rs".to_string(),
+                "wk-1".to_string(),
+                "crfo-1".to_string()
+            )),
+            "the existing lease stands, unduplicated: {:?}",
+            held_paths(root)
+        );
+
+        // Same agent, DIFFERENT cell: still a conflict.
+        foreign_lease(root, "wk-1", "crfo-9", "src/other.rs");
+        let refusal = thrown(claim_cell_with_reservations(
+            root,
+            main_topo(root),
+            "crfo-2",
+            "wk-1",
+            Some("sess-1"),
+            None,
+            None,
+        ));
+        assert!(refusal.starts_with("claim: RESERVATION_CONFLICT — "), "{refusal}");
+        assert!(refusal.contains("- wk-1 holds \"src/other.rs\" (cell crfo-9)"), "{refusal}");
+        assert_eq!(read_cell_fixture(root, "crfo-2")["status"], json!("open"));
+    }
+
     // ── budgets ───────────────────────────────────────────────────────────
     fn attempt(session: &str, acquired: &str, verdict: &str, sig: Option<&str>) -> Value {
         json!({
