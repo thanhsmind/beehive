@@ -417,6 +417,7 @@
     "health-checks",
     "state-store",
     "contract",
-    "escalation"
+    "escalation",
+    "judge-deferral"
   ]
 }
