@@ -923,7 +923,8 @@ use std::time::Instant;
     /// D5 (store `97ce5225`): the escalation flag is a boolean and nothing
     /// else. Presence and shape only — there is no budget check here, exactly
     /// as there was none for authoring `tier: "ceiling"`; the 40% ration
-    /// lives on the `cells tier` door where it always did.
+    /// lives on the `bee cells escalate` door — the same door as ever, under
+    /// the name the tier retirement (D4) left it with.
     #[test]
     fn the_escalation_flag_is_a_boolean_and_never_a_name() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2475,9 +2476,16 @@ use std::time::Instant;
         );
         assert_eq!(update_field_problem("change_class", &Value::Null), None);
         assert_eq!(update_field_problem("behavior_change", &json!(true)), None);
-        assert_eq!(
-            update_frozen_hint("tier"),
-            Some("use the tier verb (bee cells tier --id ID --tier T)")
+        // D4 (store `97ce5225`): `tier` is still a FROZEN key — stored records
+        // carry the field — but the hint no longer names a verb to set it,
+        // because there is none. Retargeted, not dropped: the assertion is
+        // still "a frozen key answers with the sentence that replaces it".
+        let tier_hint = update_frozen_hint("tier").expect("tier stays a frozen key");
+        assert!(tier_hint.contains("retired"), "{tier_hint}");
+        assert!(tier_hint.contains("bee cells escalate"), "{tier_hint}");
+        assert!(
+            !tier_hint.contains("bee cells tier"),
+            "no shipped text may send a caller to a verb that no longer exists: {tier_hint}"
         );
         assert_eq!(update_frozen_hint("status"), Some("status moves only through claim/verify/cap/block/drop"));
         assert_eq!(update_frozen_hint("nonsense"), None);
@@ -5416,11 +5424,20 @@ use std::time::Instant;
         assert!(claims_dir(root).join("c-1.json").exists(), "still there — a stale fence never proceeds");
     }
 
-    // ══ cells tier — ceiling-share budget (D3, decision 0012) ══════════════
+    // ══ cells escalate — escalation-share budget (D3, decision 0012) ═══════
     //
     // D6 sequencing: these prove the share computation first (exactly-40
     // allowed, just-over refused) and the refusal/override contract, before
-    // trusting the flip in set_tier to refuse anything for real.
+    // trusting the flip in `set_escalation` to refuse anything for real.
+    //
+    // RETARGETED, NEVER WEAKENED (model-role-split D4, store `97ce5225`).
+    // These probes were taken against `set_tier` while `bee cells tier` was
+    // the door; D4 retired the tier selector and the verb, and the escalation
+    // half kept its own name as `bee cells escalate` / `set_escalation`. The
+    // call sites move and the tier-field assertions become flag assertions —
+    // the FIELD they read ceased to exist by decision, and D4 is that
+    // decision — but every arithmetic, refusal, override and scope assertion
+    // is the one that was here before, unchanged.
 
     fn tiered_cell(id: &str, feature: &str, tier: Option<&str>) -> Value {
         let mut body = cell(id, "open", feature, json!([]));
@@ -5442,10 +5459,11 @@ use std::time::Instant;
         write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let cell = set_tier(root, "target", "ceiling", None).expect("exactly 40% must be allowed");
-        assert_eq!(cell["tier"], json!("ceiling"));
+        let cell =
+            set_escalation(root, "target", true, None).expect("exactly 40% must be allowed");
+        assert_eq!(cell[ESCALATE_FIELD], json!(true));
         let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
-        assert_eq!(after["tier"], json!("ceiling"), "the write actually landed");
+        assert_eq!(after[ESCALATE_FIELD], json!(true), "the write actually landed");
     }
 
     /// Others: 2 ceiling + 4 non-ceiling (6 tiered). Assigning "ceiling" to
@@ -5464,22 +5482,23 @@ use std::time::Instant;
         write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        let refusal = thrown(set_escalation(root, "target", true, None));
         assert!(
-            refusal.starts_with("setTier: cell \"target\" refused"),
+            refusal.starts_with("escalateCell: cell \"target\" refused"),
             "{refusal}"
         );
         assert!(refusal.contains("3/7"), "{refusal}");
         assert!(refusal.contains("43%"), "names the computed share: {refusal}");
         assert!(refusal.contains("40%"), "names the threshold: {refusal}");
-        // Refused — the tier on disk never moved.
+        // Refused — the marking on disk never moved.
         let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
-        assert!(after.get("tier").is_none(), "a refused assignment writes nothing");
+        assert!(after.get(ESCALATE_FIELD).is_none(), "a refused assignment writes nothing");
     }
 
     /// The same over-budget shape as above, but with `--reason` supplied:
-    /// the override succeeds and the reason persists on the cell's trace
-    /// (the cell's tier record) as `tier_reason`.
+    /// the override succeeds and the reason persists on the cell's trace as
+    /// `escalation_reason` (D4 renamed the key from `tier_reason` with the
+    /// selector it was named for).
     #[test]
     fn reason_override_bypasses_the_refusal_and_persists_on_the_tier_record() {
         let tmp = tempfile::tempdir().unwrap();
@@ -5492,14 +5511,29 @@ use std::time::Instant;
         write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let cell = set_tier(root, "target", "ceiling", Some("owner-approved rescue ladder bump"))
-            .expect("a named reason overrides the refusal");
-        assert_eq!(cell["tier"], json!("ceiling"));
-        assert_eq!(cell["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+        let cell =
+            set_escalation(root, "target", true, Some("owner-approved rescue ladder bump"))
+                .expect("a named reason overrides the refusal");
+        assert_eq!(cell[ESCALATE_FIELD], json!(true));
+        assert_eq!(
+            cell["trace"][ESCALATION_REASON_KEY],
+            json!("owner-approved rescue ladder bump")
+        );
+        assert!(
+            cell["trace"].get(LEGACY_ESCALATION_REASON_KEY).is_none(),
+            "the retired key is never written again"
+        );
 
         let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
-        assert_eq!(after["tier"], json!("ceiling"), "the override write actually landed");
-        assert_eq!(after["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+        assert_eq!(
+            after[ESCALATE_FIELD],
+            json!(true),
+            "the override write actually landed"
+        );
+        assert_eq!(
+            after["trace"][ESCALATION_REASON_KEY],
+            json!("owner-approved rescue ladder bump")
+        );
     }
 
     /// A whitespace-only reason is not an override — D1/D3's "non-blank"
@@ -5517,14 +5551,14 @@ use std::time::Instant;
         write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let refusal = thrown(set_tier(root, "target", "ceiling", Some("   ")));
-        assert!(refusal.starts_with("setTier: cell \"target\" refused"), "{refusal}");
+        let refusal = thrown(set_escalation(root, "target", true, Some("   ")));
+        assert!(refusal.starts_with("escalateCell: cell \"target\" refused"), "{refusal}");
     }
 
-    /// Any other tier is never budget-checked, however skewed the ceiling
-    /// share already is.
+    /// Taking the flag OFF is never budget-checked, however skewed the
+    /// escalated share already is.
     #[test]
-    fn assigning_a_non_ceiling_tier_never_checks_the_ceiling_budget() {
+    fn disarming_the_flag_never_checks_the_escalation_budget() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
@@ -5532,16 +5566,16 @@ use std::time::Instant;
         write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("ceiling")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let cell = set_tier(root, "target", "generation", None)
-            .expect("a non-ceiling tier is never budget-checked");
-        assert_eq!(cell["tier"], json!("generation"));
+        let cell = set_escalation(root, "target", false, None)
+            .expect("disarming is never budget-checked");
+        assert!(cell.get(ESCALATE_FIELD).is_none());
     }
 
     // ══ D5 (store 97ce5225) — the ration, rehomed onto the escalation flag ══
     //
     // The five probes above keep their exact arithmetic and are the "unchanged
     // in force" half. These are the moved half: the flag is what the ration
-    // now counts, the flag is what `cells tier ceiling` now writes, and no
+    // now counts, the flag is what `bee cells escalate` writes, and no
     // store — migrated or not — can read as "nothing is marked".
 
     fn escalated_cell(id: &str, feature: &str) -> Value {
@@ -5570,20 +5604,23 @@ use std::time::Instant;
         target["role"] = json!("code");
         write_cell_fixture(root, "target", &target);
 
-        let refusal = thrown(set_tier(root, "target", "ceiling", None));
-        assert!(refusal.starts_with("setTier: cell \"target\" refused"), "{refusal}");
+        let refusal = thrown(set_escalation(root, "target", true, None));
+        assert!(refusal.starts_with("escalateCell: cell \"target\" refused"), "{refusal}");
         assert!(refusal.contains("3/7"), "{refusal}");
         assert!(refusal.contains("43%"), "names the computed share: {refusal}");
         assert!(refusal.contains("40%"), "names the threshold: {refusal}");
         let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
         assert!(after.get("escalate").is_none(), "a refused escalation writes nothing");
 
-        // The reason override still overrides, and still persists under the
-        // key the store already carries on 20 records.
-        let ok = set_tier(root, "target", "ceiling", Some("owner-approved rescue ladder"))
+        // The reason override still overrides, and now persists under the
+        // key D4 renamed it to.
+        let ok = set_escalation(root, "target", true, Some("owner-approved rescue ladder"))
             .expect("a named reason overrides the refusal");
         assert_eq!(ok["escalate"], json!(true));
-        assert_eq!(ok["trace"]["tier_reason"], json!("owner-approved rescue ladder"));
+        assert_eq!(
+            ok["trace"][ESCALATION_REASON_KEY],
+            json!("owner-approved rescue ladder")
+        );
     }
 
     /// The zero-share window D5 forbids by name. A store still carrying the
@@ -5603,7 +5640,7 @@ use std::time::Instant;
             write_cell_fixture(root, id, &tiered_cell(id, "f", Some("generation")));
         }
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
-        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        let refusal = thrown(set_escalation(root, "target", true, None));
         assert!(refusal.contains("3/7"), "the legacy spelling counts: {refusal}");
 
         // And a HALF-migrated store — one record converted, one not — counts
@@ -5616,15 +5653,15 @@ use std::time::Instant;
             write_cell_fixture(root2, id, &tiered_cell(id, "f", Some("generation")));
         }
         write_cell_fixture(root2, "target", &tiered_cell("target", "f", None));
-        let refusal2 = thrown(set_tier(root2, "target", "ceiling", None));
+        let refusal2 = thrown(set_escalation(root2, "target", true, None));
         assert!(refusal2.contains("3/7"), "one spelling each, counted once: {refusal2}");
     }
 
-    /// The write half: escalating marks the flag, and any other tier disarms
-    /// it — `--tier generation` took a cell off the session model before D5
-    /// and still does.
+    /// The write half: escalating marks the flag, and `--off` disarms it —
+    /// `bee cells tier --tier generation` took a cell off the session model
+    /// before D5, and `bee cells escalate --off` still does.
     #[test]
-    fn escalating_marks_the_flag_and_any_other_tier_disarms_it() {
+    fn escalating_marks_the_flag_and_off_disarms_it() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         // Four cells, one of them escalated: 25%, comfortably under budget.
@@ -5633,12 +5670,16 @@ use std::time::Instant;
         }
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let up = set_tier(root, "target", "ceiling", None).expect("well under budget");
+        let up = set_escalation(root, "target", true, None).expect("well under budget");
         assert_eq!(up["escalate"], json!(true));
+        assert!(
+            up.get("tier").is_none(),
+            "D4: the retired selector is never written back onto a cell"
+        );
         let on_disk = read_cell_norm(root, "target").ok().unwrap().unwrap();
         assert_eq!(on_disk["escalate"], json!(true), "the flag actually landed");
 
-        let down = set_tier(root, "target", "generation", None).expect("never budget-checked");
+        let down = set_escalation(root, "target", false, None).expect("never budget-checked");
         assert!(
             down.get("escalate").is_none(),
             "a non-escalating assignment removes the flag rather than writing false"
@@ -5665,7 +5706,7 @@ use std::time::Instant;
         target["role"] = json!("code");
         write_cell_fixture(root, "target", &target);
 
-        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        let refusal = thrown(set_escalation(root, "target", true, None));
         assert!(refusal.contains("3/4"), "{refusal}");
         assert!(refusal.contains("75%"), "{refusal}");
     }
@@ -5689,7 +5730,7 @@ use std::time::Instant;
         let mut target = cell("target", "open", "f", json!([]));
         target["role"] = json!("code");
         write_cell_fixture(root, "target", &target);
-        let cell = set_tier(root, "target", "ceiling", None)
+        let cell = set_escalation(root, "target", true, None)
             .expect("another feature's escalations never charge this one");
         assert_eq!(cell["escalate"], json!(true));
     }
@@ -7638,10 +7679,10 @@ use std::time::Instant;
             assert_eq!(read_cell_fixture(&root, id)["escalate"], json!(true), "{id}");
         }
         assert_eq!(report.escalated, 3, "two live ceilings plus the archived one");
-        // The tier STRING survives beside the flag. It is vestigial from here
-        // on, and it stays only because status_full/cells.rs and
-        // session_preamble/store.rs still count it — the tier-retirement
-        // slice deletes the field everywhere at once.
+        // The tier STRING survives beside the flag, and D4 (store `97ce5225`)
+        // keeps it that way: retiring `tier` as the model SELECTOR is not an
+        // order to rewrite stored history, and `cell_is_escalated` still
+        // reads the one value that ever meant anything.
         for id in ["c-1", "c-2"] {
             assert_eq!(read_cell_fixture(&root, id)["tier"], json!("ceiling"), "{id}");
         }
@@ -7678,6 +7719,97 @@ use std::time::Instant;
             "and an archived ceiling is converted too — `cells unarchive` brings it back live"
         );
         assert_eq!(archived("a-2")["role"], json!("code"));
+    }
+
+    /// D4 (store `97ce5225`) — the third job this one pass carries: the
+    /// escalation reason moved off the retired selector's name, so a stored
+    /// trace still spelling it `tier_reason` is renamed to
+    /// `escalation_reason` here, VALUE untouched.
+    ///
+    /// Its own store rather than `backfill_store()`, so the counts above stay
+    /// the counts they were measured as. Four shapes in one pass: a legacy
+    /// key alone, a legacy key on a cell that ALSO needs a role and the flag,
+    /// a trace already migrated (which must not be touched or overwritten),
+    /// and a trace carrying neither.
+    #[test]
+    fn backfill_renames_the_retired_escalation_reason_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(cells_dir(root)).unwrap();
+
+        let with_trace = |id: &str, tier: Value, trace: Value, role: Option<&str>| {
+            let mut c = roleless(id, tier);
+            let map = c.as_object_mut().unwrap();
+            map.insert("trace".into(), trace);
+            if let Some(r) = role {
+                map.insert("role".into(), json!(r));
+            }
+            c
+        };
+        // Already roled, so the rename is the ONLY reason this file is opened.
+        write_cell_fixture(
+            root,
+            "legacy-only",
+            &with_trace("legacy-only", Value::Null, json!({"tier_reason": "owner said so"}), Some("code")),
+        );
+        // Needs all three at once.
+        write_cell_fixture(
+            root,
+            "legacy-all",
+            &with_trace("legacy-all", json!("ceiling"), json!({"tier_reason": "rescue ladder"}), None),
+        );
+        // Already migrated: nothing to do, and its current reason must not be
+        // clobbered by a stale legacy key sitting beside it.
+        write_cell_fixture(
+            root,
+            "already",
+            &with_trace(
+                "already",
+                Value::Null,
+                json!({"escalation_reason": "current", "tier_reason": "stale"}),
+                Some("code"),
+            ),
+        );
+        write_cell_fixture(
+            root,
+            "no-reason",
+            &with_trace("no-reason", Value::Null, json!({"worker": "w-1"}), Some("code")),
+        );
+
+        // Dry run measures it and writes nothing.
+        let before = store_bytes(root);
+        let dry = backfill_roles(root, true).unwrap();
+        assert_eq!(dry.reasons_renamed, 2, "legacy-only and legacy-all, never `already`");
+        assert_eq!(store_bytes(root), before, "--dry-run writes nothing");
+        let dry_text = role_backfill_text(&dry, true);
+        assert!(dry_text.contains("trace.tier_reason"), "{dry_text}");
+        assert!(dry_text.contains("would be renamed"), "{dry_text}");
+        assert_eq!(role_backfill_json(&dry, true)["reasons_renamed"], json!(2));
+
+        let report = backfill_roles(root, false).unwrap();
+        assert_eq!(report.reasons_renamed, 2);
+
+        let migrated = read_cell_fixture(root, "legacy-only");
+        assert_eq!(migrated["trace"]["escalation_reason"], json!("owner said so"));
+        assert!(
+            migrated["trace"].get("tier_reason").is_none(),
+            "the retired key is removed, not left beside its replacement"
+        );
+
+        let all = read_cell_fixture(root, "legacy-all");
+        assert_eq!(all["role"], json!("code"), "the role still lands");
+        assert_eq!(all["escalate"], json!(true), "and so does the flag");
+        assert_eq!(all["trace"]["escalation_reason"], json!("rescue ladder"));
+        assert!(all["trace"].get("tier_reason").is_none());
+
+        // An already-migrated trace keeps the reason it holds.
+        let already = read_cell_fixture(root, "already");
+        assert_eq!(already["trace"]["escalation_reason"], json!("current"));
+
+        // Idempotent: a second pass finds nothing left to rename.
+        let second = backfill_roles(root, false).unwrap();
+        assert_eq!(second.reasons_renamed, 0);
+        assert_eq!(second.written, 0, "and opens no file for writing");
     }
 
     #[test]
@@ -7834,4 +7966,40 @@ use std::time::Instant;
             assert!(entry.properties.contains_key(flag), "--{flag} is undeclared");
         }
         assert_eq!(entry.examples[0], "bee cells backfill-roles --dry-run --json");
+    }
+
+    /// D4 (store `97ce5225`) — the tier verb is gone, and gone in every
+    /// direction the registry↔dispatcher law reaches.
+    ///
+    /// mrs-12 proved one half: a verb the dispatcher serves and the registry
+    /// does not declare is reported unknown by `bee --help --all` and gives
+    /// the CLI-shape guard no schema. The inverse is the half this asserts —
+    /// a verb the registry still declares and no code serves would be
+    /// advertised by `--help` and answered by nothing, which is the exact
+    /// defect tests/registry_dispatch.rs was written for.
+    #[test]
+    fn the_tier_verb_is_retired_and_escalate_stands_in_its_place() {
+        assert!(
+            crate::catalog::resolve(&["cells", "tier"]).is_none(),
+            "cells tier must not be declared: no code serves it any more"
+        );
+        assert!(
+            !crate::catalog::group_subverbs("cells").contains(&"tier".to_string()),
+            "and `bee cells` must not advertise it"
+        );
+
+        let (entry, rest) = crate::catalog::resolve(&["cells", "escalate"])
+            .expect("cells escalate must be in the registry payload");
+        assert_eq!(entry.name, "cells.escalate");
+        assert!(rest.is_empty(), "{rest:?}");
+        assert!(entry.unavailable.is_none(), "the dispatcher serves it, so no unavailable marker");
+        assert_eq!(entry.required, vec!["id".to_string()], "only --id is required");
+        for flag in ["id", "reason", "off", "json"] {
+            assert!(entry.properties.contains_key(flag), "--{flag} is undeclared");
+        }
+        // No enum anywhere on it: D4 retires the closed three-value list with
+        // the selector, and nothing replaces it.
+        for (flag, schema) in entry.properties.iter() {
+            assert!(schema.get("enum").is_none(), "--{flag} must carry no enum: {schema}");
+        }
     }

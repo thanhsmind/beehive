@@ -517,7 +517,22 @@ mod tests {
         // Nothing new was invented, and nothing was needed: a migration verb
         // that had to teach a caller a NEW word for "show me first" would be
         // a worse migration verb.
-        const PINNED_FLAG_COUNT: usize = 182;
+        // 182 -> 183 (model-role-split D4, mrs-15, store 97ce5225): `bee
+        // cells tier` retires with the selector it wrote, and its escalation
+        // half lands as `bee cells escalate`. Three of that verb's four flags
+        // are pure reuse — `--id`, `--reason` (the same budget override, the
+        // same trace record) and `--json`. `--off` is the one new spelling,
+        // and it is new because nothing in this vocabulary meant "take this
+        // marking back off". Checked first, and each rejected for a reason:
+        // `--set` (state.route) is a WRITE-MODE switch that turns a read verb
+        // into a write verb, not a value; `--clear` is a subverb everywhere
+        // it appears (`state worker clear`, `intent clear`), never a flag;
+        // `--without` (close) means "exclude this from a set"; `--force-
+        // downgrade` and `--waive-*` are permissions to proceed, not
+        // reversals. Spelling the reversal as `--tier generation` is exactly
+        // what D4 retires. `--off` reads the same on any future flag-shaped
+        // marking, which is the property this ratchet is protecting.
+        const PINNED_FLAG_COUNT: usize = 183;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

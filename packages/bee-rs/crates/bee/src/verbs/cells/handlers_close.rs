@@ -367,7 +367,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 if !registered_worker_for_cell(root, id, worker)? {
                     let worker_disp = worker.unwrap_or("unknown");
                     return Err(Fail::Thrown(format!(
-                        "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: dispatch this cell to a registered worker (bee state worker add --nickname <nickname> --cell {id} --tier <tier> --status running), then retry — or re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
+                        "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: dispatch this cell to a registered worker (bee state worker add --nickname <nickname> --cell {id} --status running), then retry — or re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
                     )));
                 }
             }
@@ -1059,10 +1059,11 @@ pub(crate) fn run_reopen(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
 // Unchanged in force: the threshold (`CEILING_SHARE_REFUSAL_MAX`, still
 // 0.4), the strictly-over comparison, the `--reason` override, the blank
 // reason that is not an override, and the persisted reason on the cell's
-// trace under its existing key `tier_reason` (renaming that key is the
-// tier-retirement slice's, together with the doc surfaces that publish it —
-// a rename that left `docs/handbook/register.md` naming a key nothing writes
-// would be a migration half-done).
+// trace — now under `escalation_reason` (D4, store `97ce5225`). The key was
+// `tier_reason` until the tier retirement; it moved WITH its surfaces, in
+// one change: `docs/handbook/register.md` publishes the key and
+// `bee cells backfill-roles` carries the stored records that already hold
+// it. A rename that left either behind would be a migration half-done.
 //
 // Moved: WHICH cells count. It used to be `tier == "ceiling"`. It is now
 // `cell_is_escalated` — the flag, with the legacy `tier: "ceiling"` spelling
@@ -1122,31 +1123,44 @@ fn escalation_share_after(
     Ok(EscalationShare { escalated, cells: counted, share })
 }
 
-/// setTier's mutator (D3, rehomed by D5): the escalation word `ceiling` no
-/// longer names a tier VALUE — it sets the cell's escalation flag. When the
-/// post-assignment escalated share would exceed `CEILING_SHARE_REFUSAL_MAX`
-/// the assignment refuses, naming the share and the threshold, unless
-/// `reason` is a non-blank override — in which case the reason is recorded
-/// on the cell's trace (`tier_reason`). Any other tier is never
-/// budget-checked, and DISARMS the flag: `--tier generation` on an escalated
-/// cell took it off the session model before D5 and still does.
-/// `--reason` given for an already-under-budget escalation is still
-/// persisted (harmless metadata; never required there).
+/// The escalation mutator (D3, rehomed by D5, renamed by D4) — what
+/// `bee cells tier --tier ceiling` used to be, with the retired cost word
+/// taken out of its spelling.
 ///
-/// The literal `tier` string is still written beside the flag. It is
-/// vestigial from this commit on — nothing here reads it back except
-/// `cell_is_escalated`'s legacy arm — and it stays only because
-/// `verbs/status_full/cells.rs` and `hooks/session_preamble/store.rs` still
-/// count `tier` for their advice lines, and both of those files belong to
-/// the tier-retirement slice that deletes the field outright. Dropping it
-/// here would blind two counters this cell cannot fix.
-pub(crate) fn set_tier(root: &Path, id: &str, tier: &str, reason: Option<&str>) -> MR<Value> {
+/// D4 (store `97ce5225`) makes `role` the cell's SOLE model selector, so the
+/// three-value `tier` enum and the verb that wrote it retire. What does NOT
+/// retire is this door: D5 keeps the 40 percent ration "unchanged in force",
+/// and this function plus `bee cells escalate` is where it is enforced. The
+/// old verb carried two jobs in one flag — pick a model tier, and escalate —
+/// and only the second one was ever real (all 22 cells that carried
+/// information in `tier` meant budget; 20 of them `ceiling`). So the tier
+/// half is deleted and the escalation half keeps its name.
+///
+/// `escalate: true` sets the cell's escalation flag. When the post-assignment
+/// escalated share would exceed `CEILING_SHARE_REFUSAL_MAX` it refuses,
+/// naming the share and the threshold, unless `reason` is a non-blank
+/// override — in which case the reason is recorded on the cell's trace as
+/// `escalation_reason`. `escalate: false` is never budget-checked and DISARMS
+/// the flag: `bee cells tier --tier generation` took a cell off the session
+/// model before D5 and `bee cells escalate --off` still does. `reason` given
+/// for an already-under-budget escalation is still persisted (harmless
+/// metadata; never required there).
+///
+/// The literal `tier` string is no longer written. A stored record may still
+/// carry one — D4 retires `tier` as a SELECTOR, it does not rewrite history —
+/// and `cell_is_escalated` still reads that legacy spelling, which is what
+/// keeps the ration firing on a store no one has run
+/// `bee cells backfill-roles` against yet.
+pub(crate) fn set_escalation(
+    root: &Path,
+    id: &str,
+    escalate: bool,
+    reason: Option<&str>,
+) -> MR<Value> {
     let id2 = id.to_string();
-    let tier2 = tier.to_string();
     let reason2 = reason.map(str::to_string);
-    mutate_cell(root, id, "setTier", Some("setTier"), false, move |cell_map| {
-        let escalating = tier2 == crate::verbs::drivers::ESCALATION_WORD;
-        if escalating {
+    mutate_cell(root, id, "escalateCell", Some("escalateCell"), false, move |cell_map| {
+        if escalate {
             let feature = match cell_map.get("feature") {
                 Some(Value::String(f)) if !f.is_empty() => Some(f.as_str()),
                 _ => None,
@@ -1155,7 +1169,7 @@ pub(crate) fn set_tier(root: &Path, id: &str, tier: &str, reason: Option<&str>) 
             let override_reason = reason2.as_deref().map(js_trim).filter(|r| !r.is_empty());
             if share.share > CEILING_SHARE_REFUSAL_MAX && override_reason.is_none() {
                 return Err(Fail::Thrown(format!(
-                    "setTier: cell \"{id2}\" refused — escalating it would put {}/{} of the feature's cells on the session model ({}%), over the {}% escalation budget (D3, decision 0012). Pass --reason <text> to override; the reason is recorded on the cell's tier record.",
+                    "escalateCell: cell \"{id2}\" refused — escalating it would put {}/{} of the feature's cells on the session model ({}%), over the {}% escalation budget (D3, decision 0012). Pass --reason <text> to override; the reason is recorded on the cell's trace as escalation_reason.",
                     share.escalated,
                     share.cells,
                     jsjson::js_f64_to_string(rsv::js_round(share.share * 100.0)),
@@ -1164,7 +1178,7 @@ pub(crate) fn set_tier(root: &Path, id: &str, tier: &str, reason: Option<&str>) 
             }
             if let Some(r) = override_reason {
                 let mut trace = merge_trace(cell_map.get("trace"))?;
-                trace.insert("tier_reason".into(), Value::String(r.to_string()));
+                trace.insert(ESCALATION_REASON_KEY.into(), Value::String(r.to_string()));
                 cell_map.insert("trace".into(), Value::Object(trace));
             }
             cell_map.insert(ESCALATE_FIELD.into(), Value::Bool(true));
@@ -1174,32 +1188,34 @@ pub(crate) fn set_tier(root: &Path, id: &str, tier: &str, reason: Option<&str>) 
             // the same read every other optional cell field gets.
             cell_map.remove(ESCALATE_FIELD);
         }
-        cell_map.insert("tier".into(), Value::String(tier2.clone()));
         Ok(())
     })
 }
 
-pub(crate) fn run_tier(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !rsv::keys_known(&flags, &["id", "tier", "reason"]) {
+/// `bee cells escalate --id <id> [--reason <text>] [--off]` — the door
+/// `bee cells tier --tier ceiling` used to be.
+pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["id", "reason", "off"]) {
         return None;
     }
     let id = flags.req_str("id")?.to_string();
-    let tier = flags.req_str("tier")?.to_string();
-    if !MODEL_TIERS.contains(&tier.as_str()) {
-        return None; // validate()'s required-field enum refusal — Node's bytes
-    }
-    // --reason <text> (D3): overrides the ceiling-share budget refusal
+    let off = bool_flag(&flags, "off")?;
+    // --reason <text> (D3): overrides the escalation-share budget refusal
     // below. A flag-alone `--reason` (no value) is unprovable here — same
     // as every other optional value-flag this verb group parses through
     // `opt_string_flag` — so it delegates to Node's validate().
     let reason = opt_string_flag(&flags, "reason")?;
-    dispatch("cells tier", use_json, t0, move |ctx| {
+    dispatch("cells escalate", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        let cell = set_tier(&root, &id, &tier, reason.as_deref())?;
+        let cell = set_escalation(&root, &id, !off, reason.as_deref())?;
         let text = format!(
-            "Cell {} tier set to {}.",
+            "Cell {} {}.",
             js_string_or_undefined(cell.get("id")),
-            js_string_or_undefined(cell.get("tier"))
+            if off {
+                "is no longer escalated — it runs on its role's model"
+            } else {
+                "escalated — it runs on the session model and charges the 40% ration"
+            }
         );
         Ok(Out::Emit(cell, text, 0))
     })

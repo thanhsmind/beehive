@@ -200,9 +200,11 @@ One unit of executable work — the atom the swarm dispatches. One file per cell
 | `behavior_change` | bool — gates scribing + the semantic judge |
 | `verify` | plan text describing how the change is proven. **MAIN owns running it, once, at feature close** — never the assigned worker (`cells show` states this as `verify_owner`) |
 | `deps` | cell ids that must cap first |
-| `tier` | dispatch tier (`generation`, …) |
+| `role` | **required** — the job this work is (`code`, `read`, `test`, `docs`, `review`, `design`, or any name you configure). The cell's sole model selector: the dispatch asks for this name first and falls through when nothing configures it. Any non-empty name is legal; bee holds no list |
+| `escalate` | bool — run this cell on the session model and charge the 40% escalation ration. Set through `bee cells escalate` (the door that checks the ration), never a role name |
+| `tier` | **retired** as the model selector (model-role-split D4). `role` selects the model; `escalate` is the session-model flag. Records written before the retirement still carry the field, and it is read for exactly one thing: `tier: "ceiling"` still counts as escalated until `bee cells backfill-roles` has run |
 | `status` | `open` · `claimed` · `capped` · `blocked` · `dropped` |
-| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence, report}` — `report` is the worker's structured Result, written by `cells finish --report` |
+| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence, report}` — `report` is the worker's structured Result, written by `cells finish --report`. `escalation_reason` joins it when an over-ration escalation was allowed on a named `--reason` (spelled `tier_reason` on records written before model-role-split D4; `bee cells backfill-roles` renames it) |
 
 `trace.tests` is a proof string `<command> — <result> — <scope reason>` on a
 cap (decision `1f534837`): the writer picks the proof its change type needs,
@@ -407,7 +409,7 @@ top-level spellings still work. `bee --help --all [--json]` lists the full regis
 
 | Group | Verbs |
 |-------|-------|
-| `cells` | list · ready · show · add · update · claim · claim-next · unclaim · finish · cap · block · drop · reopen · tier · judge · judge-record · reset-budget · schedule · archive · unarchive |
+| `cells` | list · ready · show · add · update · claim · claim-next · unclaim · finish · cap · block · drop · reopen · escalate · judge · judge-record · reset-budget · schedule · archive · unarchive · backfill-roles |
 | `state` | set · gate · route · start-feature · lanes · scribing-run · compounding-run · plan-rev bump · session.* · handoff.* · workflows.* · rebuild-projections · advisor-ref.* · compact-* (worker.* = compat no-ops) |
 | `reservations` | reserve · release · list · sweep |
 | `decisions` | log · supersede · redact · active · search · archive · tag · render |
@@ -470,7 +472,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `cells claim` | the feature has no route record **and** this session already spent its one-time warning on an earlier claim (warn once, then refuse) | `bee route --set …`. A racing loser sees the typed `CLAIMED` refusal first, so a claim conflict never reads as a routing problem |
 | `cells finish` (cap) | lane is `small`/`standard`/`high-risk` and `trace.worker` names no registered execution worker — a lane that must dispatch cannot cap as if it had | `--inline-reason "<why>"`, stored on `trace.inline_reason`. `tiny` never reaches this branch |
 | `cells finish` (cap) | the cell changed files and no commit in the last 50 commits carries the trailer `cell: <id>` — one commit per cell, checked, not asserted | `--commit-pending "<reason>"`, stored on `trace.commit_pending` |
-| `cells tier` | escalating a cell (`--tier ceiling`, which sets its `escalate` flag) would put more than 40% of the feature's cells on the session model (exactly 40% passes) | `--reason "<text>"`, stored on `trace.tier_reason` |
+| `cells escalate` | escalating a cell (setting its `escalate` flag) would put more than 40% of the feature's cells on the session model (exactly 40% passes) | `--reason "<text>"`, stored on `trace.escalation_reason` |
 | `bee close` | the feature has `behavior_change` cells capped since the last scribing stamp and nothing captured them | run `bee-capturing`, or log a `capture-deferral` decision naming the feature |
 | `bee close` (judge-debt, standard/high-risk lanes only) | a `behavior_change` cell capped since the judge-debt door shipped carries no `cells judge-record` verdict | run `bee cells judge` then `bee cells judge-record` for each named cell, or log a `judge-deferral` decision naming the feature |
 | `bee close` (doc-deferral door) | deferral-shaped prose (matching `matches_deferral_prose`) appears outside a fence with no same-line registered trigger citation | register the condition (`bee triggers add --decision <id> --condition "..."`) and cite it inline (backtick `` `<id>` `` or `[[trigger:<id>]]`), log a `doc-deferral` decision naming the feature, or — only for prose that *documents* deferral machinery rather than prose that itself defers — wrap it in a reasoned `<!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral -->` block; the reason is required, an empty or missing one exempts nothing |

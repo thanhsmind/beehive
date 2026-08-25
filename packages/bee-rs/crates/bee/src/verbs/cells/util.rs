@@ -75,7 +75,14 @@ pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option
         "drop" => run_drop(flags, use_json, t0),
         "unclaim" => run_unclaim(flags, use_json, t0),
         "reopen" => run_reopen(flags, use_json, t0),
-        "tier" => run_tier(flags, use_json, t0),
+        // D4 (store `97ce5225`) — `tier` is gone from this table, and
+        // `escalate` is what it always really was. Served here and DECLARED
+        // in generated/registry_payload.json in the same change, in BOTH
+        // directions: mrs-12 proved a verb the dispatcher serves and the
+        // registry does not describe is reported unknown by `bee --help
+        // --all`, and tests/registry_dispatch.rs proves the inverse — a verb
+        // the registry declares and no code serves fails the same law.
+        "escalate" => run_escalate(flags, use_json, t0),
         "judge" => run_judge(flags, use_json, t0),
         "reset-budget" => run_reset_budget(flags, use_json, t0),
         "judge-record" => run_judge_record(flags, use_json, t0),

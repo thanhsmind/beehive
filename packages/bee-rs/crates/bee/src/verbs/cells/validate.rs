@@ -26,7 +26,14 @@ use std::time::Instant;
 
 pub(crate) const LANES: [&str; 5] = ["tiny", "small", "standard", "high-risk", "spike"];
 
-pub(crate) const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
+// D4 (store `97ce5225`) retired `MODEL_TIERS` from this file. It was the
+// closed three-value enum `bee cells add` checked an optional `tier` against
+// and `bee cells tier` checked its own required flag against; `role` is the
+// cell's sole model selector now, so neither door exists to hold it. The
+// FIELD is not policed at all any more: a record written before the
+// retirement may still carry a `tier` string, harmlessly, and
+// `cell_is_escalated` below still reads the one value that ever meant
+// something. Retiring a selector is not rewriting history.
 
 /// D8 (store `4eaf1b71`): the recommended role vocabulary, **authoring
 /// guidance only**. It is printed in the missing-`role` FIX line so an
@@ -54,6 +61,22 @@ pub(crate) const ROLE_VOCABULARY: [&str; 6] = ["code", "read", "test", "docs", "
 /// carve-out at all — `ceiling` is simply not a role, so
 /// `resolve_role_named` needs no branch for it.
 pub(crate) const ESCALATE_FIELD: &str = "escalate";
+
+/// D4 (store `97ce5225`) — the cell TRACE key that carries the `--reason`
+/// text an over-budget escalation was allowed on.
+///
+/// It was `tier_reason` while `tier` still existed. mrs-14 deliberately left
+/// it unrenamed because `docs/handbook/register.md` publishes the key and
+/// stored records already carry it; the tier retirement moves all three in
+/// one change — the writer (`handlers_close.rs`), the published name
+/// (`docs/handbook/register.md`), and the stored records (`bee cells
+/// backfill-roles` renames the key wherever it finds it).
+pub(crate) const ESCALATION_REASON_KEY: &str = "escalation_reason";
+
+/// The legacy spelling of `ESCALATION_REASON_KEY`, still found on records
+/// written before the tier retirement. Nothing WRITES it; the migration reads
+/// it once and renames it.
+pub(crate) const LEGACY_ESCALATION_REASON_KEY: &str = "tier_reason";
 
 /// The ONE predicate for "does this cell run on the session model and charge
 /// the ration". Both readers ask it — the ration (`handlers_close.rs`) and
@@ -229,20 +252,19 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             problems.push("addCell: optional \"pbi\" must be a string backlog id when present.".into());
         }
     }
-    if let Some(tier) = map.get("tier") {
-        let ok = matches!(tier, Value::Null)
-            || matches!(tier, Value::String(s) if MODEL_TIERS.contains(&s.as_str()));
-        if !ok {
-            problems.push(format!(
-                "addCell: optional \"tier\" must be one of {} when present.",
-                MODEL_TIERS.join(", ")
-            ));
-        }
-    }
+    // D4 (store `97ce5225`): there is deliberately NO check on `tier` here
+    // any more. The optional add-time enum went with the selector — an author
+    // declares `role`, and nothing bee ships tells anyone to set a tier. A
+    // legacy payload that still carries the field is accepted and ignored
+    // rather than refused: refusing it would break replaying stored history
+    // for no gain, and the one value that ever carried meaning (`ceiling`) is
+    // still read by `cell_is_escalated` until every store is migrated.
+    //
     // D5 (store `97ce5225`): the escalation flag is a boolean and nothing
     // else. Presence and shape only — there is no budget check at authoring
     // time, exactly as there was none for authoring `tier: "ceiling"`; the
-    // 40 percent ration lives on the `cells tier` door where it always did.
+    // 40 percent ration lives on the `bee cells escalate` door — the same
+    // door as ever, under the name the tier retirement left it with.
     if let Some(escalate) = map.get(ESCALATE_FIELD) {
         let ok = matches!(escalate, Value::Null | Value::Bool(true) | Value::Bool(false));
         if !ok {

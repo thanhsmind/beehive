@@ -434,7 +434,14 @@ pub(crate) fn update_frozen_hint(key: &str) -> Option<&'static str> {
         "feature" => Some("a cell never moves between features — drop and re-add instead"),
         "status" => Some("status moves only through claim/verify/cap/block/drop"),
         "trace" => Some("the trace is the frozen audit record — claim/verify/cap own it"),
-        "tier" => Some("use the tier verb (bee cells tier --id ID --tier T)"),
+        // D4 (store `97ce5225`): `tier` is retired as the model selector, so
+        // this hint no longer names a verb to set it — there is none. It
+        // stays a FROZEN key rather than an unknown one because stored
+        // records still carry the field and a patch naming it deserves the
+        // sentence that explains what replaced it.
+        "tier" => Some(
+            "tier is retired as the model selector — a cell's \"role\" is the job that picks its model, and escalation is the \"escalate\" flag (bee cells escalate --id ID)",
+        ),
         _ => None,
     }
 }
@@ -1356,12 +1363,22 @@ pub(crate) fn claim_cell_cross_session_ex(
 // escalations answer the flag and some answer the tier, and the ration
 // divides by a whole-store scan.
 //
-// The `tier` string itself is LEFT IN PLACE. `verbs/status_full/cells.rs`
-// and `hooks/session_preamble/store.rs` still count it for their advice
-// lines, and both belong to the tier-retirement slice that deletes the field
-// outright; dropping it here would blind two counters this pass cannot fix.
-// So the verb writes exactly two fields, and only where they are missing:
-// `role` and `escalate`.
+// WHAT THE RETIRED `tier_reason` TAKES NOW. D4 (store `97ce5225`) retired
+// the `tier` selector, and the escalation reason went with its name:
+// `trace.tier_reason` is `trace.escalation_reason` from here on. mrs-14 left
+// the key alone on purpose — `docs/handbook/register.md` publishes it and
+// stored records carry it — so the rename lands as one change with its
+// surfaces, and this pass is the third of them: wherever a stored trace still
+// spells the key the old way, it is renamed in place, VALUE UNTOUCHED. Same
+// pass, same reason as `escalate`: a half-renamed store would answer the same
+// question two ways.
+//
+// The `tier` string itself is LEFT IN PLACE. D4 retires `tier` as a
+// SELECTOR; it does not order stored history rewritten, and a legacy record
+// carrying the field is harmless — `cell_is_escalated` reads exactly one of
+// its values and nothing else reads it at all. So the verb writes three
+// things, and only where they are missing or misspelled: `role`, `escalate`,
+// and the escalation reason's key.
 //
 // NO COUNT IS HARDCODED. The decision measured 484 / 2 / 20 on 2026-08-24;
 // the store has grown since and will grow again. Every number below is
@@ -1426,6 +1443,11 @@ pub(crate) struct RoleBackfill {
     /// the `escalate` flag. Counted separately from `assigned` because the
     /// two answer different questions and a cell can need both.
     pub(crate) escalated: u64,
+    /// D4: traces whose `tier_reason` key was renamed to `escalation_reason`.
+    /// Its own counter for the same reason: a cell can need this and neither
+    /// of the other two, and an operator reading "0 escalated" must not read
+    /// it as "no reason moved".
+    pub(crate) reasons_renamed: u64,
     /// `(id, tier)` for every cell whose tier D9's mapping does not cover.
     pub(crate) unmapped: Vec<(String, String)>,
     /// Store-relative paths of files that are absent, corrupt, or not a JSON
@@ -1529,6 +1551,16 @@ pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
         // it there.
         let needs_flag = matches!(tier.map(js_trim), Some(t) if t == crate::verbs::drivers::ESCALATION_WORD)
             && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true)));
+        // D4: the escalation reason under its retired key. Renamed only when
+        // the new key is not already there, so a record migrated once is
+        // never rewritten and never has its current reason overwritten by a
+        // stale one.
+        let legacy_reason = cell
+            .get("trace")
+            .and_then(Value::as_object)
+            .filter(|t| !t.contains_key(ESCALATION_REASON_KEY))
+            .and_then(|t| t.get(LEGACY_ESCALATION_REASON_KEY))
+            .cloned();
         let mut new_role: Option<&'static str> = None;
         if !has_role {
             match d9_role_for_tier(tier) {
@@ -1541,7 +1573,7 @@ pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
                 }
             }
         }
-        if new_role.is_none() && !needs_flag {
+        if new_role.is_none() && !needs_flag && legacy_reason.is_none() {
             // Nothing to add — not re-derived, not rewritten, not even opened
             // for writing. This IS the idempotence guarantee.
             continue;
@@ -1559,9 +1591,15 @@ pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
             report.escalated += 1;
             migrated.insert(ESCALATE_FIELD.into(), Value::Bool(true));
         }
-        // Exactly two fields, and `tier` is not one of them: it stays as the
-        // store recorded it until the tier-retirement slice removes the
-        // field everywhere at once.
+        if let Some(reason) = legacy_reason {
+            report.reasons_renamed += 1;
+            if let Some(trace) = migrated.get_mut("trace").and_then(Value::as_object_mut) {
+                trace.remove(LEGACY_ESCALATION_REASON_KEY);
+                trace.insert(ESCALATION_REASON_KEY.into(), reason);
+            }
+        }
+        // `tier` is not among what this writes: D4 retires it as a selector,
+        // and a stored record may keep carrying the string harmlessly.
         plan.push((file, Value::Object(migrated)));
     }
 
@@ -1605,6 +1643,7 @@ pub(crate) fn role_backfill_json(report: &RoleBackfill, dry_run: bool) -> Value 
         "by_role": Value::Object(by_role),
         "by_source": Value::Object(by_source),
         "escalated": report.escalated,
+        "reasons_renamed": report.reasons_renamed,
         "unmapped": report
             .unmapped
             .iter()
@@ -1640,6 +1679,13 @@ pub(crate) fn role_backfill_text(report: &RoleBackfill, dry_run: bool) -> String
         "tier:ceiling",
         report.escalated,
         if dry_run { "  (would be marked)" } else { "  (marked)" }
+    ));
+    lines.push(format!(
+        "  {:<16} -> trace.{} {:>3}{}",
+        format!("trace.{LEGACY_ESCALATION_REASON_KEY}"),
+        ESCALATION_REASON_KEY,
+        report.reasons_renamed,
+        if dry_run { "  (would be renamed)" } else { "  (renamed)" }
     ));
     if !report.unmapped.is_empty() {
         lines.push(format!(

@@ -65,7 +65,9 @@ pub const PORTED: &[&str] = &[
     // R3 wave 2
     "--help (all forms, incl. group-scoped)",
     "test",
-    "cells add|update|claim|unclaim|cap|finish|block|drop|reopen|tier",
+    // model-role-split D4 — `cells tier` retired with the selector it wrote;
+    // `cells escalate` is the escalation half of it, under its own name.
+    "cells add|update|claim|unclaim|cap|finish|block|drop|reopen|escalate",
     "cells judge|judge-record|reset-budget|schedule|archive|unarchive",
     // model-role-split D9 — the one-time role backfill over the stored cells.
     "cells backfill-roles [--dry-run]",
