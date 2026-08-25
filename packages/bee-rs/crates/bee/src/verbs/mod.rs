@@ -26,6 +26,7 @@ pub mod feedback;
 pub mod help;
 pub mod intent_group;
 pub mod knowledge;
+pub mod mailbox; // library module (no try_native) — never probed below
 pub mod reservations;
 pub mod reviews;
 pub mod staging;
