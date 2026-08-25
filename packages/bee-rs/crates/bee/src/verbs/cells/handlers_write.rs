@@ -1453,6 +1453,13 @@ pub(crate) struct RoleBackfill {
     /// Store-relative paths of files that are absent, corrupt, or not a JSON
     /// object — skipped and named, never guessed at.
     pub(crate) unreadable: Vec<String>,
+    /// Store-relative paths of records that MOVED between the scan and the
+    /// lock — another writer landed, or `bee close` archived the feature.
+    /// The part of their planned migration the record no longer asks for was
+    /// dropped rather than written over it. Named rather than retried in
+    /// place, because the pass is idempotent and a re-run finishes them
+    /// against a store that has stopped moving.
+    pub(crate) changed_during_pass: Vec<String>,
 }
 
 impl RoleBackfill {
@@ -1516,21 +1523,163 @@ fn store_relative(root: &Path, file: &Path) -> String {
     file.strip_prefix(root).unwrap_or(file).to_string_lossy().replace('\\', "/")
 }
 
+/// The three keys D9's migration owns, derived from ONE record: `role`
+/// (D9), `escalate` (D5), and the escalation reason's key inside `trace`
+/// (D4). Naming the change as a value rather than as a rewritten object is
+/// what lets the write half re-read a record under the lock and apply only
+/// the part that record still asks for — a cell's other fields are never
+/// this pass's to write, and a whole-object write of a stale clone is
+/// exactly how a concurrent writer gets reversed.
+#[derive(Clone, Default, PartialEq)]
+pub(crate) struct RoleMigration {
+    /// The role to add. `None` when the record already carries one, and
+    /// `None` when its tier is outside D9's mapping — that hole is counted
+    /// and named, never guessed at.
+    role: Option<&'static str>,
+    /// Which row of `ROLE_BACKFILL_SOURCES` the role came from, so the
+    /// per-source counts fold out of the same derivation that produced the
+    /// bytes rather than out of a second reading of them.
+    source: Option<usize>,
+    /// D5: the legacy `tier: "ceiling"` spelling, not yet on the flag.
+    escalate: bool,
+    /// D4: the reason value still sitting under the retired key.
+    reason: Option<Value>,
+}
+
+impl RoleMigration {
+    /// Nothing to add — not re-derived, not rewritten, not even opened for
+    /// writing. This IS the idempotence guarantee.
+    fn is_noop(&self) -> bool {
+        self.role.is_none() && !self.escalate && self.reason.is_none()
+    }
+
+    /// The part of a planned migration that a fresh reading of the same
+    /// record still asks for, key by key. A key both readings agree on is
+    /// applied; a key that moved between the scan and the lock belongs to
+    /// whoever moved it, so it is dropped here rather than written over.
+    /// Dropping costs nothing but a re-run: the pass is idempotent, and the
+    /// record it dropped is named in `changed_during_pass`.
+    fn still_agreed(&self, fresh: &Self) -> Self {
+        let role_agrees = matches!((self.role, fresh.role), (Some(p), Some(f)) if p == f);
+        Self {
+            role: if role_agrees { self.role } else { None },
+            source: if role_agrees { self.source } else { None },
+            escalate: self.escalate && fresh.escalate,
+            reason: match (&self.reason, &fresh.reason) {
+                (Some(planned), Some(now)) if planned == now => Some(now.clone()),
+                _ => None,
+            },
+        }
+    }
+}
+
+/// What ONE record needs, read off that record and nothing remembered.
+fn plan_role_migration(cell: &Map<String, Value>) -> RoleMigration {
+    let tier = cell.get("tier").and_then(|t| t.as_str());
+    let mut plan = RoleMigration::default();
+    if !nonblank_string(cell.get("role")) {
+        plan.role = d9_role_for_tier(tier);
+        if plan.role.is_some() {
+            let source = d9_source_for_tier(tier);
+            plan.source = ROLE_BACKFILL_SOURCES.iter().position(|(s, _)| *s == source);
+        }
+    }
+    // D5: the legacy escalation spelling, and whether it has already been
+    // converted. A cell that carries the flag is done, whichever pass put
+    // it there.
+    plan.escalate = matches!(tier.map(js_trim), Some(t) if t == crate::verbs::drivers::ESCALATION_WORD)
+        && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true)));
+    // D4: the escalation reason under its retired key. Renamed only when
+    // the new key is not already there, so a record migrated once is never
+    // rewritten and never has its current reason overwritten by a stale one.
+    plan.reason = cell
+        .get("trace")
+        .and_then(Value::as_object)
+        .filter(|t| !t.contains_key(ESCALATION_REASON_KEY))
+        .and_then(|t| t.get(LEGACY_ESCALATION_REASON_KEY))
+        .cloned();
+    plan
+}
+
+/// The migration, onto the record it was derived from — three keys and no
+/// others. `tier` is not among what this writes: D4 retires it as a
+/// selector, and a stored record may keep carrying the string harmlessly.
+fn apply_role_migration(cell: &mut Map<String, Value>, plan: &RoleMigration) {
+    if let Some(role) = plan.role {
+        cell.insert("role".into(), Value::String(role.to_string()));
+    }
+    if plan.escalate {
+        cell.insert(ESCALATE_FIELD.into(), Value::Bool(true));
+    }
+    if let Some(reason) = plan.reason.clone() {
+        if let Some(trace) = cell.get_mut("trace").and_then(Value::as_object_mut) {
+            trace.remove(LEGACY_ESCALATION_REASON_KEY);
+            trace.insert(ESCALATION_REASON_KEY.into(), reason);
+        }
+    }
+}
+
+/// The counters for one migration. In an applied run this is fed from what
+/// was WRITTEN rather than from what was planned, so every number describes
+/// bytes that are on disk.
+fn record_role_migration(report: &mut RoleBackfill, plan: &RoleMigration) {
+    if plan.role.is_some() {
+        report.assigned += 1;
+        if let Some(i) = plan.source {
+            report.by_source[i] += 1;
+        }
+    }
+    if plan.escalate {
+        report.escalated += 1;
+    }
+    if plan.reason.is_some() {
+        report.reasons_renamed += 1;
+    }
+}
+
 /// One full pass. Scans EVERY stored cell and builds the whole plan before
 /// it writes a single file, so the counts a caller reads describe the same
 /// store state the writes were derived from — a half-scanned store would
 /// misreport exactly the way a half-migrated one would.
 ///
-/// Concurrency: the write half holds the `cells-archive` store lock for its
-/// duration — the same lock `writeCell` acquires (single-attempt) on every
-/// cell write and the same lock `archiveFeature` holds across a whole
-/// feature's move. So a concurrent `cells update`/`cap`/`claim` cannot
-/// half-write behind this pass: it takes its own `cells:<id>` lock, reaches
-/// `writeCell`, finds the archive lock held, and refuses with the typed
-/// CELLS_ARCHIVE_BUSY message that tells the caller to retry.
+/// Concurrency: the scan runs UNLOCKED, deliberately. A 40 000-cell store
+/// takes about a second to scan, and holding the archive lock across it
+/// would refuse every other writer in the repository for that whole second.
+/// What an unlocked scan may produce is therefore a PLAN, never bytes.
+///
+/// The write half takes the `cells-archive` store lock — the same lock
+/// `writeCell` acquires (single-attempt) on every cell write, and the same
+/// lock `archiveFeature` holds across a whole feature's move — and then
+/// RE-READS every planned file under it. Each record is migrated from that
+/// fresh reading, and only for the keys this migration owns (`role`,
+/// `escalate`, `trace.escalation_reason`) that the fresh reading still asks
+/// for. Three things follow, and they are the contract:
+///
+/// - A writer that COMPLETES during the scan is not reversed. Its bytes are
+///   in the copy this pass migrates, and any owned key it moved is dropped
+///   from the plan and named in `changed_during_pass` for the next run.
+/// - A file that went away under the scan — `bee close` archiving its
+///   feature — is skipped, never recreated. A whole-object write here would
+///   resurrect an archived cell as a live duplicate, because `readCell`
+///   prefers the live copy.
+/// - A writer that ARRIVES during the write half is refused by the lock
+///   itself, with the typed CELLS_ARCHIVE_BUSY message telling it to retry.
 pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
+    backfill_roles_interleaved(root, dry_run, || {})
+}
+
+/// `backfill_roles` with a seam between the scan and the lock. That window —
+/// unlocked, plan built, nothing written yet — is the one the concurrency
+/// contract above is entirely about, and handing a test the window itself is
+/// the only way to pin the contract without a sleep or a thread race.
+/// Production takes the no-op closure.
+pub(crate) fn backfill_roles_interleaved(
+    root: &Path,
+    dry_run: bool,
+    between_scan_and_write: impl FnOnce(),
+) -> MR<RoleBackfill> {
     let mut report = RoleBackfill::default();
-    let mut plan: Vec<(PathBuf, Value)> = Vec::new();
+    let mut plan: Vec<(PathBuf, RoleMigration)> = Vec::new();
 
     for file in stored_cell_files(root) {
         report.scanned += 1;
@@ -1541,85 +1690,73 @@ pub(crate) fn backfill_roles(root: &Path, dry_run: bool) -> MR<RoleBackfill> {
                 continue;
             }
         };
-        let tier = cell.get("tier").and_then(|t| t.as_str());
         let has_role = nonblank_string(cell.get("role"));
         if has_role {
             report.already_roled += 1;
         }
-        // D5: the legacy escalation spelling, and whether it has already been
-        // converted. A cell that carries the flag is done, whichever pass put
-        // it there.
-        let needs_flag = matches!(tier.map(js_trim), Some(t) if t == crate::verbs::drivers::ESCALATION_WORD)
-            && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true)));
-        // D4: the escalation reason under its retired key. Renamed only when
-        // the new key is not already there, so a record migrated once is
-        // never rewritten and never has its current reason overwritten by a
-        // stale one.
-        let legacy_reason = cell
-            .get("trace")
-            .and_then(Value::as_object)
-            .filter(|t| !t.contains_key(ESCALATION_REASON_KEY))
-            .and_then(|t| t.get(LEGACY_ESCALATION_REASON_KEY))
-            .cloned();
-        let mut new_role: Option<&'static str> = None;
-        if !has_role {
-            match d9_role_for_tier(tier) {
-                Some(role) => new_role = Some(role),
-                None => {
-                    report.unmapped.push((
-                        js_string_or_undefined(cell.get("id")),
-                        tier.unwrap_or("").to_string(),
-                    ));
-                }
-            }
+        let planned = plan_role_migration(&cell);
+        if !has_role && planned.role.is_none() {
+            report.unmapped.push((
+                js_string_or_undefined(cell.get("id")),
+                cell.get("tier").and_then(|t| t.as_str()).unwrap_or("").to_string(),
+            ));
         }
-        if new_role.is_none() && !needs_flag && legacy_reason.is_none() {
-            // Nothing to add — not re-derived, not rewritten, not even opened
-            // for writing. This IS the idempotence guarantee.
+        if planned.is_noop() {
             continue;
         }
-        let mut migrated = cell.clone();
-        if let Some(role) = new_role {
-            let source = d9_source_for_tier(tier);
-            if let Some(i) = ROLE_BACKFILL_SOURCES.iter().position(|(s, _)| *s == source) {
-                report.by_source[i] += 1;
-            }
-            report.assigned += 1;
-            migrated.insert("role".into(), Value::String(role.to_string()));
-        }
-        if needs_flag {
-            report.escalated += 1;
-            migrated.insert(ESCALATE_FIELD.into(), Value::Bool(true));
-        }
-        if let Some(reason) = legacy_reason {
-            report.reasons_renamed += 1;
-            if let Some(trace) = migrated.get_mut("trace").and_then(Value::as_object_mut) {
-                trace.remove(LEGACY_ESCALATION_REASON_KEY);
-                trace.insert(ESCALATION_REASON_KEY.into(), reason);
-            }
-        }
-        // `tier` is not among what this writes: D4 retires it as a selector,
-        // and a stored record may keep carrying the string harmlessly.
-        plan.push((file, Value::Object(migrated)));
+        plan.push((file, planned));
     }
 
     if dry_run {
+        for (_, planned) in &plan {
+            record_role_migration(&mut report, planned);
+        }
         return Ok(report); // `written` stays 0 — nothing was opened for writing
     }
 
+    between_scan_and_write();
+
     let mut guard = acquire_named_lock(root, "cells-archive")?;
-    let outcome = (|| -> MR<u64> {
-        let mut written = 0u64;
-        for (file, cell) in &plan {
-            write_json_atomic(file, cell).map_err(|e| {
+    let mut written = 0u64;
+    let mut applied: Vec<RoleMigration> = Vec::new();
+    let mut changed: Vec<String> = Vec::new();
+    let outcome = (|| -> MR<()> {
+        for (file, planned) in &plan {
+            let fresh = match read_json(file) {
+                ReadJson::Parsed(Value::Object(map)) => map,
+                // Gone or unreadable since the scan: archived out from under
+                // the pass, or replaced by something that is not a record.
+                // Writing the plan here is what would recreate an archived
+                // cell as a live duplicate.
+                ReadJson::Parsed(_) | ReadJson::Missing | ReadJson::Corrupt => {
+                    changed.push(store_relative(root, file));
+                    continue;
+                }
+            };
+            let agreed = planned.still_agreed(&plan_role_migration(&fresh));
+            if agreed != *planned {
+                changed.push(store_relative(root, file));
+            }
+            if agreed.is_noop() {
+                continue;
+            }
+            let mut migrated = fresh;
+            apply_role_migration(&mut migrated, &agreed);
+            write_json_atomic(file, &Value::Object(migrated)).map_err(|e| {
                 Fail::Thrown(format!("cells backfill-roles: writing {} — {e}", file.display()))
             })?;
             written += 1;
+            applied.push(agreed);
         }
-        Ok(written)
+        Ok(())
     })();
     guard.release();
-    report.written = outcome?;
+    outcome?;
+    for applied_plan in &applied {
+        record_role_migration(&mut report, applied_plan);
+    }
+    report.written = written;
+    report.changed_during_pass = changed;
     Ok(report)
 }
 
@@ -1650,6 +1787,7 @@ pub(crate) fn role_backfill_json(report: &RoleBackfill, dry_run: bool) -> Value 
             .map(|(id, tier)| json!({"id": id, "tier": tier}))
             .collect::<Vec<_>>(),
         "unreadable": report.unreadable.clone(),
+        "changed_during_pass": report.changed_during_pass.clone(),
     })
 }
 
@@ -1704,6 +1842,13 @@ pub(crate) fn role_backfill_text(report: &RoleBackfill, dry_run: bool) -> String
             "  {} unreadable file(s) skipped: {}",
             report.unreadable.len(),
             report.unreadable.join(", ")
+        ));
+    }
+    if !report.changed_during_pass.is_empty() {
+        lines.push(format!(
+            "  {} cell(s) changed under the pass and kept their own writer's value: {}",
+            report.changed_during_pass.len(),
+            report.changed_during_pass.join(", ")
         ));
     }
     lines.push(if dry_run {

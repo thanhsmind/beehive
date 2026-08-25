@@ -7919,6 +7919,124 @@ use std::time::Instant;
         assert_eq!(backfill_roles(&root, false).unwrap().written, 0);
     }
 
+    // ── The unlocked scan (review r2, P1-B) ───────────────────────────────
+    //
+    // What these close: the pass took the `cells-archive` lock for its WRITE
+    // half only, and every write was a whole object cloned during the
+    // unlocked scan. Demonstrated on a 40 000-cell store — a
+    // `cells escalate --off` that COMPLETED at t=25ms was back on disk as
+    // `escalate: true` when the pass finished at t=1.007s. Not a half-write:
+    // a complete write, completely reversed. Only writers that finished
+    // inside the scan were lost, which is why casual testing never saw it.
+    //
+    // Why the seam and not a thread: every backfill test above is
+    // single-threaded, and the whole suite passed with `acquire_named_lock`
+    // DELETED. A sleep-and-race test would swap that silence for flakiness.
+    // `backfill_roles_interleaved` hands the test the window itself — plan
+    // built, lock not yet taken — so the interleaving is decided by the
+    // test, not by the machine.
+
+    /// `backfill_store` plus `e-1`, in the demonstration's exact shape: no
+    /// role (so the pass DOES plan a write for it) and the escalation flag
+    /// already set (so the flag is NOT part of what the pass plans to
+    /// change). That combination is what makes the reversal invisible — the
+    /// pass never meant to touch the flag, and reversed it anyway.
+    fn escalated_backfill_store() -> (tempfile::TempDir, PathBuf) {
+        let (tmp, root) = backfill_store();
+        let mut armed = roleless("e-1", json!("ceiling"));
+        armed.as_object_mut().unwrap().insert(ESCALATE_FIELD.into(), json!(true));
+        write_cell_fixture(&root, "e-1", &armed);
+        (tmp, root)
+    }
+
+    #[test]
+    fn an_operator_write_that_lands_before_the_lock_is_never_reversed() {
+        let (_tmp, root) = escalated_backfill_store();
+        let disarm_root = root.clone();
+        let report = backfill_roles_interleaved(&root, false, || {
+            // A real operator door, in the window the review measured: the
+            // plan is built and the lock is not held, so this write is
+            // ALLOWED — exactly why the defect only ever lost the writers
+            // that completed.
+            set_escalation(&disarm_root, "e-1", false, None)
+                .expect("the disarm lands while the pass is still unlocked");
+        })
+        .expect("the pass itself must not refuse");
+
+        let after = read_cell_fixture(&root, "e-1");
+        assert!(
+            after.get(ESCALATE_FIELD).is_none(),
+            "the operator's disarm must survive: the write half re-reads under the lock and \
+             merges the keys it owns, instead of restoring a clone taken before the disarm \
+             existed — got {after}"
+        );
+        assert_eq!(
+            after["role"],
+            json!("code"),
+            "and the migration still adds the one key it did plan for this cell"
+        );
+        assert_eq!(report.escalated, 3, "c-1, c-2 and archived a-1 — never e-1, which was already flagged");
+        assert!(
+            report.changed_during_pass.is_empty(),
+            "nothing was dropped: the plan for e-1 (role only) still applied in full — {:?}",
+            report.changed_during_pass
+        );
+    }
+
+    #[test]
+    fn a_feature_archived_before_the_lock_is_not_recreated_as_a_live_duplicate() {
+        let (_tmp, root) = backfill_store();
+        let close_root = root.clone();
+        let report = backfill_roles_interleaved(&root, false, || {
+            // `bee close`'s own archiving door, unblocked in this window for
+            // the same reason the disarm above is.
+            archive_feature_for_close(&close_root, "demo").expect("every demo cell is capped");
+        })
+        .expect("a feature archived under the pass is not an error");
+
+        assert!(
+            !cell_file(&root, "g-1").exists(),
+            "an archived cell must not be recreated at its live path — readCell prefers the \
+             live copy, so a whole-object write here forges a duplicate of archived history"
+        );
+        assert_eq!(report.written, 2, "only old-feature's archive, which nothing moved");
+        assert_eq!(
+            report.changed_during_pass.len(),
+            8,
+            "the eight demo records that moved are named, not written — {:?}",
+            report.changed_during_pass
+        );
+        // Idempotent as ever: the next run finishes them at their new home.
+        let second = backfill_roles(&root, false).unwrap();
+        assert_eq!(second.written, 8);
+        assert!(second.changed_during_pass.is_empty(), "{:?}", second.changed_during_pass);
+    }
+
+    /// The lock line itself, which nothing above ever asked about: deleting
+    /// `acquire_named_lock` left the whole suite green. Costs one bounded
+    /// wait (MAX_ATTEMPTS × RETRY_DELAY_MS) on purpose — the refusal IS the
+    /// assertion, and a live holder is never stale-taken inside that window.
+    #[test]
+    fn the_write_half_refuses_while_the_archive_lock_is_held() {
+        let (_tmp, root) = backfill_store();
+        let mut held =
+            lock::acquire_store_lock(&root, "cells-archive", 1).expect("the store starts unlocked");
+
+        let refusal = thrown(backfill_roles(&root, false));
+        assert!(refusal.contains("cells-archive"), "{refusal}");
+        assert!(
+            read_cell_fixture(&root, "g-1").get("role").is_none(),
+            "a refused pass writes nothing at all"
+        );
+
+        held.release();
+        assert_eq!(
+            backfill_roles(&root, false).unwrap().written,
+            10,
+            "and the same pass goes through once the holder is gone"
+        );
+    }
+
     #[test]
     fn an_unmapped_tier_and_an_unreadable_file_are_named_never_guessed() {
         let tmp = tempfile::tempdir().unwrap();
