@@ -127,7 +127,7 @@ fn taxonomy_path(root: &Path) -> PathBuf {
 mod tests;
 
 mod store;
-mod scanners;
+pub(crate) mod scanners;
 mod read;
 mod verbs_read;
 mod verbs_write;
