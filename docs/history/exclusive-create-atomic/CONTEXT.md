@@ -78,10 +78,13 @@ branch is skipped. That is precisely what stops a partial read from deciding a
 
 Keep that derivation. This fix removes the partial read, so the `None` branch
 stops being reachable from a race — but the predicate must stay conservative
-regardless. If a later cleanup makes an unreadable lease count as expired, a
+regardless.
+<!-- bee:not-a-deferral: a standing warning about a hypothetical future edit to this predicate, not a promise by this feature to act later; there is no deferred work here and nothing to trigger on -->
+If a later cleanup makes an unreadable lease count as expired, a
 mid-write lease becomes takeable and two agents can hold the same path. That is
 the line between today's cosmetic defect and a data-loss one, and both reviewing
 sessions independently landed on it.
+<!-- /bee:not-a-deferral -->
 
 ## Acceptance
 

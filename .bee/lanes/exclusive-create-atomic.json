@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "exclusive-create-atomic",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"exclusive-create-atomic\" started at phase \"planning\" (lane).",
-  "next_action": "The same exclusive-create shape exists at ten other sites that are correct because their losers only test existence; revisit if any gains a content read.",
+  "next_action": "bee close finished \"exclusive-create-atomic\" — feature is closed.",
   "created_at": "2026-08-25T10:16:42.698Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",

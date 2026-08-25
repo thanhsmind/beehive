@@ -68,6 +68,63 @@
     "warnings": [
       "advisory: this cap's commit changes 167 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "mechanism-evidenced-not-inferred",
+            "status": "PASS",
+            "evidence": "A real failing interleaving was captured by temporary tracing: w5 wins the rename leaving the lock vacant, w2 plain-acquires into the vacancy, w7 carrying an older staleness judgment renames away w2's fresh lock (holder_after: null), the vacancy reopens and w5 acquires too. Two LockGuards live at once, proven twice — both mutators read the same empty snapshot, and w5's own release read w2's token out of the lock file."
+          },
+          {
+            "id": "c2",
+            "name": "forty-solo-runs-clean",
+            "status": "PASS",
+            "evidence": "Orchestrator independently ran the stale-lock test solo 40 consecutive times: 0 failures, against a ~1-in-10 pre-fix rate. 40 rather than 20 because a clean 20 at that rate is roughly a coin flip."
+          },
+          {
+            "id": "c3",
+            "name": "no-instrumentation-shipped",
+            "status": "PASS",
+            "evidence": "grep for eprintln!/dbg! in lock.rs returns 0 lines in the shipped diff."
+          },
+          {
+            "id": "c4",
+            "name": "takeover-still-prevents-wedging",
+            "status": "PASS",
+            "evidence": "The test asserts a stale lock never wedges the store and that at least one racer completes; it passes 40/40, so the takeover still works rather than being disabled to win the race."
+          },
+          {
+            "id": "c5",
+            "name": "context-fact-disproved-and-reported",
+            "status": "PASS",
+            "evidence": "The cell contradicted this feature's own locked CONTEXT: the lost racer was w5, not w0. It reported that plainly rather than bending the evidence to fit. CONTEXT now carries the struck fact with the correction, and the real rule is positional-independent — the victim is whoever won the takeover."
+          },
+          {
+            "id": "c6",
+            "name": "open-question-resolved-with-evidence",
+            "status": "PASS",
+            "evidence": "CONTEXT flagged that read_holder seeing a still-empty lock file would be a real finding if evidenced. w7's holder_after: null is exactly that, arriving via rename_for_takeover's post-rename read — a route neither reviewing session had enumerated."
+          },
+          {
+            "id": "c7",
+            "name": "declared-suite-green-on-the-merged-base",
+            "status": "PASS",
+            "evidence": "cargo test --release on the merged base carrying both concurrency fixes: CARGO_EXIT=0, 2883 passed, 0 failed, including one_claimant_wins_the_cell which had been red at 17/20 all afternoon."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-25T11:21:07.720Z"
+      }
+    ]
   }
 }

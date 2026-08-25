@@ -337,8 +337,45 @@ drift from it.
   kind; legacy/solo leases with no `workspace_id` stay byte-identical
   (multisession-native D2/D3, slice 4, msn-18b/msn-21).
 
+- R76 — **An exclusive-create election whose loser READS the winner's record
+  must publish that record atomically.** Creating the name and then writing its
+  body are two steps, and between them the name exists and is EMPTY. A loser
+  whose own exclusive create fails then reads that same name to learn who won,
+  and lands in the gap. Both sites where that happened now write the complete
+  body to a temp file in the SAME directory (a hard link cannot cross a
+  filesystem) and link it into place: the link fails when a winner exists, so
+  exclusivity is exactly what the exclusive create gave, and the name never
+  exists without its content. The temp is removed on every path including the
+  lost race — at this store's concurrency most races lose, so a leak there
+  accumulates. Sites whose loser only tests EXISTENCE are correct as they are
+  and were deliberately left alone (feature exclusive-create-atomic, 2026-08-25).
+- R77 — **A stale-lock takeover is serialized on its own exclusive claim, keyed
+  to the acquisition being displaced.** Judging a lock stale and renaming it
+  aside are two steps, and a racer that judged staleness BEFORE a fresh holder
+  arrived could still rename that holder's lock away — reopening the vacancy
+  and admitting a second holder. Exactly one racer may now displace one
+  acquisition; a racer carrying an older judgment is refused before its rename
+  rather than after. The claims are tombstones, never released, because a racer
+  can sit between judging and renaming indefinitely; they are broken only when
+  both old enough and left by a provably dead claimant (feature
+  state-lock-lost-update, 2026-08-25).
+
 ## Edge Cases Settled
 
+- **Two holders of one lock is a LOST UPDATE, not a reporting fault.** The
+  mutation frame already reads under the lock, so a stale snapshot cannot come
+  from an unlocked read — when an entry vanished it was because two holders
+  each read the same empty state and the second wrote over the first. The entry
+  that dies is whichever holder's work was already COMPLETE when the second one
+  entered, which is positional only by accident: a single reproduction lost the
+  first racer and that was briefly mistaken for a rule, until a captured run
+  lost the fifth. Diagnosing this class from one sample is how the rule got
+  written; see `patterns/20260825-plausibility-is-not-evidence-and-only-a-second-reader-catches-it.md`.
+- **A load that lowers a race's rate reads as a load that prevents it.** This
+  defect fired ~4 in 5 when its test ran alone and ~1 in 8 inside a full suite,
+  because the tight solo interleaving is the failing one. Months of green suite
+  runs were measuring the interleaving that works. A green suite is not evidence
+  about a low-rate concurrency defect; solo repetition is.
 - A contention log that does not exist yet, or whose recent window holds zero
   `LOCK_BUSY` events, produces no `contention` key in status at all — silent,
   not an empty object and not an error (multisession-native).
