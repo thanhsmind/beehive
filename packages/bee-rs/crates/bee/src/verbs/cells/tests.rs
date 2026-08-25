@@ -971,6 +971,13 @@ use std::time::Instant;
         // store that has not run the migration from reading as unmarked.
         assert!(cell_is_escalated(&json!({"id": "e-2", "tier": "ceiling"})));
         assert!(!cell_is_escalated(&json!({"id": "e-3", "tier": "generation"})));
+        // escalate-off-disarm D1: an explicit false is the operator's
+        // recorded disarm and OVERRIDES the legacy spelling. Without this
+        // arm the disarm was a silent no-op on every migrated ceiling cell.
+        assert!(
+            !cell_is_escalated(&json!({"id": "e-4", "tier": "ceiling", "escalate": false})),
+            "an explicit escalate:false must disarm a legacy ceiling cell"
+        );
     }
 
     // P3-5: a cell authored with change_class "behavior" and no explicit
@@ -8343,6 +8350,71 @@ use std::time::Instant;
         (tmp, root)
     }
 
+    /// escalate-off-disarm D1/D2 — the r3 finding both reviewers hit
+    /// independently: disarming a MIGRATED ceiling cell removed only the
+    /// flag key, the legacy `tier: "ceiling"` string re-answered true, and
+    /// the "success" was a silent no-op against the ration, the dispatch,
+    /// and the preamble alike.
+    #[test]
+    fn disarming_a_legacy_ceiling_cell_actually_disarms_it() {
+        let (_tmp, root) = escalated_backfill_store(); // e-1: tier ceiling + escalate true
+        set_escalation(&root, "e-1", false, None).expect("the disarm must not refuse");
+
+        let after = read_cell_fixture(&root, "e-1");
+        assert_eq!(
+            after.get(ESCALATE_FIELD),
+            Some(&json!(false)),
+            "a legacy cell's disarm is recorded as an explicit false, never a removal — got {after}"
+        );
+        assert!(
+            !cell_is_escalated(&after),
+            "and every ration counter must now count it NOT escalated"
+        );
+    }
+
+    /// escalate-off-disarm D1: an operator's recorded disarm survives a
+    /// later migration pass. Before the fix the pass re-derived the flag
+    /// from the still-present tier string and silently re-armed the cell.
+    #[test]
+    fn backfill_never_rearms_an_explicitly_disarmed_legacy_cell() {
+        let (_tmp, root) = backfill_store();
+        let mut disarmed = roleless("d-1", json!("ceiling"));
+        let obj = disarmed.as_object_mut().unwrap();
+        obj.insert("role".into(), json!("code"));
+        obj.insert(ESCALATE_FIELD.into(), json!(false));
+        write_cell_fixture(&root, "d-1", &disarmed);
+
+        let report = backfill_roles(&root, false).expect("the pass must not refuse");
+        let after = read_cell_fixture(&root, "d-1");
+        assert_eq!(
+            after.get(ESCALATE_FIELD),
+            Some(&json!(false)),
+            "a present flag key of EITHER value means this record is done — got {after}"
+        );
+        assert!(!cell_is_escalated(&after), "the disarm must hold across the pass");
+        assert!(report.escalated >= 1, "the pass still arms the genuinely unconverted cells");
+    }
+
+    /// escalate-off-disarm D2's other half: absent-means-absent is untouched
+    /// for ordinary cells — only a legacy spelling earns the explicit false.
+    #[test]
+    fn disarming_an_ordinary_cell_still_removes_the_key() {
+        let (_tmp, root) = backfill_store();
+        let mut plain = roleless("p-1", Value::Null); // no tier at all
+        let obj = plain.as_object_mut().unwrap();
+        obj.insert("role".into(), json!("code"));
+        obj.insert(ESCALATE_FIELD.into(), json!(true));
+        write_cell_fixture(&root, "p-1", &plain);
+
+        set_escalation(&root, "p-1", false, None).expect("the disarm must not refuse");
+        let after = read_cell_fixture(&root, "p-1");
+        assert!(
+            after.get(ESCALATE_FIELD).is_none(),
+            "no legacy spelling to override, so absent stays the disarmed state — got {after}"
+        );
+        assert!(!cell_is_escalated(&after));
+    }
+
     #[test]
     fn an_operator_write_that_lands_before_the_lock_is_never_reversed() {
         let (_tmp, root) = escalated_backfill_store();
@@ -8358,11 +8430,15 @@ use std::time::Instant;
         .expect("the pass itself must not refuse");
 
         let after = read_cell_fixture(&root, "e-1");
-        assert!(
-            after.get(ESCALATE_FIELD).is_none(),
-            "the operator's disarm must survive: the write half re-reads under the lock and \
-             merges the keys it owns, instead of restoring a clone taken before the disarm \
-             existed — got {after}"
+        // escalate-off-disarm D2: e-1 carries the legacy tier spelling, so
+        // the disarm now records an explicit false rather than removing the
+        // key — removal would let the tier string re-answer true.
+        assert_eq!(
+            after.get(ESCALATE_FIELD),
+            Some(&json!(false)),
+            "the operator's disarm must survive AS A RECORD: the write half re-reads under \
+             the lock and merges the keys it owns, instead of restoring a clone taken \
+             before the disarm existed — got {after}"
         );
         assert_eq!(
             after["role"],
