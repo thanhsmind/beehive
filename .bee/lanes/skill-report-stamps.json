@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"skill-report-stamps\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"skill-report-stamps\" (lane).",
+  "next_action": "Merged into main at 0544b9c; capture what settled, then bee close --feature skill-report-stamps.",
   "created_at": "2026-08-25T07:28:36.401Z",
   "run_state": "done",
   "waiting_on": null,
@@ -23,12 +23,5 @@
     "rationale": "Retrofit report-shaped bee skills with an output stamp, closed tag list, required end line incl. the empty case, and an honesty boundary — craft ported from refs/ponytail's six skills.",
     "updated_at": "2026-08-25T07:29:05.596Z",
     "feature": "skill-report-stamps"
-  },
-  "merge_ready": {
-    "since": "2026-08-25T07:34:55.714Z",
-    "branch": "wt/skill-report-stamps",
-    "worktree_id": "beehive--wt--skill-report-stamps",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
