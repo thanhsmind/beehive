@@ -32,20 +32,46 @@
   "deps": [
     "da-1"
   ],
-  "status": "claimed",
+  "status": "capped",
   "read_first": [],
   "trace": {
     "worker": "main-inline",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "bee decisions reattribute lands and corrects 67 contradicted feature stamps on the live store; a second run reports 0",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason.",
+      "Corrected 67 records rather than the 23 named in D5 — same predicate and same mechanism, a wider blast radius than the first sample showed."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T13:31:23.909Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-25T13:25:33.039Z"
+    "claimed_at": "2026-08-25T13:25:33.039Z",
+    "inline_reason": "Same named deviation as da-1 and da-2: this session does not spawn subagents unless the user asks, and the orchestrator held the diagnosis, the predicate design and the lock-ordering lesson already.",
+    "report": {
+      "outcome": "decisions reattribute added, served and declared. Applied to the live store: 2358 scanned, 67 corrected, 0 on re-run. Proven by diff that exactly 67 lines changed and feature is the only field differing on any of them. 67 not 23 — the earlier figure sampled only the model-role-split stamp. human-mailbox recovered all 18 of its decisions; 0 records now contradict their own text. Residual filed as P3: 5 prompt-work-record decisions make no D-number claim so the predicate correctly declined them.",
+      "commit": "a3c6cbdc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (2981 passed, 2 failed) — the 2 are the opencode contract tests needing node on PATH, environmental and unchanged; plus a live idempotence run on the real 2358-record store",
+      "deviations": [
+        "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason.",
+        "Corrected 67 records rather than the 23 named in D5 — same predicate and same mechanism, a wider blast radius than the first sample showed."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

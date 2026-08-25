@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: decision-attribution",
-    "asked_at": "2026-08-25T13:30:02.813Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-08-25T12:17:31.890Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {
     "class": "bugfix",
@@ -32,5 +32,12 @@
     "rationale": null,
     "updated_at": "2026-08-25T12:14:34.071Z",
     "feature": "decision-attribution"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T13:31:23.930Z",
+    "branch": "wt/decision-attribution",
+    "worktree_id": "beehive--wt--decision-attribution",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
