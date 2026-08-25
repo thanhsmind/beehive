@@ -5322,8 +5322,75 @@ use std::time::Instant;
 
     /// A host that carries no `code` and no `read` key — every host that
     /// onboarded before mrs-10, and the one the fall-through tail exists for.
+    ///
+    /// NO VALUE HERE IS A BUILT-IN DEFAULT, and the values are deliberately
+    /// ROTATED against `default_models("claude")` (`models.rs:79-83`:
+    /// extraction `haiku`, generation `sonnet`, review `opus`). This fixture
+    /// used to carry those three byte for byte — and `normalize_models` seeds
+    /// that same map into every table BEFORE any config overlay, so a config
+    /// repeating the defaults is indistinguishable from an EMPTY one. Under
+    /// it the fall-through tests below asserted only "an unconfigured role
+    /// lands on sonnet", which is true whether the resolver reads this host's
+    /// table or ignores it entirely: a tail that regressed to `default_models`
+    /// stayed green. The `-custom` values make the two answers different
+    /// strings, so the assertions bite; the rotation catches the narrower
+    /// regression of reading the right KEY out of the wrong TABLE.
+    /// `the_pre_roles_fixture_is_distinguishable_from_an_empty_config` pins
+    /// the property so the fixture cannot drift back.
     const HOST_BEFORE_ROLES: &str =
-        r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus"}}}"#;
+        r#"{"models":{"claude":{"extraction":"haiku-custom","generation":"opus-custom","review":"sonnet-custom"}}}"#;
+
+    /// The same pre-roles host on the CODEX runtime, and the case this block
+    /// had no variant for at all. codex is where a tail that stopped reading
+    /// the host's table shows LOUDEST: every codex entry in `default_models`
+    /// is `null` (`models.rs:81-83`), so the built-ins can answer no role at
+    /// all — the dispatch resolves NO model rather than a different one.
+    const CODEX_HOST_BEFORE_ROLES: &str =
+        r#"{"models":{"codex":{"extraction":"gpt-5-mini-custom","generation":"gpt-5-custom","review":"gpt-5-pro-custom"}}}"#;
+
+    /// THE ANTI-RECURRENCE DEVICE for this block.
+    ///
+    /// An independent audit found the two fall-through tests below could not
+    /// fail, because the fixture they drive off repeated `default_models`
+    /// verbatim. This asks the TWO TABLES THEMSELVES — never a hand-written
+    /// list — so a fixture edited back toward the built-ins fails HERE, at
+    /// the fixture, instead of silently unpinning THE safety property this
+    /// whole feature rests on: no existing host's dispatch changes model
+    /// until the operator opts in.
+    #[test]
+    fn the_pre_roles_fixture_is_distinguishable_from_an_empty_config() {
+        for (runtime, config) in
+            [("claude", HOST_BEFORE_ROLES), ("codex", CODEX_HOST_BEFORE_ROLES)]
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let models = read_models(&root).unwrap();
+            let table = models.get(runtime).unwrap().as_object().unwrap();
+            let defaults = default_models(runtime);
+            for (slot, value) in table {
+                assert_ne!(
+                    Some(value),
+                    defaults.get(slot),
+                    "{runtime}.{slot}: the fixture repeats the built-in default, so a \
+                     resolver that ignored this host's table would still answer correctly"
+                );
+            }
+            for slot in ["extraction", "generation", "review"] {
+                assert!(
+                    table.get(slot).map(Value::is_string).unwrap_or(false),
+                    "{runtime}.{slot}: the tail walks this slot, so the host must configure it"
+                );
+            }
+            // …and bee's own tail names stay ABSENT: that absence is what
+            // makes this a host from BEFORE the roles existed.
+            for name in ASKED_ROLES {
+                assert!(
+                    table.get(name).is_none(),
+                    "{runtime}: {name} must stay unconfigured on a pre-roles host"
+                );
+            }
+        }
+    }
 
     fn cell_with(root: &Path, id: &str, fields: &str) {
         w(
@@ -5336,9 +5403,15 @@ use std::time::Instant;
     }
 
     fn cell_envelope(root: &Path, id: &str, role: Option<&str>) -> Value {
+        cell_envelope_on(root, "claude", id, role)
+    }
+
+    /// `cell_envelope` with the runtime spelled out — codex resolves against
+    /// its own table, whose built-in defaults are all null.
+    fn cell_envelope_on(root: &Path, runtime: &str, id: &str, role: Option<&str>) -> Value {
         let out = prepare_dispatch_with_role(
             root,
-            "claude",
+            runtime,
             "cell",
             role,
             Some(id),
@@ -5385,6 +5458,14 @@ use std::time::Instant;
     /// walks to `generation`, and the marker names the role that RESOLVED so
     /// the model-guard — which denies a marker naming an unconfigured role —
     /// still lets through the dispatch bee itself prepared.
+    ///
+    /// "No built-in default" is the load-bearing half, and it is what the
+    /// assertions actually ask: the payload must carry THIS HOST'S generation
+    /// model, `opus-custom`, a string `default_models` does not contain
+    /// anywhere. If the tail ever stops reading the host's table and answers
+    /// out of the built-ins, this reads `sonnet` and goes red — which is the
+    /// only shape in which "no existing host silently migrates" is a claim a
+    /// test can refute.
     #[test]
     fn a_cell_role_nothing_configures_falls_through_to_the_historical_model() {
         let tmp = tempfile::tempdir().unwrap();
@@ -5399,8 +5480,9 @@ use std::time::Instant;
             let payload = v.get("payload").unwrap();
             assert_eq!(
                 payload.get("model"),
-                Some(&json!("sonnet")),
-                "{id}: the model this host has run for years"
+                Some(&json!("opus-custom")),
+                "{id}: the model THIS HOST has run for years, read out of its own \
+                 config — `default_models` says `sonnet` here and must not win"
             );
             assert!(
                 payload
@@ -5414,12 +5496,21 @@ use std::time::Instant;
             let econ = v.get("economics").unwrap();
             assert_eq!(econ.get("logical_tier"), Some(&json!("generation")), "{id}");
             assert_eq!(econ.get("tier_source"), Some(&json!("cell")), "{id}");
+            assert_eq!(
+                econ.get("requested_model"),
+                Some(&json!("opus-custom")),
+                "{id}: the audit line names the same host model the payload pins"
+            );
         }
     }
 
     /// A read-shaped cell takes the READ consumer's list, so it lands on the
     /// historical read model rather than on generation — D9 backfills every
     /// `tier: extraction` cell to `role: read`, and this is where they land.
+    ///
+    /// Same discipline as the test above: `haiku-custom` is THIS HOST's
+    /// extraction model and appears in no built-in table, so a tail that
+    /// answered out of `default_models` would read `haiku` and go red.
     #[test]
     fn a_read_cell_falls_through_to_the_historical_read_model() {
         let tmp = tempfile::tempdir().unwrap();
@@ -5428,13 +5519,72 @@ use std::time::Instant;
 
         let v = cell_envelope(&root, "c-1", None);
         let payload = v.get("payload").unwrap();
-        assert_eq!(payload.get("model"), Some(&json!("haiku")));
+        assert_eq!(
+            payload.get("model"),
+            Some(&json!("haiku-custom")),
+            "the host's own extraction model, not `default_models`' `haiku`"
+        );
         assert!(payload
             .get("prompt")
             .unwrap()
             .as_str()
             .unwrap()
             .starts_with("[bee-tier: extraction]\n"));
+        assert_eq!(
+            v.get("economics").unwrap().get("requested_model"),
+            Some(&json!("haiku-custom")),
+            "the audit line names the same host model the payload pins"
+        );
+    }
+
+    /// The same fall-through on CODEX, the runtime this block had no case for
+    /// at all — and the one where the regression this pair guards against
+    /// would be unmissable. Every codex entry in `default_models` is `null`,
+    /// so a tail reading the built-ins instead of this host's table resolves
+    /// `Resolved::Budget`: no model requested, nothing pinned, the dispatch
+    /// quietly running on whatever the session happens to be.
+    ///
+    /// codex carries no `model` on the payload (its `spawn_agent` arm takes
+    /// the model off the resolved slot, not off a tool parameter), so the
+    /// model that resolved is read where codex actually records it — the
+    /// economics audit line — beside the `[bee-tier: …]` marker on the
+    /// message.
+    #[test]
+    fn a_codex_cell_role_nothing_configures_falls_through_to_that_hosts_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, CODEX_HOST_BEFORE_ROLES);
+        cell_with(&root, "c-1", r#""role":"code""#);
+        cell_with(&root, "c-2", r#""role":"design""#);
+        cell_with(&root, "c-3", r#""role":"read""#);
+
+        for (id, role, model) in [
+            ("c-1", "generation", "gpt-5-custom"),
+            ("c-2", "generation", "gpt-5-custom"),
+            ("c-3", "extraction", "gpt-5-mini-custom"),
+        ] {
+            let v = cell_envelope_on(&root, "codex", id, None);
+            assert_eq!(v.get("ok"), None, "{id}: a role nothing configures is not a refusal");
+            assert_eq!(v.get("tool"), Some(&json!("spawn_agent")), "{id}");
+            assert!(
+                v.get("payload")
+                    .unwrap()
+                    .get("message")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .starts_with(&format!("[bee-tier: {role}]\n")),
+                "{id}: the marker names the role that resolved"
+            );
+            let econ = v.get("economics").unwrap();
+            assert_eq!(econ.get("logical_tier"), Some(&json!(role)), "{id}");
+            assert_eq!(econ.get("tier_source"), Some(&json!("cell")), "{id}");
+            assert_eq!(
+                econ.get("requested_model"),
+                Some(&json!(model)),
+                "{id}: this host's own model — every codex entry in \
+                 `default_models` is null, so the built-ins could not have answered"
+            );
+        }
     }
 
     /// Precedence: an explicit `--role` names the slot directly and outranks
