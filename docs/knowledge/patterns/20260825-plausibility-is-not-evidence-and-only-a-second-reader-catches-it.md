@@ -51,6 +51,47 @@ one verification step **between the conclusion and the sentence** — never afte
 the objection. If the check happened only because someone pushed back, what was
 filed was plausibility.
 
+## The limit of a second reader: a shared error is invisible to review
+
+A fifth diagnosis died the same day, and it broke this pattern's own remedy.
+
+One session reproduced the state-lock lost update and observed that the entry
+lost was **`w0`, the first racer**. The data was sound — that run really did
+lose the first entry, and the file really was well-formed. What happened next
+was that `n=1` became a law: "the FIRST entry dies". It was then *refined*
+("`w0` dies because it is the only entry already complete when a second holder
+enters"), which made it more persuasive without making it better supported. The
+other session wrote it into a feature's locked context as an established fact.
+
+Instrumentation later caught a real failing run. **The lost racer was `w5`.**
+The victim is whoever won the takeover and was clobbered by the plain acquirer
+that walked into its rename vacancy; position was a coincidence of one sample.
+
+The four earlier errors were each caught by the other party re-running the
+check. **This one could not be** — both parties had made the *same*
+generalisation from the *same* single observation, and cross-checking cannot
+detect an error that both readers share. What killed it was a **second
+sample**.
+
+So the remedy has two halves, and only one of them is review:
+
+- Errors made **separately** are caught by a second reader with the same data
+  and no attachment to the conclusion.
+- Errors made **together** — a shared prior, an agreed framing, one observation
+  promoted to a rule — are caught only by **new data**. No amount of careful
+  re-reading reaches them, because the reading is the thing that agrees.
+
+The tell for the second kind: a claim everyone accepts that rests on **one
+run**. Ask how many samples are under it. "We both think so" is not a second
+sample.
+
+**A corollary about elimination.** "Eliminated" and "eliminated on the route I
+checked" are different claims, and only the second is ever earned. In the same
+investigation, an empty-lock hypothesis was correctly eliminated via the
+staleness path — `mtime` age is checked before the holder is read — and then
+turned out to be reachable through a door nobody had enumerated, a post-rename
+read. Record which route was closed, not that the question is.
+
 **The cheap version, for intermittent symptoms:** one run per side is not a
 bisect. At a 1-in-10 rate a clean 20 is roughly a coin flip. Repetition counts
 are not pedantry; they are the difference between measuring and guessing.
