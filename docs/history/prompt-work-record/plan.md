@@ -78,10 +78,24 @@ work: { title, text, status: "open", opened_at, updated_at, turns }
   reader already computes liveness from `last_heartbeat` and drops a stale
   session. The cell proves that rather than building it.
 
-### Slice 2 — the agent's upgrade surface (headline only)
+### Slice 2 — the agent's upgrade surface (shipped, cell pwr-2)
 
-A verb the agent calls to add the acceptance and move the status, which is what
-promotes a stub to a board card (D1, D2). Not a cell yet.
+`bee work show` and `bee work set --acceptance --status`: one group, two
+shapes, sink parity with the hook. An acceptance IS the promotion (D2), so
+there is no separate promote verb. Status vocabulary: `open` (the hook's) →
+`active` → `done` | `dropped`, which is what the board's existing columns
+already read. D5 reaches the acceptance as a REFUSAL, not a redaction — the
+prompt is the user's text and bee stores what it is given, while the acceptance
+is the agent's own sentence and a credential in one is a bug to report.
+
+The registry has no generator any more: `registry_contracts.rs` names
+`node scripts/export_registry_payload.mjs`, which is not in the tree. Both
+commands are declared by hand in `generated/registry_payload.json`, written off
+the real argument parsing, exactly as commit `e8bc86f7` did for the herding
+verbs. They are declared as plumbing, not `surface: porcelain` — the closest
+sibling, `intent.*`, is plumbing too, and putting `work` on the flow surface
+that `bee --help --json` prints is a claim worth making with slice 3's
+integration rather than ahead of it.
 
 ### Slice 3 — waggledance renders it (headline only, other repo)
 

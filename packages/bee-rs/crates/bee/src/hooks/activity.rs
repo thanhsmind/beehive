@@ -185,7 +185,7 @@ fn field(payload: &Map<String, Value>, key: &str) -> Option<String> {
 
 /// Session ids address files, so the same shape check every other session
 /// writer makes (state_sync's `well_formed_id`).
-fn well_formed_id(id: &str) -> bool {
+pub(crate) fn well_formed_id(id: &str) -> bool {
     !id.is_empty() && !id.contains('/') && !id.contains('\\') && !id.contains("..")
 }
 
