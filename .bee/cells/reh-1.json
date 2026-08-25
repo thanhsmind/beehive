@@ -1,0 +1,46 @@
+{
+  "id": "reh-1",
+  "feature": "role-edge-hardening",
+  "lane": "standard",
+  "role": "code",
+  "title": "Refuse the forbidden ceiling key, fold the advisor case, warn on a dead chain key",
+  "action": "Three config-layer fixes (role-edge-hardening D1 items 1-3). (a) validate_models_config in verbs/drivers/models.rs: a models.<rt> table carrying the key named by ESCALATION_WORD is refused by name with a FIX teaching bee cells escalate and citing decision 0015 - ceiling is an escalation flag, never a role, and a configured key currently makes prepare stamp marker ceiling PLUS a model param, the exact pair the guard denies (r3 A1). RED FIRST: a validation test with a ceiling key shown passing (accepted) on unfixed code via the current validator, then refused after. (b) verbs/drivers/guard.rs role_is_declarable: match the advisor arm case-insensitively (name.eq_ignore_ascii_case(ADVISOR_ROLE)), and in verbs/drivers/models.rs resolve_advisor: find the advisor key case-insensitively instead of t.get(advisor) - so a mis-cased Advisor key answers the SAME at the marker door and the --kind advisor door (r3 H1). Test: with Advisor:null both doors refuse; with Advisor:fable both doors resolve fable. (c) normalize_fallback_chains in models.rs: when a chain key is role-shaped (not provider/* and not a name that resolves as a concrete model selector in models.<rt>) and that role is not configured in models.<rt>, keep the chain but emit one stderr warn naming the key and why it can never fire (r3: chains are keyed on the RESOLVED role, so an unconfigured role-key is dead). Follow the existing junk-drop warn style in that function.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "A models table with a ceiling key is refused by name, teaching bee cells escalate; shown accepted-then-refused red-first",
+      "A mis-cased advisor key answers identically at the marker door and the kind-advisor door, in both the null and the configured direction",
+      "A role-keyed fallback chain naming an unconfigured role still publishes but warns once on stderr naming the dead key",
+      "No cell-role membership check is added anywhere - D7 untouched",
+      "Existing config fixtures stay green"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "role-edge-hardening D1"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "claimed",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T16:02:35.689Z"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "reh-2",
+  "feature": "role-edge-hardening",
+  "lane": "standard",
+  "role": "code",
+  "title": "Pin the null opt-in window and count the backfill from under its lock",
+  "action": "Two proof-layer fixes (role-edge-hardening D1 items 4-5). (a) verbs/drivers/tests.rs: pin host_opted_into_roles null boundary - a models table of {code:null} or {read:null} counts as OPTED IN (window shut), an empty or absent table does not; the r2 mutation probe showed narrowing .is_some() to non-null leaves the whole suite green, so this exact fixture is the missing tooth. Also pin role_is_unknown for a null-valued slot (present-but-null is KNOWN - it resolves Budget, never warns). These tests pin CURRENT intended semantics; if either fails on unfixed code something is wrong with the diagnosis - stop and report rather than changing code to match. (b) verbs/cells/handlers_write.rs backfill: derive already_roled and unmapped from the same under-lock fresh reads the writes use (the re-read loop from 00fd53b6), so every reported count describes the state the writes actually saw; update the doc block at ~:1910 so its claim is true (r3 A P4). Test: interleave a concurrent role-write during the pass (existing backfill_roles_interleaved seam) and assert already_roled counts the fresh state, not the stale scan.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "A null-valued code or read slot counts as opted-in and the fixture would fail under the non-null mutation",
+      "A null-valued slot is known to role_is_unknown - resolves Budget, never warns",
+      "already_roled and unmapped are derived under the lock from fresh reads, pinned by an interleaved test",
+      "The doc block claim about count provenance is true after the change",
+      "backfill dry-run and apply report identical counts on a quiet store"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "role-edge-hardening D1"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "open",
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "verify_command": null,
+    "verified_at": null
+  }
+}

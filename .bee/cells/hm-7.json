@@ -1,0 +1,57 @@
+{
+  "id": "hm-7",
+  "feature": "human-mailbox",
+  "role": "docs",
+  "title": "Close the third description of the departure contract in worker-details",
+  "action": "skills/bee-swarming/references/worker-details.md around line 80 still teaches --deviation \"<one line>\" — the free-form shape hm-5 narrowed. It is the third place a worker reads this contract, after the worker prompt and the swarming reference, and it is the one that explains WHY deviations matter (the promote miner reads trace.deviations). Bring it into line with the shipped behaviour: three parts, the closed four kinds, the explicit plan-followed statement, and the armed-only boundary. Wording only.",
+  "verify": "rg -n 'hit an unforeseen obstacle' skills/bee-swarming/references/worker-details.md",
+  "slice": 2,
+  "lane": "tiny",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [
+    "skills/bee-swarming/references/worker-details.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "hm-6"
+  ],
+  "files": [
+    "skills/bee-swarming/references/worker-details.md"
+  ],
+  "acceptance": "worker-details.md describes the same three-part line, the same closed four kinds, the same plan-followed statement and the same armed-only boundary as the worker prompt and the swarming reference; the three documents agree with each other and with the shipped code.",
+  "status": "capped",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-7",
+    "outcome": "worker-details now teaches the shipped departure contract: three parts, the closed four kinds, the explicit followed-the-plan statement recorded on trace.plan_followed, and the armed-only boundary",
+    "files_changed": [
+      "skills/bee-swarming/references/worker-details.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T16:07:54.964Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T16:05:19.857Z",
+    "report": {
+      "outcome": "worker-details carries the three-part departure contract, the closed four kinds, the plan-followed statement and the armed-only boundary",
+      "commit": "3020a05d",
+      "files": [
+        "skills/bee-swarming/references/worker-details.md"
+      ],
+      "tests": "rg -c -F over the four DEPARTURE_KINDS and \"followed the plan\" across worker-details.md, swarming-reference.md, worker-cell.md and mailbox.rs; plus rg -F -- '--deviation \"<one line>\"' across skills/ and packages/bee/prompts/ — green — docs-only cell: parity of the three documents against the code, and proof the free-form shape is gone",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
