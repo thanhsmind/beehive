@@ -16,7 +16,7 @@ use crate::hooks::Outcome;
 use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
-use crate::verbs::drivers::{normalize_models, resolve_advisor, resolve_tier, Resolved};
+use crate::verbs::drivers::{normalize_models, resolve_tier, Resolved};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -81,7 +81,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
 
     let mut verdict = if is_codex_spawn {
-        evaluate_codex_spawn(&tool_input)
+        evaluate_codex_spawn(&tool_input, &models)
     } else {
         evaluate_claude_dispatch(&tool_input, &models)
     };
@@ -187,25 +187,34 @@ fn is_js_ws(c: char) -> bool {
         | '\u{3000}' | '\u{feff}')
 }
 
-// ─── anchored tier marker (ANCHORED_TIER_MARKER_RE / _CODEX_) ──────────────
-// /^\s*\[bee-tier:\s*(ceiling|generation|extraction|review[|advisor])\]/i
+// ─── anchored role marker (ANCHORED_TIER_MARKER_RE / _CODEX_) ─────────────
+// /^\s*\[bee-tier:\s*(<role>)\]/i
+//
+// model-role-split D2 (store 06e49368): the capture group used to be a
+// hand-maintained alternation of legal names, kept TWICE — CLAUDE_TIERS with
+// four entries, CODEX_TIERS with five — and the two had already drifted with
+// nothing intending it (`advisor` was a name a Codex spawn could open with
+// and an Agent dispatch could not). Both lists are retired. The parser reads
+// whatever NAME the marker carries, and legality is one question asked in one
+// place: is this role configured for this runtime.
 
-const CLAUDE_TIERS: [&str; 4] = ["ceiling", "generation", "extraction", "review"];
-const CODEX_TIERS: [&str; 5] = ["ceiling", "generation", "extraction", "review", "advisor"];
-
-fn starts_with_tier_marker(value: &Value, tiers: &[&str]) -> Option<String> {
+/// The role name a `[bee-tier: <name>]` marker opens with, exactly as
+/// written. Parsing decides SHAPE only — anchored at the start, one
+/// whitespace-free token, closed by `]` — never legality: under an open role
+/// set there is no closed list to decide legality against.
+fn marker_role_name(value: &Value) -> Option<String> {
     let text = value.as_str()?;
     let rest = text.trim_start_matches(is_js_ws);
     let rest = strip_prefix_ascii_ci(rest, "[bee-tier:")?;
     let rest = rest.trim_start_matches(is_js_ws);
-    for tier in tiers {
-        if let Some(after) = strip_prefix_ascii_ci(rest, tier) {
-            if after.starts_with(']') {
-                return Some(tier.to_string());
-            }
-        }
+    let (name, _) = rest.split_once(']')?;
+    // The same strictness the old alternation had: the name ran up to `]`
+    // with nothing between. A candidate carrying whitespace or a second `[`
+    // is prose that happens to open with the marker text, not a role name.
+    if name.is_empty() || name.contains(is_js_ws) || name.contains('[') {
+        return None;
     }
-    None
+    Some(name.to_string())
 }
 
 fn strip_prefix_ascii_ci<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
@@ -216,12 +225,86 @@ fn strip_prefix_ascii_ci<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
     head.eq_ignore_ascii_case(prefix).then_some(tail)
 }
 
-fn marker_tier(tool_input: &Map<String, Value>) -> Option<String> {
-    // description FIRST, then prompt.
+/// A well-formed marker, classified against what this runtime can resolve.
+enum Marker {
+    /// Names a role bee can resolve, in the spelling the config carries.
+    Role(String),
+    /// Well-formed, but names a role nothing configures — the loud case.
+    Unconfigured(String),
+}
+
+/// Every role name a dispatch on this runtime may legally declare.
+///
+/// DERIVED, never listed (model-role-split D2): the keys `models.<runtime>`
+/// carries after `normalize_models` — the operator's own roles plus the
+/// built-in defaults bee seeds there — the slots bee's own dispatch door can
+/// ask for (`slot_for_kind` over `DISPATCH_KINDS`, which is why `advisor` is
+/// legal on a runtime that never configured one), and `ceiling`, which
+/// decision 0015 keeps out of config on purpose and which `resolve_role`
+/// answers with `Resolved::Inherit`. Every entry is a name something in bee
+/// can publish, so the set cannot drift from the resolver the way the two
+/// deleted lists drifted from each other.
+fn known_roles(models: &Map<String, Value>, runtime: &str) -> BTreeSet<String> {
+    let mut set = BTreeSet::new();
+    if let Some(Value::Object(table)) = models.get(runtime) {
+        set.extend(table.keys().cloned());
+    }
+    for kind in crate::verbs::drivers::DISPATCH_KINDS {
+        if let Some(slot) = crate::verbs::drivers::slot_for_kind(kind) {
+            set.insert(slot.to_string());
+        }
+    }
+    set.insert("ceiling".to_string());
+    set
+}
+
+/// The configured roles as one FIX-line fragment.
+fn role_list(models: &Map<String, Value>, runtime: &str) -> String {
+    known_roles(models, runtime).into_iter().collect::<Vec<_>>().join("/")
+}
+
+/// Case-insensitive, exactly as the old alternation matched — `[BEE-TIER:
+/// Generation]` declares the `generation` role — and the answer is the
+/// CONFIG's own spelling, so every downstream read (the audit line,
+/// `resolve_role`, the FIX text) gets a key it can look up.
+fn classify_marker(name: &str, models: &Map<String, Value>, runtime: &str) -> Marker {
+    match known_roles(models, runtime).iter().find(|k| k.eq_ignore_ascii_case(name)) {
+        Some(canonical) => Marker::Role(canonical.clone()),
+        None => Marker::Unconfigured(name.to_string()),
+    }
+}
+
+fn marker_of(value: &Value, models: &Map<String, Value>, runtime: &str) -> Option<Marker> {
+    marker_role_name(value).map(|name| classify_marker(&name, models, runtime))
+}
+
+/// The claude dispatch's marker: description FIRST, then prompt. A marker in
+/// `description` wins even when it names nothing configured — it is a role
+/// declaration either way, and reading past it to `prompt` would let a typo
+/// in the field the host displays pass unremarked.
+fn marker_tier(tool_input: &Map<String, Value>, models: &Map<String, Value>) -> Option<Marker> {
     tool_input
         .get("description")
-        .and_then(|d| starts_with_tier_marker(d, &CLAUDE_TIERS))
-        .or_else(|| tool_input.get("prompt").and_then(|p| starts_with_tier_marker(p, &CLAUDE_TIERS)))
+        .and_then(|d| marker_of(d, models, "claude"))
+        .or_else(|| tool_input.get("prompt").and_then(|p| marker_of(p, models, "claude")))
+}
+
+/// The refusal a marker naming a role nothing configures earns. Never a
+/// silent fall-through: a name bee cannot resolve would run the subagent on
+/// the session model while the audit line recorded a role that selects no
+/// model at all (model-role-split D2, store 06e49368 — "a name nothing
+/// configures is warned, never silently accepted").
+fn unconfigured_role_reason(name: &str, models: &Map<String, Value>, runtime: &str) -> String {
+    let roles = role_list(models, runtime);
+    format!(
+        "bee-model-guard: [bee-tier: {name}] names a role nothing configures — \
+models.{runtime} in .bee/config.json carries no \"{name}\" entry, so the dispatch would \
+silently inherit the session model while dispatch.jsonl recorded a role that selects no \
+model.\n\
+FIX: open with a configured role ({roles}), or configure this one — add \
+\"{name}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you \
+configure is legal; bee holds no fixed list."
+    )
 }
 
 // ─── model config (the ONE parser lives in verbs::drivers) ────────────────
@@ -309,7 +392,18 @@ pub(crate) fn tier_slot_display(
     ]
 }
 
-/// The configurable-slot models plus the advisor slot's own resolved model.
+/// Every model a bare `model:` param may name — derived from what the
+/// resolver can publish for this runtime, never from a list kept beside it.
+///
+/// model-role-split D2 (store 06e49368): this walked the literal
+/// `["extraction", "generation", "review"]` plus the advisor slot, so a model
+/// configured under any OTHER role (`models.claude.test`) failed membership
+/// and the dispatch DENIED — the hard blocker on an open role set. It now
+/// walks whatever `models.claude` carries, which is that map's keys after
+/// `normalize_models`: the operator's roles plus bee's own seeded defaults.
+/// `advisor` needs no special case any more — it is one of those keys when it
+/// is configured, and `resolve_tier` reads its slot directly (mrs-2), so the
+/// separate `resolve_advisor` call was a second read of the same value.
 ///
 /// hgf-1: a herding slot carrying `fallback:"default"` also contributes its
 /// runtime default model. `dispatch prepare`'s Resolved::Herding arm publishes
@@ -320,29 +414,35 @@ pub(crate) fn tier_slot_display(
 /// a second copy in this hook would drift the moment either door moved.
 fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
-    for slot in ["extraction", "generation", "review"] {
+    let roles: Vec<String> = models
+        .get("claude")
+        .and_then(Value::as_object)
+        .map(|table| table.keys().cloned().collect())
+        .unwrap_or_default();
+    for role in &roles {
         // Resolved::Model ONLY. A native slot carries a model string too, and
         // matching it here would silently widen what a bare `model:` param may
         // name — a native slot is a transport this hook's Agent/Task surface
         // does not dispatch, so it contributes no member. Deliberate, and the
         // reason the port is a match on one variant rather than a model_name()
         // call.
-        if let Resolved::Model { model, .. } = resolve_tier(models, slot, "claude", GUARD_PURPOSE)
+        if let Resolved::Model { model, .. } = resolve_tier(models, role, "claude", GUARD_PURPOSE)
         {
             if !model.trim().is_empty() {
                 set.insert(model.trim().to_string());
             }
         }
     }
-    // hgf-1: the herding-fallback contribution covers `generation` and
-    // `review` only — prepare.rs's slot_for_kind maps cell|gather ->
-    // generation and reviewer -> review, and everything else to advisor, so
-    // `extraction` is never a tier_token at prepare's single resolve_tier
-    // call site. No prepared dispatch ever publishes an extraction fallback
-    // (this hook's own FIX text says as much: "dispatch prepare has no --kind
-    // for the {t} tier yet"), so admitting one would widen the guard past the
-    // door it is mirroring.
-    for slot in ["generation", "review"] {
+    // hgf-1: the herding-fallback contribution covers exactly the slots a
+    // PREPARED dispatch can publish a fallback for — `slot_for_kind` over
+    // `DISPATCH_KINDS`, read from prepare.rs itself instead of restated here
+    // as ["generation", "review"]. `extraction` is not among them (no --kind
+    // resolves it), so no prepared dispatch ever publishes an extraction
+    // fallback and admitting one would widen the guard past the door it
+    // mirrors; `advisor` IS among them, and contributes nothing because
+    // `default_models` carries no advisor entry to publish.
+    for kind in crate::verbs::drivers::DISPATCH_KINDS {
+        let Some(slot) = crate::verbs::drivers::slot_for_kind(kind) else { continue };
         // The shared parser carries the flag on the resolved value itself
         // (`Resolved::Herding { fallback }` mirrors the normalized
         // `"fallback": "default"` verbatim), so the raw-slot peek the deleted
@@ -361,12 +461,6 @@ fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
                     set.insert(m.trim().to_string());
                 }
             }
-        }
-    }
-    // Resolved::Model only here too, for the same reason as the slot loop.
-    if let Some(Resolved::Model { model, .. }) = resolve_advisor(models, "claude") {
-        if !model.trim().is_empty() {
-            set.insert(model.trim().to_string());
         }
     }
     set
@@ -442,12 +536,15 @@ const PINNED_AGENT_TYPE: [(&str, &str); 4] = [
     ("review", "bee-review"),
 ];
 
-fn pinned_type_for(tier: &str) -> &'static str {
-    PINNED_AGENT_TYPE
-        .iter()
-        .find(|(t, _)| *t == tier)
-        .map(|(_, p)| *p)
-        .unwrap_or("undefined") // unreachable: ceiling is exempted before lookup
+/// `None` = this role has no rendered agent of its own.
+///
+/// model-role-split D2: the old `unwrap_or("undefined")` was unreachable
+/// while only four names could reach the lookup. Under an open role set most
+/// roles have no rendered agent at all, so the arm is live — and rewriting a
+/// dispatch's `subagent_type` to the literal "undefined" would be a repair
+/// that breaks the call it repairs. The caller skips the repair instead.
+fn pinned_type_for(tier: &str) -> Option<&'static str> {
+    PINNED_AGENT_TYPE.iter().find(|(t, _)| *t == tier).map(|(_, p)| *p)
 }
 
 /// The tier a rendered bee agent type already stands for. These files are
@@ -461,26 +558,37 @@ fn tier_for_pinned_type(subagent_type: &str) -> Option<&'static str> {
         .map(|(tier, _)| *tier)
 }
 
-fn evaluate_codex_spawn(tool_input: &Value) -> Verdict {
+fn evaluate_codex_spawn(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
     let Some(message) = obj.get("message").and_then(Value::as_str) else { return no_opinion() };
     if message.is_empty() {
         return no_opinion();
     }
-    if let Some(tier) =
-        starts_with_tier_marker(&Value::String(message.to_string()), &CODEX_TIERS)
-    {
-        return allow("codex-spawn-marker", Some(tier), None, None);
-    }
-    let reason = "bee-model-guard: every Codex spawn_agent needs an explicit tier — its \
-message must OPEN with a [bee-tier: <tier>] marker (decision 0023 \
+    match marker_of(&Value::String(message.to_string()), models, "codex") {
+        Some(Marker::Role(role)) => allow("codex-spawn-marker", Some(role), None, None),
+        // model-role-split D2: a marker IS present and names a role bee
+        // cannot resolve. Under the deleted CODEX_TIERS list this read as no
+        // marker at all and earned the unmarked refusal below, which never
+        // said the one thing worth saying — that the name itself is the
+        // problem. The spawn is still refused; now it is refused by name.
+        Some(Marker::Unconfigured(name)) => {
+            let reason = unconfigured_role_reason(&name, models, "codex");
+            deny(reason, "codex-spawn-role-unconfigured", Some(name), None, None)
+        }
+        None => {
+            let roles = role_list(models, "codex");
+            let reason = format!(
+                "bee-model-guard: every Codex spawn_agent needs an explicit role — its \
+message must OPEN with a [bee-tier: <role>] marker (decision 0023 \
 parity, codex-native-runtime-v2 D4, i54-closeout D1). A marker anywhere but the \
 start of the message does not count, and a marker in any other field is ignored; \
 without one the spawned worker silently inherits the session model.\n\
 FIX: begin the spawn message with the marker, e.g. \
-\"[bee-tier: generation] <task>\" (tiers: ceiling/generation/extraction/review/advisor)."
-        .to_string();
-    deny(reason, "codex-spawn-unmarked", None, None, None)
+\"[bee-tier: generation] <task>\" (configured roles: {roles})."
+            );
+            deny(reason, "codex-spawn-unmarked", None, None, None)
+        }
+    }
 }
 
 /// D1(d): the `--kind` a FIX message hands to `dispatch prepare` so it reads
@@ -507,9 +615,30 @@ fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> 
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(String::from);
-    let tier = marker_tier(obj);
     let subagent_type: Option<String> =
         obj.get("subagent_type").and_then(Value::as_str).map(String::from);
+
+    // model-role-split D2: the marker is parsed for SHAPE, then classified
+    // against what this runtime can resolve. A well-formed marker naming a
+    // role nothing configures refuses HERE, before any other branch — the
+    // declared role is wrong whatever else the dispatch carries, and letting
+    // it read as "no marker" (what the deleted CLAUDE_TIERS list did) would
+    // hand a typo the bare-dispatch refusal, or worse, let a pinned
+    // subagent_type rescue it silently.
+    let tier: Option<String> = match marker_tier(obj, models) {
+        Some(Marker::Unconfigured(name)) => {
+            let reason = unconfigured_role_reason(&name, models, "claude");
+            return deny(
+                reason,
+                "role-not-configured",
+                Some(name),
+                model_param,
+                subagent_type,
+            );
+        }
+        Some(Marker::Role(role)) => Some(role),
+        None => None,
+    };
 
     // (0) Pinned-type rule (W3, AO5/AO10/AO11) — REPAIRED, not refused. The
     // tier is already stated; which agent file carries it is a lookup the
@@ -535,8 +664,14 @@ commits, caps); subagent_type \"bee-gather\" reads and reports (never writes)."
                 subagent_type,
             );
         }
-        if t != "ceiling" && subagent_type.as_deref() == Some("general-purpose") {
-            let pinned = pinned_type_for(t);
+        // D2: only a role that HAS a rendered agent is repaired onto it.
+        // Every other configured role (`advisor`, and any job name the
+        // operator invents) has no agent file to name, so the dispatch falls
+        // through to the branches below, where the marker either agrees with
+        // the model param or stands alone as the budget declaration.
+        if let (false, Some("general-purpose"), Some(pinned)) =
+            (t == "ceiling", subagent_type.as_deref(), pinned_type_for(t))
+        {
             let note = format!(
                 "[bee-tier: {t}] dispatched with subagent_type \"general-purpose\" → \"{pinned}\" \
 (general-purpose carries no tier identity and would run under the runtime default, \
@@ -774,12 +909,16 @@ pane worker.\n\
     // GUARD_PURPOSE: the FIX text names the generation slot's own transport,
     // so it must read the slot exactly as the branches above refuse it.
     let gen_resolved = resolve_tier(models, "generation", "claude", GUARD_PURPOSE);
+    // D2: the role names this FIX offers are the CONFIGURED ones, read at the
+    // moment of the refusal — naming a fixed three here would send a caller
+    // whose config carries other roles to a shorter list than bee accepts.
+    let roles = role_list(models, "claude");
     let bare_fix = if let Resolved::Model { model: gen_model, .. } = &gen_resolved {
         format!(
             "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
-bee-extract = extraction, bee-review = review) — that alone declares the tier. \
-Otherwise pass model: \"{gen_model}\" for the generation tier, or open the \
-prompt/description with [bee-tier: ceiling] (or generation/extraction/review)."
+bee-extract = extraction, bee-review = review) — that alone declares the role. \
+Otherwise pass model: \"{gen_model}\" for the generation role, or open the \
+prompt/description with [bee-tier: ceiling] (or any configured role: {roles})."
         )
     } else {
         let slot_kind = match gen_resolved {
@@ -789,17 +928,17 @@ prompt/description with [bee-tier: ceiling] (or generation/extraction/review)."
         };
         format!(
             "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
-bee-extract = extraction, bee-review = review) — that alone declares the tier. \
-Otherwise open the prompt/description with [bee-tier: ceiling] (or another tier: \
-generation/extraction/review). The generation tier is {slot_kind}: run \
+bee-extract = extraction, bee-review = review) — that alone declares the role. \
+Otherwise open the prompt/description with [bee-tier: ceiling] (or any configured \
+role: {roles}). The generation role is {slot_kind}: run \
 \".bee/bin/bee dispatch prepare --runtime claude --kind gather --json\" — it reads \
 .bee/config.json and returns the tool and exact payload to run (a Bash call, either \
 the configured cli command or a herding-pane invocation) rather than a model param."
         )
     };
     let reason = format!(
-        "bee-model-guard: every Agent/Task dispatch needs an explicit tier — a rendered \
-bee agent type, a `model` param, or a `[bee-tier: <tier>]` marker opening the \
+        "bee-model-guard: every Agent/Task dispatch needs an explicit role — a rendered \
+bee agent type, a `model` param, or a `[bee-tier: <role>]` marker opening the \
 prompt/description (decision 0023). A bare dispatch would silently inherit the most \
 expensive session model.\n{bare_fix}"
     );
@@ -2011,5 +2150,158 @@ mod tests {
         );
         assert_eq!(code, 0);
         assert_eq!(stdout, "");
+    }
+
+    // ─── model-role-split D2 (store 06e49368): the open role set ───────────
+
+    /// A config carrying roles bee ships no default for — `test` on claude,
+    /// `design` on codex — beside the seeded ones.
+    fn open_role_config() -> Value {
+        json!({"models": {
+            "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "test": "gpt-test" },
+            "codex": { "generation": "gpt-5.5", "design": "gpt-design" }
+        }})
+    }
+
+    #[test]
+    fn the_known_role_set_is_derived_from_config_and_the_dispatch_door() {
+        let models = normalize_models(open_role_config().get("models"));
+        let claude = known_roles(&models, "claude");
+        // The operator's own role, the defaults normalize seeds, the slots
+        // `slot_for_kind` can ask for, and the escalation word — every entry
+        // published by something, none of them typed into this file.
+        for name in ["test", "extraction", "generation", "review", "advisor", "ceiling"] {
+            assert!(claude.contains(name), "{name} missing from {claude:?}");
+        }
+        assert!(!claude.contains("tset"), "{claude:?}");
+        // One derivation for both runtimes, so the 4-against-5 drift the two
+        // deleted lists carried cannot come back: the runtimes differ by
+        // exactly what each config carries and nothing else.
+        let codex = known_roles(&models, "codex");
+        assert!(codex.contains("advisor") && codex.contains("design"), "{codex:?}");
+        assert_eq!(
+            claude.difference(&codex).cloned().collect::<Vec<_>>(),
+            vec!["test".to_string()],
+            "claude {claude:?} / codex {codex:?}"
+        );
+    }
+
+    #[test]
+    fn a_role_outside_the_old_three_slots_is_a_configured_model() {
+        // The hard dependency D2 names: the member set walked a literal
+        // ["extraction", "generation", "review"], so this model DENIED.
+        let models = normalize_models(open_role_config().get("models"));
+        let set = configured_model_set(&models);
+        assert!(set.contains("gpt-test"), "{set:?}");
+        let fx = fixture(&open_role_config());
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "gpt-test", "prompt": "run the tests"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+        assert_eq!(d["model"], "gpt-test");
+    }
+
+    #[test]
+    fn a_marker_naming_any_configured_role_is_accepted() {
+        let fx = fixture(&open_role_config());
+        for (payload, role) in [
+            (json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: test] run them"}}), "test"),
+            // `advisor` on a claude Agent: the exact name the deleted
+            // CLAUDE_TIERS list dropped and CODEX_TIERS kept.
+            (json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}), "advisor"),
+            // Case-insensitive as the old alternation was, answering in the
+            // config's own spelling.
+            (json!({"tool_name": "Agent", "tool_input": {"description": "[BEE-TIER: Test] mixed case"}}), "test"),
+        ] {
+            let (code, stderr) = run_payload(fx.path(), payload.clone());
+            assert_eq!(code, 0, "{payload}: {stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["tier"], role, "{payload}");
+        }
+        // The param path agrees with the marker path: a configured role's own
+        // model is what its marker resolves to.
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: test] go", "model": "gpt-test"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+    }
+
+    #[test]
+    fn a_marker_naming_an_unconfigured_role_refuses_with_a_fix() {
+        let fx = fixture(&open_role_config());
+        // A pinned subagent_type would have rescued this dispatch if the
+        // typo'd marker read as "no marker" the way the closed list made it.
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: tset] typo", "subagent_type": "bee-gather"}}),
+        );
+        assert_eq!(code, 2, "{stderr}");
+        assert!(stderr.contains("[bee-tier: tset] names a role nothing configures"), "{stderr}");
+        assert!(stderr.contains("FIX:"), "{stderr}");
+        // The remedy is named, and the roles it offers are the configured
+        // ones — including the operator's own.
+        assert!(stderr.contains("models.claude in .bee/config.json"), "{stderr}");
+        assert!(stderr.contains("test"), "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "role-not-configured");
+        assert_eq!(d["tier"], "tset");
+    }
+
+    #[test]
+    fn an_unconfigured_role_on_a_codex_spawn_refuses_by_name() {
+        let fx = fixture(&open_role_config());
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: tset] go"}}),
+        );
+        assert_eq!(code, 2, "{stderr}");
+        assert!(stderr.contains("names a role nothing configures"), "{stderr}");
+        assert!(stderr.contains("models.codex in .bee/config.json"), "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-role-unconfigured");
+        assert_eq!(d["tier"], "tset");
+        // A codex role bee ships no default for is accepted on its own name.
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: design] draw it"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-marker");
+        assert_eq!(d["tier"], "design");
+    }
+
+    #[test]
+    fn a_role_with_no_rendered_agent_is_never_repaired_to_undefined() {
+        // `pinned_type_for` ended in `unwrap_or("undefined")`, unreachable
+        // while only four names could reach it. Every role an operator
+        // invents reaches it now, and a repair to a subagent_type that does
+        // not exist would break the dispatch it claims to fix.
+        let fx = fixture(&open_role_config());
+        for role in ["test", "advisor"] {
+            let (code, stdout, stderr) = run_full(
+                fx.path(),
+                json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {role}] go"), "subagent_type": "general-purpose"}}),
+            );
+            assert_eq!(code, 0, "{role}: {stderr}");
+            assert_eq!(stdout, "", "{role} has no rendered agent to repair onto");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["subagent_type"], "general-purpose", "{role}");
+            assert_eq!(d["tier"], role);
+        }
+        // The roles that DO have one are repaired exactly as before.
+        let (code, stdout, _) = run_full(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: review] check", "subagent_type": "general-purpose"}}),
+        );
+        assert_eq!(code, 0);
+        let out = repair_output(&stdout);
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!("bee-review"));
     }
 }
