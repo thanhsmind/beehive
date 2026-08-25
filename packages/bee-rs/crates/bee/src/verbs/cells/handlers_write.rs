@@ -1857,10 +1857,12 @@ fn plan_role_migration(cell: &Map<String, Value>) -> RoleMigration {
         }
     }
     // D5: the legacy escalation spelling, and whether it has already been
-    // converted. A cell that carries the flag is done, whichever pass put
-    // it there.
+    // converted. A cell that carries the flag key AT ALL is done, whichever
+    // pass or operator put it there — escalate-off-disarm D1: an explicit
+    // false is a recorded disarm, and re-deriving true from the tier string
+    // would silently reverse the operator's act on the next run.
     plan.escalate = matches!(tier.map(js_trim), Some(t) if t == crate::verbs::drivers::ESCALATION_WORD)
-        && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true)));
+        && !matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(_)));
     // D4: the escalation reason under its retired key. Renamed only when
     // the new key is not already there, so a record migrated once is never
     // rewritten and never has its current reason overwritten by a stale one.
