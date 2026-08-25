@@ -292,7 +292,11 @@ fn run_set(
         }
     };
 
-    // The record is on disk and the ask is over — see `file_letter_at_run_end`.
+    // D12 first: some EARLIER run may have died without ever reaching its own
+    // end, and this session is the next one — see `file_letters_for_silent_runs`.
+    file_letters_for_silent_runs(&ctx.root, session_flag.as_deref());
+    // Then this run's own end. The record is on disk and the ask is over — see
+    // `file_letter_at_run_end`.
     file_letter_at_run_end(&ctx.root, session_flag.as_deref(), status.as_deref());
 
     let mut result = Map::new();
@@ -351,11 +355,54 @@ fn file_letter_at_run_end(root: &Path, session_flag: Option<&str>, status: Optio
     mailbox::record_run_end(&control, &run);
 }
 
+// ── the human mailbox: a run that went silent (hm-9, D12) ──────────────────
+//
+// D12: a run that dies WITHOUT reaching its own end gets its letter from THE
+// NEXT SESSION THAT STARTS. No background scheduler is added — a scheduler
+// shares the failure mode it would exist to cover, so the recovery rides a
+// path a later session already walks. All of the detection, the never-sweep-a-
+// live-run rule and the letter's own shape live in `verbs/mailbox.rs`; this is
+// only the hook.
+//
+// WHY HERE. CONTEXT.md's Integration Points names this file — "session start
+// and the herding surface … where D12's next-session filing hooks in" — and
+// `work set` is the moment in it: the agent's first move on a new ask is to
+// say what "done" means, so it is the earliest point at which this file learns
+// a session has taken up work. It is also where the run's own END already
+// lives, which keeps both edges of a run's span in one place.
+//
+// WHY IT IS CHEAP ENOUGH TO SIT ON THIS PATH. `work set` already takes the
+// sessions lock and writes a JSON file. The recovery adds one config read when
+// the mailbox is not armed — the ordinary case, and it stops there — and three
+// directory listings when it is. It opens no entry file to decide anything;
+// `mailbox::ENTRY_READS` holds that promise down in a test. A `work set` that
+// runs more than once in a session repeats a no-op: the first pass gives every
+// silent run its ONE letter (D11), and a run that has a letter is never a
+// candidate again.
+//
+// FAIL-OPEN, like the run end beside it: `mailbox::record_silent_runs` warns
+// and returns. Recovering some other run's letter must never turn the caller's
+// own ask into a refusal.
+
+/// D12's pass, hooked to the moment this session takes up work.
+///
+/// WHICH RUN is this one — the same `resolve_session_flag_env` chain the cap
+/// and the run end use, so "not me" means exactly what it means everywhere
+/// else. WHICH ROOT is the control root, for the same reason
+/// `file_letter_at_run_end` uses it: that is where the entries a cap appended
+/// actually are.
+fn file_letters_for_silent_runs(root: &Path, session_flag: Option<&str>) {
+    let control = crate::hooks::session_init::control_root_for(root);
+    let run = mailbox::run_id(resolve_session_flag_env(session_flag).as_deref());
+    mailbox::record_silent_runs(&control, &run);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::verbs::mailbox::{
         append_entry, list_letter_files, read_letter, Entry, KIND_CAP, STATUS_UNREAD,
+        UNFINISHED_SUBJECT_MARK,
     };
 
     fn arm(root: &Path) {
@@ -446,5 +493,80 @@ mod tests {
         file_letter_at_run_end(root, Some("sess-a"), Some("done"));
         file_letter_at_run_end(root, Some("sess-b"), Some("dropped"));
         assert_eq!(list_letter_files(root).len(), 2, "one letter per run, never one per night (D11)");
+    }
+
+    // ── D12: the next session files the silent run's letter (hm-9) ─────────
+
+    fn session_record(root: &Path, id: &str, status: &str, last_heartbeat: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            serde_json::json!({ "id": id, "status": status, "last_heartbeat": last_heartbeat })
+                .to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn the_next_session_files_the_letter_of_a_run_that_went_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm(root);
+        // A run that died: entries on disk, no letter, and its session record
+        // says the session is over.
+        append_entry(root, "sess-dead", &entry("2026-08-25T01:00:00.000Z", "Fixed the slow start"))
+            .unwrap();
+        append_entry(root, "sess-dead", &entry("2026-08-25T02:30:00.000Z", "Wrote down what changed"))
+            .unwrap();
+        session_record(root, "sess-dead", "dead", "2026-08-25T02:31:00.000Z");
+        // This session, alive and taking up work.
+        session_record(root, "sess-now", "active", &now_iso());
+
+        file_letters_for_silent_runs(root, Some("sess-now"));
+
+        let letters = list_letter_files(root);
+        assert_eq!(letters.len(), 1, "the silent run gets exactly one letter (D11, D12)");
+        let letter = read_letter(&letters[0]).unwrap();
+        assert_eq!(letter.run, "sess-dead");
+        assert_eq!(letter.status, STATUS_UNREAD);
+        assert!(
+            letter.subject.starts_with(UNFINISHED_SUBJECT_MARK),
+            "the subject {:?} does not mark the run unfinished",
+            letter.subject
+        );
+        assert_eq!(letter.items.len(), 2, "the entries up to the last one");
+        assert!(
+            letter.body.contains("2026-08-25T02:30:00.000Z"),
+            "the body never names the moment the run went silent: {}",
+            letter.body
+        );
+    }
+
+    #[test]
+    fn a_session_start_never_files_a_letter_for_a_run_still_working() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm(root);
+        append_entry(root, "sess-live", &entry("2026-08-25T01:00:00.000Z", "Still going")).unwrap();
+        session_record(root, "sess-live", "active", &now_iso());
+        session_record(root, "sess-now", "active", &now_iso());
+
+        file_letters_for_silent_runs(root, Some("sess-now"));
+        assert!(list_letter_files(root).is_empty(), "a run still working was reported as dead");
+    }
+
+    #[test]
+    fn a_second_session_start_does_not_file_the_same_letter_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        arm(root);
+        append_entry(root, "sess-dead", &entry("2026-08-25T01:00:00.000Z", "Fixed the slow start"))
+            .unwrap();
+        session_record(root, "sess-dead", "closed", "2026-08-25T01:05:00.000Z");
+
+        file_letters_for_silent_runs(root, Some("sess-now"));
+        file_letters_for_silent_runs(root, Some("sess-later"));
+        assert_eq!(list_letter_files(root).len(), 1, "one run, one letter (D11)");
     }
 }

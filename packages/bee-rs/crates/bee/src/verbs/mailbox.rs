@@ -3,12 +3,13 @@
 // After an unattended run, bee files ONE plain-language letter per run into
 // `.bee/human-mailbox/`. This module owns the two things that letter is made
 // of and nothing above them: the record shape, and the file-backed store that
-// holds it. It ships no verb of its own yet — the one command this feature
-// owes (D6's read flip) lands in phase 3, so `verbs/mod.rs` registers this as
-// a library module (the `workflow_store` / `workspace_store` shape), never a
-// probed verb group. Modelled on `verbs/triggers/` (the closest working
-// file-backed store) and `verbs/discovery.rs` (a store whose records are
-// documents on disk rather than JSON blobs).
+// holds it — plus the ONE verb the feature owes its consumer, D6's read flip
+// (`bee mailbox mark`, at the bottom of this file). hm-1 registered this as a
+// library module with no probe because that command was still to come; hm-8
+// added the probe, so `verbs/mod.rs` now dispatches `mailbox` like any other
+// group. Modelled on `verbs/triggers/` (the closest working file-backed store)
+// and `verbs/discovery.rs` (a store whose records are documents on disk rather
+// than JSON blobs).
 //
 // ── Two layers (D4) ────────────────────────────────────────────────────────
 //
@@ -64,15 +65,24 @@
 // worktrees through it, so it never re-roots onto the control root.
 
 #![allow(dead_code)] // The store landed first (hm-1), the append at a clean
-// stop second (hm-2), the composing pass third (hm-3). What is still unused is
-// the surface D6's read flip and D12's recovery consume, both phase 3.
+// stop second (hm-2), the composing pass third (hm-3), D6's read flip fourth
+// (hm-8). What is still unused is the surface D12's recovery consumes.
 
+use super::feedback::{emit_error, emit_success, js_trim, parse_shape, ParsedArgs};
 use crate::fsutil::{append_jsonl, warn_corrupt_jsonl_line, write_text_atomic};
 use crate::hooks::session_close::project_name;
+use crate::registry::check_manifest_drift;
+use crate::roots::{resolve_store_root_worktree, RootsWt};
+use crate::verbs::cells::{read_session, sessions_dir, HEARTBEAT_STALE_SECONDS};
 use crate::verbs::knowledge::deviation_text;
-use crate::verbs::reservations::now_iso;
+use crate::verbs::reservations::{date_parse_val, now_iso, now_ms};
+use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::Instant;
 
 // ─── store paths ────────────────────────────────────────────────────────
 
@@ -576,12 +586,26 @@ pub(crate) fn append_entry(root: &Path, run: &str, entry: &Entry) -> std::io::Re
     append_jsonl(&entries_path(root, run), &entry.to_value())
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Test-only instrument for D12's bounded-read promise: how many times
+    /// [`read_entries`] opened a run's JSONL on THIS thread. It is a
+    /// `thread_local!`, so each `#[test]` — which cargo runs on its own
+    /// thread — sees only its own count and no two tests can interfere. It
+    /// exists because "the detection opens no entry file" is a claim about a
+    /// COST, and a cost claim that nothing measures rots the first time
+    /// someone adds a read.
+    pub(crate) static ENTRY_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Every entry this run appended, in append order. Fail-open: a missing file
 /// is an empty run, and a line that will not parse (or parses to the wrong
 /// shape) is skipped with the standard visible warning rather than sinking the
 /// read — a torn last line from a run killed mid-write must never cost the
 /// entries that landed before it.
 pub(crate) fn read_entries(root: &Path, run: &str) -> Vec<Entry> {
+    #[cfg(test)]
+    ENTRY_READS.with(|c| c.set(c.get() + 1));
     let path = entries_path(root, run);
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Vec::new();
@@ -1191,6 +1215,155 @@ pub(crate) fn read_letter(path: &Path) -> Result<Letter, LetterReadError> {
     Ok(letter)
 }
 
+// ─── D6: the read flip, and the ONE command bee owes its consumer ───────
+//
+// THE SEAM. Everything else in this module is bee talking to itself. This is
+// the one place another program touches the mailbox, so it is written as a
+// contract rather than a convenience:
+//
+//     bee mailbox mark --id <letter-file-name> --status read|unread [--json]
+//
+// WHAT IT IS CALLED, AND WHY — the question CONTEXT.md deferred to planning
+// and plan.md left open ("what the read-flip command of D6 is called and
+// where it sits in the verb tree"). Settled here, with its reasons, so no
+// later reader has to re-derive them:
+//
+//   * The GROUP is `mailbox`: the store's own name, wired the way
+//     `verbs/triggers/` is wired — one probe in `verbs/mod.rs`, one group,
+//     its verbs beneath it. hm-1 registered this module as a LIBRARY module
+//     with no probe precisely because the one command bee owes was this
+//     cell's; this is that probe, and no new registration idiom is invented.
+//   * The VERB is `mark`. It is what an inbox does to a letter, it is plain
+//     language, and — the deciding reason — it says nothing about READING or
+//     LISTING. D1 fixes this feature's ceiling: no rendering surface, no
+//     listing UI, no viewer ships from bee. `mailbox read` would have read as
+//     "show me the mailbox" at exactly the door where that must be
+//     impossible.
+//   * The VALUE rides `--status`, because `status` is the frontmatter field
+//     bee owns (D3, D6) — the flag names the field it writes, and the closed
+//     value set is [`KNOWN_STATUSES`] itself rather than a second copy. The
+//     spelling is not new: `state worker update --status` and `work set
+//     --status` already mean "the new status of this record". This CLI's flag
+//     vocabulary is a ratchet (`catalog.rs`'s `PINNED_FLAG_COUNT`) — a second
+//     word for one idea makes every caller who learned the first one wrong.
+//   * The IDENTITY rides `--id`, the spelling `cells`, `decisions` and
+//     `triggers` all use for "which record". A letter's id is its file name
+//     in `.bee/human-mailbox/`, which is the only handle a consumer has: it
+//     listed the directory, because by D3 the directory listing IS the index.
+//
+// IDEMPOTENT ON PURPOSE. Marking a letter that already carries that status is
+// a no-op SUCCESS, never an error. The consumer is a UI on the far side of a
+// process boundary; it will retry, and a retry punished with a failure teaches
+// that caller to stop reading failures at all.
+//
+// THROUGH THE STORE, ALWAYS. The flip reads the record, changes the one field,
+// re-renders and writes atomically. Nothing — not even this module's own verb
+// — edits the markdown by hand (D6). [`render_letter`] is deterministic, so
+// every other frontmatter field and the whole body come back byte for byte and
+// the status line is the only line that moves.
+
+/// What one flip did. `changed: false` is a success, not a refusal — see the
+/// idempotence note above.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Marked {
+    pub path: PathBuf,
+    /// The status the letter carried before the flip.
+    pub previous: String,
+    /// The status it carries now.
+    pub status: String,
+    pub changed: bool,
+}
+
+/// Why a flip did not happen. Each variant names its own remedy — a refusal
+/// that does not say what to fix is a refusal the caller works around.
+#[derive(Debug)]
+pub(crate) enum MarkError {
+    /// A status outside the closed set bee owns (D6).
+    UnknownStatus(String),
+    /// The id is not a bare file name inside the mailbox directory.
+    NotALetterId(String),
+    /// No filed letter with that id. Names WHICH letter was asked for.
+    NoSuchLetter(String),
+    /// There is a file, and it is not a readable record.
+    Unreadable(String),
+    /// The record read back invalid — kept as its own arm so a bad record can
+    /// never be reported as a disk problem.
+    Invalid(LetterInvalid),
+    Io(std::io::Error),
+}
+
+impl MarkError {
+    pub(crate) fn message(&self) -> String {
+        match self {
+            // One wording for one rule: the closed-status refusal is the
+            // letter's own, borrowed rather than re-typed.
+            Self::UnknownStatus(status) => LetterInvalid::UnknownStatus(status.clone()).message(),
+            Self::NotALetterId(id) => format!(
+                "{id:?} is not a letter id — a letter id is its file name in .bee/human-mailbox, with no path separators"
+            ),
+            Self::NoSuchLetter(id) => format!(
+                "no letter {id:?} in .bee/human-mailbox — remedy: list that directory and pass a name it holds"
+            ),
+            Self::Unreadable(why) => why.clone(),
+            Self::Invalid(why) => why.message(),
+            Self::Io(e) => format!("could not write the letter: {e}"),
+        }
+    }
+}
+
+/// A letter's id is its file name. The `.md` suffix is optional on the way in
+/// and canonical on the way out, so a consumer that stored the stem and one
+/// that stored the whole name reach the same letter — and every answer names
+/// it the one way.
+pub(crate) fn letter_id_to_filename(id: &str) -> String {
+    if id.ends_with(".md") {
+        id.to_string()
+    } else {
+        format!("{id}.md")
+    }
+}
+
+/// A letter id addresses ONE file inside the mailbox directory and can never
+/// reach out of it — the same plain-id rule `triggers resolve` puts in front
+/// of its own store.
+fn is_letter_id(id: &str) -> bool {
+    !id.is_empty() && !id.contains('/') && !id.contains('\\') && !id.contains("..")
+}
+
+/// D6's flip, done BY THE STORE.
+///
+/// The path comes from the file that was read, never from a name recomputed
+/// out of the frontmatter: a hand-renamed letter must be flipped where it
+/// lies, not forked into a twin beside itself. That is why this does not go
+/// through [`write_letter`] (which addresses by `filed_at` + `run`), and why
+/// it re-runs the record's own validation before a byte moves — the door
+/// `write_letter` puts in front of the disk is kept, not skipped.
+pub(crate) fn mark_letter(root: &Path, id: &str, status: &str) -> Result<Marked, MarkError> {
+    if !KNOWN_STATUSES.contains(&status) {
+        return Err(MarkError::UnknownStatus(status.to_string()));
+    }
+    if !is_letter_id(id) {
+        return Err(MarkError::NotALetterId(id.to_string()));
+    }
+    let path = mailbox_dir(root).join(letter_id_to_filename(id));
+    let mut letter = match read_letter(&path) {
+        Ok(letter) => letter,
+        Err(LetterReadError::Missing) => return Err(MarkError::NoSuchLetter(id.to_string())),
+        Err(other) => return Err(MarkError::Unreadable(other.message())),
+    };
+    let previous = letter.status.clone();
+    if previous == status {
+        // The retry a consumer makes after a dropped response, and the second
+        // click on an already-read row. Nothing is written, so the file's
+        // mtime does not move either.
+        return Ok(Marked { path, previous, status: status.to_string(), changed: false });
+    }
+    letter.status = status.to_string();
+    letter.validate().map_err(MarkError::Invalid)?;
+    write_text_atomic(&path, &render_letter(&letter)).map_err(MarkError::Io)?;
+    Ok(Marked { path, previous, status: status.to_string(), changed: true })
+}
+
 // ─── composing the letter at the end of a run (D4, D7, D8, D9, D11) ─────
 //
 // THE AUTHORSHIP BAN (D8) is the whole shape of this section. The composing
@@ -1392,6 +1565,11 @@ pub(crate) enum RunEnd {
     NoEntries,
     /// Written — or re-written in place, keeping D11's one letter per run.
     Filed(PathBuf),
+    /// D11's refusal, not a failure: this run already has its ONE letter, so
+    /// nothing was written and the letter it has is named. Only the D12
+    /// recovery pass can reach it — an ordinary run end RE-COMPOSES its own
+    /// letter in place instead (see [`file_run_letter`]).
+    AlreadyFiled(PathBuf),
     /// Nothing was written, and the human will miss this run's letter. The
     /// string names what to fix.
     Failed(String),
@@ -1474,6 +1652,303 @@ pub(crate) fn record_run_end(root: &Path, run: &str) -> RunEnd {
     outcome
 }
 
+// ─── D12: the run that went silent ──────────────────────────────────────
+//
+// A run that dies WITHOUT reaching its own end gets its letter from the NEXT
+// SESSION THAT STARTS. That letter is marked plainly as an unfinished run, it
+// lists the entries up to the last one, and it names the moment the run went
+// silent.
+//
+// NO BACKGROUND SCHEDULER, and the reason is the decision's own: a scheduler
+// shares the failure mode it would exist to cover. The thing that kills a run
+// at 3am — the machine sleeping, the laptop lid, the power cut — kills a timer
+// in the same process and on the same box. Only a LATER session can be trusted
+// to have survived, so the recovery is a few reads on a path a later session
+// already walks (`bee work set`, in `verbs/work.rs`). Nothing polls.
+//
+// ── The bounded detection (plan.md's deferred question) ──────────────────
+//
+// CONTEXT.md deferred "how a later session recognises orphaned entries without
+// scanning the whole store on every start". Settled here, with its costs:
+//
+//   0. `armed(root)` — one config read and one marker stat. An unarmed
+//      checkout stops HERE and pays no directory read at all, so a repo that
+//      never runs unattended never pays for this feature (D9).
+//   1. `runs_with_entries` — ONE directory listing of `entries/`, names only.
+//   2. `letter_run_slugs` — ONE directory listing of the mailbox, names only.
+//   3. `session_ids` — ONE directory listing of `.bee/sessions/`, names only.
+//   4. For each CANDIDATE only — a run that has entries, has no letter, and is
+//      not this session — one session record read, and one entry-file read if
+//      it is filed. Candidates are normally ZERO.
+//
+// Three directory listings and no file opened is the whole steady-state cost.
+// It is O(runs + letters + sessions) in DIRECTORY ENTRIES and O(candidates) in
+// FILE OPENS, and the second number is the one that matters: not one entry is
+// read to answer "which runs went silent?". `ENTRY_READS` measures exactly
+// that, so the promise cannot rot silently.
+//
+// Why the session ids drive the loop rather than the entry file names: an
+// entry file is named `slug_capped(run, 64)` and a letter carries
+// `short_run_slug(run)` — two different truncations of the same run id, and
+// neither is invertible. The session id is the run id itself (`run_id`), so
+// slugging it forwards is the one direction that is exact.
+//
+// ── Never sweep a LIVE run (the hard part) ──────────────────────────────
+//
+// From the outside a run still working looks EXACTLY like a dead one: entries
+// on disk, no letter yet. Filing an "unfinished" letter for a run that is
+// still going is worse than filing nothing — it tells the human a lie about
+// work that is happening while they read it.
+//
+// The signal that separates them is the one bee already reclaims by: the
+// session record under `.bee/sessions/<id>.json`, its `status`, and its
+// `last_heartbeat`. A run IS a session's span (`run_id`), so the run id is the
+// session id and the record is a direct lookup — no scan, no guess.
+//
+// FAIL CLOSED, the same posture the claim sweep and `worktree prune` take: a
+// signal that is missing, unreadable or ambiguous KEEPS the run rather than
+// reclaiming it. `run_went_silent` therefore says "silent" ONLY on positive
+// evidence — the record says `closed`/`dead`, or its heartbeat parsed and is
+// older than `HEARTBEAT_STALE_SECONDS`. No record at all, no heartbeat field,
+// an unparseable stamp: not silent, no letter, try again next session. That is
+// a deliberate divergence from `claims::heartbeat_stale`, which answers the
+// opposite question (may I take this claim?) and so treats an absent record as
+// stale. Here an absent record is an absent WITNESS.
+//
+// It is also why `UNATTRIBUTED_RUN` never gets an unfinished letter: nothing
+// ever wrote a session record named "unattributed", so there is no witness
+// that its run is over.
+//
+// ── The authorship ban still holds (D8) ─────────────────────────────────
+//
+// An unfinished letter invents NOTHING about why the run stopped. bee knows
+// two things and says exactly those two: the run never reached its end, and
+// the last moment it recorded anything. It does not say the run crashed, or
+// failed, or was killed — it does not know that, and a letter is only worth
+// reading if every sentence in it was true when it was written.
+//
+// The moment is the LAST ENTRY's `at`, not the session's last heartbeat: the
+// last entry is a fact the run itself stored, so the sentence naming it stays
+// inside D8's ban with nothing borrowed from outside the entry set.
+
+/// The mark that makes an unfinished letter tell itself apart AT A GLANCE
+/// (D12). It leads the SUBJECT, because the subject is the inbox row a human
+/// reads first (D2) — a mark buried in the body is not "at a glance".
+///
+/// No frontmatter FIELD is added for it. D3 fixes the machine contract's field
+/// list (`subject`, `run`, `project`, `filed_at`, `status`, `items[]`,
+/// `needs_you[]`) and another project consumes it; extending that list is a
+/// decision, not a worker's choice. The mark rides the field D3 already has.
+pub(crate) const UNFINISHED_SUBJECT_MARK: &str = "Unfinished run:";
+
+/// The body's own heading for the mark. It is NOT one of D7's five — those are
+/// what a finished run's stops are sorted into, and this says something about
+/// the run itself — so it leads the body, above them.
+pub(crate) const SECTION_UNFINISHED: &str = "Unfinished run";
+
+/// The two facts an unfinished letter is allowed to state, and all of them.
+/// Constants because they are the decision's own words: what bee knows is
+/// "it did not reach its end" and "this was the last thing it recorded".
+pub(crate) const UNFINISHED_LINE: &str = "This run never reached its end.";
+pub(crate) const SILENT_AFTER_PREFIX: &str = "Nothing more was recorded after";
+
+/// The moment the run went silent: the `at` of its LAST stored entry — the
+/// last thing the run said before it stopped saying anything.
+pub(crate) fn went_silent_at(entries: &[Entry]) -> Option<String> {
+    entries.last().map(|e| e.at.trim().to_string()).filter(|at| !at.is_empty())
+}
+
+/// The unfinished letter's prose: the mark first, then D7's five sections over
+/// the entries, composed by the same [`compose_body`] a finished run uses.
+///
+/// Same renderer, one extra section — so an unfinished letter can never drift
+/// away from what a finished one reads like, and the entries are listed up to
+/// the last one exactly as D12 asks.
+pub(crate) fn compose_unfinished_body(entries: &[Entry]) -> String {
+    let moment = match went_silent_at(entries) {
+        Some(at) => format!("- {UNFINISHED_LINE} {SILENT_AFTER_PREFIX} {at}."),
+        // No entry carries a moment, so no moment is named. D8: silence beats
+        // an invented timestamp.
+        None => format!("- {UNFINISHED_LINE}"),
+    };
+    let lead = format!("## {SECTION_UNFINISHED}\n\n{moment}\n");
+    let rest = compose_body(entries);
+    if rest.is_empty() {
+        return lead;
+    }
+    format!("{lead}\n{rest}")
+}
+
+/// [`compose_letter`] for a run that went silent (D12).
+///
+/// Everything below the subject and the leading section is the ordinary
+/// composition — same items, same sections, same authorship ban.
+pub(crate) fn compose_unfinished_letter(
+    project: &str,
+    run: &str,
+    filed_at: &str,
+    entries: &[Entry],
+) -> Option<Letter> {
+    let mut letter = compose_letter(project, run, filed_at, entries)?;
+    letter.subject = format!("{UNFINISHED_SUBJECT_MARK} {}", letter.subject);
+    letter.body = compose_unfinished_body(entries);
+    Some(letter)
+}
+
+/// Is there POSITIVE evidence that the session behind `run` is over?
+///
+/// Fail closed. Everything that is not evidence — no record, no heartbeat, a
+/// stamp that will not parse — answers `false`, and the run keeps its silence
+/// until a later session can see better. See this section's header for why
+/// that is the opposite default from `claims::heartbeat_stale`.
+fn run_went_silent(control: &Path, run: &str, now: f64) -> bool {
+    let Ok(Some(record)) = read_session(control, run) else {
+        return false; // no witness — never "it is dead", only "I cannot tell"
+    };
+    if matches!(record.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
+        return true;
+    }
+    match date_parse_val(record.get("last_heartbeat")) {
+        Ok(Some(ms)) => ms + HEARTBEAT_STALE_SECONDS * 1000.0 <= now,
+        _ => false,
+    }
+}
+
+/// The `<short-run-slug>` of every filed letter. ONE directory listing, names
+/// only — the letter name is `<stamp>-<short-run-slug>.md` and the stamp
+/// carries no `-` (see [`compact_utc_stamp`]), so the first `-` is the split.
+fn letter_run_slugs(root: &Path) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for path in list_letter_files(root) {
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        let Some(stem) = name.strip_suffix(".md") else { continue };
+        if let Some((_, slug)) = stem.split_once('-') {
+            out.insert(slug.to_string());
+        }
+    }
+    out
+}
+
+/// Every session id this checkout has a record for, name-sorted. ONE directory
+/// listing, no record opened — a record is read only for a candidate.
+fn session_ids(control: &Path) -> Vec<String> {
+    let dir = sessions_dir(control);
+    let mut names: Vec<String> = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries
+            .flatten()
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                name.strip_suffix(".json").map(str::to_string)
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    names.sort();
+    names
+}
+
+/// The runs that MIGHT have gone silent: they stored entries, they have no
+/// letter, and they are not this session. Three directory listings and not one
+/// file opened — see this section's header for the full cost.
+///
+/// `root` is the CONTROL root: entries, letters and session records all live
+/// under it, and a linked worktree's cap already resolved its store there.
+///
+/// `current_run` is excluded belt-and-braces. A live sibling is already kept by
+/// `run_went_silent`'s heartbeat, but THIS session's own heartbeat may not be
+/// stamped yet at the moment it starts, and a session that filed an unfinished
+/// letter for itself would be the worst version of this bug.
+pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<String> {
+    let entry_slugs: HashSet<String> = runs_with_entries(root).into_iter().collect();
+    if entry_slugs.is_empty() {
+        return Vec::new();
+    }
+    let lettered = letter_run_slugs(root);
+    let mut out = Vec::new();
+    for id in session_ids(root) {
+        if id == current_run {
+            continue;
+        }
+        if !entry_slugs.contains(&slug_capped(&id, 64)) {
+            continue;
+        }
+        if lettered.contains(&short_run_slug(&id)) {
+            continue;
+        }
+        out.push(id);
+    }
+    out
+}
+
+/// File the ONE unfinished letter for a run that went silent (D12).
+///
+/// D11 is re-checked at the door to the disk even though the candidate filter
+/// already applied it: a second letter for one run is the loss that rule
+/// exists to prevent, and the last check before a write is the one that has to
+/// hold. An existing letter is [`RunEnd::AlreadyFiled`] — a refusal, not a
+/// failure, and nothing is rewritten. Unlike an ordinary run end, this pass
+/// never re-composes a letter in place: the run is gone, so there is nothing
+/// new to fold in, and the human's own reading of that letter stands.
+pub(crate) fn file_unfinished_letter(root: &Path, run: &str) -> RunEnd {
+    if !armed(root) {
+        return RunEnd::NotArmed;
+    }
+    if let Some(existing) = letter_files_for_run(root, run).into_iter().next() {
+        return RunEnd::AlreadyFiled(existing);
+    }
+    let entries = read_entries(root, run);
+    let Some(letter) = compose_unfinished_letter(&project_of(root), run, &now_iso(), &entries)
+    else {
+        return RunEnd::NoEntries;
+    };
+    match write_letter(root, &letter) {
+        Ok(path) => RunEnd::Filed(path),
+        Err(why) => RunEnd::Failed(why.message()),
+    }
+}
+
+/// D12's whole pass: at the start of a session, file the unfinished letter of
+/// every run that went silent. `root` is the CONTROL root; `current_run` is
+/// this session's own run id.
+///
+/// Returns one `(run, outcome)` per run it decided about, so a caller can say
+/// what happened; a run that is still live, or that cannot be judged, is not
+/// in the list at all.
+pub(crate) fn file_letters_for_silent_runs(root: &Path, current_run: &str) -> Vec<(String, RunEnd)> {
+    // Step 0 of the bounded read: an unarmed checkout stops before it lists a
+    // single directory (D9 — an attended checkout files no letter anyway).
+    if !armed(root) {
+        return Vec::new();
+    }
+    let now = now_ms();
+    let mut out = Vec::new();
+    for run in silent_run_candidates(root, current_run) {
+        if !run_went_silent(root, &run, now) {
+            continue;
+        }
+        out.push((run.clone(), file_unfinished_letter(root, &run)));
+    }
+    out
+}
+
+/// [`file_letters_for_silent_runs`], FAIL-OPEN — the shape [`record_run_end`]
+/// and [`record_stop`] already have.
+///
+/// The caller's actual ask is its own; recovering some OTHER run's letter must
+/// never turn that ask into a refusal. A failure is still said out loud, and
+/// it names the run whose letter the human will not find.
+pub(crate) fn record_silent_runs(root: &Path, current_run: &str) -> Vec<(String, RunEnd)> {
+    let outcomes = file_letters_for_silent_runs(root, current_run);
+    for (run, outcome) in &outcomes {
+        if let RunEnd::Failed(why) = outcome {
+            eprintln!(
+                "bee: could not file the human-mailbox letter for run \"{run}\", which went silent without finishing ({why}) — remedy: that run has no letter to read until this is fixed."
+            );
+        }
+    }
+    outcomes
+}
+
 // ─── small value helpers ────────────────────────────────────────────────
 
 fn string_list(m: &Map<String, Value>, key: &str) -> Vec<String> {
@@ -1485,6 +1960,86 @@ fn string_list(m: &Map<String, Value>, key: &str) -> Vec<String> {
 
 fn opt_string(m: &Map<String, Value>, key: &str) -> Option<String> {
     m.get(key).and_then(Value::as_str).map(str::to_string)
+}
+
+// ─── the verb: `bee mailbox mark` (D6) ──────────────────────────────────
+//
+// Argv plumbing only. Every rule this command enforces lives in
+// [`mark_letter`] above, where the store is — the door and the store can never
+// disagree about what a flip is, because there is only one of them.
+//
+// Root topology: WORKTREE-NATIVE, and it stops there. The mailbox is a record
+// of what a run did, a run happens in ONE checkout, and nothing coordinates
+// across worktrees through it — so unlike `triggers`, this store never
+// re-roots onto the control root.
+
+/// The trimmed value of `--<name>`, or `None` when it is absent or empty.
+fn mark_flag<'a>(parsed: &'a ParsedArgs, name: &str) -> Option<&'a str> {
+    parsed.flags.get(name).map(|s| js_trim(s)).filter(|s| !s.is_empty())
+}
+
+pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
+    if args.first()?.to_str()? != "mailbox" {
+        return None;
+    }
+    let verb = args.get(1)?.to_str()?;
+    let rest = &args[2..];
+    match verb {
+        "mark" => run_mark(parse_shape(rest, &["id", "status"])?, t0),
+        _ => None,
+    }
+}
+
+fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "mailbox mark";
+    let Ok(cwd) = std::env::current_dir() else { return None };
+    let root = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r.root,
+        RootsWt::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, cmd, parsed.pre_json, t0, &why))
+        }
+        RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, parsed.pre_json, t0)),
+    };
+    let drift = check_manifest_drift(&root);
+    let Some(id) = mark_flag(&parsed, "id") else {
+        let msg = format!("bee {cmd}: --id is required — the letter's file name in .bee/human-mailbox.");
+        return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+    };
+    let Some(status) = mark_flag(&parsed, "status") else {
+        let msg = format!(
+            "bee {cmd}: --status is required — {STATUS_UNREAD:?} or {STATUS_READ:?} (D6)."
+        );
+        return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+    };
+    match mark_letter(&root, id, status) {
+        Err(why) => {
+            let msg = format!("bee {cmd}: {}", why.message());
+            Some(emit_error(&root, cmd, parsed.json, &msg, t0))
+        }
+        Ok(marked) => {
+            // The answer always names the letter the ONE canonical way, so a
+            // consumer that passed the bare stem still learns the file name.
+            let name = marked
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| letter_id_to_filename(id));
+            let result = json!({
+                "letter": name,
+                "path": marked.path.display().to_string(),
+                "status": marked.status,
+                "previous_status": marked.previous,
+                "changed": marked.changed,
+            });
+            let text = if marked.changed {
+                format!("Marked {name} {}.", marked.status)
+            } else {
+                format!("{name} was already {}. Nothing was written.", marked.status)
+            };
+            Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0))
+        }
+    }
 }
 
 // ─── tests ──────────────────────────────────────────────────────────────
@@ -1858,6 +2413,141 @@ mod tests {
             write_letter(root, &letter).unwrap_err(),
             LetterWriteError::Invalid(LetterInvalid::UnknownStatus(_))
         ));
+    }
+
+    // ── D6: the read flip, the one command bee owes its consumer ────────
+
+    /// The letter as bytes, minus the one line the flip is allowed to move.
+    fn every_line_but_the_status(text: &str) -> Vec<String> {
+        text.lines().filter(|l| !l.starts_with("status: ")).map(str::to_string).collect()
+    }
+
+    fn status_line(text: &str) -> String {
+        text.lines().find(|l| l.starts_with("status: ")).expect("a letter carries a status").to_string()
+    }
+
+    #[test]
+    fn a_flip_moves_the_status_line_and_nothing_else() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        let before = std::fs::read_to_string(&path).unwrap();
+
+        let marked = mark_letter(root, &id, STATUS_READ).unwrap();
+        assert!(marked.changed);
+        assert_eq!(marked.previous, STATUS_UNREAD);
+        assert_eq!(marked.status, STATUS_READ);
+        assert_eq!(marked.path, path, "the flip writes the file it read, never a twin");
+
+        let after = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(status_line(&after), format!("status: {:?}", STATUS_READ));
+        assert_eq!(
+            every_line_but_the_status(&before),
+            every_line_but_the_status(&after),
+            "every other frontmatter field and the whole body survive byte for byte"
+        );
+        assert_eq!(list_letter_files(root).len(), 1, "one letter stays one letter");
+
+        // Read back through the store: subject, items, needs_you and prose are
+        // the record they were, and only the state bee owns has moved.
+        let read_back = read_letter(&path).unwrap();
+        let mut expected = sample_letter();
+        expected.status = STATUS_READ.to_string();
+        assert_eq!(read_back, expected);
+    }
+
+    #[test]
+    fn flipping_back_restores_the_letter_byte_for_byte() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        let original = std::fs::read_to_string(&path).unwrap();
+
+        mark_letter(root, &id, STATUS_READ).unwrap();
+        mark_letter(root, &id, STATUS_UNREAD).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn flipping_an_already_flipped_letter_is_a_no_op_not_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+
+        mark_letter(root, &id, STATUS_READ).unwrap();
+        let after_first = std::fs::read_to_string(&path).unwrap();
+
+        // The consumer retries after a dropped response. It is not punished.
+        let again = mark_letter(root, &id, STATUS_READ).expect("a retry is a success");
+        assert!(!again.changed, "a second flip writes nothing");
+        assert_eq!(again.previous, STATUS_READ);
+        assert_eq!(again.status, STATUS_READ);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), after_first);
+    }
+
+    #[test]
+    fn the_id_is_the_file_name_with_or_without_its_suffix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let stem = name.trim_end_matches(".md").to_string();
+
+        let marked = mark_letter(root, &stem, STATUS_READ).unwrap();
+        assert_eq!(marked.path, path, "the stem and the file name reach the same letter");
+    }
+
+    #[test]
+    fn flipping_a_letter_that_is_not_there_refuses_and_names_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_letter(root, &sample_letter()).unwrap();
+
+        let why = mark_letter(root, "20260101T000000Z-no-such-run.md", STATUS_READ).unwrap_err();
+        assert!(matches!(why, MarkError::NoSuchLetter(_)));
+        let message = why.message();
+        assert!(message.contains("20260101T000000Z-no-such-run.md"), "{message}");
+        assert!(message.contains("remedy"), "a refusal names what to fix: {message}");
+    }
+
+    #[test]
+    fn a_status_outside_the_set_bee_owns_is_refused_before_the_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        let before = std::fs::read_to_string(&path).unwrap();
+
+        let why = mark_letter(root, &id, "archived").unwrap_err();
+        assert!(matches!(why, MarkError::UnknownStatus(_)));
+        assert!(why.message().contains("archived"), "{}", why.message());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before, "a refusal writes nothing");
+    }
+
+    #[test]
+    fn a_letter_id_can_never_reach_out_of_the_mailbox() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for id in ["../../etc/passwd", "sub/letter.md", "..", ""] {
+            let why = mark_letter(root, id, STATUS_READ).unwrap_err();
+            assert!(matches!(why, MarkError::NotALetterId(_)), "{id:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn an_unreadable_file_is_reported_as_unreadable_not_as_a_missing_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        std::fs::write(&path, "someone deleted the fence\n").unwrap();
+
+        let why = mark_letter(root, &id, STATUS_READ).unwrap_err();
+        assert!(matches!(why, MarkError::Unreadable(_)));
+        assert!(why.message().contains("remedy"), "{}", why.message());
     }
 
     // ── D9: arming, and D11's run identity ──────────────────────────────
@@ -2376,5 +3066,295 @@ nested:
         let filed = Departure::from_value(&json!({"what": "a", "why": "b", "kind": "an old kind"}))
             .expect("a filed letter keeps its departure");
         assert_eq!(filed.kind, "an old kind");
+    }
+
+    // ── D12: the run that went silent ───────────────────────────────────
+
+    fn write_session(root: &Path, id: &str, status: &str, last_heartbeat: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            json!({ "id": id, "status": status, "last_heartbeat": last_heartbeat }).to_string(),
+        )
+        .unwrap();
+    }
+
+    /// A session record that says, positively, that the run is over.
+    fn dead_session(root: &Path, id: &str) {
+        write_session(root, id, "dead", "2026-08-25T03:00:00.000Z");
+    }
+
+    /// A session record that is beating right now — a run still working.
+    fn live_session(root: &Path, id: &str) {
+        write_session(root, id, "active", &now_iso());
+    }
+
+    fn armed_store(root: &Path) {
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        arm_the_loop(root);
+    }
+
+    #[test]
+    fn a_run_that_went_silent_gets_a_marked_letter_naming_the_moment() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        for entry in full_run() {
+            append_entry(root, "sess-dead", &entry).unwrap();
+        }
+        dead_session(root, "sess-dead");
+        live_session(root, "sess-now");
+
+        let outcomes = file_letters_for_silent_runs(root, "sess-now");
+        assert_eq!(outcomes.len(), 1, "one silent run, one decision");
+        let RunEnd::Filed(path) = &outcomes[0].1 else {
+            panic!("the silent run gets its letter from the next session (D12)");
+        };
+        let letter = read_letter(path).unwrap();
+
+        // Marked plainly — the mark leads the inbox row, so a human tells this
+        // letter from a clean one at a glance.
+        assert!(
+            letter.subject.starts_with(UNFINISHED_SUBJECT_MARK),
+            "the subject {:?} does not mark the run unfinished",
+            letter.subject
+        );
+        assert!(letter.body.contains(&format!("## {SECTION_UNFINISHED}")));
+        // Lists the entries up to the last one.
+        assert_eq!(letter.items.len(), full_run().len());
+        // Names the moment it went silent — the last entry's own `at`.
+        assert!(
+            letter.body.contains("2026-08-25T03:00:00.000Z"),
+            "the body never names the moment: {}",
+            letter.body
+        );
+        assert_eq!(letter.status, STATUS_UNREAD);
+        assert_eq!(letter.run, "sess-dead");
+        // D7's sections still carry the run's work.
+        assert!(letter.body.contains(&format!("## {SECTION_DONE}")));
+    }
+
+    #[test]
+    fn an_unfinished_letter_states_only_facts_the_entries_carry() {
+        // D8's authorship ban, over D12's own path. bee knows TWO things about
+        // a silent run — it never reached its end, and when it last recorded
+        // anything — and the body may say those two and nothing else.
+        let entries = full_run();
+        let body = compose_unfinished_body(&entries);
+
+        let mut allowed: Vec<String> = Vec::new();
+        for e in &entries {
+            allowed.extend(words(&e.what));
+            allowed.extend(words(&e.kind));
+            allowed.extend(words(&e.at));
+            for f in &e.files {
+                allowed.extend(words(f));
+            }
+            if let Some(c) = &e.commit {
+                allowed.extend(words(c));
+            }
+            if let Some(p) = &e.proof {
+                allowed.extend(words(p));
+            }
+            if let Some(d) = &e.departure {
+                allowed.extend(words(&d.what));
+                allowed.extend(words(&d.why));
+                allowed.extend(words(&d.kind));
+            }
+            for n in &e.needs_you {
+                allowed.extend(words(&n.id));
+                allowed.extend(words(&n.what));
+                allowed.extend(words(&n.blocks));
+            }
+        }
+        for heading in SECTIONS {
+            allowed.extend(words(heading));
+        }
+        allowed.push("blocks".to_string());
+        // The whole extra vocabulary D12 buys, named as constants so this test
+        // measures the marking rather than being widened by it.
+        allowed.extend(words(SECTION_UNFINISHED));
+        allowed.extend(words(UNFINISHED_LINE));
+        allowed.extend(words(SILENT_AFTER_PREFIX));
+
+        for word in words(&body) {
+            assert!(
+                allowed.contains(&word),
+                "the body says {word:?}, which no stored entry carries — that is authoring (D8)"
+            );
+        }
+        // It never guesses WHY the run stopped.
+        let lower = body.to_lowercase();
+        for invented in ["crash", "killed", "failed", "died", "error"] {
+            assert!(!lower.contains(invented), "the body guesses why: {invented:?}");
+        }
+    }
+
+    #[test]
+    fn a_run_still_working_is_never_swept() {
+        // The hard case: a live run and a dead one look identical from the
+        // outside — entries on disk, no letter. Only the heartbeat separates
+        // them, and a live one must keep working undisturbed.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        append_entry(root, "sess-live", &sample_entry("2026-08-25T01:00:00.000Z", "Still going"))
+            .unwrap();
+        live_session(root, "sess-live");
+        live_session(root, "sess-now");
+
+        assert!(file_letters_for_silent_runs(root, "sess-now").is_empty());
+        assert!(list_letter_files(root).is_empty(), "a live run was given an unfinished letter");
+    }
+
+    #[test]
+    fn an_ambiguous_or_missing_signal_files_nothing() {
+        // FAIL CLOSED, the posture the claim sweep and `worktree prune` take:
+        // no witness is "I cannot tell", never "it is dead". Each row here has
+        // entries and no letter — the shape that WOULD be swept on evidence.
+        let cases: Vec<(&str, Option<(&str, &str)>)> = vec![
+            ("no session record at all", None),
+            ("no heartbeat stamp", Some(("active", ""))),
+            ("an unparseable heartbeat", Some(("active", "last tuesday"))),
+            ("a fresh heartbeat", Some(("active", "NOW"))),
+        ];
+        for (why, record) in cases {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            armed_store(root);
+            append_entry(root, "sess-x", &sample_entry("2026-08-25T01:00:00.000Z", "Did a thing"))
+                .unwrap();
+            if let Some((status, heartbeat)) = record {
+                let stamp = if heartbeat == "NOW" { now_iso() } else { heartbeat.to_string() };
+                write_session(root, "sess-x", status, &stamp);
+            }
+            assert!(
+                file_letters_for_silent_runs(root, "sess-now").is_empty(),
+                "{why}: a run was swept on no evidence"
+            );
+            assert!(list_letter_files(root).is_empty(), "{why}: a letter was filed anyway");
+        }
+    }
+
+    #[test]
+    fn the_unattributed_bucket_is_never_swept() {
+        // Nothing ever writes a session record named "unattributed", so there
+        // is no witness that its run is over — and many runs share that bucket.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        append_entry(root, UNATTRIBUTED_RUN, &sample_entry("2026-08-25T01:00:00.000Z", "A thing"))
+            .unwrap();
+        assert!(file_letters_for_silent_runs(root, "sess-now").is_empty());
+    }
+
+    #[test]
+    fn this_session_never_files_an_unfinished_letter_for_itself() {
+        // Belt-and-braces: a session whose own heartbeat is not stamped yet is
+        // still not a silent run.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        append_entry(root, "sess-now", &sample_entry("2026-08-25T01:00:00.000Z", "Working now"))
+            .unwrap();
+        write_session(root, "sess-now", "dead", "2020-01-01T00:00:00.000Z");
+        assert!(file_letters_for_silent_runs(root, "sess-now").is_empty());
+        assert!(list_letter_files(root).is_empty());
+    }
+
+    #[test]
+    fn a_silent_run_that_already_has_its_letter_is_not_filed_twice() {
+        // D11: one letter maps to one run.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        for entry in full_run() {
+            append_entry(root, "sess-dead", &entry).unwrap();
+        }
+        dead_session(root, "sess-dead");
+
+        let first = file_letters_for_silent_runs(root, "sess-now");
+        assert!(matches!(first[0].1, RunEnd::Filed(_)));
+        assert_eq!(list_letter_files(root).len(), 1);
+
+        // Second session start: the run has a letter, so it is not even a
+        // candidate any more.
+        assert!(silent_run_candidates(root, "sess-later").is_empty());
+        assert!(file_letters_for_silent_runs(root, "sess-later").is_empty());
+        assert_eq!(list_letter_files(root).len(), 1, "one run, one letter (D11)");
+    }
+
+    #[test]
+    fn an_unarmed_checkout_files_nothing_and_lists_no_directory() {
+        // D9, and step 0 of the bounded read: an attended checkout stops at the
+        // config read.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+        append_entry(root, "sess-dead", &sample_entry("2026-08-25T01:00:00.000Z", "A thing"))
+            .unwrap();
+        dead_session(root, "sess-dead");
+        assert!(file_letters_for_silent_runs(root, "sess-now").is_empty());
+        assert!(list_letter_files(root).is_empty());
+    }
+
+    #[test]
+    fn detection_opens_no_entry_file_however_many_runs_the_store_holds() {
+        // The MEDIUM risk plan.md flags on this cell: this runs on a path that
+        // has nothing to do with the mailbox, so the cost must not grow with
+        // the store. The detection is three directory listings; the number that
+        // matters is FILE OPENS, and it is zero.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        for n in 0..60 {
+            let run = format!("sess-{n:03}");
+            for entry in full_run() {
+                append_entry(root, &run, &entry).unwrap();
+            }
+            live_session(root, &run);
+        }
+        live_session(root, "sess-now");
+
+        ENTRY_READS.with(|c| c.set(0));
+        let candidates = silent_run_candidates(root, "sess-now");
+        assert_eq!(candidates.len(), 60, "every run with entries and no letter is a candidate");
+        assert_eq!(
+            ENTRY_READS.with(|c| c.get()),
+            0,
+            "the detection opened an entry file — it must answer from directory names alone"
+        );
+
+        // And the whole pass over 60 live runs still opens nothing.
+        ENTRY_READS.with(|c| c.set(0));
+        assert!(file_letters_for_silent_runs(root, "sess-now").is_empty());
+        assert_eq!(ENTRY_READS.with(|c| c.get()), 0, "a live run's entries were read");
+    }
+
+    #[test]
+    fn only_the_run_that_is_actually_filed_has_its_entries_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        for n in 0..40 {
+            let run = format!("sess-{n:03}");
+            append_entry(root, &run, &sample_entry("2026-08-25T01:00:00.000Z", "Still going"))
+                .unwrap();
+            live_session(root, &run);
+        }
+        for entry in full_run() {
+            append_entry(root, "sess-dead", &entry).unwrap();
+        }
+        dead_session(root, "sess-dead");
+
+        ENTRY_READS.with(|c| c.set(0));
+        let outcomes = file_letters_for_silent_runs(root, "sess-now");
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(
+            ENTRY_READS.with(|c| c.get()),
+            1,
+            "exactly one entry file is opened: the one letter that gets written"
+        );
     }
 }
