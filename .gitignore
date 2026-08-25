@@ -12,7 +12,6 @@
 .bee/sessions/
 .bee/claims/
 .bee/runtime/
-.bee/human-mailbox/
 .bee/cache/
 .bee/intent/
 .bee/locks/
@@ -21,6 +20,7 @@
 .bee/config.local.json
 .bee/tmp/
 .bee/backups/
+.bee/human-mailbox/
 *.[0-9]*-*-*.tmp
 .claude-plugin/skills.tmp-*/
 .claude-plugin/skills.old-*/

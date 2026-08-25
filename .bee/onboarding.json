@@ -3,7 +3,7 @@
   "bee_version": "2.22.1",
   "managed": {
     "agents_block": "febc3240abec981c13b6ce4b1732ebfaf402c93c01f3c7ec521c3606f4287bd3",
-    "gitignore_block": "cea6e7ea571219e956c754a9dde610886ae95c7e83b2cb56d2deca64b4f6c6c7",
+    "gitignore_block": "7e44a6ac3a8cd11b4cbfbdc2396b6133ce30a2e20136cbca608a77742f61bed8",
     "helpers": {},
     "lib": {},
     "expertise": {
@@ -79,5 +79,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-25T09:49:03.125Z"
+  "updated_at": "2026-08-25T15:23:07.198Z"
 }

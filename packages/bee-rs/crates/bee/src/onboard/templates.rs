@@ -43,6 +43,7 @@ pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[
     ".bee/config.local.json",
     ".bee/tmp/",
     ".bee/backups/",
+    ".bee/human-mailbox/",
     "*.[0-9]*-*-*.tmp",
     ".claude-plugin/skills.tmp-*/",
     ".claude-plugin/skills.old-*/",
