@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "model-role-split",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"model-role-split\" started at phase \"exploring\" (lane).",
-  "next_action": "model-role-split merged into main at a5d416e (34 cells proven); D9 backfill applied to the live store (540 cells, commit 1b09eb5e) and binary reinstalled. Awaiting the user's uat gate: bee gate --name uat --approved true --lane model-role-split, then bee close.",
+  "next_action": "Judge door is the only blocker left: 25 behavior_change cells need independent judge verdicts.",
   "created_at": "2026-08-24T18:50:51.857Z",
-  "run_state": "done",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-08-25T11:47:57.090Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -29,5 +34,15 @@
     "rationale": "Hard-gate: retiring the cell tier enum is validation removal, and the 506-cell backfill is a data migration. Changes bee cells add, cells tier, state worker add --tier and the dispatch payload (public contracts), invalidates existing model_guard and tier-validation tests, and spans drivers, hooks/model_guard, cells, state_group, status_full, session_preamble and onboard.",
     "updated_at": "2026-08-24T18:50:59.929Z",
     "feature": "model-role-split"
+  },
+  "last_scribing_run": {
+    "feature": "model-role-split",
+    "date": "2026-08-25",
+    "at": "2026-08-25T11:47:19.372Z",
+    "areas_synced": [
+      "doctrine-layer",
+      "workflow-state"
+    ],
+    "next_action": "Judge door is the only blocker left: 25 behavior_change cells need independent judge verdicts."
   }
 }

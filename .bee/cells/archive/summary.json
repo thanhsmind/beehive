@@ -848,5 +848,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-25T11:20:42.847Z"
+  },
+  "state-lock-lost-update": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T11:49:18.056Z"
   }
 }

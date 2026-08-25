@@ -278,3 +278,7 @@
 {"ts":"2026-08-25T11:47:09.892Z","event":"complete","id":"92c9dbe2-99e5-4544-b804-c17f1506abd1"}
 {"ts":"2026-08-25T11:47:10.312Z","event":"complete","id":"42bc2884-725d-4f4f-b200-966c0a89b83f"}
 {"ts":"2026-08-25T11:47:10.965Z","event":"complete","id":"f85defc8-79d5-4ed5-b77d-755e262b9573"}
+{"ts":"2026-08-25T11:47:11.174Z","event":"add","id":"f0b6960e-8348-4f71-81b0-bc9c4c440443","kind":"worktree-cleanup","feature":"model-role-split-scribe","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--model-role-split-scribe"],"reason":"Worktree beehive--wt--model-role-split-scribe (branch wt/model-role-split-scribe) merged into main at 079d307e09c21cb9260d516039c0969ed191f493 and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-08-25T11:47:11.586Z","event":"complete","id":"49710bbd-0cbd-4f2f-b1ef-1cd9ea51e78b"}
+{"ts":"2026-08-25T11:47:12.056Z","event":"complete","id":"dd7541b5-3c09-4230-a1e7-12d7fa6a67d2"}
+{"ts":"2026-08-25T11:49:18.056Z","event":"add","id":"6a7df5c2-73d4-44f2-b8b9-0b9c0b1b8d4d","kind":"promote","feature":"state-lock-lost-update","cells":[],"areas":[],"files":["docs/history/state-lock-lost-update/promote-proposals.md"],"reason":"Promote proposal for \"state-lock-lost-update\" awaiting apply — docs/history/state-lock-lost-update/promote-proposals.md."}

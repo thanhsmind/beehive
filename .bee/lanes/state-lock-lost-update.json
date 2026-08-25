@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"state-lock-lost-update\" started at phase \"planning\" (lane).",
   "next_action": "The takeover claims are tombstones swept past HARD_STALE_MS; watch that the sweep keeps pace under sustained contention.",
   "created_at": "2026-08-25T10:40:43.042Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Prune has no per-worktree flag, and `--older-than-days 0` would sweep four worktrees belonging to work I did not do. Not mine to decide. Che",
-    "asked_at": "2026-08-25T11:31:33.453Z",
-    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",
