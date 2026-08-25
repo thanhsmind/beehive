@@ -1515,18 +1515,14 @@ pub fn build_compact_capsule(
         )]);
     }
 
-    // ── item 10c: the dispatch door (dispatch-door-upfront D2).
+    // ── item 10c: the dispatch door (dispatch-door-upfront D2). The block is
+    // built in ONE place and the session preamble renders the identical
+    // bytes (`hooks/model_guard::dispatch_door_lines`): a second copy of the
+    // literal here is precisely how a compacted session gets told a role list
+    // or a command spelling the preamble has already stopped saying.
     let config_val = Value::Object(config);
-    let slots = crate::hooks::model_guard::tier_slot_display(config_val.get("models"), "claude");
-    let slots_line = slots
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join(" | ");
-    sections.push(vec![
-        "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker.".to_string(),
-        format!("- Tier slots (claude): {slots_line}"),
-    ]);
+    sections
+        .push(crate::hooks::model_guard::dispatch_door_lines(config_val.get("models"), "claude"));
 
     // ── item 11: the survival count and, when it applies, the D9 advisory.
     // Silent on a repo with no records at all (D15).
@@ -1729,6 +1725,12 @@ mod tests {
         assert!(frontmatter_type("---\nnote: x\n---\n").is_none(), "no type key");
     }
 
+    /// RETARGETED for the open role set (model-role-split D2) and `--role`
+    /// (store 8ff6e79e): same two assertions, new spelling. The capsule and
+    /// the session preamble now build these lines from one home, so this
+    /// asserts the BYTES the preamble asserts — a compacted session must not
+    /// be handed a role list or a command spelling the preamble has stopped
+    /// saying.
     #[test]
     fn capsule_renders_dispatch_door_item_10c() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1736,15 +1738,30 @@ mod tests {
         let text = build_compact_capsule(tmp.path(), Some("s1"), None);
         assert!(
             text.contains(
-                "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
+                "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor [--role <name>] --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
             ),
             "{text}"
         );
         assert!(
             text.contains(
-                "- Tier slots (claude): generation=sonnet | extraction=haiku | review=opus | advisor=none"
+                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
+    }
+
+    /// The capsule and the preamble carried two copies of this literal, which
+    /// is how a compacted session ends up told something the preamble no
+    /// longer says. One home now — proved against the shared builder rather
+    /// than by a second hand-written expectation that could drift the same
+    /// way.
+    #[test]
+    fn capsule_dispatch_door_matches_the_shared_builder() {
+        let tmp = tempfile::tempdir().unwrap();
+        repo(tmp.path());
+        let text = build_compact_capsule(tmp.path(), Some("s1"), None);
+        for line in crate::hooks::model_guard::dispatch_door_lines(None, "claude") {
+            assert!(text.contains(&line), "capsule dropped `{line}`:\n{text}");
+        }
     }
 }

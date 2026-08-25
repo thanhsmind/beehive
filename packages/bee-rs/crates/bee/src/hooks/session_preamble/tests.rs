@@ -1387,6 +1387,14 @@ use crate::version::BEE_VERSION;
 
     // ── dispatch-door-upfront D2 ──────────────────────────────────────────
 
+    /// RETARGETED, not rewritten (model-role-split D2 + `--role`, store
+    /// 8ff6e79e). Both assertions this test always made still stand — the
+    /// prepare command is published before any dispatch can happen, and the
+    /// herding generation slot renders from the same source the resolver
+    /// reads. What moved is the SPELLING of each: the command line now names
+    /// `--role <name>`, and the published list is the host's roles rather
+    /// than a fixed four-slot tier list, because there is no fixed list to
+    /// print once the set is open.
     #[test]
     fn dispatch_door_renders_herding_generation_slot_and_prepare_line() {
         let tmp = minimal_repo();
@@ -1400,20 +1408,22 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("### Dispatch door"), "{text}");
         assert!(
             text.contains(
-                "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
+                "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor [--role <name>] --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
             ),
             "{text}"
         );
         assert!(
             text.contains(
-                "- Tier slots (claude): generation=herding (agy-flash) | extraction=haiku | review=opus | advisor=none"
+                "- Roles (claude): generation=herding (agy-flash) | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
 
-        // Same-source proof: rendered generation string matches what drivers resolve_tier returns for that map
+        // Same-source proof: the rendered generation string matches what the
+        // drivers resolver returns for that map — one parser, one answer.
         let map = crate::verbs::drivers::normalize_models(Some(&models_obj));
-        let resolved = crate::verbs::drivers::resolve_tier(&map, "generation", "claude", "gather");
+        let resolved =
+            crate::verbs::drivers::resolve_role(&map, &["generation"], "claude", "gather");
         assert_eq!(
             resolved,
             crate::verbs::drivers::Resolved::Herding {
@@ -1421,8 +1431,8 @@ use crate::version::BEE_VERSION;
                 fallback: None,
             }
         );
-        let slots = crate::hooks::model_guard::tier_slot_display(Some(&models_obj), "claude");
-        let gen_str = slots.iter().find(|(k, _)| *k == "generation").map(|(_, v)| v.as_str());
+        let slots = crate::hooks::model_guard::role_slot_display(Some(&models_obj), "claude");
+        let gen_str = slots.iter().find(|(k, _)| k == "generation").map(|(_, v)| v.as_str());
         assert_eq!(gen_str, Some("herding (agy-flash)"));
     }
 
@@ -1437,21 +1447,101 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(
             text.contains(
-                "- Tier slots (claude): generation=claude-3-5-sonnet-20241022 | extraction=claude-3-5-haiku-20241022 | review=claude-3-opus-20240229 | advisor=claude-3-7-sonnet-20250219"
+                "- Roles (claude): generation=claude-3-5-sonnet-20241022 | review=claude-3-opus-20240229 | advisor=claude-3-7-sonnet-20250219 | extraction=claude-3-5-haiku-20241022"
             ),
             "{text}"
         );
     }
 
+    /// No config at all: the door still publishes something, and what it
+    /// publishes is the seeded defaults. `advisor=none` is gone on purpose —
+    /// a role that selects no model is dropped rather than printed as a name
+    /// with nothing behind it, which is one fewer thing in a block injected
+    /// into every session.
     #[test]
     fn dispatch_door_renders_defaults_when_no_models_key_present() {
         let tmp = minimal_repo();
         let text = render(tmp.path());
         assert!(text.contains("### Dispatch door"), "{text}");
         assert!(
+            text.contains("- Roles (claude): generation=sonnet | review=opus | extraction=haiku —"),
+            "{text}"
+        );
+        assert!(!text.contains("advisor=none"), "an unconfigured role is dropped:\n{text}");
+        assert!(!text.contains("Tier slots"), "the retired tier list is gone:\n{text}");
+    }
+
+    /// A role name bee itself never asks for is published exactly like bee's
+    /// own — that is what "open set" means at this door (D2, store 06e49368).
+    /// bee's own slots still read first, so the name most dispatches land on
+    /// has not moved down the line.
+    #[test]
+    fn dispatch_door_publishes_a_role_name_bee_never_asks_for() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":"opus","test":"haiku"}}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(
             text.contains(
-                "- Tier slots (claude): generation=sonnet | extraction=haiku | review=opus | advisor=none"
+                "- Roles (claude): generation=opus | review=opus | extraction=haiku | test=haiku —"
             ),
             "{text}"
         );
+    }
+
+    /// The block is injected into EVERY session, so its length is a real,
+    /// repeated cost. Past the cap the line counts instead of listing; the
+    /// truncation is safe because a name nothing configures refuses BY NAME
+    /// with a FIX at both doors rather than resolving silently.
+    #[test]
+    fn dispatch_door_counts_roles_past_the_cap_instead_of_listing_them() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":"opus","test":"haiku","docs":"haiku","design":"opus","migrate":"haiku","triage":"haiku"}}}"#,
+        );
+        let text = render(tmp.path());
+        // 3 seeded + 6 configured, one of which (generation) overlays a
+        // seeded slot: 8 roles, 6 shown.
+        assert!(text.contains(" +2 more —"), "{text}");
+        assert!(!text.contains("triage="), "the 8th role is counted, not listed:\n{text}");
+    }
+
+    /// model-role-split records `effort` as a known NON-delivery, so the door
+    /// must not print one. It USED to: `render_resolved` spelled a
+    /// `{model, effort}` slot as `model:effort` while every `Resolved::Model`
+    /// site in `verbs/drivers/prepare.rs` destructures `{ model, .. }` and
+    /// drops it — and on codex the `spawn_agent` arm drops it for its OWN
+    /// reason (only the `native` arm emits `reasoning_effort`), which the
+    /// claude harness explanation does not cover. Publishing a value no
+    /// dispatch carries is the exact silent-lie shape this feature removes.
+    #[test]
+    fn dispatch_door_never_publishes_an_effort_the_dispatch_discards() {
+        let tmp = minimal_repo();
+        let models_obj = json!({"claude":{"generation":{"model":"opus","effort":"high"}}});
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            &json!({"models": models_obj}).to_string(),
+        );
+
+        // The effort really is parsed and really does reach the resolver —
+        // this is a rendering choice, not a config that failed to load.
+        let map = crate::verbs::drivers::normalize_models(Some(&models_obj));
+        assert_eq!(
+            crate::verbs::drivers::resolve_role(&map, &["generation"], "claude", "gather"),
+            crate::verbs::drivers::Resolved::Model {
+                model: "opus".into(),
+                effort: Some("high".into()),
+            }
+        );
+
+        let text = render(tmp.path());
+        assert!(text.contains("- Roles (claude): generation=opus |"), "{text}");
+        assert!(!text.contains("opus:high"), "the door published a dropped effort:\n{text}");
+        assert!(!text.contains(":high"), "the door published a dropped effort:\n{text}");
     }

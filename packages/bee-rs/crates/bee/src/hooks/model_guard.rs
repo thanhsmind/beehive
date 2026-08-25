@@ -328,51 +328,154 @@ fn resolved_model_name(resolved: &Resolved) -> Option<&str> {
     }
 }
 
-pub(crate) fn tier_slot_display(
+/// How many roles the dispatch door prints before it starts counting.
+///
+/// The door block is injected into EVERY session and re-injected after every
+/// compaction, so its length is a real, repeated cost — publishing a long
+/// list of names would be worse than the fixed tier list it replaced. Six is
+/// bee's own slots plus room for a couple of the operator's; past that the
+/// line says how many more there are and `bee dispatch prepare --role <name>`
+/// answers for any of them by name.
+const DOOR_ROLES_SHOWN: usize = 6;
+
+/// One resolved role, as the door publishes it — or `None` when the role
+/// selects no model at all (`Resolved::Budget`: a name the table does not
+/// carry, or a slot the config explicitly turned off), which the door drops
+/// rather than printing a name with nothing behind it.
+///
+/// **`effort` is NOT rendered, and that is the point.** model-role-split
+/// records `effort` as a known NON-delivery (plan S10), so printing it here
+/// was the door stating a fact no dispatch carries — the same silent-lie
+/// shape this feature exists to remove. Three separate facts, because the two
+/// runtimes fail for DIFFERENT reasons:
+///
+/// * `models.<runtime>.<role>` accepts `{model, effort}` and
+///   `normalize_tier_value` keeps the value, so it does reach
+///   `Resolved::Model`. Config and parsing are not the gap.
+/// * On CLAUDE it dies at the door: every `Resolved::Model` site in
+///   `verbs/drivers/prepare.rs` destructures `{ model, .. }`, and the Agent
+///   tool takes no effort parameter to carry it even if they did not. That
+///   half is a harness limit, not a bee gap.
+/// * On CODEX it dies for a different reason, and this one IS bee's own: only
+///   the `native` transport arm emits `reasoning_effort`. A `Resolved::Model`
+///   on codex falls into the `spawn_agent` arm, which emits neither `model`
+///   nor `reasoning_effort` — on the one runtime that demonstrably accepts
+///   it. The claude harness explanation does NOT cover this half, and anyone
+///   who reads "harness limit" and takes the whole thing as closed is reading
+///   past a live gap.
+///
+/// `Resolved::Native` is the one place effort IS delivered; it is not
+/// rendered here either, because the native arm's own `reasoning_effort` is
+/// what speaks for it and this line publishes the model, not the transport.
+fn render_role(resolved: &Resolved) -> Option<String> {
+    Some(match resolved {
+        Resolved::Model { model, .. } => model.clone(),
+        Resolved::Herding { agent, fallback } => {
+            let mut s = match agent {
+                Some(a) => format!("herding ({a})"),
+                None => "herding".to_string(),
+            };
+            if let Some(fb) = fallback {
+                s.push_str(&format!(" fallback={fb}"));
+            }
+            s
+        }
+        Resolved::Cli { .. } | Resolved::Refused { .. } => "cli".to_string(),
+        Resolved::Native { model, .. } => format!("native:{model}"),
+        Resolved::Inherit => "session default".to_string(),
+        Resolved::Budget => return None,
+    })
+}
+
+/// The roles this host actually configures, each resolved to what it selects.
+///
+/// model-role-split D2 (store 06e49368): this was `tier_slot_display` and it
+/// returned a FIXED four-entry vector — `generation`, `extraction`, `review`,
+/// `advisor` — because under a closed set those were the only names that
+/// could exist. The set is open now, so there is no fixed list to print and
+/// the names are DERIVED from `models.<runtime>` after `normalize_models`
+/// (the operator's own keys plus the defaults bee seeds there), exactly as
+/// every other role surface derives them.
+///
+/// Read from the TABLE rather than from `known_roles`, deliberately: the
+/// resolver warns on a name absent from both the table and the built-in
+/// defaults, and `known_roles` adds `advisor` on every host whether or not
+/// one is configured — walking it here would print one stderr warning per
+/// session render on every host with no advisor. Every key of the table is by
+/// definition present in the table, so this walk cannot warn.
+///
+/// `ceiling` is excluded: D5 (store 97ce5225) makes it an escalation flag,
+/// never a role, and it selects no model.
+///
+/// Order is derived too, never hand-listed: the slots bee's own dispatch
+/// kinds resolve come first, in `DISPATCH_KINDS` order, so the name most
+/// dispatches land on still reads first; whatever else the host configures
+/// follows in config order.
+pub(crate) fn role_slot_display(
     models_raw: Option<&Value>,
     runtime: &str,
-) -> Vec<(&'static str, String)> {
-    let map = crate::verbs::drivers::normalize_models(models_raw);
-    let gen_res = crate::verbs::drivers::resolve_tier(&map, "generation", runtime, "gather");
-    let ext_res = crate::verbs::drivers::resolve_tier(&map, "extraction", runtime, "gather");
-    let rev_res = crate::verbs::drivers::resolve_tier(&map, "review", runtime, "reviewer");
-    let adv_res = crate::verbs::drivers::resolve_advisor(&map, runtime);
-
-    fn render_resolved(resolved: &crate::verbs::drivers::Resolved) -> String {
-        use crate::verbs::drivers::Resolved;
-        match resolved {
-            Resolved::Model { model, effort } => match effort {
-                Some(e) => format!("{model}:{e}"),
-                None => model.clone(),
-            },
-            Resolved::Herding { agent, fallback } => {
-                let mut s = match agent {
-                    Some(a) => format!("herding ({a})"),
-                    None => "herding".to_string(),
-                };
-                if let Some(fb) = fallback {
-                    s.push_str(&format!(" fallback={fb}"));
-                }
-                s
+) -> Vec<(String, String)> {
+    use crate::verbs::drivers::{
+        normalize_models, resolve_role, slot_for_kind, DISPATCH_KINDS, ESCALATION_WORD,
+    };
+    let map = normalize_models(models_raw);
+    let table = map.get(runtime).and_then(Value::as_object);
+    let mut order: Vec<String> = Vec::new();
+    for kind in DISPATCH_KINDS {
+        if let Some(slot) = slot_for_kind(kind) {
+            if table.is_some_and(|t| t.contains_key(slot)) && !order.iter().any(|n| n == slot) {
+                order.push(slot.to_string());
             }
-            Resolved::Cli { .. } => "cli".to_string(),
-            Resolved::Native { model, .. } => format!("native:{model}"),
-            Resolved::Inherit => "session default".to_string(),
-            Resolved::Budget => "session default".to_string(),
-            Resolved::Refused { .. } => "cli".to_string(),
         }
     }
+    if let Some(t) = table {
+        for name in t.keys() {
+            if name == ESCALATION_WORD || order.iter().any(|n| n == name) {
+                continue;
+            }
+            order.push(name.clone());
+        }
+    }
+    order
+        .into_iter()
+        .filter_map(|name| {
+            let resolved = resolve_role(&map, &[name.as_str()], runtime, "gather");
+            render_role(&resolved).map(|text| (name, text))
+        })
+        .collect()
+}
 
+/// The dispatch door block — both lines, in ONE place.
+///
+/// The session preamble renders it at session start
+/// (`hooks/session_preamble/budget.rs`) and `hooks/compaction.rs` re-injects
+/// it after a compaction. They used to carry two copies of the same literal,
+/// which is exactly how a post-compaction agent ends up being told something
+/// the preamble no longer says.
+///
+/// What changed with the open role set (D2, and `--role` from store
+/// `8ff6e79e`): the command line names `--role <name>`, and the second line
+/// publishes the host's roles instead of a fixed tier list. The list is safe
+/// to truncate because a wrong guess is not silent — a name nothing
+/// configures refuses BY NAME with a FIX at both doors
+/// (`unconfigured_role_reason` here, `--role`'s refusal in `prepare.rs`).
+pub(crate) fn dispatch_door_lines(models_raw: Option<&Value>, runtime: &str) -> Vec<String> {
+    let roles = role_slot_display(models_raw, runtime);
+    let shown = std::cmp::min(DOOR_ROLES_SHOWN, roles.len());
+    let mut listed =
+        roles[..shown].iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" | ");
+    if roles.len() > shown {
+        listed.push_str(&format!(" +{} more", roles.len() - shown));
+    }
+    if listed.is_empty() {
+        listed.push_str("none configured");
+    }
     vec![
-        ("generation", render_resolved(&gen_res)),
-        ("extraction", render_resolved(&ext_res)),
-        ("review", render_resolved(&rev_res)),
-        (
-            "advisor",
-            match adv_res {
-                Some(r) => render_resolved(&r),
-                None => "none".to_string(),
-            },
+        format!(
+            "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime {runtime} --kind cell|gather|reviewer|advisor [--role <name>] --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
+        ),
+        format!(
+            "- Roles ({runtime}): {listed} — open set: any name models.{runtime} configures is legal; one nothing configures refuses by name."
         ),
     ]
 }
