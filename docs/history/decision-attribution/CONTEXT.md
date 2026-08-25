@@ -49,7 +49,7 @@ phase in bee is exactly the phase with no lane to attribute to.
 **no `.bee/state.json` at all**. The real shape — a state file that exists and
 names a foreign feature, with no bound lane — has no test.
 
-## Locked decisions
+## Locked Decisions
 
 | ID | Decision | Rationale |
 |----|----------|-----------|
@@ -67,10 +67,20 @@ touches only the `feature` label, only on records whose own text opens with
 every change. Idempotent. The reasoning and the append-only tension are
 recorded in the store under `decision-attribution D5`.
 
-The original framing is kept below, because the tension is real and a later
-reader should see what was traded.
+<!-- bee:not-a-deferral: this sentence explains why the superseded framing is kept in the document; it records a decision already taken and promises no work. -->
 
-There is no verb to re-attribute a decision today (`bee decisions` has log,
+The original framing is kept below, because the tension is real and a
+subsequent reader should see what was traded.
+
+<!-- /bee:not-a-deferral -->
+
+**Shipped since:** `bee decisions reattribute` now exists and was applied on
+2026-08-25 — 2358 scanned, 67 corrected, 0 on a second run. The paragraph
+below describes the state at the time the question was asked, when there was
+no such verb.
+
+At the time of asking there was no verb to re-attribute a decision (`bee
+decisions` had log,
 supersede, redact, active, search, archive, tag, render), and hand-editing
 `.bee/*.jsonl` is forbidden by AGENTS.md.
 
