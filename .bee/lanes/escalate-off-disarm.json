@@ -4,9 +4,9 @@
   "mode": null,
   "phase": "exploring",
   "approved_gates": {
-    "context": false,
-    "shape": false,
-    "execution": false,
+    "context": true,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
@@ -25,5 +25,12 @@
     "rationale": null,
     "updated_at": "2026-08-25T15:35:43.538Z",
     "feature": "escalate-off-disarm"
+  },
+  "merge_ready": {
+    "since": "2026-08-25T15:41:27.302Z",
+    "branch": "wt/escalate-off-disarm",
+    "worktree_id": "beehive--wt--escalate-off-disarm",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
