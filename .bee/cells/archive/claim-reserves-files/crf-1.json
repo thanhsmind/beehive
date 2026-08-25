@@ -72,6 +72,69 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "claim-reserves-declared-files",
+            "status": "PASS",
+            "evidence": "Orchestrator ran the binary built from this cell's source against throwaway cell probe-a (files: [packages/probeA.rs]). After claim, bee reservations list showed 'wk-pa | cell probe-a | packages/probeA.rs' plus its cross_worktree mirror. Before this cell, the same sequence left the store empty."
+          },
+          {
+            "id": "c2",
+            "name": "conflict-refuses-zero-mutation",
+            "status": "PASS",
+            "evidence": "Claiming probe-b on the same path under wk-pb returned 'claim: RESERVATION_CONFLICT — ... nothing claimed; the claim was rolled back and the store restored as found: - wk-pa holds packages/probeA.rs (cell probe-a)'. probe-b remained status=open with trace.worker=None, and the reservation listing was unchanged."
+          },
+          {
+            "id": "c3",
+            "name": "empty-files-list-unchanged",
+            "status": "PASS",
+            "evidence": "probe-c declared files: [] and claimed normally; the reservation count stayed at 1 (probe-a's), so no new refusal and no spurious reservation."
+          },
+          {
+            "id": "c4",
+            "name": "cap-releases-through-the-existing-path",
+            "status": "PASS",
+            "evidence": "Capping probe-a printed 'Released 1 reservation(s): packages/probeA.rs.' and bee reservations list then printed 'No reservations.' The release path was not edited by this cell."
+          },
+          {
+            "id": "c5",
+            "name": "release-half-untouched",
+            "status": "PASS",
+            "evidence": "The cell's files list does not include handlers_close.rs; finish_cap_and_release and release_reservations_for_agent carry no diff."
+          },
+          {
+            "id": "c6",
+            "name": "single-reserve-door-preserved",
+            "status": "PASS",
+            "evidence": "reserve_path_atomic hardcodes session: None and would refuse with SESSION_REQUIRED whenever another session is live, so the claim calls the same pair one layer down (reserve_prechecks + reserve_exec) with its own --session-id. Recorded as a deviation; no second reservation path was written."
+          },
+          {
+            "id": "c7",
+            "name": "declared-suite-green-on-main-after-merge",
+            "status": "PASS",
+            "evidence": "cargo test --release on main after the merge: MAIN_POST_EXIT=0, 2851 passed, 0 failed. Exit code read from cargo directly."
+          },
+          {
+            "id": "c8",
+            "name": "intermittent-doctor-failure-is-not-this-cell",
+            "status": "PASS",
+            "evidence": "One full-suite run failed doctor::tests::binary_freshness_catches_release_drift_when_package_versions_agree. It passes on main, passes alone, passed on the second full run and on main post-merge, and the test is hermetic (tempdir). Root cause read from source: the ProbedBeeVersion::Failed arm is empty, so an unprobeable binary falls through to ok:Some(true). Filed as a separate P2 product defect, not a regression from this cell."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-25T09:31:16.835Z"
+      }
+    ]
   }
 }

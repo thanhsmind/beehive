@@ -1,0 +1,50 @@
+{
+  "id": "mrs-30",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Close the ceiling role hole that bypasses the escalation ration",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/reports/review-r2.md"
+  ],
+  "action": "REVIEW P1-A, blocking merge. Read the finding in docs/history/model-role-split/reports/review-r2.md before anything else — it carries the executed proof. A cell whose only marking is role ceiling takes the SESSION MODEL and is invisible to every counter that enforces D5's 40 percent ration. prepare.rs:941 reads `else if escalated_cell || tier_token == ESCALATION_WORD`, and on the from_role path tier_token IS the cell's declared role string, so the arm fires before resolve_role_named is reached: Resolved::Inherit, channel session-model, no model param. cell_is_escalated (validate.rs:98) reads only escalate==true or the legacy tier==ceiling, so the record is false there and all three counters miss it — escalation_share_after, role_mix, ceiling_scarcity_warning. Executed on a seven-cell feature with six such cells: 86 percent escalated and set_escalation on the seventh was ALLOWED. TWO FIXES ARE ON THE TABLE and the choice is yours to make and record: (a) refuse ceiling in the role field at validate.rs:252 — the reserved-name option CONTEXT.md:154 already contemplated, which costs an exception to D2's open set; or (b) narrow prepare.rs:941 so only the flag or an explicit --role ceiling escalates, letting a cell's role ceiling fall through the resolver exactly as models.rs:530-538 already PROMISES it does. Weigh that (b) makes the code match a comment that is currently false, while (a) adds a closed word to an open set this feature spent five slices opening. Whichever you take, THE COMMENT AT models.rs:530-538 MUST END UP TRUE. Also: cells/tests.rs currently ASSERTS that role ceiling is accepted at add time (role_validation_checks_shape_and_never_membership) — if you take (a) that assertion changes and the change must be deliberate and explained, not silent. The missing test is the one that connects the two layers: authoring a cell with this role and observing what the dispatch and the ration then do. Write it so it fails on today's code. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A cell declaring role ceiling either cannot be authored, or does not take the session model without being counted by the ration — the cap names which and why",
+      "The comment at models.rs:530-538 is true of the shipped behaviour",
+      "A test connects add-time acceptance to the dispatch outcome, and it fails on the pre-fix code — state that you checked it fails",
+      "If the add-time assertion changed, the change is explained rather than silently rewritten",
+      "No other escalation path was opened while closing this one"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "97ce5225",
+    "06e49368"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

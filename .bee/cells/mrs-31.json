@@ -1,0 +1,46 @@
+{
+  "id": "mrs-31",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Make the backfill hold its lock across the scan so it cannot reverse a concurrent write",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/reports/review-r2.md"
+  ],
+  "action": "REVIEW P1-B, blocking merge. Read the finding in docs/history/model-role-split/reports/review-r2.md first — it carries a demonstration, not a theory. bee cells backfill-roles reads every cell at handlers_write.rs:1537 to build its plan, takes the cells-archive lock only at :1607, then writes each WHOLE OBJECT back with write_json_atomic at :1613. The lock guards the write phase alone; the scan is unlocked and every write is a full-object write of a stale clone. Demonstrated on a 40000-cell store: an operator running bee cells escalate --off (not budget-checked, so it does no store scan) committed a disarm to disk at t=25ms; the backfill finished at t=1.007s and the cell was RE-ARMED on disk. The operator's write was not half-applied — it was fully applied and then fully reversed. The doc block at :1523-1531 claims the opposite and must end up true or be rewritten. A second path found by trace, not executed: a bee close archiving a feature during the scan is not blocked, and the write then recreates .bee/cells/<id>.json as a live duplicate, because read_cell prefers the live copy. TWO SHAPES: take the lock before the scan so one lock spans both phases, or re-read each file under the lock and merge only the three keys this migration owns (role, escalate, trace.escalation_reason) rather than writing the snapshot. The second is friendlier to a long migration on a big store — a lock held across a 40000-cell scan blocks every other writer for a second — so weigh duration against simplicity and say which you chose. THE TEST IS THE DELIVERABLE: the current suite passes with the lock line deleted entirely, because every backfill test is single-threaded. Pin the property — mutate a record mid-pass and assert the operator's write survives, or hold the lock externally and assert the verb refuses. Run your verify with --no-fail-fast.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A write committed by another door during the backfill's scan survives the backfill",
+      "A test fails when the locking is removed or reverted to its pre-fix placement — say that you checked it fails",
+      "The doc block at handlers_write.rs:1523-1531 is true of the shipped behaviour",
+      "The archived-cell resurrection path is closed or explicitly named as out of scope with a reason",
+      "A long migration does not block every other writer for its whole duration, or the cap states that trade deliberately"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4eaf1b71"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
