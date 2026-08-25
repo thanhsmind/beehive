@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"claim-reserves-files\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"claim-reserves-files\" (lane).",
+  "next_action": "Merged into main at 4df3877; capture what settled, then bee close --feature claim-reserves-files.",
   "created_at": "2026-08-25T08:59:08.924Z",
   "run_state": "done",
   "waiting_on": null,
