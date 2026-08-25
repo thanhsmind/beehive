@@ -2473,11 +2473,36 @@ use std::time::Instant;
         assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-4", Some("w")).unwrap());
     }
 
-    /// A registration failure (an invalid tier on the cell — the one
-    /// deterministic failure `register_worker_for_cell` can hit) never
-    /// unwinds a claim that already stands: the cell is claimed, the
-    /// reservations (none, here) stand, and the outcome names the failure
-    /// rather than silently dropping it.
+    /// A registration failure never unwinds a claim that already stands: the
+    /// cell stays claimed ON DISK, the reservations (none, here) stand, and
+    /// the outcome names the failure rather than silently dropping it. That
+    /// guarantee is the point of this test; the *trigger* is incidental, and
+    /// has been retargeted once already.
+    ///
+    /// **Why a whitespace-only role, and not `"bogus"`.** This test used to
+    /// drive the failure with `tier: "bogus"`, back when the worker registry
+    /// gated that value against a closed `extraction | generation | ceiling`
+    /// enum. D4 (store `97ce5225`) retired the enum: the shared
+    /// `worker_role_value` shape check in `verbs/state_group/workers.rs` now
+    /// asks only that the name be non-blank, so `bogus` is a perfectly legal
+    /// role and the old premise is gone.
+    ///
+    /// What is still reachable is the blank-shape refusal, and reaching it
+    /// takes one specific value, because TWO filters sit on this path and
+    /// they are spelled differently:
+    ///
+    /// * `claim_and_reserve_for_dispatch` itself folds the cell's value away
+    ///   with `!t.is_empty()` — UNtrimmed. An `""` role is therefore never
+    ///   passed on at all: it becomes `None`, `push_worker_record` writes a
+    ///   null, and registration SUCCEEDS. An empty string would make this
+    ///   test green through the wrong door while exercising no failure.
+    /// * `worker_role_value` refuses on `role.trim().is_empty()` — trimmed.
+    ///
+    /// A whitespace-only name is the value that passes the first filter and
+    /// is refused by the second, so it is the deterministic registration
+    /// failure that survives the open role set. It is set on BOTH `role` and
+    /// `tier` so the pin survives the key this door reads migrating from one
+    /// to the other, rather than quietly ceasing to exercise a failure.
     #[test]
     fn a_registration_failure_never_unwinds_the_standing_claim() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2486,16 +2511,26 @@ use std::time::Instant;
         w(
             &root,
             ".bee/cells/c-5.json",
-            r#"{"id":"c-5","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"tier":"bogus"}"#,
+            r#"{"id":"c-5","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"role":"   ","tier":"   "}"#,
         );
 
         let (cell, reserved, registered, err) =
             claim_and_reserve_for_dispatch(&root, None, "c-5", "bee-w5", None).unwrap().unwrap();
+
+        // The guarantee, in full: the claim this call took SURVIVES the failed
+        // registration — proven off the store the NEXT reader would see, not
+        // only off the value handed back.
         assert_eq!(cell["status"], json!("claimed"), "the claim stands despite the registration failure");
+        let on_disk = read_cell(&root, "c-5").unwrap().expect("the claimed cell is still on disk");
+        assert_eq!(on_disk["status"], json!("claimed"), "the claim was unwound on disk: {on_disk}");
+        assert_eq!(on_disk["trace"]["worker"], json!("bee-w5"), "the claim lost its owner: {on_disk}");
         assert!(reserved.is_empty());
-        assert!(!registered, "an invalid tier must fail registration, not silently pass");
+
+        // And the failure travels back by name rather than being dropped.
+        assert!(!registered, "a blank role must fail registration, not silently pass");
         let message = err.expect("a failed registration must name why");
-        assert!(message.contains("invalid tier"), "{message}");
+        assert!(message.starts_with("worker add: invalid tier"), "{message}");
+        assert!(message.contains("FIX:"), "a refusal names its remedy: {message}");
         assert!(dpr1_workers(&root).is_empty(), "the bad record was never written");
     }
 
@@ -2530,8 +2565,9 @@ use std::time::Instant;
     /// directly (`a_registration_failure_never_unwinds_the_standing_claim`,
     /// above): `run_dispatch_prepare` has no clean, corrupt-able seam that
     /// fails registration alone without also refusing the claim itself
-    /// earlier (an invalid `--cell`/`--worker` never reaches registration; an
-    /// invalid cell `tier` is the one deterministic failure, and it is
+    /// earlier (an invalid `--cell`/`--worker` never reaches registration; a
+    /// blank-shaped cell role is the one deterministic failure left once D4
+    /// retired the closed tier enum, and it is
     /// already exercised, byte-for-byte, on the inner function both doors
     /// share) — so this test pins the success shape through the real entry
     /// and the existing inner-fn test keeps the failure shape, per rph-4.
