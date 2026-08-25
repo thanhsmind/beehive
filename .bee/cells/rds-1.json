@@ -1,0 +1,61 @@
+{
+  "id": "rds-1",
+  "feature": "release-doc-sync",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Point the Release instructions at the one command that now does it",
+  "behavior_change": false,
+  "files": [
+    "CLAUDE.md"
+  ],
+  "read_first": [
+    "scripts/release.sh"
+  ],
+  "action": "CLAUDE.md's `## Release` section still spells out the hand-run prologue: bump the version in BOTH .claude-plugin/plugin.json AND .codex-plugin/plugin.json, run bee dev regen, make the release commit, then run scripts/release.sh to the end. As of cell roc-1 the script owns all of that -- `scripts/release.sh <VERSION>` bumps both manifests, runs bee dev regen, runs the declared test suite BEFORE anything is tagged, makes the path-scoped release commit, then tags, pushes, waits for release-binaries and verifies the assets. Leaving the checklist in place means the next agent walks it by hand and re-creates the exact drift this repo has been clearing all day.\n\nRewrite the `## Release` section so it teaches the one-command form: `scripts/release.sh <VERSION>` is the whole release. Mention the two flags that exist -- `--no-test` (skips the suite, warns loudly, own the risk) and `-m <subject>` (override the default `Release <VERSION>` commit subject) -- and that a re-run at an already-committed version is idempotent and just picks the release back up. Keep, because it is the rule and not a step: the release is done ONLY when the script prints its final `OK` line, and a release commit without that OK is NOT a release. Drop the now-obsolete manual bump/regen/commit instructions rather than leaving them beside the new form, so there is exactly ONE way described. Keep the section short -- it is an operating instruction, not a manual.\n\nDo not touch any other section of CLAUDE.md and do not edit scripts/release.sh.",
+  "verify": "rg -n 'release.sh' CLAUDE.md",
+  "must_haves": {
+    "truths": [
+      "The Release section names `scripts/release.sh <VERSION>` as the whole release",
+      "No instruction to hand-edit the two plugin manifests or to run bee dev regen by hand survives in that section",
+      "The final-OK rule is still stated",
+      "--no-test and -m are both mentioned",
+      "No other section of CLAUDE.md changed"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "rds-w1",
+    "outcome": "CLAUDE.md's Release section now names scripts/release.sh <VERSION> as the whole release; the hand-run bump/regen/commit checklist is gone",
+    "files_changed": [
+      "CLAUDE.md"
+    ],
+    "deviations": [
+      "Ran inline rather than through a dispatched worker — permitted for a tiny cell."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T05:27:28.414Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "49e28775-6532-4090-9f4e-39c083ae7af2",
+    "claimed_at": "2026-08-25T05:26:59.293Z",
+    "report": {
+      "outcome": "CLAUDE.md Release section rewritten around the one-command form",
+      "commit": "35f1a345",
+      "files": [
+        "CLAUDE.md"
+      ],
+      "tests": "rg -n release.sh CLAUDE.md — green — docs-only change; the pointer check is the proof, and it resolves to the single new one-command line with no surviving manual-bump instruction",
+      "deviations": [
+        "Ran inline rather than through a dispatched worker — permitted for a tiny cell."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
