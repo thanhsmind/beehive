@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"model-role-split\" started at phase \"exploring\" (lane).",
   "next_action": "model-role-split merged into main at a5d416e (34 cells proven); D9 backfill applied to the live store (540 cells, commit 1b09eb5e) and binary reinstalled. Awaiting the user's uat gate: bee gate --name uat --approved true --lane model-role-split, then bee close.",
   "created_at": "2026-08-24T18:50:51.857Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",

@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "That last point matters more than it looks: they reinstalled `.bee/bin/bee` from merged source. I have been telling you all day that today's",
-    "asked_at": "2026-08-25T11:28:25.131Z",
+    "subject": "Prune has no per-worktree flag, and `--older-than-days 0` would sweep four worktrees belonging to work I did not do. Not mine to decide. Che",
+    "asked_at": "2026-08-25T11:31:33.453Z",
     "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
   },
   "route": {
