@@ -312,6 +312,18 @@ silent.
   source tree itself in both directions — a stale root and an uncovered new
   guard directory each turn a test red — never hand-kept independent of it
   (pattern-20260812, cell jo-1, 2026-08-12).
+- R104 — `affects_skills` entries are validated as repo-relative paths under
+  the skills root at AUTHORING time, on both the add and the update door, and a
+  bare skill name is refused by naming the entry and its exact
+  `skills/<name>/SKILL.md` replacement. The format was always paths, but for a
+  long time only the cap-time sync door enforced it: a name passed the
+  "array of strings" check, survived authoring, and was refused at cap, where
+  the mismatch reads as a broken door rather than a bad input. A whole wave of
+  workers concluded the door could never match and capped with `--sync-ack`,
+  which is the real cost — a guard that appears to always fire is a guard that
+  gets routinely acked. The cap-time comparison itself is unchanged; only the
+  moment of enforcement moved (decision f8be49c9, wave-guard-gaps cell wgg-1,
+  2026-08-25).
 
 ## Edge Cases Settled
 

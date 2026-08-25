@@ -13,7 +13,7 @@ never a generation timestamp or any other wall-clock value.
 
 ## Sections
 
-- [areas/](areas/index.md) — 114 concept(s)
+- [areas/](areas/index.md) — 115 concept(s)
 - [patterns/](patterns/index.md) — 141 concept(s)
 - [work/](work/index.md) — 19 concept(s)
 

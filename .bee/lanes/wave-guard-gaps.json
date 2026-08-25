@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "wave-guard-gaps",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"wave-guard-gaps\" started at phase \"planning\" (lane).",
-  "next_action": "Vendored .bee/bin/bee still carries the old guard; it picks up the fix at the next scripts/release.sh run.",
+  "next_action": "bee close finished \"wave-guard-gaps\" — feature is closed.",
   "created_at": "2026-08-25T07:43:41.395Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
