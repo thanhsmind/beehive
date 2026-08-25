@@ -26,7 +26,7 @@ pub mod feedback;
 pub mod help;
 pub mod intent_group;
 pub mod knowledge;
-pub mod mailbox; // library module (no try_native) — never probed below
+pub mod mailbox;
 pub mod reservations;
 pub mod reviews;
 pub mod staging;
@@ -107,6 +107,13 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = tmp_group::try_native(args, t0) {
+        return Some(code);
+    }
+    // hm-1 registered `mailbox` as a library module with no probe, because the
+    // one command the human-mailbox feature owes its consumer (D6's read flip)
+    // was still to come. hm-8 shipped it, so the group is probed like any
+    // other from here on.
+    if let Some(code) = mailbox::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = triggers::try_native(args, t0) {

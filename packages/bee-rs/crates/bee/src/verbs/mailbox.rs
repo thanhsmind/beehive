@@ -3,12 +3,13 @@
 // After an unattended run, bee files ONE plain-language letter per run into
 // `.bee/human-mailbox/`. This module owns the two things that letter is made
 // of and nothing above them: the record shape, and the file-backed store that
-// holds it. It ships no verb of its own yet — the one command this feature
-// owes (D6's read flip) lands in phase 3, so `verbs/mod.rs` registers this as
-// a library module (the `workflow_store` / `workspace_store` shape), never a
-// probed verb group. Modelled on `verbs/triggers/` (the closest working
-// file-backed store) and `verbs/discovery.rs` (a store whose records are
-// documents on disk rather than JSON blobs).
+// holds it — plus the ONE verb the feature owes its consumer, D6's read flip
+// (`bee mailbox mark`, at the bottom of this file). hm-1 registered this as a
+// library module with no probe because that command was still to come; hm-8
+// added the probe, so `verbs/mod.rs` now dispatches `mailbox` like any other
+// group. Modelled on `verbs/triggers/` (the closest working file-backed store)
+// and `verbs/discovery.rs` (a store whose records are documents on disk rather
+// than JSON blobs).
 //
 // ── Two layers (D4) ────────────────────────────────────────────────────────
 //
@@ -64,15 +65,22 @@
 // worktrees through it, so it never re-roots onto the control root.
 
 #![allow(dead_code)] // The store landed first (hm-1), the append at a clean
-// stop second (hm-2), the composing pass third (hm-3). What is still unused is
-// the surface D6's read flip and D12's recovery consume, both phase 3.
+// stop second (hm-2), the composing pass third (hm-3), D6's read flip fourth
+// (hm-8). What is still unused is the surface D12's recovery consumes.
 
+use super::feedback::{emit_error, emit_success, js_trim, parse_shape, ParsedArgs};
 use crate::fsutil::{append_jsonl, warn_corrupt_jsonl_line, write_text_atomic};
 use crate::hooks::session_close::project_name;
+use crate::registry::check_manifest_drift;
+use crate::roots::{resolve_store_root_worktree, RootsWt};
 use crate::verbs::knowledge::deviation_text;
 use crate::verbs::reservations::now_iso;
+use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{json, Map, Value};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::Instant;
 
 // ─── store paths ────────────────────────────────────────────────────────
 
@@ -1191,6 +1199,155 @@ pub(crate) fn read_letter(path: &Path) -> Result<Letter, LetterReadError> {
     Ok(letter)
 }
 
+// ─── D6: the read flip, and the ONE command bee owes its consumer ───────
+//
+// THE SEAM. Everything else in this module is bee talking to itself. This is
+// the one place another program touches the mailbox, so it is written as a
+// contract rather than a convenience:
+//
+//     bee mailbox mark --id <letter-file-name> --status read|unread [--json]
+//
+// WHAT IT IS CALLED, AND WHY — the question CONTEXT.md deferred to planning
+// and plan.md left open ("what the read-flip command of D6 is called and
+// where it sits in the verb tree"). Settled here, with its reasons, so no
+// later reader has to re-derive them:
+//
+//   * The GROUP is `mailbox`: the store's own name, wired the way
+//     `verbs/triggers/` is wired — one probe in `verbs/mod.rs`, one group,
+//     its verbs beneath it. hm-1 registered this module as a LIBRARY module
+//     with no probe precisely because the one command bee owes was this
+//     cell's; this is that probe, and no new registration idiom is invented.
+//   * The VERB is `mark`. It is what an inbox does to a letter, it is plain
+//     language, and — the deciding reason — it says nothing about READING or
+//     LISTING. D1 fixes this feature's ceiling: no rendering surface, no
+//     listing UI, no viewer ships from bee. `mailbox read` would have read as
+//     "show me the mailbox" at exactly the door where that must be
+//     impossible.
+//   * The VALUE rides `--status`, because `status` is the frontmatter field
+//     bee owns (D3, D6) — the flag names the field it writes, and the closed
+//     value set is [`KNOWN_STATUSES`] itself rather than a second copy. The
+//     spelling is not new: `state worker update --status` and `work set
+//     --status` already mean "the new status of this record". This CLI's flag
+//     vocabulary is a ratchet (`catalog.rs`'s `PINNED_FLAG_COUNT`) — a second
+//     word for one idea makes every caller who learned the first one wrong.
+//   * The IDENTITY rides `--id`, the spelling `cells`, `decisions` and
+//     `triggers` all use for "which record". A letter's id is its file name
+//     in `.bee/human-mailbox/`, which is the only handle a consumer has: it
+//     listed the directory, because by D3 the directory listing IS the index.
+//
+// IDEMPOTENT ON PURPOSE. Marking a letter that already carries that status is
+// a no-op SUCCESS, never an error. The consumer is a UI on the far side of a
+// process boundary; it will retry, and a retry punished with a failure teaches
+// that caller to stop reading failures at all.
+//
+// THROUGH THE STORE, ALWAYS. The flip reads the record, changes the one field,
+// re-renders and writes atomically. Nothing — not even this module's own verb
+// — edits the markdown by hand (D6). [`render_letter`] is deterministic, so
+// every other frontmatter field and the whole body come back byte for byte and
+// the status line is the only line that moves.
+
+/// What one flip did. `changed: false` is a success, not a refusal — see the
+/// idempotence note above.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Marked {
+    pub path: PathBuf,
+    /// The status the letter carried before the flip.
+    pub previous: String,
+    /// The status it carries now.
+    pub status: String,
+    pub changed: bool,
+}
+
+/// Why a flip did not happen. Each variant names its own remedy — a refusal
+/// that does not say what to fix is a refusal the caller works around.
+#[derive(Debug)]
+pub(crate) enum MarkError {
+    /// A status outside the closed set bee owns (D6).
+    UnknownStatus(String),
+    /// The id is not a bare file name inside the mailbox directory.
+    NotALetterId(String),
+    /// No filed letter with that id. Names WHICH letter was asked for.
+    NoSuchLetter(String),
+    /// There is a file, and it is not a readable record.
+    Unreadable(String),
+    /// The record read back invalid — kept as its own arm so a bad record can
+    /// never be reported as a disk problem.
+    Invalid(LetterInvalid),
+    Io(std::io::Error),
+}
+
+impl MarkError {
+    pub(crate) fn message(&self) -> String {
+        match self {
+            // One wording for one rule: the closed-status refusal is the
+            // letter's own, borrowed rather than re-typed.
+            Self::UnknownStatus(status) => LetterInvalid::UnknownStatus(status.clone()).message(),
+            Self::NotALetterId(id) => format!(
+                "{id:?} is not a letter id — a letter id is its file name in .bee/human-mailbox, with no path separators"
+            ),
+            Self::NoSuchLetter(id) => format!(
+                "no letter {id:?} in .bee/human-mailbox — remedy: list that directory and pass a name it holds"
+            ),
+            Self::Unreadable(why) => why.clone(),
+            Self::Invalid(why) => why.message(),
+            Self::Io(e) => format!("could not write the letter: {e}"),
+        }
+    }
+}
+
+/// A letter's id is its file name. The `.md` suffix is optional on the way in
+/// and canonical on the way out, so a consumer that stored the stem and one
+/// that stored the whole name reach the same letter — and every answer names
+/// it the one way.
+pub(crate) fn letter_id_to_filename(id: &str) -> String {
+    if id.ends_with(".md") {
+        id.to_string()
+    } else {
+        format!("{id}.md")
+    }
+}
+
+/// A letter id addresses ONE file inside the mailbox directory and can never
+/// reach out of it — the same plain-id rule `triggers resolve` puts in front
+/// of its own store.
+fn is_letter_id(id: &str) -> bool {
+    !id.is_empty() && !id.contains('/') && !id.contains('\\') && !id.contains("..")
+}
+
+/// D6's flip, done BY THE STORE.
+///
+/// The path comes from the file that was read, never from a name recomputed
+/// out of the frontmatter: a hand-renamed letter must be flipped where it
+/// lies, not forked into a twin beside itself. That is why this does not go
+/// through [`write_letter`] (which addresses by `filed_at` + `run`), and why
+/// it re-runs the record's own validation before a byte moves — the door
+/// `write_letter` puts in front of the disk is kept, not skipped.
+pub(crate) fn mark_letter(root: &Path, id: &str, status: &str) -> Result<Marked, MarkError> {
+    if !KNOWN_STATUSES.contains(&status) {
+        return Err(MarkError::UnknownStatus(status.to_string()));
+    }
+    if !is_letter_id(id) {
+        return Err(MarkError::NotALetterId(id.to_string()));
+    }
+    let path = mailbox_dir(root).join(letter_id_to_filename(id));
+    let mut letter = match read_letter(&path) {
+        Ok(letter) => letter,
+        Err(LetterReadError::Missing) => return Err(MarkError::NoSuchLetter(id.to_string())),
+        Err(other) => return Err(MarkError::Unreadable(other.message())),
+    };
+    let previous = letter.status.clone();
+    if previous == status {
+        // The retry a consumer makes after a dropped response, and the second
+        // click on an already-read row. Nothing is written, so the file's
+        // mtime does not move either.
+        return Ok(Marked { path, previous, status: status.to_string(), changed: false });
+    }
+    letter.status = status.to_string();
+    letter.validate().map_err(MarkError::Invalid)?;
+    write_text_atomic(&path, &render_letter(&letter)).map_err(MarkError::Io)?;
+    Ok(Marked { path, previous, status: status.to_string(), changed: true })
+}
+
 // ─── composing the letter at the end of a run (D4, D7, D8, D9, D11) ─────
 //
 // THE AUTHORSHIP BAN (D8) is the whole shape of this section. The composing
@@ -1485,6 +1642,86 @@ fn string_list(m: &Map<String, Value>, key: &str) -> Vec<String> {
 
 fn opt_string(m: &Map<String, Value>, key: &str) -> Option<String> {
     m.get(key).and_then(Value::as_str).map(str::to_string)
+}
+
+// ─── the verb: `bee mailbox mark` (D6) ──────────────────────────────────
+//
+// Argv plumbing only. Every rule this command enforces lives in
+// [`mark_letter`] above, where the store is — the door and the store can never
+// disagree about what a flip is, because there is only one of them.
+//
+// Root topology: WORKTREE-NATIVE, and it stops there. The mailbox is a record
+// of what a run did, a run happens in ONE checkout, and nothing coordinates
+// across worktrees through it — so unlike `triggers`, this store never
+// re-roots onto the control root.
+
+/// The trimmed value of `--<name>`, or `None` when it is absent or empty.
+fn mark_flag<'a>(parsed: &'a ParsedArgs, name: &str) -> Option<&'a str> {
+    parsed.flags.get(name).map(|s| js_trim(s)).filter(|s| !s.is_empty())
+}
+
+pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
+    if args.first()?.to_str()? != "mailbox" {
+        return None;
+    }
+    let verb = args.get(1)?.to_str()?;
+    let rest = &args[2..];
+    match verb {
+        "mark" => run_mark(parse_shape(rest, &["id", "status"])?, t0),
+        _ => None,
+    }
+}
+
+fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "mailbox mark";
+    let Ok(cwd) = std::env::current_dir() else { return None };
+    let root = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r.root,
+        RootsWt::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, cmd, parsed.pre_json, t0, &why))
+        }
+        RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, parsed.pre_json, t0)),
+    };
+    let drift = check_manifest_drift(&root);
+    let Some(id) = mark_flag(&parsed, "id") else {
+        let msg = format!("bee {cmd}: --id is required — the letter's file name in .bee/human-mailbox.");
+        return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+    };
+    let Some(status) = mark_flag(&parsed, "status") else {
+        let msg = format!(
+            "bee {cmd}: --status is required — {STATUS_UNREAD:?} or {STATUS_READ:?} (D6)."
+        );
+        return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+    };
+    match mark_letter(&root, id, status) {
+        Err(why) => {
+            let msg = format!("bee {cmd}: {}", why.message());
+            Some(emit_error(&root, cmd, parsed.json, &msg, t0))
+        }
+        Ok(marked) => {
+            // The answer always names the letter the ONE canonical way, so a
+            // consumer that passed the bare stem still learns the file name.
+            let name = marked
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| letter_id_to_filename(id));
+            let result = json!({
+                "letter": name,
+                "path": marked.path.display().to_string(),
+                "status": marked.status,
+                "previous_status": marked.previous,
+                "changed": marked.changed,
+            });
+            let text = if marked.changed {
+                format!("Marked {name} {}.", marked.status)
+            } else {
+                format!("{name} was already {}. Nothing was written.", marked.status)
+            };
+            Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0))
+        }
+    }
 }
 
 // ─── tests ──────────────────────────────────────────────────────────────
@@ -1858,6 +2095,141 @@ mod tests {
             write_letter(root, &letter).unwrap_err(),
             LetterWriteError::Invalid(LetterInvalid::UnknownStatus(_))
         ));
+    }
+
+    // ── D6: the read flip, the one command bee owes its consumer ────────
+
+    /// The letter as bytes, minus the one line the flip is allowed to move.
+    fn every_line_but_the_status(text: &str) -> Vec<String> {
+        text.lines().filter(|l| !l.starts_with("status: ")).map(str::to_string).collect()
+    }
+
+    fn status_line(text: &str) -> String {
+        text.lines().find(|l| l.starts_with("status: ")).expect("a letter carries a status").to_string()
+    }
+
+    #[test]
+    fn a_flip_moves_the_status_line_and_nothing_else() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        let before = std::fs::read_to_string(&path).unwrap();
+
+        let marked = mark_letter(root, &id, STATUS_READ).unwrap();
+        assert!(marked.changed);
+        assert_eq!(marked.previous, STATUS_UNREAD);
+        assert_eq!(marked.status, STATUS_READ);
+        assert_eq!(marked.path, path, "the flip writes the file it read, never a twin");
+
+        let after = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(status_line(&after), format!("status: {:?}", STATUS_READ));
+        assert_eq!(
+            every_line_but_the_status(&before),
+            every_line_but_the_status(&after),
+            "every other frontmatter field and the whole body survive byte for byte"
+        );
+        assert_eq!(list_letter_files(root).len(), 1, "one letter stays one letter");
+
+        // Read back through the store: subject, items, needs_you and prose are
+        // the record they were, and only the state bee owns has moved.
+        let read_back = read_letter(&path).unwrap();
+        let mut expected = sample_letter();
+        expected.status = STATUS_READ.to_string();
+        assert_eq!(read_back, expected);
+    }
+
+    #[test]
+    fn flipping_back_restores_the_letter_byte_for_byte() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        let original = std::fs::read_to_string(&path).unwrap();
+
+        mark_letter(root, &id, STATUS_READ).unwrap();
+        mark_letter(root, &id, STATUS_UNREAD).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn flipping_an_already_flipped_letter_is_a_no_op_not_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+
+        mark_letter(root, &id, STATUS_READ).unwrap();
+        let after_first = std::fs::read_to_string(&path).unwrap();
+
+        // The consumer retries after a dropped response. It is not punished.
+        let again = mark_letter(root, &id, STATUS_READ).expect("a retry is a success");
+        assert!(!again.changed, "a second flip writes nothing");
+        assert_eq!(again.previous, STATUS_READ);
+        assert_eq!(again.status, STATUS_READ);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), after_first);
+    }
+
+    #[test]
+    fn the_id_is_the_file_name_with_or_without_its_suffix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let stem = name.trim_end_matches(".md").to_string();
+
+        let marked = mark_letter(root, &stem, STATUS_READ).unwrap();
+        assert_eq!(marked.path, path, "the stem and the file name reach the same letter");
+    }
+
+    #[test]
+    fn flipping_a_letter_that_is_not_there_refuses_and_names_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_letter(root, &sample_letter()).unwrap();
+
+        let why = mark_letter(root, "20260101T000000Z-no-such-run.md", STATUS_READ).unwrap_err();
+        assert!(matches!(why, MarkError::NoSuchLetter(_)));
+        let message = why.message();
+        assert!(message.contains("20260101T000000Z-no-such-run.md"), "{message}");
+        assert!(message.contains("remedy"), "a refusal names what to fix: {message}");
+    }
+
+    #[test]
+    fn a_status_outside_the_set_bee_owns_is_refused_before_the_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        let before = std::fs::read_to_string(&path).unwrap();
+
+        let why = mark_letter(root, &id, "archived").unwrap_err();
+        assert!(matches!(why, MarkError::UnknownStatus(_)));
+        assert!(why.message().contains("archived"), "{}", why.message());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before, "a refusal writes nothing");
+    }
+
+    #[test]
+    fn a_letter_id_can_never_reach_out_of_the_mailbox() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for id in ["../../etc/passwd", "sub/letter.md", "..", ""] {
+            let why = mark_letter(root, id, STATUS_READ).unwrap_err();
+            assert!(matches!(why, MarkError::NotALetterId(_)), "{id:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn an_unreadable_file_is_reported_as_unreadable_not_as_a_missing_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_letter(root, &sample_letter()).unwrap();
+        let id = path.file_name().unwrap().to_str().unwrap().to_string();
+        std::fs::write(&path, "someone deleted the fence\n").unwrap();
+
+        let why = mark_letter(root, &id, STATUS_READ).unwrap_err();
+        assert!(matches!(why, MarkError::Unreadable(_)));
+        assert!(why.message().contains("remedy"), "{}", why.message());
     }
 
     // ── D9: arming, and D11's run identity ──────────────────────────────
