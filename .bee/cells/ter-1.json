@@ -1,0 +1,35 @@
+{
+  "id": "ter-1",
+  "feature": "test-exec-race",
+  "title": "Stop the doctor test helpers holding their exec target open for writing",
+  "action": "In packages/bee-rs/crates/bee/src/doctor/tests.rs, change write_executable_binary and write_executable_binary_raw to write the script to a sibling temp path, set the executable mode there, then rename it into the final path. The exec'd path is then never open for writing, so a sibling test's fork cannot inherit a write fd and turn a later exec into ETXTBSY.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml doctor::",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": false,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "acceptance": "Both helpers create the final path via rename from a temp sibling, never by writing the final path directly; every doctor test keeps its current assertions unedited; the doctor suite is green across repeated consecutive runs.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-ter-1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T09:44:12.689Z"
+  }
+}
