@@ -672,7 +672,12 @@ mod tests {
     fn the_embedded_registry_parses_and_carries_the_commands_the_guard_resolves() {
         let reg = registry();
         assert!(reg.len() > 100, "registry parsed {} entries", reg.len());
-        for name in ["cells.show", "cells.cap", "cells.tier", "state.worker.add", "status"] {
+        // `cells.tier` used to stand in this list; model-role-split D4 (store
+        // `97ce5225`) retired it, and `cells.escalate` — the escalation half
+        // of that verb, under its own name — stands in its place. Retargeted,
+        // not dropped: the assertion is still "a real cells verb the guard
+        // resolves is in the embedded registry".
+        for name in ["cells.show", "cells.cap", "cells.escalate", "state.worker.add", "status"] {
             assert!(reg.iter().any(|e| e.name == name), "missing {name}");
         }
         let cap = reg.iter().find(|e| e.name == "cells.cap").unwrap();
@@ -720,18 +725,23 @@ parameters (see `bee cells show --help --json`)."
         );
     }
 
+    /// Retargeted by model-role-split D4 (store `97ce5225`), which retired
+    /// `cells tier`. `backlog.pbi.status` is its exact structural twin — two
+    /// required fields, `id` first, the second carrying an enum — so every
+    /// assertion below is the original one, moved to a subject that still
+    /// exists. Nothing here was weakened or dropped.
     #[test]
     fn ce1_every_problem_is_rendered_and_the_first_still_owns_the_field_clause() {
-        let reason = deny("node .bee/bin/bee_cells.mjs tier");
+        let reason = deny("node .bee/bin/bee.mjs backlog pbi status");
         assert!(reason.contains("bee CLI-shape guard"), "{reason}");
-        assert!(reason.contains("cells.tier"), "{reason}");
+        assert!(reason.contains("backlog.pbi.status"), "{reason}");
         assert!(reason.contains("field: id"), "{reason}");
         assert_eq!(
             reason.matches("required, missing").count(),
             2,
             "both missing fields must be reported: {reason}"
         );
-        assert!(reason.contains("(--tier)"), "{reason}");
+        assert!(reason.contains("(--to)"), "{reason}");
     }
 
     #[test]
@@ -946,16 +956,22 @@ parameters (see `bee cells show --help --json`)."
         assert!(reason.contains("required, missing (--id)"), "{reason}");
     }
 
+    /// Retargeted by model-role-split D4 (store `97ce5225`): `cells.tier`'s
+    /// required enum was the subject here until the verb retired with the
+    /// selector it wrote. `backlog.pbi.status`'s `to` is required and carries
+    /// an enum in exactly the same shape, so the assertion is unchanged —
+    /// only the command it is taken against moved.
     #[test]
     fn enum_enforcement_is_scoped_to_required_fields() {
-        // cells.tier's `tier` IS required and carries an enum.
-        let reason = deny("node .bee/bin/bee.mjs cells tier --id c1 --tier nope");
+        let reason = deny("node .bee/bin/bee.mjs backlog pbi status --id p1 --to nope");
         assert!(
-            reason.contains("invalid value, expected one of extraction, generation, ceiling"),
+            reason.contains(
+                "invalid value, expected one of proposed, in-flight, parked, done, declined"
+            ),
             "{reason}"
         );
-        assert!(reason.contains("field: tier"), "{reason}");
-        allow("node .bee/bin/bee.mjs cells tier --id c1 --tier ceiling");
+        assert!(reason.contains("field: to"), "{reason}");
+        allow("node .bee/bin/bee.mjs backlog pbi status --id p1 --to done");
     }
 
     #[test]

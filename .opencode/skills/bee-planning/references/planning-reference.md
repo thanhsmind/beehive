@@ -158,6 +158,16 @@ history.
 9. **Predicted affects_skills and affects_specs.** Every cell carries flat arrays
    `affects_skills` and `affects_specs` (repo-relative paths; `[]` when none are
    affected) required on every lane (per D3).
+10. **Role is required; the name is guidance, not an enum.** Every cell carries
+    `role`, the job this work is — the sole model selector, required exactly as
+    `lane` is (`bee cells add` refuses without it). The recommended vocabulary —
+    `code`, `read`, `test`, `docs`, `review`, `design` — is authoring guidance
+    only; any non-empty name is legal, validation checks presence and shape,
+    never membership. A role nothing in `models.<runtime>` configures still
+    runs: it falls through to the next name the dispatch asks for and warns,
+    it never fails. The one silent case is `code` or `read` on a runtime whose
+    `models.<runtime>` configures NEITHER of them — the pre-roles window, where
+    falling through is the intended no-op; configuring either key closes it.
 
 ## Example cell JSON
 
@@ -167,6 +177,7 @@ history.
   "feature": "auth",
   "title": "Wire session middleware into API router",
   "lane": "standard",
+  "role": "code",
   "status": "open",
   "deps": ["auth-1", "auth-2"],
   "decisions": ["D2", "D4"],
@@ -197,10 +208,15 @@ stays the source of truth:
 1. **Ids.** Match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and follow the
    `<feature-slug-abbrev>-<n>` convention (e.g. `auth-3`); collide with no
    existing cell id — list current ids first: `bee cells list`.
-2. **Required fields.** `id`, `feature`, `title`, `action`, `verify` are all
-   non-empty strings; `affects_skills` and `affects_specs` are required flat
-   arrays (`[]` when none are affected); `verify: "none"` is legal only in a
-   repo whose `commands.test` declares itself no-test (the `"none"` sentinel).
+2. **Required fields.** `id`, `feature`, `title`, `action`, `verify`, `role`
+   are all non-empty strings; `affects_skills` and `affects_specs` are
+   required flat arrays (`[]` when none are affected); `verify: "none"` is
+   legal only in a repo whose `commands.test` declares itself no-test (the
+   `"none"` sentinel). `role` is any non-empty name — `code`, `read`, `test`,
+   `docs`, `review`, `design` are the recommended vocabulary, guidance only;
+   an unconfigured name still runs (fall-through, plus a warning — silent only
+   for `code` or `read` on a runtime that configures neither), never a
+   refusal.
 3. **Lane.** One of `tiny`/`small`/`standard`/`high-risk`/`spike`;
    `standard`/`high-risk` cells carry non-empty `must_haves.truths`.
 4. **Scope-derived obligations.** Any `files` path under a release-manifest

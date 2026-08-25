@@ -82,5 +82,6 @@
     "dropped_reason": null,
     "reopened_at": "2026-08-18T11:30:22.587Z",
     "reopened_reason": "Re-cap with a real D8 proof line: the original cap recorded only the bare word green, which the tests door rejects. The cell is docs-only (four flow surfaces plus the handbook), so its proof is a parity and pointer check, not the Rust suite the cell's verify field names."
-  }
+  },
+  "role": "code"
 }

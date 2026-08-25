@@ -415,7 +415,10 @@
     "prompt-work-record",
     "waggledance",
     "health-checks",
-    "human-mailbox",
-    "store"
+    "state-store",
+    "contract",
+    "escalation",
+    "judge-deferral",
+    "data-model"
   ]
 }

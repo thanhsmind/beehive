@@ -1,0 +1,56 @@
+{
+  "id": "hm-4",
+  "feature": "human-mailbox",
+  "role": "code",
+  "title": "Ignore the mailbox store so a cap never dirties the checkout",
+  "action": "Add .bee/human-mailbox/ to .gitignore beside the other runtime stores. hm-2 wired an append at every cap, so a real bee cells finish now writes an untracked file into the checkout; unignored, every session dirties main and bee worktree merge refuses a dirty main.",
+  "verify": "git check-ignore -q .bee/human-mailbox/entries/probe.jsonl",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": false,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "hm-2"
+  ],
+  "files": [
+    ".gitignore"
+  ],
+  "acceptance": "A cap that writes mailbox entries leaves git status clean; .bee/human-mailbox/ sits with the other ignored runtime stores.",
+  "status": "capped",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-4",
+    "outcome": "The mailbox store is git-ignored, so a cap that appends an entry no longer dirties the checkout or blocks a sibling session's merge",
+    "files_changed": [
+      ".gitignore"
+    ],
+    "deviations": [
+      "Found while verifying hm-2 rather than planned: hm-2 flagged the untracked store path as a next-phase question, but it dirties main on every cap today, which is the standoff that blocked two sessions for hours earlier in the session. Kind: hit an unforeseen obstacle."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T15:00:49.991Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T15:00:18.068Z",
+    "inline_reason": "tiny lane, one .gitignore line, fully specified before execution; dispatch writes no state.workers row and bee state worker add refuses from a granted worktree (known P2)",
+    "report": {
+      "outcome": "The mailbox store is git-ignored so a cap no longer dirties the checkout",
+      "commit": "61960cc3",
+      "files": [
+        ".gitignore"
+      ],
+      "tests": "git check-ignore -q on both .bee/human-mailbox/entries/probe.jsonl and a letter path — green (exit 0 for both) — the whole risk surface is whether both halves of the store are ignored",
+      "deviations": [
+        "Found while verifying hm-2 rather than planned: hm-2 flagged the untracked store path as a next-phase question, but it dirties main on every cap today, which is the standoff that blocked two sessions for hours earlier in the session. Kind: hit an unforeseen obstacle."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

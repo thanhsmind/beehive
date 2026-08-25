@@ -838,5 +838,30 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-25T09:42:24.300Z"
+  },
+  "test-exec-race": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T11:12:31.035Z"
+  },
+  "exclusive-create-atomic": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T11:20:42.847Z"
+  },
+  "state-lock-lost-update": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-25T11:49:18.056Z"
+  },
+  "model-role-split": {
+    "capped": 34,
+    "dropped": 0,
+    "archived_at": "2026-08-25T11:49:48.687Z"
+  },
+  "decision-attribution": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-25T14:39:36.802Z"
   }
 }

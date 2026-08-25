@@ -52,7 +52,7 @@
     "verify_passed": null,
     "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
     "claimed_at": "2026-08-21T14:56:46.583Z",
-    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "tests": "boundary",
     "report": {
       "outcome": "backlog.add now declares its four required flags, so --help stars them and the schema stops lying; a source-derived contract test locks the declaration to run_add own const",
       "commit": "c37058e",
@@ -70,8 +70,10 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "escalation_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier"
   },
   "decisions": [],
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }

@@ -5,10 +5,10 @@
 // sanitization (unsafe-char substitution + 8-hex sha256 of the ORIGINAL
 // name), holder body shape ({pid, session, ts, token}), the stale-takeover
 // rule (STALE_MS only for a provably-dead holder pid, HARD_STALE_MS absolute
-// ceiling), the two-phase verified takeover (a post-rename identity check;
-// a pre-rename re-verification), token-matched release, transient-FS retry
-// on the Windows sharing-violation error class, and contention.jsonl
-// telemetry.
+// ceiling), the verified takeover (a per-acquisition O_EXCL takeover claim; a
+// post-rename identity check; a pre-rename re-verification), token-matched
+// release, transient-FS retry on the Windows sharing-violation error class,
+// and contention.jsonl telemetry.
 //
 // `with_store_lock` is the retrying entry point and `acquire_store_lock_once`
 // the single-attempt one, same semantics each.
@@ -248,6 +248,81 @@ fn judge_stale_takeover_eligibility(lock_path: &Path, now: u128) -> Option<Value
     Some(holder_before.map_or(Value::Null, |h| h))
 }
 
+/// The takeover CLAIM path — named from the lock ACQUISITION being displaced
+/// (pid+ts+token, the same triple `same_holder_identity` proves on), so two
+/// racers that judged the SAME acquisition stale collide on one file name,
+/// and a racer judging a different acquisition never does.
+fn takeover_claim_path(lock_path: &Path, holder: &Value) -> PathBuf {
+    let field = |k: &str| holder.get(k).map_or_else(String::new, jsjson::stringify);
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{}|{}|{}", field("pid"), field("ts"), field("token")).as_bytes());
+    let id = format!("{:x}", hasher.finalize());
+    let mut name = lock_path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".claim-{}", &id[..16]));
+    lock_path.with_file_name(name)
+}
+
+/// O_EXCL claim on the right to displace ONE lock acquisition. Exactly one
+/// racer can ever hold it, and that is what makes the rename below safe.
+///
+/// A claim is never released, because a racer can sit between its stale
+/// judgment and its rename for an unbounded time: the claim is the tombstone
+/// that keeps refusing it. Breaking one is therefore the only recovery path,
+/// and it is deliberately narrow — the claim must be BOTH older than
+/// STALE_MS and left by a provably dead claimant, so a crash mid-takeover
+/// cannot wedge the store while a live claimant is never broken. The age
+/// floor is also what keeps `try_acquire`'s create_new/write_all window
+/// harmless here: a just-created claim whose body has not landed yet reads as
+/// "no pid", but it is age ~0, so it is never breakable. Breaking never
+/// GRANTS the takeover either — it only clears the path, and the next retry
+/// re-races `create_new`, which admits exactly one winner.
+fn claim_takeover(claim_path: &Path, now: u128) -> bool {
+    let body = json!({
+        "pid": std::process::id(),
+        "session": Value::Null,
+        "ts": now_iso(SystemTime::now()),
+        "token": fresh_token(),
+    });
+    if try_acquire(claim_path, &body).unwrap_or(false) {
+        return true;
+    }
+    if let Some(mtime) = mtime_ms(claim_path) {
+        if now.saturating_sub(mtime) > STALE_MS {
+            let pid = read_holder(claim_path).and_then(|h| h.get("pid").and_then(Value::as_f64));
+            if !is_pid_alive(pid) {
+                let _ = with_transient_fs_retry(|| match std::fs::remove_file(claim_path) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                    other => other,
+                });
+            }
+        }
+    }
+    false
+}
+
+/// Claims outlive their race on purpose, never forever. An acquisition can
+/// only be in flight for the retry budget (MAX_ATTEMPTS * RETRY_DELAY_MS,
+/// ~5s), so a claim past HARD_STALE_MS is older than any judgment that could
+/// still act on it, and is swept on the next takeover attempt.
+fn sweep_expired_claims(lock_path: &Path, now: u128) {
+    let (Some(dir), Some(stem)) =
+        (lock_path.parent(), lock_path.file_name().and_then(|n| n.to_str()))
+    else {
+        return;
+    };
+    let prefix = format!("{stem}.claim-");
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with(&prefix) {
+            continue;
+        }
+        let path = entry.path();
+        if matches!(mtime_ms(&path), Some(m) if now.saturating_sub(m) > HARD_STALE_MS) {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
 fn rename_for_takeover(lock_path: &Path, now: u128) -> Option<(PathBuf, Option<Value>)> {
     let mut name = lock_path.file_name().unwrap_or_default().to_os_string();
     name.push(format!(".stale-{}-{}-{}", std::process::id(), now, &fresh_token()[..8]));
@@ -294,6 +369,19 @@ fn try_stale_takeover(lock_path: &Path, now: u128) -> bool {
     // rel190-2 pre-rename re-verification: never touch content that changed
     // since it was judged stale.
     if !same_holder_identity(&read_holder(lock_path), &holder_before) {
+        return false;
+    }
+    // sll-1: that re-verification is a read-then-act, so it is a TOCTOU — the
+    // content at lock_path can still change between it and the rename below,
+    // and a racer carrying the OLD judgment then renames away the FRESH lock
+    // a takeover winner has already installed. The vacancy that opens admits
+    // a SECOND holder, and the two mutators read the same snapshot and clobber
+    // each other's write. No amount of re-reading closes that window, so the
+    // takeover is serialized on the identity being displaced instead: exactly
+    // one racer may ever displace one lock acquisition.
+    let Some(holder) = holder_before.as_ref() else { return false };
+    sweep_expired_claims(lock_path, now);
+    if !claim_takeover(&takeover_claim_path(lock_path, holder), now) {
         return false;
     }
     match rename_for_takeover(lock_path, now) {
@@ -535,6 +623,77 @@ mod tests {
         filetime::set_file_mtime(&lock_path, old).unwrap();
         let guard = acquire_store_lock(tmp.path(), "test", 2);
         assert!(guard.is_ok(), "stale dead-pid lock must be taken over");
+    }
+
+    /// sll-1 regression. Two racers that judged the SAME stale acquisition
+    /// must not both reach the rename: the second one renaming would evacuate
+    /// the lock the first has since installed, and the vacancy admits a second
+    /// holder. Exactly one claim per acquisition is what forbids that.
+    #[test]
+    fn only_one_racer_may_ever_displace_one_lock_acquisition() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lock_path = lock_file_path(tmp.path(), "test");
+        std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+        let holder = json!({"pid": 999_999_999, "session": null, "ts": "old", "token": "tok"});
+        let claim = takeover_claim_path(&lock_path, &holder);
+        let now = now_ms();
+        assert!(claim_takeover(&claim, now), "the first racer must win the claim");
+        assert!(!claim_takeover(&claim, now), "the second racer must be refused");
+        assert!(!claim_takeover(&claim, now), "and stay refused — the claim is a tombstone");
+        // A DIFFERENT acquisition of the same lock is a different claim.
+        let other = json!({"pid": 999_999_999, "session": null, "ts": "old", "token": "tok2"});
+        assert_ne!(claim, takeover_claim_path(&lock_path, &other));
+        assert!(claim_takeover(&takeover_claim_path(&lock_path, &other), now));
+    }
+
+    #[test]
+    fn a_claim_left_by_a_dead_claimant_never_wedges_the_takeover() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lock_path = lock_file_path(tmp.path(), "test");
+        std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+        let holder = json!({"pid": 999_999_999, "session": null, "ts": "old", "token": "tok"});
+        let claim = takeover_claim_path(&lock_path, &holder);
+        // A claimant that died mid-takeover: dead pid, aged past STALE_MS.
+        std::fs::write(&claim, "{\"pid\":999999999,\"ts\":\"old\",\"token\":\"t\"}\n").unwrap();
+        let old = filetime::FileTime::from_unix_time((now_ms() / 1000) as i64 - 120, 0);
+        filetime::set_file_mtime(&claim, old).unwrap();
+        // Breaking never GRANTS the takeover — it only clears the path.
+        assert!(!claim_takeover(&claim, now_ms()), "breaking a claim must not grant it");
+        assert!(!claim.exists(), "a dead claimant's claim must be cleared, never left to wedge");
+        assert!(claim_takeover(&claim, now_ms()), "the next attempt may then claim it");
+    }
+
+    #[test]
+    fn a_fresh_claim_is_never_broken() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lock_path = lock_file_path(tmp.path(), "test");
+        std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+        let holder = json!({"pid": 999_999_999, "session": null, "ts": "old", "token": "tok"});
+        let claim = takeover_claim_path(&lock_path, &holder);
+        // The create_new/write_all window: the claim exists but is EMPTY, so
+        // its holder reads as absent. Age ~0 must keep it un-breakable.
+        std::fs::write(&claim, "").unwrap();
+        assert!(!claim_takeover(&claim, now_ms()));
+        assert!(claim.exists(), "an age-0 claim must survive even with no readable holder");
+    }
+
+    #[test]
+    fn expired_claims_are_swept() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lock_path = lock_file_path(tmp.path(), "test");
+        std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+        let holder = json!({"pid": 1, "session": null, "ts": "old", "token": "tok"});
+        let claim = takeover_claim_path(&lock_path, &holder);
+        std::fs::write(&claim, "{}\n").unwrap();
+        let now = now_ms();
+        sweep_expired_claims(&lock_path, now);
+        assert!(claim.exists(), "a live-era claim must never be swept");
+        // Two hours back — past the HARD_STALE_MS ceiling.
+        let ancient = filetime::FileTime::from_unix_time((now / 1000) as i64 - 7_200, 0);
+        filetime::set_file_mtime(&claim, ancient).unwrap();
+        sweep_expired_claims(&lock_path, now);
+        assert!(!claim.exists(), "a claim past the hard ceiling must be swept");
+        assert!(lock_path.parent().unwrap().exists(), "the sweep touches claims only");
     }
 
     #[test]

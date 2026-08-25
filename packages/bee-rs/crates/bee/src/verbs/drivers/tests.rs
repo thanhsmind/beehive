@@ -298,12 +298,11 @@ use std::time::Instant;
         assert_eq!(resolve_tier(&m, "review", "codex", "gather"), Resolved::Budget);
         // ceiling is never configured.
         assert_eq!(resolve_tier(&m, "ceiling", "claude", "cell"), Resolved::Inherit);
-        // An unknown slot ('advisor') coerces to generation — the trap
-        // resolveAdvisor exists to avoid.
-        assert_eq!(
-            resolve_tier(&m, "advisor", "claude", "gather"),
-            Resolved::Model { model: "sonnet".into(), effort: None }
-        );
+        // model-role-split D2 (store 06e49368) RETARGETED: 'advisor' used to
+        // coerce to generation and hand back sonnet — the trap resolveAdvisor
+        // exists to avoid. A name now resolves its own slot or nothing, so an
+        // unconfigured advisor is Budget.
+        assert_eq!(resolve_tier(&m, "advisor", "claude", "gather"), Resolved::Budget);
 
         // review: null falls back to the generation tier BEFORE the cli check.
         let m = models_from(
@@ -314,9 +313,13 @@ use std::time::Instant;
             Resolved::Cli { command: "glm run".into() }
         );
         // cli + cell purpose -> typed refusal naming the RESOLVED slot.
+        // model-role-split D2 RETARGETED: the null review yields to
+        // generation, and generation is the slot that carries the cli value,
+        // so the refusal names the slot actually read rather than the one
+        // asked for.
         assert_eq!(
             resolve_tier(&m, "review", "claude", "cell"),
-            Resolved::Refused { slot: "review".into() }
+            Resolved::Refused { slot: "generation".into() }
         );
 
         // {model, effort}
@@ -355,6 +358,89 @@ use std::time::Instant;
             Resolved::Native { fallback, .. } => assert_eq!(fallback, None),
             other => panic!("expected native, got {other:?}"),
         }
+    }
+
+    /// model-role-split D2 (store 06e49368): a consumer names an ORDERED LIST
+    /// of role names; the first that resolves wins, an unset or unresolvable
+    /// name yields to the next, and the last entry always resolves.
+    #[test]
+    fn resolve_role_walks_the_list_and_refuses_to_guess_an_unknown_name() {
+        let m = models_from(r#"{"claude":{"test":"opus","generation":"sonnet"}}"#);
+        // A role name bee never shipped is legal the moment the config
+        // carries it — there is no membership list left to be added to.
+        assert_eq!(
+            resolve_role(&m, &["test", "generation"], "claude", "cell"),
+            Resolved::Model { model: "opus".into(), effort: None }
+        );
+        // A configured role is obeyed EXACTLY (decision 72f3d6dd): the walk
+        // never looks past a name that resolves.
+        assert_eq!(
+            resolve_role(&m, &["test"], "claude", "cell"),
+            Resolved::Model { model: "opus".into(), effort: None }
+        );
+
+        // THE FIX. A misspelling used to be coerced to generation and
+        // dispatched sonnet while prepare.rs stamped tier_source:"cell" — a
+        // wrong-model dispatch that completed clean. It yields instead: to
+        // the next entry when there is one...
+        assert_eq!(
+            resolve_role(&m, &["tset", "generation"], "claude", "cell"),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+        // ...and to no model at all when there is not. Nothing in the config
+        // names `tset`, so nothing resolves for `tset`.
+        assert_eq!(resolve_role(&m, &["tset"], "claude", "cell"), Resolved::Budget);
+
+        // The last entry cannot dead-end: a name the table does not carry
+        // falls to bee's own built-in default for that name.
+        let bare: Map<String, Value> = Map::new();
+        assert_eq!(
+            resolve_role(&bare, &["code", "generation"], "claude", "cell"),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+        // A one-entry list is just a walk of length one, and an empty list
+        // asks for nothing rather than panicking.
+        assert_eq!(
+            resolve_role(&bare, &["generation"], "claude", "cell"),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+        assert_eq!(resolve_role(&m, &[], "claude", "cell"), Resolved::Budget);
+
+        // An explicitly nulled slot yields like an unset one, and is NOT
+        // answered with the built-in default the config just cleared.
+        let off = models_from(r#"{"claude":{"extraction":null,"generation":null,"review":null}}"#);
+        assert_eq!(resolve_role(&off, &["generation"], "claude", "cell"), Resolved::Budget);
+        assert_eq!(
+            resolve_role(&off, &["review", "generation"], "claude", "gather"),
+            Resolved::Budget
+        );
+        // RETARGETED by D5 (store `97ce5225`), not weakened. `ceiling` used
+        // to end this walk on its own — the one closed word inside the open
+        // role set. It is no longer a role at all (escalation is a flag on
+        // the cell), so the open walk has no exception left: the name is
+        // just a role nothing configures and it yields to the next entry
+        // exactly like `tset` above. Decision `0015` is preserved rather
+        // than reopened — `ceiling` still is not configurable, because it is
+        // not a slot name in the first place.
+        assert_eq!(
+            resolve_role(&off, &["ceiling", "generation"], "claude", "cell"),
+            Resolved::Budget
+        );
+        // The escalation word survives one layer up, where the tier-shaped
+        // marker callers live: `[bee-tier: ceiling]` still means the session
+        // model.
+        assert_eq!(resolve_tier(&off, "ceiling", "claude", "cell"), Resolved::Inherit);
+        // Every leaf shape is reachable through a fall-through, not just a
+        // first hit: the cli purpose gate still refuses a cell execution.
+        let cli = models_from(r#"{"claude":{"generation":{"kind":"cli","command":"glm run"}}}"#);
+        assert_eq!(
+            resolve_role(&cli, &["docs", "generation"], "claude", "gather"),
+            Resolved::Cli { command: "glm run".into() }
+        );
+        assert_eq!(
+            resolve_role(&cli, &["docs", "generation"], "claude", "cell"),
+            Resolved::Refused { slot: "generation".into() }
+        );
     }
 
     // herding-review-slots D1 (widened to the full mapping): `{kind:
@@ -572,6 +658,53 @@ use std::time::Instant;
         );
     }
 
+    /// D1 (store `cd72ec97`) — mrs-24 collapsed `resolve_advisor` onto the ONE
+    /// leaf parser, and this is what keeps it collapsed. For every documented
+    /// value shape the advisor slot and an ordinary role slot must resolve to
+    /// the SAME `Resolved`: a second advisor-only parser would have to diverge
+    /// on one of these rows to be worth having, and divergence is precisely
+    /// what D1 removed — the two copies had already been edited in lockstep
+    /// twice (herding-tier D1, then herding-review-slots D1/D2) before this.
+    ///
+    /// What is genuinely the advisor's own is its WALK, not its parse: one
+    /// name, no fall-through, no `Budget` floor (decision `4faf1de9`). That is
+    /// the single asymmetry the `None` arm below pins.
+    #[test]
+    fn the_advisor_slot_parses_a_value_exactly_as_any_other_role_does() {
+        for shape in [
+            r#""opus""#,
+            r#"{"model":"opus"}"#,
+            r#"{"kind":"native","model":"opus"}"#,
+            r#"{"kind":"native","model":"opus","effort":"low","fork_turns":"none","agent_type":"reviewer"}"#,
+            r#"{"kind":"cli","command":"consult me"}"#,
+            r#"{"kind":"herding"}"#,
+            r#"{"kind":"herding","agent":"named-herd","fallback":"default"}"#,
+            r#"{"primary":{"kind":"native","model":"opus"},"fallback_policy":"explicit-only","fallback":{"kind":"cli","command":"consult me"}}"#,
+            "null",
+        ] {
+            let as_advisor = resolve_advisor(
+                &models_from(&format!(r#"{{"claude":{{"advisor":{shape}}}}}"#)),
+                "claude",
+            );
+            // `design` is any other name at all — the point is that nothing
+            // about the WORD "advisor" changes how the leaf is read.
+            let as_role = resolve_role(
+                &models_from(&format!(r#"{{"claude":{{"design":{shape}}}}}"#)),
+                &["design"],
+                "claude",
+                "advisor",
+            );
+            match as_advisor {
+                Some(r) => assert_eq!(r, as_role, "shape {shape}: advisor and role disagree"),
+                None => assert_eq!(
+                    as_role,
+                    Resolved::Budget,
+                    "shape {shape}: the advisor's None is a walk difference, not a parse one"
+                ),
+            }
+        }
+    }
+
     // opencode-support E4/S4: `models.opencode` used to be silently dropped
     // (RUNTIMES only listed claude/codex) — docs/config-reference.md called
     // this "dead config that never resolves". It is now a real third key.
@@ -664,6 +797,106 @@ use std::time::Instant;
         assert_eq!(pinned_agent_type("review"), "bee-review");
         // 'advisor' has no rendered agent — `|| 'general-purpose'`.
         assert_eq!(pinned_agent_type("advisor"), "general-purpose");
+
+        // mrs-29: the JOB decides, not the spelling. Both words for one job
+        // reach the one agent that serves it, so the lookup cannot answer
+        // differently depending on which vocabulary a host speaks.
+        assert_eq!(pinned_agent_type("read"), pinned_agent_type("extraction"));
+        assert_eq!(pinned_agent_type("code"), pinned_agent_type("generation"));
+        // A name that is nobody's alias is untouched — the open role set has
+        // no rendered agent for an operator-invented job, and inventing one
+        // would name a file that does not exist.
+        assert_eq!(agent_for_role("test"), None);
+        assert_eq!(agent_for_role("design"), None);
+        assert_eq!(canonical_role("test"), "test");
+        // The inverse lookup is deliberately NOT aliased: its answer is
+        // resolved against `models.<runtime>`, so it must name the role the
+        // agent was rendered from — the one every host still carries.
+        assert_eq!(role_for_agent("bee-extract"), Some("extraction"));
+        assert_eq!(role_for_agent("bee-gather"), Some("generation"));
+    }
+
+    /// mrs-29, the audit's finding, pinned where a caller can feel it: ONE
+    /// request gets ONE agent, whatever vocabulary the host's config speaks.
+    ///
+    /// Measured on the release binary BEFORE the fix, `dispatch prepare
+    /// --runtime claude --kind gather --role read` answered
+    /// `subagent_type: "general-purpose"` on a host seeded by today's
+    /// `default_config`, while `--role extraction` answered `bee-extract` —
+    /// the same read job, two agents, decided by config drift rather than by
+    /// the request. This asks the DOOR, over the payload a caller actually
+    /// receives, on all three host shapes the migration produces.
+    #[test]
+    fn the_same_job_gets_the_same_rendered_agent_on_every_host_vocabulary() {
+        // The three configs a host can be in mid-migration.
+        const PRE_ROLES: &str =
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus"}}}"#;
+        // What `onboard/templates.rs::default_config` seeds into a fresh host.
+        const SEEDED: &str = r#"{"models":{"claude":{"code":"sonnet","read":"haiku","extraction":"haiku","generation":"sonnet"}}}"#;
+        // An operator who finished the move and dropped the historical keys.
+        const MIGRATED: &str =
+            r#"{"models":{"claude":{"code":"sonnet","read":"haiku","review":"opus"}}}"#;
+
+        // Every (host, spelling) pair the door can ANSWER for the read job,
+        // and the one agent every one of them must name.
+        for (config, role) in [
+            (PRE_ROLES, "extraction"),
+            (SEEDED, "extraction"),
+            (SEEDED, "read"),
+            (MIGRATED, "read"),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "gather", Some(role), None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("--role {role} did not produce a payload")
+            };
+            assert_eq!(
+                v.get("payload").and_then(|p| p.get("subagent_type")),
+                Some(&json!("bee-extract")),
+                "--role {role} on {config} must reach the rendered read agent"
+            );
+        }
+
+        // The same for the generation job, whose FIRST entry (the read-only
+        // bee-gather) is the answer a role-only lookup owes on either word.
+        for (config, role) in
+            [(PRE_ROLES, "generation"), (SEEDED, "generation"), (SEEDED, "code"), (MIGRATED, "code")]
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "gather", Some(role), None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("--role {role} did not produce a payload")
+            };
+            assert_eq!(
+                v.get("payload").and_then(|p| p.get("subagent_type")),
+                Some(&json!("bee-gather")),
+                "--role {role} on {config} must reach the read-only generation agent"
+            );
+        }
+
+        // The pair this does NOT silently repair, recorded so it is a
+        // decision rather than a gap: a spelling the host configures NO model
+        // for is still refused by name (D2, store 06e49368) — there is no
+        // model to select, and answering an agent while selecting none is the
+        // silent-migration defect this feature exists to remove. The refusal
+        // is loud and carries its FIX, which is the honest answer; what mrs-29
+        // fixes is the case where the door DOES answer.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PRE_ROLES);
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root, "claude", "gather", Some("read"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected a refusal envelope")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
     }
 
     // ── prepareDispatch envelopes ──────────────────────────────────────────
@@ -1560,6 +1793,330 @@ use std::time::Instant;
         assert_eq!(codex_econ.get("tier_source"), Some(&json!("cell")));
     }
 
+    /// D5 (store `97ce5225`) — the OTHER half of what `ceiling` meant, now
+    /// carried by the flag: run on the session model, with no `model`
+    /// parameter and NO herding command.
+    ///
+    /// The fixture is chosen so the two answers cannot be confused. The cell
+    /// carries no `tier` at all (a post-D7 cell never will), declares
+    /// `role: "code"`, and the only configured slot is a HERDING
+    /// `generation` — so without the flag this dispatch is a Bash
+    /// `bee herding run` payload on the `herding-exec` channel. With the
+    /// flag it is the session model, and the escalation outranks the job
+    /// role the cell declares.
+    #[test]
+    fn an_escalated_cell_runs_on_the_session_model_with_no_herding_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"rescue ladder","role":"code","escalate":true,"status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        // The same cell WITHOUT the flag: the herding command this fixture
+        // exists to make visible.
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"f","title":"ordinary work","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let prep = |id: &str| {
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v
+        };
+
+        let unescalated = prep("c-2");
+        assert_eq!(unescalated.get("tool"), Some(&json!("Bash")), "the control really does herd");
+        assert_eq!(
+            unescalated.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+
+        let v = prep("c-1");
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), None, "an escalated dispatch has no model param");
+        assert_eq!(payload.get("command"), None, "and no herding command");
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(payload.get("description"), Some(&json!("c-1: rescue ladder (ceiling)")));
+        assert!(payload
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: ceiling]\n"));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("session-model")));
+        assert_eq!(econ.get("enforcement"), Some(&json!("session-model")));
+        assert_eq!(econ.get("requested_model"), Some(&Value::Null));
+        assert_eq!(econ.get("effective_model"), Some(&Value::Null));
+        // The marker and the audit line name ONE word. A cell declaring
+        // `role: "code"` that runs on the session model must not audit as
+        // "code" while its prompt says "ceiling".
+        assert_eq!(econ.get("logical_tier"), Some(&json!("ceiling")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+
+        // Codex takes the same answer through its own transport.
+        let Prepared::Value(v_codex) = prepare_dispatch(
+            &root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v_codex.get("tool"), Some(&json!("spawn_agent")));
+        let codex_payload = v_codex.get("payload").unwrap();
+        assert_eq!(codex_payload.get("model"), None);
+        assert_eq!(codex_payload.get("command"), None);
+        assert!(codex_payload
+            .get("message")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: ceiling]\n"));
+        assert_eq!(
+            v_codex.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model"))
+        );
+    }
+
+    /// An explicit `--role` still names the slot OUTRIGHT — the precedence
+    /// D5 did not change. A `--role` naming a real slot beats the cell's own
+    /// flag, and `--role ceiling` stays the escalation door for a dispatch
+    /// with no cell behind it.
+    #[test]
+    fn explicit_role_still_outranks_the_cells_escalation_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"rescue ladder","role":"code","escalate":true,"status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "cell",
+            Some("code"),
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("claude-agent")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("flag")));
+
+        // And with no cell at all, `--role ceiling` is still the escalation
+        // door for a gather or a reviewer.
+        let Prepared::Value(g) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "gather",
+            Some("ceiling"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            g.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model"))
+        );
+    }
+
+    /// REVIEW P1-A — the invariant that binds D5's two halves together:
+    /// **the set of cells the ration CHARGES is the set of cells that get the
+    /// session model.** `prepare.rs` states it in prose beside the flag read
+    /// ("the one predicate the 40% ration reads too, so the cell that charges
+    /// the budget and the cell that spends it are the same set"); nothing
+    /// asserted it, and the two sides had drifted.
+    ///
+    /// This is the test the review named as missing: it authors a cell, then
+    /// asks BOTH layers about the same record. Neither half proves anything
+    /// alone — `cell_is_escalated` answering false is only a defect once the
+    /// dispatch hands that same record the session model anyway, which is
+    /// exactly the shape `role: "ceiling"` had.
+    ///
+    /// It fails on the pre-fix code at the `c-role-ceiling` row: `tier_token`
+    /// on the `from_role` path IS the cell's declared role string, so
+    /// `tier_token == ESCALATION_WORD` fired for a record no counter ever
+    /// saw — measured at 86% escalated with the 40% refusal silent.
+    #[test]
+    fn the_ration_and_the_dispatch_agree_on_which_cells_are_escalated() {
+        let tmp = tempfile::tempdir().unwrap();
+        // ONLY `generation` is configured, so the two answers cannot be
+        // confused: a cell that does not escalate resolves a real model on
+        // the `claude-agent` channel, and an escalated one has no `model`
+        // parameter at all.
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+
+        // Every marking a cell can carry, against what D5 says it MEANS.
+        // The third row is review P1-A: `verbs::cells` validation accepts the
+        // name (`role_validation_checks_shape_and_never_membership` — D2's
+        // role set is open and membership-blind), and the dispatch used to
+        // read that accepted name as the escalation word.
+        let rows: [(&str, &str, bool); 4] = [
+            ("c-flag", r#""role":"code","escalate":true"#, true),
+            ("c-legacy-tier", r#""tier":"ceiling""#, true),
+            ("c-role-ceiling", r#""role":"ceiling""#, false),
+            ("c-plain", r#""role":"code""#, false),
+        ];
+
+        for (id, marking, escalated) in rows {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f","title":"t",{marking},"status":"claimed","trace":{{"worker":"w"}}}}"#
+                ),
+            );
+
+            // HALF ONE — what the RATION sees. `cell_is_escalated` is the one
+            // predicate `escalation_share_after`, `role_mix` and
+            // `ceiling_scarcity_warning` all read, so this is every counter.
+            let cell = read_cell(&root, id).unwrap().unwrap();
+            assert_eq!(
+                crate::verbs::cells::cell_is_escalated(&cell),
+                escalated,
+                "{id}: the predicate every escalation counter reads"
+            );
+
+            // HALF TWO — what the DISPATCH actually hands out for that very
+            // same record.
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("{id}: expected an envelope")
+            };
+            let econ = v.get("economics").unwrap();
+            let payload = v.get("payload").unwrap();
+            let prompt = payload.get("prompt").unwrap().as_str().unwrap().to_string();
+            let took_session_model = econ.get("channel") == Some(&json!("session-model"));
+
+            // THE BINDING ASSERTION. Charged and spent are ONE set.
+            assert_eq!(
+                took_session_model, escalated,
+                "{id}: the ration says escalated={escalated}, the dispatch says \
+                 {took_session_model} — a cell that runs on the session model without \
+                 being counted bypasses the 40% ration entirely"
+            );
+
+            if escalated {
+                assert_eq!(payload.get("model"), None, "{id}: escalated means no model param");
+                assert!(
+                    prompt.starts_with("[bee-tier: ceiling]\n"),
+                    "{id}: an escalated dispatch travels under the escalation word: {prompt}"
+                );
+            } else {
+                assert_eq!(
+                    payload.get("model"),
+                    Some(&json!("sonnet")),
+                    "{id}: an uncounted cell must resolve a real model, never the session one"
+                );
+                assert!(
+                    !prompt.starts_with("[bee-tier: ceiling]\n"),
+                    "{id}: an uncounted cell must not travel under the escalation word: {prompt}"
+                );
+                assert_eq!(econ.get("channel"), Some(&json!("claude-agent")), "{id}");
+            }
+        }
+    }
+
+    /// The other direction of P1-A, stated on its own because it is what
+    /// `models.rs` PROMISES in prose: a cell declaring `role: "ceiling"` is
+    /// "just a role nothing configures — it warns and falls through like any
+    /// other". Escalation left the role axis with D5; it lives on the flag.
+    ///
+    /// The escalation doors that MUST stay open are asserted in the same
+    /// test, so a later narrowing cannot close one of them while closing this
+    /// hole: an explicit `--role ceiling` names the slot outright and remains
+    /// the escalation door, with a cell behind it or without one.
+    #[test]
+    fn a_cell_role_of_ceiling_falls_through_the_resolver_but_the_flag_door_stays_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"t","role":"ceiling","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let econ = v.get("economics").unwrap();
+        // It walked `[ceiling, code, generation]` and the TAIL won, exactly as
+        // an operator-invented name would. The marker names the RESOLVED role,
+        // never the unresolved head — `hooks/model_guard.rs` reads it back and
+        // denies a name nothing configures.
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
+        assert_eq!(econ.get("channel"), Some(&json!("claude-agent")));
+        // `tier_source` still records WHO chose it: the cell did.
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+
+        // NO OTHER ESCALATION PATH CLOSED. `--role ceiling` with no cell
+        // behind it is still the session model.
+        let Prepared::Value(g) = prepare_dispatch_with_role(
+            &root, "claude", "gather", Some("ceiling"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            g.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model")),
+            "an explicit --role ceiling is still the escalation door"
+        );
+
+        // And `--role ceiling` aimed AT this cell escalates it, because an
+        // explicit role names the slot outright — the caller saying so is a
+        // different fact from the record saying so.
+        let Prepared::Value(f) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "cell",
+            Some("ceiling"),
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            f.get("economics").unwrap().get("channel"),
+            Some(&json!("session-model"))
+        );
+        assert_eq!(f.get("payload").unwrap().get("model"), None);
+    }
+
     #[test]
     fn cell_with_no_tier_field_has_tier_source_default_and_unchanged_payload() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2238,11 +2795,36 @@ use std::time::Instant;
         assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-4", Some("w")).unwrap());
     }
 
-    /// A registration failure (an invalid tier on the cell — the one
-    /// deterministic failure `register_worker_for_cell` can hit) never
-    /// unwinds a claim that already stands: the cell is claimed, the
-    /// reservations (none, here) stand, and the outcome names the failure
-    /// rather than silently dropping it.
+    /// A registration failure never unwinds a claim that already stands: the
+    /// cell stays claimed ON DISK, the reservations (none, here) stand, and
+    /// the outcome names the failure rather than silently dropping it. That
+    /// guarantee is the point of this test; the *trigger* is incidental, and
+    /// has been retargeted once already.
+    ///
+    /// **Why a whitespace-only role, and not `"bogus"`.** This test used to
+    /// drive the failure with `tier: "bogus"`, back when the worker registry
+    /// gated that value against a closed `extraction | generation | ceiling`
+    /// enum. D4 (store `97ce5225`) retired the enum: the shared
+    /// `worker_role_value` shape check in `verbs/state_group/workers.rs` now
+    /// asks only that the name be non-blank, so `bogus` is a perfectly legal
+    /// role and the old premise is gone.
+    ///
+    /// What is still reachable is the blank-shape refusal, and reaching it
+    /// takes one specific value, because TWO filters sit on this path and
+    /// they are spelled differently:
+    ///
+    /// * `claim_and_reserve_for_dispatch` itself folds the cell's value away
+    ///   with `!t.is_empty()` — UNtrimmed. An `""` role is therefore never
+    ///   passed on at all: it becomes `None`, `push_worker_record` writes a
+    ///   null, and registration SUCCEEDS. An empty string would make this
+    ///   test green through the wrong door while exercising no failure.
+    /// * `worker_role_value` refuses on `role.trim().is_empty()` — trimmed.
+    ///
+    /// A whitespace-only name is the value that passes the first filter and
+    /// is refused by the second, so it is the deterministic registration
+    /// failure that survives the open role set. It is set on BOTH `role` and
+    /// `tier` so the pin survives the key this door reads migrating from one
+    /// to the other, rather than quietly ceasing to exercise a failure.
     #[test]
     fn a_registration_failure_never_unwinds_the_standing_claim() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2251,16 +2833,26 @@ use std::time::Instant;
         w(
             &root,
             ".bee/cells/c-5.json",
-            r#"{"id":"c-5","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"tier":"bogus"}"#,
+            r#"{"id":"c-5","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"role":"   ","tier":"   "}"#,
         );
 
         let (cell, reserved, registered, err) =
             claim_and_reserve_for_dispatch(&root, None, "c-5", "bee-w5", None).unwrap().unwrap();
+
+        // The guarantee, in full: the claim this call took SURVIVES the failed
+        // registration — proven off the store the NEXT reader would see, not
+        // only off the value handed back.
         assert_eq!(cell["status"], json!("claimed"), "the claim stands despite the registration failure");
+        let on_disk = read_cell(&root, "c-5").unwrap().expect("the claimed cell is still on disk");
+        assert_eq!(on_disk["status"], json!("claimed"), "the claim was unwound on disk: {on_disk}");
+        assert_eq!(on_disk["trace"]["worker"], json!("bee-w5"), "the claim lost its owner: {on_disk}");
         assert!(reserved.is_empty());
-        assert!(!registered, "an invalid tier must fail registration, not silently pass");
+
+        // And the failure travels back by name rather than being dropped.
+        assert!(!registered, "a blank role must fail registration, not silently pass");
         let message = err.expect("a failed registration must name why");
-        assert!(message.contains("invalid tier"), "{message}");
+        assert!(message.starts_with("worker add: invalid tier"), "{message}");
+        assert!(message.contains("FIX:"), "a refusal names its remedy: {message}");
         assert!(dpr1_workers(&root).is_empty(), "the bad record was never written");
     }
 
@@ -2295,8 +2887,9 @@ use std::time::Instant;
     /// directly (`a_registration_failure_never_unwinds_the_standing_claim`,
     /// above): `run_dispatch_prepare` has no clean, corrupt-able seam that
     /// fails registration alone without also refusing the claim itself
-    /// earlier (an invalid `--cell`/`--worker` never reaches registration; an
-    /// invalid cell `tier` is the one deterministic failure, and it is
+    /// earlier (an invalid `--cell`/`--worker` never reaches registration; a
+    /// blank-shaped cell role is the one deterministic failure left once D4
+    /// retired the closed tier enum, and it is
     /// already exercised, byte-for-byte, on the inner function both doors
     /// share) — so this test pins the success shape through the real entry
     /// and the existing inner-fn test keeps the failure shape, per rph-4.
@@ -5039,4 +5632,854 @@ use std::time::Instant;
         };
         assert_eq!(code, 0, "nothing blocks this close: {text}");
         assert_eq!(read_merge_ready(&root, "demo")["blocked_by"], json!([]));
+    }
+
+    // ═══ the WORK declares its job role ════════════════════════════════════
+    //
+    // model-role-split D3 (store 3c9d6262) with its literal lists fixed by
+    // 561e1bda: a cell execution asks for [<the cell's own role>, code,
+    // generation]; a read-shaped cell asks [read, extraction, generation]; a
+    // review dispatch asks [review, generation]; the advisor asks [advisor]
+    // ALONE (4faf1de9).
+
+    /// A host that carries no `code` and no `read` key — every host that
+    /// onboarded before mrs-10, and the one the fall-through tail exists for.
+    ///
+    /// NO VALUE HERE IS A BUILT-IN DEFAULT, and the values are deliberately
+    /// ROTATED against `default_models("claude")` (`models.rs:79-83`:
+    /// extraction `haiku`, generation `sonnet`, review `opus`). This fixture
+    /// used to carry those three byte for byte — and `normalize_models` seeds
+    /// that same map into every table BEFORE any config overlay, so a config
+    /// repeating the defaults is indistinguishable from an EMPTY one. Under
+    /// it the fall-through tests below asserted only "an unconfigured role
+    /// lands on sonnet", which is true whether the resolver reads this host's
+    /// table or ignores it entirely: a tail that regressed to `default_models`
+    /// stayed green. The `-custom` values make the two answers different
+    /// strings, so the assertions bite; the rotation catches the narrower
+    /// regression of reading the right KEY out of the wrong TABLE.
+    /// `the_pre_roles_fixture_is_distinguishable_from_an_empty_config` pins
+    /// the property so the fixture cannot drift back.
+    const HOST_BEFORE_ROLES: &str =
+        r#"{"models":{"claude":{"extraction":"haiku-custom","generation":"opus-custom","review":"sonnet-custom"}}}"#;
+
+    /// The same pre-roles host on the CODEX runtime, and the case this block
+    /// had no variant for at all. codex is where a tail that stopped reading
+    /// the host's table shows LOUDEST: every codex entry in `default_models`
+    /// is `null` (`models.rs:81-83`), so the built-ins can answer no role at
+    /// all — the dispatch resolves NO model rather than a different one.
+    const CODEX_HOST_BEFORE_ROLES: &str =
+        r#"{"models":{"codex":{"extraction":"gpt-5-mini-custom","generation":"gpt-5-custom","review":"gpt-5-pro-custom"}}}"#;
+
+    /// THE ANTI-RECURRENCE DEVICE for this block.
+    ///
+    /// An independent audit found the two fall-through tests below could not
+    /// fail, because the fixture they drive off repeated `default_models`
+    /// verbatim. This asks the TWO TABLES THEMSELVES — never a hand-written
+    /// list — so a fixture edited back toward the built-ins fails HERE, at
+    /// the fixture, instead of silently unpinning THE safety property this
+    /// whole feature rests on: no existing host's dispatch changes model
+    /// until the operator opts in.
+    #[test]
+    fn the_pre_roles_fixture_is_distinguishable_from_an_empty_config() {
+        for (runtime, config) in
+            [("claude", HOST_BEFORE_ROLES), ("codex", CODEX_HOST_BEFORE_ROLES)]
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let models = read_models(&root).unwrap();
+            let table = models.get(runtime).unwrap().as_object().unwrap();
+            let defaults = default_models(runtime);
+            for (slot, value) in table {
+                assert_ne!(
+                    Some(value),
+                    defaults.get(slot),
+                    "{runtime}.{slot}: the fixture repeats the built-in default, so a \
+                     resolver that ignored this host's table would still answer correctly"
+                );
+            }
+            for slot in ["extraction", "generation", "review"] {
+                assert!(
+                    table.get(slot).map(Value::is_string).unwrap_or(false),
+                    "{runtime}.{slot}: the tail walks this slot, so the host must configure it"
+                );
+            }
+            // …and bee's own tail names stay ABSENT: that absence is what
+            // makes this a host from BEFORE the roles existed.
+            for name in ASKED_ROLES {
+                assert!(
+                    table.get(name).is_none(),
+                    "{runtime}: {name} must stay unconfigured on a pre-roles host"
+                );
+            }
+        }
+    }
+
+    fn cell_with(root: &Path, id: &str, fields: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"f","title":"some work",{fields},"status":"claimed","trace":{{"worker":"w"}}}}"#
+            ),
+        );
+    }
+
+    fn cell_envelope(root: &Path, id: &str, role: Option<&str>) -> Value {
+        cell_envelope_on(root, "claude", id, role)
+    }
+
+    /// `cell_envelope` with the runtime spelled out — codex resolves against
+    /// its own table, whose built-in defaults are all null.
+    fn cell_envelope_on(root: &Path, runtime: &str, id: &str, role: Option<&str>) -> Value {
+        let out = prepare_dispatch_with_role(
+            root,
+            runtime,
+            "cell",
+            role,
+            Some(id),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected an envelope for {id}") };
+        v
+    }
+
+    /// The whole point of the feature: the cell names its job, the host names
+    /// a model for that job, and the dispatch gets it.
+    #[test]
+    fn a_cell_role_the_host_configures_resolves_that_hosts_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","test":"grok-code"}}}"#,
+        );
+        cell_with(&root, "c-1", r#""role":"test""#);
+
+        let v = cell_envelope(&root, "c-1", None);
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), Some(&json!("grok-code")), "the job's own model");
+        assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
+        assert!(payload
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: test]\n"));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("logical_tier"), Some(&json!("test")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
+    }
+
+    /// …and a host that configured nothing for that job runs EXACTLY where it
+    /// ran before this feature. No refusal, no built-in default: the tail
+    /// walks to `generation`, and the marker names the role that RESOLVED so
+    /// the model-guard — which denies a marker naming an unconfigured role —
+    /// still lets through the dispatch bee itself prepared.
+    ///
+    /// "No built-in default" is the load-bearing half, and it is what the
+    /// assertions actually ask: the payload must carry THIS HOST'S generation
+    /// model, `opus-custom`, a string `default_models` does not contain
+    /// anywhere. If the tail ever stops reading the host's table and answers
+    /// out of the built-ins, this reads `sonnet` and goes red — which is the
+    /// only shape in which "no existing host silently migrates" is a claim a
+    /// test can refute.
+    #[test]
+    fn a_cell_role_nothing_configures_falls_through_to_the_historical_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HOST_BEFORE_ROLES);
+        cell_with(&root, "c-1", r#""role":"code""#);
+        cell_with(&root, "c-2", r#""role":"design""#);
+
+        for id in ["c-1", "c-2"] {
+            let v = cell_envelope(&root, id, None);
+            assert_eq!(v.get("ok"), None, "{id}: a role nothing configures is not a refusal");
+            assert_eq!(v.get("tool"), Some(&json!("Agent")), "{id}");
+            let payload = v.get("payload").unwrap();
+            assert_eq!(
+                payload.get("model"),
+                Some(&json!("opus-custom")),
+                "{id}: the model THIS HOST has run for years, read out of its own \
+                 config — `default_models` says `sonnet` here and must not win"
+            );
+            assert!(
+                payload
+                    .get("prompt")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .starts_with("[bee-tier: generation]\n"),
+                "{id}: the marker names the role that resolved"
+            );
+            let econ = v.get("economics").unwrap();
+            assert_eq!(econ.get("logical_tier"), Some(&json!("generation")), "{id}");
+            assert_eq!(econ.get("tier_source"), Some(&json!("cell")), "{id}");
+            assert_eq!(
+                econ.get("requested_model"),
+                Some(&json!("opus-custom")),
+                "{id}: the audit line names the same host model the payload pins"
+            );
+        }
+    }
+
+    /// A read-shaped cell takes the READ consumer's list, so it lands on the
+    /// historical read model rather than on generation — D9 backfills every
+    /// `tier: extraction` cell to `role: read`, and this is where they land.
+    ///
+    /// Same discipline as the test above: `haiku-custom` is THIS HOST's
+    /// extraction model and appears in no built-in table, so a tail that
+    /// answered out of `default_models` would read `haiku` and go red.
+    #[test]
+    fn a_read_cell_falls_through_to_the_historical_read_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HOST_BEFORE_ROLES);
+        cell_with(&root, "c-1", r#""role":"read""#);
+
+        let v = cell_envelope(&root, "c-1", None);
+        let payload = v.get("payload").unwrap();
+        assert_eq!(
+            payload.get("model"),
+            Some(&json!("haiku-custom")),
+            "the host's own extraction model, not `default_models`' `haiku`"
+        );
+        assert!(payload
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .starts_with("[bee-tier: extraction]\n"));
+        assert_eq!(
+            v.get("economics").unwrap().get("requested_model"),
+            Some(&json!("haiku-custom")),
+            "the audit line names the same host model the payload pins"
+        );
+    }
+
+    /// The same fall-through on CODEX, the runtime this block had no case for
+    /// at all — and the one where the regression this pair guards against
+    /// would be unmissable. Every codex entry in `default_models` is `null`,
+    /// so a tail reading the built-ins instead of this host's table resolves
+    /// `Resolved::Budget`: no model requested, nothing pinned, the dispatch
+    /// quietly running on whatever the session happens to be.
+    ///
+    /// codex carries no `model` on the payload (its `spawn_agent` arm takes
+    /// the model off the resolved slot, not off a tool parameter), so the
+    /// model that resolved is read where codex actually records it — the
+    /// economics audit line — beside the `[bee-tier: …]` marker on the
+    /// message.
+    #[test]
+    fn a_codex_cell_role_nothing_configures_falls_through_to_that_hosts_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, CODEX_HOST_BEFORE_ROLES);
+        cell_with(&root, "c-1", r#""role":"code""#);
+        cell_with(&root, "c-2", r#""role":"design""#);
+        cell_with(&root, "c-3", r#""role":"read""#);
+
+        for (id, role, model) in [
+            ("c-1", "generation", "gpt-5-custom"),
+            ("c-2", "generation", "gpt-5-custom"),
+            ("c-3", "extraction", "gpt-5-mini-custom"),
+        ] {
+            let v = cell_envelope_on(&root, "codex", id, None);
+            assert_eq!(v.get("ok"), None, "{id}: a role nothing configures is not a refusal");
+            assert_eq!(v.get("tool"), Some(&json!("spawn_agent")), "{id}");
+            assert!(
+                v.get("payload")
+                    .unwrap()
+                    .get("message")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .starts_with(&format!("[bee-tier: {role}]\n")),
+                "{id}: the marker names the role that resolved"
+            );
+            let econ = v.get("economics").unwrap();
+            assert_eq!(econ.get("logical_tier"), Some(&json!(role)), "{id}");
+            assert_eq!(econ.get("tier_source"), Some(&json!("cell")), "{id}");
+            assert_eq!(
+                econ.get("requested_model"),
+                Some(&json!(model)),
+                "{id}: this host's own model — every codex entry in \
+                 `default_models` is null, so the built-ins could not have answered"
+            );
+        }
+    }
+
+    /// Precedence: an explicit `--role` names the slot directly and outranks
+    /// the cell's own declared role (store 8ff6e79e over D3).
+    #[test]
+    fn an_explicit_role_outranks_the_cells_recorded_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","review":"opus","test":"grok-code"}}}"#,
+        );
+        cell_with(&root, "c-1", r#""role":"test""#);
+
+        let v = cell_envelope(&root, "c-1", Some("review"));
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("opus")));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("logical_tier"), Some(&json!("review")));
+        assert_eq!(econ.get("tier_source"), Some(&json!("flag")), "the caller chose it");
+    }
+
+    /// A pre-mrs-8 record — no `role` at all — keeps the exact path it had:
+    /// its recorded `tier` selects, stamps `cell`, and an unconfigured one is
+    /// still the typed refusal, never a fall-through.
+    #[test]
+    fn a_role_less_cell_still_resolves_and_refuses_on_its_recorded_tier() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        cell_with(&root, "c-1", r#""tier":"generation""#);
+        cell_with(&root, "c-2", r#""tier":"quantum""#);
+
+        let v = cell_envelope(&root, "c-1", None);
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        assert_eq!(
+            v.get("economics").unwrap().get("tier_source"),
+            Some(&json!("cell")),
+            "the recorded tier still selects"
+        );
+
+        let refused = cell_envelope(&root, "c-2", None);
+        assert_eq!(refused.get("ok"), Some(&json!(false)));
+        assert_eq!(refused.get("reason"), Some(&json!("tier_not_configured")));
+    }
+
+    /// The advisor list is ONE name with no fall-through (4faf1de9): an
+    /// unconfigured advisor refuses, it never walks on to code or generation,
+    /// and no cell's role can drag it into one.
+    #[test]
+    fn the_advisor_list_has_no_fall_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet-code"}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "claude", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)));
+        assert_eq!(v.get("reason"), Some(&json!("advisor_not_configured")));
+    }
+
+    /// The warn has to stay BELIEVABLE. On a host that never opted in, every
+    /// name a cell dispatch walks is silent — bee's own tail is bee's
+    /// plumbing, not the operator's request — while a job role nothing
+    /// configures is still loud. Asked of the real ordered lists against a
+    /// real config, because the warn itself writes to stderr.
+    #[test]
+    fn bees_own_tail_is_silent_while_an_unconfigured_job_role_still_warns() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, HOST_BEFORE_ROLES);
+        let models = read_models(&root).unwrap();
+
+        for role in ["code", "read", "generation", "extraction", "review"] {
+            for name in cell_role_list(role) {
+                assert!(
+                    !role_is_unknown(&models, "claude", name),
+                    "role {role}: walking {name} would warn on every dispatch"
+                );
+            }
+        }
+        for name in tier_role_list("review") {
+            assert!(!role_is_unknown(&models, "claude", name), "a review dispatch warns on {name}");
+        }
+
+        // …and the names nobody configured stay loud, head or tail.
+        for invented in ["test", "design", "migrate"] {
+            assert!(
+                role_is_unknown(&models, "claude", invented),
+                "{invented} names no configured job and must warn"
+            );
+        }
+
+        // Membership, never a fixed list: configure it and it goes quiet.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let configured = repo(&tmp2, r#"{"models":{"claude":{"generation":"sonnet","test":"grok"}}}"#);
+        let models2 = read_models(&configured).unwrap();
+        assert!(!role_is_unknown(&models2, "claude", "test"));
+    }
+
+    /// mrs-24 (store `fef79243`) — the silence above is a MIGRATION WINDOW,
+    /// and this is the assertion that it SHUTS.
+    ///
+    /// An audit found the suppression unconditional: `code` and `read` were
+    /// exempt on every host forever, so a host that had opted in and then
+    /// missed one of the two keys resolved that name silently for good —
+    /// exactly the "silently accepted" case D2 (store `06e49368`) forbids,
+    /// sheltering behind mrs-9's noise argument long after the noise it
+    /// described was gone. The window keeps mrs-9's silence where it was
+    /// earned (a host that configured NEITHER name, where falling through to
+    /// the historical model is the intended no-op) and nowhere else.
+    #[test]
+    fn opting_into_one_asked_role_makes_the_missing_sibling_warn() {
+        // Un-migrated: the window is open, so both of bee's own names are
+        // silent — this is the property the test above pins, restated here as
+        // the baseline the rest of this test moves away from.
+        let tmp = tempfile::tempdir().unwrap();
+        let pre = read_models(&repo(&tmp, HOST_BEFORE_ROLES)).unwrap();
+        assert!(!host_opted_into_roles(&pre, "claude"), "the pre-roles fixture has not opted in");
+        for name in ASKED_ROLES {
+            assert!(!role_is_unknown(&pre, "claude", name), "{name}: the window is open");
+        }
+
+        // Half-migrated: `code` is configured, so this operator KNOWS about
+        // the role names. The key they missed is now something they can act
+        // on, so it warns like any other unconfigured name.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let half = read_models(&repo(
+            &tmp2,
+            r#"{"models":{"claude":{"generation":"opus-custom","code":"sonnet-custom"}}}"#,
+        ))
+        .unwrap();
+        assert!(host_opted_into_roles(&half, "claude"));
+        assert!(!role_is_unknown(&half, "claude", "code"), "a configured name never warns");
+        assert!(
+            role_is_unknown(&half, "claude", "read"),
+            "the sibling key a half-migrated host missed must warn — this is the audit's defect"
+        );
+
+        // Fully migrated (what mrs-10 seeds into a fresh config): opted in and
+        // complete, so the window is shut and nothing warns anyway.
+        let tmp3 = tempfile::tempdir().unwrap();
+        let full = read_models(&repo(
+            &tmp3,
+            r#"{"models":{"claude":{"generation":"opus-custom","code":"sonnet-custom","read":"haiku-custom"}}}"#,
+        ))
+        .unwrap();
+        for name in ASKED_ROLES {
+            assert!(!role_is_unknown(&full, "claude", name), "{name} is configured");
+        }
+
+        // The window is PER RUNTIME, because the table is. Opting claude in
+        // says nothing about codex, whose dispatches would otherwise start
+        // warning over a migration their own config never saw.
+        let tmp4 = tempfile::tempdir().unwrap();
+        let mixed = read_models(&repo(
+            &tmp4,
+            r#"{"models":{"claude":{"code":"sonnet-custom"},"codex":{"generation":"gpt-5-custom"}}}"#,
+        ))
+        .unwrap();
+        assert!(host_opted_into_roles(&mixed, "claude"));
+        assert!(!host_opted_into_roles(&mixed, "codex"));
+        assert!(role_is_unknown(&mixed, "claude", "read"), "claude opted in; its gap is loud");
+        assert!(!role_is_unknown(&mixed, "codex", "read"), "codex never opted in; its window is open");
+    }
+
+    // ── mrs-19: the runtime fallback chain (D10/D11, store 50808d48) ───────
+    //
+    // Scoped by 51341f84: bee PUBLISHES a chain and its gate, it never walks
+    // one. So every test below asks what the payload SAYS — there is no retry
+    // loop here to exercise, and adding one would be the decision's rejected
+    // alternative.
+
+    const CHAIN_MODELS: &str = r#""models":{"claude":{"code":"sonnet","read":"haiku","generation":"sonnet","review":"opus","advisor":"fable"}}"#;
+
+    const CHAIN_CELL: &str =
+        r#"{"id":"c-1","feature":"f","status":"claimed","role":"code","trace":{"worker":"w"}}"#;
+
+    fn chain_repo(tmp: &tempfile::TempDir, retry: &str) -> PathBuf {
+        let config = if retry.is_empty() {
+            format!("{{{CHAIN_MODELS}}}")
+        } else {
+            format!("{{{CHAIN_MODELS},{retry}}}")
+        };
+        let root = repo(tmp, &config);
+        w(&root, ".bee/cells/c-1.json", CHAIN_CELL);
+        root
+    }
+
+    fn chain_payload(root: &Path, kind: &str) -> Value {
+        let (cell, worker) = if kind == "cell" { (Some("c-1"), Some("w")) } else { (None, None) };
+        let Prepared::Value(v) =
+            prepare_dispatch(root, "claude", kind, cell, worker, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("{kind} dispatch did not produce a payload")
+        };
+        v.get("payload").cloned().unwrap()
+    }
+
+    /// The whole payload, as the bytes it serializes to. Byte equality is the
+    /// question this feature has to answer, so the assertion asks it directly
+    /// rather than comparing parsed maps (which compare order-blind).
+    fn chain_payload_bytes(root: &Path, kind: &str) -> String {
+        serde_json::to_string(&chain_payload(root, kind)).unwrap()
+    }
+
+    /// D10, the load-bearing one: with NO `retry.fallbackChains` configured,
+    /// every dispatch payload is byte-identical to a bee that had never heard
+    /// of chains.
+    ///
+    /// Two halves, because "identical to BEFORE" is not a thing a test can
+    /// re-derive from the code it is testing. The three goldens are the exact
+    /// bytes captured from the build one commit before this cell — a whole
+    /// payload each, not a key spot-check. The loop then pins that every
+    /// shape of chain config that matches NOTHING (absent, empty, unmatched,
+    /// junk, and the refused `default` key) leaves all four kinds on those
+    /// same bytes.
+    #[test]
+    fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
+        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: generation]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (sonnet)","model":"sonnet"}"#;
+        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"advisor (fable)","model":"fable"}"#;
+
+        let t0 = tempfile::tempdir().unwrap();
+        let none = chain_repo(&t0, "");
+        assert_eq!(chain_payload_bytes(&none, "gather"), GATHER);
+        assert_eq!(chain_payload_bytes(&none, "reviewer"), REVIEWER);
+        assert_eq!(chain_payload_bytes(&none, "advisor"), ADVISOR);
+
+        for retry in [
+            r#""retry":{}"#,
+            r#""retry":{"fallbackChains":{}}"#,
+            r#""retry":"nonsense""#,
+            // configured, but nothing here keys THIS host's dispatches
+            r#""retry":{"fallbackChains":{"nowhere/*":["x"],"design":["y"],"gpt-5.5":["z"]}}"#,
+            // every validation refusal at once: the `default` key D10 declined,
+            // a non-array chain, an empty chain, a whitespace-only step, and a
+            // chain looping to its own head
+            r#""retry":{"fallbackChains":{"default":["sonnet"],"code":"opus","review":[],"advisor":["  "],"generation":["generation"]}}"#,
+        ] {
+            let t = tempfile::tempdir().unwrap();
+            let root = chain_repo(&t, retry);
+            for kind in ["cell", "gather", "reviewer", "advisor"] {
+                assert_eq!(
+                    chain_payload_bytes(&root, kind),
+                    chain_payload_bytes(&none, kind),
+                    "the {kind} payload moved under {retry}"
+                );
+            }
+        }
+    }
+
+    /// A chain that DOES match adds exactly one payload key and moves nothing
+    /// else — asked of the cell payload, the big one the goldens above leave
+    /// out. Remove `fallback_chain` and the bytes are the no-chain bytes again.
+    #[test]
+    fn a_matching_chain_adds_exactly_one_payload_key_and_moves_nothing_else() {
+        let t0 = tempfile::tempdir().unwrap();
+        let none = chain_repo(&t0, "");
+        let t1 = tempfile::tempdir().unwrap();
+        let with = chain_repo(&t1, r#""retry":{"fallbackChains":{"code":["opus","haiku"]}}"#);
+
+        let mut payload = chain_payload(&with, "cell");
+        let obj = payload.as_object_mut().unwrap();
+        assert!(obj.remove("fallback_chain").is_some(), "the chain was never published");
+        assert_eq!(
+            serde_json::to_string(&payload).unwrap(),
+            chain_payload_bytes(&none, "cell")
+        );
+    }
+
+    /// D10: a chain key may name a role, a concrete model selector, or a
+    /// `provider/*` wildcard, and the most specific key wins — model, then
+    /// wildcard, then role.
+    #[test]
+    fn a_chain_resolves_by_role_by_model_and_by_provider_wildcard_most_specific_first() {
+        let chains = normalize_fallback_chains(Some(&json!({
+            "code": ["by-role"],
+            "anthropic/*": ["by-wildcard"],
+            "anthropic/opus": ["by-model"],
+            "sonnet": ["by-plain-model"],
+        })));
+
+        // each key kind resolves on its own …
+        assert_eq!(
+            resolve_fallback_chain(&chains, "code", "haiku"),
+            Some(("code".into(), vec!["by-role".to_string()]))
+        );
+        assert_eq!(
+            resolve_fallback_chain(&chains, "review", "sonnet"),
+            Some(("sonnet".into(), vec!["by-plain-model".to_string()]))
+        );
+        assert_eq!(
+            resolve_fallback_chain(&chains, "review", "anthropic/haiku"),
+            Some(("anthropic/*".into(), vec!["by-wildcard".to_string()]))
+        );
+        // … and where several match, the narrowest key answers.
+        assert_eq!(
+            resolve_fallback_chain(&chains, "code", "anthropic/opus"),
+            Some(("anthropic/opus".into(), vec!["by-model".to_string()]))
+        );
+        assert_eq!(
+            resolve_fallback_chain(&chains, "code", "anthropic/haiku"),
+            Some(("anthropic/*".into(), vec!["by-wildcard".to_string()]))
+        );
+        // A model-keyed chain follows the MODEL, whatever role carries it.
+        assert_eq!(
+            resolve_fallback_chain(&chains, "read", "sonnet"),
+            Some(("sonnet".into(), vec!["by-plain-model".to_string()]))
+        );
+        // Nothing keyed for this dispatch is no chain, never a borrowed one.
+        assert_eq!(resolve_fallback_chain(&chains, "read", "haiku"), None);
+
+        // end to end: the role key on a real cell dispatch (role `code`
+        // resolves models.claude.code = sonnet) …
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        let payload = chain_payload(&root, "cell");
+        assert_eq!(payload.get("model"), Some(&json!("sonnet")));
+        assert_eq!(payload.get("fallback_chain").unwrap().get("key"), Some(&json!("code")));
+        assert_eq!(payload.get("fallback_chain").unwrap().get("chain"), Some(&json!(["opus"])));
+
+        // … and the model key outranking it on the same dispatch.
+        let t2 = tempfile::tempdir().unwrap();
+        let root2 =
+            chain_repo(&t2, r#""retry":{"fallbackChains":{"code":["opus"],"sonnet":["haiku"]}}"#);
+        let by_model = chain_payload(&root2, "cell");
+        assert_eq!(by_model.get("fallback_chain").unwrap().get("key"), Some(&json!("sonnet")));
+        assert_eq!(by_model.get("fallback_chain").unwrap().get("chain"), Some(&json!(["haiku"])));
+
+        // … and a provider wildcard, on a host whose models carry providers.
+        let t3 = tempfile::tempdir().unwrap();
+        let root3 = repo(
+            &t3,
+            r#"{"models":{"claude":{"code":"anthropic/opus"}},"retry":{"fallbackChains":{"anthropic/*":["local/qwen"]}}}"#,
+        );
+        w(&root3, ".bee/cells/c-1.json", CHAIN_CELL);
+        let wild = chain_payload(&root3, "cell");
+        assert_eq!(wild.get("model"), Some(&json!("anthropic/opus")));
+        assert_eq!(wild.get("fallback_chain").unwrap().get("key"), Some(&json!("anthropic/*")));
+    }
+
+    /// D11: the payload publishes the gate in BOTH directions — the classes
+    /// that may advance a step and the classes that may never. The executor
+    /// must not have to re-derive that list; an unpublished rule is one every
+    /// caller invents differently.
+    #[test]
+    fn the_published_chain_carries_both_halves_of_the_error_gate() {
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        let payload = chain_payload(&root, "cell");
+        let chain = payload.get("fallback_chain").unwrap();
+
+        assert_eq!(
+            chain.get("advance_on"),
+            Some(&json!([
+                "quota_or_rate_limit",
+                "provider_auth_or_policy_rejection",
+                "empty_response",
+                "malformed_tool_call_replay_safe",
+                "stream_stall_or_connection_reset",
+                "server_error_5xx"
+            ]))
+        );
+        assert_eq!(
+            chain.get("never_advance_on"),
+            Some(&json!(["tool_error", "wrong_or_unwanted_result", "failed_proof", "red_test"]))
+        );
+        assert_eq!(chain.get("fallback_when"), Some(&json!(CHAIN_FALLBACK_WHEN)));
+    }
+
+    /// D11's negative half (store `50808d48`), pinned on the PUBLISHED gate.
+    ///
+    /// mrs-29, from an independent audit. What stood here asserted that
+    /// `CHAIN_NEVER_ADVANCE_ON` and `CHAIN_ADVANCE_ON` are disjoint — two
+    /// constants in the same crate agreeing with each other, which no caller
+    /// can rely on and which stays green through any edit that moves a class
+    /// out of BOTH lists. The pin belongs on the payload a caller receives.
+    ///
+    /// The oracle is D11's own sentence, transcribed here rather than read
+    /// back out of the code under test: "A step **never** fires on a semantic
+    /// failure — a tool error, a wrong or unwanted result, a failed proof, a
+    /// red test." Delete a class from `CHAIN_NEVER_ADVANCE_ON` and this test
+    /// goes red; move one into `CHAIN_ADVANCE_ON` and it goes red twice.
+    ///
+    /// THE CEILING, stated because the plan overstated it: bee PUBLISHES the
+    /// chain and never walks one (decision `51341f84`), so nothing on bee's
+    /// side can prove an executor OBEYS the gate. What is provable — and what
+    /// this asserts — is that every dispatch bee publishes carries the gate
+    /// correctly and in both directions. An executor that ignores it is
+    /// outside bee's reach, and a test claiming otherwise would be the
+    /// self-agreeing kind this one replaces.
+    #[test]
+    fn every_published_chain_refuses_to_advance_on_a_semantic_failure() {
+        // D11's four semantic classes, from the decision text.
+        const SEMANTIC: [&str; 4] =
+            ["tool_error", "wrong_or_unwanted_result", "failed_proof", "red_test"];
+
+        // Every shape of chain a dispatch can publish: role-keyed, model-keyed,
+        // provider-wildcard, and a non-cell kind resolving its own slot. The
+        // gate is a property of the published contract, never of one fixture.
+        let t1 = tempfile::tempdir().unwrap();
+        let by_role = chain_repo(&t1, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        let t2 = tempfile::tempdir().unwrap();
+        let by_model = chain_repo(&t2, r#""retry":{"fallbackChains":{"sonnet":["haiku"]}}"#);
+        let t3 = tempfile::tempdir().unwrap();
+        let by_review = chain_repo(&t3, r#""retry":{"fallbackChains":{"review":["sonnet"]}}"#);
+        let t4 = tempfile::tempdir().unwrap();
+        let wildcard = repo(
+            &t4,
+            r#"{"models":{"claude":{"code":"anthropic/opus"}},"retry":{"fallbackChains":{"anthropic/*":["local/qwen"]}}}"#,
+        );
+        w(&wildcard, ".bee/cells/c-1.json", CHAIN_CELL);
+
+        for (root, kind) in [
+            (&by_role, "cell"),
+            (&by_model, "cell"),
+            (&by_review, "reviewer"),
+            (&wildcard, "cell"),
+        ] {
+            let payload = chain_payload(root, kind);
+            let chain = payload
+                .get("fallback_chain")
+                .unwrap_or_else(|| panic!("{kind}: the dispatch published no chain to gate"));
+
+            // Read BOTH halves off the payload — never off the constants that
+            // built it. A caller has only these two arrays.
+            let advance: Vec<&str> = chain
+                .get("advance_on")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("{kind}: the published chain carries no advance_on"))
+                .iter()
+                .filter_map(Value::as_str)
+                .collect();
+            let never: Vec<&str> = chain
+                .get("never_advance_on")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("{kind}: the published chain carries no never_advance_on"))
+                .iter()
+                .filter_map(Value::as_str)
+                .collect();
+
+            for class in SEMANTIC {
+                assert!(
+                    never.contains(&class),
+                    "{kind}: the published gate omits the semantic failure {class} from \
+never_advance_on — an executor reading this payload would have to invent the rule"
+                );
+                assert!(
+                    !advance.contains(&class),
+                    "{kind}: the published gate lists the semantic failure {class} in \
+advance_on — falling to another model there hides the defect (D11)"
+                );
+            }
+
+            // And the positive half stays what it is for: only failures that
+            // happened BEFORE the model got to be wrong may move a step, so
+            // no class is ever published on both sides at once.
+            for class in &advance {
+                assert!(
+                    !never.contains(class),
+                    "{kind}: {class} is published as both an advance and a never-advance"
+                );
+            }
+
+            // The gate travels WITH the chain (the `fallback_when` precedent,
+            // af17e217): a caller that reads the chain has read the condition.
+            assert_eq!(
+                chain.get("fallback_when").and_then(Value::as_str),
+                Some(CHAIN_FALLBACK_WHEN),
+                "{kind}: the chain published without its condition"
+            );
+        }
+    }
+
+    /// D10 preserving 4faf1de9: the advisor has no fallback by design — the
+    /// consult that hit a quota wall was recorded NOT OBTAINED rather than
+    /// substituted. A chain configured for other roles must not reach it; only
+    /// a chain the operator keys to the advisor itself does.
+    #[test]
+    fn the_advisor_carries_no_chain_unless_one_is_configured_for_it() {
+        let t = tempfile::tempdir().unwrap();
+        let others =
+            chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"],"review":["sonnet"]}}"#);
+        assert_eq!(chain_payload(&others, "advisor").get("fallback_chain"), None);
+
+        let t2 = tempfile::tempdir().unwrap();
+        let by_role = chain_repo(&t2, r#""retry":{"fallbackChains":{"advisor":["opus"]}}"#);
+        assert_eq!(
+            chain_payload(&by_role, "advisor").get("fallback_chain").unwrap().get("key"),
+            Some(&json!("advisor"))
+        );
+
+        let t3 = tempfile::tempdir().unwrap();
+        let by_model = chain_repo(&t3, r#""retry":{"fallbackChains":{"fable":["opus"]}}"#);
+        assert_eq!(
+            chain_payload(&by_model, "advisor").get("fallback_chain").unwrap().get("key"),
+            Some(&json!("fable"))
+        );
+    }
+
+    /// A dispatch with no model of its own has nothing to fall FROM: an
+    /// escalated cell runs the session model with no `model` parameter, and a
+    /// herding slot runs a pane. Publishing a list of model selectors beside
+    /// a payload that names no model would be advice none of them could take.
+    #[test]
+    fn a_dispatch_that_names_no_model_carries_no_chain() {
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"],"ceiling":["opus"]}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","role":"code","escalate":true,"trace":{"worker":"w"}}"#,
+        );
+        let escalated = chain_payload(&root, "cell");
+        assert_eq!(escalated.get("model"), None);
+        assert_eq!(escalated.get("fallback_chain"), None);
+
+        let t2 = tempfile::tempdir().unwrap();
+        let herding = repo(
+            &t2,
+            r#"{"models":{"claude":{"code":{"kind":"herding"}}},"retry":{"fallbackChains":{"code":["opus"]}}}"#,
+        );
+        w(&herding, ".bee/cells/c-1.json", CHAIN_CELL);
+        assert_eq!(chain_payload(&herding, "cell").get("fallback_chain"), None);
+    }
+
+    /// Parsing and validation, at the door. Junk drops — loudly, on stderr —
+    /// rather than reaching a payload half-formed, and `default` is refused
+    /// outright: D10 ships no default chain and no role inherits one.
+    #[test]
+    fn fallback_chain_config_validation_drops_what_it_cannot_use() {
+        let chains = normalize_fallback_chains(Some(&json!({
+            "  code  ": ["  opus  ", "opus", "", "haiku"],
+            "review": "opus",
+            "read": [],
+            "extraction": [null, 7],
+            "sonnet": ["sonnet", "haiku"],
+            "default": ["opus"],
+            "   ": ["opus"],
+        })));
+
+        // trimmed key, trimmed steps, duplicates collapsed, order kept
+        assert_eq!(chains.get("code"), Some(&json!(["opus", "haiku"])));
+        // a step naming the key's own model is not a step
+        assert_eq!(chains.get("sonnet"), Some(&json!(["haiku"])));
+        for dropped in ["review", "read", "extraction", "default", "   ", ""] {
+            assert_eq!(chains.get(dropped), None, "{dropped} should not have survived");
+        }
+        assert_eq!(chains.len(), 2);
+
+        // Absent, non-object and empty all read as "no chains configured" —
+        // the same answer, so nothing can mistake one for a partial default.
+        assert!(normalize_fallback_chains(None).is_empty());
+        assert!(normalize_fallback_chains(Some(&json!("chains"))).is_empty());
+        assert!(normalize_fallback_chains(Some(&json!({}))).is_empty());
+        assert!(resolve_fallback_chain(&Map::new(), "code", "sonnet").is_none());
+
+        // A matched key whose steps clean away to nothing STOPS the walk: the
+        // most specific key the operator wrote is the one that answers, and a
+        // broader key never overrules it.
+        let self_loop = normalize_fallback_chains(Some(&json!({
+            "anthropic/*": ["anthropic/opus"],
+            "code": ["haiku"],
+        })));
+        assert_eq!(resolve_fallback_chain(&self_loop, "code", "anthropic/opus"), None);
+
+        // And the whole config path reads the same way `read_models` does.
+        let t = tempfile::tempdir().unwrap();
+        let root = chain_repo(&t, r#""retry":{"fallbackChains":{"code":["opus"]}}"#);
+        assert_eq!(read_fallback_chains(&root).get("code"), Some(&json!(["opus"])));
+        let t2 = tempfile::tempdir().unwrap();
+        assert!(read_fallback_chains(&chain_repo(&t2, "")).is_empty());
     }

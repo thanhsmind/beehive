@@ -20,7 +20,6 @@
 .bee/config.local.json
 .bee/tmp/
 .bee/backups/
-.bee/human-mailbox/
 *.[0-9]*-*-*.tmp
 .claude-plugin/skills.tmp-*/
 .claude-plugin/skills.old-*/
@@ -33,6 +32,7 @@
 .claude/settings.json.bak
 .codex/hooks.json.bak
 .bee/mailbox/
+.bee/human-mailbox/
 # BEE:END
 
 # rust-port (crates/): compiled artifacts only — Rust source is never

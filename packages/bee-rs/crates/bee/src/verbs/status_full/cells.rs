@@ -573,55 +573,88 @@ pub(crate) fn global_scribing_debt(ctx: &mut Ctx) -> R<JMap> {
     Ok(out)
 }
 
-pub(crate) struct TierMix {
+/// The accounting side of the model-role split (D6, store 97ce5225).
+///
+/// It used to be a TIER mix: three closed cost words plus an `untiered`
+/// bucket, and a `ceilingShare` whose denominator was "cells that recorded a
+/// tier at all". Both halves are retired here.
+///
+/// `counts` is now OPEN, exactly as the role set is (D2/D3) — one entry per
+/// role name actually observed in the store, sorted, plus `unassigned` for a
+/// legacy cell authored before D7 made `role` required. Nothing here
+/// enumerates the legal names, so this counter cannot drift from the resolver
+/// the way the two deleted tier lists drifted from each other.
+///
+/// `cells` is the DENOMINATOR, and it is the feature's cells, full stop — the
+/// same correction `handlers_close.rs`'s ration took (store b39d045f). A
+/// tier-shaped denominator counts 0 for every cell authored from here on
+/// (`role` is required, `tier` is not written), so `escalation_share` would
+/// be 0.0 forever and the scarcity advice below could never fire again.
+pub(crate) struct RoleMix {
     pub(crate) counts: JMap,
-    pub(crate) tiered: i64,
-    pub(crate) ceiling: i64,
-    pub(crate) ceiling_share: f64,
+    pub(crate) cells: i64,
+    pub(crate) escalated: i64,
+    pub(crate) escalation_share: f64,
 }
 
-/// cells.mjs tierMix.
-pub(crate) fn tier_mix(ctx: &Ctx, feature: Option<&Value>) -> R<TierMix> {
+/// The bucket a cell with no `role` falls into. It is not a role name and is
+/// never resolvable as one — it is the honest "this record predates D7".
+pub(crate) const UNASSIGNED_ROLE: &str = "unassigned";
+
+/// cells.mjs tierMix, rehomed onto `role` plus the escalation flag.
+pub(crate) fn role_mix(ctx: &Ctx, feature: Option<&Value>) -> R<RoleMix> {
     // tierMix passes {} (no filter) when feature is null.
     let filter = feature.filter(|f| truthy(f));
     let cells = list_cells(ctx, filter, None)?;
-    let (mut extraction, mut generation, mut ceiling, mut untiered) = (0i64, 0i64, 0i64, 0i64);
+    let mut by_role: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
+    let (mut total, mut escalated) = (0i64, 0i64);
     for cell in &cells {
-        match vget(cell, "tier").and_then(|t| t.as_str()) {
-            Some(t) if MODEL_TIERS.contains(&t) => match t {
-                "extraction" => extraction += 1,
-                "generation" => generation += 1,
-                _ => ceiling += 1,
-            },
-            _ => untiered += 1,
+        total += 1;
+        let role = match vget(cell, "role").and_then(|r| r.as_str()) {
+            Some(r) if !js_trim(r).is_empty() => js_trim(r).to_string(),
+            _ => UNASSIGNED_ROLE.to_string(),
+        };
+        *by_role.entry(role).or_insert(0) += 1;
+        // The flag, with the legacy `tier: "ceiling"` spelling still counted:
+        // the ONE predicate `verbs/cells/validate.rs` publishes. A cell
+        // carrying `escalate: true` and no tier at all is therefore visible
+        // here, which is precisely what it was not before this change.
+        if crate::verbs::cells::cell_is_escalated(cell) {
+            escalated += 1;
         }
     }
-    let tiered = extraction + generation + ceiling;
-    let ceiling_share = if tiered > 0 { ceiling as f64 / tiered as f64 } else { 0.0 };
+    let escalation_share = if total > 0 { escalated as f64 / total as f64 } else { 0.0 };
     let mut counts = JMap::new();
-    counts.insert("extraction".into(), json!(extraction));
-    counts.insert("generation".into(), json!(generation));
-    counts.insert("ceiling".into(), json!(ceiling));
-    counts.insert("untiered".into(), json!(untiered));
-    Ok(TierMix { counts, tiered, ceiling, ceiling_share })
+    for (role, n) in by_role {
+        counts.insert(role, json!(n));
+    }
+    Ok(RoleMix { counts, cells: total, escalated, escalation_share })
 }
 
-/// cells.mjs ceilingScarcityWarning.
+/// cells.mjs ceilingScarcityWarning, on the escalation flag.
+///
+/// The key and the wording keep the word `ceiling`: D5 retires it as a tier
+/// VALUE, not as the name of the escalation. Decision 0015 keeps `ceiling`
+/// out of config on purpose and `resolve_role` still answers it with
+/// `Resolved::Inherit`, so "keep the ceiling model scarce" (decision 0012) is
+/// still the exact thing this line says. What moved is WHICH cells count
+/// (the flag, not a tier value) and what they are counted AGAINST (the
+/// feature's cells, not the cells that happened to record a tier).
 pub(crate) fn ceiling_scarcity_warning(ctx: &mut Ctx) -> R<Option<JMap>> {
     let state = read_state_full(ctx)?;
     let feature = state.get("feature").cloned().unwrap_or(Value::Null);
     let feature_arg = if truthy(&feature) { Some(feature) } else { None };
-    let mix = tier_mix(ctx, feature_arg.as_ref())?;
-    if mix.tiered < SCARCITY_MIN_TIERED {
+    let mix = role_mix(ctx, feature_arg.as_ref())?;
+    if mix.cells < SCARCITY_MIN_CELLS {
         return Ok(None);
     }
-    if mix.ceiling_share <= CEILING_MAX_SHARE {
+    if mix.escalation_share <= CEILING_MAX_SHARE {
         return Ok(None);
     }
     let mut out = JMap::new();
-    out.insert("pct".into(), json_num(js_round(mix.ceiling_share * 100.0)));
-    out.insert("ceiling".into(), json!(mix.ceiling));
-    out.insert("tiered".into(), json!(mix.tiered));
+    out.insert("pct".into(), json_num(js_round(mix.escalation_share * 100.0)));
+    out.insert("ceiling".into(), json!(mix.escalated));
+    out.insert("cells".into(), json!(mix.cells));
     Ok(Some(out))
 }
 

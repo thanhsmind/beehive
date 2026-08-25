@@ -241,5 +241,6 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     }
   },
-  "tier": "generation"
+  "tier": "generation",
+  "role": "code"
 }

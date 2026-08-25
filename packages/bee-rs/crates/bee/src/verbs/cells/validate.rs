@@ -26,7 +26,91 @@ use std::time::Instant;
 
 pub(crate) const LANES: [&str; 5] = ["tiny", "small", "standard", "high-risk", "spike"];
 
-pub(crate) const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
+// D4 (store `97ce5225`) retired `MODEL_TIERS` from this file. It was the
+// closed three-value enum `bee cells add` checked an optional `tier` against
+// and `bee cells tier` checked its own required flag against; `role` is the
+// cell's sole model selector now, so neither door exists to hold it. The
+// FIELD is not policed at all any more: a record written before the
+// retirement may still carry a `tier` string, harmlessly, and
+// `cell_is_escalated` below still reads the one value that ever meant
+// something. Retiring a selector is not rewriting history.
+
+/// D8 (store `4eaf1b71`): the recommended role vocabulary, **authoring
+/// guidance only**. It is printed in the missing-`role` FIX line so an
+/// author has somewhere to start; it is NEVER matched against, and no code
+/// path may turn it into a membership test.
+///
+/// Enforcing a list here would undo D2 (store `06e49368`): the role set is
+/// open, any name present in `models.<runtime>` is legal, and a closed enum
+/// in this file would move drift from author habit into a hand-maintained
+/// list — the exact defect the one-parser work exists to remove. If you are
+/// reaching for `ROLE_VOCABULARY.contains(...)`, stop: that is the bug.
+pub(crate) const ROLE_VOCABULARY: [&str; 6] = ["code", "read", "test", "docs", "review", "design"];
+
+/// D5 (store `97ce5225`) — the cell field that carries the ESCALATION FLAG.
+///
+/// `ceiling` used to be the third value of the retiring `tier` enum and it
+/// meant two things at once: run this cell on the SESSION model, and charge
+/// the 40 percent ration (`handlers_close.rs`'s `CEILING_SHARE_REFUSAL_MAX`).
+/// Both halves now hang off this boolean instead.
+///
+/// A flag and NOT a reserved role name, which is the question CONTEXT.md
+/// deferred and plan.md answered: a reserved name would be the one exception
+/// to D2's open role set (store `06e49368`), and every author path would have
+/// to special-case it. As a flag it preserves decision `0015` with no
+/// carve-out at all — `ceiling` is simply not a role, so
+/// `resolve_role_named` needs no branch for it.
+pub(crate) const ESCALATE_FIELD: &str = "escalate";
+
+/// D4 (store `97ce5225`) — the cell TRACE key that carries the `--reason`
+/// text an over-budget escalation was allowed on.
+///
+/// It was `tier_reason` while `tier` still existed. mrs-14 deliberately left
+/// it unrenamed because `docs/handbook/register.md` publishes the key and
+/// stored records already carry it; the tier retirement moves all three in
+/// one change — the writer (`handlers_close.rs`), the published name
+/// (`docs/handbook/register.md`), and the stored records (`bee cells
+/// backfill-roles` renames the key wherever it finds it).
+pub(crate) const ESCALATION_REASON_KEY: &str = "escalation_reason";
+
+/// The legacy spelling of `ESCALATION_REASON_KEY`, still found on records
+/// written before the tier retirement. Nothing WRITES it; the migration reads
+/// it once and renames it.
+pub(crate) const LEGACY_ESCALATION_REASON_KEY: &str = "tier_reason";
+
+/// The ONE predicate for "does this cell run on the session model and charge
+/// the ration". Both readers ask it — the ration (`handlers_close.rs`) and
+/// the dispatch (`verbs/drivers/prepare.rs`) — so the two can never disagree
+/// about which cells are escalated.
+///
+/// It reads TWO spellings of one fact, deliberately. The flag is the
+/// authority and the only thing anything writes from here on. `tier:
+/// "ceiling"` is the LEGACY spelling every record written before this change
+/// still carries; `bee cells backfill-roles` converts those records onto the
+/// flag, but a migration verb runs when an operator runs it, and the ration
+/// has to be able to fire on the store as it stands TODAY. Reading the flag
+/// alone would mean that between this change and that run nothing in the
+/// store is marked, the share reads `0.0`, and the 40 percent refusal could
+/// never fire — the zero-share window D5 forbids by name.
+///
+/// This is not a default merged into a read: absent is still absent. A cell
+/// is escalated only if it says so, in one of the two spellings.
+///
+/// TWO spellings, and `role` is NOT a third — review P1-A. The `role` field
+/// is membership-blind by decision (D2, store `06e49368`: the set is open),
+/// so `role: "ceiling"` is authored freely and means nothing here. That is
+/// correct and must stay correct: the fix for a cell escalating itself under
+/// that name belongs at the dispatch, where `verbs::drivers::prepare` now
+/// guards its escalation arm with `!from_role`, and NOT here as a reserved
+/// word — a closed name in an open set would still leave every already-stored
+/// cell carrying it. If a third spelling of "escalated" is ever added, it is
+/// added HERE, because this predicate is what the 40% ration counts.
+pub(crate) fn cell_is_escalated(cell: &Value) -> bool {
+    if matches!(cell.get(ESCALATE_FIELD), Some(Value::Bool(true))) {
+        return true;
+    }
+    matches!(cell.get("tier"), Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD)
+}
 
 pub(crate) const CHANGE_CLASSES: [&str; 8] =
     ["formatting", "bugfix", "behavior", "api", "security", "migration", "refactor", "test"];
@@ -213,18 +297,54 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             }
         }
     }
+    // D7 (store `4eaf1b71`): `role` is REQUIRED on a cell, exactly as `lane`
+    // is — the job the work declares is what selects its model. The store's
+    // own natural experiment settles why it is not optional: `lane` (required)
+    // is present on 506 of 506 cells, `tier` (optional) on 291. An optional
+    // role reproduces the `tier` outcome, where a configured per-job model
+    // fires on about half the cells that wanted it and every miss is silent.
+    //
+    // Presence and shape ONLY, never membership. Any non-empty name is legal
+    // (D2, store `06e49368`) because the role set is open — the question a
+    // resolver asks is "is this configured", not "is this one of six words".
+    // `ROLE_VOCABULARY` rides the FIX line as guidance and nothing else.
+    //
+    // mrs-24 (store `fef79243`): this text is read by an author at the moment
+    // they are refused, so its job is to say what WILL happen — which means it
+    // may not promise a warn bee does not give. `verbs::drivers::role_is_unknown`
+    // keeps exactly one silent case, the pre-roles migration window for bee's
+    // own `code`/`read`, so the line names that case and the config key that
+    // shuts it. Softening the sentence to "may warn" instead would be the
+    // wrong repair: it would stop being false by stopping to teach.
+    if !nonblank_string(map.get("role")) {
+        problems.push(format!(
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. {}. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it.",
+            ROLE_VOCABULARY.join(", ")
+        ));
+    }
     if let Some(pbi) = map.get("pbi") {
         if !matches!(pbi, Value::Null | Value::String(_)) {
             problems.push("addCell: optional \"pbi\" must be a string backlog id when present.".into());
         }
     }
-    if let Some(tier) = map.get("tier") {
-        let ok = matches!(tier, Value::Null)
-            || matches!(tier, Value::String(s) if MODEL_TIERS.contains(&s.as_str()));
+    // D4 (store `97ce5225`): there is deliberately NO check on `tier` here
+    // any more. The optional add-time enum went with the selector — an author
+    // declares `role`, and nothing bee ships tells anyone to set a tier. A
+    // legacy payload that still carries the field is accepted and ignored
+    // rather than refused: refusing it would break replaying stored history
+    // for no gain, and the one value that ever carried meaning (`ceiling`) is
+    // still read by `cell_is_escalated` until every store is migrated.
+    //
+    // D5 (store `97ce5225`): the escalation flag is a boolean and nothing
+    // else. Presence and shape only — there is no budget check at authoring
+    // time, exactly as there was none for authoring `tier: "ceiling"`; the
+    // 40 percent ration lives on the `bee cells escalate` door — the same
+    // door as ever, under the name the tier retirement left it with.
+    if let Some(escalate) = map.get(ESCALATE_FIELD) {
+        let ok = matches!(escalate, Value::Null | Value::Bool(true) | Value::Bool(false));
         if !ok {
             problems.push(format!(
-                "addCell: optional \"tier\" must be one of {} when present.",
-                MODEL_TIERS.join(", ")
+                "addCell: optional \"{ESCALATE_FIELD}\" must be true or false when present — it is the escalation flag (run this cell on the session model, and charge the 40% escalation budget), not a name."
             ));
         }
     }

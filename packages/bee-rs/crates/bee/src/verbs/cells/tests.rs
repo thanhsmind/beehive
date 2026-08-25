@@ -44,6 +44,16 @@ use std::time::Instant;
         }
     }
 
+    /// A raw cell written STRAIGHT TO DISK — it never passes through
+    /// `validate_new_cell`, so D7's required `role` is deliberately absent
+    /// here and adding one would be noise on the ~130 tests that only claim,
+    /// close, schedule or list this fixture. The rule (recorded on cell
+    /// `mrs-8`): a fixture whose test RESOLVES or DISPATCHES it names its
+    /// role explicitly at the call site — see the `dispatch wave` and
+    /// `claim_and_reserve_for_dispatch` tests below, which set `tier` and
+    /// `role` together for exactly that reason. A fixture that is never
+    /// resolved stays roleless on purpose; the alternative is a blanket
+    /// default that would hide the very silence this feature exists to end.
     fn cell(id: &str, status: &str, feature: &str, deps: Value) -> Value {
         json!({
             "id": id,
@@ -709,10 +719,11 @@ use std::time::Instant;
              addCell: cell is missing required field \"verify\" (non-empty string). \
              addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
-             addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike."
+             addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike. \
+             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it."
         );
         let base = |lane: &str| {
-            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "affects_skills": [], "affects_specs": []})
+            json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "role": "code", "affects_skills": [], "affects_specs": []})
         };
         assert_eq!(
             thrown(validate_new_cell(root, &base("mega"))),
@@ -772,8 +783,15 @@ use std::time::Instant;
     fn validate_new_cell_problems_collects_every_problem_in_one_call() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        // Missing id, feature, action, verify, affects_skills, affects_specs —
-        // title present so it does not fire — plus an invalid lane.
+        // Missing id, feature, action, verify, affects_skills, affects_specs,
+        // role — title present so it does not fire — plus an invalid lane.
+        //
+        // RETARGETED for D7 (store `4eaf1b71`), never trimmed: `role` became
+        // required, so the joined list grew one sentence and the contract
+        // this test pins — every schema problem from ONE call, in check
+        // order, verbatim — is asserted over the LONGER list. Deleting an
+        // entry to restore the old string would weaken exactly the thing
+        // the test exists for.
         let broken = json!({"title": "t", "lane": "nope"});
         let expected = vec![
             "addCell: cell is missing required field \"id\" (non-empty string).".to_string(),
@@ -783,6 +801,8 @@ use std::time::Instant;
             "addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
+                .to_string(),
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it."
                 .to_string(),
         ];
         assert_eq!(validate_new_cell_problems(root, &broken).unwrap(), expected);
@@ -798,6 +818,159 @@ use std::time::Instant;
         assert!(!rows[0].ok);
         assert_eq!(rows[0].problems, expected);
         assert!(normalized.is_none());
+    }
+
+    /// A cell that is valid in every way EXCEPT its `role` — the isolating
+    /// fixture for the two `role` tests below. Every other required field is
+    /// filled, so any problem the collector reports is the role's.
+    fn role_probe(role: Option<Value>) -> Value {
+        let mut c = json!({
+            "id": "role-1", "feature": "f", "title": "t", "action": "a",
+            "verify": "echo ok", "lane": "tiny",
+            "affects_skills": [], "affects_specs": [],
+        });
+        if let Some(role) = role {
+            c["role"] = role;
+        }
+        c
+    }
+
+    // D7 (store `4eaf1b71`): `role` is required on a cell exactly as `lane`
+    // is — `bee cells add` refuses without it, and the refusal names the
+    // remedy rather than only the rule.
+    #[test]
+    fn add_cell_refuses_a_cell_with_no_role_and_names_the_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // The ONLY problem on an otherwise-complete cell is the missing role.
+        let problems = validate_new_cell_problems(root, &role_probe(None)).unwrap();
+        assert_eq!(problems.len(), 1, "role is the only thing wrong: {problems:?}");
+        let problem = &problems[0];
+        assert!(
+            problem.starts_with("addCell: cell is missing required field \"role\" (non-empty string)"),
+            "{problem}"
+        );
+        assert!(problem.contains("FIX: add \"role\": \"<name>\" to the cell"), "{problem}");
+        // D8's vocabulary rides the FIX line as an example, and the line says
+        // in its own words that it is not a list — an author who reads only
+        // the refusal must not come away thinking these six are the legal set.
+        assert!(problem.contains("code, read, test, docs, review, design"), "{problem}");
+        assert!(problem.contains("Any non-empty name is legal"), "{problem}");
+        // Decision 561e1bda / D2: an unconfigured role still RUNS (it falls
+        // through and warns), so the FIX must not threaten a failure.
+        assert!(
+            problem.contains("a role nothing configures still runs"),
+            "the FIX must not imply an unconfigured role breaks the dispatch: {problem}"
+        );
+
+        // The real door refuses too, and the batch path writes nothing.
+        assert_eq!(thrown(validate_new_cell(root, &role_probe(None))), *problem);
+        let (ok, rows, normalized) = build_add_cells_report(root, &[role_probe(None)]).unwrap();
+        assert!(!ok);
+        assert_eq!(rows[0].problems, vec![problem.clone()]);
+        assert!(normalized.is_none(), "a refused batch lands nothing on disk");
+    }
+
+    // D2 (store `06e49368`): the role set is OPEN. Validation checks presence
+    // and SHAPE; it never checks membership. This test is the guard against
+    // someone "helpfully" turning `ROLE_VOCABULARY` into an enum later — a
+    // closed list here would undo slice 1 outright.
+    #[test]
+    fn role_validation_checks_shape_and_never_membership() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let refused = |role: Value| {
+            let p = validate_new_cell_problems(root, &role_probe(Some(role))).unwrap();
+            assert_eq!(p.len(), 1, "expected exactly the role problem, got {p:?}");
+            assert!(p[0].contains("missing required field \"role\""), "{}", p[0]);
+        };
+
+        // Shape: empty, whitespace-only, and non-string values are all
+        // refused — a blank or mistyped role would resolve nothing while the
+        // record asserted the cell had chosen a job.
+        refused(json!(""));
+        refused(json!("   "));
+        refused(json!("\t\n "));
+        refused(json!(null));
+        refused(json!(7));
+        refused(json!(["code"]));
+        refused(json!({"name": "code"}));
+
+        // Membership: every recommended name is legal, AND so is a name that
+        // appears in no vocabulary and in no config anywhere. If this half
+        // ever goes red, a membership check was added and D2 is broken.
+        for role in ROLE_VOCABULARY {
+            assert!(
+                validate_new_cell_problems(root, &role_probe(Some(json!(role)))).unwrap().is_empty(),
+                "recommended role {role} must be legal"
+            );
+        }
+        for role in ["migrate", "ops", "Rewrite-The-Parser", "chữa-lỗi", "a", &"x".repeat(500)] {
+            assert!(
+                validate_new_cell_problems(root, &role_probe(Some(json!(role)))).unwrap().is_empty(),
+                "role {role} must be legal — bee holds no fixed list"
+            );
+        }
+        // Reserved-word probe: `ceiling` is retired as a role name entirely
+        // (D5), but nothing in THIS layer knows that — validation stays
+        // membership-blind, so it accepts the string like any other name.
+        //
+        // REVIEW P1-A weighed refusing it here and DECLINED, so this
+        // assertion stands unchanged on purpose rather than by oversight.
+        // Two reasons. A reserved word is a closed name inside the open set
+        // D2 (store `06e49368`) spent this feature's first slice opening, and
+        // this very test exists to catch exactly that regression. And it would
+        // not have closed the hole: refusing the name at ADD time leaves every
+        // already-stored cell carrying it, and the defect was that such a cell
+        // took the session model uncounted at DISPATCH time. The fix therefore
+        // landed at the dispatch, and the missing link between the two layers
+        // is asserted in
+        // `verbs::drivers::tests::the_ration_and_the_dispatch_agree_on_which_cells_are_escalated`:
+        // a name accepted here resolves an ordinary model, and only the
+        // escalation flag charges the 40% ration.
+        assert!(validate_new_cell_problems(root, &role_probe(Some(json!("ceiling"))))
+            .unwrap()
+            .is_empty());
+    }
+
+    /// D5 (store `97ce5225`): the escalation flag is a boolean and nothing
+    /// else. Presence and shape only — there is no budget check here, exactly
+    /// as there was none for authoring `tier: "ceiling"`; the 40% ration
+    /// lives on the `bee cells escalate` door — the same door as ever, under
+    /// the name the tier retirement (D4) left it with.
+    #[test]
+    fn the_escalation_flag_is_a_boolean_and_never_a_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let probe = |escalate: Value| {
+            let mut body = role_probe(Some(json!("code")));
+            body.as_object_mut().unwrap().insert("escalate".into(), escalate);
+            body
+        };
+        for legal in [json!(true), json!(false), Value::Null] {
+            assert!(
+                validate_new_cell_problems(root, &probe(legal.clone())).unwrap().is_empty(),
+                "{legal} must be legal"
+            );
+        }
+        for junk in [json!("ceiling"), json!("true"), json!(1), json!([])] {
+            let problems = validate_new_cell_problems(root, &probe(junk.clone())).unwrap();
+            assert_eq!(problems.len(), 1, "{junk}: {problems:?}");
+            assert!(problems[0].contains("must be true or false"), "{}", problems[0]);
+        }
+        // Omitting it entirely is legal and is NOT an escalation: absent
+        // stays absent.
+        let mut bare = probe(Value::Null);
+        bare.as_object_mut().unwrap().remove("escalate");
+        assert!(validate_new_cell_problems(root, &bare).unwrap().is_empty());
+        assert!(!cell_is_escalated(&bare));
+        assert!(!cell_is_escalated(&probe(json!(false))));
+        assert!(cell_is_escalated(&probe(json!(true))));
+        // The legacy spelling reads as escalated, which is what keeps a
+        // store that has not run the migration from reading as unmarked.
+        assert!(cell_is_escalated(&json!({"id": "e-2", "tier": "ceiling"})));
+        assert!(!cell_is_escalated(&json!({"id": "e-3", "tier": "generation"})));
     }
 
     // P3-5: a cell authored with change_class "behavior" and no explicit
@@ -2565,9 +2738,16 @@ use std::time::Instant;
         );
         assert_eq!(update_field_problem("change_class", &Value::Null), None);
         assert_eq!(update_field_problem("behavior_change", &json!(true)), None);
-        assert_eq!(
-            update_frozen_hint("tier"),
-            Some("use the tier verb (bee cells tier --id ID --tier T)")
+        // D4 (store `97ce5225`): `tier` is still a FROZEN key — stored records
+        // carry the field — but the hint no longer names a verb to set it,
+        // because there is none. Retargeted, not dropped: the assertion is
+        // still "a frozen key answers with the sentence that replaces it".
+        let tier_hint = update_frozen_hint("tier").expect("tier stays a frozen key");
+        assert!(tier_hint.contains("retired"), "{tier_hint}");
+        assert!(tier_hint.contains("bee cells escalate"), "{tier_hint}");
+        assert!(
+            !tier_hint.contains("bee cells tier"),
+            "no shipped text may send a caller to a verb that no longer exists: {tier_hint}"
         );
         assert_eq!(update_frozen_hint("status"), Some("status moves only through claim/verify/cap/block/drop"));
         assert_eq!(update_frozen_hint("nonsense"), None);
@@ -3621,6 +3801,7 @@ use std::time::Instant;
         json!({
             "id": id, "feature": "batch", "title": format!("title {id}"),
             "action": "do the thing", "verify": "echo ok", "lane": "tiny",
+            "role": "code",
             "affects_skills": [], "affects_specs": [],
         })
     }
@@ -3638,6 +3819,7 @@ use std::time::Instant;
                 "action": "action",
                 "verify": "cargo test",
                 "lane": lane,
+                "role": "code",
             });
             if lane == "standard" || lane == "high-risk" {
                 base["must_haves"] = json!({"truths": ["something true"]});
@@ -5568,11 +5750,20 @@ use std::time::Instant;
         assert!(claims_dir(root).join("c-1.json").exists(), "still there — a stale fence never proceeds");
     }
 
-    // ══ cells tier — ceiling-share budget (D3, decision 0012) ══════════════
+    // ══ cells escalate — escalation-share budget (D3, decision 0012) ═══════
     //
     // D6 sequencing: these prove the share computation first (exactly-40
     // allowed, just-over refused) and the refusal/override contract, before
-    // trusting the flip in set_tier to refuse anything for real.
+    // trusting the flip in `set_escalation` to refuse anything for real.
+    //
+    // RETARGETED, NEVER WEAKENED (model-role-split D4, store `97ce5225`).
+    // These probes were taken against `set_tier` while `bee cells tier` was
+    // the door; D4 retired the tier selector and the verb, and the escalation
+    // half kept its own name as `bee cells escalate` / `set_escalation`. The
+    // call sites move and the tier-field assertions become flag assertions —
+    // the FIELD they read ceased to exist by decision, and D4 is that
+    // decision — but every arithmetic, refusal, override and scope assertion
+    // is the one that was here before, unchanged.
 
     fn tiered_cell(id: &str, feature: &str, tier: Option<&str>) -> Value {
         let mut body = cell(id, "open", feature, json!([]));
@@ -5594,10 +5785,11 @@ use std::time::Instant;
         write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let cell = set_tier(root, "target", "ceiling", None).expect("exactly 40% must be allowed");
-        assert_eq!(cell["tier"], json!("ceiling"));
+        let cell =
+            set_escalation(root, "target", true, None).expect("exactly 40% must be allowed");
+        assert_eq!(cell[ESCALATE_FIELD], json!(true));
         let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
-        assert_eq!(after["tier"], json!("ceiling"), "the write actually landed");
+        assert_eq!(after[ESCALATE_FIELD], json!(true), "the write actually landed");
     }
 
     /// Others: 2 ceiling + 4 non-ceiling (6 tiered). Assigning "ceiling" to
@@ -5616,22 +5808,23 @@ use std::time::Instant;
         write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        let refusal = thrown(set_escalation(root, "target", true, None));
         assert!(
-            refusal.starts_with("setTier: cell \"target\" refused"),
+            refusal.starts_with("escalateCell: cell \"target\" refused"),
             "{refusal}"
         );
         assert!(refusal.contains("3/7"), "{refusal}");
         assert!(refusal.contains("43%"), "names the computed share: {refusal}");
         assert!(refusal.contains("40%"), "names the threshold: {refusal}");
-        // Refused — the tier on disk never moved.
+        // Refused — the marking on disk never moved.
         let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
-        assert!(after.get("tier").is_none(), "a refused assignment writes nothing");
+        assert!(after.get(ESCALATE_FIELD).is_none(), "a refused assignment writes nothing");
     }
 
     /// The same over-budget shape as above, but with `--reason` supplied:
-    /// the override succeeds and the reason persists on the cell's trace
-    /// (the cell's tier record) as `tier_reason`.
+    /// the override succeeds and the reason persists on the cell's trace as
+    /// `escalation_reason` (D4 renamed the key from `tier_reason` with the
+    /// selector it was named for).
     #[test]
     fn reason_override_bypasses_the_refusal_and_persists_on_the_tier_record() {
         let tmp = tempfile::tempdir().unwrap();
@@ -5644,14 +5837,29 @@ use std::time::Instant;
         write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let cell = set_tier(root, "target", "ceiling", Some("owner-approved rescue ladder bump"))
-            .expect("a named reason overrides the refusal");
-        assert_eq!(cell["tier"], json!("ceiling"));
-        assert_eq!(cell["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+        let cell =
+            set_escalation(root, "target", true, Some("owner-approved rescue ladder bump"))
+                .expect("a named reason overrides the refusal");
+        assert_eq!(cell[ESCALATE_FIELD], json!(true));
+        assert_eq!(
+            cell["trace"][ESCALATION_REASON_KEY],
+            json!("owner-approved rescue ladder bump")
+        );
+        assert!(
+            cell["trace"].get(LEGACY_ESCALATION_REASON_KEY).is_none(),
+            "the retired key is never written again"
+        );
 
         let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
-        assert_eq!(after["tier"], json!("ceiling"), "the override write actually landed");
-        assert_eq!(after["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+        assert_eq!(
+            after[ESCALATE_FIELD],
+            json!(true),
+            "the override write actually landed"
+        );
+        assert_eq!(
+            after["trace"][ESCALATION_REASON_KEY],
+            json!("owner-approved rescue ladder bump")
+        );
     }
 
     /// A whitespace-only reason is not an override — D1/D3's "non-blank"
@@ -5669,14 +5877,14 @@ use std::time::Instant;
         write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let refusal = thrown(set_tier(root, "target", "ceiling", Some("   ")));
-        assert!(refusal.starts_with("setTier: cell \"target\" refused"), "{refusal}");
+        let refusal = thrown(set_escalation(root, "target", true, Some("   ")));
+        assert!(refusal.starts_with("escalateCell: cell \"target\" refused"), "{refusal}");
     }
 
-    /// Any other tier is never budget-checked, however skewed the ceiling
-    /// share already is.
+    /// Taking the flag OFF is never budget-checked, however skewed the
+    /// escalated share already is.
     #[test]
-    fn assigning_a_non_ceiling_tier_never_checks_the_ceiling_budget() {
+    fn disarming_the_flag_never_checks_the_escalation_budget() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
@@ -5684,9 +5892,173 @@ use std::time::Instant;
         write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("ceiling")));
         write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
 
-        let cell = set_tier(root, "target", "generation", None)
-            .expect("a non-ceiling tier is never budget-checked");
-        assert_eq!(cell["tier"], json!("generation"));
+        let cell = set_escalation(root, "target", false, None)
+            .expect("disarming is never budget-checked");
+        assert!(cell.get(ESCALATE_FIELD).is_none());
+    }
+
+    // ══ D5 (store 97ce5225) — the ration, rehomed onto the escalation flag ══
+    //
+    // The five probes above keep their exact arithmetic and are the "unchanged
+    // in force" half. These are the moved half: the flag is what the ration
+    // now counts, the flag is what `bee cells escalate` writes, and no
+    // store — migrated or not — can read as "nothing is marked".
+
+    fn escalated_cell(id: &str, feature: &str) -> Value {
+        let mut body = cell(id, "open", feature, json!([]));
+        body["role"] = json!("code");
+        body["escalate"] = json!(true);
+        body
+    }
+
+    /// The same shape as `ceiling_share_just_over_40_percent_refuses…`, with
+    /// every escalation spelled as the FLAG on a post-D7 cell (a role, no
+    /// tier at all). 3/7 is still over budget and still refuses, which is
+    /// what "fires on the flag exactly as it fired on the tier value" means.
+    #[test]
+    fn the_ration_refuses_on_the_escalation_flag_exactly_as_it_did_on_the_tier() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &escalated_cell("o-1", "f"));
+        write_cell_fixture(root, "o-2", &escalated_cell("o-2", "f"));
+        for id in ["o-3", "o-4", "o-5", "o-6"] {
+            let mut body = cell(id, "open", "f", json!([]));
+            body["role"] = json!("code");
+            write_cell_fixture(root, id, &body);
+        }
+        let mut target = cell("target", "open", "f", json!([]));
+        target["role"] = json!("code");
+        write_cell_fixture(root, "target", &target);
+
+        let refusal = thrown(set_escalation(root, "target", true, None));
+        assert!(refusal.starts_with("escalateCell: cell \"target\" refused"), "{refusal}");
+        assert!(refusal.contains("3/7"), "{refusal}");
+        assert!(refusal.contains("43%"), "names the computed share: {refusal}");
+        assert!(refusal.contains("40%"), "names the threshold: {refusal}");
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert!(after.get("escalate").is_none(), "a refused escalation writes nothing");
+
+        // The reason override still overrides, and now persists under the
+        // key D4 renamed it to.
+        let ok = set_escalation(root, "target", true, Some("owner-approved rescue ladder"))
+            .expect("a named reason overrides the refusal");
+        assert_eq!(ok["escalate"], json!(true));
+        assert_eq!(
+            ok["trace"][ESCALATION_REASON_KEY],
+            json!("owner-approved rescue ladder")
+        );
+    }
+
+    /// The zero-share window D5 forbids by name. A store still carrying the
+    /// LEGACY spelling — `tier: "ceiling"`, which every record written before
+    /// this change carries and which `bee cells backfill-roles` converts when
+    /// an operator runs it — must charge the ration exactly the same. If the
+    /// ration read the flag alone, this store would compute 0.0 and the
+    /// refusal could never fire.
+    #[test]
+    fn an_unmigrated_store_still_charges_the_ration() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Legacy only: nothing here carries the flag.
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        for id in ["o-3", "o-4", "o-5", "o-6"] {
+            write_cell_fixture(root, id, &tiered_cell(id, "f", Some("generation")));
+        }
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+        let refusal = thrown(set_escalation(root, "target", true, None));
+        assert!(refusal.contains("3/7"), "the legacy spelling counts: {refusal}");
+
+        // And a HALF-migrated store — one record converted, one not — counts
+        // each cell exactly once rather than twice or not at all.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        write_cell_fixture(root2, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root2, "o-2", &escalated_cell("o-2", "f"));
+        for id in ["o-3", "o-4", "o-5", "o-6"] {
+            write_cell_fixture(root2, id, &tiered_cell(id, "f", Some("generation")));
+        }
+        write_cell_fixture(root2, "target", &tiered_cell("target", "f", None));
+        let refusal2 = thrown(set_escalation(root2, "target", true, None));
+        assert!(refusal2.contains("3/7"), "one spelling each, counted once: {refusal2}");
+    }
+
+    /// The write half: escalating marks the flag, and `--off` disarms it —
+    /// `bee cells tier --tier generation` took a cell off the session model
+    /// before D5, and `bee cells escalate --off` still does.
+    #[test]
+    fn escalating_marks_the_flag_and_off_disarms_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Four cells, one of them escalated: 25%, comfortably under budget.
+        for id in ["o-1", "o-2", "o-3"] {
+            write_cell_fixture(root, id, &tiered_cell(id, "f", None));
+        }
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let up = set_escalation(root, "target", true, None).expect("well under budget");
+        assert_eq!(up["escalate"], json!(true));
+        assert!(
+            up.get("tier").is_none(),
+            "D4: the retired selector is never written back onto a cell"
+        );
+        let on_disk = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert_eq!(on_disk["escalate"], json!(true), "the flag actually landed");
+
+        let down = set_escalation(root, "target", false, None).expect("never budget-checked");
+        assert!(
+            down.get("escalate").is_none(),
+            "a non-escalating assignment removes the flag rather than writing false"
+        );
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert!(after.get("escalate").is_none());
+    }
+
+    /// The denominator is the feature's CELLS, not the cells that recorded
+    /// the retired optional `tier`. A post-D7 feature records no tier at all,
+    /// so a tier-shaped denominator would be 0 for every one of them, the
+    /// share would be 0.0, and this refusal could never fire again.
+    #[test]
+    fn the_ration_counts_every_cell_of_the_feature_not_just_tiered_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Two escalated, one plain — no `tier` anywhere in this store.
+        write_cell_fixture(root, "o-1", &escalated_cell("o-1", "f"));
+        write_cell_fixture(root, "o-2", &escalated_cell("o-2", "f"));
+        let mut plain = cell("o-3", "open", "f", json!([]));
+        plain["role"] = json!("code");
+        write_cell_fixture(root, "o-3", &plain);
+        let mut target = cell("target", "open", "f", json!([]));
+        target["role"] = json!("code");
+        write_cell_fixture(root, "target", &target);
+
+        let refusal = thrown(set_escalation(root, "target", true, None));
+        assert!(refusal.contains("3/4"), "{refusal}");
+        assert!(refusal.contains("75%"), "{refusal}");
+    }
+
+    /// Another feature's escalations are not this feature's budget — the
+    /// scope the share is taken over is unchanged.
+    #[test]
+    fn the_ration_is_scoped_to_the_cells_own_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for id in ["x-1", "x-2", "x-3"] {
+            write_cell_fixture(root, id, &escalated_cell(id, "other"));
+        }
+        // Feature "f": the target plus two plain cells — 1/3, under budget.
+        // Counted store-wide it would be 4/6 and would refuse.
+        for id in ["f-1", "f-2"] {
+            let mut plain = cell(id, "open", "f", json!([]));
+            plain["role"] = json!("code");
+            write_cell_fixture(root, id, &plain);
+        }
+        let mut target = cell("target", "open", "f", json!([]));
+        target["role"] = json!("code");
+        write_cell_fixture(root, "target", &target);
+        let cell = set_escalation(root, "target", true, None)
+            .expect("another feature's escalations never charge this one");
+        assert_eq!(cell["escalate"], json!(true));
     }
 
     // ══ wf-1 — `cells finish` from a granted worktree ═════════════════════
@@ -6489,13 +6861,22 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
         lane_with_route(&root, "f");
+        // `tier` and `role` are set TOGETHER on every fixture this suite
+        // actually dispatches. The reason is the blind spot D7 opens: a raw
+        // fixture bypasses `validate_new_cell`, so it would not go red when
+        // `role` became required — it would quietly resolve whatever the
+        // default is, and the assertion below would still pass while proving
+        // nothing about which model the wave chose. Naming the role keeps
+        // this test's model choice deliberate through the tier retirement.
         let mut a = cell("wa-1", "open", "f", json!([]));
         a["files"] = json!(["docs/wa-1.md"]);
         a["tier"] = json!("generation");
+        a["role"] = json!("code");
         write_cell_fixture(&root, "wa-1", &a);
         let mut b = cell("wa-2", "open", "f", json!([]));
         b["files"] = json!(["docs/wa-2.md"]);
         b["tier"] = json!("generation");
+        b["role"] = json!("code");
         write_cell_fixture(&root, "wa-2", &b);
 
         let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
@@ -6584,10 +6965,12 @@ use std::time::Instant;
         let mut f1 = cell("wc-1", "open", "f", json!([]));
         f1["files"] = json!(["docs/wc-1.md"]);
         f1["tier"] = json!("generation");
+        f1["role"] = json!("code");
         write_cell_fixture(&root, "wc-1", &f1);
         let mut g1 = cell("wg-1", "open", "g", json!([]));
         g1["files"] = json!(["docs/wg-1.md"]);
         g1["tier"] = json!("generation");
+        g1["role"] = json!("code");
         write_cell_fixture(&root, "wg-1", &g1);
 
         let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
@@ -6614,10 +6997,12 @@ use std::time::Instant;
         let mut a = cell("wl-1", "open", "f", json!([]));
         a["files"] = json!(["docs/wl-1.md"]);
         a["tier"] = json!("generation");
+        a["role"] = json!("code");
         write_cell_fixture(&root, "wl-1", &a);
         let mut b = cell("wl-2", "open", "f", json!([]));
         b["files"] = json!(["docs/wl-2.md"]);
         b["tier"] = json!("generation");
+        b["role"] = json!("code");
         write_cell_fixture(&root, "wl-2", &b);
 
         let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f", "--limit", "1"]);
@@ -6717,6 +7102,7 @@ use std::time::Instant;
         let mut c = cell("uw-1", "open", "f", json!([]));
         c["files"] = json!(["docs/uw-1.md"]);
         c["tier"] = json!("generation");
+        c["role"] = json!("code");
         write_cell_fixture(&root, "uw-1", &c);
 
         // A real claim: taken, one file reserved, worker row registered.
@@ -6839,6 +7225,7 @@ use std::time::Instant;
             "action": "edit guard source",
             "verify": "echo ok",
             "lane": lane,
+            "role": "code",
             "files": ["packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"],
             "affects_skills": [],
             "affects_specs": [],
@@ -7563,4 +7950,582 @@ use std::time::Instant;
             json!(null),
             "a reopen is a reopen, whichever door performs it"
         );
+    }
+
+    // ── cells backfill-roles (model-role-split D9, store 4eaf1b71) ────────
+
+    /// Every stored cell file's exact bytes, keyed by path. Byte-level on
+    /// purpose: "the store did not change" is the claim these tests make,
+    /// and a parsed comparison would hide a reordered key or a rewritten
+    /// separator that a `git diff` on 500 files would not.
+    fn store_bytes(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+        let mut out = std::collections::BTreeMap::new();
+        for file in stored_cell_files(root) {
+            out.insert(file.to_string_lossy().into_owned(), std::fs::read(&file).unwrap());
+        }
+        out
+    }
+
+    fn write_archived_cell_fixture(root: &Path, feature: &str, id: &str, body: &Value) {
+        let dir = cells_archive_dir(root, feature);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(body)).unwrap();
+    }
+
+    fn roleless(id: &str, tier: Value) -> Value {
+        let mut cell = json!({"id": id, "title": id, "status": "capped", "lane": "tiny", "feature": "demo"});
+        if !tier.is_null() {
+            cell.as_object_mut().unwrap().insert("tier".into(), tier);
+        }
+        cell
+    }
+
+    /// A store whose shape is deliberately NOT the 484 / 2 / 20 the decision
+    /// measured on 2026-08-24: 11 cells — 3 `generation`, 3 no-tier,
+    /// 3 `ceiling`, 1 `extraction`, and 1 that already carries a role. If any
+    /// count in the verb were remembered rather than measured, this store is
+    /// where it shows.
+    fn backfill_store() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        std::fs::create_dir_all(cells_dir(&root)).unwrap();
+        for id in ["g-1", "g-2", "g-3"] {
+            write_cell_fixture(&root, id, &roleless(id, json!("generation")));
+        }
+        for id in ["n-1", "n-2"] {
+            write_cell_fixture(&root, id, &roleless(id, Value::Null));
+        }
+        for id in ["c-1", "c-2"] {
+            write_cell_fixture(&root, id, &roleless(id, json!("ceiling")));
+        }
+        write_cell_fixture(&root, "x-1", &roleless("x-1", json!("extraction")));
+        // Already roled, and roled AGAINST what D9 would have picked for its
+        // tier ("design" on a `generation` cell, where D9 says "code") —
+        // which is what proves the verb reads the role that is there rather
+        // than re-deriving one over the top of it.
+        let mut roled = roleless("r-1", json!("generation"));
+        roled.as_object_mut().unwrap().insert("role".into(), json!("design"));
+        write_cell_fixture(&root, "r-1", &roled);
+        // Archived history is stored history — D9 says "the stored cells".
+        write_archived_cell_fixture(&root, "old-feature", "a-1", &roleless("a-1", json!("ceiling")));
+        write_archived_cell_fixture(&root, "old-feature", "a-2", &roleless("a-2", Value::Null));
+        (tmp, root)
+    }
+
+    #[test]
+    fn d9_maps_every_legal_tier_and_refuses_to_guess_at_any_other() {
+        // The three legal tiers plus the absent one — D9's whole mapping.
+        assert_eq!(d9_role_for_tier(Some("generation")), Some("code"));
+        assert_eq!(d9_role_for_tier(None), Some("code"));
+        assert_eq!(d9_role_for_tier(Some("")), Some("code"));
+        assert_eq!(d9_role_for_tier(Some("  ")), Some("code"), "a blank tier is no tier");
+        assert_eq!(d9_role_for_tier(Some("ceiling")), Some("code"));
+        assert_eq!(d9_role_for_tier(Some("extraction")), Some("read"));
+        // The deliberate hole. A value outside the legal three is data this
+        // mapping has no answer for, and "code" is not a safe guess — it is
+        // the silent default D7 exists to end.
+        assert_eq!(d9_role_for_tier(Some("premium")), None);
+        assert_eq!(d9_role_for_tier(Some("Generation")), None, "the match is exact, not fuzzy");
+        // The source labels line up with the mapping, entry for entry.
+        for (source, role) in ROLE_BACKFILL_SOURCES {
+            let tier = match source {
+                "no-tier" => None,
+                other => Some(other.trim_start_matches("tier:")),
+            };
+            assert_eq!(d9_source_for_tier(tier), source, "{source}");
+            assert_eq!(d9_role_for_tier(tier), Some(role), "{source}");
+        }
+    }
+
+    #[test]
+    fn backfill_dry_run_reports_its_counts_and_writes_nothing() {
+        let (_tmp, root) = backfill_store();
+        let before = store_bytes(&root);
+        let report = backfill_roles(&root, true).expect("dry run must not refuse");
+
+        // Every number is measured off THIS store: 11 files, 1 already
+        // roled, 10 to assign. Nothing here is the decision's 484 / 2 / 20.
+        assert_eq!(report.scanned, 11);
+        assert_eq!(report.already_roled, 1);
+        assert_eq!(report.assigned, 10);
+        assert_eq!(report.written, 0, "--dry-run writes nothing, so `written` must stay 0");
+        assert_eq!(report.by_source, [3, 3, 3, 1], "generation / no-tier / ceiling / extraction");
+        assert_eq!(report.by_role(), vec![("code", 9), ("read", 1)]);
+        // D5: the three `ceiling` cells (two live, one archived) are the ones
+        // that also take the escalation flag.
+        assert_eq!(report.escalated, 3);
+        assert!(report.unmapped.is_empty());
+        assert!(report.unreadable.is_empty());
+
+        assert_eq!(store_bytes(&root), before, "--dry-run must leave every byte of the store alone");
+        let text = role_backfill_text(&report, true);
+        assert!(text.contains("11 stored cell(s) scanned"), "{text}");
+        assert!(text.contains("10 would take a role"), "{text}");
+        assert!(text.contains("Nothing was written"), "{text}");
+        let obj = role_backfill_json(&report, true);
+        assert_eq!(obj["dry_run"], json!(true));
+        assert_eq!(obj["written"], json!(0));
+        assert_eq!(obj["by_source"]["tier:extraction"], json!(1));
+        assert_eq!(obj["by_role"]["read"], json!(1));
+    }
+
+    #[test]
+    fn backfill_applies_d9_and_converts_ceiling_onto_the_escalation_flag() {
+        let (_tmp, root) = backfill_store();
+        let report = backfill_roles(&root, false).expect("apply must not refuse");
+        assert_eq!(report.assigned, 10);
+        assert_eq!(report.written, 10, "assigned and written agree once it is applied");
+
+        for id in ["g-1", "g-2", "g-3", "n-1", "n-2", "c-1", "c-2"] {
+            assert_eq!(read_cell_fixture(&root, id)["role"], json!("code"), "{id}");
+        }
+        assert_eq!(read_cell_fixture(&root, "x-1")["role"], json!("read"));
+        // D5 (store `97ce5225`): a stored `tier: "ceiling"` is converted onto
+        // the escalation flag in this same pass — flag and role together, so
+        // no store ever answers half of one and half of the other.
+        for id in ["c-1", "c-2"] {
+            assert_eq!(read_cell_fixture(&root, id)["escalate"], json!(true), "{id}");
+        }
+        assert_eq!(report.escalated, 3, "two live ceilings plus the archived one");
+        // The tier STRING survives beside the flag, and D4 (store `97ce5225`)
+        // keeps it that way: retiring `tier` as the model SELECTOR is not an
+        // order to rewrite stored history, and `cell_is_escalated` still
+        // reads the one value that ever meant anything.
+        for id in ["c-1", "c-2"] {
+            assert_eq!(read_cell_fixture(&root, id)["tier"], json!("ceiling"), "{id}");
+        }
+        // A cell that was never `ceiling` takes no flag: absent stays absent.
+        for id in ["g-1", "n-1", "x-1"] {
+            assert!(read_cell_fixture(&root, id).get("escalate").is_none(), "{id}");
+        }
+        assert_eq!(read_cell_fixture(&root, "g-1")["tier"], json!("generation"));
+        assert_eq!(read_cell_fixture(&root, "x-1")["tier"], json!("extraction"));
+        assert!(
+            read_cell_fixture(&root, "n-1").get("tier").is_none(),
+            "a cell that recorded no tier must not acquire one"
+        );
+        // The role is the ONLY new key: everything else is byte-for-byte the
+        // value the store already held.
+        let migrated = read_cell_fixture(&root, "c-1");
+        assert_eq!(migrated["status"], json!("capped"));
+        assert_eq!(migrated["lane"], json!("tiny"));
+        assert_eq!(migrated["feature"], json!("demo"));
+
+        // Archived history is migrated too.
+        let archived = |id: &str| {
+            let file = cells_archive_dir(&root, "old-feature").join(format!("{id}.json"));
+            match read_json(&file) {
+                ReadJson::Parsed(v) => v,
+                _ => panic!("archived cell {id} is missing or corrupt at {}", file.display()),
+            }
+        };
+        assert_eq!(archived("a-1")["role"], json!("code"));
+        assert_eq!(archived("a-1")["tier"], json!("ceiling"), "an archived ceiling keeps its tier too");
+        assert_eq!(
+            archived("a-1")["escalate"],
+            json!(true),
+            "and an archived ceiling is converted too — `cells unarchive` brings it back live"
+        );
+        assert_eq!(archived("a-2")["role"], json!("code"));
+    }
+
+    /// D4 (store `97ce5225`) — the third job this one pass carries: the
+    /// escalation reason moved off the retired selector's name, so a stored
+    /// trace still spelling it `tier_reason` is renamed to
+    /// `escalation_reason` here, VALUE untouched.
+    ///
+    /// Its own store rather than `backfill_store()`, so the counts above stay
+    /// the counts they were measured as. Four shapes in one pass: a legacy
+    /// key alone, a legacy key on a cell that ALSO needs a role and the flag,
+    /// a trace already migrated (which must not be touched or overwritten),
+    /// and a trace carrying neither.
+    #[test]
+    fn backfill_renames_the_retired_escalation_reason_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(cells_dir(root)).unwrap();
+
+        let with_trace = |id: &str, tier: Value, trace: Value, role: Option<&str>| {
+            let mut c = roleless(id, tier);
+            let map = c.as_object_mut().unwrap();
+            map.insert("trace".into(), trace);
+            if let Some(r) = role {
+                map.insert("role".into(), json!(r));
+            }
+            c
+        };
+        // Already roled, so the rename is the ONLY reason this file is opened.
+        write_cell_fixture(
+            root,
+            "legacy-only",
+            &with_trace("legacy-only", Value::Null, json!({"tier_reason": "owner said so"}), Some("code")),
+        );
+        // Needs all three at once.
+        write_cell_fixture(
+            root,
+            "legacy-all",
+            &with_trace("legacy-all", json!("ceiling"), json!({"tier_reason": "rescue ladder"}), None),
+        );
+        // Already migrated: nothing to do, and its current reason must not be
+        // clobbered by a stale legacy key sitting beside it.
+        write_cell_fixture(
+            root,
+            "already",
+            &with_trace(
+                "already",
+                Value::Null,
+                json!({"escalation_reason": "current", "tier_reason": "stale"}),
+                Some("code"),
+            ),
+        );
+        write_cell_fixture(
+            root,
+            "no-reason",
+            &with_trace("no-reason", Value::Null, json!({"worker": "w-1"}), Some("code")),
+        );
+
+        // Dry run measures it and writes nothing.
+        let before = store_bytes(root);
+        let dry = backfill_roles(root, true).unwrap();
+        assert_eq!(dry.reasons_renamed, 2, "legacy-only and legacy-all, never `already`");
+        assert_eq!(store_bytes(root), before, "--dry-run writes nothing");
+        let dry_text = role_backfill_text(&dry, true);
+        assert!(dry_text.contains("trace.tier_reason"), "{dry_text}");
+        assert!(dry_text.contains("would be renamed"), "{dry_text}");
+        assert_eq!(role_backfill_json(&dry, true)["reasons_renamed"], json!(2));
+
+        let report = backfill_roles(root, false).unwrap();
+        assert_eq!(report.reasons_renamed, 2);
+
+        let migrated = read_cell_fixture(root, "legacy-only");
+        assert_eq!(migrated["trace"]["escalation_reason"], json!("owner said so"));
+        assert!(
+            migrated["trace"].get("tier_reason").is_none(),
+            "the retired key is removed, not left beside its replacement"
+        );
+
+        let all = read_cell_fixture(root, "legacy-all");
+        assert_eq!(all["role"], json!("code"), "the role still lands");
+        assert_eq!(all["escalate"], json!(true), "and so does the flag");
+        assert_eq!(all["trace"]["escalation_reason"], json!("rescue ladder"));
+        assert!(all["trace"].get("tier_reason").is_none());
+
+        // An already-migrated trace keeps the reason it holds.
+        let already = read_cell_fixture(root, "already");
+        assert_eq!(already["trace"]["escalation_reason"], json!("current"));
+
+        // Idempotent: a second pass finds nothing left to rename.
+        let second = backfill_roles(root, false).unwrap();
+        assert_eq!(second.reasons_renamed, 0);
+        assert_eq!(second.written, 0, "and opens no file for writing");
+    }
+
+    #[test]
+    fn a_cell_that_already_carries_a_role_is_left_byte_identical() {
+        let (_tmp, root) = backfill_store();
+        let file = cell_file(&root, "r-1");
+        let before = std::fs::read(&file).unwrap();
+        let report = backfill_roles(&root, false).unwrap();
+        assert_eq!(report.already_roled, 1);
+        assert_eq!(
+            std::fs::read(&file).unwrap(),
+            before,
+            "r-1 already carried \"design\"; the migration must not open it for writing at all"
+        );
+        assert_eq!(
+            read_cell_fixture(&root, "r-1")["role"],
+            json!("design"),
+            "an existing role is never re-derived from tier"
+        );
+    }
+
+    /// The exact record shape the role-only pass left behind: a cell that
+    /// ALREADY carries a role and still records `tier: "ceiling"`, because
+    /// the escalation flag did not exist when its role was written. Having a
+    /// role is not having been converted — this cell is opened for writing,
+    /// its role is left alone, and it takes the flag.
+    #[test]
+    fn a_roled_ceiling_cell_is_still_converted_onto_the_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        std::fs::create_dir_all(cells_dir(&root)).unwrap();
+        let mut leftover = roleless("k-1", json!("ceiling"));
+        leftover.as_object_mut().unwrap().insert("role".into(), json!("code"));
+        write_cell_fixture(&root, "k-1", &leftover);
+
+        let report = backfill_roles(&root, false).unwrap();
+        assert_eq!(report.already_roled, 1, "it does carry a role");
+        assert_eq!(report.assigned, 0, "so no role is assigned");
+        assert_eq!(report.escalated, 1, "but the escalation is still converted");
+        assert_eq!(report.written, 1);
+        let after = read_cell_fixture(&root, "k-1");
+        assert_eq!(after["escalate"], json!(true));
+        assert_eq!(after["role"], json!("code"), "the role it already had is never re-derived");
+
+        // And it is done: a second pass opens nothing.
+        assert_eq!(backfill_roles(&root, false).unwrap().written, 0);
+    }
+
+    /// The property the plan asks for by name: run it, run it again, and the
+    /// second run changes nothing. Byte-identity, not prose.
+    #[test]
+    fn backfill_is_idempotent_down_to_the_byte() {
+        let (_tmp, root) = backfill_store();
+        let first = backfill_roles(&root, false).unwrap();
+        assert_eq!(first.written, 10);
+        let after_first = store_bytes(&root);
+
+        let second = backfill_roles(&root, false).unwrap();
+        assert_eq!(second.scanned, 11, "the second pass still scans the whole store");
+        assert_eq!(second.assigned, 0, "there is nothing left to assign");
+        assert_eq!(second.written, 0, "and therefore nothing to write");
+        assert_eq!(second.already_roled, 11, "every cell now carries a role");
+        assert_eq!(second.by_source, [0, 0, 0, 0]);
+        assert_eq!(store_bytes(&root), after_first, "the second run must change nothing");
+
+        // A dry run over an already-migrated store agrees, and still writes
+        // nothing.
+        let third = backfill_roles(&root, true).unwrap();
+        assert_eq!((third.assigned, third.written, third.already_roled), (0, 0, 11));
+        assert_eq!(store_bytes(&root), after_first);
+    }
+
+    /// An interrupted first pass is finished by running again — the cells
+    /// already done are indistinguishable from cells authored with a role.
+    #[test]
+    fn a_partially_migrated_store_is_finished_by_a_re_run() {
+        let (_tmp, root) = backfill_store();
+        // Stand in for the interrupted run: two cells landed, the rest did not.
+        for id in ["g-1", "n-1"] {
+            let mut cell = read_cell_fixture(&root, id);
+            cell.as_object_mut().unwrap().insert("role".into(), json!("code"));
+            write_json_atomic(&cell_file(&root, id), &cell).unwrap();
+        }
+        let done_bytes = std::fs::read(cell_file(&root, "g-1")).unwrap();
+        let report = backfill_roles(&root, false).unwrap();
+        assert_eq!(report.already_roled, 3, "r-1 plus the two the interrupted run finished");
+        assert_eq!(report.written, 8, "only the remainder is written");
+        assert_eq!(
+            std::fs::read(cell_file(&root, "g-1")).unwrap(),
+            done_bytes,
+            "a cell the interrupted run already finished is not touched a second time"
+        );
+        assert_eq!(backfill_roles(&root, false).unwrap().written, 0);
+    }
+
+    // ── The unlocked scan (review r2, P1-B) ───────────────────────────────
+    //
+    // What these close: the pass took the `cells-archive` lock for its WRITE
+    // half only, and every write was a whole object cloned during the
+    // unlocked scan. Demonstrated on a 40 000-cell store — a
+    // `cells escalate --off` that COMPLETED at t=25ms was back on disk as
+    // `escalate: true` when the pass finished at t=1.007s. Not a half-write:
+    // a complete write, completely reversed. Only writers that finished
+    // inside the scan were lost, which is why casual testing never saw it.
+    //
+    // Why the seam and not a thread: every backfill test above is
+    // single-threaded, and the whole suite passed with `acquire_named_lock`
+    // DELETED. A sleep-and-race test would swap that silence for flakiness.
+    // `backfill_roles_interleaved` hands the test the window itself — plan
+    // built, lock not yet taken — so the interleaving is decided by the
+    // test, not by the machine.
+
+    /// `backfill_store` plus `e-1`, in the demonstration's exact shape: no
+    /// role (so the pass DOES plan a write for it) and the escalation flag
+    /// already set (so the flag is NOT part of what the pass plans to
+    /// change). That combination is what makes the reversal invisible — the
+    /// pass never meant to touch the flag, and reversed it anyway.
+    fn escalated_backfill_store() -> (tempfile::TempDir, PathBuf) {
+        let (tmp, root) = backfill_store();
+        let mut armed = roleless("e-1", json!("ceiling"));
+        armed.as_object_mut().unwrap().insert(ESCALATE_FIELD.into(), json!(true));
+        write_cell_fixture(&root, "e-1", &armed);
+        (tmp, root)
+    }
+
+    #[test]
+    fn an_operator_write_that_lands_before_the_lock_is_never_reversed() {
+        let (_tmp, root) = escalated_backfill_store();
+        let disarm_root = root.clone();
+        let report = backfill_roles_interleaved(&root, false, || {
+            // A real operator door, in the window the review measured: the
+            // plan is built and the lock is not held, so this write is
+            // ALLOWED — exactly why the defect only ever lost the writers
+            // that completed.
+            set_escalation(&disarm_root, "e-1", false, None)
+                .expect("the disarm lands while the pass is still unlocked");
+        })
+        .expect("the pass itself must not refuse");
+
+        let after = read_cell_fixture(&root, "e-1");
+        assert!(
+            after.get(ESCALATE_FIELD).is_none(),
+            "the operator's disarm must survive: the write half re-reads under the lock and \
+             merges the keys it owns, instead of restoring a clone taken before the disarm \
+             existed — got {after}"
+        );
+        assert_eq!(
+            after["role"],
+            json!("code"),
+            "and the migration still adds the one key it did plan for this cell"
+        );
+        assert_eq!(report.escalated, 3, "c-1, c-2 and archived a-1 — never e-1, which was already flagged");
+        assert!(
+            report.changed_during_pass.is_empty(),
+            "nothing was dropped: the plan for e-1 (role only) still applied in full — {:?}",
+            report.changed_during_pass
+        );
+    }
+
+    #[test]
+    fn a_feature_archived_before_the_lock_is_not_recreated_as_a_live_duplicate() {
+        let (_tmp, root) = backfill_store();
+        let close_root = root.clone();
+        let report = backfill_roles_interleaved(&root, false, || {
+            // `bee close`'s own archiving door, unblocked in this window for
+            // the same reason the disarm above is.
+            archive_feature_for_close(&close_root, "demo").expect("every demo cell is capped");
+        })
+        .expect("a feature archived under the pass is not an error");
+
+        assert!(
+            !cell_file(&root, "g-1").exists(),
+            "an archived cell must not be recreated at its live path — readCell prefers the \
+             live copy, so a whole-object write here forges a duplicate of archived history"
+        );
+        assert_eq!(report.written, 2, "only old-feature's archive, which nothing moved");
+        assert_eq!(
+            report.changed_during_pass.len(),
+            8,
+            "the eight demo records that moved are named, not written — {:?}",
+            report.changed_during_pass
+        );
+        // Idempotent as ever: the next run finishes them at their new home.
+        let second = backfill_roles(&root, false).unwrap();
+        assert_eq!(second.written, 8);
+        assert!(second.changed_during_pass.is_empty(), "{:?}", second.changed_during_pass);
+    }
+
+    /// The lock line itself, which nothing above ever asked about: deleting
+    /// `acquire_named_lock` left the whole suite green. Costs one bounded
+    /// wait (MAX_ATTEMPTS × RETRY_DELAY_MS) on purpose — the refusal IS the
+    /// assertion, and a live holder is never stale-taken inside that window.
+    #[test]
+    fn the_write_half_refuses_while_the_archive_lock_is_held() {
+        let (_tmp, root) = backfill_store();
+        let mut held =
+            lock::acquire_store_lock(&root, "cells-archive", 1).expect("the store starts unlocked");
+
+        let refusal = thrown(backfill_roles(&root, false));
+        assert!(refusal.contains("cells-archive"), "{refusal}");
+        assert!(
+            read_cell_fixture(&root, "g-1").get("role").is_none(),
+            "a refused pass writes nothing at all"
+        );
+
+        held.release();
+        assert_eq!(
+            backfill_roles(&root, false).unwrap().written,
+            10,
+            "and the same pass goes through once the holder is gone"
+        );
+    }
+
+    #[test]
+    fn an_unmapped_tier_and_an_unreadable_file_are_named_never_guessed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(cells_dir(root)).unwrap();
+        write_cell_fixture(root, "ok-1", &roleless("ok-1", json!("generation")));
+        write_cell_fixture(root, "odd-1", &roleless("odd-1", json!("premium")));
+        std::fs::write(cells_dir(root).join("broken-1.json"), "{not json").unwrap();
+        std::fs::write(cells_dir(root).join("array-1.json"), "[]").unwrap();
+
+        let report = backfill_roles(root, false).unwrap();
+        assert_eq!(report.scanned, 4);
+        assert_eq!(report.assigned, 1);
+        assert_eq!(report.written, 1);
+        assert_eq!(
+            report.unmapped,
+            vec![("odd-1".to_string(), "premium".to_string())],
+            "a tier D9 does not map is reported by id, not silently defaulted to \"code\""
+        );
+        assert!(
+            read_cell_fixture(root, "odd-1").get("role").is_none(),
+            "and the cell itself is left alone"
+        );
+        let unreadable: Vec<&str> = report.unreadable.iter().map(String::as_str).collect();
+        assert_eq!(unreadable.len(), 2, "{unreadable:?}");
+        assert!(unreadable.iter().any(|p| p.ends_with(".bee/cells/broken-1.json")), "{unreadable:?}");
+        assert!(unreadable.iter().any(|p| p.ends_with(".bee/cells/array-1.json")), "{unreadable:?}");
+        let text = role_backfill_text(&report, false);
+        assert!(text.contains("odd-1 (tier \"premium\")"), "{text}");
+        assert!(text.contains("2 unreadable file(s) skipped"), "{text}");
+    }
+
+    #[test]
+    fn backfill_over_an_empty_store_reports_zero_and_refuses_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let report = backfill_roles(tmp.path(), true).expect("a store with no cells dir is not an error");
+        assert_eq!((report.scanned, report.assigned, report.written), (0, 0, 0));
+        // Every source is reported AS zero — an absent row and an empty row
+        // must not read the same.
+        let obj = role_backfill_json(&report, true);
+        for (source, _) in ROLE_BACKFILL_SOURCES {
+            assert_eq!(obj["by_source"][source], json!(0), "{source}");
+        }
+    }
+
+    /// The registry↔dispatcher law, the direction mrs-12 was the other half
+    /// of: the verb this cell serves must also be DECLARED, or `bee --help
+    /// --all` calls it unknown and the CLI-shape guard has no schema to
+    /// check a call against.
+    #[test]
+    fn backfill_roles_is_declared_in_the_registry() {
+        let (entry, rest) = crate::catalog::resolve(&["cells", "backfill-roles"])
+            .expect("cells backfill-roles must be in the registry payload");
+        assert_eq!(entry.name, "cells.backfill-roles");
+        assert!(rest.is_empty(), "{rest:?}");
+        assert!(entry.unavailable.is_none(), "the dispatcher serves it, so no unavailable marker");
+        assert!(entry.required.is_empty(), "both flags are optional");
+        for flag in ["dry-run", "json"] {
+            assert!(entry.properties.contains_key(flag), "--{flag} is undeclared");
+        }
+        assert_eq!(entry.examples[0], "bee cells backfill-roles --dry-run --json");
+    }
+
+    /// D4 (store `97ce5225`) — the tier verb is gone, and gone in every
+    /// direction the registry↔dispatcher law reaches.
+    ///
+    /// mrs-12 proved one half: a verb the dispatcher serves and the registry
+    /// does not declare is reported unknown by `bee --help --all` and gives
+    /// the CLI-shape guard no schema. The inverse is the half this asserts —
+    /// a verb the registry still declares and no code serves would be
+    /// advertised by `--help` and answered by nothing, which is the exact
+    /// defect tests/registry_dispatch.rs was written for.
+    #[test]
+    fn the_tier_verb_is_retired_and_escalate_stands_in_its_place() {
+        assert!(
+            crate::catalog::resolve(&["cells", "tier"]).is_none(),
+            "cells tier must not be declared: no code serves it any more"
+        );
+        assert!(
+            !crate::catalog::group_subverbs("cells").contains(&"tier".to_string()),
+            "and `bee cells` must not advertise it"
+        );
+
+        let (entry, rest) = crate::catalog::resolve(&["cells", "escalate"])
+            .expect("cells escalate must be in the registry payload");
+        assert_eq!(entry.name, "cells.escalate");
+        assert!(rest.is_empty(), "{rest:?}");
+        assert!(entry.unavailable.is_none(), "the dispatcher serves it, so no unavailable marker");
+        assert_eq!(entry.required, vec!["id".to_string()], "only --id is required");
+        for flag in ["id", "reason", "off", "json"] {
+            assert!(entry.properties.contains_key(flag), "--{flag} is undeclared");
+        }
+        // No enum anywhere on it: D4 retires the closed three-value list with
+        // the selector, and nothing replaces it.
+        for (flag, schema) in entry.properties.iter() {
+            assert!(schema.get("enum").is_none(), "--{flag} must carry no enum: {schema}");
+        }
     }

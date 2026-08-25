@@ -8,7 +8,7 @@
 // cross-lane pool and the hold filters, then the shared claim half.
 //
 // MUTATING (this wave): add, update, claim, cap, finish, block, drop,
-// unclaim, reopen, tier, judge, reset-budget, judge-record, schedule,
+// unclaim, reopen, escalate, judge, reset-budget, judge-record, schedule,
 // archive, unarchive — each mirroring bee.mjs's dispatch frame (root resolve
 // -> manifest-drift check -> handler -> emit/emitError -> timing) and the
 // lib/cells.mjs mutators behind it: the same `cells:<id>` /

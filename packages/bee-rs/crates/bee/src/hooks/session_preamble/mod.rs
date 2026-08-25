@@ -100,10 +100,14 @@ const NO_TEST_SENTINEL: &str = "none";
 /// cells.mjs CEILING_MAX_SHARE / SCARCITY_MIN_TIERED.
 const CEILING_MAX_SHARE: f64 = 0.4;
 
-const SCARCITY_MIN_TIERED: i64 = 3;
+/// model-role-split D6: was SCARCITY_MIN_TIERED, a floor on "cells that
+/// recorded a tier". Nothing records a tier any more, so that floor would sit
+/// at 0 forever. Same number, honest subject: the feature's cells.
+const SCARCITY_MIN_CELLS: i64 = 3;
 
-/// cells.mjs MODEL_TIERS.
-const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
+// model-role-split D4/D6: this module's private `MODEL_TIERS` copy is gone.
+// Its one reader was `store.rs`'s ceiling-scarcity count, which now reads the
+// escalation flag — there is no list of legal names left to keep in step.
 
 /// inject.mjs NO_WORK_PHASES.
 const NO_WORK_PHASES: [&str; 2] = ["idle", "compounding-complete"];

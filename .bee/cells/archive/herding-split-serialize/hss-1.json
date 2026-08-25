@@ -49,7 +49,7 @@
     "verify_passed": null,
     "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
     "claimed_at": "2026-08-21T13:11:28.852Z",
-    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled (no owner enable marker); the only in-family claude slots are review=opus and advisor=fable, so the model-guard sanctioned ceiling is the honest execution tier here",
+    "tests": "boundary",
     "report": {
       "outcome": "Cross-process pane-split file lock module added, with acquire wait budget, two-tier stale takeover, identity-checked Drop release, and 5 unit tests including a real 8-thread contention test",
       "commit": "9e4b1eb4e36bc32ce16e448b4ff6d46038556e94",
@@ -65,8 +65,10 @@
     "warnings": [
       "advisory: this cap's commit changes 485 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "escalation_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled (no owner enable marker); the only in-family claude slots are review=opus and advisor=fable, so the model-guard sanctioned ceiling is the honest execution tier here"
   },
   "decisions": [],
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }

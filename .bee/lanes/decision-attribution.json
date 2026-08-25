@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "feature": "decision-attribution",
+  "mode": null,
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"decision-attribution\" started at phase \"exploring\" (lane).",
+  "next_action": "bee close finished \"decision-attribution\" — feature is closed.",
+  "created_at": "2026-08-25T12:14:02.772Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Just the artifact scratch file. The page is published, so the local copy can go.",
+    "asked_at": "2026-08-25T15:33:41.390Z",
+    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-08-25T12:14:34.071Z",
+    "feature": "decision-attribution"
+  },
+  "last_scribing_run": {
+    "feature": "decision-attribution",
+    "date": "2026-08-25",
+    "at": "2026-08-25T14:37:32.535Z",
+    "areas_synced": [
+      "decision-memory"
+    ],
+    "next_action": "Awaiting the user's uat gate."
+  }
+}

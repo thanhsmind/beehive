@@ -89,5 +89,6 @@
       "advisory: this cap's commit changes 239 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
     "tests": "boundary"
-  }
+  },
+  "role": "code"
 }

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "exclusive-create-atomic",
   "mode": null,
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"exclusive-create-atomic\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"exclusive-create-atomic\" (lane).",
+  "next_action": "bee close finished \"exclusive-create-atomic\" — feature is closed.",
   "created_at": "2026-08-25T10:16:42.698Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Nothing to add. Checking whether the merge is unblocked yet.",
-    "asked_at": "2026-08-25T10:35:51.474Z",
-    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -29,11 +24,13 @@
     "updated_at": "2026-08-25T10:16:42.709Z",
     "feature": "exclusive-create-atomic"
   },
-  "merge_ready": {
-    "since": "2026-08-25T10:28:30.741Z",
-    "branch": "wt/exclusive-create-atomic",
-    "worktree_id": "beehive--wt--exclusive-create-atomic",
-    "uat": "approved",
-    "blocked_by": []
+  "last_scribing_run": {
+    "feature": "exclusive-create-atomic",
+    "date": "2026-08-25",
+    "at": "2026-08-25T11:19:56.852Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "The same exclusive-create shape exists at ten other sites that are correct because their losers only test existence; revisit if any gains a content read."
   }
 }

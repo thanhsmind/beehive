@@ -1,0 +1,73 @@
+{
+  "id": "mrs-10",
+  "feature": "model-role-split",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Ship config defaults only for the roles bee itself asks for",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 3, the publishing half of D3 (store 3c9d6262): bee ships config defaults ONLY for the role names its own dispatch sites ask for, and every other job name is the user's to invent. With decision 561e1bda the asked-for names are code, read, review, advisor plus the historical tail names generation and extraction. Decide, and state the reasoning on the cap, which of those a FRESH onboarding writes into a new host's .bee/config.json — a name bee asks for but does not ship as a default is legal and resolves by fall-through, so shipping fewer is a real option and may be the better one. DO NOT change what an EXISTING host's config means: mrs-6 already rebased agent rendering onto roles, and an existing config carrying generation and extraction must keep resolving exactly as it does today. A published default is a name bee consumes, never a suggestion nobody reads — if you cannot justify a name as consumed, do not ship it.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard",
+  "must_haves": {
+    "truths": [
+      "A fresh onboarding writes config defaults only for names bee's own dispatch sites ask for, and the cap justifies each one as consumed",
+      "An existing config carrying the historical names resolves exactly as it does today",
+      "No name is shipped as a default merely as a suggestion"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "3c9d6262",
+    "561e1bda"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w10",
+    "outcome": "A fresh .bee/config.json publishes code and read alongside the kept extraction/generation tail; review and advisor stay unshipped",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+    ],
+    "deviations": [
+      "Shipped 2 of the 4 names the plan S4 row listed (code, read, not review, advisor). Named reason: publishing and asking are different acts (561e1bda), and review/advisor already resolve without a config key, so a default for either is a product decision rather than a publishing one.",
+      "mrs-6 left a note that D3 prepends its published names to AGENT_ROLES_BY_NAME. I did NOT prepend: bee-gather serves the gather dispatch at generation strength, so prepending read there would downgrade it haiku-ward, and that is the asking half call. AGENT_ROLES_BY_NAME is unchanged.",
+      "REGEN OWED (mrs-11 or a docs cell): .bee/config-sample.json documents models.claude/codex with extraction, generation, review and advisor, and now lacks code and read. It is embedded via include_str! and no longer mirrors what onboarding writes. No rendered agent file changed, so no agent-tree regen is owed.",
+      "FOLLOWUP for the asking half (S4): resolve_role warns on every dispatch for a name absent from both the host config and drivers::default_models. code and read are exactly that for EXISTING hosts, which a fresh-config default cannot fix. S4 must decide whether default_models gains code/read or the warn is narrowed.",
+      "FOUND, not fixed: a fresh claude host reviewer dispatch resolves to sonnet, not opus, because mid-list entries never consult default_models, while bee-review rendered agent file is pinned to opus by AGENT_TIER_DEFAULTS_CLAUDE. The two paths already disagree today; shipping a review default would have hidden that, not fixed it.",
+      "CAPTURE: a published config default is only worth shipping for a name the config file itself must carry for the tool own door to accept it. Every other asked-for name already resolves, and writing it turns a publishing act into a product decision."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T04:29:44.457Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:19:36.443Z",
+    "report": {
+      "outcome": "A fresh .bee/config.json now publishes models.<runtime>.code and .read and keeps extraction/generation; review and advisor stay unshipped. The test applied to each of the six asked-for names: ship a default ONLY for a name a host own models.<runtime> table must carry for bee own dispatch door to accept it. known_roles = config keys UNION every slot_for_kind answer UNION ceiling, and dispatch prepare refuses (role_not_configured) anything outside it. code and read are answered by no slot_for_kind and are absent from drivers::default_models, so with no config key a cell carrying role: code (D9 backfills 504 of 506 cells onto it) is refused at the door. SHIPPED, and consumed today rather than waiting on the asking half. extraction is reachable only through its own config key too, so it is KEPT for the same reason: dropping it would make --role extraction a refusal on every fresh host. generation is KEPT as the historical tail 561e1bda exists to protect. review and advisor are NOT shipped: both already sit in known_roles via slot_for_kind, so shipping adds no legality, and a value would decide a product question this cell does not own. A review=opus default silently moves every new host reviews off the documented unset-review-to-generation posture, and advisor has no fall-through (4faf1de9), so a value switches the advisor on for everyone while an explicit null spells that same off as a REFUSAL instead of an absence. The two added values are today models (code=sonnet=generation, read=haiku=extraction), so no fresh host model moves; codex stays all-null by design. default_config seeds create-if-missing (apply.rs create_runtime_file), so no existing host config changes meaning.",
+      "commit": "6b084dcc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard — green (140 passed, 0 failed; onboard::templates::tests::default_config_publishes_only_the_roles_bee_asks_for named in the output) — the onboard filter covers the whole reader set of default_config(), which only apply.rs consumes",
+      "deviations": [
+        "Shipped 2 of the 4 names the plan S4 row listed (code, read, not review, advisor). Named reason: publishing and asking are different acts (561e1bda), and review/advisor already resolve without a config key, so a default for either is a product decision rather than a publishing one.",
+        "mrs-6 left a note that D3 prepends its published names to AGENT_ROLES_BY_NAME. I did NOT prepend: bee-gather serves the gather dispatch at generation strength, so prepending read there would downgrade it haiku-ward, and that is the asking half call. AGENT_ROLES_BY_NAME is unchanged.",
+        "REGEN OWED (mrs-11 or a docs cell): .bee/config-sample.json documents models.claude/codex with extraction, generation, review and advisor, and now lacks code and read. It is embedded via include_str! and no longer mirrors what onboarding writes. No rendered agent file changed, so no agent-tree regen is owed.",
+        "FOLLOWUP for the asking half (S4): resolve_role warns on every dispatch for a name absent from both the host config and drivers::default_models. code and read are exactly that for EXISTING hosts, which a fresh-config default cannot fix. S4 must decide whether default_models gains code/read or the warn is narrowed.",
+        "FOUND, not fixed: a fresh claude host reviewer dispatch resolves to sonnet, not opus, because mid-list entries never consult default_models, while bee-review rendered agent file is pinned to opus by AGENT_TIER_DEFAULTS_CLAUDE. The two paths already disagree today; shipping a review default would have hidden that, not fixed it.",
+        "CAPTURE: a published config default is only worth shipping for a name the config file itself must carry for the tool own door to accept it. Every other asked-for name already resolves, and writing it turns a publishing act into a product decision."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role": "code"
+}

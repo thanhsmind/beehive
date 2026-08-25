@@ -8,6 +8,7 @@ use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, Read
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
 use crate::roots::Roots;
+use crate::textutil::truncate_chars_head;
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
     js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
@@ -415,6 +416,162 @@ pub(crate) fn do_redact(root: &Path, redacts: &str, reason: &str, lock_retries: 
 
     let text = format!("Redacted {}.", js_disp_opt(jget(&event, "redacts")));
     Ok(Out::Emit(event, text, 0))
+}
+
+// ─── decisions reattribute ─────────────────────────────────────────────────
+
+/// decision-attribution D5: the feature a decision's own text claims, when it
+/// opens with the `<slug> D<n>` convention every provable mis-stamp followed.
+///
+/// Deliberately strict. The slug must be lowercase alphanumerics and dashes,
+/// followed by a single space, `D`, and at least one digit. Anything else
+/// returns `None` and the record is left alone — this reads a claim the record
+/// already makes about itself, it never infers one.
+pub(crate) fn feature_from_decision_text(text: &str) -> Option<String> {
+    let t = js_trim(text);
+    let (slug, rest) = t.split_once(' ')?;
+    if slug.is_empty() || slug.len() > 64 {
+        return None;
+    }
+    if !slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+        return None;
+    }
+    if !slug.chars().any(|c| c.is_ascii_lowercase()) {
+        return None;
+    }
+    let marker = rest.strip_prefix('D')?;
+    let digits: String = marker.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    Some(slug.to_string())
+}
+
+/// decision-attribution D5: one planned correction.
+pub(crate) struct Reattribution {
+    pub(crate) id: String,
+    pub(crate) from: String,
+    pub(crate) to: String,
+}
+
+/// decision-attribution D5: decide, for one already-parsed event, whether its
+/// stamp contradicts its own text.
+///
+/// Acts ONLY on a contradiction: the record carries a `feature`, its text
+/// names a feature, and the two differ. A record with NO stamp is left
+/// unstamped — post-D1 that is a legitimate, common state, and filling it in
+/// from a prose convention would be the inference D2 explicitly rejected.
+pub(crate) fn plan_reattribution(event: &Value) -> Option<Reattribution> {
+    let id = jget(event, "id").and_then(Value::as_str)?.to_string();
+    let stamped = jget(event, "feature").and_then(Value::as_str)?;
+    if js_trim(stamped).is_empty() {
+        return None;
+    }
+    let text = jget(event, "decision").and_then(Value::as_str)?;
+    let claimed = feature_from_decision_text(text)?;
+    if claimed == js_trim(stamped) {
+        return None;
+    }
+    Some(Reattribution { id, from: js_trim(stamped).to_string(), to: claimed })
+}
+
+pub(crate) fn run_reattribute(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["dry-run"]) {
+        return None;
+    }
+    let dry_run = bool_flag_present(&flags, "dry-run")?;
+    let ctx = match decisions_prelude("decisions reattribute", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+    let out = do_reattribute(&ctx.root, dry_run, DECISIONS_LOCK_RETRY_ATTEMPTS);
+    finish(&ctx, out)
+}
+
+/// decision-attribution D5. The lock is held across the WHOLE pass — the read
+/// as well as the write. `cells backfill-roles` shipped a scan outside its
+/// lock and silently reversed an operator's concurrent write; sibling sessions
+/// append to this file continuously, so the same shape would lose decisions.
+/// Every untouched line is written back byte-for-byte, so only the records
+/// this verb corrects can differ at all.
+pub(crate) fn do_reattribute(root: &Path, dry_run: bool, lock_retries: u32) -> R2<Out> {
+    let path = decisions_path(root);
+    let guard = acquire_decisions_lock(root, lock_retries).map_err(Err2::Msg)?;
+
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => {
+            drop(guard);
+            return Ok(Out::Emit(
+                json!({"scanned": 0, "changed": 0, "dry_run": dry_run, "changes": []}),
+                "decisions reattribute: no decisions store — nothing to do.".to_string(),
+                0,
+            ));
+        }
+    };
+
+    let mut scanned = 0usize;
+    let mut changes: Vec<Reattribution> = Vec::new();
+    let mut out_lines: Vec<String> = Vec::new();
+    for line in raw.lines() {
+        if js_trim(line).is_empty() {
+            out_lines.push(line.to_string());
+            continue;
+        }
+        scanned += 1;
+        let Ok(mut event) = serde_json::from_str::<Value>(line) else {
+            // Unparseable lines are never rewritten, only carried through.
+            out_lines.push(line.to_string());
+            continue;
+        };
+        match plan_reattribution(&event) {
+            None => out_lines.push(line.to_string()),
+            Some(plan) => {
+                if let Some(obj) = event.as_object_mut() {
+                    // `preserve_order` keeps the key in place, so the line
+                    // differs in this value and nothing else.
+                    obj.insert("feature".into(), Value::String(plan.to.clone()));
+                }
+                out_lines.push(serde_json::to_string(&event).map_err(|_| Err2::Ex)?);
+                changes.push(plan);
+            }
+        }
+    }
+
+    if !dry_run && !changes.is_empty() {
+        let tmp = path.with_extension("jsonl.reattribute.tmp");
+        let mut body = out_lines.join("\n");
+        body.push('\n');
+        let write = std::fs::write(&tmp, body).and_then(|()| std::fs::rename(&tmp, &path));
+        if write.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+            drop(guard);
+            return Err(Err2::Ex);
+        }
+    }
+    drop(guard);
+
+    let listed: Vec<Value> = changes
+        .iter()
+        .map(|c| json!({"id": c.id, "from": c.from, "to": c.to}))
+        .collect();
+    let verb = if dry_run { "would correct" } else { "corrected" };
+    let mut text = format!(
+        "decisions reattribute{}: {scanned} decision(s) scanned, {verb} {}.",
+        if dry_run { " --dry-run" } else { "" },
+        changes.len()
+    );
+    for c in &changes {
+        text.push_str(&format!("\n  {} : {} -> {}", truncate_chars_head(&c.id, 8), c.from, c.to));
+    }
+    if dry_run && !changes.is_empty() {
+        text.push_str("\nNothing was written. Re-run without --dry-run to apply.");
+    }
+    Ok(Out::Emit(
+        json!({"scanned": scanned, "changed": changes.len(), "dry_run": dry_run, "changes": listed}),
+        text,
+        0,
+    ))
 }
 
 // ─── decisions archive ─────────────────────────────────────────────────────

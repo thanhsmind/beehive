@@ -48,5 +48,6 @@
     "swept_at": "2026-08-19T09:56:44.521Z",
     "swept_from_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
     "blocked_reason": "swept by bee: session \"837fbcd4-540d-49a6-a882-7366f6bc3f97\"'s claim on this cell expired and its heartbeat went stale; its half-finished work, if any, may be at worktree \"/home/thanhsmind/projects/goglbe/beehive\" (workspace \"main\")."
-  }
+  },
+  "role": "code"
 }

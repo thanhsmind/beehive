@@ -1,0 +1,91 @@
+{
+  "id": "hm-2",
+  "feature": "human-mailbox",
+  "title": "Append an entry at a clean stop while the run is armed",
+  "action": "Append one raw entry the moment a clean stop happens (D4), starting with a cell cap. Recognise whether the run is armed from .bee/config.json's herding block (D9). Every session appends its entries whether attended or not (D9); only an armed run will later compose a letter. The plain-language sentence is written at the moment of the event, not at composition (D8). Resolve plan.md's deferred question of how each clean stop reaches the append hook by tracing outward from handlers_close.rs, and record what you find for the remaining stop kinds even if only the cap lands in this cell.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "hm-1"
+  ],
+  "must_haves": {
+    "truths": [
+      "Capping a cell appends one entry to the store at the moment of the cap (D4).",
+      "Entries are appended whether the session is attended or unattended; only arming decides whether a letter is later composed (D9).",
+      "Arming is read from the existing .bee/config.json herding block rather than a new signal.",
+      "The entry carries the plain-language sentence written at the moment of the event (D8).",
+      "An unarmed run's cap path stays byte-identical to today (D10).",
+      "How the other clean stops — feature close and blocker — reach the append hook is traced and recorded, even where only the cap is wired in this cell."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "acceptance": "A cap in any run appends its entry; arming is read from the herding block; the unarmed cap path is byte-identical to today; the route from every clean stop to the append hook is recorded.",
+  "role": "code",
+  "status": "capped",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-2",
+    "outcome": "Every cap now appends its human-mailbox entry the moment it lands, with the plain sentence written then; arming reads the herding block plus the owner switch and gates only the letter",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+    ],
+    "deviations": [
+      {
+        "what": "Arming requires the owner enable marker as well as the config herding block",
+        "why": "The herding block alone answers only that the checkout CAN herd, so every attended session in a herding repo would have filed a letter, which D9 excludes; the marker is bee existing arming switch, not a new signal",
+        "kind": "the plan was wrong about a fact"
+      },
+      {
+        "what": "The run is the session span, not the herding job id",
+        "why": "D9 and D12 both describe a run in sessions, and one night dispatches many jobs, which would shatter D11 one-letter-per-run",
+        "kind": "found a better route"
+      },
+      "sync-ack: phase 1 changes no contract a skill documents: no flag, no Result form and no worker instruction moves here (the cell declares affects_skills []). plan.md puts the worker-prompt and bee-swarming re-wording in phase 2, with the departure contract that actually changes what a worker must type"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T14:58:38.009Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T14:43:32.309Z",
+    "sync_ack": "phase 1 changes no contract a skill documents: no flag, no Result form and no worker instruction moves here (the cell declares affects_skills []). plan.md puts the worker-prompt and bee-swarming re-wording in phase 2, with the departure contract that actually changes what a worker must type",
+    "inline_reason": "dispatched worker wk-hm-2 ran this cell; dispatch writes no state.workers row and 'bee state worker add' refuses from a worktree (known P2) — recording the named deviation rather than a false inline run",
+    "report": {
+      "outcome": "Every cap appends one human-mailbox entry the moment it lands (D4), unconditionally (D9) and fail-open (D10); the three-stop map is recorded",
+      "commit": "69b2af88",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox && cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells — green (75 passed, 0 failed; 223 passed, 0 failed) — the new store plus every existing cap/finish test on the touched door",
+      "deviations": [
+        {
+          "what": "Arming requires the owner enable marker as well as the config herding block",
+          "why": "The herding block alone answers only that the checkout CAN herd, so every attended session in a herding repo would have filed a letter, which D9 excludes; the marker is bee existing arming switch, not a new signal",
+          "kind": "the plan was wrong about a fact"
+        },
+        {
+          "what": "The run is the session span, not the herding job id",
+          "why": "D9 and D12 both describe a run in sessions, and one night dispatches many jobs, which would shatter D11 one-letter-per-run",
+          "kind": "found a better route"
+        }
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 503 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -49,5 +49,6 @@
     "warnings": [],
     "feature_verify": "pending"
   },
-  "tier": "generation"
+  "tier": "generation",
+  "role": "code"
 }

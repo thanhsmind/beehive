@@ -1,0 +1,79 @@
+{
+  "id": "mrs-7",
+  "feature": "model-role-split",
+  "lane": "small",
+  "tier": "extraction",
+  "title": "Reconcile the swarming reference with the one dispatch door",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/plan.md",
+    "AGENTS.md"
+  ],
+  "action": "Slice 2, the documentation half of D12's carrier. Today the swarming reference tells an agent to name subagent_type bee-extract for the extraction tier (swarming-reference.md:104-114 and :294) while AGENTS.md forbids hand-picking subagent_type and the one door lists only four kinds — an agent obeying both cannot dispatch a read-only worker at all. Decision 8dad7c2e names resolving this contradiction as one of its consequences. Once mrs-5 makes every rendered agent returnable through the door, rewrite these lines so the door is the only spelling and the agent names appear solely as what prepare RETURNS. Do NOT hand-edit the four mirror trees under .claude/, .codex-plugin/, .opencode/ and .claude-plugin/: skills/ is the source and the mirrors are rendered, differing from it by intended runtime-conditional blocks. Run the regen chain inside this cell — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and let it write them. PROOF NOTE: the mirrors are NOT byte-identical to skills/ — three files differ by design — so the proof is that regen runs clean, release-manifest --check passes, and each tree matches its own render; never a byte-identity diff.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "No shipped instruction tells an agent to hand-pick a subagent_type",
+      "The read-only worker is dispatchable by following the docs alone, with no contradiction against AGENTS.md",
+      "The four mirror trees are written by the regen chain, not by hand, and bee dev release-manifest --check passes"
+    ]
+  },
+  "affects_skills": [
+    "bee-swarming",
+    "bee-hive"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "8dad7c2e"
+  ],
+  "deps": [
+    "mrs-5"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w7",
+    "outcome": "Rewrote swarming-reference's read-only worker spawn instructions and Subagent-type table row to route through bee dispatch prepare --kind gather --role extraction; agent names appear only as what prepare returns",
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "gates-and-delegation.md stayed in scope but unedited: its subagent_type mention already reads as prepare-returns-only plus documented guard leniency (D2), never an instruction to hand-pick; editing it risked reinterpreting a locked decision outside the named contradiction at swarming-reference.md:104-114 and :294.",
+      "sync-ack: gates-and-delegation.md (bee-hive skill) was in cell scope but deliberately left unedited: its subagent_type mention already reads as prepare-returns-only plus documented guard leniency (D2), not an instruction to hand-pick, so no edit was needed there — only bee-swarming's swarming-reference.md carried the named contradiction (lines 104-114 and 294)"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T04:10:00.369Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:02:54.682Z",
+    "sync_ack": "gates-and-delegation.md (bee-hive skill) was in cell scope but deliberately left unedited: its subagent_type mention already reads as prepare-returns-only plus documented guard leniency (D2), not an instruction to hand-pick, so no edit was needed there — only bee-swarming's swarming-reference.md carried the named contradiction (lines 104-114 and 294)",
+    "report": {
+      "outcome": "Reconciled swarming-reference.md's two subagent_type hand-pick spots with the one dispatch door via --role extraction; ran bee dev regen to sync mirrors and manifest.",
+      "commit": "02ff06b8",
+      "files": [
+        "skills/bee-swarming/references/swarming-reference.md",
+        ".claude/skills/bee-swarming/references/swarming-reference.md",
+        ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".bee/backlog.jsonl",
+        ".bee/decisions.jsonl"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools && bee dev release-manifest --check — green (86 devtools tests passed; 270/270 manifest files match) — the cell's own verify command, proving the regen chain output matches the committed manifest",
+      "deviations": [
+        "gates-and-delegation.md stayed in scope but unedited: its subagent_type mention already reads as prepare-returns-only plus documented guard leniency (D2), never an instruction to hand-pick; editing it risked reinterpreting a locked decision outside the named contradiction at swarming-reference.md:104-114 and :294."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role": "read"
+}

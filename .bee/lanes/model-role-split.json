@@ -2,22 +2,22 @@
   "schema_version": "1.0",
   "feature": "model-role-split",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"model-role-split\" started at phase \"exploring\" (lane).",
-  "next_action": "model-role-split review APPROVED, both P1s fixed, merge BLOCKED on a dirty main owned by other sessions (human-mailbox tickets; beehive-7a's eca-1/sll-1 cells and lanes; test-exec-race lane; deferred-queue). Retry bee worktree merge --id beehive--wt--model-role-split once they commit.",
+  "next_action": "bee close finished \"model-role-split\" — feature is closed.",
   "created_at": "2026-08-24T18:50:51.857Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "needs input: have that session commit `docs/discovery/human-mailbox/`, `docs/history/human-mailbox/` and its trigger file — or tell me to co",
-    "asked_at": "2026-08-25T11:06:50.412Z",
+    "subject": "result: model-role-split fully closed — UAT approved, all five blocking close doors settled, knowledge concept and learnings landed, 34 cell",
+    "asked_at": "2026-08-25T12:03:46.911Z",
     "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
   },
   "route": {
@@ -35,11 +35,14 @@
     "updated_at": "2026-08-24T18:50:59.929Z",
     "feature": "model-role-split"
   },
-  "merge_ready": {
-    "since": "2026-08-25T04:10:00.386Z",
-    "branch": "wt/model-role-split",
-    "worktree_id": "beehive--wt--model-role-split",
-    "uat": "pending",
-    "blocked_by": []
+  "last_scribing_run": {
+    "feature": "model-role-split",
+    "date": "2026-08-25",
+    "at": "2026-08-25T11:47:19.372Z",
+    "areas_synced": [
+      "doctrine-layer",
+      "workflow-state"
+    ],
+    "next_action": "Judge door is the only blocker left: 25 behavior_change cells need independent judge verdicts."
   }
 }

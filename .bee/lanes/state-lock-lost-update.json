@@ -2,18 +2,18 @@
   "schema_version": "1.0",
   "feature": "state-lock-lost-update",
   "mode": null,
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"state-lock-lost-update\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"state-lock-lost-update\" (lane).",
+  "next_action": "bee close finished \"state-lock-lost-update\" — feature is closed.",
   "created_at": "2026-08-25T10:40:43.042Z",
-  "run_state": "awaiting-approval",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,5 +23,14 @@
     "rationale": "A state worker add entry is lost during a stale-lock steal: w0 dies, state.json stays well-formed, ~9-12% solo on three trees. Two candidate mechanisms already eliminated by reading; needs instrumentation.",
     "updated_at": "2026-08-25T10:40:43.052Z",
     "feature": "state-lock-lost-update"
+  },
+  "last_scribing_run": {
+    "feature": "state-lock-lost-update",
+    "date": "2026-08-25",
+    "at": "2026-08-25T11:20:49.469Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "The takeover claims are tombstones swept past HARD_STALE_MS; watch that the sweep keeps pace under sustained contention."
   }
 }

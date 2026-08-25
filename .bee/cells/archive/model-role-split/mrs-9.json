@@ -1,0 +1,83 @@
+{
+  "id": "mrs-9",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Head each dispatch's role list with the cell's own role",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 3, D3 (store 3c9d6262) with its literal lists fixed by decision 561e1bda. A cell-execution dispatch asks for the ordered list [<the cell's own role>, code, generation]; a read dispatch asks [read, extraction, generation]; a review dispatch asks [review, generation]; the advisor asks [advisor] ALONE with no fall-through, preserving 4faf1de9. THE TAIL IS LOAD-BEARING: fall-through walks to the first name that resolves, so ending a list at code would skip past the generation model every existing host has configured for years and land on bee's built-in default — a silent migration onto a different model, the exact defect this feature exists to remove. Read 561e1bda before changing any list. prepare.rs already prefers a cell's own recorded value over the kind default and stamps tier_source cell (the mechanism mrs-5 extended with --role, stamping tier_source flag); reuse it, do not add a second path. Precedence to preserve: an explicit --role names the slot directly; otherwise the cell's role heads the list; otherwise the kind's default. Record on the cap what tier_source values a caller can now observe and when. SECOND JOB, handed over by mrs-10 (commit 6b084dcc) and NOT optional: resolve_role emits a warning for any name absent from BOTH the host config and drivers::default_models. On an EXISTING host, code and read are exactly that, so with these lists every single cell dispatch would warn. A warning that fires on every dispatch is a warning operators learn to ignore, and this feature's entire safety rests on that warning being believed — so silencing it correctly is part of this cell, not a follow-up. Two candidate fixes, and you choose with the reason on the cap. (a) drivers::default_models gains code and read. mrs-10 observed that mid-list entries never consult default_models — resolve_role reaches it only at the LAST entry — so this should silence the membership-based warn WITHOUT changing which model resolves anywhere. VERIFY that claim in the code before relying on it; if it is wrong, (a) is a silent migration and must be rejected. (b) Narrow the warn to the name the CALLER actually asked for — the head of the list, or an explicit --role — and stay silent while walking bee's own tail, since a tail entry is bee's plumbing and not the operator's request. Whichever you take, prove BOTH properties on the cap: no dispatch on an existing host warns routinely, AND a cell naming a genuinely unconfigured job role (say role: test with no models.<runtime>.test) still warns loudly. Losing that second property would defeat the feature.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A cell carrying role test resolves models.<runtime>.test when configured",
+      "A cell whose role nothing configures falls through to the historical name and runs exactly where it ran before this feature — no host sees a model change without opting in",
+      "--role still names the slot directly and outranks the cell's role",
+      "The advisor list has no fall-through",
+      "No dispatch on an existing host warns routinely — the code/read tail is silent",
+      "A cell naming a genuinely unconfigured job role still warns loudly; the warn is not blanket-silenced",
+      "The cap names every tier_source value a caller can observe and the condition for each, and states which warn fix was taken and why"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "3c9d6262",
+    "561e1bda",
+    "4faf1de9"
+  ],
+  "deps": [
+    "mrs-8"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w9",
+    "outcome": "A cell execution resolves the model from the role the cell declares, heading 561e1bda's ordered list with the historical tail intact",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Reserved and edited packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, a fourth file the cell did not list: BOTH warn fixes the cell offered live in that file (default_models, resolve_role/warn_unknown_role), so the cell mandated work there while listing only two files",
+      "Rejected the cell hinted fix (a): mrs-10 claim that mid-list entries never consult default_models is FALSE in the path that matters — normalize_models seeds default_models into the very table resolve_role walks, so adding code/read there makes a MID-list code resolve and silently outrank every existing host generation model. Took (b), narrowed by provenance rather than by list position: head-only narrowing also fails, because on an existing host the head IS code for nearly every cell",
+      "Changed the [bee-tier: …] marker, logical_tier, pinned_agent_type and the herding fallback lookup to name the role that RESOLVED rather than the role asked for. Not in the cell text, but required by its own must-have: model_guard classify_marker DENIES a marker naming a role nothing configures, so an unresolved code marker would refuse every cell dispatch on every host that has not opted in",
+      "Left the pre-mrs-8 (role-less) cell path on its recorded tier, refusal included, so no legacy record changes model or answer; the cell body kept its ceiling handling",
+      "The two warn properties are proven empirically, not only by predicate: running the fall-through test with --nocapture emits exactly one warn line, for the invented role design, and none for code"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T04:50:12.706Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:31:50.991Z",
+    "report": {
+      "outcome": "A cell execution resolves the model from the role the cell declares: [<cell role>, code, generation], read cells [read, extraction, generation], review [review, generation], advisor alone. tier_source values a caller can observe are unchanged at flag (an explicit --role), cell (the cell own recorded role, or a pre-mrs-8 record tier when it carries no role) and default (the kind slot, non-cell kinds and a cell with neither field). Warn fix (b): bee own tail names code/read are exempt via ASKED_ROLES; option (a) rejected because normalize_models seeds default_models INTO the walked table, so a mid-list code would resolve and outrank the host generation model. Marker and logical_tier now name the RESOLVED role, without which the model-guard would deny every cell dispatch on a host that has not opted in.",
+      "commit": "f60710da",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers hooks::model_guard — green (278 passed, 0 failed); full --bin bee suite green at 2599 passed — scoped to the resolver, the dispatch door and the guard that reads the marker back, the three surfaces this cell moved; the 4 opencode_plugin_contracts failures are the known node-TS environment noise and registry_dispatch::every_namespace_the_dispatcher_serves_is_declared_in_the_registry fails identically with my three files stashed, so it is a pre-existing red on this base, not this cell",
+      "deviations": [
+        "Reserved and edited packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, a fourth file the cell did not list: BOTH warn fixes the cell offered live in that file (default_models, resolve_role/warn_unknown_role), so the cell mandated work there while listing only two files",
+        "Rejected the cell hinted fix (a): mrs-10 claim that mid-list entries never consult default_models is FALSE in the path that matters — normalize_models seeds default_models into the very table resolve_role walks, so adding code/read there makes a MID-list code resolve and silently outrank every existing host generation model. Took (b), narrowed by provenance rather than by list position: head-only narrowing also fails, because on an existing host the head IS code for nearly every cell",
+        "Changed the [bee-tier: …] marker, logical_tier, pinned_agent_type and the herding fallback lookup to name the role that RESOLVED rather than the role asked for. Not in the cell text, but required by its own must-have: model_guard classify_marker DENIES a marker naming a role nothing configures, so an unresolved code marker would refuse every cell dispatch on every host that has not opted in",
+        "Left the pre-mrs-8 (role-less) cell path on its recorded tier, refusal included, so no legacy record changes model or answer; the cell body kept its ceiling handling",
+        "The two warn properties are proven empirically, not only by predicate: running the fall-through test with --nocapture emits exactly one warn line, for the invented role design, and none for code"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role": "code"
+}

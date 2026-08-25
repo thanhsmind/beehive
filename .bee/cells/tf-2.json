@@ -47,5 +47,6 @@
     "verify_passed": null,
     "claim_session": null,
     "dropped_reason": "Duplicate stale record resurrected by the two-flows worktree merge; the authoritative capped record is .bee/cells/archive/two-flows/tf-2.json"
-  }
+  },
+  "role": "code"
 }

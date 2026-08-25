@@ -46,5 +46,6 @@
     "warnings": [],
     "feature_verify": "pending"
   },
-  "tier": "extraction"
+  "tier": "extraction",
+  "role": "read"
 }

@@ -300,32 +300,62 @@ pub(crate) fn global_scribing_debt(root: &Path) -> (usize, Vec<(String, Vec<Valu
     (count, features)
 }
 
-/// cells.mjs ceilingScarcityWarning -> (pct, ceiling, tiered).
+/// Is this cell escalated onto the session model? (D5, store 97ce5225.)
+///
+/// A LIFT of `verbs/cells/validate.rs`'s `cell_is_escalated`, not a second
+/// implementation — one flag, one legacy spelling — following the precedent
+/// `verbs/cells/handlers_close.rs` set at this same module boundary. The
+/// published predicate takes a `&Value`; every cell here is already a `JMap`
+/// and cloning ~500 of them per preamble render to satisfy the signature
+/// would be the wrong trade. What it must NOT do is restate the field NAMES,
+/// so it reads the same two constants the published predicate reads: a rename
+/// there fails the build here rather than silently zeroing this counter.
+fn map_is_escalated(cell: &JMap) -> bool {
+    if matches!(cell.get(crate::verbs::cells::ESCALATE_FIELD), Some(Value::Bool(true))) {
+        return true;
+    }
+    matches!(cell.get("tier"), Some(Value::String(t)) if t == crate::verbs::drivers::ESCALATION_WORD)
+}
+
+/// cells.mjs ceilingScarcityWarning -> (pct, escalated, cells).
+///
+/// D6 (store 97ce5225) moved both halves of this arithmetic, and the second
+/// one is a correction rather than a translation — the same one
+/// `handlers_close.rs`'s ration took (store b39d045f).
+///
+/// WHICH cells count: the escalation flag, with the legacy `tier: "ceiling"`
+/// spelling still honoured. Before this change a cell carrying
+/// `escalate: true` and no `tier` at all was INVISIBLE here — the enforcing
+/// door already read the flag while this advice line still watched a tier
+/// value, so the preamble could report all-clear on a feature the ration
+/// would have refused.
+///
+/// WHAT they are counted against: the feature's cells, full stop. It used to
+/// be "cells that recorded a tier at all", which is 0 for every cell authored
+/// under D7's required `role`. Left alone, the denominator would go to zero,
+/// `share` would be 0.0, and this warning would report all-clear forever —
+/// which is worse than reporting nothing, because nobody looks at a section
+/// that never appears.
 pub(crate) fn ceiling_scarcity_warning(root: &Path) -> Option<(f64, i64, i64)> {
     let state = read_state(root);
     let feature = state.get("feature").cloned().unwrap_or(Value::Null);
     let filter = if truthy(&feature) { Some(feature) } else { None };
     let cells = list_cells(root, filter.as_ref(), None);
-    let (mut extraction, mut generation, mut ceiling) = (0i64, 0i64, 0i64);
+    let (mut escalated, mut counted) = (0i64, 0i64);
     for cell in &cells {
-        match cell.get("tier").and_then(|t| t.as_str()) {
-            Some(t) if MODEL_TIERS.contains(&t) => match t {
-                "extraction" => extraction += 1,
-                "generation" => generation += 1,
-                _ => ceiling += 1,
-            },
-            _ => {}
+        counted += 1;
+        if map_is_escalated(cell) {
+            escalated += 1;
         }
     }
-    let tiered = extraction + generation + ceiling;
-    if tiered < SCARCITY_MIN_TIERED {
+    if counted < SCARCITY_MIN_CELLS {
         return None;
     }
-    let share = if tiered > 0 { ceiling as f64 / tiered as f64 } else { 0.0 };
+    let share = if counted > 0 { escalated as f64 / counted as f64 } else { 0.0 };
     if share <= CEILING_MAX_SHARE {
         return None;
     }
-    Some((js_round(share * 100.0), ceiling, tiered))
+    Some((js_round(share * 100.0), escalated, counted))
 }
 
 // ─── capture queue (capture.mjs pendingCaptureStubs / captureQueue) ────────

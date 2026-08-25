@@ -1,0 +1,11 @@
+{
+  "id": "the-human-mailbox-record-description-exi__e255fe3a",
+  "decision": "e255fe3a",
+  "condition": "The human-mailbox record description exists in bee's docs: send it to the waggledance side and add the inbox row to waggledance's own backlog (bee backlog add in the waggledance repo), so the frontend inbox work is held by someone there.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "resolved",
+  "created_at": "2026-08-25T10:39:20.731Z",
+  "updated_at": "2026-08-25T10:41:26.427Z",
+  "outcome": "Delivered the same session it was registered. The discovery map itself is the description, so no separate spec doc was needed: the record contract was carried across as PBI p-e9386ebb in the waggledance backlog (bee backlog propose), which now holds the frontend inbox work and cites beehive docs/discovery/human-mailbox/MAP.md for the full spec. docs/backlog.md regenerated on that side."
+}

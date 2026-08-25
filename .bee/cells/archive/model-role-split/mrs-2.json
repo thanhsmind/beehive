@@ -1,0 +1,78 @@
+{
+  "id": "mrs-2",
+  "feature": "model-role-split",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Resolve an ordered role list and refuse to guess an unknown name",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md",
+    "docs/history/model-role-split/plan.md"
+  ],
+  "action": "Per D2 (store 06e49368), widen the single resolver from one slot name to an ORDERED LIST of role names: walk the list, first name that resolves wins, and the caller's last entry is guaranteed to resolve because it falls back to the runtime's built-in default_models entry. THE CENTRAL FIX: models.rs:328 reads `let s = if CONFIGURABLE_SLOTS.contains(&slot) { slot } else { \"generation\" };` — it silently coerces ANY unrecognized name to generation and returns that model, while prepare.rs:1067 stamps tier_source:'cell' so the record asserts the cell chose it. Under an open role set that turns a typo (role: 'tset') into a wrong-model dispatch that completes clean with no red output. That coercion must go: an unconfigured name yields to the next entry and WARNS, and no path may resolve a name the config does not carry without warning. Retire CONFIGURABLE_SLOTS (:37) and MODEL_NORMALIZE_SLOTS (:40) as closed membership lists — any name present in models.<runtime> is legal. Leave the guard's struct-shaped config and its closed tier lists to mrs-3, and slot_for_kind to mrs-4.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A configured custom role name resolves to its model",
+      "An unconfigured or misspelled name NEVER silently resolves a model: it warns and yields to the next list entry",
+      "The last entry of any list always resolves, so a walk cannot dead-end",
+      "An empty list and a one-entry list both behave as specified rather than panicking",
+      "A configured role is still obeyed exactly, per decision 72f3d6dd",
+      "The full suite is green, with every retargeted or deleted test named on the cap"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "06e49368"
+  ],
+  "deps": [
+    "mrs-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w2",
+    "outcome": "resolve_role walks an ordered role list; the unknown-name coercion to generation is gone and warns instead",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Added packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs to scope and reserved it under mrs-w2 — the cell requires retargeted tests be named. Retargeted 2 assertions in resolve_tier_covers_every_documented_slot_shape: resolve_tier(advisor) no longer coerces to generation/sonnet (now Budget), and the cli refusal names slot generation (the slot actually read) instead of review (the slot asked for). Added resolve_role_walks_the_list_and_refuses_to_guess_an_unknown_name. No test deleted.",
+      "MODEL_NORMALIZE_SLOTS deleted outright (nothing used it once normalize_models opened to every configured key). CONFIGURABLE_SLOTS kept, no longer a membership test — it survives as the default_models key list because prepare.rs still imports it; that sweep is mrs-4.",
+      "The stderr warning fires for a name absent from BOTH models.<runtime> and default_models (the typo case). A present-but-null slot yields silently: warning there would print on every dispatch of an unconfigured runtime, where every codex/opencode slot ships null by default.",
+      "The last-entry default_models floor is consulted ONLY for a key the table does not carry. An explicit null resolves to Budget: answering it with the built-in default resurrected the model the config had just cleared, and model_guard::cli_slot_and_empty_and_malformed_model_sets caught it red before this was fixed.",
+      "resolve_tier is kept as the single-name spelling of resolve_role rather than left beside it, so the fix reaches the model-guard and prepare.rs now instead of becoming dead code until mrs-3/mrs-4 sweep their call sites."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T03:09:50.180Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T02:54:52.909Z",
+    "report": {
+      "outcome": "resolve_role walks an ordered role list; the unknown-name coercion to generation is gone and warns instead",
+      "commit": "cbf9b2af",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — the cell verify, whole suite: 2573 unit tests and every integration target green (drivers resolver + model_guard + concurrency included); the only red is 4 opencode_plugin_contracts tests that fail identically at HEAD with this change stashed (env-limited: node v24.19.0 cannot run a .ts file directly)",
+      "deviations": [
+        "Added packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs to scope and reserved it under mrs-w2 — the cell requires retargeted tests be named. Retargeted 2 assertions in resolve_tier_covers_every_documented_slot_shape: resolve_tier(advisor) no longer coerces to generation/sonnet (now Budget), and the cli refusal names slot generation (the slot actually read) instead of review (the slot asked for). Added resolve_role_walks_the_list_and_refuses_to_guess_an_unknown_name. No test deleted.",
+        "MODEL_NORMALIZE_SLOTS deleted outright (nothing used it once normalize_models opened to every configured key). CONFIGURABLE_SLOTS kept, no longer a membership test — it survives as the default_models key list because prepare.rs still imports it; that sweep is mrs-4.",
+        "The stderr warning fires for a name absent from BOTH models.<runtime> and default_models (the typo case). A present-but-null slot yields silently: warning there would print on every dispatch of an unconfigured runtime, where every codex/opencode slot ships null by default.",
+        "The last-entry default_models floor is consulted ONLY for a key the table does not carry. An explicit null resolves to Budget: answering it with the built-in default resurrected the model the config had just cleared, and model_guard::cli_slot_and_empty_and_malformed_model_sets caught it red before this was fixed.",
+        "resolve_tier is kept as the single-name spelling of resolve_role rather than left beside it, so the fix reaches the model-guard and prepare.rs now instead of becoming dead code until mrs-3/mrs-4 sweep their call sites."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role": "code"
+}

@@ -341,33 +341,36 @@ A capped `behavior_change` cell also creates **scribing debt** until its meaning
 
 ---
 
-## Model tiers — keep the strong model scarce
+## Model roles — the job picks the model
 
-Not every step needs your most capable (most expensive) model. The costly loops — try, read, fix, repeat — should run on a cheap model; the strong model should touch only the decision points. bee makes this a per-repo setting. You configure only the two **cheaper** tiers — the **ceiling is always the model you run the session on** (decision 0015), so it needs no config:
+Models are not one ladder. Some plan well, some test well, some design well, some code well — so bee asks each piece of work **what job it is**, not how expensive it is, and your config says which model does that job. A cell declares a `role`; the dispatch asks for that role; `.bee/config.json` answers with a model:
 
 ```json
 "models": {
-  "claude": { "extraction": "haiku", "generation": "sonnet" },
-  "codex":  { "extraction": null,    "generation": null }
+  "claude": { "code": "sonnet", "read": "haiku", "extraction": "haiku", "generation": "sonnet" },
+  "codex":  { "code": null,     "read": null,    "extraction": null,    "generation": null }
 }
 ```
 
-- **ceiling** — the strongest model = **your session model** (no entry). Kept *scarce*: planning, integration, review; a ceiling cell just inherits the session model. Touch it on every dispatch and the cost saving evaporates.
-- **generation** — the mid worker that runs the loops (implementation, tests) — where the bulk of work goes.
-- **extraction** — cheapest capable (retrieval, mechanical edits).
-- `null` = the runtime can't select a per-agent model (Codex today) → the tier is enforced as a read budget + output cap in the worker prompt. Set real ids (e.g. `"generation": "gpt-5"`) if your runtime supports switching.
+- **`code`** — the work writes: implementation, wiring, tests. Where the bulk of dispatches go.
+- **`read`** — the work only reads: retrieval, tracing a call path, mining a transcript, an evidence digest.
+- **`extraction` / `generation`** — the historical names every ordered role list ends with, so upgrading moves no host's model. Leave them set.
+- **Any name you invent is legal.** `test`, `docs`, `design`, `migrate` — add the key, and a cell declaring that role gets that model. bee validates a role's *presence and shape*, never its membership in a list; `code`, `read`, `test`, `docs`, `review`, `design` are recommended words, guidance only.
+- `null` = the runtime can't select a per-agent model (Codex today) → the role is enforced as a read budget + output cap in the worker prompt. Set real ids (e.g. `"code": "gpt-5"`) if your runtime supports switching.
 
-The **orchestrator judges each cell's tier when it dispatches** (decision 0016) — mechanical → extraction, normal → generation, integration/architecture/high-risk → ceiling — not a label fixed at planning. It records the choice (`bee cells tier`), then `modelForTier` resolves it: `generation`/`extraction` to the configured alias, `ceiling` to "inherit the session model". `bee status` and the preamble **warn when too many cells sit on the ceiling tier** (the cost lever erodes when the strongest model touches most dispatches).
+**A role nothing configures still runs.** The dispatch asks for an ordered list headed by the cell's own role and ending in a name every host has configured for years — `[<cell role>, code, generation]`. An unconfigured head yields to the next name and **warns on stderr**, naming what it fell through to; it never fails, and it never silently picks a model the config did not name for it.
+
+**Cost is a separate lever, not a role.** Work that must run on your strongest model — integration, architecture, a security call, an ambiguous spec — is *escalated*: `bee cells escalate --id <id>` marks the cell to run on the **session model** (the model you run the session on, never configured — decision 0015) and charges a ration. Escalating past 40% of a feature's cells refuses unless `--reason "<text>"` names why; `--off` puts the cell back on its role's model. `bee status` reports the `role_mix` (renamed from `tier_mix`) with that escalated share, and the preamble warns when it runs high — the cost lever erodes when the strongest model touches most dispatches.
 
 The orchestrator pattern keeps the strongest model scarce:
 
-- **Fan-out delegation** (default): run the session on your strong model; it orchestrates all work and dispatches gather-altitude steps (multi-file reads, document rendering, trace mining) down-tier to cheaper workers, collecting digests instead of verbatim output. The Delegation contract (in gates-and-delegation.md) specifies which steps delegate and what a digest must carry. `bee-swarming`'s default.
+- **Fan-out delegation** (default): run the session on your strong model; it orchestrates all work and dispatches gather-altitude steps (multi-file reads, document rendering, trace mining) to cheaper read-role workers, collecting digests instead of verbatim output. The Delegation contract (in gates-and-delegation.md) specifies which steps delegate and what a digest must carry. `bee-swarming`'s default.
 
-**To change the worker models**, edit `.bee/config.json` `models.claude.generation` / `extraction`; the ceiling changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
+**To change the worker models**, edit `.bee/config.json` `models.claude.code` / `read` (or add your own role key); the escalated model changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
 
 ### Model pairs: the full slot set and its five shapes
 
-The two-slot example above is the minimal form. The full slot set under `models.<runtime>` is **`extraction` · `generation` · `review` · `advisor`** (the orchestrator is always the session model and is never configured; `review: null` falls back to `generation`, which otherwise defaults to opus). Each slot takes one of five shapes:
+The example above is the minimal form. A fresh config seeds **`code` · `read` · `extraction` · `generation`**, and two more slots are read when set: **`review`** (bee's reviewers; `null` falls back to `generation`, which otherwise defaults to opus) and **`advisor`** (the consult identity). bee ships no default for those two on purpose — both already resolve without a key. The session model is never configured. Any further role you add is just another key. Each slot takes one of five shapes:
 
 | Shape | Example | Meaning |
 |---|---|---|
@@ -375,7 +378,7 @@ The two-slot example above is the minimal form. The full slot set under `models.
 | model + effort | `{ "model": "sonnet", "effort": "medium" }` | effort applies only where the runtime supports per-agent selection |
 | CLI executor | `{ "kind": "cli", "command": "codex exec … -" }` | an **external** CLI runs this slot; the prompt is piped via stdin. **Gather/review/advisor only** — cell execution against a cli-shaped slot is refused |
 | herding pane | `{ "kind": "herding", "agent": "agy-flash", "fallback": "default" }` | every purpose of this slot routes through `bee herding run` as a live pane agent (see [Herding](#herding--the-autonomous-cockpit-and-external-agents)); optional `fallback: "default"` re-dispatches a failed run through the runtime's own default path — absent, a failure stays loud and the pane is kept as forensics |
-| `null` | `null` | the runtime can't switch models — the tier is enforced as a prompt budget instead |
+| `null` | `null` | the runtime can't switch models — the role is enforced as a prompt budget instead |
 
 Ready-made pairs to copy — mixing a cheap implementer with an adversarial reviewer from a *different* vendor — live in **[docs/model-presets.md](docs/model-presets.md)**: `all-claude` (default), `all-claude-tuned`, `gpt-adversarial-review` (Codex reviews read-only), `codex-implements`, `antigravity-review` (Gemini/agy), `opencode-review`, `budget`. A runnable external-executor sample sits in `.bee/config-sample-cli-executors.json`. Two constraints never bend: the `review` slot must be read-only, and every `[DONE]` from an external executor is re-verified and judge-checked by the orchestrator — no spot-check exception.
 
@@ -601,7 +604,7 @@ Everything is one statically-linked Rust binary — **no runtime dependencies at
 
 Copied into every onboarded repo, so enforcement works even for agents that ignore instructions. `bee <group> <verb>` is the sole shipped CLI. `bee --help` shows the porcelain surface — 16 flow verbs, opening with `bee orient` (the session-start context packet: where am I, what is locked, what is next); `bee --help --all` lists the full plumbing registry. The core groups:
 
-- **`status`** — one-shot situational scout: onboarding health, phase/mode/feature, gate states, **gate-bypass state**, cell counts, **scribing debt** (uncaptured behavior changes), **model-tier map**, reservations, recent decisions, staleness warnings, recommended next action. First command of every session.
+- **`status`** — one-shot situational scout: onboarding health, phase/mode/feature, gate states, **gate-bypass state**, cell counts, **scribing debt** (uncaptured behavior changes), **model-role map**, reservations, recent decisions, staleness warnings, recommended next action. First command of every session.
 - **`cells`** — the cell lifecycle: `list` / `ready` / `show` / `add` / `claim` (throws unless Gate 2's execution component is approved + deps capped) / `verify` / `cap` (refuses without recorded proof; `behavior_change` cells also require a before-state) / `block` / `drop`.
 - **`reservations`** — file-level conflict prevention between parallel workers: `reserve` / `release` / `list` / `sweep` (release expired TTLs). On overlap → `{ok:false, conflicts}`; the caller must return `[BLOCKED]`.
 - **`decisions`** — append-only decision log (rejects secrets and injection patterns): `log` / `supersede` / `redact` / `active` / `search`.
@@ -638,7 +641,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 |---|---|
 | `onboarding.json` | installed bee version + managed-file hashes (drift detection) |
 | `state.json` | phase, mode, feature, the four gate approvals, workers, next action |
-| `config.json` | per-repo hook/guard toggles, lanes, capabilities, **`gate_bypass`**, **`models`** (runtime-keyed tier→model map) |
+| `config.json` | per-repo hook/guard toggles, lanes, capabilities, **`gate_bypass`**, **`models`** (runtime-keyed role→model map) |
 | `HANDOFF.json` | pause context at ~65% budget — surfaced next session, never auto-resumed |
 | `cells/<id>.json` | one cell each: acceptance criteria, verify command, full trace |
 | `decisions.jsonl` / `backlog.jsonl` | append-only decision events / friction & grooming items |
@@ -686,7 +689,7 @@ Recent additions, each gated by a decision record:
 - **Artifact scaling + cap-time before-state** (0009) — planning stops fanning out four overlapping documents for small work; capping a behavior change now requires a recorded "before".
 - **Gate bypass** (0010; today `bee-hive`'s "Gates" section) — opt-in autopilot with LEVELS: normal keeps the safety floor (high-risk/hard-gate, Gate 3 UAT, P1 and secrets still stop); full lifts the high-risk floor; total lifts everything and leaves no human checkpoint.
 - **Capture-mode spine / scribing debt** (0011) — behavior_change cells capped since the last spec sync are counted as *scribing debt* and surfaced in `bee_status`, the preamble, and the swarming nudge, so settled behavior reaches `docs/specs/` mid-flight instead of only when a human remembers.
-- **Runtime-keyed model tiers + scarcity signal** (0012) — a per-repo `models` map (claude/codex → extraction/generation/ceiling) with a `modelForTier` resolver; cells carry a `tier`, swarming resolves tier → model, and `bee_status`/preamble warn when the ceiling share runs high — keeping the strongest model scarce.
+- **Runtime-keyed model tiers + scarcity signal** (0012) — a per-repo `models` map with one shared resolver; `bee_status`/preamble warn when the session-model share runs high, keeping the strongest model scarce. (Superseded in part: the cost tiers became open-ended **roles** — a cell declares the job it is, and `ceiling` became the `bee cells escalate` flag. See “Model roles” above.)
 - **Grooming is project-first** (0014) — the hygiene pass hunts the *current project's* debt in plain language; `.bee/`, `.claude/`, `.codex/` and bee's own plumbing are out of scope (a harness bug becomes a one-line upstream note, not a project kill), and the entropy score is demoted to a short hive-housekeeping side-note. Also fixes two real bugs it caught: `capCell` now honors a cell's declared `behavior_change` even when the CLI flag is omitted, and the write-guard no longer misreads `2>&1` as a file write. (Note: this parenthetical is superseded by skill-sync above — `onboard --apply` now syncs `skills/*` into the host repo's own `.claude/skills/bee-*` and `.agents/skills/bee-*` by default, committed to the repo; downgrades refused by default. `--global-skills` extends the sync to the legacy global `~/.claude/skills` root (and, via the install scripts, `~/.codex/skills`); without it neither global root is touched.)
 
 **Known debt before 1.0** (recorded per skill in `docs/decisions/skills/*-creation-log.md`): the newer skills and the two most recent decisions have not yet been dogfooded/pressure-tested per bee's own Iron Law; the gate-bypass safety floor in particular wants RED-baseline testing on a real high-risk feature.

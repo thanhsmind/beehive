@@ -102,5 +102,6 @@
       }
     ]
   },
-  "tier": "generation"
+  "tier": "generation",
+  "role": "code"
 }

@@ -31,5 +31,6 @@
     "verify_command": null,
     "verified_at": null,
     "dropped_reason": "live-verification probe for the claim-reserves-files door; not real work"
-  }
+  },
+  "role": "code"
 }

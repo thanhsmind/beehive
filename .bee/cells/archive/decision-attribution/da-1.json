@@ -1,0 +1,67 @@
+{
+  "id": "da-1",
+  "feature": "decision-attribution",
+  "lane": "standard",
+  "role": "code",
+  "title": "Stop decisions log borrowing the default record's feature",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs, the bound_feature block (~:613) calls resolve_mutation_target and reads .record().get(\"feature\"), which accepts BOTH a Target::Lane and a Target::Default result. Change it to accept ONLY a lane-resolved feature: when resolution lands on the default .bee/state.json record, resolve to None so the emitted event carries no feature key at all. Do NOT change resolve_mutation_target itself (decision-attribution D3) - it is shared by many mutating verbs for which the default fallback is correct. RED FIRST (decision-attribution D4): before the fix, add a test in verbs/decisions/tests.rs whose fixture has a .bee/state.json that EXISTS and names a foreign feature, with no bound lane, and asserts the emitted event has no feature key. Run it against the unfixed code and record in the cap that it failed, with the output. The existing log_touches_sweep_own_history_stays_a_citation_when_no_feature_is_bound test uses a fixture with NO state file, so it passes either way and is not evidence. Also keep a test proving a bound lane still stamps that lane.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "A decisions log call from a session with no bound lane, in a repo whose .bee/state.json exists and names some other feature, emits an event carrying no feature key at all",
+      "The same call in a repo with no .bee/state.json still emits no feature key - unchanged behaviour",
+      "A decisions log call from a session bound to a lane is still stamped with that lane's feature",
+      "resolve_mutation_target in state_group/ledger.rs is byte-unchanged, so every other caller keeps its default-record fallback",
+      "The new test fails against the unfixed code and the cap quotes that failure"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee decisions",
+  "behavior_change": true,
+  "decisions": [
+    "decision-attribution D1",
+    "decision-attribution D3",
+    "decision-attribution D4"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "capped",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": "decisions log stamps a feature only from a lane-resolved target; the shared default record is never borrowed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
+    "deviations": [
+      "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T13:21:08.296Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T13:14:49.947Z",
+    "inline_reason": "This session does not spawn subagents unless the user asks for it, and the orchestrator already held the full diagnosis — the 18/18 lane-timing evidence and the resolve_mutation_target call-graph read. A cold worker would have re-derived both before touching a two-file change. Named deviation, not a silent one.",
+    "report": {
+      "outcome": "decisions log stamps a feature only from a lane-resolved target; Target::Default now yields None, so an unbound session emits no feature key. resolve_mutation_target is byte-unchanged (D3).",
+      "commit": "460493cd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green (2975 passed, 2 failed) — the 2 failures are the opencode contract tests that refuse to run without node on PATH, environmental and identical before this change; the new tests were shown RED first against the pre-fix behaviour (left: Some(someone-elses-feature), right: None)",
+      "deviations": [
+        "Executed inline instead of via a dispatched execution worker; reason recorded as trace.inline_reason."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

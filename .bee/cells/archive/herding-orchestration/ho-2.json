@@ -85,5 +85,6 @@
     ],
     "tests": "boundary"
   },
-  "tier": "generation"
+  "tier": "generation",
+  "role": "code"
 }

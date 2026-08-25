@@ -15,12 +15,12 @@ metadata:
       kind: command
       command: herdr
       missing_effect: degraded
-      reason: One of two transports, and only one is ever needed. Required when `herding.transport` is `herdr` — the default: the cockpit's `bee herding pane …` / `agent-start` verbs then reach their panes through the herdr binary. Unneeded when the key says `tmux`. The choice is that one config key (tmux-herding-transport D1), never an auto-detect from `$TMUX` or `$HERDR_ENV`.
+      reason: "One of two transports, and only one is ever needed. Required when `herding.transport` is `herdr` — the default: the cockpit's `bee herding pane …` / `agent-start` verbs then reach their panes through the herdr binary. Unneeded when the key says `tmux`. The choice is that one config key (tmux-herding-transport D1), never an auto-detect from `$TMUX` or `$HERDR_ENV`."
     tmux-cli:
       kind: command
       command: tmux
       missing_effect: degraded
-      reason: The other of the two transports. Required on PATH when `herding.transport` is `tmux` — the same `bee herding pane …` / `agent-start` verbs then act on the caller's tmux session, windows and pane titles (tmux-herding-cockpit D3). Unneeded when the key says `herdr`. No role document or bootstrap script ever calls `tmux` (or `herdr`) directly: the pane verbs are the one vocabulary (D2).
+      reason: "The other of the two transports. Required on PATH when `herding.transport` is `tmux` — the same `bee herding pane …` / `agent-start` verbs then act on the caller's tmux session, windows and pane titles (tmux-herding-cockpit D3). Unneeded when the key says `herdr`. No role document or bootstrap script ever calls `tmux` (or `herdr`) directly: the pane verbs are the one vocabulary (D2)."
 ---
 
 # Herding — the unattended cockpit

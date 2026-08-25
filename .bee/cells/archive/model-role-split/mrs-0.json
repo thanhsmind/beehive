@@ -1,0 +1,67 @@
+{
+  "id": "mrs-0",
+  "feature": "model-role-split",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Order lane rows deterministically instead of by directory read order",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "action": "FIX-FIRST cell: the base is red and nothing may build on it (AGENTS.md, never build on a red base). verbs::status_full::tests::lanes_summary_vs_full fails at HEAD, verified twice — once by the mrs-1 worker with its change stashed, once by the orchestrator running the test filtered and alone (assertion: left is Some(beta), right is Some(alpha)). The test writes .bee/lanes/alpha.json and .bee/lanes/beta.json and then asserts rows[0].feature == alpha, while the lane-row builder returns entries in filesystem directory-read order, which is not sorted on this filesystem. Decide which side is wrong and fix THAT side, not the symptom: either the builder owes callers a deterministic order (sort lane rows by feature id at build time — the likelier answer, since bee status renders these rows to a human and an unstable order is a display defect), or the test is over-specifying and should assert set membership. Do not weaken the test merely to make it pass — if the assertion is the wrong shape, say so on the cap and replace it with one that still pins the behavior a reader depends on. This cell is unrelated to the model-role-split feature scope; it exists because the feature cannot prove itself green on a red base. Its files are disjoint from the live mrs-2 (drivers/models.rs) and mrs-4 (drivers/prepare.rs) reservations.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full",
+  "must_haves": {
+    "truths": [
+      "lanes_summary_vs_full passes when run alone AND inside the full suite",
+      "The lane row order a caller receives is deterministic, or the test no longer claims an order the builder never promised — whichever side the cap names as wrong",
+      "No assertion is deleted to make the suite green; a replaced assertion still pins the behavior a reader depends on"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w0",
+    "outcome": "Lane rows now sort by feature id at the display builder; lanes_summary_vs_full green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/topology.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "The builder the cell placed in build.rs actually lives in verbs/status_full/topology.rs (build.rs only calls it); reserved topology.rs under mrs-w0 and fixed there — build.rs needed no change and was left untouched.",
+      "Fixed the builder side, not the test: the rows are a display surface (bee status prints them, build_lane_summary derives its ids from them), so enumeration order was the defect. list_lanes keeps its documented Node-parity read order.",
+      "Added a regression test (lane_rows_order_by_feature_id_not_by_directory_enumeration) with names whose creation order and sort order disagree, since the original test only caught this by filesystem luck. No assertion was deleted or weakened."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T03:00:52.316Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T02:56:59.598Z",
+    "report": {
+      "outcome": "Lane rows now sort by feature id at the display builder; lanes_summary_vs_full green",
+      "commit": "d5e49961a10e5e04627e46578f46192eb9ce2dcc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/topology.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full — green (95 passed, 0 failed; both lane tests named in output) plus the whole bee bin suite green (2572 passed, 0 failed) and lanes_summary_vs_full green alone — the fix is a display-order builder used only inside status_full, and the must-have asks for alone AND full-suite green",
+      "deviations": [
+        "The builder the cell placed in build.rs actually lives in verbs/status_full/topology.rs (build.rs only calls it); reserved topology.rs under mrs-w0 and fixed there — build.rs needed no change and was left untouched.",
+        "Fixed the builder side, not the test: the rows are a display surface (bee status prints them, build_lane_summary derives its ids from them), so enumeration order was the defect. list_lanes keeps its documented Node-parity read order.",
+        "Added a regression test (lane_rows_order_by_feature_id_not_by_directory_enumeration) with names whose creation order and sort order disagree, since the original test only caught this by filesystem luck. No assertion was deleted or weakened."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role": "code"
+}

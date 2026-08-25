@@ -1,0 +1,75 @@
+{
+  "id": "mrs-8",
+  "feature": "model-role-split",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Require a role on every cell and sweep the fixtures that bypass validation",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/model-role-split/CONTEXT.md"
+  ],
+  "action": "Slice 3, D7 (store 4eaf1b71). A cell gains a REQUIRED role field, exactly as lane is required: bee cells add refuses a cell without one, with a typed FIX line in this repo's house style. Copy the lane pattern at validate.rs:133-140 — the value is any NON-EMPTY name, so validation checks presence and shape and NEVER membership (the role set is open per 06e49368; a closed enum here would undo slice 1). D8's recommended vocabulary — code, read, test, docs, review, design — is authoring GUIDANCE only: it may appear in a help string or a FIX line, never as a validation list. TWO HAZARDS, both must be handled or the cap is dishonest. (1) The exact-problem-string assertion at cells/tests.rs:772-790 compares the joined validation problems verbatim; a new required-field problem changes that string, so it must be retargeted, not deleted. (2) THE FIXTURE BLIND SPOT, the reason this cell is high-risk: roughly 100 raw cell fixtures across 17 Rust files write cell JSON straight to disk and never call validate_new_cell, so they will NOT break when role becomes required — they will silently carry no role and resolve the default. A green suite would prove nothing. Inventory them (rg for lane literals in cell-shaped JSON under packages/bee-rs/crates/bee/src), and for every fixture that is dispatched or resolved in its test, give it a role. A fixture that is never resolved may stay roleless; say which is which on the cap with counts. If the inventory exceeds what this cell can carry, cap what you did, report the remainder precisely, and BLOCK rather than leave a false green.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee cells add refuses a cell with no role, naming the remedy in a FIX line",
+      "Validation checks presence and shape only — no membership list, so any non-empty name is legal",
+      "The exact-problem-string test is retargeted and still pins the joined-problems contract",
+      "Every fixture whose test resolves or dispatches it carries a role; the cap gives the counts and names any fixture deliberately left roleless",
+      "No test is deleted to make the suite green"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4eaf1b71",
+    "06e49368"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mrs-w8",
+    "outcome": "bee cells add requires a non-empty role with a typed FIX line; membership never checked; 7 dispatched fixtures given roles, 159 never-resolved ones left roleless by rule",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "write_guard/tests.rs was reserved but left untouched: all 7 of its .bee/cells/ mentions are guard INPUT path strings (and one stage_file writing the literal x), never cell-shaped JSON, so it holds zero fixtures the role field can reach",
+      "Fixture sweep scoped by ownership, not abandoned: nothing in production reads a cell role today (proved by grep — the cell record tier is read at prepare.rs:823/:1414/:1699 and status_full/cells.rs:584 only), so the fixtures that will resolve a role live in drivers/tests.rs, which is cell mrs-9 own declared file. Reported rather than reached into.",
+      "D8 vocabulary shipped in the FIX line only; the help string and every authoring surface belong to mrs-11, which is open and names those files",
+      "sync-ack: The authoring-surface half of D7/D8 is cell mrs-11's declared scope (skills/bee-planning/references/planning-reference.md, skills/bee-herding/references/dispatch-dry-run.md, docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md); mrs-8's files list carries only the validator and its tests, so editing those skills here would write through another cell's scope."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T04:31:06.260Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-25T04:19:34.332Z",
+    "sync_ack": "The authoring-surface half of D7/D8 is cell mrs-11's declared scope (skills/bee-planning/references/planning-reference.md, skills/bee-herding/references/dispatch-dry-run.md, docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md); mrs-8's files list carries only the validator and its tests, so editing those skills here would write through another cell's scope.",
+    "report": {
+      "outcome": "bee cells add requires a non-empty role with a typed FIX line; validation is presence+shape only, never membership; the exact-problem-string test retargeted; 7 dispatched fixtures given roles, 159 never-resolved ones left roleless by a written rule",
+      "commit": "cb51441c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee — green (2592 passed, 0 failed) — the whole bee unit suite in release, which carries every cells/validate, drivers/prepare and model-guard test the role field can reach; the full declared verify adds crates/bee/tests/opencode_plugin_contracts.rs, whose 4 failures are the orchestrator-verified node-v24.19.0 TypeScript-stripping environment limit and touch no code this cell changed",
+      "deviations": [
+        "write_guard/tests.rs was reserved but left untouched: all 7 of its .bee/cells/ mentions are guard INPUT path strings (and one stage_file writing the literal x), never cell-shaped JSON, so it holds zero fixtures the role field can reach",
+        "Fixture sweep scoped by ownership, not abandoned: nothing in production reads a cell role today (proved by grep — the cell record tier is read at prepare.rs:823/:1414/:1699 and status_full/cells.rs:584 only), so the fixtures that will resolve a role live in drivers/tests.rs, which is cell mrs-9 own declared file. Reported rather than reached into.",
+        "D8 vocabulary shipped in the FIX line only; the help string and every authoring surface belong to mrs-11, which is open and names those files"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role": "code"
+}

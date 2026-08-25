@@ -56,7 +56,7 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
   helpers (D3).
 
 - **R6** — A dispatch begins at the preparation command, never at a
-  hand-picked helper identity, model, or tier marker: the actor runs
+  hand-picked helper identity, model, or `[bee-tier:]` marker: the actor runs
   preparation first and then runs exactly the call it returns. Those three
   fields are what preparation answers, so choosing them by hand is choosing
   before asking; the standing sheet states the door up front, and the guard
@@ -72,13 +72,19 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
 
 ## Pointers (implementation)
 
-- The delegation contract in full (tiers, digest contract):
+- The delegation contract in full (roles, digest contract):
   `skills/bee-hive/references/routing-and-contracts.md` § Delegation contract —
   the *detail* legitimately lives there; the rule itself, and the transport it
   requires (a `model` param or an anchored `[bee-tier:]` marker, B3a), are
   critical rule 12 on the standing sheet. The guard that rejects a bare,
-  config-disagreeing, or cli-tier-declared dispatch (declared tier read before
+  config-disagreeing, or cli-declared dispatch (the declared role read before
   the model param, 2A-iii): `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`
   (the Node-era `bee-model-guard.mjs` is retired; pointer corrected 2026-08-22).
-- Model tiers behind R3: `.bee/config.json` `models` (extraction / generation /
-  review / advisor slots), resolved per dispatch by `bee-swarming`.
+- Model roles behind R3: `.bee/config.json` `models` is a role→model map, keyed
+  by runtime and then by the JOB a dispatch asks for — `code` and `read` beside
+  the historical `extraction`/`generation` tail, plus the `review` and `advisor`
+  slots — resolved per dispatch by `bee-swarming`. Any name the map carries is
+  legal; bee validates a role's presence and shape, never its membership, and an
+  unconfigured name falls through to the next in the list and warns. This is the
+  helper's JOB, and it is a different axis from R3's own "lower-cost helper":
+  delegating a mechanical step down-tier is altitude, not a role name.

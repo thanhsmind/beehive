@@ -47,5 +47,6 @@
     "claimed_at": "2026-07-30T03:39:16.832Z",
     "warnings": [],
     "feature_verify": "pending"
-  }
+  },
+  "role": "code"
 }

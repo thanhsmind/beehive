@@ -625,20 +625,20 @@ pub fn build_session_preamble(
         }
     }
 
-    // dispatch-door-upfront D2: the prepare command and resolved tier slots
-    // for claude, rendered before any dispatch can happen.
+    // dispatch-door-upfront D2: the prepare command and the roles this host
+    // configures, rendered before any dispatch can happen.
+    //
+    // model-role-split D2 (store 06e49368) + `--role` (store 8ff6e79e): this
+    // published a FIXED tier-slot list and a command line that knew only
+    // `--kind`. Both went stale the moment the role set opened — there is no
+    // fixed list of names to print any more, and the flag a caller reaches
+    // for a role by is `--role`. Both lines now come from ONE home, which
+    // `hooks/compaction.rs` re-injects verbatim after a compaction: two
+    // copies of this literal is how a compacted session ends up being told
+    // something the preamble no longer says.
     lines.push(String::new());
     lines.push("### Dispatch door".to_string());
-    lines.push(
-        "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime claude --kind cell|gather|reviewer|advisor --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker.".to_string(),
-    );
-    let slots = crate::hooks::model_guard::tier_slot_display(config.get("models"), "claude");
-    let slots_line = slots
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join(" | ");
-    lines.push(format!("- Tier slots (claude): {slots_line}"));
+    lines.extend(crate::hooks::model_guard::dispatch_door_lines(config.get("models"), "claude"));
 
     // csc-1: the whole command surface, always on — unlike Standard
     // commands above it never depends on host-project config. Placed right
@@ -761,15 +761,18 @@ pub fn build_session_preamble(
         lines.extend(open_maps_lines);
     }
 
-    // P7: keep the ceiling model scarce.
-    if let Some((pct, ceiling, tiered)) = ceiling_scarcity_warning(root) {
+    // P7: keep the ceiling model scarce. D6 — the subject is the escalation
+    // flag and the feature's cells, never a retired tier value; the remedy
+    // line names dropping the escalation, because there is no longer a
+    // "generation/extraction" to re-tier a cell to.
+    if let Some((pct, escalated, cells)) = ceiling_scarcity_warning(root) {
         lines.push(String::new());
         lines.push(format!(
-            "### Ceiling-model scarcity: {}% of tiered cells on ceiling",
+            "### Ceiling-model scarcity: {}% of this feature's cells escalated",
             num_str(pct)
         ));
         lines.push(format!(
-            "- {ceiling}/{tiered} cells tiered ceiling (> {}%) — the cost lever erodes when the strongest model touches most dispatches; re-tier routine cells to generation/extraction (decision 0012).",
+            "- {escalated}/{cells} cells escalated onto the session model (> {}%) — the cost lever erodes when the strongest model touches most dispatches; drop the escalation on routine cells (decision 0012).",
             num_str(js_round(CEILING_MAX_SHARE * 100.0))
         ));
     }

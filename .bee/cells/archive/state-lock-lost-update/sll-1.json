@@ -1,0 +1,131 @@
+{
+  "id": "sll-1",
+  "feature": "state-lock-lost-update",
+  "title": "Diagnose and fix the lost state.json entry during a stale-lock takeover",
+  "action": "Reproduce store_lock_survives_a_pre_seeded_stale_lock_without_wedging_or_double_entry solo with repetition, instrument the takeover in lock.rs to capture the actual interleaving that admits a second lock holder, name the mechanism from that evidence, then fix it. Remove all temporary instrumentation before capping. Two mechanisms are already eliminated in CONTEXT and must not be re-proposed without new evidence.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test concurrency",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "The mechanism that admits a second lock holder is named and backed by captured evidence, not inferred from reading.",
+      "store_lock_survives_a_pre_seeded_stale_lock_without_wedging_or_double_entry passes 40 consecutive SOLO runs with zero failures (pre-fix rate is about 1 in 10, so 20 runs would be too weak).",
+      "store_lock_serializes_concurrent_state_mutators_with_no_lost_update passes 20 consecutive solo runs.",
+      "A stale lock still never wedges the store: takeover keeps working and at least one racer completes.",
+      "No temporary instrumentation remains in the shipped diff.",
+      "One full-suite run is recorded green, offered as a record and never as the proof."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/lock.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+  ],
+  "acceptance": "The mechanism is evidenced and stated in the commit body; the stale-lock test passes 40/40 solo and its sibling 20/20; the takeover still prevents wedging; no instrumentation ships.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-sll-1",
+    "outcome": "Serialized the stale-lock takeover on an O_EXCL claim keyed to the displaced acquisition; the TOCTOU that admitted a second LockGuard is closed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/lock.rs"
+    ],
+    "deviations": [
+      "Full-file verify command is red on a PRE-EXISTING, unrelated failure: one_claimant_wins_the_cell_and_every_loser_is_a_typed_claimed_refusal (cells-claim JSON corruption in .bee/claims/, not the store lock). Measured 17/20 failures on the pristine base and 16/20 with this change, so it is neither caused nor worsened here. Full concurrency suite recorded: 18 passed, 1 failed (that one). Needs its own fix-first cell.",
+      "Fix landed in lock.rs only; workers.rs (also in the cell's files) needed no change and is byte-identical to HEAD.",
+      "Reservations for both files were already held under this cell and nickname when the worker started, so `reservations reserve` reported a self-conflict; treated as pre-reserved by the orchestrator, not a foreign hold.",
+      "The context's fact 1 (\"the lost entry is w0, the FIRST racer\") is contradicted by the captured run: the lost racer was w5. The lost racer is whichever won the takeover and was clobbered by the plain acquirer that took the rename vacancy. Context fact 2 (well-formed state.json) held.",
+      "Context's open question resolved: read_holder DID observe a freshly created, still-empty lock file (holder_after: null on a rename), so the create_new-then-write_all window at lock.rs:198 is reachable in practice via rename_for_takeover's post-rename read - just not via the staleness path."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T11:03:11.907Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T10:41:43.446Z",
+    "report": {
+      "outcome": "Named and fixed the lost update: the stale-takeover re-verification is a TOCTOU, so a racer with an older judgment renames away a lock a fresh holder already installed and the vacancy admits a second LockGuard; takeover is now serialized on an O_EXCL claim keyed to the displaced acquisition",
+      "commit": "18b5ecc6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/lock.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test concurrency store_lock_survives_a_pre_seeded_stale_lock_without_wedging_or_double_entry (40 consecutive solo runs) + store_lock_serializes_concurrent_state_mutators_with_no_lost_update (20 consecutive solo runs) + cargo test --release --bin bee lock::tests — green (40/40, 20/20, 16 unit tests incl. 4 new claim regressions) — the change is a store-lock mutual-exclusion fix, so the proof is the two store-lock race tests it governs at the rate the defect demands plus lock.rs's own unit suite; the full concurrency file is recorded separately because it carries one pre-existing unrelated red",
+      "deviations": [
+        "Full-file verify command is red on a PRE-EXISTING, unrelated failure: one_claimant_wins_the_cell_and_every_loser_is_a_typed_claimed_refusal (cells-claim JSON corruption in .bee/claims/, not the store lock). Measured 17/20 failures on the pristine base and 16/20 with this change, so it is neither caused nor worsened here. Full concurrency suite recorded: 18 passed, 1 failed (that one). Needs its own fix-first cell.",
+        "Fix landed in lock.rs only; workers.rs (also in the cell's files) needed no change and is byte-identical to HEAD.",
+        "Reservations for both files were already held under this cell and nickname when the worker started, so `reservations reserve` reported a self-conflict; treated as pre-reserved by the orchestrator, not a foreign hold.",
+        "The context's fact 1 (\"the lost entry is w0, the FIRST racer\") is contradicted by the captured run: the lost racer was w5. The lost racer is whichever won the takeover and was clobbered by the plain acquirer that took the rename vacancy. Context fact 2 (well-formed state.json) held.",
+        "Context's open question resolved: read_holder DID observe a freshly created, still-empty lock file (holder_after: null on a rename), so the create_new-then-write_all window at lock.rs:198 is reachable in practice via rename_for_takeover's post-rename read - just not via the staleness path."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 167 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "mechanism-evidenced-not-inferred",
+            "status": "PASS",
+            "evidence": "A real failing interleaving was captured by temporary tracing: w5 wins the rename leaving the lock vacant, w2 plain-acquires into the vacancy, w7 carrying an older staleness judgment renames away w2's fresh lock (holder_after: null), the vacancy reopens and w5 acquires too. Two LockGuards live at once, proven twice — both mutators read the same empty snapshot, and w5's own release read w2's token out of the lock file."
+          },
+          {
+            "id": "c2",
+            "name": "forty-solo-runs-clean",
+            "status": "PASS",
+            "evidence": "Orchestrator independently ran the stale-lock test solo 40 consecutive times: 0 failures, against a ~1-in-10 pre-fix rate. 40 rather than 20 because a clean 20 at that rate is roughly a coin flip."
+          },
+          {
+            "id": "c3",
+            "name": "no-instrumentation-shipped",
+            "status": "PASS",
+            "evidence": "grep for eprintln!/dbg! in lock.rs returns 0 lines in the shipped diff."
+          },
+          {
+            "id": "c4",
+            "name": "takeover-still-prevents-wedging",
+            "status": "PASS",
+            "evidence": "The test asserts a stale lock never wedges the store and that at least one racer completes; it passes 40/40, so the takeover still works rather than being disabled to win the race."
+          },
+          {
+            "id": "c5",
+            "name": "context-fact-disproved-and-reported",
+            "status": "PASS",
+            "evidence": "The cell contradicted this feature's own locked CONTEXT: the lost racer was w5, not w0. It reported that plainly rather than bending the evidence to fit. CONTEXT now carries the struck fact with the correction, and the real rule is positional-independent — the victim is whoever won the takeover."
+          },
+          {
+            "id": "c6",
+            "name": "open-question-resolved-with-evidence",
+            "status": "PASS",
+            "evidence": "CONTEXT flagged that read_holder seeing a still-empty lock file would be a real finding if evidenced. w7's holder_after: null is exactly that, arriving via rename_for_takeover's post-rename read — a route neither reviewing session had enumerated."
+          },
+          {
+            "id": "c7",
+            "name": "declared-suite-green-on-the-merged-base",
+            "status": "PASS",
+            "evidence": "cargo test --release on the merged base carrying both concurrency fixes: CARGO_EXIT=0, 2883 passed, 0 failed, including one_claimant_wins_the_cell which had been red at 17/20 all afternoon."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-25T11:21:07.720Z"
+      }
+    ]
+  },
+  "role": "code"
+}

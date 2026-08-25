@@ -1,0 +1,75 @@
+{
+  "id": "hm-1",
+  "feature": "human-mailbox",
+  "title": "Stand up the mailbox store and the letter record shape",
+  "action": "Create the mailbox verb group and its file-backed store, modelled on verbs/triggers/ (the closest working precedent per plan.md Discovery). Settle the entry layer's shape — the plan leaves it open between one JSONL per run and a directory of entries — and record the choice with its reason. Define the letter record: one markdown file per letter at .bee/human-mailbox/<UTC-timestamp>-<short-run-slug>.md (D11), typed YAML frontmatter carrying subject, run, project, filed_at, status, items[] of {what, files[], commit, proof, departure}, needs_you[] (D3), with a non-empty plain-language subject as a validity rule (D2). No JSON twin and no separate index stream (D3).",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A letter is exactly one markdown file with YAML frontmatter; there is no JSON twin and no separate index stream (D3).",
+      "The filename is <UTC-timestamp>-<short-run-slug>.md and a bare directory listing sorts correctly by time (D11).",
+      "Frontmatter carries every field CONTEXT.md names: subject, run, project, filed_at, status, items[] of {what, files[], commit, proof, departure}, needs_you[] (D3).",
+      "A record whose subject is empty or missing is refused as invalid, not merely rendered oddly (D2).",
+      "The entry layer's shape is chosen between one-JSONL-per-run and a directory of entries, and the choice is recorded with its reason — plan.md leaves this open.",
+      "The store follows the verbs/triggers/ precedent rather than inventing a new storage pattern."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+  ],
+  "acceptance": "The mailbox store exists with the letter record shape and its validity rules; a letter round-trips to disk under the D11 name with all D3 frontmatter fields; an empty subject is refused; the entry-layer choice is recorded with its reason.",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-1",
+    "outcome": "Mailbox store and letter record shape land: one markdown letter per run, entry layer settled as one append-only JSONL per run",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+    ],
+    "deviations": [
+      "Followed the plan for the record shape and the D11 filename.",
+      "Departure (what): registered the module in verbs/mod.rs as a library module instead of adding a try_native verb probe. Why: the one command this feature owes is the D6 read flip, which the cell assigns to phase 3, so there is no verb to serve yet and an empty probe would be dead argv handling. Kind: found a better route.",
+      "Departure (what): added a sha256 tail to any run slug that had to be truncated. Why: two long run ids sharing a 20-character prefix would otherwise collapse onto one letter filename and one entries file, overwriting a letter and merging two runs of entries - the exact loss D11 exists to prevent. Kind: hit an unforeseen obstacle.",
+      "Departure (what): capped with --inline-reason instead of a registered workers[] row. Why: the dispatch wrote no worker row and bee state worker add refuses from a granted worktree, so this session cannot add it; the orchestrator must reconcile state.workers. Kind: hit an unforeseen obstacle."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T12:25:47.077Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T12:11:40.837Z",
+    "inline_reason": "Dispatched worker wk-hm-1 ran this cell in the human-mailbox worktree, but no workers[] row was written at dispatch and bee state worker add refuses from a granted worktree (shared control plane lives in the main checkout), so the row cannot be added from here. Orchestrator to reconcile state.workers.",
+    "report": {
+      "outcome": "Mailbox store and letter record shape land: one markdown letter per run with typed YAML frontmatter, entry layer settled as one append-only JSONL per run.",
+      "commit": "35e4d5bec2d883d3cd1be61dbeacb87968e1a095",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox — green (66 passed, 0 failed, exit 0; 21 new verbs::mailbox::tests all ran) — the verify command declared on the cell, scoped to the new module plus every existing mailbox-named test it could disturb",
+      "deviations": [
+        "Followed the plan for the record shape and the D11 filename.",
+        "Departure (what): registered the module in verbs/mod.rs as a library module instead of adding a try_native verb probe. Why: the one command this feature owes is the D6 read flip, which the cell assigns to phase 3, so there is no verb to serve yet and an empty probe would be dead argv handling. Kind: found a better route.",
+        "Departure (what): added a sha256 tail to any run slug that had to be truncated. Why: two long run ids sharing a 20-character prefix would otherwise collapse onto one letter filename and one entries file, overwriting a letter and merging two runs of entries - the exact loss D11 exists to prevent. Kind: hit an unforeseen obstacle.",
+        "Departure (what): capped with --inline-reason instead of a registered workers[] row. Why: the dispatch wrote no worker row and bee state worker add refuses from a granted worktree, so this session cannot add it; the orchestrator must reconcile state.workers. Kind: hit an unforeseen obstacle."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1257 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

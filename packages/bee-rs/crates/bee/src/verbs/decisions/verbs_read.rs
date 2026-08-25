@@ -8,7 +8,7 @@ use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, Read
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
 use crate::textutil::truncate_chars_head;
-use crate::verbs::state_group::resolve_mutation_target;
+use crate::verbs::state_group::{resolve_mutation_target, Target};
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
     js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
@@ -46,6 +46,13 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "archive" => run_archive(flags, use_json, t0),
         "render" => run_render(flags, use_json, t0),
         "supersede" => run_supersede(flags, use_json, t0),
+        // decision-attribution D5 — the one-time attribution correction.
+        // Served here and DECLARED in generated/registry_payload.json in the
+        // same change: a verb served but not declared is reported unknown by
+        // `bee --help --all` and leaves the CLI-shape guard no schema to
+        // validate a call against, and tests/registry_dispatch.rs enforces
+        // the inverse too.
+        "reattribute" => run_reattribute(flags, use_json, t0),
         _ => None, // anything else: Node's
     }
 }
@@ -193,7 +200,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         &flags,
         &[
             "decision", "rationale", "alternatives", "scope", "source", "confidence", "tags",
-            "relation", "trigger",
+            "relation", "trigger", "feature",
         ],
     ) {
         return None;
@@ -228,6 +235,11 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
     // D2: --trigger <id> — a kdt-2 trigger registry id, required only when
     // the decision text itself reads as a deferral (matches_deferral_prose).
     let trigger_raw: Option<String> = str_flag(&flags, "trigger")?;
+    // decision-attribution D2: --feature <slug> — the feature this decision
+    // is ABOUT, outranking the session's bound lane. `None` only when the
+    // flag is absent; a blank value reaches do_log and is refused there,
+    // never quietly dropped.
+    let feature_raw: Option<String> = str_flag(&flags, "feature")?;
 
     let ctx = match decisions_prelude("decisions log", use_json, t0)? {
         Pre::Go(c) => c,
@@ -245,6 +257,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             tags: tags_flag,
             relation: relation_raw,
             trigger: trigger_raw,
+            feature: feature_raw,
         },
         DECISIONS_LOCK_RETRY_ATTEMPTS,
     );
@@ -277,6 +290,16 @@ pub(crate) struct LogParams {
     /// deferral (matches_deferral_prose); optional otherwise. Persisted
     /// onto the event as `trigger` whenever given and valid.
     pub(crate) trigger: Option<String>,
+    /// decision-attribution D2: the feature this decision is ABOUT, named
+    /// explicitly by the caller. Always outranks the session's bound lane.
+    ///
+    /// It exists because D1 made an unresolved feature absent rather than
+    /// borrowed, and the Discovery flow is where decisions are logged most —
+    /// a wayfinding map locks them ticket by ticket, before the effort has a
+    /// lane to be bound to. Without this flag D1 would trade a wrong answer
+    /// for no answer. `None` means the flag was not passed; an empty or
+    /// whitespace-only value is refused rather than ignored.
+    pub(crate) feature: Option<String>,
 }
 
 /// dsh-1's prose-supersession guard: decision text that reads as an inline
@@ -445,6 +468,11 @@ fn relation_required_message(root: &Path, p: &LogParams) -> R2<String> {
     Ok(msg)
 }
 
+/// decision-attribution D2: a blank `--feature` is refused rather than
+/// ignored. Passing the flag is an act of naming; dropping a blank value
+/// silently would stamp the lane instead and look like it obeyed.
+pub(crate) const FEATURE_FLAG_EMPTY_MESSAGE: &str = "logDecision: --feature was passed with an empty value — name the feature this decision is about (e.g. --feature human-mailbox), or omit the flag entirely to take the calling session's bound lane.";
+
 pub(crate) const RELATION_REQUIRED_MESSAGE: &str = "logDecision: --relation is required — pass --relation supersedes:<id>[,...] to retire earlier decisions here, --relation touches:<id>[,...] to note a related-but-not-retired decision, or --relation none if this decision relates to nothing active.";
 
 /// D3's declared relation, parsed from the raw `--relation` flag value.
@@ -471,6 +499,35 @@ fn parse_relation(raw: &str) -> Option<Relation> {
         return if ids.is_empty() { None } else { Some(Relation::Touches(ids)) };
     }
     None
+}
+
+/// decision-attribution D1: which feature, if any, a new decide event is
+/// stamped with.
+///
+/// ONLY a lane-resolved target names it. `resolve_mutation_target` falls back
+/// to the shared default `.bee/state.json` record when the calling session has
+/// no bound lane, and for the verbs it was built for that fallback is right —
+/// an unbound session *mutating* state should act on the default record. This
+/// call site is different: it reads the target only to borrow a NAME, and the
+/// default record's `feature` is whatever some other session most recently
+/// made active, not the feature this decision is about.
+///
+/// Absent beats wrong. A missing `feature` is already a supported state that
+/// every reader tolerates (legacy pre-stamp lines simply lack the field),
+/// whereas a wrong one is invisible on inspection and misroutes both the
+/// impact and routing doors at close.
+///
+/// Measured before the fix, 2026-08-25: 23 of the 32 decisions stamped
+/// `model-role-split` belonged to other features, and all 18 `human-mailbox`
+/// ones were logged before that feature had a lane at all.
+pub(crate) fn feature_for_stamp(target: &Target) -> Option<String> {
+    match target {
+        Target::Lane { record, .. } => match record.get("feature") {
+            Some(v) if truthy(v) => Some(js_disp(v)),
+            _ => None,
+        },
+        Target::Default { .. } => None,
+    }
 }
 
 pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
@@ -603,17 +660,28 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // refusal / unknown-tag candidates append (dp-6, D7b).
     classify_decision_tags(root, &normalized.clone().unwrap_or_default(), lock_retries)?;
 
-    // doc-impact-synthesis D1a: the calling context's active feature —
-    // resolved exactly as `state route` resolves it (session-bound lane,
-    // else the default `.bee/state.json` record) — stamps onto the new
-    // event below and bounds the touches-sweep's own-history exclusion.
-    // No resolution (no bound lane, no `feature` on the default record) →
-    // `None`, and the event carries no `feature` field at all.
-    let bound_feature: Option<String> = {
-        let target = resolve_mutation_target(root, None, "decisions log", false)?;
-        match target.record().get("feature") {
-            Some(v) if truthy(v) => Some(js_disp(v)),
-            _ => None,
+    // doc-impact-synthesis D1a: the calling context's active feature stamps
+    // onto the new event below and bounds the touches-sweep's own-history
+    // exclusion.
+    //
+    // decision-attribution D1 narrowed how it resolves: the session-bound
+    // lane ONLY, never the shared default `.bee/state.json` record. No bound
+    // lane → `None`, and the event carries no `feature` field at all. See
+    // `feature_for_stamp` for why borrowing the default record was wrong.
+    // decision-attribution D2: an explicit --feature outranks the bound lane.
+    // A blank value is a refusal, never a silent fall-through to the lane —
+    // the caller who typed the flag meant to name something.
+    let bound_feature: Option<String> = match &p.feature {
+        Some(raw) => {
+            let slug = js_trim(raw);
+            if slug.is_empty() {
+                return Ok(Out::Thrown(FEATURE_FLAG_EMPTY_MESSAGE.to_string()));
+            }
+            Some(slug.to_string())
+        }
+        None => {
+            let target = resolve_mutation_target(root, None, "decisions log", false)?;
+            feature_for_stamp(&target)
         }
     };
 

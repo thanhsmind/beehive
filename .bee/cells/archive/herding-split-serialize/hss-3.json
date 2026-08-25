@@ -49,7 +49,7 @@
     "verify_passed": null,
     "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
     "claimed_at": "2026-08-21T14:31:43.741Z",
-    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "tests": "boundary",
     "report": {
       "outcome": "Worker panes now stack in one right-hand column and the caller's main pane is split exactly once, at a one-third-floored-at-60 ratio",
       "commit": "77823ed9",
@@ -66,7 +66,9 @@
     "warnings": [
       "advisory: this cap's commit changes 440 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "escalation_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier"
   },
-  "tier": "ceiling"
+  "tier": "ceiling",
+  "role": "code",
+  "escalate": true
 }

@@ -31,12 +31,75 @@ pub(crate) const DISPATCH_RUNTIMES: [&str; 2] = ["codex", "claude"];
 pub(crate) const DISPATCH_KINDS: [&str; 4] = ["cell", "gather", "reviewer", "advisor"];
 
 /// provenance: dispatch-prepare.mjs slotForKind (the PURPOSE MAP, advisor A1).
-pub(crate) fn slot_for_kind(kind: &str) -> &'static str {
+///
+/// D2 (decision 06e49368) — the second silent-resolve site, closed. This map
+/// used to end in a catch-all `_ => "advisor"`, so ANY kind without its own
+/// arm resolved the advisor slot. `kind` is enum-gated against
+/// `DISPATCH_KINDS` (at the flag parse and again at `prepare_dispatch`'s
+/// entry), so a typo could never reach it — the hazard was a kind added to
+/// `DISPATCH_KINDS` later with no arm here, which would have routed that work
+/// to the advisor model with nothing red to show for it. Every kind now names
+/// its slot EXPLICITLY; an unhandled kind returns `None` and its caller
+/// refuses (`unmapped_kind_refusal`).
+pub(crate) fn slot_for_kind(kind: &str) -> Option<&'static str> {
     match kind {
-        "cell" | "gather" => "generation",
-        "reviewer" => "review",
-        _ => "advisor",
+        "cell" | "gather" => Some("generation"),
+        "reviewer" => Some("review"),
+        "advisor" => Some("advisor"),
+        _ => None,
     }
+}
+
+/// The typed refusal a kind with no `slot_for_kind` arm earns: `{ok:false}`
+/// naming its remedy, in the same shape as every other prepare refusal —
+/// never a silent resolution onto some other consumer's model.
+pub(crate) fn unmapped_kind_refusal(kind: &str) -> Value {
+    let mut refusal = Map::new();
+    refusal.insert("ok".into(), Value::Bool(false));
+    refusal.insert("type".into(), Value::String("refused".into()));
+    refusal.insert("reason".into(), Value::String("kind_slot_unmapped".into()));
+    refusal.insert("kind".into(), Value::String(kind.to_string()));
+    refusal.insert(
+        "fix".into(),
+        Value::String(format!(
+            "dispatch kind \"{kind}\" has no slot mapping — add an explicit arm for it to slot_for_kind (verbs/drivers/prepare.rs) beside its DISPATCH_KINDS entry. An unmapped kind is refused, never resolved onto the advisor slot."
+        )),
+    );
+    Value::Object(refusal)
+}
+
+/// A non-empty string field off a loaded cell record, or `None`. Written once
+/// because the dispatch now reads TWO of them in precedence order (`role`,
+/// then a pre-mrs-8 record's `tier`) and two hand-rolled copies of the same
+/// "empty string is no value" rule is how the two drift.
+pub(crate) fn recorded_str<'a>(cell: Option<&'a Value>, field: &str) -> Option<&'a str> {
+    cell.and_then(|c| vget(c, field)).and_then(|v| match v {
+        Value::String(s) if !s.is_empty() => Some(s.as_str()),
+        _ => None,
+    })
+}
+
+/// The ordered role list a CELL EXECUTION asks for, per store 561e1bda.
+///
+/// `[<the cell's own role>, code, generation]`, and for a read-shaped cell
+/// `[read, extraction, generation]` — the read consumer's own literal list,
+/// reached here because a cell is the only thing that can DECLARE itself a
+/// read job (D9 backfills every `tier: extraction` cell to `role: read`).
+///
+/// THE TAIL IS LOAD-BEARING. Fall-through walks to the first name that
+/// resolves, so a list ending at `code` would walk straight past the
+/// `generation` model every existing host has configured for years and land
+/// on bee's built-in default — a silent migration onto a different model, the
+/// exact defect this feature exists to remove. The tail costs one array entry
+/// and makes the upgrade a no-op for every host that has not opted in.
+///
+/// The advisor is deliberately NOT here: it keeps `resolve_advisor`, one name
+/// and no fall-through at all (decision 4faf1de9).
+pub(crate) fn cell_role_list(role: &str) -> Vec<&str> {
+    if role == "read" {
+        return vec![role, "extraction", "generation"];
+    }
+    vec![role, "code", "generation"]
 }
 
 /// provenance: dispatch-prepare.mjs purposeForKind — only 'cell' is
@@ -642,6 +705,44 @@ pub(crate) fn prepare_dispatch(
     record_it: bool,
     expertise: Option<&str>,
 ) -> D<Prepared> {
+    prepare_dispatch_with_role(
+        root,
+        runtime,
+        kind,
+        None,
+        cell_id,
+        worker,
+        force_ownership,
+        classification,
+        purpose,
+        record_it,
+        expertise,
+    )
+}
+
+/// `prepare_dispatch` plus T012a's explicit `--role` override (store
+/// 8ff6e79e).
+///
+/// An ARITY ADAPTER, never a second implementation: the ten-argument
+/// spelling above is one call into this body with `role: None`, so the
+/// no-role path is the same code every existing caller already runs and
+/// cannot drift from it. It exists because "role absent" is the overwhelming
+/// majority of call sites and threading a `None` through each of them would
+/// buy nothing but churn in files this change has no business touching.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_dispatch_with_role(
+    root: &Path,
+    runtime: &str,
+    kind: &str,
+    role: Option<&str>,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    force_ownership: bool,
+    classification: Option<&str>,
+    purpose: Option<&str>,
+    record_it: bool,
+    expertise: Option<&str>,
+) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
     debug_assert!(DISPATCH_RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
@@ -728,23 +829,153 @@ pub(crate) fn prepare_dispatch(
                 .map(|(_id, worktree_root)| (worktree_root, root.to_string_lossy().into_owned()))
         });
 
-    let (tier_token, tier_source) = if kind == "cell" {
-        match cell
-            .as_ref()
-            .and_then(|c| vget(c, "tier"))
-            .and_then(|v| match v {
-                Value::String(s) if !s.is_empty() => Some(s.as_str()),
-                _ => None,
-            })
-        {
-            Some(t) => (t, "cell"),
-            None => (slot_for_kind(kind), "default"),
-        }
-    } else {
-        (slot_for_kind(kind), "default")
+    // D2 (06e49368): the default slot resolves ONCE, through an explicit arm.
+    // A kind with no arm refuses here — it never falls through onto the
+    // advisor slot. Unreachable today (both gates enum-check `kind` against
+    // DISPATCH_KINDS); it exists so that adding a fifth kind without its
+    // mapping is a typed refusal instead of silent work on the wrong model.
+    let Some(default_slot) = slot_for_kind(kind) else {
+        return Ok(Prepared::Value(unmapped_kind_refusal(kind)));
     };
     let models = read_models(root)?;
-    let (resolved, is_ceiling) = if kind == "advisor" {
+    // T012a: a `--role` naming a role nothing configures is REFUSED, never
+    // resolved onto some other role's model. Same FIX shape as the
+    // model-guard's marker refusal, and — the part that used to be a comment
+    // rather than a fact — the SAME predicate, `known_role_named`, answer and
+    // all. This door asked a plain `contains` while the guard asked
+    // `eq_ignore_ascii_case`, so `--role Generation` was refused here while
+    // `[bee-tier: Generation]` was admitted and resolved there: one typo, two
+    // answers, through the two doors that share this predicate precisely so
+    // that cannot happen.
+    //
+    // The answer carries the CONFIG's own spelling, and `role` is rebound to
+    // it for the rest of this function. That is load-bearing rather than
+    // cosmetic: every downstream read — the advisor branch's `role ==
+    // Some(ADVISOR_ROLE)`, the resolved role list, the `[bee-tier: …]` marker
+    // stamped on the payload, `economics.logical_tier` — has to be a key the
+    // resolver can look up, exactly as `classify_marker` hands the guard one.
+    // Admitting a spelling here without normalizing it would have moved the
+    // two-answers defect one line down instead of closing it.
+    let canonical_role: Option<String> = match role {
+        Some(declared) => match known_role_named(&models, runtime, declared) {
+            Some(canonical) => Some(canonical),
+            None => {
+                let roles = role_list(&models, runtime);
+                let mut refusal = Map::new();
+                refusal.insert("ok".into(), Value::Bool(false));
+                refusal.insert("type".into(), Value::String("refused".into()));
+                refusal.insert("reason".into(), Value::String("role_not_configured".into()));
+                refusal.insert("role".into(), Value::String(declared.to_string()));
+                refusal.insert("fix".into(), Value::String(format!(
+                    "--role \"{declared}\" names a role nothing configures — models.{runtime} in .bee/config.json carries no \"{declared}\" entry, so the dispatch would select no model while the record asserted the caller had chosen one. FIX: name a configured role ({roles}), or configure this one — add \"{declared}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you configure is legal; bee holds no fixed list."
+                )));
+                return Ok(Prepared::Value(Value::Object(refusal)));
+            }
+        },
+        None => None,
+    };
+    // Unreachable as `None` when `role` was `Some` — that arm returned above.
+    let role: Option<&str> = canonical_role.as_deref();
+    // T012a (store 8ff6e79e): an explicit `--role` names the slot to resolve
+    // OUTRIGHT, so neither the kind's default slot nor the cell's own
+    // recorded value is consulted — the caller stating the job is the most
+    // specific signal there is. Absent, this whole expression is the code
+    // that stood here before, so every existing invocation keeps its bytes.
+    //
+    // What this buys is the reachability D12 asked for without D12's fifth
+    // kind: `--kind gather --role extraction` resolves the extraction slot
+    // and returns bee-extract, so every rendered bee agent is reachable
+    // through the one door instead of one of them being rendered,
+    // onboarded and documented while prepare could never return it.
+    //
+    // D3 (store 3c9d6262) — the WORK declares its job. A `--kind cell`
+    // dispatch reads the cell's own `role` (required since mrs-8) and that
+    // name HEADS the ordered list resolved below. Precedence, most specific
+    // first: an explicit `--role` names the slot outright; else the cell's
+    // declared role; else the kind's default slot.
+    //
+    // A role-LESS cell — every record written before mrs-8 — keeps the exact
+    // path it had: its recorded `tier` still selects, still stamps
+    // `tier_source: "cell"`, and still earns the `tier_not_configured`
+    // refusal below. `tier` is not retired here (that is a later slice); this
+    // changes which value a role-CARRYING cell resolves from, nothing else.
+    // `from_role` is what tells the two apart downstream — the observable
+    // `tier_source` vocabulary is unchanged at {flag, cell, default}.
+    let (tier_token, tier_source, from_role) = match role {
+        Some(role) => (role, "flag", false),
+        None => {
+            if kind == "cell" {
+                match recorded_str(cell.as_ref(), "role") {
+                    Some(r) => (r, "cell", true),
+                    None => match recorded_str(cell.as_ref(), "tier") {
+                        Some(t) => (t, "cell", false),
+                        None => (default_slot, "default", false),
+                    },
+                }
+            } else {
+                (default_slot, "default", false)
+            }
+        }
+    };
+    // The advisor slot keeps its own resolver (never budget, never a tier
+    // fallback). The condition reads the ROLE rather than the kind so an
+    // explicit `--role advisor` reaches it too, and `--kind advisor --role
+    // <other>` does not: with no `--role` it is exactly `kind == "advisor"`,
+    // because `slot_for_kind("advisor")` is the advisor slot.
+    //
+    // Which name in the list actually WON. Set only on the cell-role path,
+    // because every other path asks for one name (or `[review, generation]`,
+    // whose fall-through predates this feature) and must keep stamping the
+    // exact token it always stamped.
+    let mut resolved_role: Option<&str> = None;
+    // D5 (store `97ce5225`) — ESCALATION, read off the cell's flag rather
+    // than off a tier value. `ceiling` used to arrive here as `tier_token`
+    // and mean "run on the session model"; now the cell says so directly
+    // (`crate::verbs::cells::cell_is_escalated` — the one predicate the 40%
+    // ration reads too, so the cell that charges the budget and the cell
+    // that spends it are the same set).
+    //
+    // Precedence is unchanged: an explicit `--role` names the slot OUTRIGHT,
+    // so it still wins over the cell's own marking — including `--role
+    // ceiling`, which stays the escalation door for a dispatch with no cell
+    // behind it (a gather or a reviewer run on the session model). The flag
+    // is read only on a `--kind cell` dispatch with no `--role`, which is
+    // exactly the shape that used to read the cell's recorded `tier`.
+    let escalated_cell = role.is_none()
+        && kind == "cell"
+        && cell.as_ref().map(crate::verbs::cells::cell_is_escalated).unwrap_or(false);
+    // REVIEW P1-A — the escalation word is read off the CALLER or the FLAG,
+    // never off a name the cell DECLARED.
+    //
+    // `tier_token` is one variable carrying three different provenances, and
+    // `from_role` is the only thing that tells them apart. On the `from_role`
+    // path it is the cell's own `role` string, and validation is deliberately
+    // membership-blind there (D2, store `06e49368`: the role set is OPEN, so
+    // any non-empty name is legal at add time). Testing `tier_token ==
+    // ESCALATION_WORD` without this guard therefore let a cell escalate
+    // ITSELF by declaring `role: "ceiling"` — `Resolved::Inherit`, the
+    // session model, no `model` parameter — while `cell_is_escalated` read
+    // false for the same record and every counter that enforces the 40%
+    // ration (`escalation_share_after`, `role_mix`,
+    // `ceiling_scarcity_warning`) missed it. Measured on a seven-cell feature
+    // with six such cells: 86% escalated, and the refusal never fired.
+    //
+    // The two legitimate spellings both survive, because neither is
+    // `from_role`: an explicit `--role ceiling` is `tier_source: "flag"`, and
+    // a pre-migration record's `tier: "ceiling"` is already `escalated_cell`
+    // through `cell_is_escalated`'s legacy read.
+    //
+    // Narrowing HERE rather than refusing the name at `verbs::cells::validate`
+    // is the deliberate call: D5 took `ceiling` off the role axis entirely, so
+    // a cell declaring it is just a role nothing configures, and this arm is
+    // what makes `resolve_role_named`'s standing promise ("it warns and falls
+    // through like any other") true of the shipped code. The alternative —
+    // a reserved name validation rejects — would put one closed word back in
+    // the open set D2 locks, and closes the hole only for cells authored
+    // after it lands.
+    let escalation_asked = tier_token == ESCALATION_WORD && !from_role;
+    let (resolved, is_escalated) = if role == Some(ADVISOR_ROLE) || (role.is_none() && kind == "advisor")
+    {
         let r = match resolve_advisor(&models, runtime) {
             Some(r) => r,
             None => {
@@ -758,10 +989,22 @@ pub(crate) fn prepare_dispatch(
             }
         };
         (r, false)
-    } else if tier_token == "ceiling" {
+    } else if escalated_cell || escalation_asked {
+        // `Resolved::Inherit` IS "the session model": the payload built
+        // below carries no `model` parameter and no herding command, on
+        // either runtime. An escalated cell never walks the role list at
+        // all — the escalation outranks whatever job name the cell declares,
+        // which is what "run on the session model" has always meant.
         (Resolved::Inherit, true)
     } else {
-        if tier_source == "cell" && !is_cell_tier_configured(&models, runtime, tier_token) {
+        // A recorded TIER that nothing configures is still a refusal: a cost
+        // word bee cannot resolve was never a fall-through, and pre-mrs-8
+        // records keep that answer exactly. A recorded ROLE is the opposite
+        // by construction — D2's open set says an unresolvable name YIELDS to
+        // the next, and D3 bounds the cost of a bad guess at "ran on the
+        // normal model", so `from_role` never reaches this door.
+        if tier_source == "cell" && !from_role && !is_cell_tier_configured(&models, runtime, tier_token)
+        {
             let mut refusal = Map::new();
             refusal.insert("ok".into(), Value::Bool(false));
             refusal.insert("type".into(), Value::String("refused".into()));
@@ -772,7 +1015,15 @@ pub(crate) fn prepare_dispatch(
             )));
             return Ok(Prepared::Value(Value::Object(refusal)));
         }
-        let r = resolve_tier(&models, tier_token, runtime, kind);
+        // 561e1bda: the cell's own role heads the cell-execution list; every
+        // other caller asks the tier-shaped question it always asked. Both
+        // walk the ONE resolver, and the walk hands back the name that won.
+        let roles =
+            if from_role { cell_role_list(tier_token) } else { tier_role_list(tier_token) };
+        let (winner, r) = resolve_role_named(&models, &roles, runtime, kind);
+        if from_role {
+            resolved_role = winner;
+        }
         if let Resolved::Refused { slot } = &r {
             let mut refusal = Map::new();
             refusal.insert("ok".into(), Value::Bool(false));
@@ -784,6 +1035,24 @@ pub(crate) fn prepare_dispatch(
         }
         (r, false)
     };
+
+    // THE NAME THE DISPATCH TRAVELS UNDER — the role that resolved, which on
+    // every path but a fallen-through cell role is the token asked for.
+    //
+    // It matters because `hooks/model_guard.rs` reads the `[bee-tier: …]`
+    // marker back and DENIES a name nothing configures: a cell declaring
+    // `role: "code"` on a host that carries no `code` key runs on that host's
+    // `generation` model, and a marker still saying "code" would have the
+    // guard refuse the dispatch bee itself just prepared. The marker names
+    // the model channel; `tier_source` still says who chose it, and the cell
+    // record still carries the job the work declared.
+    //
+    // An ESCALATED dispatch travels under the escalation word, never under
+    // the cell's job role. The payload's marker says `[bee-tier: ceiling]`
+    // and `economics.logical_tier` has to say the same thing, or the guard's
+    // audit line resolves one name while the marker carries another.
+    let marker_role: &str =
+        if is_escalated { ESCALATION_WORD } else { resolved_role.unwrap_or(tier_token) };
 
     let prompt_body = match prompt_body_for(
         root,
@@ -808,7 +1077,7 @@ pub(crate) fn prepare_dispatch(
     // is the one signal that can, and only a --kind cell dispatch is a cell
     // execution (dp-2).
     let pinned_type =
-        if kind == "cell" { "bee-build" } else { pinned_agent_type(tier_token) };
+        if kind == "cell" { "bee-build" } else { pinned_agent_type(marker_role) };
 
     // The dispatch SUBJECT — computed ONCE, here, before the transport match,
     // so every branch below (native override, native fallback, codex
@@ -852,7 +1121,7 @@ pub(crate) fn prepare_dispatch(
     let mut extra_transport: Option<&str> = None;
     let mut extra_fallback_reason: Option<&str> = None;
 
-    if is_ceiling {
+    if is_escalated {
         if runtime == "codex" {
             tool = "spawn_agent".into();
             payload.insert(
@@ -861,7 +1130,7 @@ pub(crate) fn prepare_dispatch(
             );
             payload.insert(
                 "message".into(),
-                Value::String(format!("[bee-tier: ceiling]\n{prompt_body}")),
+                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
             );
             payload.insert("fork_turns".into(), Value::String("none".into()));
             channel = "session-model".into();
@@ -870,9 +1139,12 @@ pub(crate) fn prepare_dispatch(
             payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
             payload.insert(
                 "prompt".into(),
-                Value::String(format!("[bee-tier: ceiling]\n{prompt_body}")),
+                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
             );
-            payload.insert("description".into(), Value::String(format!("{subject} (ceiling)")));
+            payload.insert(
+                "description".into(),
+                Value::String(format!("{subject} ({ESCALATION_WORD})")),
+            );
             channel = "session-model".into();
         }
     } else {
@@ -891,7 +1163,7 @@ pub(crate) fn prepare_dispatch(
                     );
                     payload.insert(
                         "message".into(),
-                        Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                        Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
                     );
                     payload.insert("model".into(), Value::String(model.clone()));
                     payload.insert("fork_turns".into(), Value::String("none".into()));
@@ -990,8 +1262,8 @@ pub(crate) fn prepare_dispatch(
                 // slot with no `fallback` field.
                 if fallback.is_some() {
                     if let Some(model) = CONFIGURABLE_SLOTS
-                        .contains(&tier_token)
-                        .then(|| default_models(runtime).get(tier_token).cloned())
+                        .contains(&marker_role)
+                        .then(|| default_models(runtime).get(marker_role).cloned())
                         .flatten()
                         .and_then(|v| match v {
                             Value::String(s) => Some(s),
@@ -1023,7 +1295,7 @@ pub(crate) fn prepare_dispatch(
                 );
                 payload.insert(
                     "message".into(),
-                    Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                    Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
                 );
                 payload.insert("fork_turns".into(), Value::String("none".into()));
                 channel = "codex-native".into();
@@ -1033,13 +1305,13 @@ pub(crate) fn prepare_dispatch(
                 payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
                 payload.insert(
                     "prompt".into(),
-                    Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                    Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
                 );
                 // `requestedModel || tierToken`
                 let model_tag = requested_model
                     .clone()
                     .filter(|m| !m.is_empty())
-                    .unwrap_or_else(|| tier_token.to_string());
+                    .unwrap_or_else(|| marker_role.to_string());
                 // A description that is only a model name is a red flag
                 // (work-visibility D2) — and it was the one prepare emitted, so
                 // orchestrators wrote their own bare `Execute <id>` instead and
@@ -1059,13 +1331,47 @@ pub(crate) fn prepare_dispatch(
         return Ok(Prepared::Value(refusal));
     }
 
+    // model-role-split D10/D11 (store 50808d48), scoped for this codebase by
+    // 51341f84: the runtime fallback chain is a contract bee PUBLISHES on the
+    // payload, never a loop bee runs. prepare builds a payload and returns —
+    // the orchestrator or the worker executes it — so bee never sees the 429,
+    // the 5xx or the stall a chain step answers. What travels here is the
+    // chain that applies to THIS dispatch plus D11's gate in both directions,
+    // beside the model, in the same shape and the same neighbourhood as the
+    // herding slot's `fallback` + `fallback_when` above.
+    //
+    // Gated on the payload ACTUALLY carrying a model, which is the literal
+    // reading of "beside the model" and the honest one: an escalated dispatch
+    // (session model, no `model` parameter), a cli-exec command and a herding
+    // pane carry no model to fall FROM, so a list of model selectors would be
+    // advice none of them could take. `marker_role` is the role the dispatch
+    // travels under — the same name the `[bee-tier: …]` marker and
+    // `economics.logical_tier` carry, so a role-keyed chain is keyed on the
+    // channel that can actually fail rather than on a name that fell through.
+    //
+    // EXPLICIT-ONLY: with no `retry.fallbackChains` configured,
+    // `read_fallback_chains` hands back an empty map, `resolve_fallback_chain`
+    // answers None, and nothing at all is inserted — every payload stays
+    // byte-identical to before this block existed, the advisor included.
+    if let Some(model) = payload.get("model").and_then(Value::as_str).map(str::to_string) {
+        if !model.is_empty() {
+            let chains = read_fallback_chains(root);
+            if let Some((key, steps)) = resolve_fallback_chain(&chains, marker_role, &model) {
+                payload.insert("fallback_chain".into(), fallback_chain_payload(&key, &steps));
+            }
+        }
+    }
+
     let param_model = match (&channel[..], &resolved) {
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
         _ => None,
     };
+    // `logical_tier` audits the model channel this dispatch actually took, so
+    // it reads the resolved role for the same reason the marker does — the
+    // guard's own audit line resolves that name back and the two must agree.
     let mut economics = derive_economics(
         &channel,
-        tier_token,
+        marker_role,
         param_model.as_deref(),
         &resolved,
         native_confirmed,
@@ -1324,6 +1630,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             "session-id",
             "purpose",
             "expertise",
+            "role",
         ],
     ) {
         return None;
@@ -1365,6 +1672,13 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // `--kind cell`); `one_line` inside prepare_dispatch collapses it to a
     // single line, so no separate "<one line>" validation is needed here.
     let purpose = flags.truthy_str("purpose").map(str::to_string);
+    // T012a: the role the caller declares for this dispatch. `truthy_str`
+    // reads an empty or boolean-shaped `--role` as absent, which is the right
+    // answer — a role that names nothing is no role at all, and the whole
+    // point of the flag is that it is EXPLICIT. A name nothing configures is
+    // refused inside `prepare_dispatch_with_role`, beside the FIX that lists
+    // the roles this runtime can resolve.
+    let role = flags.truthy_str("role").map(|r| js_trim(r).to_string()).filter(|r| !r.is_empty());
     let force_ownership = matches!(flags.get("force-ownership"), Some(FlagV::Present));
 
     let expertise_flag = match flags.get("expertise") {
@@ -1451,10 +1765,11 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     let prepared = if arg_error.is_some() {
         Prepared::Value(Value::Null) // unused — the refusal short-circuits below
     } else {
-        prepare_dispatch(
+        prepare_dispatch_with_role(
             &root,
             &runtime,
             &kind,
+            role.as_deref(),
             cell_id.as_deref(),
             worker.as_deref(),
             force_ownership,
@@ -1517,10 +1832,11 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         _ => {
             // Re-run for real so the prepare-time record is appended exactly
             // once, with a freshly minted dispatch_id/ts like Node's.
-            match prepare_dispatch(
+            match prepare_dispatch_with_role(
                 &ctx.root,
                 &runtime,
                 &kind,
+                role.as_deref(),
                 cell_id.as_deref(),
                 worker.as_deref(),
                 force_ownership,
@@ -1998,4 +2314,404 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     let result = Value::Object(result);
     let text = jsjson::stringify_pretty(&result);
     finish(&ctx, Ok(Out::Emit(result, text, 0)))
+}
+
+// ═══ tests — the slot map's explicit arms (D2 / 06e49368) ══════════════════
+
+#[cfg(test)]
+mod slot_map_tests {
+    use super::*;
+
+    /// The four live kinds keep exactly the slots they resolved before the
+    /// catch-all went away — cell/gather → generation, reviewer → review,
+    /// advisor → advisor.
+    #[test]
+    fn every_dispatch_kind_keeps_its_slot() {
+        assert_eq!(slot_for_kind("cell"), Some("generation"));
+        assert_eq!(slot_for_kind("gather"), Some("generation"));
+        assert_eq!(slot_for_kind("reviewer"), Some("review"));
+        assert_eq!(slot_for_kind("advisor"), Some("advisor"));
+        // Every declared kind has an arm: no member of DISPATCH_KINDS may
+        // reach the unmapped branch.
+        for kind in DISPATCH_KINDS {
+            assert!(slot_for_kind(kind).is_some(), "kind {kind:?} has no slot arm");
+        }
+    }
+
+    /// `advisor` is the one gate onto the advisor slot. Nothing else — not a
+    /// live kind, not a name that could plausibly be added later — resolves
+    /// it by falling through.
+    #[test]
+    fn only_the_advisor_arm_resolves_the_advisor_slot() {
+        for kind in ["cell", "gather", "reviewer", "extract", "judge", "", "advisorr", "ADVISOR"] {
+            assert_ne!(
+                slot_for_kind(kind),
+                Some("advisor"),
+                "kind {kind:?} resolved the advisor slot"
+            );
+        }
+        assert_eq!(slot_for_kind("advisor"), Some("advisor"));
+    }
+
+    /// An unhandled kind resolves NOTHING: it returns None so the caller can
+    /// refuse, rather than silently landing on some other consumer's model.
+    #[test]
+    fn an_unhandled_kind_resolves_no_slot_at_all() {
+        for kind in ["extract", "judge", "scribe", "", "  ", "Cell"] {
+            assert_eq!(slot_for_kind(kind), None, "kind {kind:?} resolved a slot");
+        }
+    }
+
+    /// The refusal is typed and names its remedy — the shape a caller can
+    /// branch on, not free prose.
+    #[test]
+    fn the_unmapped_kind_refusal_is_typed_and_names_its_remedy() {
+        let refusal = unmapped_kind_refusal("extract");
+        assert_eq!(refusal.get("ok"), Some(&Value::Bool(false)));
+        assert_eq!(refusal.get("type"), Some(&Value::String("refused".into())));
+        assert_eq!(
+            refusal.get("reason"),
+            Some(&Value::String("kind_slot_unmapped".into()))
+        );
+        assert_eq!(refusal.get("kind"), Some(&Value::String("extract".into())));
+        let fix = refusal.get("fix").and_then(|v| v.as_str()).unwrap_or_default();
+        assert!(fix.contains("extract"), "fix must name the kind: {fix}");
+        assert!(fix.contains("slot_for_kind"), "fix must name the remedy: {fix}");
+    }
+}
+
+// ═══ tests — the explicit --role override (T012a / 8ff6e79e) ══════════════
+
+#[cfg(test)]
+mod role_flag_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// A repo root with nothing but the two files prepare reads. Kept local
+    /// rather than imported: the drivers test module's own `repo` fixture is
+    /// private to its `#[cfg(test)] mod tests`.
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    const THREE_SLOTS: &str =
+        r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus"}}}"#;
+
+    fn envelope(root: &Path, kind: &str, role: Option<&str>) -> Value {
+        let out =
+            prepare_dispatch_with_role(root, "claude", kind, role, None, None, false, None, None, false, None)
+                .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected an envelope for {kind}/{role:?}") };
+        v
+    }
+
+    /// THE reachability truth (decision 8dad7c2e's stated defect, closed):
+    /// bee-extract is rendered, onboarded and documented, and now the one
+    /// door can return it. A read-shaped dispatch names the read-shaped role
+    /// and gets the reader — no fifth dispatch kind, no remapped `gather`.
+    #[test]
+    fn a_read_shaped_role_returns_the_bee_extract_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, THREE_SLOTS);
+        let v = envelope(&root, "gather", Some("extraction"));
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-extract")));
+        assert_eq!(p.get("model"), Some(&json!("haiku")), "the ROLE picked the model");
+        // The marker the guard will read back names the same role, so the
+        // audit line and the model that actually runs cannot disagree.
+        let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: extraction]"), "{prompt}");
+        let e = v.get("economics").unwrap();
+        assert_eq!(e.get("logical_tier"), Some(&json!("extraction")));
+        assert_eq!(e.get("tier_source"), Some(&json!("flag")), "the caller chose it, and the record says so");
+    }
+
+    /// Every rendered bee agent is reachable through the one door. This is
+    /// the invariant the docs half of D12 (mrs-7) rewrites against: an agent
+    /// name is what prepare RETURNS, never something a caller hand-picks.
+    #[test]
+    fn every_rendered_agent_is_reachable_through_the_one_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, THREE_SLOTS);
+        let mut returned: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for (kind, role) in
+            [("gather", None), ("gather", Some("extraction")), ("reviewer", None)]
+        {
+            let v = envelope(&root, kind, role);
+            let t = v.get("payload").and_then(|p| p.get("subagent_type")).cloned().unwrap();
+            returned.insert(t.as_str().unwrap().to_string());
+        }
+        // bee-build is the cell-execution agent: `--kind cell` names it, and
+        // that is deliberately NOT role-driven — a cell execution reserves,
+        // writes and caps whatever job the cell declares (`--role` selects
+        // the MODEL, per D4, never the capability).
+        w_cell(&root, "c-1");
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root, "claude", "cell", None, Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        returned.insert(
+            v.get("payload")
+                .and_then(|p| p.get("subagent_type"))
+                .and_then(Value::as_str)
+                .unwrap()
+                .to_string(),
+        );
+        for (_, agent) in crate::verbs::drivers::ROLE_AGENTS {
+            assert!(
+                returned.contains(agent),
+                "{agent} is rendered and onboarded but the door never returns it; door returned {returned:?}"
+            );
+        }
+    }
+
+    fn w_cell(root: &Path, id: &str) {
+        let path = root.join(".bee").join("cells").join(format!("{id}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(r#"{{"id":"{id}","feature":"f","status":"claimed","trace":{{"worker":"w"}}}}"#),
+        )
+        .unwrap();
+    }
+
+    /// Absent `--role`, nothing moved. Every kind resolves the slot it always
+    /// resolved, and the envelope is byte-identical to the no-role spelling
+    /// every existing caller uses.
+    #[test]
+    fn absent_role_every_dispatch_is_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, THREE_SLOTS);
+        for (kind, agent, model) in [
+            ("gather", "bee-gather", "sonnet"),
+            ("reviewer", "bee-review", "opus"),
+        ] {
+            let with_none = envelope(&root, kind, None);
+            let p = with_none.get("payload").unwrap();
+            assert_eq!(p.get("subagent_type"), Some(&json!(agent)), "{kind}");
+            assert_eq!(p.get("model"), Some(&json!(model)), "{kind}");
+            assert_eq!(
+                with_none.get("economics").and_then(|e| e.get("tier_source")),
+                Some(&json!("default"))
+            );
+            // The ten-argument spelling and the eleven-argument one are the
+            // same code: an adapter, not a second implementation.
+            let old = prepare_dispatch(&root, "claude", kind, None, None, false, None, None, false, None)
+                .unwrap();
+            let Prepared::Value(old) = old else { panic!("expected an envelope") };
+            assert_eq!(
+                jsjson::stringify(&strip_volatile(old)),
+                jsjson::stringify(&strip_volatile(with_none)),
+                "{kind}: --role absent must change nothing"
+            );
+        }
+    }
+
+    /// `dispatch_id`/`ts` are freshly minted per call; everything else must
+    /// match byte for byte.
+    fn strip_volatile(v: Value) -> Value {
+        let Value::Object(mut m) = v else { return v };
+        m.remove("dispatch_id");
+        m.remove("ts");
+        Value::Object(m)
+    }
+
+    /// An explicit role beats the cell's own recorded value: the caller
+    /// stating the job at the door is the most specific signal there is.
+    #[test]
+    fn an_explicit_role_outranks_the_cells_recorded_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, THREE_SLOTS);
+        w_cell(&root, "c-1");
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "cell",
+            Some("review"),
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let e = v.get("economics").unwrap();
+        assert_eq!(e.get("logical_tier"), Some(&json!("review")));
+        assert_eq!(e.get("tier_source"), Some(&json!("flag")));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("opus")));
+        // …and the execution agent is unchanged: `--role` selects the model,
+        // never what the worker is allowed to do.
+        assert_eq!(
+            v.get("payload").and_then(|p| p.get("subagent_type")),
+            Some(&json!("bee-build"))
+        );
+    }
+
+    /// A typo is refused, never resolved onto some other role's model — the
+    /// same answer the model-guard gives a marker naming an unconfigured
+    /// role, because both doors ask one `known_roles`.
+    #[test]
+    fn a_role_nothing_configures_is_refused_with_the_configured_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, THREE_SLOTS);
+        let v = envelope(&root, "gather", Some("extractoin"));
+        assert_eq!(v.get("ok"), Some(&json!(false)));
+        assert_eq!(v.get("type"), Some(&json!("refused")));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        assert_eq!(v.get("role"), Some(&json!("extractoin")));
+        let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("extractoin"), "the FIX names the typo: {fix}");
+        for configured in ["extraction", "generation", "review"] {
+            assert!(fix.contains(configured), "the FIX lists {configured}: {fix}");
+        }
+        assert!(fix.contains("models.claude"), "the FIX names where to add it: {fix}");
+        // A role the operator invented and CONFIGURED is legal — the open set
+        // is open (D2), so this is not a four-word allowlist wearing a new
+        // name.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let open = repo(
+            &tmp2,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus","docs":"haiku"}}}"#,
+        );
+        let v = envelope(&open, "gather", Some("docs"));
+        assert_eq!(v.get("ok"), None, "a configured role is not refused: {v}");
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("docs"))
+        );
+        // No rendered agent for `docs`, so the payload carries the runtime's
+        // own generic rather than an invented name.
+        assert_eq!(
+            v.get("payload").and_then(|p| p.get("subagent_type")),
+            Some(&json!("general-purpose"))
+        );
+    }
+
+    /// `--role advisor` reaches the advisor's own resolver (never budget,
+    /// never a tier fallback), and `--kind advisor --role <other>` no longer
+    /// silently reads the advisor slot instead of the role that was asked
+    /// for.
+    #[test]
+    fn the_advisor_slot_follows_the_role_not_the_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus","advisor":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", Some("advisor"));
+        assert_eq!(v.get("economics").and_then(|e| e.get("logical_tier")), Some(&json!("advisor")));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("opus")));
+        let v = envelope(&root, "advisor", Some("extraction"));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("extraction")),
+            "the role the caller named, not the kind's slot"
+        );
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("haiku")));
+    }
+
+    /// A null-valued `advisor` is the OFF spelling bee itself teaches
+    /// (`.bee/config-sample.json`: "Set null to skip the advisor line"), and
+    /// EVERY door has to read it as off — not only the two that happen to
+    /// resolve through the advisor's own floor-less walk.
+    ///
+    /// `c2ef2f9f` closed the case where the key is ABSENT. A present-but-null
+    /// key is still a key, so `known_roles` kept handing the name out as
+    /// legal: `[bee-tier: advisor]` classified as a configured role, skipped
+    /// the unconfigured-role refusal, resolved `Resolved::Budget` and let the
+    /// subagent inherit the session model, while `--role advisor` and `--kind
+    /// advisor` on the SAME host refused. One question, two doors, two
+    /// answers — through the reachable configuration bee ships.
+    #[test]
+    fn a_null_advisor_is_off_at_every_door_not_only_at_the_ones_that_resolve() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus","advisor":null}}}"#,
+        );
+        // The derivation both doors share no longer calls it a role at all,
+        // which is what the model guard reads when it classifies the marker.
+        let models = read_models(&root).unwrap();
+        assert!(
+            !known_roles(&models, "claude").contains("advisor"),
+            "a null advisor is a slot switched OFF, not a declarable role"
+        );
+        assert!(known_role_named(&models, "claude", "advisor").is_none());
+        assert!(!role_list(&models, "claude").contains("advisor"), "nor is it offered as a FIX");
+        // …so the flag door refuses…
+        let v = envelope(&root, "gather", Some("advisor"));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        // …and case-insensitivity does not smuggle the off slot back in.
+        let v = envelope(&root, "gather", Some("ADVISOR"));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        // …exactly as `--kind advisor` already did, through `resolve_advisor`.
+        let v = envelope(&root, "advisor", None);
+        assert_eq!(v.get("reason"), Some(&json!("advisor_not_configured")));
+
+        // Every OTHER role keeps its documented prompt-budget floor, null
+        // value and all: a blanket non-null rule here would refuse every
+        // codex dispatch bee makes, since `default_models` seeds every codex
+        // slot null.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let off = repo(&tmp2, r#"{"models":{"claude":{"generation":null},"codex":{}}}"#);
+        let models = read_models(&off).unwrap();
+        for name in ["generation", "extraction", "review"] {
+            assert!(known_roles(&models, "codex").contains(name), "codex {name}");
+        }
+        assert!(known_roles(&models, "claude").contains("generation"));
+        let v = envelope(&off, "gather", Some("generation"));
+        assert_eq!(v.get("ok"), None, "a null ordinary slot is prompt-budget, not a refusal: {v}");
+
+        // A CONFIGURED advisor is untouched by all of it.
+        let tmp3 = tempfile::tempdir().unwrap();
+        let on = repo(&tmp3, r#"{"models":{"claude":{"generation":"sonnet","advisor":"fable"}}}"#);
+        assert_eq!(
+            envelope(&on, "advisor", None).get("payload").and_then(|p| p.get("model")),
+            Some(&json!("fable"))
+        );
+    }
+
+    /// One typo, one answer. The guard's marker door has always matched a
+    /// role name case-insensitively (`[BEE-TIER: Generation]` declares the
+    /// `generation` role); this door asked a case-SENSITIVE `contains`, so
+    /// `--role Generation` was refused here while the marker was admitted and
+    /// resolved there — the two doors sharing a derivation but not a
+    /// predicate. Nothing exercised a mixed-case `--role` before.
+    #[test]
+    fn a_mixed_case_role_is_admitted_and_normalized_to_the_configs_spelling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, THREE_SLOTS);
+        let v = envelope(&root, "gather", Some("Generation"));
+        assert_eq!(v.get("ok"), None, "the guard admits this spelling, so this door does: {v}");
+        // The CONFIG's spelling is what travels, never the caller's: the
+        // marker the guard reads back, the audit line and the model that
+        // actually runs all name one key the resolver can look up.
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("generation"))
+        );
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("sonnet")));
+        let prompt =
+            v.get("payload").and_then(|p| p.get("prompt")).and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: generation]"), "{prompt}");
+        // A name nothing configures is still refused in the spelling the
+        // caller typed, so the FIX names what they wrote.
+        let v = envelope(&root, "gather", Some("Generatoin"));
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
+        assert_eq!(v.get("role"), Some(&json!("Generatoin")));
+    }
 }

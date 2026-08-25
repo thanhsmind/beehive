@@ -50,5 +50,6 @@
       "capCell: cell \"p1-2\" test-to-source line ratio is 264.00 (>4) for lane \"standard\" — recorded as a warning on the feature-verify-pending path (main-verifies D1; test-economy D3's waiver channel is per-cell evidence, which this path defers)."
     ],
     "feature_verify": "pending"
-  }
+  },
+  "role": "code"
 }

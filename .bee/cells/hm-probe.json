@@ -1,0 +1,56 @@
+{
+  "id": "hm-probe",
+  "feature": "human-mailbox",
+  "role": "code",
+  "title": "probe cell for the end-to-end mailbox check",
+  "action": "probe only — capped with the freshly built binary to prove a real cap appends a real mailbox entry",
+  "verify": "true",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": false,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "docs/history/human-mailbox/probe.md"
+  ],
+  "acceptance": "probe",
+  "status": "dropped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-probe",
+    "outcome": "probe cap driven with the freshly built binary to prove the mailbox append fires on a real cap",
+    "files_changed": [
+      "docs/history/human-mailbox/probe.md"
+    ],
+    "deviations": [
+      "Probe only, driven by the orchestrator to verify hm-2 wired the append."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T15:30:36.053Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T15:30:29.311Z",
+    "commit_pending": "end-to-end probe; no code written",
+    "inline_reason": "probe cell for the orchestrator's end-to-end check",
+    "report": {
+      "outcome": "probe cap for the end-to-end mailbox check",
+      "commit": "none",
+      "files": [
+        "docs/history/human-mailbox/probe.md"
+      ],
+      "tests": "none — green — probe cell, no code touched",
+      "deviations": [
+        "Probe only, driven by the orchestrator to verify hm-2 wired the append."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "dropped_reason": "end-to-end probe for the mailbox append; not real work"
+  }
+}

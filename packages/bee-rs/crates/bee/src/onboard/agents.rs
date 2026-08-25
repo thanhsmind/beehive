@@ -22,10 +22,11 @@
 
 use super::source::Engine;
 use super::templates::{
-    AGENT_OPENCODE_PERMISSION_DENY, AGENT_TIER_BY_NAME, AGENT_TIER_DEFAULTS_CLAUDE,
+    AGENT_OPENCODE_PERMISSION_DENY, AGENT_ROLES_BY_NAME, AGENT_TIER_DEFAULTS_CLAUDE,
     AGENT_TIER_DEFAULTS_OPENCODE, CODEX_AGENTS_NOTE,
 };
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists};
+use crate::verbs::drivers::{normalize_tier_value, resolve_role, Resolved};
 use serde_json::{json, Map, Value};
 use std::path::Path;
 
@@ -41,59 +42,34 @@ pub fn list_template_agents(engine: &Engine) -> Vec<String> {
         .collect()
 }
 
-fn tier_for_agent(agent_name: &str) -> Option<&'static str> {
-    AGENT_TIER_BY_NAME.iter().find(|(n, _)| *n == agent_name).map(|(_, t)| *t)
+/// The ordered ROLE LIST an agent declares (model-role-split D2/D3).
+///
+/// `None` is a template with no entry in `AGENT_ROLES_BY_NAME` at all — an
+/// agent bee does not know — and its file is never rendered, exactly as an
+/// unmapped tier was never rendered before.
+pub fn roles_for_agent(agent_name: &str) -> Option<&'static [&'static str]> {
+    AGENT_ROLES_BY_NAME.iter().find(|(n, _)| *n == agent_name).map(|(_, roles)| *roles)
 }
 
-/// normalizeAgentTierValueLocal (l. 1958). The three non-string outcomes stay
-/// distinct: resolveAgentTierModel's review→generation fallback fires ONLY on
-/// an explicit null, exactly like state.mjs resolveTier.
-#[derive(Debug, Clone, PartialEq)]
-enum Slot {
-    Model(String),
-    Null,
-    Cli,
-    /// herding-tier D1: `{kind:"herding"}` — a router value, never a model
-    /// name. AO11-shaped: like Cli, resolve_tier_model_generic reads this as
-    /// "no model" (sync_agent_file no-ops, no file written) — the Claude
-    /// subagent Task/Model tool has nothing to write here since cell
-    /// dispatch on this slot routes through the herding-exec Bash payload,
-    /// never a Task dispatch.
-    Herding,
-    /// "no override" — the default for that slot stands.
-    Unset,
-}
-
-fn normalize_agent_tier_value(value: Option<&Value>) -> Slot {
-    match value {
-        Some(Value::String(s)) if !s.trim().is_empty() => Slot::Model(s.trim().to_string()),
-        Some(Value::Null) => Slot::Null,
-        Some(Value::Object(o)) => {
-            match o.get("kind") {
-                Some(Value::String(k)) if k == "cli" => Slot::Cli,
-                Some(Value::String(k)) if k == "herding" => Slot::Herding,
-                None => match o.get("model") {
-                    Some(Value::String(m)) if !m.trim().is_empty() => {
-                        Slot::Model(m.trim().to_string())
-                    }
-                    _ => Slot::Unset,
-                },
-                _ => Slot::Unset,
-            }
-        }
-        _ => Slot::Unset,
-    }
-}
-
-/// resolveAgentTierModel (l. 1980), generalized over the runtime's
-/// `models.<runtime_key>` config slice and its own default table — the same
-/// resolution shape claude and opencode share, keyed differently.
-fn resolve_tier_model_generic(
-    repo_root: &Path,
-    tier: &str,
-    runtime_key: &str,
-    defaults: &[(&str, &str)],
-) -> Option<String> {
+/// The `models` map the SHARED resolver walks for one runtime's agent files.
+///
+/// model-role-split D1/D2 (store `cd72ec97`, `06e49368`): this module used to
+/// carry its own `normalizeAgentTierValueLocal` + `resolveAgentTierModel`
+/// pair — a second parser of the `models.<runtime>` shape, keyed to a closed
+/// three-slot table. Both are gone. What is left is the one thing onboarding
+/// legitimately owns: the SEED, bee's baked-in model per role for agent
+/// FILES, which differs from `drivers::default_models` on opencode by design
+/// (`AGENT_TIER_DEFAULTS_OPENCODE`). Everything above the seed — which value
+/// shapes are legal, which resolve, which yield — is `resolve_role`'s.
+///
+/// The overlay carries EVERY key the config names under that runtime, not a
+/// fixed slot list, which is what makes a host's own role name reach the
+/// rendered file. `normalize_tier_value` returning `None` is a junk value:
+/// the seed keeps standing, exactly as the old local normalizer's `Unset`
+/// did. A key the config names as an explicit `null` is NOT junk — it
+/// normalizes to `Null`, replaces the seed, and turns the role off, so
+/// "absent" and "refused" stay different reads.
+fn agent_models(repo_root: &Path, runtime_key: &str, seed: &[(&str, &str)]) -> Map<String, Value> {
     let config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
     let raw_runtime = config
         .as_ref()
@@ -101,43 +77,63 @@ fn resolve_tier_model_generic(
         .and_then(|c| c.get("models"))
         .filter(|m| m.is_object())
         .and_then(|m| m.get(runtime_key))
-        .filter(|c| c.is_object())
+        .and_then(|c| c.as_object())
         .cloned();
 
-    let mut resolved: Vec<(&str, Slot)> =
-        defaults.iter().map(|(slot, model)| (*slot, Slot::Model((*model).to_string()))).collect();
+    let mut slice: Map<String, Value> = seed
+        .iter()
+        .map(|(role, model)| ((*role).to_string(), Value::String((*model).to_string())))
+        .collect();
     if let Some(raw) = raw_runtime {
-        for (slot, current) in resolved.iter_mut() {
-            let value = normalize_agent_tier_value(raw.get(*slot));
-            if value != Slot::Unset {
-                *current = value;
+        for (role, value) in &raw {
+            if let Some(normalized) = normalize_tier_value(Some(value)) {
+                slice.insert(role.clone(), normalized);
             }
         }
     }
-    let get = |name: &str| resolved.iter().find(|(s, _)| *s == name).map(|(_, v)| v.clone());
-    let mut value = get(tier)?;
-    if value == Slot::Null && tier == "review" {
-        value = get("generation")?;
-    }
-    match value {
-        Slot::Model(m) => Some(m),
+    let mut models = Map::new();
+    models.insert(runtime_key.to_string(), Value::Object(slice));
+    models
+}
+
+/// Resolve an agent's declared roles into the model its file pins.
+///
+/// Only a resolved MODEL renders a file. A role that resolves to a cli
+/// command, a herding router, an inherited session model or nothing at all is
+/// not a model name, so the file is skipped and a stale copy removed — the
+/// same outcome the old local resolver reached by returning `None` for
+/// everything that was not `Slot::Model`.
+///
+/// The purpose passed to `resolve_role` is `"cell"`: these agent files are
+/// what a cell dispatch runs as. It is not observable here — a cli slot maps
+/// to no model under every purpose — but naming the honest purpose keeps the
+/// call readable next to prepare's.
+fn resolve_agent_model_generic(
+    repo_root: &Path,
+    roles: &[&str],
+    runtime_key: &str,
+    seed: &[(&str, &str)],
+) -> Option<String> {
+    let models = agent_models(repo_root, runtime_key, seed);
+    match resolve_role(&models, roles, runtime_key, "cell") {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => Some(model),
         _ => None,
     }
 }
 
-/// resolveAgentTierModel (l. 1980): claude runtime only (AO11).
-pub fn resolve_agent_tier_model(repo_root: &Path, tier: &str) -> Option<String> {
-    resolve_tier_model_generic(repo_root, tier, "claude", AGENT_TIER_DEFAULTS_CLAUDE)
+/// The model `.claude/agents/<agent>.md` pins, resolved from the roles that
+/// agent declares. Replaces `resolveAgentTierModel` (l. 1980).
+pub fn resolve_agent_model(repo_root: &Path, agent_name: &str) -> Option<String> {
+    let roles = roles_for_agent(agent_name)?;
+    resolve_agent_model_generic(repo_root, roles, "claude", AGENT_TIER_DEFAULTS_CLAUDE)
 }
 
-/// opencode-support oc-14: OpenCode's counterpart, keyed off
-/// `models.opencode` and `AGENT_TIER_DEFAULTS_OPENCODE` instead of
-/// `models.claude`/`AGENT_TIER_DEFAULTS_CLAUDE` — same fallback shape
-/// (explicit-null review falls back to generation), different config slice
-/// and different baked-in defaults (the free `opencode/*` provider, not
-/// haiku/sonnet/opus).
-pub fn resolve_opencode_agent_tier_model(repo_root: &Path, tier: &str) -> Option<String> {
-    resolve_tier_model_generic(repo_root, tier, "opencode", AGENT_TIER_DEFAULTS_OPENCODE)
+/// opencode-support oc-14's counterpart: same roles, same shared resolver,
+/// keyed off `models.opencode` and seeded with the free `opencode/*` names
+/// instead of haiku/sonnet/opus.
+pub fn resolve_opencode_agent_model(repo_root: &Path, agent_name: &str) -> Option<String> {
+    let roles = roles_for_agent(agent_name)?;
+    resolve_agent_model_generic(repo_root, roles, "opencode", AGENT_TIER_DEFAULTS_OPENCODE)
 }
 
 /// renderAgentTemplate (l. 2007): `source.split("{{TIER_MODEL}}").join(model)`.
@@ -200,16 +196,15 @@ pub fn render_opencode_agent_template(engine: &Engine, agent_name: &str, model: 
 }
 
 /// computeAgentFilePlan (l. 2018): byte-compare each rendered template
-/// against the target; a tier that resolves to null skips the render and
-/// removes a stale copy.
+/// against the target; a role list that resolves to no model skips the render
+/// and removes a stale copy.
 pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> {
     let mut items = Vec::new();
     for tmpl_name in list_template_agents(engine) {
         let agent_name = tmpl_name.trim_end_matches(".md.tmpl").to_string();
-        let tier = tier_for_agent(&agent_name);
         let rel_path = format!(".claude/agents/{agent_name}.md");
         let target = repo_root.join(".claude").join("agents").join(format!("{agent_name}.md"));
-        let model = tier.and_then(|t| resolve_agent_tier_model(repo_root, t));
+        let model = resolve_agent_model(repo_root, &agent_name);
         match model {
             Some(model) => {
                 let rendered = render_agent_template(engine, &agent_name, &model);
@@ -233,17 +228,17 @@ pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> 
 
 /// opencode-support oc-14: OpenCode's counterpart to `compute_agent_file_plan`
 /// — same template set, `.opencode/agent/<name>.md` targets, OpenCode's own
-/// tier resolver and renderer. A tier that resolves to null (or a template
-/// missing a `description:`/permission profile) skips the render and removes
-/// a stale copy, same shape as the Claude side.
+/// seed and renderer over the same shared role resolver. A role list that
+/// resolves to no model (or a template missing a `description:`/permission
+/// profile) skips the render and removes a stale copy, same shape as the
+/// Claude side.
 pub fn compute_opencode_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> {
     let mut items = Vec::new();
     for tmpl_name in list_template_agents(engine) {
         let agent_name = tmpl_name.trim_end_matches(".md.tmpl").to_string();
-        let tier = tier_for_agent(&agent_name);
         let rel_path = format!(".opencode/agent/{agent_name}.md");
         let target = repo_root.join(".opencode").join("agent").join(format!("{agent_name}.md"));
-        let model = tier.and_then(|t| resolve_opencode_agent_tier_model(repo_root, t));
+        let model = resolve_opencode_agent_model(repo_root, &agent_name);
         match model {
             Some(model) => match render_opencode_agent_template(engine, &agent_name, &model) {
                 Some(rendered) if read_text_if_exists(&target) != rendered => {
@@ -273,25 +268,36 @@ pub fn compute_opencode_agent_file_plan(engine: &Engine, repo_root: &Path) -> Ve
 /// what is actually present. opencode-support oc-14 adds an `opencode` sibling
 /// to the existing `codex` asymmetry note, now that OpenCode agent files are
 /// rendered (not just hand-authored, oc-11) — same shape, own file set.
+///
+/// `rendered_from` is keyed by the role the agent ASKS FOR — the head of its
+/// declared list — not by the entry fall-through happened to land on. That is
+/// what the record said when the key was a tier (a `bee-review` rendered off
+/// a null review slot recorded `review`, not `generation`), and it is the
+/// honest read either way: the key names the request, the value names what
+/// answered it.
 pub fn compute_agents_sync_record(engine: &Engine, repo_root: &Path, bee_version: &Value) -> Value {
     let mut files: Vec<Value> = Vec::new();
     let mut rendered_from = Map::new();
     for tmpl_name in list_template_agents(engine) {
         let agent_name = tmpl_name.trim_end_matches(".md.tmpl").to_string();
-        let tier = tier_for_agent(&agent_name);
-        if let Some(model) = tier.and_then(|t| resolve_agent_tier_model(repo_root, t)) {
+        let head_role = roles_for_agent(&agent_name).and_then(|r| r.first().copied());
+        if let Some(model) = resolve_agent_model(repo_root, &agent_name) {
             files.push(json!(format!(".claude/agents/{agent_name}.md")));
-            rendered_from.insert(tier.unwrap().to_string(), json!(model));
+            if let Some(role) = head_role {
+                rendered_from.insert(role.to_string(), json!(model));
+            }
         }
     }
     let mut opencode_files: Vec<Value> = Vec::new();
     let mut opencode_rendered_from = Map::new();
     for tmpl_name in list_template_agents(engine) {
         let agent_name = tmpl_name.trim_end_matches(".md.tmpl").to_string();
-        let tier = tier_for_agent(&agent_name);
-        if let Some(model) = tier.and_then(|t| resolve_opencode_agent_tier_model(repo_root, t)) {
+        let head_role = roles_for_agent(&agent_name).and_then(|r| r.first().copied());
+        if let Some(model) = resolve_opencode_agent_model(repo_root, &agent_name) {
             opencode_files.push(json!(format!(".opencode/agent/{agent_name}.md")));
-            opencode_rendered_from.insert(tier.unwrap().to_string(), json!(model));
+            if let Some(role) = head_role {
+                opencode_rendered_from.insert(role.to_string(), json!(model));
+            }
         }
     }
     json!({
@@ -363,9 +369,21 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(&repo).unwrap();
-        assert_eq!(resolve_agent_tier_model(&repo, "extraction").as_deref(), Some("haiku"));
-        assert_eq!(resolve_agent_tier_model(&repo, "generation").as_deref(), Some("sonnet"));
-        assert_eq!(resolve_agent_tier_model(&repo, "review").as_deref(), Some("opus"));
+        assert_eq!(resolve_agent_model(&repo, "bee-extract").as_deref(), Some("haiku"));
+        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("sonnet"));
+        assert_eq!(resolve_agent_model(&repo, "bee-build").as_deref(), Some("sonnet"));
+        assert_eq!(resolve_agent_model(&repo, "bee-review").as_deref(), Some("opus"));
+    }
+
+    /// An agent bee has no role list for renders nothing — the `None` arm of
+    /// `roles_for_agent`, which used to be the unmapped-tier arm.
+    #[test]
+    fn an_unknown_agent_resolves_no_model() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        assert_eq!(resolve_agent_model(&repo, "bee-nope"), None);
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-nope"), None);
     }
 
     #[test]
@@ -377,14 +395,66 @@ mod tests {
             std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap()
         };
         write(json!({"models":{"claude":{"review":null,"generation":"sonnet-x"}}}));
-        assert_eq!(resolve_agent_tier_model(&repo, "review").as_deref(), Some("sonnet-x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-review").as_deref(), Some("sonnet-x"));
         write(json!({"models":{"claude":{"review":{"kind":"cli","command":"x"}}}}));
-        assert_eq!(resolve_agent_tier_model(&repo, "review"), None);
+        assert_eq!(resolve_agent_model(&repo, "bee-review"), None);
         write(json!({"models":{"claude":{"generation":{"model":"  m  "}}}}));
-        assert_eq!(resolve_agent_tier_model(&repo, "generation").as_deref(), Some("m"));
+        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("m"));
         // An invalid shape leaves the default standing.
         write(json!({"models":{"claude":{"generation":42}}}));
-        assert_eq!(resolve_agent_tier_model(&repo, "generation").as_deref(), Some("sonnet"));
+        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("sonnet"));
+        // bee-extract declares ONE role and must NOT fall through: a null
+        // extraction slot removes its file rather than handing it the
+        // generation model.
+        write(json!({"models":{"claude":{"extraction":null,"generation":"sonnet-x"}}}));
+        assert_eq!(resolve_agent_model(&repo, "bee-extract"), None);
+    }
+
+    /// The capability the whole rebase exists for: a host configures a role
+    /// name of its own under `models.<runtime>`, an agent declares it, and
+    /// the rendered agent file pins that model — no bee code knows the name.
+    /// The role list is declared here rather than in `AGENT_ROLES_BY_NAME`
+    /// because WHICH names bee publishes is a separate decision (D3); the
+    /// mechanism this test pins is the resolver path, not the name list.
+    #[test]
+    fn a_host_configured_role_name_reaches_the_rendered_model() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(repo.join(".bee")).unwrap();
+        std::fs::write(
+            repo.join(".bee").join("config.json"),
+            json!({"models":{"claude":{"docs":"a-model-good-at-docs"},
+                             "opencode":{"docs":"opencode/docs-model"}}})
+            .to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_agent_model_generic(&repo, &["docs"], "claude", AGENT_TIER_DEFAULTS_CLAUDE)
+                .as_deref(),
+            Some("a-model-good-at-docs")
+        );
+        assert_eq!(
+            resolve_agent_model_generic(
+                &repo,
+                &["docs"],
+                "opencode",
+                AGENT_TIER_DEFAULTS_OPENCODE
+            )
+            .as_deref(),
+            Some("opencode/docs-model")
+        );
+        // Unconfigured heads yield to the next name; the walk is the shared
+        // resolver's, not a second one here.
+        assert_eq!(
+            resolve_agent_model_generic(
+                &repo,
+                &["test", "docs"],
+                "claude",
+                AGENT_TIER_DEFAULTS_CLAUDE
+            )
+            .as_deref(),
+            Some("a-model-good-at-docs")
+        );
     }
 
     #[test]
@@ -408,8 +478,7 @@ mod tests {
         // Materialize them; the plan then settles.
         for it in &items {
             let agent = it["agent"].as_str().unwrap();
-            let tier = tier_for_agent(agent).unwrap();
-            let model = resolve_agent_tier_model(&repo, tier).unwrap();
+            let model = resolve_agent_model(&repo, agent).unwrap();
             let target = repo.join(".claude").join("agents").join(format!("{agent}.md"));
             std::fs::create_dir_all(target.parent().unwrap()).unwrap();
             std::fs::write(&target, render_agent_template(&engine, agent, &model)).unwrap();
@@ -420,13 +489,26 @@ mod tests {
         std::fs::create_dir_all(repo.join(".bee")).unwrap();
         std::fs::write(
             repo.join(".bee").join("config.json"),
-            json!({"models":{"claude":{"review":{"kind":"cli"}}}}).to_string(),
+            json!({"models":{"claude":{"review":{"kind":"cli","command":"x"}}}}).to_string(),
         )
         .unwrap();
         let items = compute_agent_file_plan(&engine, &repo);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["action"], "remove_agent_file");
         assert_eq!(items[0]["agent"], "bee-review");
+
+        // model-role-split D1: a `{kind:"cli"}` slot with NO command is not a
+        // cli slot — it is a shape bee documents nowhere, so the one shared
+        // parser drops it and the role's default stands. The retired local
+        // normalizer read the bare `kind` and removed the file, which meant
+        // onboarding and `bee dispatch prepare` disagreed about the same
+        // config value. They agree now; the plan settles instead of removing.
+        std::fs::write(
+            repo.join(".bee").join("config.json"),
+            json!({"models":{"claude":{"review":{"kind":"cli"}}}}).to_string(),
+        )
+        .unwrap();
+        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
     }
 
     #[test]
@@ -449,15 +531,19 @@ mod tests {
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(&repo).unwrap();
         assert_eq!(
-            resolve_opencode_agent_tier_model(&repo, "extraction").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-extract").as_deref(),
             Some("opencode/ling-3.0-tiny-free")
         );
         assert_eq!(
-            resolve_opencode_agent_tier_model(&repo, "generation").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-gather").as_deref(),
             Some("opencode/big-pickle")
         );
         assert_eq!(
-            resolve_opencode_agent_tier_model(&repo, "review").as_deref(),
+            resolve_opencode_agent_model(&repo, "bee-build").as_deref(),
+            Some("opencode/big-pickle")
+        );
+        assert_eq!(
+            resolve_opencode_agent_model(&repo, "bee-review").as_deref(),
             Some("opencode/nemotron-3-ultra-free")
         );
     }
@@ -471,9 +557,9 @@ mod tests {
             std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap()
         };
         write(json!({"models":{"opencode":{"review":null,"generation":"opencode/x"}}}));
-        assert_eq!(resolve_opencode_agent_tier_model(&repo, "review").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-review").as_deref(), Some("opencode/x"));
         write(json!({"models":{"opencode":{"review":{"kind":"cli","command":"x"}}}}));
-        assert_eq!(resolve_opencode_agent_tier_model(&repo, "review"), None);
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-review"), None);
     }
 
     #[test]
@@ -515,8 +601,7 @@ mod tests {
         // Materialize them; the plan then settles.
         for it in &items {
             let agent = it["agent"].as_str().unwrap();
-            let tier = tier_for_agent(agent).unwrap();
-            let model = resolve_opencode_agent_tier_model(&repo, tier).unwrap();
+            let model = resolve_opencode_agent_model(&repo, agent).unwrap();
             let target = repo.join(".opencode").join("agent").join(format!("{agent}.md"));
             std::fs::create_dir_all(target.parent().unwrap()).unwrap();
             std::fs::write(
@@ -531,13 +616,23 @@ mod tests {
         std::fs::create_dir_all(repo.join(".bee")).unwrap();
         std::fs::write(
             repo.join(".bee").join("config.json"),
-            json!({"models":{"opencode":{"review":{"kind":"cli"}}}}).to_string(),
+            json!({"models":{"opencode":{"review":{"kind":"cli","command":"x"}}}}).to_string(),
         )
         .unwrap();
         let items = compute_opencode_agent_file_plan(&engine, &repo);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["action"], "remove_opencode_agent_file");
         assert_eq!(items[0]["agent"], "bee-review");
+
+        // The Claude side's note applies here too: a command-less
+        // `{kind:"cli"}` is junk to the one shared parser, so the seed stands
+        // and the plan settles.
+        std::fs::write(
+            repo.join(".bee").join("config.json"),
+            json!({"models":{"opencode":{"review":{"kind":"cli"}}}}).to_string(),
+        )
+        .unwrap();
+        assert!(compute_opencode_agent_file_plan(&engine, &repo).is_empty());
     }
 
     #[test]
@@ -567,9 +662,9 @@ mod tests {
         if !exists(&engine.templates_agents_dir) {
             return; // packaged build, not a source checkout — nothing to pin
         }
-        for (agent, tier) in AGENT_TIER_BY_NAME {
-            let model = resolve_opencode_agent_tier_model(&root, tier)
-                .unwrap_or_else(|| panic!("no default opencode model for tier {tier}"));
+        for (agent, _roles) in AGENT_ROLES_BY_NAME {
+            let model = resolve_opencode_agent_model(&root, agent)
+                .unwrap_or_else(|| panic!("no default opencode model for agent {agent}"));
             let rendered = render_opencode_agent_template(&engine, agent, &model)
                 .unwrap_or_else(|| panic!("opencode render skipped for {agent}"));
             let committed =

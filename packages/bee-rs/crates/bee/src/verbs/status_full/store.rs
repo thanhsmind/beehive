@@ -358,136 +358,40 @@ pub(crate) fn normalize_commands(raw: Option<&Value>) -> JMap {
     commands
 }
 
-/// state.mjs normalizeTierValue — returns None for "undefined" (invalid
-/// shape: the seeded default stays).
-pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
-    match value {
-        Some(Value::String(s)) if !js_trim(s).is_empty() => Some(json!(js_trim(s))),
-        Some(Value::Null) => Some(Value::Null),
-        Some(Value::Object(o)) => {
-            if str_eq(o.get("kind"), "cli") {
-                if let Some(Value::String(cmd)) = o.get("command") {
-                    if !js_trim(cmd).is_empty() {
-                        let mut out = JMap::new();
-                        out.insert("kind".into(), json!("cli"));
-                        out.insert("command".into(), json!(js_trim(cmd)));
-                        return Some(Value::Object(out));
-                    }
-                }
-            }
-            if str_eq(o.get("kind"), "native") {
-                if let Some(Value::String(model)) = o.get("model") {
-                    if !js_trim(model).is_empty() {
-                        let mut out = JMap::new();
-                        out.insert("kind".into(), json!("native"));
-                        out.insert("model".into(), json!(js_trim(model)));
-                        if let Some(Value::String(e)) = o.get("effort") {
-                            if EFFORT_LEVELS.contains(&js_trim(e)) {
-                                out.insert("effort".into(), json!(js_trim(e)));
-                            }
-                        }
-                        if let Some(Value::String(ft)) = o.get("fork_turns") {
-                            if js_trim(ft) == "none" {
-                                out.insert("fork_turns".into(), json!("none"));
-                            }
-                        }
-                        if let Some(Value::String(at)) = o.get("agent_type") {
-                            if !js_trim(at).is_empty() {
-                                out.insert("agent_type".into(), json!(js_trim(at)));
-                            }
-                        }
-                        return Some(Value::Object(out));
-                    }
-                }
-            }
-            // herding-tier D1: { kind: 'herding' } — a router value, no other
-            // fields required; unknown extras are dropped, same as cli/native
-            // (mirrors drivers/models.rs::normalize_tier_value).
-            if str_eq(o.get("kind"), "herding") {
-                let mut out = JMap::new();
-                out.insert("kind".into(), json!("herding"));
-                return Some(Value::Object(out));
-            }
-            // Explicit-fallback composite: primary must be a valid native leaf.
-            if let Some(primary @ Value::Object(p)) = o.get("primary") {
-                let primary_ok = str_eq(p.get("kind"), "native")
-                    && matches!(p.get("model"), Some(Value::String(m)) if !js_trim(m).is_empty());
-                if primary_ok {
-                    let mut out = JMap::new();
-                    out.insert("primary".into(), normalize_tier_value(Some(primary)).unwrap_or(Value::Null));
-                    if str_eq(o.get("fallback_policy"), "explicit-only") {
-                        out.insert("fallback_policy".into(), json!("explicit-only"));
-                        if let Some(Value::Object(fb)) = o.get("fallback") {
-                            if str_eq(fb.get("kind"), "cli") {
-                                if let Some(Value::String(cmd)) = fb.get("command") {
-                                    if !js_trim(cmd).is_empty() {
-                                        let mut f = JMap::new();
-                                        f.insert("kind".into(), json!("cli"));
-                                        f.insert("command".into(), json!(js_trim(cmd)));
-                                        out.insert("fallback".into(), Value::Object(f));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return Some(Value::Object(out));
-                }
-            }
-            if o.get("kind").is_none() {
-                if let Some(Value::String(model)) = o.get("model") {
-                    if !js_trim(model).is_empty() {
-                        let mut out = JMap::new();
-                        out.insert("model".into(), json!(js_trim(model)));
-                        if let Some(Value::String(e)) = o.get("effort") {
-                            if EFFORT_LEVELS.contains(&js_trim(e)) {
-                                out.insert("effort".into(), json!(js_trim(e)));
-                            }
-                        }
-                        return Some(Value::Object(out));
-                    }
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-/// state.mjs DEFAULT_MODELS + normalizeModels. opencode-support oc-13/oc-14:
-/// a third `opencode` entry joins claude/codex. Unlike codex (defaulted
-/// null, no built-in model name), opencode DOES carry a built-in default —
-/// the free `opencode/*` provider names `onboard::templates::
-/// AGENT_TIER_DEFAULTS_OPENCODE` bakes into every `.opencode/agent/bee-*.md`
-/// render (oc-14) — because those files pin a real model regardless of
-/// `models.opencode` config (structural model-guard enforcement, per
-/// plan.md's fallback row), not something resolved per dispatch call the way
-/// claude/codex's own model params are.
+/// The `models.<runtime>` shape, read through the ONE parser that owns it.
+///
+/// model-role-split D1 (store `cd72ec97`) / D2 (store `06e49368`): this file
+/// used to carry a THIRD copy of `normalize_tier_value` + `normalize_models`
+/// — after the first two had already been collapsed onto `verbs::drivers` —
+/// and its overlay walked a closed four-slot list. A host that configured
+/// `models.claude.test` had that key silently DROPPED here, so `bee status`
+/// said nothing about a role the operator had configured and dispatch was
+/// really resolving. Both copies are gone. `drivers::normalize_models`
+/// carries EVERY key the config names, and every value shape (cli, native,
+/// herding, the explicit-fallback composite) is decided in one place.
+///
+/// What stays is the same thing `onboard::agents` legitimately keeps, for the
+/// same reason: the opencode SEED, which is not a parser.
+/// `drivers::default_models` leaves every opencode slot null because nothing
+/// is resolved per dispatch there, while every rendered
+/// `.opencode/agent/bee-*.md` pins a real model from
+/// `AGENT_TIER_DEFAULTS_OPENCODE` (oc-14) — and the drift check below
+/// compares against exactly those files, so status has to stand on the same
+/// seed. The seed fills a slot ONLY where the config resolves nothing for it,
+/// so a configured value still wins and an explicit `null` still turns the
+/// slot off.
 pub(crate) fn normalize_models(raw: Option<&Value>) -> JMap {
-    let mut claude = JMap::new();
-    claude.insert("extraction".into(), json!("haiku"));
-    claude.insert("generation".into(), json!("sonnet"));
-    claude.insert("review".into(), json!("opus"));
-    let mut codex = JMap::new();
-    codex.insert("extraction".into(), Value::Null);
-    codex.insert("generation".into(), Value::Null);
-    codex.insert("review".into(), Value::Null);
-    let mut opencode = JMap::new();
-    for (slot, model) in crate::onboard::templates::AGENT_TIER_DEFAULTS_OPENCODE {
-        opencode.insert((*slot).into(), json!(model));
-    }
-    let mut out = JMap::new();
-    out.insert("claude".into(), Value::Object(claude));
-    out.insert("codex".into(), Value::Object(codex));
-    out.insert("opencode".into(), Value::Object(opencode));
-    if let Some(Value::Object(m)) = raw {
-        for rt in RUNTIMES {
-            let Some(Value::Object(src)) = m.get(rt) else { continue };
-            for slot in MODEL_NORMALIZE_SLOTS {
-                if let Some(v) = normalize_tier_value(src.get(slot)) {
-                    if let Some(Value::Object(target)) = out.get_mut(rt) {
-                        target.insert(slot.into(), v);
-                    }
-                }
+    let mut out = crate::verbs::drivers::normalize_models(raw);
+    let configured =
+        raw.and_then(Value::as_object).and_then(|m| m.get("opencode")).and_then(Value::as_object);
+    if let Some(Value::Object(slice)) = out.get_mut("opencode") {
+        for (slot, model) in crate::onboard::templates::AGENT_TIER_DEFAULTS_OPENCODE {
+            let from_config = configured
+                .and_then(|c| c.get(*slot))
+                .and_then(|v| crate::verbs::drivers::normalize_tier_value(Some(v)))
+                .is_some();
+            if !from_config {
+                slice.insert((*slot).into(), json!(model));
             }
         }
     }
@@ -599,7 +503,13 @@ pub(crate) fn read_raw_config_for_validation(ctx: &Ctx) -> R<Option<Value>> {
 pub(crate) struct Problem {
     pub(crate) code: &'static str,
     pub(crate) runtime: Option<&'static str>,
-    pub(crate) slot: Option<&'static str>,
+    /// The role the finding is filed under.
+    ///
+    /// model-role-split D2 (store 06e49368): OWNED, not `&'static str`. The
+    /// role set is open, so the name a finding names is whatever key the
+    /// operator's config carries — there is no list of legal names left for
+    /// a borrowed literal to point into.
+    pub(crate) slot: Option<String>,
     pub(crate) message: String,
     /// Only for validateAgentFilesDrift rows.
     pub(crate) agent: Option<&'static str>,
@@ -651,11 +561,23 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                 continue;
             }
         };
-        for slot in MODEL_VALIDATE_SLOTS {
-            let value = match src.get(slot) {
-                None | Some(Value::Null) => continue,
-                Some(Value::String(_)) => continue,
-                Some(v) => v,
+        // model-role-split D2 (store 06e49368): DERIVED, never listed. This
+        // walked `MODEL_VALIDATE_SLOTS` — `extraction`/`generation`/`review`/
+        // `advisor` — so every check below (value shape, composite primary,
+        // fallback policy, native model, cli transport, unsafe flags) simply
+        // never ran on a role the operator invented. `models.claude.test: 7`
+        // was dropped by the parser and reported by nobody, while the
+        // identical `models.claude.generation: 7` warned. Walking `src`
+        // asks the config what it carries instead of asking a list what is
+        // allowed, so a role is validated because it is CONFIGURED. `ceiling`
+        // is deliberately not carved out: decision 0015 keeps it out of
+        // config, and a junk value written there is still worth a word.
+        for (slot, value) in src {
+            let slot = slot.as_str();
+            let value = match value {
+                Value::Null => continue,
+                Value::String(_) => continue,
+                v => v,
             };
             let vobj = match value {
                 Value::Object(m) => m,
@@ -663,7 +585,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "slot-value-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is not a string, object, or null — ignored; defaults apply."),
                         agent: None,
                     });
@@ -682,7 +604,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "composite-primary-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a composite (primary/fallback) but its primary is not a valid native override {{kind:\"native\", model}} — ignored; today this silently reverts to the seeded default (D2)."),
                         agent: None,
                     });
@@ -694,7 +616,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                             problems.push(Problem {
                                 code: "native-fork-turns-unknown",
                                 runtime: Some(rt),
-                                slot: Some(slot),
+                                slot: Some(slot.to_string()),
                                 message: format!(
                                     "models.{rt}.{slot} composite primary has fork_turns:{} — only \"none\" is valid; a full-history fork rejects model overrides (E2/D2).",
                                     jsjson::stringify(ft)
@@ -708,7 +630,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "composite-fallback-policy-missing",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a composite but has no fallback_policy:\"explicit-only\" — its cli fallback is silently dropped and no fallback is ever taken; silent native->cli fallback is forbidden (D1). Set fallback_policy:\"explicit-only\" to opt in."),
                         agent: None,
                     });
@@ -721,7 +643,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "composite-fallback-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} composite declares fallback_policy:\"explicit-only\" but its fallback is not a valid cli executor {{kind:\"cli\", command}} — the fallback is silently dropped; fix or remove it (D2)."),
                         agent: None,
                     });
@@ -734,7 +656,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "native-model-missing",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a native override (kind:\"native\") but has no non-empty model — the exact catalog model id is required; today this silently reverts to the seeded default (D2)."),
                         agent: None,
                     });
@@ -745,7 +667,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                         problems.push(Problem {
                             code: "native-fork-turns-unknown",
                             runtime: Some(rt),
-                            slot: Some(slot),
+                            slot: Some(slot.to_string()),
                             message: format!(
                                 "models.{rt}.{slot} native override has fork_turns:{} — only \"none\" is valid; a full-history fork rejects model overrides (E2/D2).",
                                 jsjson::stringify(ft)
@@ -773,7 +695,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "cli-malformed",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} looks like a cli executor but is missing kind:\"cli\" or a non-empty command — today this silently reverts to the seeded default; fix or remove it (W-e)."),
                         agent: None,
                     });
@@ -784,7 +706,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                     problems.push(Problem {
                         code: "cli-prompt-transport-missing",
                         runtime: Some(rt),
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("models.{rt}.{slot} is a cli executor with no declared prompt transport — set promptVia (e.g. \"stdin\") so the prompt reliably reaches it; never inferred from the command string (B2)."),
                         agent: None,
                     });
@@ -795,19 +717,30 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                         problems.push(Problem {
                             code: "cli-unsafe-flag",
                             runtime: Some(rt),
-                            slot: Some(slot),
+                            slot: Some(slot.to_string()),
                             message: format!("models.{rt}.{slot} command contains \"{flag}\" — a known auto-approve/sandbox-bypass flag; remove it (B6/B7). This is a blocklist of KNOWN-BAD flags, not a positive read-only guarantee."),
                             agent: None,
                         });
                     }
                 }
+                // ADVICE_CLASS_SLOTS stays a closed TWO-name list on
+                // purpose, and it is not the defect D2 removed above. Those
+                // two names are bee's OWN doors — the advisor kind and the
+                // reviewer kind of `bee dispatch prepare` — and read-only is
+                // a property of what bee does at those doors (AO8), not of
+                // any name an operator may choose. bee cannot know that an
+                // invented `critique` role is advice-class, so widening this
+                // would either guess or ask a list to mean something the
+                // config never said. A closed list of bee's own door names
+                // is a fact about bee; a closed list standing in for the
+                // operator's names is the bug.
                 if ADVICE_CLASS_SLOTS.contains(&slot) {
                     for token in ADVICE_CLASS_WRITABLE_TOKENS {
                         if command.contains(token) {
                             problems.push(Problem {
                                 code: "cli-advice-slot-writable",
                                 runtime: Some(rt),
-                                slot: Some(slot),
+                                slot: Some(slot.to_string()),
                                 message: format!("models.{rt}.{slot} is an advice-class cli slot (advisor/review must run read-only, AO8) and its command contains \"{token}\" — a known write-granting sandbox token; remove it. This is a blocklist of KNOWN write-granting tokens, not a positive read-only guarantee."),
                                 agent: None,
                             });
@@ -821,7 +754,7 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                 problems.push(Problem {
                     code: "model-shape-malformed",
                     runtime: Some(rt),
-                    slot: Some(slot),
+                    slot: Some(slot.to_string()),
                     message: format!("models.{rt}.{slot} is an object but neither a valid cli executor nor a valid {{model}} shape — ignored; today this silently reverts to the seeded default."),
                     agent: None,
                 });
@@ -890,12 +823,12 @@ pub(crate) fn read_agent_file_model(file: &Path) -> (bool, Option<String>) {
 /// (`onboard::agents::compute_opencode_agent_file_plan`), so both roots now
 /// share one verdict shape below.
 pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) -> Vec<Problem> {
-    const AGENT_FILE_TIER: [(&str, &str); 4] = [
-        ("bee-gather", "generation"),
-        ("bee-build", "generation"),
-        ("bee-extract", "extraction"),
-        ("bee-review", "review"),
-    ];
+    // model-role-split D1/D2: the agent -> role mapping is NOT restated
+    // here. `AGENT_ROLES_BY_NAME` is the one table onboarding renders these
+    // files from, so status checks exactly the files onboarding writes and a
+    // new agent needs no second edit in this file.
+    use crate::onboard::templates::AGENT_ROLES_BY_NAME;
+    use crate::verbs::drivers::{resolve_role, Resolved};
     const AGENT_FILE_ROOTS: [(&str, &str, &str); 2] =
         [("claude", ".claude", "agents"), ("opencode", ".opencode", "agent")];
     let mut problems = Vec::new();
@@ -906,7 +839,11 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
     let models = normalize_models(raw_models);
     for (runtime, dir, subdir) in AGENT_FILE_ROOTS {
         let rel_prefix = format!("{dir}/{subdir}");
-        for (agent_name, slot) in AGENT_FILE_TIER {
+        for (agent_name, roles) in AGENT_ROLES_BY_NAME {
+            let agent_name = *agent_name;
+            // The role the file is FILED under in a finding: the first name
+            // the agent declares, which is the one it is named for.
+            let slot = roles.first().copied().unwrap_or("generation");
             let file = ctx.root.join(dir).join(subdir).join(format!("{agent_name}.md"));
             let (found, file_model) = read_agent_file_model(&file);
             if !found {
@@ -916,45 +853,47 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                 problems.push(Problem {
                     code: "agent-file-malformed",
                     runtime: None,
-                    slot: Some(slot),
+                    slot: Some(slot.to_string()),
                     message: format!("{rel_prefix}/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 });
                 continue;
             };
-            let rt_models = models.get(runtime).and_then(|v| v.as_object());
-            let mut value = rt_models.and_then(|c| c.get(slot));
-            if nullish(value) && slot == "review" {
-                value = rt_models.and_then(|c| c.get("generation"));
-            }
-            let slot_kind: Option<&str> = match value {
-                Some(Value::Object(o)) => o.get("kind").and_then(|k| k.as_str()),
-                _ => None,
-            };
-            let expected: Option<String> = match value {
-                Some(Value::String(s)) => Some(s.clone()),
-                Some(Value::Object(o)) => o.get("model").and_then(|m| m.as_str()).map(str::to_string),
+            // model-role-split D1/D2: the review-inherits-generation
+            // fall-through used to be restated here as `if nullish(value) &&
+            // slot == "review"` — a hand copy of a rule
+            // `AGENT_ROLES_BY_NAME` already states as `["review",
+            // "generation"]` and `resolve_role` already walks. status now
+            // asks the same question `onboard::agents` asks when it RENDERS
+            // these files, so the check and the renderer cannot disagree.
+            let resolved = resolve_role(&models, roles, runtime, "cell");
+            let expected: Option<String> = match &resolved {
+                Resolved::Model { model, .. } | Resolved::Native { model, .. } => {
+                    Some(model.clone())
+                }
                 _ => None,
             };
             // Both roots are onboarding-rendered now (oc-14), so both carry a
-            // non-null built-in default and share one verdict shape: `None`
-            // only happens when config explicitly opted the slot OUT (a
+            // non-null built-in default and share one verdict shape: no model
+            // name only happens when config explicitly opted the role OUT (a
             // herding-shaped, cli-shaped, or literal-null-with-no-fallback
             // override) — a real "this file should not exist" signal on
-            // either runtime. `slot_kind` reads the already-normalized value
-            // (dod-4) so the wording names what the slot actually is instead
-            // of guessing "cli-shaped" for every non-model shape.
+            // either runtime. The wording reads the RESOLVED shape (dod-4), so
+            // it names what the role actually is instead of guessing
+            // "cli-shaped" for every non-model shape. A cli slot resolves to
+            // `Refused` under the "cell" purpose and to `Cli` under the read
+            // ones; both are the same fact to a reader of an agent file.
             match expected {
                 None => {
-                    let slot_desc = match slot_kind {
-                        Some("herding") => "a herding executor",
-                        Some("cli") => "a cli executor",
+                    let slot_desc = match resolved {
+                        Resolved::Herding { .. } => "a herding executor",
+                        Resolved::Cli { .. } | Resolved::Refused { .. } => "a cli executor",
                         _ => "unconfigured",
                     };
                     problems.push(Problem {
                         code: "agent-file-drift",
                         runtime: None,
-                        slot: Some(slot),
+                        slot: Some(slot.to_string()),
                         message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now {slot_desc} (no model name) — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to remove the stale file.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                         agent: Some(agent_name),
                     })
@@ -962,7 +901,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                 Some(expected) if expected != file_model => problems.push(Problem {
                     code: "agent-file-drift",
                     runtime: None,
-                    slot: Some(slot),
+                    slot: Some(slot.to_string()),
                     message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 }),

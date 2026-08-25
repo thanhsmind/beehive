@@ -1,0 +1,75 @@
+{
+  "id": "hm-3",
+  "feature": "human-mailbox",
+  "title": "Compose and file one letter at the end of an armed run",
+  "action": "At the end of an armed run, compose the stored entries into one letter and file it (D4, D9). The body carries five sections — Done / Where I departed from the plan and why / Broken or unfinished / Needs your call / Next — and a section with nothing to report is dropped, never printed empty (D7). Composition may reorder, group and drop, and may never state a fact no stored entry carries (D8). Each Needs-your-call item carries a stable id naming what it blocks (D13). One letter maps to one run, never one night (D11). Render any departure through the existing deviation_text in verbs/knowledge/ rather than a second renderer (plan.md Discovery).",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "hm-2"
+  ],
+  "must_haves": {
+    "truths": [
+      "An armed run that ends composes its entries into exactly one letter and files it (D4, D9).",
+      "The body carries the five D7 sections and a section with nothing to report is absent rather than empty.",
+      "Composition states no fact that no stored entry carries — it may reorder, group and drop only (D8).",
+      "Each Needs-your-call item carries a stable id and names what it blocks (D13).",
+      "Two runs in one night produce two letters, not one (D11).",
+      "An attended run records entries and files no letter (D9).",
+      "A run with zero entries is handled without producing an invalid letter.",
+      "Departures render through the existing deviation_text, not a second renderer."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/work.rs"
+  ],
+  "acceptance": "An armed run files exactly one letter per run with the five sections, empty ones dropped, no invented facts, stable ids on Needs-your-call items; an attended run files none; two runs in a night file two letters.",
+  "role": "code",
+  "status": "capped",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-3",
+    "outcome": "An armed run now composes its stored entries into one filed letter with D7's five sections, with a test that fails if composition invents a fact",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/work.rs"
+    ],
+    "deviations": [
+      "The Next section of D7 renders empty and is therefore dropped: no Entry field carries a next step, and printing one would be authoring (D8). Recorded in compose_body rather than left implicit.",
+      "work.rs hooks the run end at a work record reaching a terminal status (done|dropped) — the one moment this verb group can see a session span end; bee state session release lives in state_group/sessions.rs, outside the cell's files."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-25T15:19:06.570Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T15:04:07.459Z",
+    "inline_reason": "Dispatched worker wk-hm-3 ran this cell, but dispatch writes no state.workers row and bee state worker add refuses from a worktree — the recorded-reason escape named in the dispatch prompt (known P2), not an inline run",
+    "report": {
+      "outcome": "An armed run now composes its stored entries into one filed letter with D7's five sections, with a test that fails if composition invents a fact",
+      "commit": "d6e10fdb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/work.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox — green (93 passed, 0 failed) — the cell's own verify; plus cargo test ... --test work_verbs green (12/12) because run_set changed",
+      "deviations": [
+        "The Next section of D7 renders empty and is therefore dropped: no Entry field carries a next step, and printing one would be authoring (D8). Recorded in compose_body rather than left implicit.",
+        "work.rs hooks the run end at a work record reaching a terminal status (done|dropped) — the one moment this verb group can see a session span end; bee state session release lives in state_group/sessions.rs, outside the cell's files."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 727 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

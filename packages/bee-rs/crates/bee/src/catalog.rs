@@ -496,7 +496,30 @@ mod tests {
         // be rediscovered: `herding record-worker` spells the same concept
         // `--pane-id`. Both are live surface and neither is renamed here — the
         // same shape as the `--worker`/`--agent` split asserted below.
-        const PINNED_FLAG_COUNT: usize = 188;
+        // 188 -> 189 (model-role-split, store 97ce5225 / 8ff6e79e): merged
+        // with main, which had declared the same four cockpit verbs
+        // independently and more completely — seven spellings where this
+        // branch had declared one. That +7 is main's above; only ONE of
+        // this feature's own spellings survives the merge as new.
+        // `--role` (dispatch.prepare) is reuse: `herding.control-loop`
+        // already spells "which named role" the same way, and the whole
+        // point of the role split is that one word means one thing at
+        // every door. `--pane` was this branch's only other candidate and
+        // main's declaration already carries it. `bee cells backfill-roles`
+        // invented nothing: `--dry-run` and `--json` are the vocabulary
+        // every cells verb already speaks.
+        // `--off` is the one new word, on `bee cells escalate`, which is
+        // where `bee cells tier`'s escalation half landed when D4 retired
+        // the selector. Nothing in this vocabulary meant "take this
+        // marking back off": `--set` (state.route) switches a read verb
+        // into a write verb rather than naming a value; `--clear` is a
+        // subverb everywhere it appears, never a flag; `--without`
+        // (close) excludes a member from a set; `--force-downgrade` and
+        // `--waive-*` are permissions to proceed, not reversals. Spelling
+        // the reversal as `--tier generation` is precisely what D4
+        // retires. `--off` reads the same on any future flag-shaped
+        // marking, which is the property this ratchet protects.
+        const PINNED_FLAG_COUNT: usize = 189;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
