@@ -235,32 +235,17 @@ enum Marker {
 
 /// Every role name a dispatch on this runtime may legally declare.
 ///
-/// DERIVED, never listed (model-role-split D2): the keys `models.<runtime>`
-/// carries after `normalize_models` — the operator's own roles plus the
-/// built-in defaults bee seeds there — the slots bee's own dispatch door can
-/// ask for (`slot_for_kind` over `DISPATCH_KINDS`, which is why `advisor` is
-/// legal on a runtime that never configured one), and `ceiling`, which
-/// decision 0015 keeps out of config on purpose and which `resolve_role`
-/// answers with `Resolved::Inherit`. Every entry is a name something in bee
-/// can publish, so the set cannot drift from the resolver the way the two
-/// deleted lists drifted from each other.
+/// The derivation itself lives in `verbs::drivers` (T012a, store 8ff6e79e):
+/// `bee dispatch prepare --role` asks the SAME question at the door that this
+/// hook asks at the guard, and two copies of "is this role legal" is the
+/// defect this whole feature exists to remove. One home, two callers.
 fn known_roles(models: &Map<String, Value>, runtime: &str) -> BTreeSet<String> {
-    let mut set = BTreeSet::new();
-    if let Some(Value::Object(table)) = models.get(runtime) {
-        set.extend(table.keys().cloned());
-    }
-    for kind in crate::verbs::drivers::DISPATCH_KINDS {
-        if let Some(slot) = crate::verbs::drivers::slot_for_kind(kind) {
-            set.insert(slot.to_string());
-        }
-    }
-    set.insert("ceiling".to_string());
-    set
+    crate::verbs::drivers::known_roles(models, runtime)
 }
 
 /// The configured roles as one FIX-line fragment.
 fn role_list(models: &Map<String, Value>, runtime: &str) -> String {
-    known_roles(models, runtime).into_iter().collect::<Vec<_>>().join("/")
+    crate::verbs::drivers::role_list(models, runtime)
 }
 
 /// Case-insensitive, exactly as the old alternation matched — `[BEE-TIER:

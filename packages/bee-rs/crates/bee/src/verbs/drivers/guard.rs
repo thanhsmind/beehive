@@ -28,6 +28,44 @@ pub(crate) const NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE: &str = "native_model_ov
 
 pub(crate) const NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY: &str = "native_budget_only";
 
+/// Every role name a dispatch on this runtime may legally declare.
+///
+/// DERIVED, never listed (model-role-split D2): the keys `models.<runtime>`
+/// carries after `normalize_models` — the operator's own roles plus the
+/// built-in defaults bee seeds there — the slots bee's own dispatch door can
+/// ask for (`slot_for_kind` over `DISPATCH_KINDS`, which is why `advisor` is
+/// legal on a runtime that never configured one), and `ceiling`, which
+/// decision 0015 keeps out of config on purpose and which `resolve_role`
+/// answers with `Resolved::Inherit`. Every entry is a name something in bee
+/// can publish, so the set cannot drift from the resolver the way the two
+/// deleted tier lists drifted from each other.
+///
+/// It lives HERE rather than in the model-guard because both doors ask it
+/// (T012a, store 8ff6e79e): the hook classifies a `[bee-tier: <name>]`
+/// marker with it, and `bee dispatch prepare --role <name>` refuses with it.
+/// Two copies of "is this role legal" is the defect this feature removes.
+pub(crate) fn known_roles(
+    models: &Map<String, Value>,
+    runtime: &str,
+) -> std::collections::BTreeSet<String> {
+    let mut set = std::collections::BTreeSet::new();
+    if let Some(Value::Object(table)) = models.get(runtime) {
+        set.extend(table.keys().cloned());
+    }
+    for kind in DISPATCH_KINDS {
+        if let Some(slot) = slot_for_kind(kind) {
+            set.insert(slot.to_string());
+        }
+    }
+    set.insert("ceiling".to_string());
+    set
+}
+
+/// The configured roles as one FIX-line fragment.
+pub(crate) fn role_list(models: &Map<String, Value>, runtime: &str) -> String {
+    known_roles(models, runtime).into_iter().collect::<Vec<_>>().join("/")
+}
+
 /// Every rendered bee agent, keyed by the ROLE it serves.
 ///
 /// provenance: dispatch-guard.mjs PINNED_AGENT_TYPE (W3 pinned-type rule).

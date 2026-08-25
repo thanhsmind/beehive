@@ -472,6 +472,17 @@ mod tests {
         // cap door's ESCAPE from a skill obligation, not the answer to one —
         // none of them carries "whether the owned skill changed", so
         // `--skill-answer` is new.
+        // 181 -> 181 (model-role-split T012a, store 8ff6e79e):
+        // `dispatch.prepare` gained `--role`, the job the work is, naming the
+        // model slot to resolve outright. The count is deliberately
+        // UNCHANGED because the ratchet's whole point is reuse and this is
+        // reuse: `herding.control-loop --role` already spells "which named
+        // role this run takes", and a caller who has learned that word on one
+        // command reads it correctly on the next. Checked first: `--kind` is
+        // the dispatch's SHAPE (cell/gather/reviewer/advisor, a closed enum
+        // this flag deliberately does not grow), and `--tier` is the retired
+        // COST word this feature exists to replace — neither means "the job
+        // this work is", so neither was the name to reuse.
         const PINNED_FLAG_COUNT: usize = 181;
 
         let names: std::collections::BTreeSet<&str> =
