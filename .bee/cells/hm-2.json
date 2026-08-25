@@ -29,20 +29,63 @@
   ],
   "acceptance": "A cap in any run appends its entry; arming is read from the herding block; the unarmed cap path is byte-identical to today; the route from every clean stop to the append hook is recorded.",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "decisions": [],
   "read_first": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "wk-hm-2",
+    "outcome": "Every cap now appends its human-mailbox entry the moment it lands, with the plain sentence written then; arming reads the herding block plus the owner switch and gates only the letter",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+    ],
+    "deviations": [
+      {
+        "what": "Arming requires the owner enable marker as well as the config herding block",
+        "why": "The herding block alone answers only that the checkout CAN herd, so every attended session in a herding repo would have filed a letter, which D9 excludes; the marker is bee existing arming switch, not a new signal",
+        "kind": "the plan was wrong about a fact"
+      },
+      {
+        "what": "The run is the session span, not the herding job id",
+        "why": "D9 and D12 both describe a run in sessions, and one night dispatches many jobs, which would shatter D11 one-letter-per-run",
+        "kind": "found a better route"
+      },
+      "sync-ack: phase 1 changes no contract a skill documents: no flag, no Result form and no worker instruction moves here (the cell declares affects_skills []). plan.md puts the worker-prompt and bee-swarming re-wording in phase 2, with the departure contract that actually changes what a worker must type"
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T14:58:38.009Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T14:43:32.309Z",
+    "sync_ack": "phase 1 changes no contract a skill documents: no flag, no Result form and no worker instruction moves here (the cell declares affects_skills []). plan.md puts the worker-prompt and bee-swarming re-wording in phase 2, with the departure contract that actually changes what a worker must type",
+    "inline_reason": "dispatched worker wk-hm-2 ran this cell; dispatch writes no state.workers row and 'bee state worker add' refuses from a worktree (known P2) — recording the named deviation rather than a false inline run",
+    "report": {
+      "outcome": "Every cap appends one human-mailbox entry the moment it lands (D4), unconditionally (D9) and fail-open (D10); the three-stop map is recorded",
+      "commit": "69b2af88",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox && cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells — green (75 passed, 0 failed; 223 passed, 0 failed) — the new store plus every existing cap/finish test on the touched door",
+      "deviations": [
+        {
+          "what": "Arming requires the owner enable marker as well as the config herding block",
+          "why": "The herding block alone answers only that the checkout CAN herd, so every attended session in a herding repo would have filed a letter, which D9 excludes; the marker is bee existing arming switch, not a new signal",
+          "kind": "the plan was wrong about a fact"
+        },
+        {
+          "what": "The run is the session span, not the herding job id",
+          "why": "D9 and D12 both describe a run in sessions, and one night dispatches many jobs, which would shatter D11 one-letter-per-run",
+          "kind": "found a better route"
+        }
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 503 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }

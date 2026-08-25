@@ -31,20 +31,45 @@
   ],
   "acceptance": "An armed run files exactly one letter per run with the five sections, empty ones dropped, no invented facts, stable ids on Needs-your-call items; an attended run files none; two runs in a night file two letters.",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "decisions": [],
   "read_first": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "wk-hm-3",
+    "outcome": "An armed run now composes its stored entries into one filed letter with D7's five sections, with a test that fails if composition invents a fact",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/work.rs"
+    ],
+    "deviations": [
+      "The Next section of D7 renders empty and is therefore dropped: no Entry field carries a next step, and printing one would be authoring (D8). Recorded in compose_body rather than left implicit.",
+      "work.rs hooks the run end at a work record reaching a terminal status (done|dropped) — the one moment this verb group can see a session span end; bee state session release lives in state_group/sessions.rs, outside the cell's files."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-25T15:19:06.570Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-25T15:04:07.459Z",
+    "inline_reason": "Dispatched worker wk-hm-3 ran this cell, but dispatch writes no state.workers row and bee state worker add refuses from a worktree — the recorded-reason escape named in the dispatch prompt (known P2), not an inline run",
+    "report": {
+      "outcome": "An armed run now composes its stored entries into one filed letter with D7's five sections, with a test that fails if composition invents a fact",
+      "commit": "d6e10fdb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/work.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox — green (93 passed, 0 failed) — the cell's own verify; plus cargo test ... --test work_verbs green (12/12) because run_set changed",
+      "deviations": [
+        "The Next section of D7 renders empty and is therefore dropped: no Entry field carries a next step, and printing one would be authoring (D8). Recorded in compose_body rather than left implicit.",
+        "work.rs hooks the run end at a work record reaching a terminal status (done|dropped) — the one moment this verb group can see a session span end; bee state session release lives in state_group/sessions.rs, outside the cell's files."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 727 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
