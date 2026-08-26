@@ -878,5 +878,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-25T21:34:41.750Z"
+  },
+  "reattribute-by-name": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-26T02:50:25.100Z"
   }
 }
