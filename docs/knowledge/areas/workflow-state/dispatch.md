@@ -23,6 +23,14 @@ record changes.
 
 ## Behaviors & Operations
 
+**The unregistered-worker refusal names the door that registers
+(reachable-remedy, cell rr-1, 2026-08-26).** Worker registration rides the
+`dispatch prepare --claim` path, so the refusal a worker reads when it is not
+registered names exactly that door — not a control-plane verb that itself
+refuses when run from the worktree where the message is read. The principle it
+pinned: a refusal's FIX line must name a remedy reachable from where the
+refusal is read.
+
 **Wave-batch dispatch (workflow-lessons wfl-4, 2026-08-11; scoped and bounded,
 dispatch review P1/P2, 2026-08-12; unwind claim-taken precision, dispatch
 review delta hpf-3, 2026-08-12).** `bee dispatch wave --runtime <rt>`

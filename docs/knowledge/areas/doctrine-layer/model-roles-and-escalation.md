@@ -2,14 +2,14 @@
 type: bee.area
 title: Doctrine Layer — model roles, fall-through, and escalation
 description: "How work says which model should run it: an open set of job-named roles resolved through one parser, an ordered fall-through that warns instead of failing, cost held apart as an explicit escalation flag, and an explicit-only retry chain that never fires on a semantic failure."
-timestamp: 2026-08-25
+timestamp: 2026-08-26
 bee:
   id: doctrine-layer-model-roles-and-escalation
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
   decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1]
-  sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md"]
+  sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md", "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
 ---
 
@@ -143,6 +143,34 @@ settled. Under B2's fall-through it stopped being load-bearing, so it was
 extraction model. It was recorded as an open question and answered, never
 silently dropped — the answer is in `docs/history/model-role-split/plan.md`
 ("D12's fate").
+
+**B12 — A role slot may describe itself, and only the door line reads the
+description** (role-slot-description, cell rsd-1, PBI p-a1399c00). A
+`models.<runtime>` role slot may carry an optional description string.
+Exactly one surface renders it: the dispatch-door roles line, reading the
+RAW config and clipping to 60 characters, as `name=model ("desc")`. The
+normalizer drops the field, which is what keeps resolution, the model
+guard, and dispatch prepare blind to it — a display string can never
+steer a dispatch. The validator already tolerated unknown keys; that
+tolerance is now pinned by test.
+
+**B13 — `bee models show` is the one read door for the role table**
+(models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44). It prints the
+raw `models.<runtime>` slots verbatim — description intact — plus the
+built-in defaults, each row source-marked. `bee status --json` keeps
+descriptions display-only; the default config seeds described roles; and
+the missing-role refusal and the `bee cells add` help both send an
+author to this verb before assigning a role. Resolution, guard, and
+dispatch are untouched by the verb — it reads, never resolves.
+
+**B14 — A rendered agent file carries no model pin; the dispatch payload
+is the one authority** (agent-model-unpin, cells amu-1/amu-2). On the
+first runtime, rendering a known agent file is unconditional and writes
+no `model:` line — the model reaches the worker only through the
+dispatch payload's model param. The drift check flips accordingly: a
+PRESENT model line in an agent file is the drift, not a missing one.
+Opencode is unchanged on purpose — there the rendered file IS the
+enforcement (see Open Gaps).
 
 ## The one deliberate silent case
 

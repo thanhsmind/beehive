@@ -595,3 +595,14 @@
   that limit is stated rather than papered over. And UI visual snapshots still have no home in the
   bundle — recorded as an Open Gap in `concept-model-and-authoring.md`, not a home invented to close
   a red.
+
+## 2026-08-26
+
+- **A product description of the whole bee product now exists at `docs/product-description/`.**
+  34 documents on one eight-section skeleton written from the agent's point of view, a glossary, a
+  goal statement, four verification checklists (715 rows), and `bug-triage.md` with 24 deduplicated
+  defects — six of them high, including a secret-guard Bash walk-around, an `=true` boolean
+  inversion, commands advertised but not built, and a review preflight reporting `passed: true`.
+  It lives inside the beehive repo because the write guard blocks external paths. It is an
+  outside-in behavior description, not part of this bundle's authority: where it and an area spec
+  disagree, the spec and the code win, and the disagreement is a defect to file.

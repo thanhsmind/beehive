@@ -317,6 +317,15 @@ absent-key default the same day: absent now reads FALSE — staging is opt-in
 `true`), so an unconfigured repo runs worktree → merge to main → uat at close.
 Explicit values on either key keep their meanings.
 
+The instruction layer says the same thing since 2026-08-26
+(uat-close-instruction-parity): the AGENTS block, swarming's Completion
+text, hive's Gates text, and gates-and-delegation all state that
+merge-on-green-without-asking is the default road, with "Ready to merge"
+scoped to `uat_stop: "merge"` only. The always-loaded text had lagged the
+defaults-and-agent-env flip by six days and sessions kept stopping before
+merge — an instance of the recorded pattern that a defaults flip is not
+done until its instruction layer flips too.
+
 Any other string, or a non-string shape, refuses rather than guessing (`None` from
 `uat_stop_config`, surfaced as `WORKTREE_MERGE_UAT_CONFIG_INVALID` at merge or a
 blocking `uat` door with an invalid-config detail at close — never a silent pick

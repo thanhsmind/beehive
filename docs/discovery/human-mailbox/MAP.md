@@ -91,6 +91,10 @@ integration, not a new bridge.
   session never writes another project's backlog row —
   tickets/009-handover-spec.md (replaces D16 e255fe3a and D15 4c05dde2).
   Delivered: handover message accepted by session waggledance-e1.
+- D18 (4d837e6b): a bee session working inside another project runs no
+  record-writing or record-regenerating command in that project's tree —
+  not a store append, not a view render; it reads, and it messages that
+  project's own session. Extends D17 — tickets/009-handover-spec.md
 
 ## Not yet specified
 

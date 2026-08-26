@@ -13,9 +13,9 @@ never a generation timestamp or any other wall-clock value.
 
 ## Sections
 
-- [areas/](areas/index.md) — 118 concept(s)
-- [patterns/](patterns/index.md) — 148 concept(s)
-- [work/](work/index.md) — 19 concept(s)
+- [areas/](areas/index.md) — 119 concept(s)
+- [patterns/](patterns/index.md) — 149 concept(s)
+- [work/](work/index.md) — 29 concept(s)
 
 ## Critical patterns
 
@@ -73,3 +73,4 @@ never a generation timestamp or any other wall-clock value.
 - [Plausibility is not evidence, and the author is never the one who catches it](patterns/20260825-plausibility-is-not-evidence-and-only-a-second-reader-catches-it.md) — Plausibility is not evidence, and the author is never the one who catches it
 - [A non-event written into a mined stream teaches a lesson out of silence](patterns/20260826-a-non-event-in-a-mined-stream-teaches-a-lesson-out-of-silence.md) — A non-event written into a mined stream teaches a lesson out of silence
 - [A truncated identifier is not an identifier](patterns/20260826-a-truncated-identifier-is-not-an-identifier.md) — A truncated identifier is not an identifier
+- [A wrapper on PATH is not the binary a derivation reads](patterns/20260826-a-wrapper-on-path-is-not-the-binary-a-derivation-reads.md) — A test that derives facts from an installed binary's own bytes silently derives nothing when PATH resolves to a wrapper script or a versionless shim

@@ -141,6 +141,11 @@ where more words are warranted, never elsewhere.
     rule itself belongs on the standing instruction sheet. The catalogue of per-step examples is
     illustration, stays on demand, and is never mistaken for the rule — a reader who loads only the
     standing sheet already has everything needed to comply (T1, T2).
+16. **A mid-work continue-ask is drift, not a stop.** Between the merged gate and the uat stop, a
+    finished slice with approved work remaining continues in the same turn — "Say go" /
+    "continue?" mid-work is forbidden in the always-loaded layer. The only asks are the gates,
+    the uat door, and questions shaping needs before the plan (promoted from go-mode into the
+    always-loaded layer, no-midslice-ask, 2026-08-26; decision logged the same day).
 
 ## Edge Cases Settled
 

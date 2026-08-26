@@ -29,3 +29,8 @@ trail of everything up to the moment it died.
 raw entry the moment it happens; the letter is composed from those
 entries when the run ends. Capture immediate, composition at the end, so
 a run that dies at 3am still leaves everything up to the moment it died.
+
+Refined by **D9 (d970d6fc)** and **D12 (05b5f964)**: every session
+appends entries, attended or not, but only an unattended run composes
+and files a letter — and a run that dies before its own end gets its
+letter from the next session that starts, marked as unfinished.

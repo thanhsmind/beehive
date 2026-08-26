@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Binary thật có dữ liệu cần tìm. Tài liệu đã sửa. Giờ tôi chạy lại đúng 2 nhóm test hỏng với PATH đúng.",
-    "asked_at": "2026-08-26T06:56:42.827Z",
+    "subject": "Release xong. Giờ tôi ghi lại một bài học vào sổ để lần sau không vấp lại.",
+    "asked_at": "2026-08-26T07:02:07.838Z",
     "session": "7a44c92f-5bc8-4252-bb94-8f62de3e55c9"
   }
 }
