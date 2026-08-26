@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "✓ Đóng feature xong, sổ sách tự commit. Tôi gỡ liên kết phiên và nhả session.",
-    "asked_at": "2026-08-26T06:00:02.659Z",
-    "session": "14038471-5ea0-46ca-afd6-5bf3cbf492c3"
+    "subject": "Tôi kiểm tra release 2.22.2: tag, CI, và file đính kèm trên GitHub.",
+    "asked_at": "2026-08-26T06:40:29.530Z",
+    "session": "7a44c92f-5bc8-4252-bb94-8f62de3e55c9"
   }
 }
