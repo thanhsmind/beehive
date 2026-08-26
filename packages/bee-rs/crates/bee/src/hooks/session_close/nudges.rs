@@ -46,6 +46,25 @@ pub(crate) fn pending_capture_stubs(root: &Path) -> Vec<Value> {
         .collect()
 }
 
+/// A queued stub that is a SETTLEMENT — something a session decided and owes
+/// a spec merge for — as opposed to bookkeeping the queue also carries.
+///
+/// Two other kinds ride the same queue and must not escalate the nudge:
+/// `touches-sweep` rows (one per citation a decision change touched) and
+/// `promote` rows (a pointer at a feature's promote proposal). Neither is a
+/// settlement, and neither is actionable by the session that reads the
+/// message — a sweep row typically belongs to another feature entirely.
+///
+/// Measured 2026-08-26 on this repo: 20 sweep + 8 promote + 6 settlements.
+/// Thresholding on all 34 meant the blocker said "flush before new work"
+/// about work the reader could not do, every session, which is how a signal
+/// stops being read (pattern-20260825-a-guard-that-cannot-pass-teaches-agents
+/// -to-ack-it). Nothing is dropped from the queue here: every kind is still
+/// tracked, listed and flushable — only the ESCALATION narrows.
+pub(crate) fn is_settlement_stub(stub: &Value) -> bool {
+    !matches!(stub.get("source").and_then(Value::as_str), Some("touches-sweep") | Some("promote"))
+}
+
 /// The oldest pending stub's `at`, in epoch ms — NaN when there is no
 /// pending stub or its `at` doesn't parse (an unresolvable timestamp is
 /// never treated as a breach, same fallback shape the rest of this hook
@@ -73,28 +92,44 @@ pub(crate) fn maybe_capture_queue_nudge(
     }
     mark_injected(root, "capture-queue-nudge", &hash)?;
     let count = stubs.len();
+    // Escalation reads SETTLEMENTS only. Sweep and promote rows stay queued,
+    // listed and flushable — they simply do not push the nudge into overdue
+    // wording that tells the reader to flush settlements before new work.
+    let settlements: Vec<Value> = stubs.iter().filter(|s| is_settlement_stub(s)).cloned().collect();
+    let settlement_count = settlements.len();
+    let other_count = count - settlement_count;
     // U3: past the configured threshold — count exceeds it, OR the oldest
     // pending stub is older than the configured day count — the nudge
     // escalates to overdue wording naming the breach. Never a hard block:
     // this is still an advisory Stop message, same as the wording below.
     let config = read_config_raw(root);
     let threshold = capture_queue_threshold(&config);
-    let oldest_ms = oldest_pending_stub_at_ms(&stubs);
+    let oldest_ms = oldest_pending_stub_at_ms(&settlements);
     let oldest_age_days = if oldest_ms.is_nan() { None } else { Some((now_ms() - oldest_ms) / 86_400_000.0) };
-    let over_count = count as u64 > threshold.count;
+    let over_count = settlement_count as u64 > threshold.count;
     let over_age = oldest_age_days.map(|d| d > threshold.days).unwrap_or(false);
+    let also = if other_count > 0 {
+        format!(" ({other_count} sweep/promote row(s) also queued — tracked, not settlements)")
+    } else {
+        String::new()
+    };
     if over_count || over_age {
         let oldest_days = oldest_age_days.unwrap_or(0.0).max(0.0).floor() as u64;
         return Ok(Some(format!(
-            "bee capture queue (decision 0017): OVERDUE — {count} stub(s) pending, oldest \
-{oldest_days} days — flush before new work. Flush them now via bee-capturing (drain \
-oldest-first, merge each into its area spec) — or they must survive into the next \
-session's preamble, never be dropped."
+            "bee capture queue (decision 0017): OVERDUE — {settlement_count} settlement stub(s) \
+pending, oldest {oldest_days} days — flush before new work.{also} Flush them now via \
+bee-capturing (drain oldest-first, merge each into its area spec) — or they must survive \
+into the next session's preamble, never be dropped."
+        )));
+    }
+    if settlement_count == 0 {
+        return Ok(Some(format!(
+            "bee capture queue (decision 0017): no settlement stub is waiting.{also}"
         )));
     }
     Ok(Some(format!(
-        "bee capture queue (decision 0017): {count} settlement stub(s) are queued and \
-unflushed. Flush them now via bee-capturing (drain oldest-first, merge each into its \
+        "bee capture queue (decision 0017): {settlement_count} settlement stub(s) are queued and \
+unflushed.{also} Flush them now via bee-capturing (drain oldest-first, merge each into its \
 area spec) — or they must survive into the next session's preamble, never be dropped."
     )))
 }
@@ -448,6 +483,12 @@ mod tests {
         format!(r#"{{"kind":"stub","id":"{id}","at":"{at}","outcome":"x"}}"#)
     }
 
+    /// A queued row that is NOT a settlement: a citation sweep or a promote
+    /// pointer. These ride the same queue and must never escalate the nudge.
+    fn bookkeeping_stub(id: &str, at: &str, source: &str) -> String {
+        format!(r#"{{"kind":"stub","id":"{id}","at":"{at}","outcome":"x","source":"{source}"}}"#)
+    }
+
     fn write_config(root: &Path, content: &str) {
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         std::fs::write(root.join(".bee").join("config.json"), content).unwrap();
@@ -469,6 +510,52 @@ area spec) — or they must survive into the next session's preamble, never be d
         );
     }
 
+    /// Sweep and promote rows are queued bookkeeping, not settlements. Twenty
+    /// of them — far past the default count threshold — must not escalate the
+    /// nudge, because the escalated wording tells the reader to flush
+    /// settlements before new work, and a sweep row usually belongs to another
+    /// feature entirely. They stay counted and named, just not as a breach.
+    #[test]
+    fn bookkeeping_rows_never_escalate_the_nudge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = now_iso();
+        let mut lines: Vec<String> =
+            (0..15).map(|i| bookkeeping_stub(&format!("t{i}"), &now, "touches-sweep")).collect();
+        lines.extend((0..5).map(|i| bookkeeping_stub(&format!("p{i}"), &now, "promote")));
+        write_queue(root, &lines);
+        let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
+        assert!(!msg.contains("OVERDUE"), "20 bookkeeping rows must not read as a breach: {msg}");
+        assert!(
+            msg.contains("no settlement stub is waiting"),
+            "the message must say plainly that nothing is owed: {msg}"
+        );
+        assert!(
+            msg.contains("20 sweep/promote row(s) also queued"),
+            "the rows must still be named, never silently dropped: {msg}"
+        );
+    }
+
+    /// A real settlement beside bookkeeping still escalates on its own count,
+    /// and the reported number is the settlement count — not the queue length.
+    #[test]
+    fn settlements_escalate_on_their_own_count_beside_bookkeeping() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = now_iso();
+        let mut lines: Vec<String> = (0..6).map(|i| stub(&format!("s{i}"), &now)).collect();
+        lines.extend((0..9).map(|i| bookkeeping_stub(&format!("t{i}"), &now, "touches-sweep")));
+        write_queue(root, &lines);
+        let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
+        assert!(
+            msg.starts_with(
+                "bee capture queue (decision 0017): OVERDUE — 6 settlement stub(s) pending"
+            ),
+            "the breach must count settlements, not the 15-row queue: {msg}"
+        );
+        assert!(msg.contains("9 sweep/promote row(s) also queued"), "{msg}");
+    }
+
     #[test]
     fn over_count_threshold_escalates_to_overdue_wording() {
         let tmp = tempfile::tempdir().unwrap();
@@ -479,7 +566,7 @@ area spec) — or they must survive into the next session's preamble, never be d
         let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
         assert!(
             msg.starts_with(
-                "bee capture queue (decision 0017): OVERDUE — 6 stub(s) pending, oldest 0 days — flush before new work."
+                "bee capture queue (decision 0017): OVERDUE — 6 settlement stub(s) pending, oldest 0 days — flush before new work."
             ),
             "{msg}"
         );
@@ -494,7 +581,7 @@ area spec) — or they must survive into the next session's preamble, never be d
         let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
         assert!(
             msg.starts_with(
-                "bee capture queue (decision 0017): OVERDUE — 1 stub(s) pending, oldest 10 days — flush before new work."
+                "bee capture queue (decision 0017): OVERDUE — 1 settlement stub(s) pending, oldest 10 days — flush before new work."
             ),
             "{msg}"
         );
@@ -509,7 +596,7 @@ area spec) — or they must survive into the next session's preamble, never be d
         write_queue(root, &[stub("s1", &now), stub("s2", &now)]);
         let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
         assert!(
-            msg.starts_with("bee capture queue (decision 0017): OVERDUE — 2 stub(s) pending"),
+            msg.starts_with("bee capture queue (decision 0017): OVERDUE — 2 settlement stub(s) pending"),
             "{msg}"
         );
     }

@@ -468,12 +468,28 @@ pub(crate) fn capture_queue_pending(root: &Path) -> (usize, f64) {
         .iter()
         .filter(|s| !flushed.iter().any(|f| strict_eq(Some(f), vget(s, "id"))))
         .collect();
-    let oldest_ms = pending
+    // The queue also carries bookkeeping that is NOT a settlement: citation
+    // `touches-sweep` rows and `promote` pointers. Counting them here made the
+    // close door say "flush before new work" about rows the reader cannot act
+    // on — a sweep row usually belongs to another feature — every single
+    // close. Nothing is dropped: they remain queued, listed and flushable;
+    // only this door's count narrows to what the reader actually owes. The
+    // Stop-hook nudge applies the same split (hooks/session_close/nudges.rs).
+    let settlements: Vec<&&&Value> = pending
+        .iter()
+        .filter(|s| {
+            !matches!(
+                vget(s, "source").and_then(Value::as_str),
+                Some("touches-sweep") | Some("promote")
+            )
+        })
+        .collect();
+    let oldest_ms = settlements
         .iter()
         .map(|s| date_parse(vget(s, "at")))
         .filter(|ms| ms.is_finite())
         .fold(f64::NAN, |acc, ms| if acc.is_nan() || ms < acc { ms } else { acc });
-    (pending.len(), oldest_ms)
+    (settlements.len(), oldest_ms)
 }
 
 /// U4 (docs/history/knowledge-usable/CONTEXT.md): the proposal's dominant
