@@ -420,6 +420,8 @@
     "escalation",
     "judge-deferral",
     "data-model",
-    "human-mailbox"
+    "human-mailbox",
+    "promotion",
+    "knowledge-loop"
   ]
 }
