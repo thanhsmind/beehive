@@ -380,7 +380,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 if !registered_worker_for_cell(root, id, worker)? {
                     let worker_disp = worker.unwrap_or("unknown");
                     return Err(Fail::Thrown(format!(
-                        "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: dispatch this cell to a registered worker (bee state worker add --nickname <nickname> --cell {id} --status running), then retry — or re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
+                        "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: registration rides on the dispatch that claims — have the orchestrator dispatch this cell with `bee dispatch prepare --claim`, which registers the worker as part of claiming it. A worker reading this from inside a granted worktree cannot self-register: `bee state worker add` is control-plane and refuses there, so it is the ORCHESTRATOR's move from the main checkout, not yours. Retry after it registers — or, if the dispatch genuinely did not claim, re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
                     )));
                 }
             }
