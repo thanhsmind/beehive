@@ -554,6 +554,28 @@ mod tests {
         );
     }
 
+    /// models-show-verb D1: the role table's own verb has to RESOLVE, or the
+    /// dispatcher answers `bee models show` with "unknown command" and the
+    /// agent goes back to parsing .bee/config.json by hand — the exact defect
+    /// the verb replaces.
+    #[test]
+    fn models_show_resolves_and_is_built_into_this_binary() {
+        let (entry, rest) = resolve(&["models", "show"]).expect("models.show is in the registry");
+        assert_eq!(entry.invoke, "bee models show");
+        assert!(rest.is_empty());
+        assert!(
+            entry.unavailable.is_none(),
+            "models show is served natively, not declared and missing"
+        );
+        assert!(entry.properties.contains_key("runtime"), "the --runtime filter is undeclared");
+        assert!(missing_required(entry, &[]).is_empty(), "a read verb must need no flags");
+        assert!(
+            group_subverbs("models").contains(&"show".to_string()),
+            "`bee models` never offers its one verb: {:?}",
+            group_subverbs("models")
+        );
+    }
+
     /// A refusal must not hand the caller another dead end.
     #[test]
     fn group_subverbs_never_offers_an_unavailable_verb() {

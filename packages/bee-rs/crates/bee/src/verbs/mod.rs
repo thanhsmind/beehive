@@ -27,6 +27,7 @@ pub mod help;
 pub mod intent_group;
 pub mod knowledge;
 pub mod mailbox;
+pub mod models_group;
 pub mod reservations;
 pub mod reviews;
 pub mod staging;
@@ -120,6 +121,11 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = work::try_native(args, t0) {
+        return Some(code);
+    }
+    // models-show-verb D1: the role table is a READ verb, so an agent never
+    // has to parse .bee/config.json by hand to learn what a role means.
+    if let Some(code) = models_group::try_native(args, t0) {
         return Some(code);
     }
     knowledge::try_native(args, t0)
