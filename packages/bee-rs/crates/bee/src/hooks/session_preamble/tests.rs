@@ -1453,6 +1453,47 @@ use crate::version::BEE_VERSION;
         );
     }
 
+    /// The preamble is where a role's own purpose actually reaches a reader,
+    /// so the described line is asserted THROUGH `render`, not just through
+    /// the helper — an operator who writes `description` on a slot must see
+    /// that sentence in the block their session opens with.
+    #[test]
+    fn dispatch_door_renders_a_role_description_when_the_slot_declares_one() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":{"model":"sonnet","description":"build and edit code"},"review":"opus","design":{"model":"opus","description":"shape the thing before it is built"}}}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(
+            text.contains(
+                "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=opus (\"shape the thing before it is built\")"
+            ),
+            "{text}"
+        );
+    }
+
+    /// The same config with the descriptions removed renders the line bee
+    /// rendered before this field existed — byte for byte. This is the guard
+    /// against the additive change quietly becoming a re-render.
+    #[test]
+    fn dispatch_door_line_is_unchanged_when_no_slot_declares_a_description() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"generation":{"model":"sonnet"},"review":"opus","design":{"model":"opus"}}}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(
+            text.contains(
+                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=opus — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+            ),
+            "{text}"
+        );
+    }
+
     /// No config at all: the door still publishes something, and what it
     /// publishes is the seeded defaults. `advisor=none` is gone on purpose —
     /// a role that selects no model is dropped rather than printed as a name
