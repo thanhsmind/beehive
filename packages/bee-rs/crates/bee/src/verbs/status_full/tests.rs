@@ -2779,6 +2779,45 @@ use crate::version::BEE_VERSION;
         assert!(validate_models_config(None).is_empty());
     }
 
+    /// A role's optional `description` (rendered by the dispatch door,
+    /// `hooks::model_guard::role_slot_description`) is documentation the
+    /// resolver never reads. This validator must therefore stay silent about
+    /// it on EVERY documented slot shape — a config that bee itself tells the
+    /// operator to write must never come back as a status problem row.
+    #[test]
+    fn a_role_description_produces_zero_problems_on_every_slot_shape() {
+        for config in [
+            json!({"models": {"claude": {"generation": {"model": "sonnet", "description": "build and edit code"}}}}),
+            json!({"models": {"claude": {"design": {"model": "opus", "effort": "medium", "description": "shape it first"}}}}),
+            json!({"models": {"codex": {"generation": {"kind": "native", "model": "gpt-5.5", "effort": "high", "fork_turns": "none", "agent_type": "worker", "description": "writes code"}}}}),
+            json!({"models": {"claude": {"advisor": {"kind": "cli", "command": "codex exec -m gpt-5.6-sol -s read-only -", "promptVia": "stdin", "description": "second opinion, read-only"}}}}),
+            json!({"models": {"claude": {"design": {"kind": "herding", "agent": "agy-flash", "description": "runs in a herding pane"}}}}),
+            json!({"models": {"codex": {"advisor": {
+                "primary": {"kind": "native", "model": "gpt-5.5", "effort": "high"},
+                "fallback": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -", "promptVia": "stdin"},
+                "fallback_policy": "explicit-only",
+                "description": "second opinion, with a cli fallback"
+            }}}}),
+            // An empty or over-long description is display's problem, not a
+            // config defect — the door trims and clips; status says nothing.
+            json!({"models": {"claude": {"generation": {"model": "sonnet", "description": ""}}}}),
+            json!({"models": {"claude": {"generation": {"model": "sonnet", "description": "x".repeat(400)}}}}),
+        ] {
+            let problems = validate_models_config(Some(&config));
+            assert!(
+                problems.is_empty(),
+                "{config} produced {:?}",
+                problems.iter().map(|p| (p.code, &p.message)).collect::<Vec<_>>()
+            );
+        }
+        // The description does NOT rescue a slot that is malformed for its
+        // own reasons — it is ignored, never read as a shape.
+        let problems = validate_models_config(Some(
+            &json!({"models": {"claude": {"generation": {"description": "just a note"}}}}),
+        ));
+        assert_eq!(codes(&problems), vec!["model-shape-malformed"]);
+    }
+
     #[test]
     fn cli_tier_problem_codes_fire_for_each_defect() {
         // cli-malformed: three ways to be cli-shaped and invalid.

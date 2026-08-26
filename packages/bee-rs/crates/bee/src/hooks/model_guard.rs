@@ -345,6 +345,46 @@ fn resolved_model_name(resolved: &Resolved) -> Option<&str> {
 /// answers for any of them by name.
 const DOOR_ROLES_SHOWN: usize = 6;
 
+/// How many characters of a role's optional `description` the door prints
+/// before it clips. The door block is injected into EVERY session, so a
+/// description is a one-line hint, never a paragraph; past this the line
+/// says `...` and `.bee/config.json` carries the rest.
+const ROLE_DESCRIPTION_MAX: usize = 60;
+
+/// The operator's own one-line purpose for a role, as the door prints it.
+///
+/// Read from the RAW config rather than the normalized map, deliberately:
+/// `normalize_models` rebuilds every slot from the fields the RESOLVER needs
+/// and drops the rest, so `description` never survives it — and it must not,
+/// because nothing that resolves, guards, or dispatches may read this field.
+/// It is display, and only display: `verbs/drivers::resolve_role`, this
+/// hook's deny/allow decision and `dispatch prepare` all see exactly the
+/// same value they saw before an operator wrote one.
+///
+/// Only an OBJECT slot can carry it. `models.claude.generation: "sonnet"`
+/// has nowhere to put a description and renders exactly as it always did;
+/// so does an object slot without the key, an empty one, and a whitespace
+/// one — the door never prints an empty pair of quotes.
+fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) -> Option<String> {
+    let text = models_raw?
+        .as_object()?
+        .get(runtime)?
+        .as_object()?
+        .get(role)?
+        .as_object()?
+        .get("description")?
+        .as_str()?
+        .trim();
+    if text.is_empty() {
+        return None;
+    }
+    Some(if text.chars().count() > ROLE_DESCRIPTION_MAX {
+        format!("{}...", truncate_chars_head(text, ROLE_DESCRIPTION_MAX))
+    } else {
+        text.to_string()
+    })
+}
+
 /// One resolved role, as the door publishes it — or `None` when the role
 /// selects no model at all (`Resolved::Budget`: a name the table does not
 /// carry, or a slot the config explicitly turned off), which the door drops
@@ -468,11 +508,26 @@ pub(crate) fn role_slot_display(
 /// to truncate because a wrong guess is not silent — a name nothing
 /// configures refuses BY NAME with a FIX at both doors
 /// (`unconfigured_role_reason` here, `--role`'s refusal in `prepare.rs`).
+///
+/// An open role set means the NAME is the only thing bee can publish about a
+/// role it never invented, and `design` or `test` says nothing about when to
+/// reach for it. A slot object may therefore carry `description`, and the
+/// door prints it beside the model as `name=model ("what it is for")` — the
+/// operator's own sentence, on the one surface every session reads. It is
+/// rendered here and nowhere else: `role_slot_description` reads the raw
+/// config, resolution never sees the field, so a described role and an
+/// undescribed one resolve and dispatch identically.
 pub(crate) fn dispatch_door_lines(models_raw: Option<&Value>, runtime: &str) -> Vec<String> {
     let roles = role_slot_display(models_raw, runtime);
     let shown = std::cmp::min(DOOR_ROLES_SHOWN, roles.len());
-    let mut listed =
-        roles[..shown].iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" | ");
+    let mut listed = roles[..shown]
+        .iter()
+        .map(|(k, v)| match role_slot_description(models_raw, runtime, k) {
+            Some(desc) => format!("{k}={v} (\"{desc}\")"),
+            None => format!("{k}={v}"),
+        })
+        .collect::<Vec<_>>()
+        .join(" | ");
     if roles.len() > shown {
         listed.push_str(&format!(" +{} more", roles.len() - shown));
     }
@@ -2691,5 +2746,130 @@ mod tests {
         // A role with no rendered agent has none, in every spelling.
         assert!(agents_for_role("advisor").is_empty());
         assert!(agents_for_role("test").is_empty());
+    }
+
+    /// An open role set means the NAME is all bee can say about a role it
+    /// never invented. A slot may carry the operator's own sentence, and the
+    /// door prints it beside the model. Both halves are asserted on the SAME
+    /// pair of configs: the described slot gains its quoted hint, and every
+    /// role that declared none renders byte-identically to before.
+    #[test]
+    fn the_door_prints_a_role_description_beside_its_model() {
+        let described = json!({"claude": {
+            "generation": {"model": "sonnet", "description": "build and edit code"},
+            "review": "opus",
+            "design": {"kind": "herding", "agent": "agy-flash"},
+        }});
+        let bare = json!({"claude": {
+            "generation": {"model": "sonnet"},
+            "review": "opus",
+            "design": {"kind": "herding", "agent": "agy-flash"},
+        }});
+        let with_desc = dispatch_door_lines(Some(&described), "claude");
+        let without = dispatch_door_lines(Some(&bare), "claude");
+        assert_eq!(
+            with_desc[1],
+            "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+        );
+        // The same line without the field is what it always was — additive,
+        // never a re-render of the roles that declared nothing.
+        assert_eq!(
+            without[1],
+            "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+        );
+        // The prepare-command line never mentions the field at all.
+        assert_eq!(with_desc[0], without[0]);
+        // ...and resolution is blind to it: described and bare resolve to the
+        // SAME published value, which is what makes this display-only.
+        assert_eq!(
+            role_slot_display(Some(&described), "claude"),
+            role_slot_display(Some(&bare), "claude")
+        );
+    }
+
+    /// Every shape that declares no description renders exactly as it did
+    /// before the field existed — a string slot has nowhere to put one, and
+    /// empty, whitespace, non-string and null are not descriptions.
+    #[test]
+    fn a_slot_that_declares_no_description_renders_unchanged() {
+        for slot in [
+            json!("sonnet"),
+            json!({"model": "sonnet"}),
+            json!({"model": "sonnet", "description": ""}),
+            json!({"model": "sonnet", "description": "   "}),
+            json!({"model": "sonnet", "description": 7}),
+            json!({"model": "sonnet", "description": null}),
+        ] {
+            let models = json!({"claude": {"generation": slot.clone()}});
+            let line = &dispatch_door_lines(Some(&models), "claude")[1];
+            assert_eq!(
+                line,
+                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name.",
+                "{slot} must render the historical line"
+            );
+        }
+        // No models key at all: the seeded defaults, with nothing quoted.
+        assert!(!dispatch_door_lines(None, "claude")[1].contains('"'));
+    }
+
+    /// A description is a one-line hint. Past the budget the door clips and
+    /// says so, so one operator's paragraph cannot push the roles after it
+    /// off the line every session reads.
+    #[test]
+    fn a_long_description_is_clipped_at_the_door_budget() {
+        let long = "x".repeat(200);
+        let models = json!({"claude": {"generation": {"model": "sonnet", "description": long}}});
+        let rendered = role_slot_description(Some(&models), "claude", "generation").unwrap();
+        assert_eq!(rendered, format!("{}...", "x".repeat(ROLE_DESCRIPTION_MAX)));
+        assert!(dispatch_door_lines(Some(&models), "claude")[1]
+            .contains(&format!("generation=sonnet (\"{rendered}\")")));
+
+        // Exactly at the budget is NOT clipped: the ellipsis promises there
+        // is more, so it must never appear when there is not.
+        let exact = "y".repeat(ROLE_DESCRIPTION_MAX);
+        let models = json!({"claude": {"generation": {"model": "sonnet", "description": exact}}});
+        assert_eq!(role_slot_description(Some(&models), "claude", "generation"), Some(exact));
+
+        // Surrounding whitespace is trimmed before any of that.
+        let models = json!({"claude": {
+            "generation": {"model": "sonnet", "description": "  picks fonts \n"}
+        }});
+        assert_eq!(
+            role_slot_description(Some(&models), "claude", "generation").as_deref(),
+            Some("picks fonts")
+        );
+
+        // A runtime or role the config never names has no description, and
+        // asking for one is a plain None rather than a panic.
+        assert_eq!(role_slot_description(Some(&models), "opencode", "generation"), None);
+        assert_eq!(role_slot_description(Some(&models), "claude", "review"), None);
+        assert_eq!(role_slot_description(None, "claude", "generation"), None);
+    }
+
+    /// The field is display and ONLY display. `description` on each
+    /// documented slot shape leaves the normalized value identical, which is
+    /// what keeps resolution, this hook's deny/allow decision and
+    /// `dispatch prepare` blind to it.
+    #[test]
+    fn a_description_never_changes_what_a_slot_resolves_to() {
+        for (bare, described) in [
+            (json!({"model": "sonnet"}), json!({"model": "sonnet", "description": "d"})),
+            (
+                json!({"kind": "native", "model": "gpt-5.5"}),
+                json!({"kind": "native", "model": "gpt-5.5", "description": "d"}),
+            ),
+            (
+                json!({"kind": "cli", "command": "codex exec -"}),
+                json!({"kind": "cli", "command": "codex exec -", "description": "d"}),
+            ),
+            (
+                json!({"kind": "herding", "agent": "agy-flash"}),
+                json!({"kind": "herding", "agent": "agy-flash", "description": "d"}),
+            ),
+        ] {
+            let a = normalize_models(Some(&json!({"claude": {"generation": bare.clone()}})));
+            let b = normalize_models(Some(&json!({"claude": {"generation": described.clone()}})));
+            assert_eq!(a, b, "{bare} vs {described}");
+        }
     }
 }
