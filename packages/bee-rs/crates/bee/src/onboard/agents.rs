@@ -143,6 +143,29 @@ pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> 
     source.replace("{{TIER_MODEL}}", model)
 }
 
+/// agent-model-unpin D1: the Claude agent file carries NO model pin — the
+/// dispatch door's `model` param is the one model authority (it overrides
+/// frontmatter in the harness), so the render needs no resolved model and a
+/// slot's shape (herding/cli/null) can no longer remove the file. `None` is
+/// only an agent bee does not know (`AGENT_ROLES_BY_NAME` has no entry) —
+/// that template is never rendered, exactly as before. A `{{TIER_MODEL}}`
+/// line in a stale template copy is dropped rather than shipped verbatim.
+pub fn render_claude_agent_file(engine: &Engine, agent_name: &str) -> Option<String> {
+    roles_for_agent(agent_name)?;
+    let source =
+        read_text_if_exists(&engine.templates_agents_dir.join(format!("{agent_name}.md.tmpl")));
+    if !source.contains("{{TIER_MODEL}}") {
+        return Some(source);
+    }
+    let mut out = String::with_capacity(source.len());
+    for line in source.split_inclusive('\n') {
+        if !line.contains("{{TIER_MODEL}}") {
+            out.push_str(line);
+        }
+    }
+    Some(out)
+}
+
 /// Splits a `.md.tmpl` source into (frontmatter, body): the frontmatter is
 /// the text strictly between the opening and closing `---` lines, the body
 /// is everything from just past the closing `---` line onward (including
@@ -204,10 +227,12 @@ pub fn compute_agent_file_plan(engine: &Engine, repo_root: &Path) -> Vec<Value> 
         let agent_name = tmpl_name.trim_end_matches(".md.tmpl").to_string();
         let rel_path = format!(".claude/agents/{agent_name}.md");
         let target = repo_root.join(".claude").join("agents").join(format!("{agent_name}.md"));
-        let model = resolve_agent_model(repo_root, &agent_name);
-        match model {
-            Some(model) => {
-                let rendered = render_agent_template(engine, &agent_name, &model);
+        // agent-model-unpin D1/D2: a known agent renders UNCONDITIONALLY —
+        // no model resolve, so a herded/cli/null slot keeps the file (the
+        // dispatch payload's model param is the authority). Removal is only
+        // for a template bee does not know.
+        match render_claude_agent_file(engine, &agent_name) {
+            Some(rendered) => {
                 if read_text_if_exists(&target) != rendered {
                     items.push(
                         json!({"action": "sync_agent_file", "path": rel_path, "agent": agent_name}),
@@ -458,7 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_syncs_then_settles_then_removes_on_null() {
+    fn plan_renders_unconditionally_and_never_removes_a_known_agent() {
         let dir = tempfile::tempdir().unwrap();
         let engine = engine_with_agents(dir.path());
         let repo = dir.path().join("repo");
@@ -475,40 +500,56 @@ mod tests {
             ]
         );
 
-        // Materialize them; the plan then settles.
+        // agent-model-unpin D1: the render needs no model, and a legacy
+        // `model: {{TIER_MODEL}}` template line is dropped, never shipped.
         for it in &items {
             let agent = it["agent"].as_str().unwrap();
-            let model = resolve_agent_model(&repo, agent).unwrap();
+            let rendered = render_claude_agent_file(&engine, agent).unwrap();
+            assert!(
+                !rendered.contains("model:"),
+                "rendered {agent} still carries a model pin: {rendered}"
+            );
             let target = repo.join(".claude").join("agents").join(format!("{agent}.md"));
             std::fs::create_dir_all(target.parent().unwrap()).unwrap();
-            std::fs::write(&target, render_agent_template(&engine, agent, &model)).unwrap();
+            std::fs::write(&target, rendered).unwrap();
         }
         assert!(compute_agent_file_plan(&engine, &repo).is_empty());
 
-        // A cli-shaped review slot removes its file.
+        // agent-model-unpin D2: a cli-shaped review slot used to remove its
+        // file; the file no longer names a model, so the slot's shape is
+        // irrelevant and the plan settles.
         std::fs::create_dir_all(repo.join(".bee")).unwrap();
         std::fs::write(
             repo.join(".bee").join("config.json"),
             json!({"models":{"claude":{"review":{"kind":"cli","command":"x"}}}}).to_string(),
         )
         .unwrap();
-        let items = compute_agent_file_plan(&engine, &repo);
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0]["action"], "remove_agent_file");
-        assert_eq!(items[0]["agent"], "bee-review");
+        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
 
-        // model-role-split D1: a `{kind:"cli"}` slot with NO command is not a
-        // cli slot — it is a shape bee documents nowhere, so the one shared
-        // parser drops it and the role's default stands. The retired local
-        // normalizer read the bare `kind` and removed the file, which meant
-        // onboarding and `bee dispatch prepare` disagreed about the same
-        // config value. They agree now; the plan settles instead of removing.
+        // The regression that motivated D2: a herded generation slot keeps
+        // bee-gather.md (it removed it before, stranding the still-native
+        // code/test roles without their execution agent).
         std::fs::write(
             repo.join(".bee").join("config.json"),
-            json!({"models":{"claude":{"review":{"kind":"cli"}}}}).to_string(),
+            json!({"models":{"claude":{"generation":{"kind":"herding","agent":"agy-flash"}}}})
+                .to_string(),
         )
         .unwrap();
         assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+
+        // An unknown template (no AGENT_ROLES_BY_NAME entry) still renders
+        // nothing, and a stale copy of it is still removed.
+        std::fs::write(
+            engine.templates_agents_dir.join("bee-mystery.md.tmpl"),
+            "---\n---\nmystery\n",
+        )
+        .unwrap();
+        let target = repo.join(".claude").join("agents").join("bee-mystery.md");
+        std::fs::write(&target, "stale").unwrap();
+        let items = compute_agent_file_plan(&engine, &repo);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["action"], "remove_agent_file");
+        assert_eq!(items[0]["agent"], "bee-mystery");
     }
 
     #[test]

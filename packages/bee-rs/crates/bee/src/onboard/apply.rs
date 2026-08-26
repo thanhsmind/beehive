@@ -13,7 +13,7 @@
 // Only then does the item loop run, and only after IT does onboarding.json
 // get its unconditional rewrite.
 
-use super::agents::{compute_agents_sync_record, resolve_agent_model, resolve_opencode_agent_model};
+use super::agents::{compute_agents_sync_record, resolve_opencode_agent_model};
 use super::hooks_wiring as hw;
 use super::merge::{merge_agents_content, merge_gitignore_content};
 use super::migration::{apply_worktree_migration, build_migration_conflict_reason, stranded_json};
@@ -442,11 +442,10 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
             }
             "sync_agent_file" => {
                 let agent = item["agent"].as_str().unwrap_or("");
-                if let Some(model) = resolve_agent_model(repo_root, agent) {
-                    let _ = write_file_atomic(
-                        &target,
-                        super::agents::render_agent_template(engine, agent, &model).as_bytes(),
-                    );
+                // agent-model-unpin D1: no model resolve — the file carries
+                // no pin; the dispatch payload's model param is the authority.
+                if let Some(rendered) = super::agents::render_claude_agent_file(engine, agent) {
+                    let _ = write_file_atomic(&target, rendered.as_bytes());
                 }
             }
             "remove_agent_file" => {
