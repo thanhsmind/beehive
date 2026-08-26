@@ -109,8 +109,5 @@
         }
       }
     }
-  },
-  "guards": {
-    "idle_gate": false
   }
 }
