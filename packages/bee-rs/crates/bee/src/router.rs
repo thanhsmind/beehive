@@ -77,6 +77,8 @@ pub const PORTED: &[&str] = &[
     "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (no-lane/no-workflow repos)",
     "intent set|show|advance|clear",
     "work show|set",
+    // models-show-verb D1 — the raw models role table, descriptions intact
+    "models show [--runtime claude|codex|opencode]",
     "reviews create|list|show|record|candidate add|candidates|status (--file shapes)",
     "knowledge check|index|list|context",
     "tmp sweep",
