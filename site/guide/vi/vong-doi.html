@@ -1,0 +1,120 @@
+<p>Một feature đi từ một câu yêu cầu mơ hồ tới lúc nằm gọn trong main. Nó đi qua đúng sáu chặng, luôn theo thứ tự đó, không nhảy cóc.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 300" role="img" aria-labelledby="fig-vongdoi-title">
+    <title id="fig-vongdoi-title">Sáu chặng theo thứ tự: orient, shaping, planning, cells, execution, close. Mỗi chặng ghi một dòng nói nó nợ cái gì.</title>
+
+    <a href="#orient">
+      <rect class="fig-box" x="10" y="30" width="120" height="56" rx="8"/>
+      <text class="fig-t" x="70" y="55" text-anchor="middle">orient</text>
+      <text class="fig-t fig-t--sm" x="70" y="73" text-anchor="middle">định vị</text>
+    </a>
+    <a href="#shaping">
+      <rect class="fig-box fig-fill-gate" x="150" y="30" width="120" height="56" rx="8"/>
+      <text class="fig-t" x="210" y="55" text-anchor="middle">shaping</text>
+      <text class="fig-t fig-t--sm" x="210" y="73" text-anchor="middle">chốt ý định</text>
+    </a>
+    <a href="#planning">
+      <rect class="fig-box fig-fill-gate" x="290" y="30" width="120" height="56" rx="8"/>
+      <text class="fig-t" x="350" y="55" text-anchor="middle">planning</text>
+      <text class="fig-t fig-t--sm" x="350" y="73" text-anchor="middle">chia hình dạng</text>
+    </a>
+    <a href="/guide/cell-lane">
+      <rect class="fig-box" x="430" y="30" width="120" height="56" rx="8"/>
+      <text class="fig-t" x="490" y="55" text-anchor="middle">cells</text>
+      <text class="fig-t fig-t--sm" x="490" y="73" text-anchor="middle">thành mẩu việc</text>
+    </a>
+    <a href="/guide/cell-lane">
+      <rect class="fig-box" x="570" y="30" width="120" height="56" rx="8"/>
+      <text class="fig-t" x="630" y="55" text-anchor="middle">execution</text>
+      <text class="fig-t fig-t--sm" x="630" y="73" text-anchor="middle">làm + chứng minh</text>
+    </a>
+    <a href="#close">
+      <rect class="fig-box fig-fill-ok" x="710" y="30" width="100" height="56" rx="8"/>
+      <text class="fig-t" x="760" y="55" text-anchor="middle">close</text>
+      <text class="fig-t fig-t--sm" x="760" y="73" text-anchor="middle">đóng sổ</text>
+    </a>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M130 58 L146 58"/>
+      <path d="M270 58 L286 58"/>
+      <path d="M410 58 L426 58"/>
+      <path d="M550 58 L566 58"/>
+      <path d="M690 58 L706 58"/>
+    </g>
+    <g class="fig-line" stroke-width="1.5">
+      <path d="M138 52 l8 6 -8 6"/>
+      <path d="M278 52 l8 6 -8 6"/>
+      <path d="M418 52 l8 6 -8 6"/>
+      <path d="M558 52 l8 6 -8 6"/>
+      <path d="M698 52 l8 6 -8 6"/>
+    </g>
+
+    <text class="fig-t fig-t--sm" x="70" y="112" text-anchor="middle">quét claim chết</text>
+    <text class="fig-t fig-t--sm" x="210" y="112" text-anchor="middle">ghim yêu cầu, log quyết định</text>
+    <text class="fig-t fig-t--sm" x="350" y="112" text-anchor="middle">lane, kế hoạch, xét xung đột</text>
+    <text class="fig-t fig-t--sm" x="490" y="112" text-anchor="middle">một lô cell theo lô</text>
+    <text class="fig-t fig-t--sm" x="630" y="112" text-anchor="middle">claim → làm → chứng minh → cap</text>
+    <text class="fig-t fig-t--sm" x="760" y="112" text-anchor="middle">bậc thang cửa, ghi kết thúc</text>
+
+    <rect class="fig-box fig-fill-gate" x="150" y="150" width="480" height="40" rx="6"/>
+    <text class="fig-t" x="390" y="175" text-anchor="middle">Cổng 1 (shaping) + Cổng 2 (planning) — hai lần bạn phải nói "được"</text>
+
+    <rect class="fig-box" x="10" y="210" width="800" height="60" rx="8"/>
+    <text class="fig-t" x="410" y="235" text-anchor="middle">Vòng lặp claim → work → prove → cap chạy nhiều lần bên trong "cells" và "execution"</text>
+    <text class="fig-t fig-t--sm" x="410" y="253" text-anchor="middle">— không phải một bước, mà một guồng quay cho tới khi hết cell</text>
+  </svg>
+  <p class="guide-fig__cap">Sáu chặng đi <strong>một chiều</strong>. Hai cổng nằm ở đúng hai chỗ không quay lui được: chốt ý định, và bắt đầu sửa file thật.</p>
+</figure>
+
+<h2 id="orient">1. Orient — định vị</h2>
+
+<p>Mọi phiên agent mới mở đều mất trí nhớ của phiên trước. <code>bee orient</code> là câu hỏi đầu tiên nó tự đặt ra: đang ở chặng nào, quyết định nào đang có hiệu lực, cell nào đang mở, có ai đang chờ mình trả lời không. Nó cũng làm đúng một việc ghi: quét và giải phóng các <code>claim</code> đã chết (phiên chủ đã tắt, hết hạn thuê) để việc đó không bị kẹt mãi.</p>
+
+<p><strong>Bạn thấy gì:</strong> gần như không gì cả — đây là việc agent tự định vị trước khi nói chuyện với bạn.</p>
+
+<h2 id="shaping">2. Shaping — ghim ý định</h2>
+
+<p>Một yêu cầu mơ hồ được biến thành quyết định khoá cứng. Agent ghim nguyên văn câu bạn yêu cầu và định nghĩa "xong là gì" vào một cái neo (<code>bee intent set</code>) — trước khi bất kỳ đoạn hội thoại nào có thể bị nén mất. Mỗi điều chốt được trong lúc phỏng vấn bạn thì được log thành một quyết định, và bộ quyết định khoá nằm ở <code>docs/history/&lt;feature&gt;/CONTEXT.md</code>.</p>
+
+<p>Chặng này kết thúc ở <strong>Cổng 1</strong>: "đây có đúng là cái tôi muốn không?" — hỏi bằng lời người, không phải thuật ngữ bee.</p>
+
+<p><strong>Bạn thấy gì:</strong> một câu hỏi rõ ràng, và bạn trả lời có hoặc không.</p>
+
+<h2 id="planning">3. Planning — chia hình dạng</h2>
+
+<p>Phạm vi đã chốt được biến thành một hình dạng làm được: agent xếp <a href="/guide/cell-lane"><code>lane</code></a> cho việc này (docs/tiny/small/spike/standard/high-risk), viết bản kế hoạch nhỏ nhất còn trung thực, và xét xem việc này có đụng gì với việc khác đang chạy không. Kế hoạch <strong>đóng băng</strong> ngay khi cổng hình dạng được duyệt — sửa sau đó phải đóng dấu một phiên bản mới, không được sửa đè.</p>
+
+<p>Chặng này kết thúc ở <strong>Cổng 2</strong> — cổng "gộp", hỏi trong một hơi: đúng việc, đúng cỡ, và cho phép agent bắt đầu sửa file thật. Đây là lần duy nhất trước khi có cell nào tồn tại.</p>
+
+<p><strong>Bạn thấy gì:</strong> một câu hỏi thứ hai, ngắn gọn — sau đó agent bắt đầu động vào code.</p>
+
+<h2 id="cells">4. Cells — chia thành mẩu việc</h2>
+
+<p>Ngay khi Cổng 2 mở, agent tạo cả lô cell đầu tiên trong một lần (<code>bee cells add</code>) — mỗi cell nói rõ việc gì, cách chứng minh, file nào đụng tới, phụ thuộc cell nào khác. Không có bản ghi "lô" riêng trong kho — <strong>lô hiện tại chính là tập cell đang tồn tại</strong>, đọc lại qua <code>bee cells ready</code>.</p>
+
+<p><strong>Bạn thấy gì:</strong> thường không gì — đây là bookkeeping của agent, trừ khi bạn tò mò xem danh sách cell.</p>
+
+<h2 id="execution">5. Execution — làm, chứng minh, đóng</h2>
+
+<p>Từng cell được một worker <code>claim</code>, làm đúng phạm vi của nó, tự chạy phép thử phù hợp, rồi <code>cap</code> lại kèm dòng bằng chứng. Vòng lặp này — <strong>claim → work → prove → cap</strong> — quay nhiều lần, mỗi lần một cell, cho tới khi lô hết. <a href="/guide/cell-lane">Chương 9</a> mở kỹ chặng này.</p>
+
+<p><strong>Bạn thấy gì:</strong> một dòng tiến độ ngắn mỗi cell (<code>▸</code> bắt đầu, <code>✓</code> xong, <code>✗</code> đỏ) — không phải chi tiết claim hay reservation.</p>
+
+<h2 id="close">6. Close — đóng sổ</h2>
+
+<p><code>bee close --feature &lt;tên&gt;</code> là cử chỉ cuối của cả feature: nó đi qua một bậc thang cửa cố định — nợ bằng chứng, nợ ghi lại hành vi đã đổi, nợ phán quyết giám khảo (với lane rủi ro cao), cổng nghiệm thu nếu cấu hình đặt ở đây — mỗi cửa hoặc báo cáo hoặc chặn, và mỗi cửa chặn đều có lối thoát được ghi lại rõ ràng (một cờ miễn trừ, hoặc một quyết định hoãn có tên). Đi qua trót lọt, close ghi luôn phần kết: một dòng capture, các cell cuối cùng được lưu trữ, và lane chuyển về <code>idle</code>.</p>
+
+<p><strong>Bạn thấy gì:</strong> một dòng — feature đã đóng, hoặc đúng một cửa đang chặn và cách gỡ nó.</p>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Chỗ hay nhầm</span>
+  <p><code>close</code> không phải là merge, và cũng không chạy test nào cả. Nó chỉ <em>đọc lại</em> những dòng bằng chứng mà từng cell đã tự chứng minh lúc <code>cap</code>. Đưa code về main là việc riêng của <a href="/guide/worktree"><code>worktree merge</code></a> — hai cử chỉ tách biệt có chủ đích.</p>
+</div>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/cell-lane">Chương 9 — Cell &amp; lane</a>: chặng "cells" và "execution" nói kỹ hơn ở đây.</li>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: hai cổng ở giữa vòng đời, giải thích đầy đủ.</li>
+  <li><a href="/guide/worktree">Chương 7 — Worktree &amp; staging</a>: chặng planning là lúc một feature code-chạm-file dọn sang bàn riêng.</li>
+</ul>

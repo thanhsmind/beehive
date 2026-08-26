@@ -1,0 +1,156 @@
+<p>Trong cả cuốn hướng dẫn này, chỉ có <strong>ba lần</strong> agent nhất định phải dừng lại và chờ bạn nói "được". Chương này nói kỹ về ba lần đó — và về đúng năm cái tên bee dùng cho chúng.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 300" role="img" aria-labelledby="fig-track-title">
+    <title id="fig-track-title">Đường chạy một feature với năm cổng đánh dấu trên đó: context và shape+execution mở đường vào swarming, review là cổng phụ chỉ khi bạn tự gọi, uat là cửa cuối trước khi vào main.</title>
+
+    <rect class="fig-box" x="20" y="220" width="140" height="52" rx="8"/>
+    <text class="fig-t" x="90" y="242" text-anchor="middle">exploring</text>
+    <text class="fig-t fig-t--sm" x="90" y="260" text-anchor="middle">hỏi cho rõ</text>
+
+    <rect class="fig-box" x="180" y="220" width="140" height="52" rx="8"/>
+    <text class="fig-t" x="250" y="242" text-anchor="middle">planning</text>
+    <text class="fig-t fig-t--sm" x="250" y="260" text-anchor="middle">chia việc</text>
+
+    <rect class="fig-box" x="340" y="220" width="140" height="52" rx="8"/>
+    <text class="fig-t" x="410" y="242" text-anchor="middle">swarming</text>
+    <text class="fig-t fig-t--sm" x="410" y="260" text-anchor="middle">cell chạy thật</text>
+
+    <rect class="fig-box" x="500" y="220" width="140" height="52" rx="8"/>
+    <text class="fig-t" x="570" y="242" text-anchor="middle">reviewing…</text>
+    <text class="fig-t fig-t--sm" x="570" y="260" text-anchor="middle">sau khi swarm xong</text>
+
+    <rect class="fig-box fig-fill-agent" x="660" y="220" width="140" height="52" rx="8"/>
+    <text class="fig-t" x="730" y="242" text-anchor="middle">main</text>
+    <text class="fig-t fig-t--sm" x="730" y="260" text-anchor="middle">qua merge</text>
+
+    <rect class="fig-box fig-fill-gate" x="116" y="30" width="108" height="52" rx="8"/>
+    <text class="fig-t" x="170" y="50" text-anchor="middle">context</text>
+    <text class="fig-t fig-t--sm" x="170" y="68" text-anchor="middle">Cổng 1</text>
+
+    <rect class="fig-box fig-fill-gate" x="276" y="30" width="108" height="52" rx="8"/>
+    <text class="fig-t" x="330" y="48" text-anchor="middle">shape +</text>
+    <text class="fig-t" x="330" y="64" text-anchor="middle">execution</text>
+    <text class="fig-t fig-t--sm" x="330" y="80" text-anchor="middle">Cổng 2, một lần bấm</text>
+
+    <rect class="fig-box" x="516" y="30" width="108" height="52" rx="8" stroke-dasharray="4 3"/>
+    <text class="fig-t" x="570" y="50" text-anchor="middle">review</text>
+    <text class="fig-t fig-t--sm" x="570" y="68" text-anchor="middle">tự gọi, không bắt buộc</text>
+
+    <rect class="fig-box fig-fill-gate" x="656" y="30" width="108" height="52" rx="8"/>
+    <text class="fig-t" x="710" y="50" text-anchor="middle">uat</text>
+    <text class="fig-t fig-t--sm" x="710" y="68" text-anchor="middle">Cổng 3</text>
+
+    <g class="fig-line" stroke-width="1.5" stroke-dasharray="4 4" fill="none">
+      <path d="M170 82 L170 210"/>
+      <path d="M330 82 L330 210"/>
+      <path d="M570 82 L570 210"/>
+      <path d="M710 82 L710 210"/>
+    </g>
+  </svg>
+  <p class="guide-fig__cap">Bốn ô vàng đặc là chỗ bee thật sự dừng lại; ô viền đứt (<code>review</code>) chỉ xuất hiện khi bạn tự yêu cầu — nó không nằm trên đường chạy tự động.</p>
+</figure>
+
+<h2>Một cổng là gì, chính xác</h2>
+
+<p>Một <strong>gate</strong> không phải một hộp thoại, không phải một câu hỏi bật lên màn hình. Nó là <em>một dòng trong kho</em>: một giá trị đúng/sai (<code>approved_gates</code>) cộng một dấu bền vững ghi ai duyệt, lúc nào, vì sao, ở mức bypass nào. Cuộc trò chuyện với bạn là phần <em>phỏng vấn</em>; kho mới là phần <em>bằng chứng</em>.</p>
+
+<p>Agent hỏi bạn bằng lời người, bạn trả lời, agent ghi lại bằng đúng một lệnh:</p>
+
+<pre class="guide-code">bee gate --merge --approved true
+<span class="c"># bee trả lời: Gates "shape" and "execution" set to true.</span></pre>
+
+<p>Ngoài lệnh đó ra, không có cách nào khác để một gate chuyển từ chưa-duyệt sang đã-duyệt. Đây chính là <a href="/guide/hooks-guards">cửa hẹp</a> mà cả hệ thống dựa vào.</p>
+
+<h2>Năm cái tên, ba lần dừng</h2>
+
+<p>Bee ghi nhận đúng <strong>năm</strong> gate: <code>context</code>, <code>shape</code>, <code>execution</code>, <code>review</code>, <code>uat</code> — tất cả mặc định là chưa duyệt. Nhưng trong luồng làm việc thật, bạn chỉ gặp <strong>ba cửa</strong>, vì hai cặp gate được gộp hoặc tách vai trò:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Cửa</th><th>Gate đứng sau</th><th>Câu hỏi thật sự</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Cửa 1 — chốt yêu cầu</strong></td>
+      <td><code>context</code></td>
+      <td>"Đây có đúng là cái bạn muốn không?" Hỏi cuối giai đoạn <em>shaping</em>, ghi thành <a href="/guide/bo-nho">decision</a>.</td>
+    </tr>
+    <tr>
+      <td><strong>Cửa 2 — duyệt kế hoạch</strong></td>
+      <td><code>shape</code> + <code>execution</code> (một lệnh <code>--merge</code>)</td>
+      <td>"Việc này đúng hình dạng, đúng cỡ, và agent được phép bắt đầu sửa file thật chưa?"</td>
+    </tr>
+    <tr>
+      <td><strong>Cửa 3 — nghiệm thu (UAT)</strong></td>
+      <td><code>uat</code></td>
+      <td>"Bạn đã tự tay thử và thấy nó chạy đúng chưa?" Cửa duy nhất đứng giữa worktree và <code>main</code>.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Gate thứ năm, <code>review</code>, không nằm trên đường chạy tự động — nó chỉ xuất hiện khi bạn tự yêu cầu một lượt review độc lập, và chỉ được hiển thị trong giai đoạn <code>reviewing</code>. Một P1 tìm thấy trong review đó chặn việc duyệt, kể cả ở mức bypass cao nhất.</p>
+
+<h2>Vì sao shape và execution gộp làm một</h2>
+
+<p>Cửa 2 là bước <strong>không thể quay lui nhất</strong> trong toàn bộ vòng đời: qua khỏi nó, hàng rào ghi mở ra và <code>bee cells claim</code> bắt đầu nhận việc thật trên file thật. Bee cố tình không để bạn duyệt "hình dạng đúng chưa" (<code>shape</code>) và "cho phép sửa file chưa" (<code>execution</code>) thành hai câu hỏi tách rời — vì tách ra sẽ tạo ra khe hở: bạn có thể vô tình duyệt hình dạng, quên rằng câu đó cũng vừa mở khoá ghi. Gộp thành một lệnh <code>--merge</code> nghĩa là bạn luôn trả lời đúng một câu, trọn vẹn: "việc này, đúng cỡ này, agent được sửa file — có hay không?"</p>
+
+<div class="guide-note">
+  <span class="guide-note__title">Một chi tiết dễ bỏ sót</span>
+  <p>Thu hồi cũng đi theo cặp: <code>bee gate --merge --approved false</code> rút lại cả hai nửa trong một lần, và việc rút lại được đóng dấu riêng (<code>gate_revoked_at</code>) để phân biệt "chưa từng duyệt" với "đã duyệt rồi rút lại".</p>
+</div>
+
+<h2>Agent không bao giờ tự duyệt cổng của chính nó</h2>
+
+<p>Đây là luật cứng, không có ngoại lệ ẩn: <strong>gate, câu trả lời quyết định, và duyệt riêng tư đều thuộc về bạn</strong>, không thuộc về agent. Mặc định actor của một lần duyệt là <code>user</code> — bản ghi trung thực của việc bạn vừa nói "được" và agent chỉ chuyển lời. Muốn agent tự bấm thay bạn, phải đi qua đúng cơ chế dưới đây, không có đường tắt nào khác.</p>
+
+<h2>Nấc <code>gate_bypass</code> — tự duyệt có ghi lại, không có gì lặng lẽ</h2>
+
+<p>Đây là một cấu hình <em>bạn bật</em>, không phải hành vi mặc định. Bật lên, agent được phép tự chạy <code>--actor auto</code> cho một số cổng — nhưng luôn phải kèm <code>--bypass-level</code> và <code>--reason</code>, và cả hai luôn bị đóng dấu vào bản ghi. Không có mức nào cho phép duyệt lặng lẽ.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Mức</th><th>Bao phủ những gì</th><th>Vẫn dừng lại chờ bạn</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>off</code></td>
+      <td>Không gì cả — mặc định.</td>
+      <td>Mọi cổng, mọi lane.</td>
+    </tr>
+    <tr>
+      <td><code>normal</code></td>
+      <td>Cửa 1–2, chỉ với lane <code>tiny</code>, <code>small</code>, <code>standard</code>.</td>
+      <td>Lane <code>high-risk</code>, việc bị hard-gate riêng, đọc file bí mật, <strong>Cửa 3 (uat)</strong>.</td>
+    </tr>
+    <tr>
+      <td><code>full</code></td>
+      <td>Cửa 1–2, ở <em>mọi</em> lane kể cả <code>high-risk</code>.</td>
+      <td>Đọc file bí mật, một P1 từ review, <strong>Cửa 3 (uat)</strong>.</td>
+    </tr>
+    <tr>
+      <td><code>total</code></td>
+      <td>Mọi thứ mà cơ chế bypass có thể bao phủ.</td>
+      <td><strong>Cửa 3 (uat)</strong> — <code>--actor auto</code> vẫn bị từ chối ở mọi mức, không ngoại lệ.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--stop">
+  <span class="guide-note__title">UAT không bao giờ bị bỏ qua</span>
+  <p>Dù bạn bật <code>gate_bypass</code> ở mức cao nhất, lệnh <code>bee gate --name uat --actor auto</code> vẫn trả về từ chối nguyên văn: cổng nghiệm thu chỉ được duyệt bởi <code>--actor user</code>. Đây là cửa duy nhất trong toàn bộ hệ thống không có cấu hình nào, không có cờ nào, mở được bằng máy.</p>
+</div>
+
+<p>Cơ chế bypass hoạt động đúng ở hai chỗ và chỉ hai chỗ: lệnh <code>bee gate</code> (đòi hỏi mức và lý do khi actor là <code>auto</code>), và một "lưới chắn" ở hook Stop — khi đang giữa <code>planning</code>, cổng gộp đang chờ, và mức bypass phủ được lane đó, một lượt dừng bị chặn cứng và agent được bảo: tự duyệt rồi chạy tiếp. Bypass không bao giờ vá vào hook, và không bao giờ khiến một quyết định biến mất khỏi bản ghi — nó chỉ đổi <em>ai</em> ký, không đổi việc <em>có</em> chữ ký hay không.</p>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/vong-doi">Chương 8 — Vòng đời một feature</a>: ba cổng này đứng ở đâu trong sáu chặng đầy đủ.</li>
+  <li><a href="/guide/hooks-guards">Chương 6 — Hooks, người gác cổng</a>: cái gì thật sự chặn được một lần ghi khi cổng chưa mở.</li>
+  <li><a href="/guide/bo-nho">Chương 12 — Bee nhớ những gì</a>: câu trả lời Cửa 1 của bạn trở thành một decision ra sao.</li>
+  <li><a href="/guide/tu-vung">Chương 2 — Từ vựng</a>: tra nhanh lại <code>phase</code>, <code>gate</code>, <code>intent anchor</code>.</li>
+</ul>

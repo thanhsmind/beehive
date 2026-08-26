@@ -1,0 +1,93 @@
+<p>Một session mất trí nhớ mỗi tối. Vậy cái gì sống sót qua đêm, và ai đọc lại nó vào sáng hôm sau?</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 280" role="img" aria-labelledby="fig-bon-tang-title">
+    <title id="fig-bon-tang-title">Bốn tầng trí nhớ của bee, xếp từ ngắn hạn tới lâu dài: mẩu ghi vội, quyết định, gói kiến thức, backlog.</title>
+
+    <rect class="fig-box" x="130" y="10" width="560" height="55" rx="8"/>
+    <text class="fig-t" x="410" y="32" text-anchor="middle">Capture stub — mẩu ghi vội</text>
+    <text class="fig-t fig-t--sm" x="410" y="50" text-anchor="middle">chờ được gộp vào nơi thật của nó</text>
+    <text class="fig-t fig-t--sm fig-t--mono" x="620" y="41" text-anchor="middle">sống: vài phút</text>
+
+    <rect class="fig-box" x="130" y="75" width="560" height="55" rx="8"/>
+    <text class="fig-t" x="410" y="97" text-anchor="middle">Quyết định (decision) — thoả thuận đã chốt</text>
+    <text class="fig-t fig-t--sm" x="410" y="115" text-anchor="middle">append-only, không bao giờ bị xoá</text>
+    <text class="fig-t fig-t--sm fig-t--mono" x="620" y="106" text-anchor="middle">sống: mãi mãi</text>
+
+    <rect class="fig-box fig-box--on" x="130" y="140" width="560" height="55" rx="8"/>
+    <text class="fig-t" x="410" y="162" text-anchor="middle">Gói kiến thức (docs/knowledge/) — tầng trạng thái</text>
+    <text class="fig-t fig-t--sm" x="410" y="180" text-anchor="middle">đọc trước khi đọc code</text>
+    <text class="fig-t fig-t--sm fig-t--mono" x="620" y="171" text-anchor="middle">sống: cập nhật liên tục</text>
+
+    <rect class="fig-box" x="130" y="205" width="560" height="55" rx="8"/>
+    <text class="fig-t" x="410" y="227" text-anchor="middle">Backlog — việc chưa xong</text>
+    <text class="fig-t fig-t--sm" x="410" y="245" text-anchor="middle">friction, finding, và các PBI đang chờ</text>
+    <text class="fig-t fig-t--sm fig-t--mono" x="620" y="236" text-anchor="middle">sống: tới khi xong</text>
+  </svg>
+  <p class="guide-fig__cap">Ghi xuống mà không ai đọc lại thì coi như chưa từng ghi. Điểm chung của cả bốn tầng là phiên <em>kế tiếp</em> đọc được nó mà không cần bạn kể lại.</p>
+</figure>
+
+<h2>Capture — mẩu ghi vội, không cần cổng</h2>
+
+<p>Ngay khoảnh khắc một quy tắc, một hành vi, hay một con số chốt lại giữa lượt làm việc, agent ghi một dòng ngắn:</p>
+
+<pre class="guide-code">bee capture add --outcome "cờ --force giờ bỏ qua lời nhắc" --area cli --files src/cli.rs
+<span class="c"># Queued capture stub &lt;id&gt;. Flush via bee-capturing at wrap-up…</span></pre>
+
+<p>Không cần cổng, không cần claim, không cần feature đang mở — capture nhận stub ở mọi phase. Stub nằm ở trạng thái <strong>pending</strong> cho tới khi một phiên "gộp" (capture session) đọc <code>bee capture list</code> rồi viết nội dung đó vào đúng chỗ và đóng dấu bằng <code>bee capture flush --into &lt;file&gt;</code>. Số lượng stub đang chờ hiện ngay trong preamble của mọi phiên sau — không ai phải hỏi "hôm qua có gì chưa ghi chưa".</p>
+
+<h2>Quyết định — thoả thuận không bao giờ bị xoá</h2>
+
+<p>Một quyết định không phải một dòng ghi chú — nó là một sự kiện được thêm vào cuối <code>.bee/decisions.jsonl</code>, không bao giờ viết đè lên dòng cũ:</p>
+
+<pre class="guide-code">bee decisions log --decision "Dùng registry trong-repo cho lệnh CLI" \
+  --rationale "Tránh trùng validate giữa dispatcher và hook" \
+  --relation none --tags cli,registry</pre>
+
+<p><code>--relation</code> là bắt buộc — <code>supersedes:&lt;id&gt;</code> khi quyết định này thay hẳn một cái cũ, <code>touches:&lt;id&gt;</code> khi chỉ liên quan, <code>none</code> khi đứng độc lập. Một quyết định không bao giờ bị xoá; nó chỉ có thể bị <em>supersede</em> (thay thế, kèm quét lại toàn bộ <code>docs/**</code> đang trích dẫn cái cũ) hoặc <em>redact</em> (rút lại, dòng vẫn nằm đó làm bằng chứng lịch sử).</p>
+
+<p>Những quyết định đã <strong>khoá</strong> của một feature không nằm trong log thô — chúng được đóng băng vào <code>docs/history/&lt;feature&gt;/CONTEXT.md</code>, đánh số <code>&lt;feature&gt; D&lt;n&gt;</code>, để mọi nơi khác trích dẫn bằng id chứ không diễn giải lại.</p>
+
+<h2>Gói kiến thức — tầng trạng thái</h2>
+
+<p>Đây là tầng bee muốn agent đọc <strong>trước khi đọc code</strong>: một cây file Markdown dưới <code>docs/knowledge/</code>, mỗi file là một "concept" mang metadata riêng của bee. Agent tra nó giữa chừng khi gặp lỗi:</p>
+
+<pre class="guide-code">bee knowledge search --text "connection refused"</pre>
+
+<p>và đọc một danh sách việc-cần-đọc theo ngân sách token khi mở một feature mới:</p>
+
+<pre class="guide-code">bee knowledge context --work ten-feature --budget 20000</pre>
+
+<p>Gói kiến thức không tự lớn lên. Khi một feature đóng sổ, bee tự đào các cell đã cap của feature đó, viết ra một <strong>đề xuất</strong> — chứ không viết thẳng vào gói kiến thức — tại <code>docs/history/&lt;feature&gt;/promote-proposals.md</code>, kèm một capture stub trỏ tới file đó. Áp dụng đề xuất (hay ghi lại vì sao không áp dụng) là việc của người hoặc agent, không bao giờ tự động.</p>
+
+<h2>Backlog — việc chưa xong</h2>
+
+<p>Backlog là <code>.bee/backlog.jsonl</code>: một sổ chỉ-thêm gồm hai loại dòng — các sự kiện của một hạng mục PBI (thêm, đổi trạng thái, sửa) và các dòng "finding" (friction, debt, …) mà agent ghi lại khi vấp phải trở ngại giữa chừng:</p>
+
+<pre class="guide-code">bee backlog add --type friction --title "claim-next đọc lại từng lane" --severity P2 --layer cells</pre>
+
+<p><code>docs/backlog.md</code> chỉ là một bản dựng lại từ sổ đó — sửa tay file này bị chặn; luôn chạy <code>bee backlog render --write</code> sau khi đổi trạng thái. Một hạng mục đi qua đúng năm trạng thái: <code>proposed → in-flight → parked/done/declined</code>. Backlog góp mặt ngay trong preamble mỗi phiên (dòng đếm PBI) và là thứ <code>bee cells claim-next</code> dùng để xếp hạng feature nào được ưu tiên giao việc trước.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Tầng</th><th>Ai ghi</th><th>Đọc lại khi nào</th></tr></thead>
+  <tbody>
+    <tr><td>Capture stub</td><td>Bất kỳ agent nào, ngay lúc chốt điều gì đó</td><td>Preamble phiên sau, và lúc capture session gộp nó</td></tr>
+    <tr><td>Decision</td><td>Thường là orchestrator, khi một thoả thuận thật sự chốt</td><td>Preamble (3 quyết định gần nhất), và bất kỳ ai trích dẫn bằng id</td></tr>
+    <tr><td>Knowledge bundle</td><td>Người/agent áp dụng đề xuất <code>promote</code></td><td>Đầu mỗi feature, và mỗi lần <code>bee knowledge search</code> giữa chừng</td></tr>
+    <tr><td>Backlog</td><td>Bất kỳ ai vấp friction, hoặc ai đề xuất hạng mục mới</td><td>Preamble, và <code>claim-next</code> khi xếp hạng việc kế tiếp</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--ok">
+  <span class="guide-note__title">Điểm mấu chốt</span>
+  <p>Cả bốn tầng đều vô nghĩa nếu không ai đọc lại. Một quyết định không được ai trích dẫn là một quyết định coi như chưa từng xảy ra — chính vì vậy đóng sổ một feature còn kiểm tra ngược: mọi D-ID đã khoá phải được trích dẫn ở đâu đó trong gói kiến thức, không thì phải ghi rõ lý do.</p>
+</div>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/kho-store">Chương 4 — Kho .bee/</a>: nơi cả capture queue lẫn decision log thật sự nằm trên đĩa.</li>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: quyết định là chất liệu của Cổng 1 — "đây có đúng là điều tôi muốn không?"</li>
+  <li><a href="/guide/vong-doi">Chương 8 — Vòng đời một feature</a>: đóng sổ (close) là nơi cả bốn tầng được kiểm tra lại một lượt.</li>
+</ul>
