@@ -419,6 +419,7 @@
     "contract",
     "escalation",
     "judge-deferral",
-    "data-model"
+    "data-model",
+    "human-mailbox"
   ]
 }

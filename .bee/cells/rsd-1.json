@@ -1,0 +1,65 @@
+{
+  "id": "rsd-1",
+  "title": "Surface a role slot's optional description in the preamble roles line and cells-add help",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "feature": "role-slot-description",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add optional per-role description display: model_guard.rs renders name=model (\"desc\") in the dispatch-door roles line when the raw slot object carries a non-empty description string; catalog.rs cells-add help gains one sentence naming models.<rt>.<role>.description as the place to document a role's purpose (then bee dev regen); status_full/store.rs gains a validator test proving description-carrying slot shapes yield zero problems.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee model_guard session_preamble status_full — green, including a new test asserting a described role renders name=model (\"desc\") and an existing-config test asserting byte-identical output without descriptions; bee dev regen leaves the tree clean.",
+  "judge_obligation_ack": "display-only change to dispatch_door_lines/role_slot_display rendering plus help text; the guard's deny/allow logic is untouched, and the new tests assert the no-description output stays byte-identical",
+  "notes": "PBI p-a1399c00. (1) model_guard.rs role_slot_display/dispatch_door_lines: when the raw slot value is an object carrying a non-empty string `description`, render the role as name=model (\"desc\") — desc trimmed, truncated to 60 chars with an ellipsis; string/null slots and objects without the key render exactly as today. (2) catalog.rs cells add help: one sentence noting a role's purpose may be documented as models.<rt>.<role>.description in .bee/config.json and the session preamble lists it; run bee dev regen after. (3) status_full/store.rs: no behavior change — add a validator test proving a `description` key on each documented object slot shape ({model}, {kind:native}, {kind:cli}, {kind:herding}, composite) yields zero problems. (4) Tests: extend model_guard/session_preamble tests with a described role asserting the rendered line, and assert existing no-description lines are byte-identical. Resolution, guard, and dispatch prepare must not read the field.",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "rsd-orchestrator",
+    "outcome": "The dispatch-door roles line now prints a role slot optional description beside its model; resolution and the guard stay blind to the field",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "The cells-add help sentence went into packages/bee-rs/crates/bee/src/generated/registry_payload.json, not catalog.rs — catalog.rs only PARSES that payload and carries no help prose, so the sentence had nowhere to live in the named file — the plan was wrong about a fact",
+      "The status_full validator test went into verbs/status_full/tests.rs, not store.rs — store.rs has no test module at all and every validate_models_config test in the crate already lives in tests.rs beside valid_models_configs_produce_zero_problems — found a better route",
+      "The model_guard unit tests were added to model_guard.rs own tests module in addition to the preamble tests, so the clipping and resolution-blindness rules are proved where the code lives — found a better route",
+      "Reserving registry_payload.json hit a live cross-worktree hold from main (feature reattribute-by-name, cell rbn-1) that expired at 03:51:04Z; I waited it out and reserved cleanly rather than writing through it — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T03:53:01.817Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
+    "claimed_at": "2026-08-26T03:35:47.230Z",
+    "report": {
+      "outcome": "The dispatch-door roles line now prints a role slot optional description beside its model; resolution and the guard stay blind to the field",
+      "commit": "0f68ec5dc0c3daf0d8531f447b472666822a169e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bins -- model_guard session_preamble status_full (plus --test registry_contracts --test registry_dispatch) — green — 216 + 18 tests over exactly the three surfaces touched (door rendering, preamble render, models validator) and the registry payload the help sentence lives in; bee dev regen ran green and left no drift",
+      "deviations": [
+        "The cells-add help sentence went into packages/bee-rs/crates/bee/src/generated/registry_payload.json, not catalog.rs — catalog.rs only PARSES that payload and carries no help prose, so the sentence had nowhere to live in the named file — the plan was wrong about a fact",
+        "The status_full validator test went into verbs/status_full/tests.rs, not store.rs — store.rs has no test module at all and every validate_models_config test in the crate already lives in tests.rs beside valid_models_configs_produce_zero_problems — found a better route",
+        "The model_guard unit tests were added to model_guard.rs own tests module in addition to the preamble tests, so the clipping and resolution-blindness rules are proved where the code lives — found a better route",
+        "Reserving registry_payload.json hit a live cross-worktree hold from main (feature reattribute-by-name, cell rbn-1) that expired at 03:51:04Z; I waited it out and reserved cleanly rather than writing through it — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

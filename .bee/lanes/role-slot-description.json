@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "role-slot-description",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"role-slot-description\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-26T03:33:53.560Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "PBI p-a1399c00: optional description on models.<rt> role slots, surfaced in preamble roles line + cells add help; validator already ignores unknown keys, change is display+help+tests",
+    "updated_at": "2026-08-26T03:34:06.769Z",
+    "feature": "role-slot-description"
+  },
+  "merge_ready": {
+    "since": "2026-08-26T03:53:01.843Z",
+    "branch": "wt/role-slot-description",
+    "worktree_id": "beehive--wt--role-slot-description",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
