@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "cli-shape-continuation",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"cli-shape-continuation\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"cli-shape-continuation\" (lane).",
+  "created_at": "2026-08-26T05:43:04.580Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "The docs CLI-shape extractor reads text.lines() one at a time, so a documented invocation continued with a trailing backslash is checked as its first physical line only — every flag on the continuations reports as MISSING against a correct example. Standard lane because hooks/ is machine-guard source and the judge obligation applies.",
+    "updated_at": "2026-08-26T05:43:04.592Z",
+    "feature": "cli-shape-continuation"
+  },
+  "merge_ready": {
+    "since": "2026-08-26T05:50:04.273Z",
+    "branch": "wt/cli-shape-continuation",
+    "worktree_id": "beehive--wt--cli-shape-continuation",
+    "uat": "approved",
+    "blocked_by": []
+  }
+}
