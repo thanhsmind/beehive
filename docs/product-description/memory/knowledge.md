@@ -24,7 +24,7 @@ The agent reads the files it wants. Nothing was written and no state moved.
 Starting a feature is the other common entry. The session preamble already named the command; the agent runs it:
 
 ```
-bee knowledge context --work human-mailbox --lane standard
+bee knowledge context --work human-mailbox --budget 20000 --lane standard
 ```
 
 bee answers with an ordered manifest — path, bytes, estimated tokens, and one line saying why each entry is in the list — cut at the lane's token budget. It is a reading list, never file content; the agent decides what to open.

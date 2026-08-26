@@ -37,8 +37,8 @@ stateDiagram-v2
     recording --> silent : the run stops recording and never ends
     silent --> unread : a later session files the unfinished letter
     unread --> unread : the run ends again — re-composed in place
-    unread --> read : bee mailbox mark --status read
-    read --> unread : bee mailbox mark --status unread
+    unread --> read : marked read
+    read --> unread : marked unread
     nothing_filed --> [*]
 ```
 
