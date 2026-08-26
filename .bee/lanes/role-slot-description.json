@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"role-slot-description\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 7aebd0c; capture what settled, then bee close --feature role-slot-description.",
   "created_at": "2026-08-26T03:33:53.560Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Stash cũng bị chặn vì \"2 worker đang sống\". Worker của tôi đã xong việc — tôi dọn bản ghi worker trước.",
-    "asked_at": "2026-08-26T03:56:22.457Z",
-    "session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "small",
@@ -28,12 +23,5 @@
     "rationale": "PBI p-a1399c00: optional description on models.<rt> role slots, surfaced in preamble roles line + cells add help; validator already ignores unknown keys, change is display+help+tests",
     "updated_at": "2026-08-26T03:34:06.769Z",
     "feature": "role-slot-description"
-  },
-  "merge_ready": {
-    "since": "2026-08-26T03:53:01.843Z",
-    "branch": "wt/role-slot-description",
-    "worktree_id": "beehive--wt--role-slot-description",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
