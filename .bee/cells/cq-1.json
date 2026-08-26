@@ -26,12 +26,12 @@
       "The session_close and drivers suites are green."
     ]
   },
-  "status": "open",
+  "status": "claimed",
   "deps": [],
   "decisions": [],
   "read_first": [],
   "trace": {
-    "worker": null,
+    "worker": "wk-cq-1",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -41,6 +41,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-26T05:42:22.725Z"
   }
 }
