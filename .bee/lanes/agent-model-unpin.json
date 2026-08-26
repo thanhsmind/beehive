@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"agent-model-unpin\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 49da907; reload the product and test \"agent-model-unpin\", then either approve uat (\"bee gate --name uat --approved true --lane agent-model-unpin\") or fix it in the worktree and merge again.",
+  "next_action": "Execute amu-1, amu-2 inline (bee-build unavailable: removed by the herded-generation regen, the defect under fix).",
   "created_at": "2026-08-26T04:44:02.932Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: agent-model-unpin",
-    "asked_at": "2026-08-26T04:58:45.493Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "refactor",
     "lane": "standard",

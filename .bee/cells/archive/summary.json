@@ -903,5 +903,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-26T04:10:38.767Z"
+  },
+  "agent-model-unpin": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-26T05:00:17.816Z"
   }
 }
