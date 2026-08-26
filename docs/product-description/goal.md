@@ -31,7 +31,7 @@ Do not describe code. Describe what the agent sees and does. Technical detail go
 
 - Exit codes: 0 success, 1 failure; `doctor` exits 1 when blocked; `herding` also uses 3; a write-guard deny exits 2; a hook that cannot decide fails open with exit 0 and a stderr line.
 - Refusal wording is a contract (five fixed phrases, `router.rs:320-326`); every argv shape gets served, refused, or unknown — never silence.
-- `--json` puts the payload (errors included, as `{"error": msg}`) on stdout; without it the human message goes to stderr. Every direct run prints `[bee] <cmd> <N>ms` to stderr and appends to `.bee/logs/timings.jsonl`.
+- `--json` puts the payload (errors included, as `{"error": msg}`) on stdout; without it, success text prints on stdout and error text on stderr. Every direct run prints `[bee] <cmd> <N>ms` to stderr and appends to `.bee/logs/timings.jsonl`.
 - The command tree is data: `generated/registry_payload.json`, hand-maintained; `registry_dispatch.rs` runs every entry's first example against the binary.
 - Five gates — `context`, `shape`, `execution`, `review`, `uat` — all default false (`state.rs:22-35`). Bypass mapping: `"total"`→total, `"full"`→full, `true`/`"on"`/`"normal"`→normal, else off (`state.rs:201-209`). Bypass lets `bee state gate` self-approve with `--actor auto --bypass-level <level>`; `--actor auto` without `--bypass-level` refuses. The UAT gate is never bypassed at any level.
 - Write-guard allow-lists: gated phase — `.bee/`, `docs/history/`, `plans/`, `AGENTS.md`; idle/terminal intake — `.bee/`, `docs/`, `plans/`, `AGENTS.md`. Outside-the-worktree writes are refused except the agent's memory root and scratchpad. An unknown phase refuses rather than allows.

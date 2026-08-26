@@ -66,7 +66,7 @@ Nothing. The append is a single write; there is no progress, no streaming, and n
 
 ### Finish
 
-Without `--json`: the one-line confirmation naming the stub id and when to flush, on stderr, followed by the timing line `[bee] capture add <N>ms`. With `--json`: the full stub, pretty-printed, on stdout. Exit 0 either way. The stub is now pending and will appear in `capture count`, `capture list` (oldest first, by timestamp), and the next session preamble's "Capture queue: N stub(s) pending flush".
+Without `--json`: the one-line confirmation naming the stub id and when to flush, on stdout, with the timing line `[bee] capture add <N>ms` on stderr. With `--json`: the full stub, pretty-printed, on stdout. Exit 0 either way. The stub is now pending and will appear in `capture count`, `capture list` (oldest first, by timestamp), and the next session preamble's "Capture queue: N stub(s) pending flush".
 
 ## Modifiers
 
@@ -110,7 +110,7 @@ After any interrupt the agent is exactly where the queue file says: a stub eithe
 
 **Configuration.** None. No config key changes the queue's behavior; the per-hook toggles do not touch it.
 
-**Output modes and exit codes.** The standard contract, owned by [invocation](../foundations/invocation.md): 0 on success, 1 on refusal or error; `--json` puts payloads and `{"error": …}` on stdout; the stderr timing line appears on successes, help, and verb-owned errors, but not on shape refusals.
+**Output modes and exit codes.** The standard contract, owned by [invocation](../foundations/invocation.md): 0 on success, 1 on refusal or error; success text on stdout, error text on stderr; `--json` puts payloads and `{"error": …}` on stdout; the stderr timing line appears on successes, help, and verb-owned errors, but not on shape refusals.
 
 ## Edge cases
 

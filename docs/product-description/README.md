@@ -86,6 +86,7 @@ Progress is tracked in the [coverage table](#coverage) below.
 - **The fleet crate has no document.** It is a library inside the binary; its behavior surfaces only through the commands that use it.
 - **Interaction shape.** The unit of interaction is an invocation and its phases are *invoke*, *ends at once*, *first side effect*, *while running*, *finish*. The interrupt list and the order of cross-cutting concerns are fixed as written in the document template above.
 - **Numbered rules.** These are prose documents, not numbered specifications. Stable heading anchors are enough for cross-references.
+- **The pinned commit.** Every footer cites beehive commit `6b0ae488`. This description set lives inside beehive, so its own `docs:` commits move HEAD — but they change no source, so the pin stays honest until a source-touching commit lands. A later revision re-verifies against the then-current commit and says so in its footer.
 
 ## Structure
 
@@ -179,28 +180,28 @@ Status is one of `not started`, `drafted`, or `verified`.
 | lifecycle/cells.md | drafted |
 | lifecycle/execution.md | drafted |
 | lifecycle/close.md | drafted |
-| delegation/dispatch.md | not started |
-| delegation/workers.md | not started |
-| delegation/herding.md | not started |
+| delegation/dispatch.md | drafted |
+| delegation/workers.md | drafted |
+| delegation/herding.md | drafted |
 | memory/capture.md | drafted |
-| memory/decisions.md | not started |
-| memory/knowledge.md | not started |
-| memory/backlog.md | not started |
-| memory/feedback.md | not started |
-| memory/mailbox.md | not started |
-| discovery/wayfinding.md | not started |
-| coordination/reservations.md | not started |
-| coordination/sessions.md | not started |
-| observability/status.md | not started |
-| observability/perf.md | not started |
-| maintenance/onboarding.md | not started |
-| maintenance/recovery.md | not started |
-| maintenance/testing.md | not started |
-| reviews/reviewing.md | not started |
-| cross-cutting/configuration.md | not started |
-| cross-cutting/privacy.md | not started |
-| cross-cutting/failure.md | not started |
-| cross-cutting/skills-layer.md | not started |
+| memory/decisions.md | drafted |
+| memory/knowledge.md | drafted |
+| memory/backlog.md | drafted |
+| memory/feedback.md | drafted |
+| memory/mailbox.md | drafted |
+| discovery/wayfinding.md | drafted |
+| coordination/reservations.md | drafted |
+| coordination/sessions.md | drafted |
+| observability/status.md | drafted |
+| observability/perf.md | drafted |
+| maintenance/onboarding.md | drafted |
+| maintenance/recovery.md | drafted |
+| maintenance/testing.md | drafted |
+| reviews/reviewing.md | drafted |
+| cross-cutting/configuration.md | drafted |
+| cross-cutting/privacy.md | drafted |
+| cross-cutting/failure.md | drafted |
+| cross-cutting/skills-layer.md | drafted |
 
 ## Reference
 

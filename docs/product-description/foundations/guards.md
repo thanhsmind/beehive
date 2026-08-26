@@ -42,7 +42,7 @@ What each guard watches, when it fires, and what its deny opens with. Write-capa
 
 ### Reads
 
-- **Secret guard** — `.env*`, key and certificate files, `id_rsa*`, `credentials*`, `secrets.*`: the *read* is denied — `bee privacy guard: "…" looks like a secret/credential file. Ask the user before reading it.` — and a machine-readable `@@BEE_PRIVACY@@{"kind":…,"question":…}@@END@@` block is emitted for the agent to route to the human. Only the human approves a secret read, at every bypass level.
+- **Secret guard** — `.env*`, key and certificate files, `id_rsa*`, `credentials*`, `secrets.*`: the *read* is denied — `bee privacy guard: "…" looks like a secret/credential file. Ask the user before reading it.` — and a machine-readable `@@BEE_PRIVACY@@{"file":…,"question":…}@@END@@` block is emitted for the agent to route to the human. Only the human approves a secret read, at every bypass level.
 - **Scout guard** — reads inside generated or vendored trees (`node_modules/`, `dist/`, `build/`, `vendor/`, `.git/objects`, coverage and cache dirs): read the source or lockfile instead.
 - **Read-size guard** — a Read of a file past the threshold (default 800 lines, `guards.max_read_lines`) is redirected toward a scoped read.
 

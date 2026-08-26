@@ -12,7 +12,7 @@ The agent runs a command:
 bee capture count
 ```
 
-bee resolves the store root, does the work, prints one human-readable line — `0 pending capture stub(s).` — on stderr, prints the timing line `[bee] capture count 0ms` after it, and exits 0. With `--json` the same command prints a pretty-printed JSON payload on stdout instead of the human line, and the timing line still goes to stderr. That is the whole shape of a successful invocation: answer, timing line, exit 0.
+bee resolves the store root, does the work, prints one human-readable line — `1 pending capture stub(s).` — on stdout, prints the timing line `[bee] capture count 0ms` on stderr, and exits 0. With `--json` the same command prints a pretty-printed JSON payload on stdout instead of the human line, and the timing line still goes to stderr. That is the whole shape of a successful invocation: answer, timing line, exit 0.
 
 When the agent gets a command wrong, bee answers with a refusal that names what was wrong and a `FIX:` clause naming the way forward — the right `--help`, the right verb list, the closest spelling. Refusals exit 1.
 
@@ -67,7 +67,7 @@ Nearly every bee command is fast — single-digit milliseconds — so "while run
 ### Finish
 
 - **Exit codes.** `0` success. `1` failure — refusals, verb-owned errors, and `doctor` when its verdict is blocked. `2` is a write-guard deny ([guards](guards.md)). `3` appears only in `herding`. A hook that cannot decide exits `0` with a stderr line — fail-open, so a broken harness never blocks the agent.
-- **Streams.** Human messages on stderr; `--json` payloads on stdout. Errors under `--json` are `{"error": "<the same message>"}` on stdout, exit code unchanged.
+- **Streams.** Success messages on stdout; refusal and error messages on stderr; the timing line always on stderr. `--json` puts the payload — errors included, as `{"error": "<the same message>"}` — on stdout, exit code unchanged. (Confirmed live: `2>/dev/null` keeps a success answer and drops the timing line.)
 - **The timing line.** Every served invocation prints `[bee] <cmd> <N>ms` to stderr and appends `{ts, cmd, ms, ok}` to `.bee/logs/timings.jsonl`. Shape refusals print no timing line; help does, and logs its command as `unknown` for the `--names` index form.
 
 ## Modifiers
