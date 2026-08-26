@@ -1,0 +1,80 @@
+{
+  "id": "amu-1",
+  "title": "Drop the model pin from Claude agent templates and render them unconditionally",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "feature": "agent-model-unpin",
+  "files": [
+    "packages/bee/agents/bee-build.md.tmpl",
+    "packages/bee/agents/bee-gather.md.tmpl",
+    "packages/bee/agents/bee-extract.md.tmpl",
+    "packages/bee/agents/bee-review.md.tmpl",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Delete the `model: {{TIER_MODEL}}` frontmatter line from the four Claude agent templates; change compute_agent_file_plan's Claude arm to render every AGENT_ROLES_BY_NAME template unconditionally (byte-compare, sync_agent_file on diff) with no resolve-to-None remove arm; keep resolve_agent_model and the whole opencode plan untouched (CONTEXT.md D3). Update onboard tests: herded generation still renders bee-build.md, rendered output carries no model line.",
+  "must_haves": {
+    "truths": [
+      "A repo whose models.claude.generation is {kind:herding} still gets .claude/agents/bee-build.md rendered by bee onboard --apply",
+      "The rendered .claude/agents/*.md files carry no model: frontmatter line",
+      "The opencode agent-file plan output is unchanged by the same config"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard — green over the changed plan/render logic; bee dev regen (render-skill-trees, onboard --apply, release-manifest --write) then bee dev release-manifest --check green",
+  "decisions": [
+    "agent-model-unpin D1",
+    "agent-model-unpin D2",
+    "agent-model-unpin D3"
+  ],
+  "notes": "Dispatch payloads are untouched: prepare.rs already carries the model param, which overrides frontmatter in the Claude harness.",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "rsd-orchestrator",
+    "outcome": "Claude agent files render without a model pin and survive herded/cli slot shapes; dispatch model param is the sole authority",
+    "files_changed": [
+      "packages/bee/agents/bee-build.md.tmpl",
+      "packages/bee/agents/bee-gather.md.tmpl",
+      "packages/bee/agents/bee-extract.md.tmpl",
+      "packages/bee/agents/bee-review.md.tmpl",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Executed inline by the orchestrator session instead of a dispatched bee-build worker — the bee-build agent type was removed from this session by the herded-generation regen, the exact defect this cell fixes — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T04:50:37.357Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
+    "claimed_at": "2026-08-26T04:46:37.049Z",
+    "inline_reason": "bee-build agent type unavailable in this session: the herded-generation regen removed its file — the exact defect this cell fixes",
+    "report": {
+      "outcome": "Claude agent files render without a model pin and survive herded/cli slot shapes",
+      "commit": "9b0b1629",
+      "files": [
+        "packages/bee/agents/bee-build.md.tmpl",
+        "packages/bee/agents/bee-gather.md.tmpl",
+        "packages/bee/agents/bee-extract.md.tmpl",
+        "packages/bee/agents/bee-review.md.tmpl",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard — green (140 passed; plan_renders_unconditionally_and_never_removes_a_known_agent proven to run by name) — covers exactly the changed plan/render logic; bee dev regen all 3 steps green and release-manifest --check 270 match",
+      "deviations": [
+        "Executed inline by the orchestrator session instead of a dispatched bee-build worker — the bee-build agent type was removed from this session by the herded-generation regen, the exact defect this cell fixes — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 226 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "id": "amu-2",
+  "title": "Flip the Claude agent-file drift check: a model pin is the drift",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "feature": "agent-model-unpin",
+  "deps": [
+    "amu-1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In validate_agent_files_drift, split the Claude root's verdict from opencode's: for .claude/agents/<agent>.md a present model: frontmatter line is the drift (legacy pinned file — re-render via bee onboard --apply), a file without one is clean, and the agent-file-malformed no-model arm no longer applies to Claude; the opencode arm keeps the existing expected-model comparison byte-for-byte. Update status_full tests accordingly.",
+  "must_haves": {
+    "truths": [
+      "A .claude/agents file that still carries model: is flagged agent-file-drift naming the re-render remedy",
+      "A .claude/agents file with no model: line yields zero problems even when generation is herded",
+      "The .opencode drift verdicts are byte-identical to before"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green including the flipped drift cases",
+  "decisions": [
+    "agent-model-unpin D1",
+    "agent-model-unpin D3"
+  ],
+  "judge_obligation_ack": "validator-message change with symmetric tests on both verdict directions; deny/allow guard logic untouched",
+  "notes": "read_agent_file_model stays; only the verdict mapping changes for the claude root.",
+  "read_first": [],
+  "trace": {
+    "worker": "rsd-orchestrator",
+    "outcome": "Claude drift check flags a legacy model pin and accepts unpinned files under any slot shape; opencode verdicts untouched",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "Executed inline by the orchestrator session instead of a dispatched bee-build worker — the bee-build agent type was removed from this session by the herded-generation regen, the defect this feature fixes — hit an unforeseen obstacle",
+      "The Claude agent-file-malformed arm was retired rather than kept — with no model line required there is nothing to fail to read, so a plain-text file is clean — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T04:53:11.784Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
+    "claimed_at": "2026-08-26T04:50:45.276Z",
+    "inline_reason": "bee-build agent type unavailable in this session: removed by the herded-generation regen, the defect this feature fixes",
+    "report": {
+      "outcome": "Claude drift check flags a legacy model pin and accepts unpinned files under any slot shape; opencode verdicts untouched",
+      "commit": "a1d82d1b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green (108 passed; the two rewritten drift tests were RED first against the flipped validator, opencode_agent_file_drift_findings stayed green untouched) — covers exactly the changed validator; session_preamble 56 green as collateral check",
+      "deviations": [
+        "Executed inline by the orchestrator session instead of a dispatched bee-build worker — the bee-build agent type was removed from this session by the herded-generation regen, the defect this feature fixes — hit an unforeseen obstacle",
+        "The Claude agent-file-malformed arm was retired rather than kept — with no model line required there is nothing to fail to read, so a plain-text file is clean — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

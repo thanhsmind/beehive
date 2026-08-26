@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature": "agent-model-unpin",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"agent-model-unpin\" started at phase \"exploring\" (lane).",
+  "next_action": "Execute amu-1, amu-2 inline (bee-build unavailable: removed by the herded-generation regen, the defect under fix).",
+  "created_at": "2026-08-26T04:44:02.932Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "✓ Cả hai cell đã cáp. Ghi capture, rời worktree, merge.",
+    "asked_at": "2026-08-26T04:54:05.288Z",
+    "session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76"
+  },
+  "route": {
+    "class": "refactor",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 7,
+    "rationale": "Unpin model from Claude agent templates: dispatch prepare's model param is already the enforcement; the frontmatter pin is redundant and forces file removal when a slot herds. Touches 4 templates + onboard/agents.rs + status_full/store.rs + tests; existing plan/drift tests assert the old pin behavior.",
+    "updated_at": "2026-08-26T04:44:31.942Z",
+    "feature": "agent-model-unpin"
+  },
+  "merge_ready": {
+    "since": "2026-08-26T04:53:11.806Z",
+    "branch": "wt/agent-model-unpin",
+    "worktree_id": "beehive--wt--agent-model-unpin",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

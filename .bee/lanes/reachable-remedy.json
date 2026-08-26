@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "reachable-remedy",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"reachable-remedy\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"reachable-remedy\" (lane).",
+  "created_at": "2026-08-26T04:41:21.619Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "But **`bee state worker add` refuses from inside a granted worktree** — which is where every dispatched worker runs. So the remedy names a d",
+    "asked_at": "2026-08-26T04:43:13.976Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "The no-registered-execution-worker refusal names bee state worker add, which refuses from inside a granted worktree — where every dispatched worker runs. The remedy is unreachable from the place that reads it, so the escape hatch became routine.",
+    "updated_at": "2026-08-26T04:41:21.630Z",
+    "feature": "reachable-remedy"
+  }
+}

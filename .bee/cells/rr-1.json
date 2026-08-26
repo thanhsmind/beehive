@@ -1,0 +1,57 @@
+{
+  "id": "rr-1",
+  "feature": "reachable-remedy",
+  "role": "code",
+  "title": "Name a remedy the reader can actually reach in the no-registered-worker refusal",
+  "action": "The cap-time refusal for an unregistered execution worker named `bee state worker add` as its FIX. That verb is control-plane and refuses from inside a granted worktree — which is exactly where every dispatched worker runs and reads this message. So the remedy was unreachable from the place it was read, and --inline-reason became the routine answer instead of the exception. Point the FIX at `bee dispatch prepare --claim`, which is where registration actually rides, say plainly that self-registering is the orchestrator's move from the main checkout, and keep --inline-reason as the honest fallback for a dispatch that genuinely did not claim.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "acceptance": "The refusal names dispatch prepare --claim, states that state worker add is control-plane and refuses from a worktree, and keeps --inline-reason as the fallback; the cells suite stays green.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-rr-1",
+    "outcome": "The unregistered-worker refusal now names dispatch prepare --claim, the door registration actually rides on, instead of a control-plane verb that refuses from the worktree reading the message",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+    ],
+    "deviations": [
+      "Ran inline rather than dispatched: tiny lane, one message string, and the bee-build agent type is no longer available in this session. Kind: hit an unforeseen obstacle.",
+      "Found while correcting my own misfiled P2 — I had filed that dispatch never registers a worker; reading prepare.rs:1814 showed it does, but only on the --claim path, so the real defect was the unreachable remedy rather than a missing write. Kind: the plan was wrong about a fact.",
+      "sync-ack: A refusal message's own wording, not a rule any skill states. The workflow-state skills teach that cells from small up run through dispatched workers — unchanged here; only the FIX line now points at a door the reader can open. No skill documents the old wording."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T04:43:02.419Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-26T04:42:35.802Z",
+    "sync_ack": "A refusal message's own wording, not a rule any skill states. The workflow-state skills teach that cells from small up run through dispatched workers — unchanged here; only the FIX line now points at a door the reader can open. No skill documents the old wording.",
+    "report": {
+      "outcome": "The unregistered-worker refusal names a remedy its reader can reach",
+      "commit": "dc595be0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells — green (254 passed, 0 failed, exit 0 read from cargo directly) — the suite that owns the cap doors and pins this refusal",
+      "deviations": [
+        "Ran inline rather than dispatched: tiny lane, one message string, and the bee-build agent type is no longer available in this session. Kind: hit an unforeseen obstacle.",
+        "Found while correcting my own misfiled P2 — I had filed that dispatch never registers a worker; reading prepare.rs:1814 showed it does, but only on the --claim path, so the real defect was the unreachable remedy rather than a missing write. Kind: the plan was wrong about a fact."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
