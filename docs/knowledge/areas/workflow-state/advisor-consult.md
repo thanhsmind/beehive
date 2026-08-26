@@ -99,9 +99,13 @@ consult budget.
 
 ## Pointers (implementation)
 
-- Cost pattern / tier resolution: `modelForTier`, `MODEL_TIERS`,
-  `CONFIGURABLE_TIERS` in `packages/bee/lib/state.mjs` (ceiling
-  never configured; extraction/generation/review are the configurable tiers).
+- Cost pattern / role resolution: `resolve_role`, `resolve_tier` and
+  `resolve_advisor` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs` (the model-role
+  split retired `MODEL_TIERS`/`CONFIGURABLE_TIERS` and the Node
+  `state.mjs` reader; `ceiling` is still never configured — the validator
+  now names the key on sight — and any role `models.<runtime>` carries is
+  configurable).
 - Adviser (worker consult): `resolveAdvisor` + `MODEL_NORMALIZE_SLOTS` in
   `packages/bee/lib/state.mjs` (byte-mirrored to `.bee/bin/lib/`);
   slot `models.<runtime>.advisor` in `.bee/config.json`; worker protocol in

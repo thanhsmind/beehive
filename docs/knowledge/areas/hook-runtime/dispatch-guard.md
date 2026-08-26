@@ -125,16 +125,20 @@ caller — and charged a round trip for every guess.
 - **The door is announced before any dispatch, not only inside a refusal.**
   Both orientations a session can start from — the full startup preamble
   and the narrowed post-compaction orientation — carry a "Dispatch door"
-  block: the one preparation verb, then one line naming the four work tiers
-  (generation, extraction, review, advisor) with what each currently
-  resolves to. The slot line is rendered through the same resolver the
-  preparation verb itself reads, so the block never disagrees with what a
-  dispatch would get: an unconfigured project shows the runtime defaults, a
-  tier backed by a pane worker shows "pane worker (agent) fallback=…", an
-  external command shows "cli", a native slot shows "native:<model>", and a
-  tier left to the session shows "session default". An actor that reads only
-  its orientation therefore knows the door and the tier shape before its
-  first helper call (dispatch-door-upfront D2, 46827304).
+  block: the one preparation verb, then one line publishing the roles
+  `models.<runtime>` actually configures plus the `--role` spelling, capped
+  at six names with a "+N more" count and never rendering a slot's effort
+  value (fbbadad5, which re-rendered dispatch-door-upfront D2's original
+  four-tier line in role language after the model-role split). The line is
+  built from one home — `hooks/model_guard::dispatch_door_lines` — the same
+  resolver the preparation verb reads, so the block never disagrees with
+  what a dispatch would get: an unconfigured project shows the runtime
+  defaults, a slot backed by a pane worker shows "pane worker (agent)
+  fallback=…", an external command shows "cli", a native slot shows
+  "native:<model>", and a slot left to the session shows "session default".
+  An actor that reads only its orientation therefore knows the door and the
+  role shape before its first helper call (dispatch-door-upfront D2,
+  46827304).
 - Every repair is announced twice — to the actor next to the tool call, to the
   human as a one-line note — and the audit line's transport label says a
   repair happened and records the value that will actually run. A repair
