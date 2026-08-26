@@ -2726,11 +2726,9 @@ use crate::version::BEE_VERSION;
         expected.sort();
         assert_eq!(agents, expected);
 
-        // A composite slot renders its PRIMARY model into the agent file
-        // (`onboard::agents` resolves it through `resolve_role`), so the
-        // drift check reads the same primary rather than "no model name" —
-        // the old private copy read `.get("model")` off the composite and
-        // reported a correctly-rendered file as stale.
+        // agent-model-unpin D1: any pinned value flags, however exotic the
+        // slot it once rendered from — a composite primary included. The
+        // unpinned sibling under the same config is clean.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet-primary");
@@ -2739,15 +2737,11 @@ use crate::version::BEE_VERSION;
             "fallback_policy": "explicit-only",
             "fallback": {"kind": "cli", "command": "codex exec -s read-only -"},
         }}}});
-        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
-
-        // `bee-review` inherits generation because the TABLE declares
-        // `["review", "generation"]`, not because this file says so.
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        write_agent_file(root, "bee-review", "name: bee-review\nmodel: my-own-generation");
-        let cfg =
-            json!({"models": {"claude": {"generation": "my-own-generation", "review": null}}});
+        assert_eq!(
+            codes(&validate_agent_files_drift(&ctx_for(root), Some(&cfg))),
+            vec!["agent-file-drift"]
+        );
+        write_agent_file(root, "bee-gather", "name: bee-gather");
         assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
     }
 
@@ -2968,10 +2962,14 @@ use crate::version::BEE_VERSION;
         );
     }
 
-    /// scripts/tests/test_config_validate.mjs validateAgentFilesDrift.
+    /// agent-model-unpin D1: on the Claude root the verdict is flipped — a
+    /// present `model:` line IS the drift (legacy pinned render), and a file
+    /// without one is clean whatever shape the slot resolves to. The opencode
+    /// root keeps the expected-model comparison (D3) — see
+    /// `opencode_agent_file_drift_findings`.
     #[test]
     fn agent_file_drift_findings() {
-        // (a) a rendered file whose model no longer matches the tier.
+        // (a) a legacy pinned file is the drift, whatever the config says.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: opus");
@@ -2980,38 +2978,36 @@ use crate::version::BEE_VERSION;
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-gather"));
         assert_eq!(problems[0].slot.as_deref(), Some("generation"));
-        assert!(problems[0].message.contains("model: \"opus\""));
-        assert!(problems[0].message.contains("is \"sonnet\""));
+        assert!(problems[0].message.contains("still pins model: \"opus\""));
+        assert!(problems[0].message.contains("bee onboard --apply"));
 
-        // (b) matching files across all three agents -> clean.
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
-        write_agent_file(root, "bee-extract", "name: bee-extract\nmodel: haiku");
-        write_agent_file(root, "bee-review", "name: bee-review\nmodel: opus");
-        let cfg =
-            json!({"models": {"claude": {"generation": "sonnet", "extraction": "haiku", "review": "opus"}}});
-        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+        // (b) unpinned files across all three agents -> clean, and the
+        // slot's shape is irrelevant: string, cli and herding all pass.
+        for gen_slot in [
+            json!("sonnet"),
+            json!({"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -"}),
+            json!({"kind": "herding", "agent": "agy-flash", "fallback": "default"}),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_agent_file(root, "bee-gather", "name: bee-gather");
+            write_agent_file(root, "bee-extract", "name: bee-extract");
+            write_agent_file(root, "bee-review", "name: bee-review");
+            let cfg = json!({"models": {"claude": {"generation": gen_slot, "extraction": "haiku"}}});
+            assert!(
+                validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty(),
+                "unpinned files must be clean under {cfg}"
+            );
+        }
 
         // (c) no agent files at all -> absent is clean.
         let tmp = tempfile::tempdir().unwrap();
         let cfg = json!({"models": {"claude": {"generation": "sonnet"}}});
         assert!(validate_agent_files_drift(&ctx_for(tmp.path()), Some(&cfg)).is_empty());
 
-        // (d) a stale file under a now cli-shaped slot is flagged, never
-        // silently accepted, and named as a cli executor rather than a
-        // generic "cli-shaped or unconfigured" catch-all.
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
-        let cfg = json!({"models": {"claude": {"generation": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -"}}}});
-        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
-        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
-        assert!(problems[0].message.contains("is now a cli executor"));
-        assert!(!problems[0].message.contains("herding"));
-
-        // (d2) dod-4: a rendered bee-build.md under a herding-shaped
-        // generation slot is named a herding executor, never "cli-shaped".
+        // (d) a pinned bee-build.md under a herding-shaped generation slot
+        // is flagged as a legacy pin — the file itself is no longer removed
+        // (the still-native code/test roles need it).
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_agent_file(root, "bee-build", "name: bee-build\nmodel: sonnet");
@@ -3019,41 +3015,23 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-build"));
-        assert_eq!(problems[0].slot.as_deref(), Some("generation"));
-        assert!(problems[0].message.contains("is now a herding executor"));
-        assert!(!problems[0].message.contains("cli"));
-        assert!(problems[0].message.contains("bee onboard --apply"));
+        assert!(problems[0].message.contains("still pins model: \"sonnet\""));
 
-        // (e) unparseable frontmatter is its own code, never a throw.
+        // (e) a file with no readable model line is simply clean — there is
+        // no pin to check, and no malformed finding on the Claude root.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write(root, ".claude/agents/bee-extract.md", "not even frontmatter, just plain text\n");
         let cfg = json!({"models": {"claude": {"extraction": "haiku"}}});
-        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
-        assert_eq!(codes(&problems), vec!["agent-file-malformed"]);
-        assert_eq!(problems[0].agent, Some("bee-extract"));
-
-        // (f) an explicitly null review slot falls back to generation
-        // (decision 0021), mirroring resolveTier.
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        write_agent_file(root, "bee-review", "name: bee-review\nmodel: sonnet");
-        let cfg = json!({"models": {"claude": {"generation": "sonnet", "review": null}}});
         assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
-        // Control: the same null-review config with a file declaring the
-        // seeded review default drifts, proving the fallback really moved the
-        // expectation to generation.
-        write_agent_file(root, "bee-review", "name: bee-review\nmodel: opus");
-        assert_eq!(
-            codes(&validate_agent_files_drift(&ctx_for(root), Some(&cfg))),
-            vec!["agent-file-drift"]
-        );
 
-        // (g) no config on disk at all -> resolves against the seeded
-        // defaults (generation=sonnet), no throw.
+        // (f) no config on disk at all: a pinned file still flags, an
+        // unpinned one is still clean — the verdict never needed the config.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
+        assert_eq!(codes(&validate_agent_files_drift(&ctx_for(root), None)), vec!["agent-file-drift"]);
+        write_agent_file(root, "bee-gather", "name: bee-gather");
         assert!(validate_agent_files_drift(&ctx_for(root), None).is_empty());
     }
 
