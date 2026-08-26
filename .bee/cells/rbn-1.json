@@ -1,0 +1,46 @@
+{
+  "id": "rbn-1",
+  "feature": "reattribute-by-name",
+  "lane": "small",
+  "role": "code",
+  "title": "Let a human name the reattribution for a record whose text makes no claim",
+  "action": "Extend bee decisions reattribute with an explicit pair: --id <decision id> --to <feature slug> (decision-attribution D5 residual, filed P3). Semantics: both flags together or neither (the bare verb stays the automatic text-claim pass). With the pair: refuse when the id names no decision; refuse a blank --to; refuse when the record's own text opens with a <slug> D<n> claim naming a DIFFERENT feature than --to (the manual door never contradicts the record's own text - that is the automatic pass's territory); when the stamp already equals --to report zero changed (idempotent); otherwise rewrite ONLY the feature field of exactly that record under the decisions lock, carrying every other line through byte-for-byte, and report old -> new. Declare the two flags on the registry entry (edit as DATA, round-trip serialization check). Update the registry description's one-time wording to note the targeted pair. Tests: pair corrects an unclaiming record; refusal on a contradicting text claim; refusal on unknown id; blank --to refuses; second run reports zero; only feature differs on the corrected line. Then run it for real for the five prompt-work-record records (f9bf6456, 34944b7a, 5944ebbb, 856789db, bd78f64a -> prompt-work-record) and quote the counts in the cap.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "must_haves": {
+    "truths": [
+      "--id/--to corrects a record whose text makes no claim, feature being the only field that differs",
+      "a record whose text claims a different feature refuses with a teach line naming the automatic pass",
+      "unknown id and blank --to refuse; a stamp already equal to --to reports zero",
+      "the flags are served and declared; registry_dispatch stays green both directions",
+      "the five prompt-work-record records carry feature prompt-work-record afterwards and a re-run reports zero"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "behavior_change": true,
+  "decisions": [
+    "decision-attribution D5"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "status": "claimed",
+  "read_first": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
+    "claimed_at": "2026-08-26T02:43:53.467Z"
+  }
+}
