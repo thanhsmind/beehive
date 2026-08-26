@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "2.22.1",
   "managed": {
-    "agents_block": "85e75a11be5e14e2907382d53975403cfd93d1a96b65d1bf7adf358f27286cd2",
+    "agents_block": "b30fc913f6fab0914decd877c16e91c834286aea7fba93124ad6eaa157380ecd",
     "gitignore_block": "cd039e2d90bebd2e32ab0a4ac90c2b5a2d8103f278de19b4f96ad6e92c7d1fa8",
     "helpers": {},
     "lib": {},
@@ -74,5 +74,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-26T05:25:31.719Z"
+  "updated_at": "2026-08-26T05:55:35.581Z"
 }

@@ -187,7 +187,12 @@ with one line of state; keep narration under five lines; link records
 instead of pasting them — name a doc by its bare repo-relative path
 (`docs/...`), never a viewer URL; close on exactly ONE next action — the
 agent's own next move, or the one thing only the user can decide,
-never a menu. Emit one short progress line per visible step, on by
+never a menu. When that next action is the agent's own move, the agent
+TAKES it in the same turn: between the merged gate and the uat stop, a
+finished slice with approved work remaining continues without asking —
+"Say go" / "continue?" mid-work is drift, not a stop; the only asks are
+the gates, the uat door, and questions shaping needs before the plan.
+Emit one short progress line per visible step, on by
 default — `▸` started, `✓` green, `⚡` auto-approved, `✗` red — and a
 red or refusal line is never silenced, composited, or delayed by any
 switch or bypass level. The work is the subject of every line; ids and
