@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "✓ Merge xong tại `f5c4871`. Trả lại mọi thứ và đóng feature.",
-    "asked_at": "2026-08-26T04:10:52.822Z",
+    "subject": "✓ Sạch — không cảnh báo validator; `read` → sonnet (bee-extract), `docs` → sonnet đều resolve đúng. Commit và ghi quyết định vào sổ.",
+    "asked_at": "2026-08-26T04:28:44.906Z",
     "session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76"
   },
   "route": {

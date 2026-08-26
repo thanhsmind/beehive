@@ -24,7 +24,8 @@
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
-        "model": "sonnet",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "multi-file gathers and codebase scans, read-only"
       },
       "test": {
@@ -32,15 +33,17 @@
         "description": "author or repair tests, red-first"
       },
       "docs": {
-        "model": "sonnet",
-        "description": "mechanical doc edits and parity sweeps"
+        "model": "opus",
+        "description": "doc edits and parity sweeps"
       },
       "extraction": {
-        "model": "sonnet",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -106,5 +109,8 @@
         }
       }
     }
+  },
+  "guards": {
+    "idle_gate": false
   }
 }
