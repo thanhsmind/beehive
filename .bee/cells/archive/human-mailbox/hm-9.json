@@ -68,6 +68,51 @@
     "warnings": [
       "advisory: this cap's commit changes 734 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "silent-run-recovery",
+            "status": "PASS",
+            "evidence": "cargo test ... mailbox — exit 0, 114 passed."
+          },
+          {
+            "id": "c2",
+            "name": "authorship-ban-not-weakened",
+            "status": "PASS",
+            "evidence": "ZERO deleted fn/assert lines; composition_never_states_a_fact_no_entry_carries still runs, plus a new word-walk asserting the body never says crash/killed/failed/died/error."
+          },
+          {
+            "id": "c3",
+            "name": "fails-closed-on-liveness",
+            "status": "PASS",
+            "evidence": "Silence is declared only on positive evidence — session record closed/dead, or a heartbeat that parsed and is stale. No record, no heartbeat, unparseable stamp all answer 'not silent'. A deliberate inversion of claims::heartbeat_stale, which answers the opposite question."
+          },
+          {
+            "id": "c4",
+            "name": "bounded-detection-measured",
+            "status": "PASS",
+            "evidence": "Three directory listings, names only, gated behind armed(). A test counter measured ZERO file opens across 60 runs and exactly one when a run is actually filed."
+          },
+          {
+            "id": "c5",
+            "name": "slug-non-invertibility",
+            "status": "PASS",
+            "evidence": "Entry files and letters use two different truncations, so the loop runs over session ids (slugging forward is exact) rather than trying to invert a slug."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.949Z"
+      }
+    ]
   }
 }

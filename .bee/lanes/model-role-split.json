@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "result: model-role-split fully closed — UAT approved, all five blocking close doors settled, knowledge concept and learnings landed, 34 cell",
-    "asked_at": "2026-08-25T12:03:46.911Z",
-    "session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d"
+    "subject": "Đã ghi xong. Giờ tôi làm mới bảng backlog (file `docs/backlog.md` là bảng sinh ra từ log).",
+    "asked_at": "2026-08-26T03:28:30.966Z",
+    "session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76"
   },
   "route": {
     "class": "feature",

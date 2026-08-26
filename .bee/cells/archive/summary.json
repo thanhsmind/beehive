@@ -883,5 +883,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-26T02:50:25.100Z"
+  },
+  "human-mailbox": {
+    "capped": 10,
+    "dropped": 1,
+    "archived_at": "2026-08-26T03:32:28.645Z"
   }
 }

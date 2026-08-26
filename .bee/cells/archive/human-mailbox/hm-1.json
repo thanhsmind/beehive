@@ -70,6 +70,45 @@
     "warnings": [
       "advisory: this cap's commit changes 1257 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "store-and-record-shape",
+            "status": "PASS",
+            "evidence": "cargo test ... mailbox — exit 0, 66 passed. 21 verbs::mailbox::tests lines confirm the new tests ran BY NAME rather than being filtered out."
+          },
+          {
+            "id": "c2",
+            "name": "entry-layer-question-settled",
+            "status": "PASS",
+            "evidence": "plan.md left one-JSONL-per-run vs a directory open; settled as one append-only JSONL per run with four reasons recorded in the module header."
+          },
+          {
+            "id": "c3",
+            "name": "one-artifact-no-twin",
+            "status": "PASS",
+            "evidence": "A test asserts the mailbox directory holds exactly one file after a write — D3's no-JSON-twin rule made mechanical."
+          },
+          {
+            "id": "c4",
+            "name": "collision-guard-beyond-spec",
+            "status": "PASS",
+            "evidence": "Two long run ids sharing a 20-char prefix would have collapsed onto one letter filename and one entries file, overwriting a letter and merging two runs. A sha256 tail on any truncated slug prevents it — D11 protected through a route D11 never anticipated."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.932Z"
+      }
+    ]
   }
 }

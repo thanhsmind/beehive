@@ -65,6 +65,39 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "prompt-and-reference-agree",
+            "status": "PASS",
+            "evidence": "Orchestrator ran the parity check: the closed kind set appears in worker-cell.md, swarming-reference.md and mailbox.rs alike."
+          },
+          {
+            "id": "c2",
+            "name": "gap-not-just-a-reword",
+            "status": "PASS",
+            "evidence": "The swarming reference had ZERO mentions of deviations before this cell — the [DONE] form documented Tests: but never the deviations key."
+          },
+          {
+            "id": "c3",
+            "name": "doc-tells-the-truth-about-code",
+            "status": "PASS",
+            "evidence": "A malformed departure STRING is silently a note while a malformed OBJECT is refused; the refusal sentence names the structured entry only, so no document promises a refusal the string path does not make."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.942Z"
+      }
+    ]
   }
 }

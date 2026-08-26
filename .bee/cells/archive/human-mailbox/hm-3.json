@@ -70,6 +70,45 @@
     "warnings": [
       "advisory: this cap's commit changes 727 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "compose-and-file",
+            "status": "PASS",
+            "evidence": "cargo test ... mailbox — exit 0, 93 passed."
+          },
+          {
+            "id": "c2",
+            "name": "authorship-ban-PROVEN-to-fail",
+            "status": "PASS",
+            "evidence": "Orchestrator injected an invented sentence ('the run finished smoothly overnight') into compose_body: the ban test FAILED (exit 101, panic at mailbox.rs:1850). Reverted, green again at 93. The test has teeth."
+          },
+          {
+            "id": "c3",
+            "name": "empty-section-dropped",
+            "status": "PASS",
+            "evidence": "push_section returns early on an empty list, so a section with nothing to report is absent rather than printed empty (D7)."
+          },
+          {
+            "id": "c4",
+            "name": "one-letter-per-run",
+            "status": "PASS",
+            "evidence": "A run reaching its end twice re-composes its existing letter in place; the original filed_at keeps the filename and the human's read state survives (D11)."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.937Z"
+      }
+    ]
   }
 }

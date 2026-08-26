@@ -75,6 +75,45 @@
     "warnings": [
       "advisory: this cap's commit changes 694 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "departure-contract",
+            "status": "PASS",
+            "evidence": "cargo test ... verbs::cells — exit 0, 250 passed."
+          },
+          {
+            "id": "c2",
+            "name": "no-existing-test-edited",
+            "status": "PASS",
+            "evidence": "ZERO deleted fn/assert lines in the commit — D10's byte-identical promise for the unarmed path held structurally."
+          },
+          {
+            "id": "c3",
+            "name": "armed-gated",
+            "status": "PASS",
+            "evidence": "The door is gated behind mailbox::armed at handlers_close.rs:228, with tests for both arming states."
+          },
+          {
+            "id": "c4",
+            "name": "plan-followed-kept-out-of-deviations",
+            "status": "PASS",
+            "evidence": "trace.deviations is what bee knowledge promote mines for patterns; a line meaning nothing-happened would teach a pattern out of silence. Recorded on trace.plan_followed instead — a second-order consequence two hops from the decision text."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.939Z"
+      }
+    ]
   }
 }

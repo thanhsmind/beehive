@@ -68,6 +68,51 @@
     "warnings": [
       "advisory: this cap's commit changes 399 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "the-one-exposed-command",
+            "status": "PASS",
+            "evidence": "cargo test ... mailbox — exit 0, 104 passed."
+          },
+          {
+            "id": "c2",
+            "name": "contract-smoke-tested-by-orchestrator",
+            "status": "PASS",
+            "evidence": "Against a real built binary: flip to read changed EXACTLY one line (status unread->read); a repeat flip exited 0 writing nothing; flipping back produced a byte-for-byte identical file (diff empty); a missing letter exited 1 naming the letter and the remedy."
+          },
+          {
+            "id": "c3",
+            "name": "naming-respects-the-ceiling",
+            "status": "PASS",
+            "evidence": "'mailbox read' was rejected because it would read as 'show me the mailbox' — the listing surface D1 forbids. 'mark' says nothing about reading or listing."
+          },
+          {
+            "id": "c4",
+            "name": "no-new-flag-vocabulary",
+            "status": "PASS",
+            "evidence": "--status and --id already carry these meanings elsewhere; the distinct-flag-vocabulary pin stayed at 189."
+          },
+          {
+            "id": "c5",
+            "name": "generated-file-researched-not-assumed",
+            "status": "PASS",
+            "evidence": "The orchestrator warned registry_payload.json is generated; the cell found the generator was REMOVED with the Node runtime and the file is now maintained in-tree, with in-code comments confirming it."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.946Z"
+      }
+    ]
   }
 }

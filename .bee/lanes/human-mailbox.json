@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "human-mailbox",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"human-mailbox\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 9eb67e4; reload the product and test \"human-mailbox\", then either approve uat (\"bee gate --name uat --approved true --lane human-mailbox\") or fix it in the worktree and merge again.",
+  "next_action": "D7's Next section still cannot print; the record shape needs a next-step field or D7 needs amending.",
   "created_at": "2026-08-25T10:57:48.542Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: human-mailbox",
-    "asked_at": "2026-08-26T03:09:38.590Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -32,5 +27,14 @@
     "rationale": "Shaping complete (17 locked decisions D1-D14/D17, all in the decision log); plan.md drafted at mode standard with four strictly ordered phases. Route recorded from the plan's own risk map: a new store shape plus a record contract another project consumes, with no auth, data-loss, external-provider or existing-proof risk — D10 keeps the flagless finish path byte-identical.",
     "updated_at": "2026-08-25T12:03:19.879Z",
     "feature": "human-mailbox"
+  },
+  "last_scribing_run": {
+    "feature": "human-mailbox",
+    "date": "2026-08-26",
+    "at": "2026-08-26T03:29:35.429Z",
+    "areas_synced": [
+      "human-mailbox"
+    ],
+    "next_action": "D7's Next section still cannot print; the record shape needs a next-step field or D7 needs amending."
   }
 }

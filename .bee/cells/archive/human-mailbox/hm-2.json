@@ -86,6 +86,51 @@
     "warnings": [
       "advisory: this cap's commit changes 503 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "append-at-every-cap",
+            "status": "PASS",
+            "evidence": "cargo test ... mailbox (75) and verbs::cells (223) both green."
+          },
+          {
+            "id": "c2",
+            "name": "no-existing-test-edited",
+            "status": "PASS",
+            "evidence": "git show of the commit over handlers_close.rs: ZERO deleted fn/assert lines, so D10's byte-identical promise held structurally."
+          },
+          {
+            "id": "c3",
+            "name": "end-to-end-on-a-real-cap",
+            "status": "PASS",
+            "evidence": "Orchestrator drove a real cap with a freshly built binary; a real entry appeared carrying the plain sentence, files and proof in D3's shape."
+          },
+          {
+            "id": "c4",
+            "name": "arming-corrected-against-the-plan",
+            "status": "PASS",
+            "evidence": "The config herding block alone only says a checkout CAN herd, so every attended session in a herding repo would have filed a letter, which D9 excludes. Arming requires the owner marker too."
+          },
+          {
+            "id": "c5",
+            "name": "run-is-a-session-span",
+            "status": "PASS",
+            "evidence": "D9 and D12 describe a run in sessions; one night dispatches many jobs, which would have shattered D11's one-letter-per-run."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.934Z"
+      }
+    ]
   }
 }

@@ -52,6 +52,33 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "third-description-closed",
+            "status": "PASS",
+            "evidence": "Orchestrator verified all FOUR files carry the closed kind set, and that the free-form --deviation \"<one line>\" shape returns 0 occurrences across skills/ and packages/bee/prompts/."
+          },
+          {
+            "id": "c2",
+            "name": "rationale-preserved",
+            "status": "PASS",
+            "evidence": "worker-details.md is the file that explains WHY deviations matter (the promote miner reads trace.deviations); the rationale was kept and extended rather than replaced by mechanics."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.944Z"
+      }
+    ]
   }
 }

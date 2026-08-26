@@ -65,6 +65,57 @@
     "warnings": [
       "advisory: this cap's commit changes 753 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "feature-close-letter",
+            "status": "PASS",
+            "evidence": "cargo test ... mailbox — exit 0, 122 passed; full suite 3080 passed 0 failed."
+          },
+          {
+            "id": "c2",
+            "name": "authorship-ban-not-weakened",
+            "status": "PASS",
+            "evidence": "ZERO deleted fn/assert lines in the commit."
+          },
+          {
+            "id": "c3",
+            "name": "same-record-not-a-second-format",
+            "status": "PASS",
+            "evidence": "Same file, same frontmatter, same filename rule — D7 already promised these sections appear only in the close letter, and no such letter existed until now."
+          },
+          {
+            "id": "c4",
+            "name": "dry-run-appends-nothing",
+            "status": "PASS",
+            "evidence": "The append sits on the non-dry-run tail, the fork hm-2's clean-stop map identified for exactly this cell."
+          },
+          {
+            "id": "c5",
+            "name": "discretion-disclosed-not-hidden",
+            "status": "PASS",
+            "evidence": "'Usage' is sourced from the skills and specs a feature's cells declare they change. The cell flagged this as a MAPPING IT CHOSE rather than a transcription — stored and factual, but a judgement. Recorded as an open gap in the area spec."
+          },
+          {
+            "id": "c6",
+            "name": "lying-fixture-fixed",
+            "status": "PASS",
+            "evidence": "The close driver's fixture modelled a checkout bee never produces (no ignore block), so a runtime write read as store dirt. The fixture was corrected rather than the code."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T03:30:43.951Z"
+      }
+    ]
   }
 }
