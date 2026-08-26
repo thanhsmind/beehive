@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "workspace-cleanup",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"workspace-cleanup\" started at phase \"swarming\" (lane).",
+  "next_action": "Continue bee-swarming for \"workspace-cleanup\" (lane).",
+  "created_at": "2026-08-26T02:32:08.941Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}
