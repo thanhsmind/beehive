@@ -19,10 +19,38 @@
   "staging_before_merge": false,
   "models": {
     "claude": {
-      "extraction": "sonnet",
-      "generation": "opus",
-      "review": "opus",
-      "advisor": "fable"
+      "code": {
+        "model": "opus",
+        "description": "write the cell's Rust code and its tests"
+      },
+      "read": {
+        "model": "sonnet",
+        "description": "multi-file gathers and codebase scans, read-only"
+      },
+      "test": {
+        "model": "opus",
+        "description": "author or repair tests, red-first"
+      },
+      "docs": {
+        "model": "sonnet",
+        "description": "mechanical doc edits and parity sweeps"
+      },
+      "extraction": {
+        "model": "sonnet",
+        "description": "narrow fact lookups from known locations"
+      },
+      "generation": {
+        "model": "opus",
+        "description": "fall-through tail: default writer role"
+      },
+      "review": {
+        "model": "opus",
+        "description": "independent read-only check of a claim or diff"
+      },
+      "advisor": {
+        "model": "fable",
+        "description": "session-class consult for high-risk gates"
+      }
     },
     "codex": {
       "extraction": "gpt-5.5",
