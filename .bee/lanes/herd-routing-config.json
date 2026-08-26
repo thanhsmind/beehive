@@ -15,9 +15,9 @@
   "created_at": "2026-08-26T04:33:57.386Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "The skill text is correct. Now I check the ship steps in bee-swarming, and the always-loaded AGENTS.md text.",
-    "asked_at": "2026-08-26T05:19:12.783Z",
-    "session": "fc596859-0d53-4166-8592-b9b4bc98fb52"
+    "kind": "question",
+    "subject": "Có sửa luật để bee không hỏi 'làm tiếp?' giữa các slice không?",
+    "asked_at": "2026-08-26T05:48:20.132Z",
+    "session": "14038471-5ea0-46ca-afd6-5bf3cbf492c3"
   }
 }
