@@ -326,6 +326,21 @@ silent.
   moment of enforcement moved (decision f8be49c9, wave-guard-gaps cell wgg-1,
   2026-08-25).
 
+- R105 — **A refusal names a remedy its own reader can reach.** The
+  unregistered-execution-worker refusal fires at cap time, which for any
+  dispatched unit happens inside a granted worktree — and it used to name the
+  control-plane verb that adds a worker record, which REFUSES from a worktree.
+  The reader was therefore told to open a door that is locked from where they
+  stand, and the recorded-reason escape became the routine answer rather than
+  the exception: roughly a dozen caps took it in a single session, each with an
+  honest reason, each teaching that acking is normal. The refusal now names the
+  dispatch-with-claim gesture that registration actually rides on, states that
+  self-registering is the orchestrator's move from the main checkout, and keeps
+  the recorded-reason escape for a dispatch that genuinely did not claim. The
+  general rule: when writing a refusal, ask where its reader is standing when
+  they read it, and name a remedy reachable from there (feature
+  reachable-remedy, cell rr-1, 2026-08-26).
+
 ## Edge Cases Settled
 
 - One invalid unit in a batch slice-creation request → zero units written; a
