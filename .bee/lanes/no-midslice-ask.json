@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"no-midslice-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"no-midslice-ask\" (lane).",
+  "next_action": "Merged into main at ae3ea38; capture what settled, then bee close --feature no-midslice-ask.",
   "created_at": "2026-08-26T05:53:27.260Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "docs",
@@ -23,12 +23,5 @@
     "rationale": "instruction-layer wording: forbid mid-work continue-asks; AGENTS.block.md rule tail + bee-swarming Completion + regen mirrors",
     "updated_at": "2026-08-26T05:53:32.307Z",
     "feature": "no-midslice-ask"
-  },
-  "merge_ready": {
-    "since": "2026-08-26T05:56:23.416Z",
-    "branch": "wt/no-midslice-ask",
-    "worktree_id": "beehive--wt--no-midslice-ask",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
