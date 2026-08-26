@@ -1,0 +1,46 @@
+{
+  "id": "cq-1",
+  "feature": "capture-queue-signal",
+  "role": "code",
+  "title": "Escalate the capture-queue nudge on settlements only, not on bookkeeping rows",
+  "action": "The capture-queue nudge and the close door both thresholded on every queued stub. The queue also carries touches-sweep citation rows and promote pointers, which are not settlements and are usually not actionable by the session reading the message. Measured on this repo: 20 sweep + 8 promote + 6 settlements — so the blocker said 'flush before new work' about work the reader could not do, every session. Narrow the escalation to settlements in both places; keep every row queued, listed and flushable; name the bookkeeping count in the message so nothing looks dropped.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_close && cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "acceptance": "Bookkeeping rows never escalate the nudge or the door; settlements still escalate on their own count and age; the bookkeeping count is still named; both frozen under-threshold wordings stay byte-identical; the session_close and drivers suites are green.",
+  "must_haves": {
+    "truths": [
+      "Bookkeeping rows (touches-sweep, promote) never escalate the nudge or the close door, however many are queued.",
+      "Settlements still escalate on their own count and on their own oldest age.",
+      "The bookkeeping count is still named in the nudge, so no row looks dropped.",
+      "Every row stays queued, listed and flushable — nothing leaves the queue.",
+      "Both frozen under-threshold wordings stay byte-identical to their pinned form.",
+      "The session_close and drivers suites are green."
+    ]
+  },
+  "status": "open",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

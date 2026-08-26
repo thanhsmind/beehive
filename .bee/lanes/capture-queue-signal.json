@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Let me land my own work first, then deal with that.",
-    "asked_at": "2026-08-26T05:36:17.263Z",
+    "subject": "Raising the lane rather than acking it.",
+    "asked_at": "2026-08-26T05:41:36.284Z",
     "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
   },
   "route": {
