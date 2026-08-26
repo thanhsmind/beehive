@@ -168,7 +168,7 @@ Status is one of `not started`, `drafted`, or `verified`.
 | bug-triage.md | not started |
 | verification/ (4 checklists) | not started |
 | foundations/invocation.md | drafted |
-| foundations/store.md | not started |
+| foundations/store.md | drafted |
 | foundations/session.md | not started |
 | foundations/gates.md | not started |
 | foundations/guards.md | not started |
