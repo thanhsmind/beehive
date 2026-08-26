@@ -1,0 +1,50 @@
+{
+  "id": "csd-1",
+  "title": "Document the role-slot description field in config-sample.json",
+  "lane": "tiny",
+  "role": "docs",
+  "status": "capped",
+  "feature": "sample-role-description",
+  "files": [
+    ".bee/config-sample.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add a description_field entry to _doc.models.slot_shapes explaining the optional description string on object-shaped slots (planner documentation only, shown in the preamble Roles line clipped to 60 chars, ignored by resolution/guard/dispatch prepare; string slots must use the {model, description} spelling), and put a live description on the sample's models.claude.generation object.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard -- --nocapture: the embedded config-sample.json parse/shape tests stay green over the edited file",
+  "notes": "Follow-up to feature role-slot-description (PBI p-a1399c00). The repo file is the single source: onboard/templates.rs embeds it via include_str, so editing .bee/config-sample.json updates the template new repos are seeded from.",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "rsd-orchestrator",
+    "outcome": "config-sample.json documents the optional role-slot description field (_doc slot_shapes entry + live generation example)",
+    "files_changed": [
+      ".bee/config-sample.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T04:10:00.963Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
+    "claimed_at": "2026-08-26T04:08:28.397Z",
+    "report": {
+      "outcome": "config-sample.json documents the optional role-slot description field",
+      "commit": "17e4b39f",
+      "files": [
+        ".bee/config-sample.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee config_sample — green — the embedded-template parse/shape test covers exactly the edited sample file",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

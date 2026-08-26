@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "role-slot-description",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"role-slot-description\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 7aebd0c; capture what settled, then bee close --feature role-slot-description.",
+  "next_action": "bee close finished \"role-slot-description\" — feature is closed.",
   "created_at": "2026-08-26T03:33:53.560Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "✓ Feature đã đóng xanh — cell được lưu trữ, hồ sơ tự commit (`c765ba2c`). Kiểm tra nhanh code đã nằm trên main rồi trả phiên.",
+    "asked_at": "2026-08-26T03:59:29.185Z",
+    "session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76"
+  },
   "route": {
     "class": "feature",
     "lane": "small",

@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "While those run, I dispatch the third scan for the last two foundations (guards, worktrees).",
-    "asked_at": "2026-08-26T03:53:17.643Z",
+    "subject": "All six foundations are written. I update the coverage table and commit, then start the hardest area (the lifecycle).",
+    "asked_at": "2026-08-26T04:02:17.008Z",
     "session": "a2bd3764-a63e-4df4-9f74-51092b0a21d5"
   },
   "route": {

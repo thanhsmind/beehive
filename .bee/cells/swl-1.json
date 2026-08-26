@@ -1,0 +1,49 @@
+{
+  "id": "swl-1",
+  "feature": "stale-worktree-lock",
+  "role": "code",
+  "title": "Release this session's expired worktree lock and prune the merged worktree",
+  "action": "The human-mailbox worktree is locked by this session with the reason 'hm-8/hm-9 in flight'. Both cells are capped and merged, so the reason has expired. Release the lock and let prune reclaim the worktree. Verify prune's own conditions still hold before and after — merged, clean, no live session, nothing precious ignored — and do not touch the statusline-binary-lookup worktree, which prune correctly keeps because its capture queue is non-empty.",
+  "verify": "git worktree list | grep -c human-mailbox",
+  "slice": 1,
+  "lane": "tiny",
+  "behavior_change": false,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [],
+  "acceptance": "The human-mailbox worktree is unlocked and pruned; statusline-binary-lookup is untouched and still kept for its non-empty capture queue; no source file changes.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-swl-1",
+    "outcome": "Released this session's expired worktree lock and pruned the merged human-mailbox worktree, reclaiming 2.1 GB",
+    "files_changed": [],
+    "deviations": [
+      "The lock and the idle gate formed a small deadlock: the lock could only be released by a session doing bee work, and releasing it was not itself bee work. Opened a tiny cell rather than disabling guards.idle_gate, which the refusal itself offers as a last resort. Kind: hit an unforeseen obstacle."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T04:10:23.571Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-26T04:10:04.775Z",
+    "commit_pending": "no source files; the cell releases a lock and runs a sweep",
+    "inline_reason": "tiny lane, no source files, fully specified before execution; dispatch writes no state.workers row and bee state worker add refuses from a granted worktree (known P2)",
+    "report": {
+      "outcome": "Released the expired lock and pruned the merged worktree",
+      "commit": "none",
+      "files": [],
+      "tests": "bee worktree prune --older-than-days 0 — green — removed human-mailbox reclaiming 2.1 GB and KEPT statusline-binary-lookup for its non-empty capture queue, which is the condition that proves the sweep still discriminates",
+      "deviations": [
+        "The lock and the idle gate formed a small deadlock: the lock could only be released by a session doing bee work, and releasing it was not itself bee work. Opened a tiny cell rather than disabling guards.idle_gate, which the refusal itself offers as a last resort. Kind: hit an unforeseen obstacle."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
