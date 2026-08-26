@@ -3,7 +3,7 @@
   "title": "bee status --json keeps role descriptions in its models section",
   "lane": "standard",
   "role": "code",
-  "status": "claimed",
+  "status": "capped",
   "feature": "models-show-verb",
   "files": [
     "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
@@ -29,16 +29,37 @@
   "read_first": [],
   "trace": {
     "worker": "ms-w2",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "bee status --json models section merges each raw slot description onto the normalized slot for display; resolution keeps the stripped map",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "Waited on a background build poll before the verify run — the sibling worker had verbs/models_group.rs mid-edit and the crate would not compile — hit an unforeseen obstacle",
+      "Test expectation for a whitespace-only description was wrong: a raw {model, description:\"   \"} slot normalizes to the OBJECT {model}, not to a bare string, so it asserts {model:\"haiku\"} and a separate undescribed string slot covers the no-widen case — the plan was wrong about a fact"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-26T05:20:37.914Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
-    "claimed_at": "2026-08-26T05:11:50.563Z"
+    "claimed_at": "2026-08-26T05:11:50.563Z",
+    "report": {
+      "outcome": "bee status --json models section merges each raw slot description onto the normalized slot for display; resolution keeps the stripped map",
+      "commit": "beb0e2e3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green — 110 passed, both new tests named in the output; plus the -p bee models filter, 24 passed",
+      "deviations": [
+        "Waited on a background build poll before the verify run — the sibling worker had verbs/models_group.rs mid-edit and the crate would not compile — hit an unforeseen obstacle",
+        "Test expectation for a whitespace-only description was wrong: a raw {model, description:\"   \"} slot normalizes to the OBJECT {model}, not to a bare string, so it asserts {model:\"haiku\"} and a separate undescribed string slot covers the no-widen case — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

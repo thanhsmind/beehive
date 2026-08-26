@@ -3,7 +3,7 @@
   "title": "Seed role descriptions in default_config and add read-before-assign reminders",
   "lane": "standard",
   "role": "code",
-  "status": "open",
+  "status": "claimed",
   "feature": "models-show-verb",
   "deps": [
     "ms-1"
@@ -32,7 +32,7 @@
   "notes": "PBI p-0a5e6c44 CoS 3+4. Depends on ms-1 for the verb name existing in catalog.rs (shared file — never run concurrently with ms-1).",
   "read_first": [],
   "trace": {
-    "worker": null,
+    "worker": "ms-w3",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -42,6 +42,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
+    "claimed_at": "2026-08-26T05:22:50.967Z"
   }
 }

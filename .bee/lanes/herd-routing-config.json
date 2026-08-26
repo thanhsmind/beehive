@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The shell was sitting inside the folder, so the path doubled. I run it from the repo root.",
-    "asked_at": "2026-08-26T04:58:17.210Z",
-    "session": "a2bd3764-a63e-4df4-9f74-51092b0a21d5"
+    "subject": "The skill text is correct. Now I check the ship steps in bee-swarming, and the always-loaded AGENTS.md text.",
+    "asked_at": "2026-08-26T05:19:12.783Z",
+    "session": "fc596859-0d53-4166-8592-b9b4bc98fb52"
   }
 }

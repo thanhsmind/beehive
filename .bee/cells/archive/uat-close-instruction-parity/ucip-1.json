@@ -29,21 +29,44 @@
     ]
   },
   "verify": "bee dev regen green, then bee dev release-manifest --check clean; rg confirms no instruction file still says the uat door defaults to merge time",
-  "status": "claimed",
+  "status": "capped",
   "decisions": [],
   "read_first": [],
   "trace": {
     "worker": "ucip-inline",
     "outcome": null,
     "files_changed": [],
-    "deviations": [],
+    "deviations": [
+      "docs-lane ran in the MAIN checkout while a sibling session was live (models-show-verb): file sets fully disjoint (skills/docs vs packages/bee-rs), commit path-scoped through the concurrent-worker guard",
+      "docs-lane in MAIN with a live sibling session; disjoint files, path-scoped commit",
+      "sync-ack: AGENTS.md touched only in the worktree-first rule tail (uat_stop placement); the flagged rule agents-capture-line-at-close and its applied_at files are untouched by this diff"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-26T05:26:52.849Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "fc596859-0d53-4166-8592-b9b4bc98fb52",
-    "claimed_at": "2026-08-26T05:25:00.058Z"
+    "claimed_at": "2026-08-26T05:25:00.058Z",
+    "sync_ack": "AGENTS.md touched only in the worktree-first rule tail (uat_stop placement); the flagged rule agents-capture-line-at-close and its applied_at files are untouched by this diff",
+    "report": {
+      "outcome": "Instruction layer now states the uat_stop close default: merge on green without asking, keep worktree, user tests on main; Ready-to-merge question scoped to uat_stop merge",
+      "commit": "6649e0d5",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-hive/SKILL.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bee dev regen && bee dev release-manifest --check — green (3/3 steps, 270 files match) — docs-only change; parity proof is the regen chain plus rg showing zero remaining merge-time-default wording",
+      "deviations": [
+        "docs-lane in MAIN with a live sibling session; disjoint files, path-scoped commit"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

@@ -3,7 +3,7 @@
   "title": "Add the read-only bee models show verb returning the raw role table",
   "lane": "standard",
   "role": "code",
-  "status": "claimed",
+  "status": "capped",
   "feature": "models-show-verb",
   "files": [
     "packages/bee-rs/crates/bee/src/catalog.rs",
@@ -32,16 +32,45 @@
   "read_first": [],
   "trace": {
     "worker": "ms-w1",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "bee models show prints the raw models role table, descriptions intact, each row marked configured or default",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "registry_payload.json was hand-edited instead of regenerated — the repo has no generator for it (bee dev regen renders skill trees, applies onboarding, writes the release manifest, and never touches the payload); every earlier verb addition declared its entry by hand the same way, and registry_contracts + registry_dispatch are the drift gate — the plan was wrong about a fact",
+      "bee dev regen also deleted three retired .claude/agents/*.md files and bumped .bee/onboarding.json; I restored them and kept them out of the commit — unrelated repo-vs-config drift, and a sibling worker shares this worktree — something else had to be fixed first"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-26T05:22:13.366Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
-    "claimed_at": "2026-08-26T05:11:50.543Z"
+    "claimed_at": "2026-08-26T05:11:50.543Z",
+    "report": {
+      "outcome": "bee models show prints the raw models role table, descriptions intact, each row marked configured or default",
+      "commit": "a08658dd248b9271eab9973bea6f735345be0749",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- router:: help:: catalog:: verbs::models_group:: plus --test registry_contracts --test registry_dispatch --test front_door --test installer_invocations — green — 13 new models_group tests plus the registry/dispatcher/help surfaces the new entry and probe touch; bee dev regen and bee dev release-manifest --check both green",
+      "deviations": [
+        "registry_payload.json was hand-edited instead of regenerated — the repo has no generator for it (bee dev regen renders skill trees, applies onboarding, writes the release manifest, and never touches the payload); every earlier verb addition declared its entry by hand the same way, and registry_contracts + registry_dispatch are the drift gate — the plan was wrong about a fact",
+        "bee dev regen also deleted three retired .claude/agents/*.md files and bumped .bee/onboarding.json; I restored them and kept them out of the commit — unrelated repo-vs-config drift, and a sibling worker shares this worktree — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 504 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
