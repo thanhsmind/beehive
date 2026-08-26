@@ -75,8 +75,9 @@ session model is this session, so that rung hands the blocker to you;
 (3) surface it to the user with the worker's diagnosis. If it invalidates the plan, return to bee-planning.
 
 **Completion:** slice done with more approved work remaining → return to
-bee-planning for the next batch (an approved plan stays frozen; planning
-shapes the next batch, never reopens it). Final slice green → the road
+bee-planning for the next batch IN THE SAME TURN — the slice boundary is
+never a user question, never a "say go" (an approved plan stays frozen;
+planning shapes the next batch, never reopens it). Final slice green → the road
 splits on `uat_stop`:
 
 - Default `uat_stop: "close"` (absent means this): merge FIRST, without
