@@ -191,6 +191,18 @@ pub fn default_state() -> Value {
 /// selection). And this function seeds a NEW `.bee/config.json` only —
 /// `apply.rs`'s `create_runtime_file` arm is create-if-missing — so no existing
 /// host's config changes meaning.
+///
+/// models-show-verb D3: each seeded claude role carries a `description`, so a
+/// fresh install ships the SELF-TEACHING table rather than four bare model
+/// names an agent has to guess the meaning of. The shape moves from a bare
+/// string to `{model, description}` — a documented leaf that
+/// `normalize_tier_value` already accepted for years, and one it normalizes to
+/// `{model}` by dropping the description, so resolution answers exactly the
+/// models the bare strings answered. `bee models show` is what reads the
+/// descriptions back (the raw table, description intact); the normalized view
+/// the dispatcher resolves against never sees them, which is what keeps
+/// resolution blind. Codex stays all-null: a description on a slot that
+/// selects no model would document a lever codex does not have.
 pub fn default_config() -> Value {
     json!({
         "hooks": {
@@ -203,13 +215,16 @@ pub fn default_config() -> Value {
         },
         "gate_bypass": false,
         // Job names first — the two a host actually edits — then the
-        // historical tail every ordered role list ends with.
+        // historical tail every ordered role list ends with. Each claude slot
+        // is `{model, description}` (D3): the description is the ONE place a
+        // role's meaning is written down, and `bee models show` is how it is
+        // read back.
         "models": {
             "claude": {
-                "code": "sonnet",
-                "read": "haiku",
-                "extraction": "haiku",
-                "generation": "sonnet"
+                "code": { "model": "sonnet", "description": "write the cell's code and its tests" },
+                "read": { "model": "haiku", "description": "multi-file gathers and scans, read-only" },
+                "extraction": { "model": "haiku", "description": "narrow fact lookups from known locations" },
+                "generation": { "model": "sonnet", "description": "fall-through tail, the default writer role" }
             },
             "codex": {
                 "code": Value::Null,
@@ -437,13 +452,86 @@ mod tests {
             assert!(!table.contains_key("advisor"), "{runtime} must not ship an advisor default");
         }
         // Nothing moves for a fresh host: the added job names carry the very
-        // models the tail already resolved to.
-        assert_eq!(v["models"]["claude"]["code"], v["models"]["claude"]["generation"]);
-        assert_eq!(v["models"]["claude"]["read"], v["models"]["claude"]["extraction"]);
+        // models the tail already resolved to. Read through `model`, because
+        // models-show-verb D3 made each claude slot a `{model, description}`
+        // object — the descriptions differ on purpose, the models must not.
+        assert_eq!(
+            v["models"]["claude"]["code"]["model"],
+            v["models"]["claude"]["generation"]["model"]
+        );
+        assert_eq!(
+            v["models"]["claude"]["read"]["model"],
+            v["models"]["claude"]["extraction"]["model"]
+        );
         // codex stays all-null by design (CODEX_AGENTS_NOTE).
         for name in ["code", "read", "extraction", "generation"] {
             assert!(v["models"]["codex"][name].is_null(), "codex.{name} must stay null");
         }
+    }
+
+    /// models-show-verb D3 (CONTEXT.md): a fresh install ships the role table
+    /// already explained. Two halves, and BOTH have to hold at once — a
+    /// description that cost the host its models would be a worse trade than
+    /// no description at all.
+    #[test]
+    fn a_fresh_seed_explains_every_claude_role_and_still_resolves_to_the_same_models() {
+        let v = default_config();
+
+        // Half one: every claude role bee publishes carries a non-empty
+        // description, and it is a `{model, description}` object rather than
+        // a bare string.
+        for name in ["code", "read", "extraction", "generation"] {
+            let slot = v["models"]["claude"][name]
+                .as_object()
+                .unwrap_or_else(|| panic!("claude.{name} must be a {{model, description}} object"));
+            assert!(
+                slot.get("model").and_then(Value::as_str).is_some_and(|m| !m.is_empty()),
+                "claude.{name} lost its model"
+            );
+            assert!(
+                slot.get("description").and_then(Value::as_str).is_some_and(|d| !d.is_empty()),
+                "claude.{name} ships no description — the fresh host cannot read what the role means"
+            );
+        }
+        // Codex stays null: no per-agent model selection, so nothing to
+        // describe (CODEX_AGENTS_NOTE, and D3 says so in as many words).
+        for name in ["code", "read", "extraction", "generation"] {
+            assert!(v["models"]["codex"][name].is_null(), "codex.{name} must stay null");
+        }
+
+        // Half two: resolution is BLIND to the change. Asked at the door a
+        // dispatch actually uses, every seeded role must resolve to exactly
+        // the model the bare-string seed resolved to. (The normalized MAPS
+        // differ in leaf shape — `{model}` where a string stood — which is
+        // why the comparison is the resolver's answer, not the map.)
+        let described = crate::verbs::drivers::normalize_models(Some(&v["models"]));
+        let bare = crate::verbs::drivers::normalize_models(Some(&json!({
+            "claude": {
+                "code": "sonnet",
+                "read": "haiku",
+                "extraction": "haiku",
+                "generation": "sonnet"
+            },
+            "codex": {
+                "code": Value::Null,
+                "read": Value::Null,
+                "extraction": Value::Null,
+                "generation": Value::Null
+            }
+        })));
+        for name in ["code", "read", "extraction", "generation"] {
+            let now = crate::verbs::drivers::resolve_role(&described, &[name], "claude", "cell");
+            let before = crate::verbs::drivers::resolve_role(&bare, &[name], "claude", "cell");
+            assert_eq!(
+                now, before,
+                "the seeded description changed what role {name} resolves to"
+            );
+        }
+        // And the description itself never reaches the resolved answer.
+        assert_eq!(
+            crate::verbs::drivers::resolve_role(&described, &["code"], "claude", "cell"),
+            crate::verbs::drivers::Resolved::Model { model: "sonnet".into(), effort: None }
+        );
     }
 
     #[test]

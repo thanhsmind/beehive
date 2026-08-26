@@ -576,6 +576,46 @@ mod tests {
         );
     }
 
+    /// models-show-verb D2: `bee cells add --help` is the OTHER door where an
+    /// agent picks a role, so it names the verb that prints the table beside
+    /// the line teaching where a role's meaning is written down. The help text
+    /// is the registry entry's own `description` — the bytes `bee cells add
+    /// --help` renders — so this reads it there.
+    #[test]
+    fn cells_add_help_sends_the_author_to_bee_models_show() {
+        let payload: Value = serde_json::from_str(crate::registry::REGISTRY_PAYLOAD)
+            .expect("the embedded registry payload must parse");
+        let desc = payload["commands"]
+            .as_array()
+            .expect("commands array")
+            .iter()
+            .find(|c| c["name"] == "cells.add")
+            .and_then(|c| c["description"].as_str())
+            .expect("cells.add is in the registry with a description");
+        // The existing teach line stays — the verb is added BESIDE it, never
+        // in place of it: one says where the meaning lives, the other says
+        // how to read it.
+        assert!(
+            desc.contains("models.<runtime>.<role>.description"),
+            "cells add --help lost the line naming where a role's meaning is written down"
+        );
+        assert!(
+            desc.contains("bee models show"),
+            "cells add --help never names the verb that prints the role table"
+        );
+        // Read-first, and only when unread this session (D2's condition).
+        assert!(
+            desc.contains("if you have not read it this session"),
+            "the reminder lost its read-first condition"
+        );
+        // The verb REPLACES the hand-parse; the help must not leave that as a
+        // live option next to it (D1).
+        assert!(
+            desc.contains("never hand-parse .bee/config.json"),
+            "cells add --help still leaves hand-parsing the config as an option"
+        );
+    }
+
     /// A refusal must not hand the caller another dead end.
     #[test]
     fn group_subverbs_never_offers_an_unavailable_verb() {

@@ -323,9 +323,18 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
     // own `code`/`read`, so the line names that case and the config key that
     // shuts it. Softening the sentence to "may warn" instead would be the
     // wrong repair: it would stop being false by stopping to teach.
+    //
+    // models-show-verb D2 (CONTEXT.md): the author is refused at the exact
+    // moment they are choosing a role, so this is where the READ-FIRST
+    // reminder belongs. `bee models show` returns the whole table with each
+    // role's description, and guess-and-fill — picking a name because it
+    // sounds right — is the defect being replaced. The reminder names the
+    // verb rather than the config path on purpose (D1): an agent that is told
+    // a file path parses the file by hand, which is what the verb exists to
+    // stop.
     if !nonblank_string(map.get("role")) {
         problems.push(format!(
-            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. {}. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it.",
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. {}. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee models show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace.",
             ROLE_VOCABULARY.join(", ")
         ));
     }

@@ -720,7 +720,7 @@ use std::time::Instant;
              addCell: cell is missing required field \"affects_skills\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none). \
              addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike. \
-             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it."
+             addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee models show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace."
         );
         let base = |lane: &str| {
             json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane, "role": "code", "affects_skills": [], "affects_specs": []})
@@ -802,7 +802,7 @@ use std::time::Instant;
             "addCell: cell is missing required field \"affects_specs\". FIX: every cell must declare \"affects_skills\" and \"affects_specs\" arrays (use `[]` if none).".to_string(),
             "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
                 .to_string(),
-            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it."
+            "addCell: cell is missing required field \"role\" (non-empty string) — the job this work is, which is what selects the model that runs it. FIX: add \"role\": \"<name>\" to the cell, e.g. code, read, test, docs, review, design. Any non-empty name is legal — bee holds no fixed list, and a role nothing configures still runs: the dispatch falls through to the next name it asked for and warns. The one silent case is \"code\" or \"read\" on a runtime whose models.<runtime> configures NEITHER of them — the pre-roles window, where falling through is the intended no-op; set models.<runtime>.code in .bee/config.json to close it. If you have not read the role table this session, run `bee models show` before you pick — it prints every role with its description, which is where a role's meaning is written down; picking a name without reading it is the guess this line exists to replace."
                 .to_string(),
         ];
         assert_eq!(validate_new_cell_problems(root, &broken).unwrap(), expected);
@@ -870,6 +870,31 @@ use std::time::Instant;
         assert!(!ok);
         assert_eq!(rows[0].problems, vec![problem.clone()]);
         assert!(normalized.is_none(), "a refused batch lands nothing on disk");
+    }
+
+    /// models-show-verb D2 (CONTEXT.md): the refusal is the moment an author
+    /// is choosing a role, so it must send them to READ the table instead of
+    /// guessing a name that sounds right. It names the VERB, never the config
+    /// path — a path invites the hand-parse `bee models show` exists to end.
+    #[test]
+    fn the_missing_role_refusal_sends_the_author_to_bee_models_show() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let problems = validate_new_cell_problems(root, &role_probe(None)).unwrap();
+        let problem = &problems[0];
+        assert!(
+            problem.contains("`bee models show`"),
+            "the refusal never names the verb that prints the role table: {problem}"
+        );
+        // Read-FIRST, and only when it has not been read — the reminder is
+        // conditional on purpose ("nhắc là nếu chưa đọc thì nên đọc", D2).
+        assert!(
+            problem.contains("If you have not read the role table this session"),
+            "the reminder lost its read-first condition: {problem}"
+        );
+        // And it says WHY the table is worth reading: the description is
+        // where a role's meaning lives.
+        assert!(problem.contains("description"), "{problem}");
     }
 
     // D2 (store `06e49368`): the role set is OPEN. Validation checks presence
