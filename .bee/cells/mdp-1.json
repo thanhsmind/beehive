@@ -25,12 +25,12 @@
     "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
   ],
   "acceptance": "Untracked files the branch never touches stop blocking; untracked files it does touch still refuse; tracked dirt is unchanged; the worktree suite is green and a new test pins the clobber case.",
-  "status": "claimed",
+  "status": "blocked",
   "deps": [],
   "decisions": [],
   "read_first": [],
   "trace": {
-    "worker": "wk-mdp-1",
+    "worker": null,
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -40,7 +40,10 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
-    "claimed_at": "2026-08-26T06:16:38.029Z"
+    "claim_session": null,
+    "claimed_at": null,
+    "swept_at": "2026-08-26T09:50:19.811Z",
+    "swept_from_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "blocked_reason": "swept by bee: session \"e79d1e09-87fb-491a-9e3a-7ade73f3bd0c\"'s claim on this cell expired and its heartbeat went stale; its half-finished work, if any, may be at worktree \"/home/thanhsmind/Projects/goglbe/beehive\" (workspace \"main\")."
   }
 }

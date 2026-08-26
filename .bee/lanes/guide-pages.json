@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"guide-pages\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 4f6245b; capture what settled, then bee close --feature guide-pages.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-26T07:27:00.044Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "UAT: nghiệm thu site guide tại https://thanhsmind.github.io/beehive/",
+    "asked_at": "2026-08-26T07:47:02.234Z",
+    "session": "8f719c60-a4b8-4aa5-9928-c219c1dc9663"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
