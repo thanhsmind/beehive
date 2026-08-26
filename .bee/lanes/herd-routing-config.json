@@ -15,9 +15,9 @@
   "created_at": "2026-08-26T04:33:57.386Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "Có sửa luật để bee không hỏi 'làm tiếp?' giữa các slice không?",
-    "asked_at": "2026-08-26T05:48:20.132Z",
+    "kind": "turn-end",
+    "subject": "✓ Đóng feature xong, sổ sách tự commit. Tôi gỡ liên kết phiên và nhả session.",
+    "asked_at": "2026-08-26T06:00:02.659Z",
     "session": "14038471-5ea0-46ca-afd6-5bf3cbf492c3"
   }
 }

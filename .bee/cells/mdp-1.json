@@ -1,0 +1,46 @@
+{
+  "id": "mdp-1",
+  "feature": "merge-door-precision",
+  "role": "code",
+  "title": "Stop refusing a merge for untracked files it can never touch",
+  "action": "bee worktree merge auto-commits bookkeeping in its allowed roots and then refuses on ANY remaining dirt in main. That includes UNTRACKED files under another feature's docs/history/, which this merge will never write — so with several live sessions nobody can merge until everybody commits. Narrow the refusal: an untracked path that is NOT in the merging branch's own changed-file set cannot collide and must not block. Tracked modifications keep refusing exactly as today, and git's own refusal to overwrite an untracked file stays the backstop for anything the branch does touch. Name the narrowing in the refusal text so a reader knows what still blocks.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "An untracked path outside the merging branch's changed-file set no longer refuses the merge.",
+      "An untracked path that the branch DOES touch still refuses, so nothing the merge would overwrite is silently clobbered.",
+      "A TRACKED modified file outside the bookkeeping roots still refuses, byte-identical to today — this narrowing never reaches tracked dirt.",
+      "The existing bookkeeping auto-commit of the allowed roots is unchanged.",
+      "The refusal text names which dirt still blocks, so the remedy stays reachable.",
+      "A test proves the untracked-and-touched case still refuses — the narrowing must not become a way to clobber."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "acceptance": "Untracked files the branch never touches stop blocking; untracked files it does touch still refuse; tracked dirt is unchanged; the worktree suite is green and a new test pins the clobber case.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-mdp-1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-26T06:16:38.029Z"
+  }
+}

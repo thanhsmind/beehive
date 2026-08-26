@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "no-midslice-ask",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"no-midslice-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at ae3ea38; capture what settled, then bee close --feature no-midslice-ask.",
+  "next_action": "bee close finished \"no-midslice-ask\" — feature is closed.",
   "created_at": "2026-08-26T05:53:27.260Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "docs",

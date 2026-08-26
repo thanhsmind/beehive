@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "merge-door-precision",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"merge-door-precision\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"merge-door-precision\" (lane).",
+  "created_at": "2026-08-26T06:16:12.166Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "bee worktree merge refuses on any dirt outside its bookkeeping allowlist, including UNTRACKED files in another feature's docs/history that this merge can never touch. With several live sessions the steady state is that nobody merges until everybody commits — hit four times in two days.",
+    "updated_at": "2026-08-26T06:16:12.177Z",
+    "feature": "merge-door-precision"
+  }
+}
