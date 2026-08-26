@@ -86,7 +86,7 @@ The mirrored hold row carries the path, the holder, the feature, the session, th
 
 ### Finish
 
-Without `--json`, one line on **stdout** — `Reserved "<path>" for <agent> (cell <id>, ttl <n>s).` — then the timing line `[bee] reservations reserve <N>ms` on stderr. With `--json`, the payload `{"ok": true, "reservation": {…}}` on stdout. A conflict or a foreign hold prints its text on the same stream with exit 1; only argument errors go to stderr. (The stream choice for the success line differs from the rest of bee — see "Edge cases".)
+Without `--json`, one line on **stdout** — `Reserved "<path>" for <agent> (cell <id>, ttl <n>s).` — then the timing line `[bee] reservations reserve <N>ms` on stderr. With `--json`, the payload `{"ok": true, "reservation": {…}}` on stdout. A conflict or a foreign hold prints its text on the same stream with exit 1; only argument errors go to stderr.
 
 ## The other three verbs
 
@@ -159,7 +159,7 @@ After any interrupt the state is exactly what the lease files say. There is no h
 ## Open questions and verification
 
 - **Suspected bug:** the `SESSION_REQUIRED` refusal tells the agent to "pass `--session-id`", and the `shared-disjoint` write-policy refusal spells out `bee reservations reserve … --session-id <id>`. `bee reservations reserve` has no `--session-id` flag; it takes `--session`. `--session-id` is the *claim* door's spelling. Following either remedy literally produces a shape refusal. Filed for [bug-triage.md](../bug-triage.md).
-- **Variance, possibly a defect:** these four verbs print their human line on stdout while the rest of bee prints it on stderr. Confirmed live for `reservations list`. Whether this is deliberate (the group predates the contract) was not determined.
+- Success text on stdout, confirmed live for `reservations list` — the standard split [invocation](../foundations/invocation.md) owns.
 - The lease record's `holder` field and the ledger's holder attribution were read from code and its comments; the granted-worktree behavior was not exercised, because it needs two checkouts and a live cell.
 - Whether anything releases a crashed session's reservations before their TTL passes: nothing found beyond expiry plus a sweep. `bee recovery scan` was not read for this document.
 - `.bee/reservations.json` is written only by `bee state rebuild-projections`. No caller was found that rebuilds it after a reserve or a release, so the projection is normally absent or stale in a live repo. Whether the write guard's corrupt-projection check was meant to read the leases instead is a product call.

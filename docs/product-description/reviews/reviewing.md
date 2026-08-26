@@ -79,13 +79,13 @@ For `record`, the same file rewritten atomically with one field changed and `upd
 
 ### Finish
 
-Without `--json`, one line on stderr (`Created review session <id>.`, `Recorded <kind> on <id> (updated_at <ts>).`, `Added candidate <uuid> for feature "<slug>" (mode standard, 6 cell(s)).`) followed by the timing line. `list` prints `<id> [<decision status>] <scope description>` per session, sorted by id with numeric-aware ordering (`rev-2` before `rev-10`), or `No review sessions.`. `candidates` prints `<date> <feature> @<head> (<mode>)` oldest first, or `No review candidates.`. `status` prints its headline and one line per candidate. `show` always prints the session as pretty JSON, with or without the flag. With `--json` the payload moves to stdout: the session object, the candidate entry, the session array, or `{counts, candidates}` for `status`.
+Without `--json`, one line on stdout (`Created review session <id>.`, `Recorded <kind> on <id> (updated_at <ts>).`, `Added candidate <uuid> for feature "<slug>" (mode standard, 6 cell(s)).`) followed by the timing line. `list` prints `<id> [<decision status>] <scope description>` per session, sorted by id with numeric-aware ordering (`rev-2` before `rev-10`), or `No review sessions.`. `candidates` prints `<date> <feature> @<head> (<mode>)` oldest first, or `No review candidates.`. `status` prints its headline and one line per candidate. `show` always prints the session as pretty JSON, with or without the flag. With `--json` the payload moves to stdout: the session object, the candidate entry, the session array, or `{counts, candidates}` for `status`.
 
 ## The five gates and the review gate
 
 The `review` gate is one of the five recorded gates ([gates](../foundations/gates.md)) and the only one that is not part of the automatic chain. Gate 1 (decisions) and Gate 2 (the merged shape+execution approval) are walked by every feature; Gate 3 is UAT, the door to main. The `review` gate exists only inside a session the human invoked, and it is shown only while the phase is `reviewing`. Nothing in the `reviews` verbs reads or writes `approved_gates.review`; the session's own merge approval lives on `decision.review` inside the session file, and the workflow's `review` boolean is set, if ever, by `bee gate --name review`. Gate bypass never creates a review and never approves one.
 
-> Technical note: `decision.review` was called `gate4` while bee had four gates. Merging shape and execution into Gate 2 renumbered the review gate to 3 and left `gate4` naming a gate that no longer exists. A payload carrying `gate4` is folded into `review` on write and the legacy key never survives; a payload carrying both keeps `review`.
+> Technical note: `decision.review` was called `gate4` while bee had four gates. Merging shape and execution into Gate 2 left `gate4` naming a number that no longer exists; the review gate carries no number in the current flow. A payload carrying `gate4` is folded into `review` on write and the legacy key never survives; a payload carrying both keeps `review`.
 
 ## The P1 door
 

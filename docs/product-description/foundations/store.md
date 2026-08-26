@@ -74,7 +74,7 @@ The direct-edit guard's deny table covers the state-bearing files: cells, lanes,
 
 ## What is in state.json
 
-The keys an agent meets: `phase` (default `idle`), `feature`, `mode`, `approved_gates` (exactly five gates — `context`, `shape`, `execution`, `review`, `uat` — all default false), and `route`. Everything else the workflow tracks lives in the workflow records and lane files, of which `state.json` is a rebuildable projection. A legacy phase value `validating` is silently read as `planning`. `approved_gates` merges only when the stored value is a JSON object; any other shape yields the defaults.
+The keys an agent meets: `phase` (default `idle`), `feature`, `mode`, `approved_gates` (exactly five gates — `context`, `shape`, `execution`, `review`, `uat` — all default false), and `route`. Everything else the workflow tracks lives in the workflow records and lane files, of which `state.json` is a rebuildable projection. A legacy phase value `validating` is silently read as `planning`. Any other unrecognized phase value is *kept* by the read — the defaults fallback covers a corrupt file, not a strange value — and it is the write guard's unknown-phase rule that then refuses to act on it ([guards](guards.md)). `approved_gates` merges only when the stored value is a JSON object; any other shape yields the defaults.
 
 ## Session records
 

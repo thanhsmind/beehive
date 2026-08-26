@@ -196,7 +196,7 @@ Columns: before and after the first removal or mark.
 
 **Configuration.** One key: `recovery.transcript_roots`, an array of `{runtime, path}` objects that widens the crash-candidate search past the Claude default. Nothing configures the sweeps — no TTL key, no scratch-retention key; `--before` is the only age control and it is per-invocation.
 
-**Output modes and exit codes.** The standard contract from [invocation](../foundations/invocation.md), with one deviation worth knowing: all three print their *success* text on stdout, not stderr. Error text goes to stderr, `--json` errors are `{"error": …}` on stdout, and the timing line is always stderr.
+**Output modes and exit codes.** The standard contract from [invocation](../foundations/invocation.md): success text on stdout, error text goes to stderr, `--json` errors are `{"error": …}` on stdout, and the timing line is always stderr.
 
 ## Edge cases
 

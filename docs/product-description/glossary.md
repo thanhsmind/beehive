@@ -102,7 +102,7 @@ The vocabulary used across these documents. When a document uses one of these wo
 
 **Refusal.** The binary answering an invocation it will not serve, with a fixed wording contract: `bee: unknown command`, `bee: not built into this binary`, `bee: unexpected positional argument`, `bee: missing required argument`, `bee: unsupported argument shape`. Every argv shape gets an answer; silence is a defect.
 
-**Unbuilt verb.** A command the registry advertises — full schema, example, listed in help — that the binary refuses with `bee: not built into this binary`. A served refusal, not an unknown command. The `config` and `perf` groups are the current sets.
+**Unbuilt verb.** A command the registry advertises — full schema, example, listed in help — that the binary refuses with `bee: not built into this binary`. A served refusal, not an unknown command. The current set: the `config` group, the `perf` group, `recovery window`, `herding enable`/`disable`, and the `state compact-*` verbs.
 
 **Deny.** A hook stopping a tool call before it runs, exit code 2. A deny names its *remedy* — the CLI verb to use, the path that is allowed, or the gate to route through. Following the remedy is the sanctioned way past a deny; working around it is not.
 
@@ -128,7 +128,11 @@ The vocabulary used across these documents. When a document uses one of these wo
 
 **Status token.** The single word a worker returns at the head of its final message — `[DONE]`, `[BLOCKED]`, `[HANDOFF]`, or `[NOOP]` — with its result fields beside it. A `[DONE]` is goal-checked, not believed.
 
-**Wave.** The set of cells the schedule places first, claimed and prepared in one `bee dispatch wave` call — one feature per wave, forgiving per cell.
+**Wave.** The set of cells the *schedule* places first — `bee cells schedule` orders open cells into dependency-and-file-overlap waves — claimed and prepared in one `bee dispatch wave` call, one feature per wave, forgiving per cell.
+
+**Judge verdict.** The goal-check's recorded answer on a cell: `PASS` or `NEEDS_REVISION`, stored by `bee cells judge-record`; a standing `NEEDS_REVISION` blocks the cap unless overridden loudly. The judge tier scales with the lane — mechanical checks for tiny/small, a checklist judge for standard, model-independence preferred for high-risk. Distinct from the *doctor verdict* and from a review finding.
+
+**Nudge.** A hook-injected reminder that proposes and never writes: the capture-queue nudge at Stop, the mid-phase hive-door warning, the intent-anchor nudge on a prompt, the chain nudge after a subagent stops. A nudge repeats on its own dedup clock until the state it names is fixed.
 
 **Cockpit.** The pane layout herding's bootstrap builds: the human's chat pane, the dispatch and merge control panes, and up to four *working agent* panes. Dispatch runs one cold *control loop* iteration at a time; the *enable marker* (`touch`ed only by the human) arms it, the *stop marker* halts it at the next boundary; merge stays the owner's single-shot gesture.
 
@@ -166,6 +170,6 @@ The vocabulary used across these documents. When a document uses one of these wo
 
 **Privacy marker.** The `@@BEE_PRIVACY@@{"file":…,"question":…}@@END@@` block a secret-guard deny emits. It is routed to the human, never acted on by the agent; no bypass level covers a secret read.
 
-**Verdict.** Doctor's three-state grade of a runtime's harness — `ready`, `degraded`, `blocked` — the one bee answer whose value decides its own exit code (`blocked` exits 1). Always evaluated, never assumed.
+**Doctor verdict.** Doctor's three-state grade of a runtime's harness — `ready`, `degraded`, `blocked` — the one bee answer whose value decides its own exit code (`blocked` exits 1). Always evaluated, never assumed.
 
 **Staleness warning.** One advisory sentence in `bee status` naming a way the repo drifted out of step with itself. Warnings never change an exit code and never block.

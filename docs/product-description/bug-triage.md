@@ -4,7 +4,7 @@ A consolidated list of the defects and inconsistencies the feature documents rai
 
 ## Summary
 
-Roughly sixty items were raised across the thirty-two documents; they merge to twenty-four entries — six high, fourteen medium, four low. The two largest clusters share one root each: the retirement of the Node delegation path left many semantic refusals falling through to a generic (and sometimes false) message, in one case reporting failure for work that succeeded (B-01); and the port left a tail of advertised-but-unbuilt commands with live documentation still pointing at them, including one shipped skill that cannot run (B-04). The high entries have one thing in common: the product silently does something different from what its own text promises.
+Roughly sixty items were raised across the thirty-four documents; they merge to twenty-four entries — six high, fourteen medium, four low. The two largest clusters share one root each: the retirement of the Node delegation path left many semantic refusals falling through to a generic (and sometimes false) message, in one case reporting failure for work that succeeded (B-01); and the port left a tail of advertised-but-unbuilt commands with live documentation still pointing at them, including one shipped skill that cannot run (B-04). The high entries have one thing in common: the product silently does something different from what its own text promises.
 
 | ID | Title | Severity | Area | Decision needed |
 | --- | --- | --- | --- | --- |
@@ -15,8 +15,8 @@ Roughly sixty items were raised across the thirty-two documents; they merge to t
 | B-05 | The review evidence preflight records `passed: true` unconditionally | high | reviews | fix |
 | B-06 | The mailbox letter promises five sections; the code can only ever print two | high | mailbox | fix |
 | B-07 | The bypass banners overstate what stops: UAT and secret reads and the review P1 door never read the bypass level | medium | gates | fix |
-| B-08 | `reviews record` rewrites the session file with no lock; concurrent findings can be lost | medium | reviews | fix |
-| B-09 | The "expired but never released" reservation warning fires on every live reservation | medium | status | fix |
+| B-08 | `reviews record` can lose a concurrent finding | medium | reviews | fix |
+| B-09 | The "expired but never released" warning fires on every live reservation | medium | status | fix |
 | B-10 | Performance-log writer diverges from its recorded rules (branch always null, cache gate gone, lost-row race) | medium | perf | fix |
 | B-11 | `bee tmp sweep` cannot reach a granted worktree's scratch, which the write guard steers writes into | medium | maintenance | fix |
 | B-12 | Store files the workflow trusts are hand-writable: `test-results.json` (read by the red-base check) and `decisions.jsonl` | medium | store | product call |
@@ -24,8 +24,8 @@ Roughly sixty items were raised across the thirty-two documents; they merge to t
 | B-14 | A typed `dispatch prepare` refusal exits 0; only the payload's `ok: false` signals it | medium | dispatch | product call |
 | B-15 | The frontier definition diverges: the skill says unreserved, the CLI reads only `claimed-by:` | medium | discovery | product call |
 | B-16 | A released session no longer blocks writes but still blocks a sibling's `start-feature` | medium | sessions | fix |
-| B-17 | Stale help, registry, and knowledge text mislead the agent in at least nine places | medium | docs drift | fix |
-| B-18 | The model guard — the other hook that can block — has no panic net; `main()` has none either | medium | failure | fix |
+| B-17 | Stale help, registry, and knowledge text misleads the agent | medium | docs drift | fix |
+| B-18 | The blocking hooks are not uniformly panic-safe | medium | failure | fix |
 | B-19 | The concurrent-worker git guard's prescribed recipe is refused by the idle intake gate | medium | guards | fix |
 | B-20 | `bee mailbox mark` resolves the worktree root while letters are filed at the control root | medium | mailbox | fix |
 | B-21 | There is no `bee --version` | low | invocation | product call |
@@ -54,7 +54,7 @@ Roughly sixty items were raised across the thirty-two documents; they merge to t
 - **Why (from the code):** the secret patterns are applied to read-tool targets (`hooks/write_guard/guards.rs:168-234`); Bash target extraction feeds the write-side checks, not the secret check, and containment scoping skips out-of-repo paths for reads.
 - **Severity:** high — the one guard that exists specifically for the human's secrets has a first-class bypass in the most common tool.
 - **Decision needed:** fix — run the secret patterns over Bash-extracted read targets and over absolute paths; or document the boundary loudly if the narrower scope is intended.
-- **Raised by:** [cross-cutting/privacy.md](cross-cutting/privacy.md#open-questions-and-verification), [foundations/guards.md](foundations/guards.md#open-questions-and-verification)
+- **Raised by:** [cross-cutting/privacy.md](cross-cutting/privacy.md#open-questions-and-verification)
 - **Status:** confirmed live in a hooked session, 2026-08-26.
 
 ### B-03: A boolean flag spelled `--flag=true` parses as false, turning read-only spellings into writes
@@ -63,19 +63,19 @@ Roughly sixty items were raised across the thirty-two documents; they merge to t
 - **What happens / what was expected:** a value-form boolean passes shape validation but is not `=== true`, so it reads as false. Expected: `--flag=true` ≡ `--flag`, or a refusal naming the accepted spelling.
 - **Reproduce:** `bee knowledge index --check=true` in a repo with a bundle; watch it take the write path.
 - **Why (from the code):** the shared flag parser accepts the `=value` form for booleans but only the bare form sets true (parser comment in `verbs/backlog.rs`; observed live for `knowledge index`).
-- **Severity:** high — a spelling any agent would write, silently inverting read/write intent in both directions.
+- **Severity:** high — a spelling any agent would write, silently inverting read/write intent in both directions. The behavior is not even uniform: `bee status --json=true` *refuses* (exit 1) while `--check=true` and `--write=true` are accepted and read as false, so an agent cannot learn one rule.
 - **Decision needed:** fix — treat `=true`/`=false` literally or refuse the value form.
 - **Raised by:** [memory/knowledge.md](memory/knowledge.md#open-questions-and-verification), [memory/backlog.md](memory/backlog.md#open-questions-and-verification)
 - **Status:** confirmed live for `knowledge index --check=true` (write path taken; output happened to be byte-identical), 2026-08-26.
 
 ### B-04: Advertised commands are not built, and shipped docs and skills still tell the agent to run them
 
-- **Where the agent meets it:** `bee config get/set/unset/validate`, all seven `bee perf` verbs, `bee recovery window`, and the cross-repository arm of `feedback collect/rank` (non-empty `dogfood_repos`) all answer `bee: not built into this binary` (or the generic shape refusal). Meanwhile: `.bee/config-sample.json` tells the reader to run `bee config set`; `skills/bee-hive/references/scout-and-ticks.md` tells the agent to mine with `recovery window`; `skills/bee-evolving/SKILL.md` still invokes `node .bee/bin/bee.mjs feedback rank` on a retired runtime; `docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md` documents the unbuilt arm as live.
+- **Where the agent meets it:** `bee config get/set/unset/validate`, all seven `bee perf` verbs, `bee recovery window`, `bee herding enable`/`disable`, the three `bee state compact-*` verbs, and the cross-repository arm of `feedback collect/rank` (non-empty `dogfood_repos`) all answer `bee: not built into this binary` (or the generic shape refusal). Meanwhile: `.bee/config-sample.json` tells the reader to run `bee config set`; `skills/bee-hive/references/scout-and-ticks.md` tells the agent to mine with `recovery window`; `skills/bee-evolving/SKILL.md` still invokes `node .bee/bin/bee.mjs feedback rank` on a retired runtime; `docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md` documents the unbuilt arm as live.
 - **What happens / what was expected:** an agent following bee's own text meets a refusal; `bee-evolving` cannot run at all.
 - **Why (from the code):** registry entries carry `unavailable` for some but not all of these; the pointers were not updated when the Node runtime retired.
 - **Severity:** high — bee's own instruction layer directs agents into dead ends; one shipped skill is broken.
 - **Decision needed:** product call per group — build or retire each; either way, fix every pointer (the sample config, the two skills, the knowledge area).
-- **Raised by:** [cross-cutting/configuration.md](cross-cutting/configuration.md#open-questions-and-verification), [observability/perf.md](observability/perf.md#open-questions-and-verification), [maintenance/recovery.md](maintenance/recovery.md#open-questions-and-verification), [memory/feedback.md](memory/feedback.md#open-questions-and-verification), [cross-cutting/failure.md](cross-cutting/failure.md#open-questions-and-verification)
+- **Raised by:** [cross-cutting/configuration.md](cross-cutting/configuration.md#open-questions-and-verification), [observability/perf.md](observability/perf.md#open-questions-and-verification), [maintenance/recovery.md](maintenance/recovery.md#open-questions-and-verification), [memory/feedback.md](memory/feedback.md#open-questions-and-verification), [delegation/herding.md](delegation/herding.md#open-questions-and-verification)
 - **Status:** confirmed live for the config and perf groups, 2026-08-26.
 
 ### B-05: The review evidence preflight records `passed: true` unconditionally
@@ -181,7 +181,7 @@ Roughly sixty items were raised across the thirty-two documents; they merge to t
 
 ### B-17: Stale help, registry, and knowledge text misleads the agent
 
-- **What happens**, one line each: `state.session.bind`'s registry text denies a lane-existence check the code performs; `backlog counts --help` says counts come from `docs/backlog.md` (the fallback); `backlog add --help` describes an unbuilt `--queue-submit`; `knowledge report`'s registry omits the `evidence_ladder` it returns; `knowledge context`'s `unknown_work` remedy names only one of its four resolution rungs; the feedback area's overview names a nonexistent `bee feedback add`; `verify-pipeline/overview.md` names retired suite-running entry points; the onboarding registry claims the command installs the binary (the installer does); the preamble's drift line says "re-run onboarding" where a host repo without a source checkout meets `engine_not_found`.
+- **What happens**, one line each: the `finish` flow-spelling's registry entry lacks the `report`/`commit-pending`/`deviation` flags its implementation requires, and `--inline-reason` — named in a cap refusal's own remedy — is declared for no command at all; `bee finish --help` still claims it runs the declared tests and refuses on red, contradicting the no-door-runs-tests contract; `bee close --help` says tests is the one blocking door while the scribing-debt door also blocks; `state.session.bind`'s registry text denies a lane-existence check the code performs; `backlog counts --help` says counts come from `docs/backlog.md` (the fallback); `backlog add --help` describes an unbuilt `--queue-submit`; `knowledge report`'s registry omits the `evidence_ladder` it returns; `knowledge context`'s `unknown_work` remedy names only one of its four resolution rungs; the feedback area's overview names a nonexistent `bee feedback add`; `verify-pipeline/overview.md` names retired suite-running entry points; the onboarding registry claims the command installs the binary (the installer does); the preamble's drift line says "re-run onboarding" where a host repo without a source checkout meets `engine_not_found`.
 - **Severity:** medium as a cluster — each is small; together they erode trust in the surfaces agents are told to rely on instead of guessing.
 - **Decision needed:** fix — a text-only sweep.
 - **Raised by:** [coordination/sessions.md](coordination/sessions.md#open-questions-and-verification), [memory/backlog.md](memory/backlog.md#open-questions-and-verification), [memory/knowledge.md](memory/knowledge.md#open-questions-and-verification), [memory/feedback.md](memory/feedback.md#open-questions-and-verification), [maintenance/testing.md](maintenance/testing.md#open-questions-and-verification), [maintenance/onboarding.md](maintenance/onboarding.md#open-questions-and-verification)
@@ -236,7 +236,7 @@ Roughly sixty items were raised across the thirty-two documents; they merge to t
 - `bee doctor` emits no timing line and no timings entry; every other served verb does. Some help forms log their command as `unknown` in the timing line.
 - `bee onboard` prints its human report on stdout but a parse error as `{"error": …}` on stdout *without* `--json`, and skips the timing line — three contract deviations in one command.
 - **Severity:** low, grouped. **Decision needed:** fix.
-- **Raised by:** [cross-cutting/failure.md](cross-cutting/failure.md#open-questions-and-verification), [observability/status.md](observability/status.md#open-questions-and-verification), [observability/perf.md](observability/perf.md#open-questions-and-verification), [memory/feedback.md](memory/feedback.md#open-questions-and-verification), [maintenance/onboarding.md](maintenance/onboarding.md#open-questions-and-verification), [foundations/invocation.md](foundations/invocation.md#open-questions-and-verification)
+- **Raised by:** [cross-cutting/failure.md](cross-cutting/failure.md#open-questions-and-verification), [observability/status.md](observability/status.md#open-questions-and-verification), [memory/feedback.md](memory/feedback.md#open-questions-and-verification), [maintenance/onboarding.md](maintenance/onboarding.md#open-questions-and-verification), [foundations/invocation.md](foundations/invocation.md#open-questions-and-verification)
 
 ### B-24: Small dead or inert surfaces
 
@@ -245,4 +245,4 @@ Roughly sixty items were raised across the thirty-two documents; they merge to t
 - Skill frontmatter `missing_effect` is read by no code.
 - `verbs/discovery.rs`'s header names a `type:` ticket key `parse_ticket` never reads.
 - **Severity:** low, grouped. **Decision needed:** product call — delete or wire each.
-- **Raised by:** [memory/feedback.md](memory/feedback.md#open-questions-and-verification), [cross-cutting/configuration.md](cross-cutting/configuration.md#open-questions-and-verification), [cross-cutting/failure.md](cross-cutting/failure.md#open-questions-and-verification), [discovery/wayfinding.md](discovery/wayfinding.md#open-questions-and-verification)
+- **Raised by:** [memory/feedback.md](memory/feedback.md#open-questions-and-verification), [cross-cutting/configuration.md](cross-cutting/configuration.md#open-questions-and-verification), [cross-cutting/skills-layer.md](cross-cutting/skills-layer.md#open-questions-and-verification), [discovery/wayfinding.md](discovery/wayfinding.md#open-questions-and-verification)

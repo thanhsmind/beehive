@@ -203,7 +203,7 @@ Columns: before and after the first side effect — status's manifest-hash cache
 
 **Configuration.** `status` reads the merged config repeatedly — for `commands`, `models`, the bypass level, and `ship_visibility` — and turns malformed values into staleness warnings through `config validate`. `doctor` reads no bee config at all; its inputs are the runtime's files. [Configuration](../cross-cutting/configuration.md) owns the merge law.
 
-**Output modes and exit codes.** Two deviations from the contract [invocation](../foundations/invocation.md) owns, both worth knowing: the text reports go to **stdout**, not stderr, so `bee status | head` works and `2>/dev/null` does not silence them; and `doctor` prints no timing line and appends no timings entry. Exit codes: 0 for status always, 0 or 1 for doctor by verdict, 1 for a refusal or a missing root.
+**Output modes and exit codes.** The standard split from [invocation](../foundations/invocation.md) — text reports on stdout, so `bee status | head` works — with one deviation worth knowing: `doctor` prints no timing line and appends no timings entry. Exit codes: 0 for status always, 0 or 1 for doctor by verdict, 1 for a refusal or a missing root.
 
 ## Edge cases
 

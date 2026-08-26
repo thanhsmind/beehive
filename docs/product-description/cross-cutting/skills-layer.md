@@ -148,7 +148,7 @@ Columns: before and after the skill's first command (the first side effect that 
 
 ## Edge cases
 
-- Twelve skills exist, and `bee orient`'s phase table names only five of them plus the `bee-hive` default and the `bee-wayfinding` override. The other six are reached by description match or by a `bee-hive` table row, never by phase.
+- Twelve skills exist, and `bee orient`'s phase table names only five of them plus the `bee-hive` default and the `bee-wayfinding` override. The other five are reached by description match or by a `bee-hive` table row, never by phase.
 - `bee-reviewing` is deliberately not reachable from a phase: review is user-invoked, and a finished cell, slice, or feature is never a trigger by itself. "Merge", "ship", and "release" are not triggers either — the response there is to report coverage and ask one question.
 - `bee-hive` calls `bee orient` a routing-only ritual: run it when starting, resuming, or routing, and not for a plain question. Running it more often is waste, not error.
 - A skill's `metadata.dependencies` block declares what it needs (`bee-cli`, `node`, `herdr`, `tmux`, a documentation-search capability) and what its absence costs. Nothing in the binary reads that block; it is a statement the skill makes to whoever loads it.

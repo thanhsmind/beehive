@@ -43,7 +43,7 @@ The `verify` field is the feature-close proof command, and `bee cells show` anno
 ### Parking and reviving
 
 - `block --id --reason` parks the cell, appends an attempt with a normalized failure signature, records the reason on the trace, and clears the claim. An empty reason refuses: `blockCell: a reason is required.`
-- `drop --id --reason` abandons it; `reopen --id --reason` returns a blocked or dropped cell to `open` (refusing one already open or claimed), clearing the parked reason and stamping the reopen.
+- `drop --id --reason` abandons it; `reopen --id --reason` returns a blocked, dropped, or even capped cell to `open` (refusing one already open or claimed), clearing the parked reason and stamping the reopen.
 - `unclaim` returns a claimed cell to `open` — the polite release, versus the sweep's forced one.
 - Any session may reopen or update; cells have owners only while claimed.
 
@@ -55,7 +55,7 @@ Every cell carries budgets — `max_claims`, `max_failed_attempts`, `max_same_si
 
 ### Retirement
 
-`archive` moves a cell's file under `.bee/cells/archive/<feature>/`; `unarchive` moves it back. [Close](close.md) auto-archives every terminal cell of the feature it closes; `bee status` counts never-closed features' terminal cells as `cells.archivable` — the backlog of retirement that only exists for work that skipped close.
+`archive` moves a feature's terminal cells under `.bee/cells/archive/<feature>/` (`--feature`, or `--all-but-active` — never a single cell id); `unarchive` moves them back. [Close](close.md) auto-archives every terminal cell of the feature it closes; `bee status` counts never-closed features' terminal cells as `cells.archivable` — the backlog of retirement that only exists for work that skipped close.
 
 ## Modifiers
 

@@ -74,7 +74,10 @@ The guards are instantaneous deciders — there is no extended phase to interrup
 | Event | Behavior |
 | --- | --- |
 | The process killed | A guard decision is atomic with the tool call; there is no half-denied state. |
+| The session turning elsewhere | No effect — guards hold no state between calls; the next tool call is judged fresh. |
+| A clean completion from outside | A gate approved or a phase moved changes which rule the *next* call meets; nothing in flight is re-judged. |
 | The store unavailable | The postures above: coordination state fails closed, permission inputs fail open, the missing binary announces itself and passes. |
+| The session going away | The holds and claims a dead session leaves behind keep denying until its heartbeat goes stale; the write-policy guard stops counting it once its record reads released, closed, or stale. |
 | A sibling changing the target | That is what the coordination guards exist for; the deny names the holder and the wait-or-coordinate remedy. Never write through it; never wait it out in silence. |
 | The channel changing | Codex advisory events never emit a block — on that runtime the same guards can only warn; the write guard's hard denies ride the events Codex does gate. The OpenCode plugin is out of scope. |
 

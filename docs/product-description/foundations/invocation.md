@@ -110,12 +110,12 @@ Columns: before and after the verb's first side effect.
 
 **Configuration.** `--json` aside, dispatch reads no config. Per-hook toggles and `gate_bypass` act elsewhere. Config is merged fresh per invocation — [configuration](../cross-cutting/configuration.md).
 
-**Output modes and exit codes.** Owned here. Summarized: stderr for humans, stdout for `--json`, `0/1` everywhere, `2` for a guard deny, `3` inside herding, fail-open `0` for undecidable hooks.
+**Output modes and exit codes.** Owned here. Summarized: stdout for success text and `--json` payloads; stderr for refusals, errors, and the timing line; `0/1` everywhere, `2` for a guard deny, `3` inside herding, fail-open `0` for undecidable hooks.
 
 ## Edge cases
 
 - The registry is hand-maintained, and the tests hold it to the binary both ways: every registry example must run, and every served shape must be advertised. What the tests do not catch is a *wrong* declaration — `capture add` declares no required parameters, so the catch-all refusal claims "required arguments are all present" when `--outcome` is missing.
-- `bee --help --json` prints the porcelain surface as JSON; `--names` and `--all` compose with it. Help output ends with a count line (`24 command(s) of 175`).
+- `bee --help --json` prints the porcelain surface as JSON; `--names` and `--all` compose with it. The `--names` form ends with a count line (`24 command(s) of 175`).
 - Four porcelain names are pure aliases (`route`→`state route`, `shape`→`intent set`, `gate`→`state gate`, `finish`→`cells finish`): identical behavior and flags, different name in the timing line.
 - An empty flag value is generally treated as absent, and flag values are trimmed with JavaScript's notion of whitespace — a compatibility inheritance from the retired Node implementation that surfaces only with exotic Unicode whitespace.
 - The refusal suggester ranks close spellings only for top-level commands; verb-level typos get the verb list instead.

@@ -6,7 +6,7 @@ The human mailbox is the one plain-language letter an unattended run leaves behi
 
 ## The simple case
 
-The human arms the unattended loop (`bee herding enable`) and goes to bed. The agent works. Each time a cell is capped, the cap appends one line to `.bee/human-mailbox/entries/<run-slug>.jsonl` — nothing is printed, nothing is gated, and a failure to append never turns a landed cap into a refusal.
+The human arms the unattended loop by hand (`touch <main-root>/.bee/tmp/bee-herding.enable` — the enable marker) and goes to bed. The agent works. Each time a cell is capped, the cap appends one line to `.bee/human-mailbox/entries/<run-slug>.jsonl` — nothing is printed, nothing is gated, and a failure to append never turns a landed cap into a refusal.
 
 At the end of the run — the moment the session's work record reaches `done` or `dropped` — bee reads that one file back, composes the entries into a letter, and writes it:
 

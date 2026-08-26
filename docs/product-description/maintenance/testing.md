@@ -167,7 +167,7 @@ Columns: before and after the first command is spawned.
 
 **Configuration.** `commands.test`, merged from `config.json` under `config.local.json` like everything else: a string, or an array run in order; trimmed; blanks dropped; `"none"` as the no-test sentinel. `commands.verify` is retired and ignored. There is no timeout key, no parallelism key, no retry key.
 
-**Output modes and exit codes.** Standard, from [invocation](../foundations/invocation.md), with the same stdout deviation the whole binary has for success text: the `✓`/`✗` lines are printed on stdout, error text on stderr, `--json` payloads on stdout, and the timing line always on stderr. Exit 0 for green *and* for undeclared; exit 1 for red and for a record-write failure.
+**Output modes and exit codes.** Standard, from [invocation](../foundations/invocation.md): the `✓`/`✗` lines print on stdout, error text on stderr, `--json` payloads on stdout, and the timing line always on stderr. Exit 0 for green *and* for undeclared; exit 1 for red and for a record-write failure.
 
 ## Edge cases
 

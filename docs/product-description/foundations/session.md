@@ -128,7 +128,7 @@ Columns: before and after the session's first store contact.
 - A `planned-next` handoff whose writer is the very session starting up is refused adoption (`SAME_SESSION_STARTUP`) — a session cannot hand work to itself.
 - The reminder's thirty-minute clock and change-hash are independent: a phase flip re-injects immediately; a static phase re-injects at most twice an hour.
 - The turn-end mark's subject is the answer's last line — so a turn ending in a question shows that question to a dashboard even if the agent forgot to set a `question` mark. It never overwrites an explicit mark.
-- The preamble is budgeted: knowledge context is clamped by lane (tiny 8000 … high-risk 30000 characters), decisions to three, each clamped. A giant store still yields a bounded preamble.
+- The preamble is budgeted: knowledge context is clamped by lane (tiny 8000 … high-risk 30000 tokens — [knowledge](../memory/knowledge.md) owns the budgets), decisions to three, each clamped. A giant store still yields a bounded preamble.
 - Ceiling-model scarcity and reclaimable-worktree sections appear only past thresholds (40% with ≥3 cells; more than one stale worktree), so their presence is itself information.
 
 ## Open questions and verification

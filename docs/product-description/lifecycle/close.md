@@ -40,7 +40,7 @@ Every blocking door's name lands in the feature's merge-ready `blocked_by` proje
 
 ### Writing the ending
 
-On a green walk: the headline, a capture line (close itself closes with a capture or an explicit nothing-settled), the auto-archive of every terminal cell, the promote proposal computed *before* retirement (soft — it never blocks), and the lane phase written to `idle` unless already terminal. A failed phase write is a warning, not a refusal — the close stands, the projection is caught up later.
+On a green walk: the headline, a capture line (close itself closes with a capture or an explicit nothing-settled), the auto-archive of the feature's cells — all or nothing: one still-open cell keeps the whole set active — the promote proposal computed *before* retirement (soft — it never blocks), and the lane phase written to `idle` unless already terminal. A failed phase write is a warning, not a refusal — the close stands, the projection is caught up later.
 
 ### The stamps
 
@@ -74,7 +74,7 @@ Columns: before and after the ending writes begin.
 
 ## Interactions with other systems
 
-**Gates and approval.** The UAT gate can bind here (`uat_stop: "close"`) or at merge; close never approves anything. **The store and history.** The doors read traces, decisions, and stamps; the ending writes archive moves, the proposal, and the lane's terminal phase. **Worktrees and containment.** Close marks the lane done; the code lands through the merge — two gestures, deliberately separate. **Claims, holds, and reservations.** A feature with live claims fails the tests door naturally (uncapped cells have no proof); close holds nothing itself. **Sibling sessions.** The `blocked_by` projection is how a sibling (or the herding cockpit) knows a feature is not landable without asking. **What the human sees.** One line: the feature closed, or the one door blocking and what would clear it. **Configuration.** `uat_stop`, `close_commit_bookkeeping`. **Output modes and exit codes.** Standard.
+**Gates and approval.** The UAT gate can bind here (`uat_stop: "close"`) or at merge; close never approves anything. **The store and history.** The doors read traces, decisions, and stamps; the ending writes archive moves, the proposal, and the lane's terminal phase. **Worktrees and containment.** Close marks the lane done; the code lands through the merge — two gestures, deliberately separate. **Claims, holds, and reservations.** Close holds nothing itself, and the tests door reads only *capped* cells — a live claim raises no proof debt by itself; incomplete work surfaces through the merge-ready projection and the later doors, not through tests. **Sibling sessions.** The `blocked_by` projection is how a sibling (or the herding cockpit) knows a feature is not landable without asking. **What the human sees.** One line: the feature closed, or the one door blocking and what would clear it. **Configuration.** `uat_stop`, `close_commit_bookkeeping`. **Output modes and exit codes.** Standard.
 
 ## Edge cases
 
