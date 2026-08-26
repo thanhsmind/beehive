@@ -18,7 +18,8 @@
         "object_model": "{ \"model\": \"sonnet\", \"effort\": \"medium\" } — model plus reasoning-effort hint.",
         "object_cli": "{ \"kind\": \"cli\", \"command\": \"...\", \"promptVia\": \"stdin\" } — external CLI executor. GATHER-ONLY by design: cell execution against a cli-shaped slot is refused (cli_tier_gather_only); gathers/reviewers/advisors run through it with the prompt piped via stdin. See config-sample-cli-executors.json for full examples.",
         "object_herding": "{ \"kind\": \"herding\" } — routes EVERY purpose against this slot (cell, gather, reviewer, advisor, extraction) through `bee herding run` automatically; the old gather/review/advisor default-model fallback is gone (herding-tier D1-D6, widened by herding-review-slots D1) — the operator who sets this slot owns the pane cost for every purpose it serves. The agent that runs is the single global `herding.agent_command` below by default; add \"agent\": \"<name>\" (herd-registry D1/D2) to look that name up in herding.agents instead — an unknown name refuses, listing every registry key. Optional \"fallback\": \"default\" (herding-review-slots D3) re-dispatches a failed run (spawn failure, timeout, invalid result) through the runtime's own default model path for that slot instead of leaving the failure loud with the pane kept; example spelling: { \"kind\": \"herding\", \"agent\": \"agy-flash\", \"fallback\": \"default\" }. Not set in this sample — a repo without an `herding.agent_command` set up should leave every slot at a plain model name or null. Canonical doc: bee-herding/references/operational-invariants.md.",
-        "null": "slot unset — prompt-budget tier; on codex-native transport the effective model is inherited-or-unknown (the dispatch log records the honest split)."
+        "null": "slot unset — prompt-budget tier; on codex-native transport the effective model is inherited-or-unknown (the dispatch log records the honest split).",
+        "description_field": "Any OBJECT-shaped slot may also carry \"description\": \"<what this role is for>\" — planner documentation only, never a selector: the session preamble's Roles line shows it beside the role name (clipped to 60 chars) so an agent knows when to assign the role, and resolution, the model guard, and dispatch prepare all ignore the field. A plain-string slot cannot carry one — spell it { \"model\": \"sonnet\", \"description\": \"...\" } instead. Live example on the `generation` slot below."
       },
       "advisor": "The AO3/AO13 consult identity required before Gate 2's execution component opens on high-risk work. Claude default: fable (the session-class model). Set null to skip the advisor line in worker prompts when no advisor resolves.",
       "codex_note": "On codex-cli 0.144.4 native subagents cannot pin a per-agent model — a string here records the REQUESTED model; the dispatch log will still say effective_model_status=inherited-or-unknown until a capability probe proves per-agent selection."
@@ -71,7 +72,8 @@
       "extraction": "haiku",
       "generation": {
         "model": "sonnet",
-        "effort": "medium"
+        "effort": "medium",
+        "description": "default writer role — cell execution, code and tests"
       },
       "review": "opus",
       "advisor": "fable"
