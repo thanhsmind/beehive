@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"guide-pages\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 4f6245b; capture what settled, then bee close --feature guide-pages.",
   "created_at": "2026-08-26T07:27:00.044Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": "static export of a proven guide; 15 of ~20 files are verbatim copies from waggledance, decision surface ~4 files (shell, CSS extraction, builder, Pages workflow)",
     "updated_at": "2026-08-26T07:42:33.520Z",
     "feature": "guide-pages"
-  },
-  "merge_ready": {
-    "since": "2026-08-26T07:44:28.128Z",
-    "branch": "wt/guide-pages",
-    "worktree_id": "beehive--wt--guide-pages",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
