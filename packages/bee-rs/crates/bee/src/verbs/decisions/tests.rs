@@ -1846,6 +1846,69 @@ use std::time::Instant;
         );
     }
 
+    /// decision-attribution D5 residual: the correction a human names, for a
+    /// record whose text makes no claim — and the refusals that keep the
+    /// manual door from contradicting a record's own text.
+    #[test]
+    fn a_named_reattribution_corrects_only_an_unclaiming_record() {
+        let tmp = fixture_root();
+        let root = tmp.path();
+        let unclaiming = r#"{"id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:00:00.000Z","decision":"Every incoming user request is recorded by bee before work starts","rationale":"r","feature":"model-role-split"}"#;
+        let claiming = r#"{"id":"bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee","type":"decide","date":"2026-08-25T10:01:00.000Z","decision":"human-mailbox D3: one record is one file","rationale":"r","feature":"model-role-split"}"#;
+        write_events(root, &[unclaiming, claiming]);
+
+        // The pair corrects the unclaiming record; feature is the only delta.
+        let Ok(Out::Emit(report, _, 0)) =
+            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", 0)
+        else {
+            panic!("expected a correction")
+        };
+        assert_eq!(report["changed"], 1);
+        assert_eq!(report["from"], "model-role-split");
+        let after: Vec<Value> = read_jsonl(&decisions_path(root));
+        assert_eq!(after[0]["feature"], "prompt-work-record");
+        assert_eq!(after[0]["decision"], "Every incoming user request is recorded by bee before work starts");
+        assert_eq!(after[0]["date"], "2026-08-25T10:00:00.000Z");
+        // The second line is untouched byte-for-byte.
+        let on_disk = std::fs::read_to_string(decisions_path(root)).unwrap();
+        assert_eq!(on_disk.lines().nth(1), Some(claiming));
+
+        // Idempotent: the same pair again reports zero.
+        let Ok(Out::Emit(again, _, 0)) =
+            do_reattribute_named(root, "aaaaaaaa", "prompt-work-record", 0)
+        else {
+            panic!("expected a zero report")
+        };
+        assert_eq!(again["changed"], 0);
+
+        // A record whose own text claims a DIFFERENT feature refuses — that
+        // territory belongs to the automatic pass.
+        let Ok(Out::Thrown(msg)) = do_reattribute_named(root, "bbbbbbbb", "prompt-work-record", 0)
+        else {
+            panic!("expected a refusal")
+        };
+        assert!(msg.contains("human-mailbox"), "{msg}");
+        let untouched: Vec<Value> = read_jsonl(&decisions_path(root));
+        assert_eq!(untouched[1]["feature"], "model-role-split", "a refusal writes nothing");
+
+        // …but naming the SAME feature the text claims is allowed.
+        let Ok(Out::Emit(fixed, _, 0)) = do_reattribute_named(root, "bbbbbbbb", "human-mailbox", 0)
+        else {
+            panic!("expected the agreeing correction")
+        };
+        assert_eq!(fixed["changed"], 1);
+
+        // Unknown id and blank --to refuse.
+        let Ok(Out::Thrown(m)) = do_reattribute_named(root, "99999999", "x", 0) else {
+            panic!("expected unknown-id refusal")
+        };
+        assert!(m.contains("no decision matches"), "{m}");
+        let Ok(Out::Thrown(m)) = do_reattribute_named(root, "aaaaaaaa", "  ", 0) else {
+            panic!("expected blank --to refusal")
+        };
+        assert!(m.contains("--to is empty"), "{m}");
+    }
+
     /// decision-attribution D5: the predicate reads a claim the record makes
     /// about itself, and refuses everything else.
     #[test]
