@@ -2385,11 +2385,137 @@ pub(crate) fn close_handler(
         }
     }
 
+    // ── the human mailbox: D4's feature-close stop (hm-10) ────────────────
+    //
+    // ON THE NON-DRY-RUN TAIL, and that placement is the whole point of the
+    // fork `verbs/cells/handlers_close.rs` maps above `record_cap_in_mailbox`:
+    // `--dry-run` lists the doors, writes nothing and STOPS nothing, so it
+    // must append nothing. A letter reports what a run DID. The dry-run branch
+    // returns near the top of this function and every blocking door above
+    // returns before this line, so a refused close records no stop either.
+    //
+    // AFTER `commit_close_bookkeeping`, deliberately, and NOT with the other
+    // `.bee` writes above it: the mailbox is a per-checkout RUNTIME record —
+    // bee's own onboarding block puts `.bee/human-mailbox/` in `.gitignore` —
+    // so it is not bookkeeping and must never be swept into the store commit.
+    // The commit stages with `git add -A -- .bee`, which in a checkout whose
+    // ignore block is absent would otherwise commit a run's letter material
+    // into the project's history. The lane write just above is the existing
+    // precedent for a `.bee` write that lands after that commit.
+    record_feature_close_in_mailbox(root, feature);
+
     lines.push(
         "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
             .to_string(),
     );
     Ok(Out::Emit(Value::Object(result), lines.join("\n"), 0))
+}
+
+// ── the human mailbox: D14's feature-close letter (hm-10) ─────────────────
+//
+// D7 promised that architecture, behaviour and usage "appear only in the
+// feature-close letter". The letter itself, its sections and its dropping
+// rule live in `verbs/mailbox.rs` under that module's own D14 section; what
+// lives HERE is the one thing only close knows — the material.
+//
+// D8'S AUTHORSHIP BAN IS THE DESIGN CONSTRAINT. The composing pass may state
+// no fact no stored entry carries, so every string this file hands the
+// mailbox is read out of the feature's OWN capped cells — never written here,
+// never summarised, never inferred. Three lists, three already-recorded
+// facts:
+//
+//   * Architecture — the files the feature's capped work actually changed
+//     (`feature_touched_files`, each cell's `trace.files_changed`). It is the
+//     answer to "which parts of the system does this feature live in", and it
+//     is a fact the cells recorded at their own caps.
+//   * Behaviour — each capped cell's `acceptance`: the feature's own written
+//     statement of what is true once that cell is done. Planned before the
+//     work, checked at the cap, and about the SYSTEM rather than the process.
+//   * Usage — the skills and specs the feature's cells declared they change
+//     (`affects_skills`, `affects_specs`): the instructions that now describe
+//     how the thing is used. Pointers a human can open, not prose about them.
+//
+// A feature that recorded none of a given fact gets NO section for it — the
+// letter drops it (D7), and that silence is the correct outcome. Filling a
+// heading with invented prose is the one thing D8 forbids outright.
+//
+// FAIL-OPEN, exactly like `record_cap_in_mailbox` (D10): the close has
+// already landed by the time this runs, and no failure to record a mailbox
+// entry may turn a landed close into a refusal. Every read below degrades to
+// an empty list, and the append itself warns rather than throws.
+
+/// The three lists D14's extra sections are composed from, read out of the
+/// feature's own capped cells. Cells are read INCLUDING the archive, because
+/// this runs after `auto_archive_on_close` has already moved them.
+fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::CloseNote {
+    fn push_unique(out: &mut Vec<String>, value: &str) {
+        let value = value.trim();
+        if !value.is_empty() && !out.iter().any(|seen| seen == value) {
+            out.push(value.to_string());
+        }
+    }
+
+    let architecture = feature_touched_files(root, feature).unwrap_or_default();
+    let mut behaviour: Vec<String> = Vec::new();
+    let mut usage: Vec<String> = Vec::new();
+    if let Ok(cells) = list_cells_including_archive(root, feature, "capped") {
+        for cell in cells {
+            if let Some(Value::String(acceptance)) = vget(&cell, "acceptance") {
+                push_unique(&mut behaviour, acceptance);
+            }
+            for key in ["affects_skills", "affects_specs"] {
+                if let Some(Value::Array(items)) = vget(&cell, key) {
+                    for item in items {
+                        if let Value::String(name) = item {
+                            push_unique(&mut usage, name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    crate::verbs::mailbox::CloseNote { architecture, behaviour, usage }
+}
+
+/// Record this feature close as ONE human-mailbox entry, the moment the close
+/// lands (D4, D8, D14).
+///
+/// WHICH RUN. The session id, through the SAME `resolve_session_flag_env`
+/// chain the cap and the run end use (`verbs/work.rs`
+/// `file_letter_at_run_end`). A second, nearly-identical resolution here
+/// would file this stop under a run whose letter nobody composes.
+///
+/// WHICH ROOT. The control root — the main checkout for a linked worktree,
+/// which is where `cells finish` already put the caps this letter is composed
+/// from, and where the run end goes looking for them.
+///
+/// UNCONDITIONAL, by D9: every session appends its entries, attended or not.
+/// Arming decides only whether a letter is composed at the run's END.
+fn record_feature_close_in_mailbox(root: &Path, feature: &str) {
+    use crate::verbs::mailbox;
+    let control = crate::hooks::session_init::control_root_for(root);
+    let run = mailbox::run_id(
+        crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
+    );
+    let entry = mailbox::Entry {
+        at: crate::verbs::cells::utc_now(),
+        kind: mailbox::KIND_FEATURE_CLOSE.to_string(),
+        // D8: the plain-language sentence is written at the moment of the
+        // event, never at composition.
+        what: mailbox::close_sentence(feature),
+        // The close itself changed no file — the feature's files are a fact
+        // ABOUT the feature, and they ride the Architecture list below rather
+        // than pretending this stop edited them.
+        files: Vec::new(),
+        commit: None,
+        proof: None,
+        // A close is not a cell, so it has no plan to depart from (D5).
+        departure: None,
+        // A green close left nothing outstanding; a close that needed the
+        // human's call refused at a door and never reached this line (D13).
+        needs_you: Vec::new(),
+    };
+    mailbox::record_close_stop(&control, &run, &entry, &feature_close_note(root, feature));
 }
 
 /// What close did with the feature's cells, and why.
@@ -3009,7 +3135,20 @@ mod tests {
         // in ENFORCE mode, so each goes on asserting exactly what it
         // asserts today about commit scoping.
         w(root, ".bee/doc-deferral-baseline.json", "{\"files\":{}}\n");
-        git_ok(root, &["add", ".bee/config.json", ".bee/doc-deferral-baseline.json"]);
+        // hm-10 (human-mailbox D4/D14): a green close now records its
+        // feature-close stop under `.bee/human-mailbox/`, which bee's own
+        // onboarding block puts in `.gitignore` — it is a per-checkout
+        // RUNTIME record, never bookkeeping. This fixture had no ignore file
+        // at all, so it modelled a checkout bee never produces and the
+        // untracked entry read as store dirt. Seeded here rather than
+        // loosened in each assertion: every "the store is clean" and "only
+        // these paths were committed" test goes on asserting exactly what it
+        // asserted before, against a repo shaped the way a real one is.
+        w(root, ".gitignore", ".bee/human-mailbox/\n");
+        git_ok(
+            root,
+            &["add", ".bee/config.json", ".bee/doc-deferral-baseline.json", ".gitignore"],
+        );
         // D-P3-1: this SEED commit is fixture setup, not the code under
         // test, so it passes `--no-gpg-sign` directly rather than relying on
         // the repo's own (unset) config — a developer whose GLOBAL
@@ -3892,5 +4031,119 @@ mod tests {
         assert!(lines[2].starts_with("next:"));
         let doors = result.get("doors").unwrap().as_array().unwrap();
         assert_eq!(doors.iter().find(|d| d["door"] == "uat").unwrap()["blocking"], json!(true));
+    }
+
+    // ── the human mailbox: D14's feature-close stop (hm-10) ─────────────
+
+    /// The run a close appends under is resolved from the environment, so a
+    /// test asks the store which run it wrote rather than assuming a name.
+    fn mailbox_entries(root: &Path) -> Vec<crate::verbs::mailbox::Entry> {
+        crate::verbs::mailbox::runs_with_entries(root)
+            .into_iter()
+            .flat_map(|run| crate::verbs::mailbox::read_entries(root, &run))
+            .collect()
+    }
+
+    fn capped_cell(root: &Path) {
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped",
+                "acceptance":"A letter is filed once per run and never twice",
+                "affects_skills":["bee-hive"],"affects_specs":["docs/specs/letters.md"],
+                "trace":{"files_changed":["src/one.rs","src/two.rs"],
+                "report":{"outcome":"o","commit":"c","files":["src/one.rs"],
+                "tests":"cargo test — green — the touched module","deviations":[]}}}"#,
+        );
+    }
+
+    #[test]
+    fn a_dry_run_close_stops_nothing_so_it_appends_no_mailbox_entry() {
+        // The fork the cap has no equivalent of: --dry-run lists the doors,
+        // writes nothing and STOPS nothing. A letter reports what a run DID.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        capped_cell(root);
+
+        let out = close_handler(root, "demo", true, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert!(
+            !crate::verbs::mailbox::entries_dir(root).exists(),
+            "a dry-run close appended a mailbox entry"
+        );
+    }
+
+    #[test]
+    fn a_refused_close_appends_no_mailbox_entry_either() {
+        // The stop has not happened: close stopped at the tests door, so
+        // nothing about this feature is finished and nothing is recorded.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "this close must refuse at the tests door");
+        assert!(
+            !crate::verbs::mailbox::entries_dir(root).exists(),
+            "a refused close appended a mailbox entry"
+        );
+    }
+
+    #[test]
+    fn a_green_close_appends_one_feature_close_entry_carrying_the_three_lists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        capped_cell(root);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "this close must be green");
+
+        let entries = mailbox_entries(root);
+        assert_eq!(entries.len(), 1, "one close, one stop");
+        assert_eq!(entries[0].kind, crate::verbs::mailbox::KIND_FEATURE_CLOSE);
+        // D8: the plain sentence is written at the moment of the stop.
+        assert_eq!(entries[0].what, crate::verbs::mailbox::close_sentence("demo"));
+        // The close itself edited nothing, and it had no plan to depart from.
+        assert!(entries[0].files.is_empty());
+        assert!(entries[0].departure.is_none());
+
+        // D14's three lists, each read out of the feature's own capped cell —
+        // which retirement has already moved into the archive by now.
+        let note = feature_close_note(root, "demo");
+        assert_eq!(note.architecture, vec!["src/one.rs".to_string(), "src/two.rs".to_string()]);
+        assert_eq!(
+            note.behaviour,
+            vec!["A letter is filed once per run and never twice".to_string()]
+        );
+        assert_eq!(note.usage, vec!["bee-hive".to_string(), "docs/specs/letters.md".to_string()]);
+    }
+
+    #[test]
+    fn the_feature_close_material_is_read_never_written() {
+        // D8: a feature that recorded none of a fact gets an EMPTY list, and
+        // the letter drops that section — nothing is invented to fill it.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test — green — one module","deviations":[]}}}"#,
+        );
+        let note = feature_close_note(root, "demo");
+        assert!(note.is_empty(), "a feature that recorded nothing must carry nothing: {note:?}");
+
+        // And a feature nobody ever worked on carries nothing either.
+        assert!(feature_close_note(root, "never-existed").is_empty());
     }
 }
