@@ -166,7 +166,7 @@ Status is one of `not started`, `drafted`, or `verified`.
 | Document | Status |
 | --- | --- |
 | glossary.md | drafted |
-| bug-triage.md | not started |
+| bug-triage.md | drafted |
 | verification/ (4 checklists) | not started |
 | foundations/invocation.md | drafted |
 | foundations/store.md | drafted |
