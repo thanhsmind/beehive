@@ -1,0 +1,47 @@
+{
+  "id": "ms-3",
+  "title": "Seed role descriptions in default_config and add read-before-assign reminders",
+  "lane": "standard",
+  "role": "code",
+  "status": "open",
+  "feature": "models-show-verb",
+  "deps": [
+    "ms-1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "(1) onboard/templates.rs default_config: the four seeded claude roles become {model, description} objects — code: write the cell's code and its tests; read: multi-file gathers and scans, read-only; extraction: narrow fact lookups from known locations; generation: fall-through tail, the default writer role. Codex seeds stay null. Update seed-shape tests (default_config_keeps_literal_order_and_nulls, default_config_publishes_only_the_roles_bee_asks_for, and any host_opted_into_roles/agents sync tests that read the seeds). (2) The missing-role refusal in cells validation and the cells-add role help sentence in catalog.rs both name the verb with the reminder: if the role table has not been read this session, run bee models show before assigning — replacing guess-and-fill. Regenerate registry_payload.json.",
+  "must_haves": {
+    "truths": [
+      "A fresh default_config carries a description on each of the four seeded claude roles and resolution still yields the same models",
+      "The missing-role refusal text names bee models show as the read-first step",
+      "bee cells add --help names bee models show beside the existing description teach line"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard cells — green with updated seed and refusal tests named in the output; bee dev regen green",
+  "decisions": [
+    "models-show-verb D2",
+    "models-show-verb D3"
+  ],
+  "notes": "PBI p-0a5e6c44 CoS 3+4. Depends on ms-1 for the verb name existing in catalog.rs (shared file — never run concurrently with ms-1).",
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

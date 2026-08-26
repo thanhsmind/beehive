@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "reachable-remedy",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"reachable-remedy\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"reachable-remedy\" (lane).",
+  "next_action": "Two sibling refusals may have the same shape — check whether any other cap-time or claim-time message names a control-plane verb a worktree reader cannot run.",
   "created_at": "2026-08-26T04:41:21.619Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "But **`bee state worker add` refuses from inside a granted worktree** — which is where every dispatched worker runs. So the remedy names a d",
-    "asked_at": "2026-08-26T04:43:13.976Z",
-    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
-  },
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "tiny",
@@ -28,5 +23,14 @@
     "rationale": "The no-registered-execution-worker refusal names bee state worker add, which refuses from inside a granted worktree — where every dispatched worker runs. The remedy is unreachable from the place that reads it, so the escape hatch became routine.",
     "updated_at": "2026-08-26T04:41:21.630Z",
     "feature": "reachable-remedy"
+  },
+  "last_scribing_run": {
+    "feature": "reachable-remedy",
+    "date": "2026-08-26",
+    "at": "2026-08-26T05:15:00.948Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Two sibling refusals may have the same shape — check whether any other cap-time or claim-time message names a control-plane verb a worktree reader cannot run."
   }
 }

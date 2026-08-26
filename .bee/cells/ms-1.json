@@ -1,0 +1,47 @@
+{
+  "id": "ms-1",
+  "title": "Add the read-only bee models show verb returning the raw role table",
+  "lane": "standard",
+  "role": "code",
+  "status": "claimed",
+  "feature": "models-show-verb",
+  "files": [
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "New verb `bee models show [--runtime claude|codex|opencode] --json` (new `models` group): read-only; prints the RAW models.<runtime> table from .bee/config.json — every slot shape verbatim, description intact — plus the runtime's built-in defaults for roles the config does not name, each row marked source: configured|default. No runtime flag = every runtime the config or defaults know. Follow the `work show` verb end to end as the wiring pattern: catalog entry with help text teaching that descriptions live here and agents read this verb instead of parsing config.json, router wiring, handler module verbs/models_group.rs, unit tests. Regenerate generated/registry_payload.json by whatever mechanism the repo uses for catalog changes (find it; bee dev regen runs at minimum). The handler must NOT call normalize_models for the table it prints (normalize strips description by design — read the raw config JSON).",
+  "must_haves": {
+    "truths": [
+      "bee models show --json on a config with a described role prints that slot verbatim including description",
+      "A role only the built-in defaults know appears with source default",
+      "The verb never mutates anything and resolution/guard/dispatch code paths are untouched"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee models_group — green with the new tests named in the output; bee dev regen green; bee dev release-manifest --check green",
+  "decisions": [
+    "models-show-verb D1",
+    "models-show-verb D5"
+  ],
+  "notes": "PBI p-0a5e6c44 CoS 1. Router group list in router.rs and catalog.rs both need the new group; check how registry_payload.json is generated (build step or dev regen) and run it inside this cell.",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ms-w1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
+    "claimed_at": "2026-08-26T05:11:50.543Z"
+  }
+}

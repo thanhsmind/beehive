@@ -52,6 +52,51 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "remedy-now-reachable-from-where-it-is-read",
+            "status": "PASS",
+            "evidence": "The refusal at handlers_close.rs:383 now names `bee dispatch prepare --claim` and states that `bee state worker add` is control-plane and refuses from a granted worktree, so self-registering is the orchestrator's move from main. Verified by grep: the old FIX string returns 0 occurrences."
+          },
+          {
+            "id": "c2",
+            "name": "escape-hatch-kept-honest",
+            "status": "PASS",
+            "evidence": "--inline-reason remains, scoped to the case it is actually for: a dispatch that genuinely did not claim. It is no longer the only reachable exit."
+          },
+          {
+            "id": "c3",
+            "name": "no-policy-change",
+            "status": "PASS",
+            "evidence": "Only the FIX line changed. The rule it enforces — cells from small up run through dispatched workers — is untouched, and the refusal still fires on exactly the same condition."
+          },
+          {
+            "id": "c4",
+            "name": "suite-green",
+            "status": "PASS",
+            "evidence": "cargo test --release ... verbs::cells — exit 0, 254 passed, 0 failed. Exit code read from cargo directly, not through a pipeline. The suite includes the test that pins this refusal's substring."
+          },
+          {
+            "id": "c5",
+            "name": "root-cause-corrected-not-just-symptom",
+            "status": "PASS",
+            "evidence": "The orchestrator had filed a P2 claiming dispatch never registers a worker. Reading prepare.rs:1814 showed registration exists but is gated behind `if claim`, so the real defect was an unreachable remedy rather than a missing write. The misfiled row was corrected on the backlog rather than left standing."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-26T05:15:18.272Z"
+      }
+    ]
   }
 }

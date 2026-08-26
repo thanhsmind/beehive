@@ -1,0 +1,44 @@
+{
+  "id": "ms-2",
+  "title": "bee status --json keeps role descriptions in its models section",
+  "lane": "standard",
+  "role": "code",
+  "status": "claimed",
+  "feature": "models-show-verb",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In status_full/build.rs, where the status JSON inserts the models section (config_models.models, the normalized map), merge each raw slot's description string back onto the normalized slot object for DISPLAY — a described string slot becomes {model, description} in the output; slots without a description stay byte-identical. Internal resolution keeps using the stripped normalized map — only the status output changes. Add tests: a described role shows its description in the status models section; an undescribed config's models section is unchanged from today.",
+  "must_haves": {
+    "truths": [
+      "bee status --json models.claude.<role>.description appears when the raw config carries it",
+      "A config with no descriptions produces a models section byte-identical to before",
+      "normalize_models itself is unchanged — resolution stays blind to the field"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee status_full — green with the new tests named in the output",
+  "decisions": [
+    "models-show-verb D4",
+    "models-show-verb D5"
+  ],
+  "notes": "PBI p-0a5e6c44 CoS 2. Do not touch drivers/models.rs.",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ms-w2",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
+    "claimed_at": "2026-08-26T05:11:50.563Z"
+  }
+}
