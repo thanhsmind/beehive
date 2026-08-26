@@ -14,12 +14,7 @@
   "next_action": "Continue bee-planning for \"human-mailbox\" (lane).",
   "created_at": "2026-08-25T10:57:48.542Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Only my branch adds `mailbox.mark`; main added no new command — but main may have *edited* existing entries, so I will take main as the base",
-    "asked_at": "2026-08-25T23:19:07.335Z",
-    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -32,5 +27,12 @@
     "rationale": "Shaping complete (17 locked decisions D1-D14/D17, all in the decision log); plan.md drafted at mode standard with four strictly ordered phases. Route recorded from the plan's own risk map: a new store shape plus a record contract another project consumes, with no auth, data-loss, external-provider or existing-proof risk — D10 keeps the flagless finish path byte-identical.",
     "updated_at": "2026-08-25T12:03:19.879Z",
     "feature": "human-mailbox"
+  },
+  "merge_ready": {
+    "since": "2026-08-26T03:08:21.944Z",
+    "branch": "wt/human-mailbox",
+    "worktree_id": "beehive--wt--human-mailbox",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

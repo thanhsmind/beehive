@@ -1,0 +1,70 @@
+{
+  "id": "hm-10",
+  "feature": "human-mailbox",
+  "role": "code",
+  "title": "File the feature-close letter with its architecture, behaviour and usage sections",
+  "action": "D14: the feature-close letter is in scope — the SAME record shape carrying the extra architecture, behaviour and usage sections D7 names. D7 already promises those three appear only in the feature-close letter and never in the nightly one, so this cell makes an existing promise true rather than inventing a shape. Same file, same frontmatter, same filename rule, same authorship ban: composition may reorder, group and drop, and may never state a fact no stored entry carries. A weekly digest is explicitly out of scope.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "slice": 4,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A feature close files a letter in the same record shape as a run letter — same frontmatter fields, same filename rule, no second format (D3, D11, D14).",
+      "The feature-close letter carries the extra architecture, behaviour and usage sections (D7, D14).",
+      "Those three sections appear ONLY in the feature-close letter and never in a nightly run letter (D7).",
+      "An empty extra section is dropped rather than printed empty, exactly as the five nightly sections are (D7).",
+      "Composition still states no fact no stored entry carries — the authorship ban test must pass unweakened (D8).",
+      "A weekly digest is not built (D14).",
+      "The feature-close stop reaches the append hook by the route hm-2 recorded — close.rs run_close, on the non-dry-run tail only, so a --dry-run appends nothing."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "acceptance": "Closing a feature files one letter in the same shape carrying architecture, behaviour and usage; those sections never appear in a nightly letter; empty ones are dropped; a --dry-run close appends and files nothing; the authorship ban test passes unweakened.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "wk-hm-10",
+    "outcome": "The feature-close letter carries architecture, behaviour and usage; the nightly letter never grows them",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "Stored the three lists as extra keys on the feature-close stop own JSONL line instead of as three new Entry fields — three new Entry fields would have forced an edit to verbs/cells/handlers_close.rs, which this cell does not name, and no other stop kind has an architecture — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-26T03:08:21.922Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
+    "claimed_at": "2026-08-26T02:51:18.209Z",
+    "inline_reason": "Dispatched execution worker wk-hm-10 ran this cell in the human-mailbox worktree; dispatch wrote no state.workers row and bee state worker add refuses from a worktree, so the registration door cannot be satisfied from here. Known and filed as a P2 by the dispatching orchestrator; the recorded-reason escape is taken rather than faking an inline run.",
+    "report": {
+      "outcome": "The feature-close letter carries architecture, behaviour and usage; the nightly letter never grows them",
+      "commit": "8101091fb1da6330220cf9024dc1388337f3d86a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox — green — the cell's own verify (122 mailbox tests, 6 new D14 ones), plus drivers::close (48, 4 new) because the feature-close hook lives there, plus the whole crate suite once because the close fixture gained a .gitignore seed",
+      "deviations": [
+        "Stored the three lists as extra keys on the feature-close stop own JSONL line instead of as three new Entry fields — three new Entry fields would have forced an edit to verbs/cells/handlers_close.rs, which this cell does not name, and no other stop kind has an architecture — found a better route"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 753 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
