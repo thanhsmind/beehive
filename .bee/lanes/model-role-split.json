@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six foundations are written. I update the coverage table and commit, then start the hardest area (the lifecycle).",
-    "asked_at": "2026-08-26T04:02:17.008Z",
+    "subject": "Backlog and feedback are in (13 of 15) — new finds: the whole cross-repository feedback arm is not built, and a hardcoded Windows path separ",
+    "asked_at": "2026-08-26T04:24:38.448Z",
     "session": "a2bd3764-a63e-4df4-9f74-51092b0a21d5"
   },
   "route": {
