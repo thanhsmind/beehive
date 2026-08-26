@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Release xong. Giờ tôi ghi lại một bài học vào sổ để lần sau không vấp lại.",
-    "asked_at": "2026-08-26T07:02:07.838Z",
+    "subject": "Xong phần kiến thức: 0 lỗi. Giờ tôi gom tất cả vào một commit.",
+    "asked_at": "2026-08-26T07:16:14.154Z",
     "session": "7a44c92f-5bc8-4252-bb94-8f62de3e55c9"
   }
 }

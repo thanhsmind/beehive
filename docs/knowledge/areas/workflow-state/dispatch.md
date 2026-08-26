@@ -23,6 +23,12 @@ record changes.
 
 ## Behaviors & Operations
 
+**A cell dispatch describes itself by the cell's own title
+(dispatch-description-intent, cell ddi-1, 2026-08-06).** The Agent-call
+description a `--kind cell` prepare returns is built from the cell's
+title, so an operator watching the run reads the work's intent, not a
+generic label; a titleless cell falls back to the dispatch date.
+
 **The unregistered-worker refusal names the door that registers
 (reachable-remedy, cell rr-1, 2026-08-26).** Worker registration rides the
 `dispatch prepare --claim` path, so the refusal a worker reads when it is not
