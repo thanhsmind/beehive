@@ -43,6 +43,12 @@ Do not describe code. Describe what the agent sees and does. Technical detail go
 - The model guard refuses a dispatch naming an unconfigured role or a bare tier, and repairs a pinned-type mismatch instead of refusing; silent exit 0 when it has no opinion.
 - Rendered agents: bee-gather (read-only, opus), bee-extract (read-only, sonnet), bee-build (writes, opus, returns one of [DONE]/[BLOCKED]/[HANDOFF]/[NOOP]), bee-review (read-only plus read-only commands, opus).
 - No-root error text: `No bee repo root found (no .bee/onboarding.json or .git up the tree). Run bee-hive onboarding.`
+- Cell states: `open`, `claimed`, `capped`, `blocked`, `dropped`; archive is a file move, not a status. Budgets default 3/4/2 (claims/failed attempts/same signature), hard max 9/12/6; escalation ration 40% of the feature's cells.
+- The proof line is `<command> — <result> — <scope reason>` with a literal ` — ` (em dash) separator; a `red` result refuses the cap. The cap runs no tests; close runs no tests (its tests door reads recorded proof).
+- Route vocabularies: class `feature|bugfix|docs|refactor|research|release|spike`; lane `docs|tiny|small|spike|standard|high-risk`. Lane transitions: promotion always allowed, high-risk never demotes, hard-gate flags block demotion, one demotion per feature ever.
+- Close's doors in order: tests, scribing-debt, capture-queue (report-only), judge-debt (standard/high-risk), uat (only under `uat_stop: "close"`), pattern-check, knowledge-freshness, impact, routing, doc-deferral. Blocking doors record `blocked_by` on the merge-ready projection.
+- `bee shape` is a pure alias of `bee intent set`; `bee finish` of `bee cells finish`; `bee route` of `bee state route`; `bee gate` of `bee state gate`. The intent anchor's request/acceptance are immutable once set (`--force` overrides); there is no slice record — the current slice is the set of cells that exist.
+- Phases: `idle, exploring, planning, swarming, reviewing, scribing, compounding, grooming, compounding-complete`; gated = exploring/planning; terminal = idle/compounding-complete.
 
 ## Order of work
 

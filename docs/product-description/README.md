@@ -173,12 +173,12 @@ Status is one of `not started`, `drafted`, or `verified`.
 | foundations/gates.md | drafted |
 | foundations/guards.md | drafted |
 | foundations/worktrees.md | drafted |
-| lifecycle/orient.md | not started |
-| lifecycle/shaping.md | not started |
-| lifecycle/planning.md | not started |
-| lifecycle/cells.md | not started |
-| lifecycle/execution.md | not started |
-| lifecycle/close.md | not started |
+| lifecycle/orient.md | drafted |
+| lifecycle/shaping.md | drafted |
+| lifecycle/planning.md | drafted |
+| lifecycle/cells.md | drafted |
+| lifecycle/execution.md | drafted |
+| lifecycle/close.md | drafted |
 | delegation/dispatch.md | not started |
 | delegation/workers.md | not started |
 | delegation/herding.md | not started |
