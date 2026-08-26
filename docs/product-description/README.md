@@ -169,10 +169,10 @@ Status is one of `not started`, `drafted`, or `verified`.
 | verification/ (4 checklists) | not started |
 | foundations/invocation.md | drafted |
 | foundations/store.md | drafted |
-| foundations/session.md | not started |
-| foundations/gates.md | not started |
-| foundations/guards.md | not started |
-| foundations/worktrees.md | not started |
+| foundations/session.md | drafted |
+| foundations/gates.md | drafted |
+| foundations/guards.md | drafted |
+| foundations/worktrees.md | drafted |
 | lifecycle/orient.md | not started |
 | lifecycle/shaping.md | not started |
 | lifecycle/planning.md | not started |
