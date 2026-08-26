@@ -1280,28 +1280,28 @@
     },
     {
       "path": "packages/bee/agents/bee-build.md.tmpl",
-      "sha256": "a38e4fcea2623d9d9e0b1659446c872884eb23c10cc650031c71c0b37c6b2d22",
+      "sha256": "272aea10b596ea273041aa4e5ae540aa69fa356c0b1783f499a64756c16d948b",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-build.md.tmpl"
     },
     {
       "path": "packages/bee/agents/bee-extract.md.tmpl",
-      "sha256": "6932d54cafec16a0fb1d4f1552cd7f0f268a2557c50333a5a6c247349bf89add",
+      "sha256": "da23aecb812bfd59ed98e4c35cae21c39d5a93477f73c6cc2c27d694fdcd43b3",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-extract.md.tmpl"
     },
     {
       "path": "packages/bee/agents/bee-gather.md.tmpl",
-      "sha256": "f405a3f0a9146d3a3aa3d7828519f62fd50651978ccd32eaee8421bcb43f1570",
+      "sha256": "dfc1f4da6891d2edcf7104562a26361ea96a37f8e261290d15333705a48ae4a8",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-gather.md.tmpl"
     },
     {
       "path": "packages/bee/agents/bee-review.md.tmpl",
-      "sha256": "d2c0e1c16756afd1fb5fdf7951a5243f7e32f5a1ff04aa78500242e6d85d2abf",
+      "sha256": "f0566aff266c92f5e681632b65ce595768572966585614caf3a2d0ac5d1bed65",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-review.md.tmpl"

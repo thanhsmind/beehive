@@ -866,6 +866,25 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
             if !found {
                 continue;
             }
+            // agent-model-unpin D1: on the Claude root the file carries NO
+            // model pin — the dispatch payload's model param is the one
+            // authority — so the verdict flips: a present `model:` line IS
+            // the drift (a legacy pinned render), and a file without one is
+            // clean whatever shape the slot resolves to. The opencode root
+            // below keeps the expected-model comparison: there the rendered
+            // file is the enforcement (D3).
+            if runtime == "claude" {
+                if let Some(file_model) = file_model {
+                    problems.push(Problem {
+                        code: "agent-file-drift",
+                        runtime: None,
+                        slot: Some(slot.to_string()),
+                        message: format!("{rel_prefix}/{agent_name}.md still pins model: \"{file_model}\" — agent files no longer carry a model (the dispatch payload's model param is the authority); run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
+                        agent: Some(agent_name),
+                    });
+                }
+                continue;
+            }
             let Some(file_model) = file_model else {
                 problems.push(Problem {
                     code: "agent-file-malformed",
