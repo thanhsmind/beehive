@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "sample-role-description",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"sample-role-description\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f5c4871; capture what settled, then bee close --feature sample-role-description.",
+  "next_action": "bee close finished \"sample-role-description\" — feature is closed.",
   "created_at": "2026-08-26T04:08:00.728Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
