@@ -312,3 +312,4 @@
 {"ts":"2026-08-26T02:33:46.583Z","event":"complete","id":"166c706f-c23d-401f-a9d3-ca717562e3a2"}
 {"ts":"2026-08-26T02:33:46.583Z","event":"complete","id":"1c4ecb9e-eded-48b8-abf1-8aa56c39f6bc"}
 {"ts":"2026-08-26T02:33:47.198Z","event":"complete","id":"c67a54d3-2383-4181-9eb0-a90d15b5c11e"}
+{"ts":"2026-08-26T02:39:11.210Z","event":"add","id":"223b0b9d-2dd1-4f84-bfdf-d6793daa0bb9","kind":"worktree-cleanup","feature":"workspace-cleanup","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--workspace-cleanup"],"reason":"Worktree beehive--wt--workspace-cleanup (branch wt/workspace-cleanup) merged into main at 9fff37c76ece333d8e4cf171f3c92f361a1f2913 and kept per default (D1) — remove it with `bee worktree prune`."}

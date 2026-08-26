@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "workspace-cleanup",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": false,
@@ -11,13 +11,17 @@
     "uat": false
   },
   "summary": "Feature \"workspace-cleanup\" started at phase \"swarming\" (lane).",
-  "next_action": "Merged into main at 9fff37c; reload the product and test \"workspace-cleanup\", then either approve uat (\"bee gate --name uat --approved true --lane workspace-cleanup\") or fix it in the worktree and merge again.",
+  "next_action": "promote proposals reviewed 2026-08-26; nothing further to merge",
   "created_at": "2026-08-26T02:32:08.941Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: workspace-cleanup",
-    "asked_at": "2026-08-26T02:39:11.181Z",
-    "session": "bee-worktree-merge-sessionless"
+  "waiting_on": null,
+  "last_scribing_run": {
+    "feature": "state-lock-lost-update",
+    "date": "2026-08-26",
+    "at": "2026-08-26T02:42:53.114Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "promote proposals reviewed 2026-08-26; nothing further to merge"
   }
 }
