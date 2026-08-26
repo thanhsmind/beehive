@@ -501,8 +501,11 @@ impl LetterItem {
 ///
 /// Which code path reaches which is answered in
 /// `verbs/cells/handlers_close.rs`, above `record_cap_in_mailbox` — one map
-/// of all three, written beside the hook that exists. Only [`KIND_CAP`] is
-/// wired today (hm-2); the other two are wired by the cells that own them.
+/// of all three, written beside the hook that exists. [`KIND_CAP`] was wired
+/// by hm-2 and [`KIND_FEATURE_CLOSE`] by hm-10 (`verbs/drivers/close.rs`
+/// `record_feature_close_in_mailbox`, on close's non-dry-run tail — a
+/// `--dry-run` close stops nothing, so it appends nothing). [`KIND_BLOCKER`]
+/// is wired by the cell that owns it.
 pub(crate) const KIND_CAP: &str = "cap";
 pub(crate) const KIND_FEATURE_CLOSE: &str = "feature-close";
 pub(crate) const KIND_BLOCKER: &str = "blocker";
@@ -604,23 +607,50 @@ thread_local! {
 /// read — a torn last line from a run killed mid-write must never cost the
 /// entries that landed before it.
 pub(crate) fn read_entries(root: &Path, run: &str) -> Vec<Entry> {
+    read_run(root, run).0
+}
+
+/// ONE read of this run's JSONL, folded into BOTH shapes a stored line
+/// carries: the [`Entry`] every clean stop shares, and the [`CloseNote`] only
+/// a feature-close stop adds beside it (D14 — see that section below).
+///
+/// One read rather than two, because the notes ride the very lines the
+/// entries do: a second pass over the same file to answer the second half of
+/// the same question would double the cost of every run end and give the two
+/// answers a way to disagree. [`read_entries`] is the counted door, so
+/// `ENTRY_READS` keeps measuring exactly what D12 promised — no entry file is
+/// opened to decide which runs went silent.
+///
+/// Same fail-open posture the entry read always had: a missing file is an
+/// empty run, and a line that will not parse is skipped with the standard
+/// visible warning. A note is only ever read off a line that parsed as an
+/// entry, so a torn line can never contribute half a letter section.
+pub(crate) fn read_run(root: &Path, run: &str) -> (Vec<Entry>, Vec<CloseNote>) {
     #[cfg(test)]
     ENTRY_READS.with(|c| c.set(c.get() + 1));
     let path = entries_path(root, run);
     let Ok(text) = std::fs::read_to_string(&path) else {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     };
-    let mut out = Vec::new();
+    let mut entries = Vec::new();
+    let mut notes = Vec::new();
     for (index, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
         }
-        match serde_json::from_str::<Value>(line).ok().as_ref().and_then(Entry::from_value) {
-            Some(entry) => out.push(entry),
-            None => warn_corrupt_jsonl_line(&path, index + 1),
+        let parsed = serde_json::from_str::<Value>(line).ok();
+        match parsed.as_ref().and_then(Entry::from_value) {
+            Some(entry) => entries.push(entry),
+            None => {
+                warn_corrupt_jsonl_line(&path, index + 1);
+                continue;
+            }
+        }
+        if let Some(note) = parsed.as_ref().and_then(CloseNote::from_value) {
+            notes.push(note);
         }
     }
-    out
+    (entries, notes)
 }
 
 /// Every run that has appended at least one entry, name-sorted. One directory
@@ -771,7 +801,14 @@ fn first_line(s: Option<&str>) -> Option<String> {
 /// stop into a refusal. The failure is still SAID (a silent gap in a letter
 /// is worse than a noisy one) and it names what the human will miss.
 pub(crate) fn record_stop(root: &Path, run: &str, entry: &Entry) {
-    if let Err(err) = append_entry(root, run, entry) {
+    warn_if_unrecorded(run, append_entry(root, run, entry));
+}
+
+/// The ONE thing said when a stop could not be written down, borrowed by
+/// every stop kind rather than re-typed per kind — a second wording here is
+/// a second promise about what the human will miss.
+fn warn_if_unrecorded(run: &str, outcome: std::io::Result<()>) {
+    if let Err(err) = outcome {
         eprintln!(
             "bee: could not record the human-mailbox entry for run \"{run}\" ({err}) — the work itself is recorded; this step will be missing from that run's letter."
         );
@@ -1603,7 +1640,10 @@ pub(crate) fn file_run_letter(root: &Path, run: &str) -> RunEnd {
     if !armed(root) {
         return RunEnd::NotArmed;
     }
-    let entries = read_entries(root, run);
+    // D14: the notes come off the very lines the entries do, so a run that
+    // closed a feature carries its three extra sections into the ONE letter
+    // it already gets — never into a second file beside it.
+    let (entries, notes) = read_run(root, run);
     if entries.is_empty() {
         return RunEnd::NoEntries;
     }
@@ -1626,7 +1666,8 @@ pub(crate) fn file_run_letter(root: &Path, run: &str) -> RunEnd {
         }
     }
 
-    let Some(mut letter) = compose_letter(&project_of(root), run, &filed_at, &entries) else {
+    let Some(mut letter) = compose_letter_with(&project_of(root), run, &filed_at, &entries, &notes)
+    else {
         return RunEnd::NoEntries;
     };
     letter.status = status;
@@ -1765,6 +1806,12 @@ pub(crate) fn went_silent_at(entries: &[Entry]) -> Option<String> {
 /// away from what a finished one reads like, and the entries are listed up to
 /// the last one exactly as D12 asks.
 pub(crate) fn compose_unfinished_body(entries: &[Entry]) -> String {
+    compose_unfinished_body_with(entries, &[])
+}
+
+/// [`compose_unfinished_body`] carrying D14's three extra sections, for a run
+/// that closed a feature and then went silent.
+pub(crate) fn compose_unfinished_body_with(entries: &[Entry], notes: &[CloseNote]) -> String {
     let moment = match went_silent_at(entries) {
         Some(at) => format!("- {UNFINISHED_LINE} {SILENT_AFTER_PREFIX} {at}."),
         // No entry carries a moment, so no moment is named. D8: silence beats
@@ -1772,7 +1819,7 @@ pub(crate) fn compose_unfinished_body(entries: &[Entry]) -> String {
         None => format!("- {UNFINISHED_LINE}"),
     };
     let lead = format!("## {SECTION_UNFINISHED}\n\n{moment}\n");
-    let rest = compose_body(entries);
+    let rest = compose_body_with(entries, notes);
     if rest.is_empty() {
         return lead;
     }
@@ -1789,9 +1836,20 @@ pub(crate) fn compose_unfinished_letter(
     filed_at: &str,
     entries: &[Entry],
 ) -> Option<Letter> {
+    compose_unfinished_letter_with(project, run, filed_at, entries, &[])
+}
+
+/// [`compose_unfinished_letter`] carrying D14's three extra sections.
+pub(crate) fn compose_unfinished_letter_with(
+    project: &str,
+    run: &str,
+    filed_at: &str,
+    entries: &[Entry],
+    notes: &[CloseNote],
+) -> Option<Letter> {
     let mut letter = compose_letter(project, run, filed_at, entries)?;
     letter.subject = format!("{UNFINISHED_SUBJECT_MARK} {}", letter.subject);
-    letter.body = compose_unfinished_body(entries);
+    letter.body = compose_unfinished_body_with(entries, notes);
     Some(letter)
 }
 
@@ -1896,8 +1954,12 @@ pub(crate) fn file_unfinished_letter(root: &Path, run: &str) -> RunEnd {
     if let Some(existing) = letter_files_for_run(root, run).into_iter().next() {
         return RunEnd::AlreadyFiled(existing);
     }
-    let entries = read_entries(root, run);
-    let Some(letter) = compose_unfinished_letter(&project_of(root), run, &now_iso(), &entries)
+    // D14: a run that closed a feature and THEN went silent keeps the three
+    // extra sections its close recorded — the recovery pass reads the same
+    // lines the ordinary run end does.
+    let (entries, notes) = read_run(root, run);
+    let Some(letter) =
+        compose_unfinished_letter_with(&project_of(root), run, &now_iso(), &entries, &notes)
     else {
         return RunEnd::NoEntries;
     };
@@ -1947,6 +2009,208 @@ pub(crate) fn record_silent_runs(root: &Path, current_run: &str) -> Vec<(String,
         }
     }
     outcomes
+}
+
+// ─── D14: the feature-close letter ──────────────────────────────────────
+//
+// D7 already promised this letter: "Architecture, behaviour and usage appear
+// only in the feature-close letter." Until now no feature-close letter
+// existed, so that clause described NOTHING. This section fills in the shape
+// D7 already carved out — it does not invent a second letter format.
+//
+// ── The same record, the same file (D3, D11) ────────────────────────────
+//
+// A feature close is one of D4's three clean stops, and a stop happens INSIDE
+// a run. So the feature-close letter is not a new artifact filed beside the
+// run's letter — it IS the run's letter, for a run that closed a feature.
+// Same frontmatter contract (nothing is added to D3's field list, for the
+// same reason `UNFINISHED_SUBJECT_MARK` adds nothing: extending the machine
+// contract another project consumes is a DECISION, not a worker's choice),
+// same `<UTC-timestamp>-<short-run-slug>.md` name (D11), same one letter per
+// run. Filing a second file would be a second letter for one run, which is
+// precisely the loss D11 exists to prevent.
+//
+// ── "Only in the feature-close letter", held by construction ────────────
+//
+// The three extra sections are composed from [`CloseNote`]s, and only the
+// feature-close stop ever writes one. A nightly run stores none, so its three
+// lists are empty, so `push_section` — D7's own "a section with nothing to
+// report is dropped, never printed empty" — drops all three. There is ONE
+// dropping rule in this module and this reuses it rather than growing a
+// second one. The promise holds because the material is absent, not because a
+// second code path remembered to check a flag.
+//
+// ── The authorship ban is NOT relaxed here (D8) ─────────────────────────
+//
+// Architecture, behaviour and usage may state no fact no stored entry
+// carries, exactly like the five sections above them. So nothing in this
+// module writes a word of them: the feature close reads three lists of
+// already-recorded facts out of the feature's own capped cells and STORES
+// them at the moment of the stop (`verbs/drivers/close.rs`
+// `record_feature_close_in_mailbox`), and the composing pass only sorts,
+// dedupes and drops. If a feature recorded no material for a section, that
+// section is absent — silence is the honest render, and authoring prose to
+// fill a heading is the one thing D8 forbids outright.
+//
+// ── Where the three lists live ──────────────────────────────────────────
+//
+// On the feature-close stop's OWN JSONL line, beside the fields every stop
+// shares. They are kind-specific payload — no other stop kind has an
+// architecture — so they are modelled as their own record read alongside
+// [`Entry`] rather than as three fields every cap would carry empty. Extra
+// keys on an append-only JSONL line are forward-compatible by construction:
+// every existing reader of that line still reads the entry it always read,
+// and a letter filed by an older build simply has no notes to find.
+
+/// D7's own three words, in D7's own order. Constants for the same reason
+/// [`SECTIONS`] is: the headings ARE the decision.
+pub(crate) const SECTION_ARCHITECTURE: &str = "Architecture";
+pub(crate) const SECTION_BEHAVIOUR: &str = "Behaviour";
+pub(crate) const SECTION_USAGE: &str = "Usage";
+pub(crate) const CLOSE_SECTIONS: [&str; 3] =
+    [SECTION_ARCHITECTURE, SECTION_BEHAVIOUR, SECTION_USAGE];
+
+/// The keys the three lists ride under on a stored feature-close line, in the
+/// same order as [`CLOSE_SECTIONS`].
+const CLOSE_NOTE_KEYS: [&str; 3] = ["architecture", "behaviour", "usage"];
+
+/// What a feature-close stop recorded for D14's three extra sections.
+///
+/// Every string in it is a fact some capped cell of the feature already
+/// stored; see this section's header for why nothing here is written by the
+/// composing pass.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CloseNote {
+    pub architecture: Vec<String>,
+    pub behaviour: Vec<String>,
+    pub usage: Vec<String>,
+}
+
+impl CloseNote {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.architecture.is_empty() && self.behaviour.is_empty() && self.usage.is_empty()
+    }
+
+    /// The three lists in [`CLOSE_SECTIONS`] order.
+    fn lists(&self) -> [&Vec<String>; 3] {
+        [&self.architecture, &self.behaviour, &self.usage]
+    }
+
+    /// `None` for a line that carries none of the three keys — which is every
+    /// line every other stop kind ever wrote — and for one that carries them
+    /// all empty, so an empty note can never keep a heading alive.
+    fn from_value(v: &Value) -> Option<Self> {
+        let m = v.as_object()?;
+        if !CLOSE_NOTE_KEYS.iter().any(|key| m.contains_key(*key)) {
+            return None;
+        }
+        let note = Self {
+            architecture: string_list(m, CLOSE_NOTE_KEYS[0]),
+            behaviour: string_list(m, CLOSE_NOTE_KEYS[1]),
+            usage: string_list(m, CLOSE_NOTE_KEYS[2]),
+        };
+        (!note.is_empty()).then_some(note)
+    }
+}
+
+/// Append the feature-close stop: ONE line carrying the [`Entry`] every stop
+/// shares plus the three lists only this stop kind has. One O_APPEND write,
+/// exactly like [`append_entry`] — a feature close that lands at 3am leaves
+/// its record even if the run never reaches its own end (D4).
+pub(crate) fn append_close_entry(
+    root: &Path,
+    run: &str,
+    entry: &Entry,
+    note: &CloseNote,
+) -> std::io::Result<()> {
+    let mut value = entry.to_value();
+    if let Value::Object(map) = &mut value {
+        for (key, list) in CLOSE_NOTE_KEYS.into_iter().zip(note.lists()) {
+            map.insert(key.to_string(), json!(list));
+        }
+    }
+    append_jsonl(&entries_path(root, run), &value)
+}
+
+/// [`record_stop`] for the feature-close stop — same FAIL-OPEN posture, same
+/// one wording. The close has already happened; nothing about a letter may
+/// turn it into a refusal (D10).
+pub(crate) fn record_close_stop(root: &Path, run: &str, entry: &Entry, note: &CloseNote) {
+    warn_if_unrecorded(run, append_close_entry(root, run, entry, note));
+}
+
+/// D8's plain-language sentence for a feature that just closed, written HERE
+/// — at the moment of the stop, exactly like [`cap_sentence`], and for the
+/// same reason: deferring it to composition would force the composer to
+/// author, which D8 forbids.
+///
+/// It says only what the stop itself makes true — this feature's work is
+/// finished — and names the feature the human asked for. It states nothing
+/// about WHAT was built; that is what the sections below it are for.
+pub(crate) fn close_sentence(feature: &str) -> String {
+    match feature.trim() {
+        "" => "Finished a piece of work.".to_string(),
+        name => format!("Finished the work on {name}."),
+    }
+}
+
+/// D14's three sections' bullets, in [`CLOSE_SECTIONS`] order.
+///
+/// Deduped in first-seen order across every feature-close stop the run
+/// recorded (one run may close two features): dropping a repeat is DROPPING,
+/// which D8 allows, and nothing is re-worded or added on the way. An entry
+/// that is blank after `one_line` is dropped rather than rendered as an empty
+/// bullet.
+fn close_section_lines(notes: &[CloseNote]) -> [Vec<String>; 3] {
+    let mut out: [Vec<String>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    for note in notes {
+        for (slot, list) in out.iter_mut().zip(note.lists()) {
+            for raw in list {
+                if one_line(raw).is_empty() {
+                    continue;
+                }
+                let line = bullet(raw);
+                if !slot.contains(&line) {
+                    slot.push(line);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// [`compose_body`] plus D14's three extra sections — the ONE body renderer a
+/// feature-close letter uses.
+///
+/// The three come AFTER D7's five, which keeps those five contiguous and in
+/// D7's own order: the news the human came for stays at the top of the file,
+/// and the reference material about what the feature now is sits below it.
+/// With no notes this is byte-identical to [`compose_body`], which is what
+/// makes "a nightly letter never grows these sections" a property of the
+/// material rather than of a second code path.
+pub(crate) fn compose_body_with(entries: &[Entry], notes: &[CloseNote]) -> String {
+    let mut out = compose_body(entries);
+    for (heading, lines) in CLOSE_SECTIONS.into_iter().zip(close_section_lines(notes)) {
+        push_section(&mut out, heading, &lines);
+    }
+    out
+}
+
+/// [`compose_letter`] for a run that closed a feature (D14).
+///
+/// The SAME record: only the body differs, and only by the sections the
+/// stored notes carry material for. Subject, frontmatter, items and filename
+/// are the nightly letter's, unchanged.
+pub(crate) fn compose_letter_with(
+    project: &str,
+    run: &str,
+    filed_at: &str,
+    entries: &[Entry],
+    notes: &[CloseNote],
+) -> Option<Letter> {
+    let mut letter = compose_letter(project, run, filed_at, entries)?;
+    letter.body = compose_body_with(entries, notes);
+    Some(letter)
 }
 
 // ─── small value helpers ────────────────────────────────────────────────
@@ -3356,5 +3620,209 @@ nested:
             1,
             "exactly one entry file is opened: the one letter that gets written"
         );
+    }
+
+    // ── D14: the feature-close letter ───────────────────────────────────
+
+    fn close_note() -> CloseNote {
+        CloseNote {
+            architecture: vec![
+                "packages/bee-rs/crates/bee/src/verbs/mailbox.rs".to_string(),
+                "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs".to_string(),
+            ],
+            behaviour: vec![
+                "A letter is filed once per run and never twice".to_string(),
+                "A section with nothing to report is dropped".to_string(),
+            ],
+            usage: vec!["skills/bee-hive/SKILL.md".to_string()],
+        }
+    }
+
+    fn close_entry() -> Entry {
+        Entry {
+            at: "2026-08-25T04:00:00.000Z".to_string(),
+            kind: KIND_FEATURE_CLOSE.to_string(),
+            what: close_sentence("human-mailbox"),
+            files: vec![],
+            commit: None,
+            proof: None,
+            departure: None,
+            needs_you: vec![],
+        }
+    }
+
+    #[test]
+    fn the_feature_close_letter_carries_architecture_behaviour_and_usage() {
+        // D7 promised these three appear in the feature-close letter. Until
+        // this cell they appeared nowhere, so the promise described nothing.
+        let mut entries = full_run();
+        entries.push(close_entry());
+        let letter = compose_letter_with(
+            "beehive",
+            "run-close",
+            "2026-08-25T06:00:00.000Z",
+            &entries,
+            &[close_note()],
+        )
+        .unwrap();
+
+        for heading in CLOSE_SECTIONS {
+            assert!(
+                letter.body.contains(&format!("## {heading}")),
+                "the feature-close letter is missing the {heading:?} section:\n{}",
+                letter.body
+            );
+        }
+        // The stored material, verbatim.
+        assert!(letter.body.contains("- packages/bee-rs/crates/bee/src/verbs/mailbox.rs"));
+        assert!(letter.body.contains("- A letter is filed once per run and never twice"));
+        assert!(letter.body.contains("- skills/bee-hive/SKILL.md"));
+
+        // D7's five stay contiguous, in D7's order, ABOVE the three: the news
+        // the human came for is still at the top of the file.
+        let at = |heading: &str| letter.body.find(&format!("## {heading}")).unwrap();
+        assert!(at(SECTION_DONE) < at(SECTION_DEPARTED));
+        assert!(at(SECTION_NEEDS_YOU) < at(SECTION_ARCHITECTURE));
+        assert!(at(SECTION_ARCHITECTURE) < at(SECTION_BEHAVIOUR));
+        assert!(at(SECTION_BEHAVIOUR) < at(SECTION_USAGE));
+
+        // SAME record shape: D3's frontmatter grew nothing, and D11's
+        // filename rule is untouched.
+        assert_eq!(letter.filename(), letter_filename(&letter.filed_at, &letter.run));
+        assert_eq!(letter.items.len(), entries.len());
+        assert_eq!(letter.status, STATUS_UNREAD);
+    }
+
+    #[test]
+    fn a_nightly_letter_never_grows_the_extra_sections() {
+        // The other direction of D7's promise: "only in the feature-close
+        // letter". A nightly run stores no note, so there is no material, so
+        // the three headings cannot appear.
+        let entries = full_run();
+        let letter =
+            compose_letter("beehive", "run-night", "2026-08-25T06:00:00.000Z", &entries).unwrap();
+        for heading in CLOSE_SECTIONS {
+            assert!(
+                !letter.body.contains(&format!("## {heading}")),
+                "a nightly letter grew the {heading:?} section:\n{}",
+                letter.body
+            );
+        }
+        // With no notes the body is byte-identical to the five-section one —
+        // the promise is a property of the material, not of a second path.
+        assert_eq!(compose_body_with(&entries, &[]), compose_body(&entries));
+    }
+
+    #[test]
+    fn an_extra_section_with_nothing_to_report_is_dropped_never_printed_empty() {
+        // D7's own dropping rule, reused rather than re-implemented: a close
+        // that recorded only architecture prints only Architecture.
+        let entries = vec![close_entry()];
+        let note = CloseNote { architecture: vec!["src/one.rs".to_string()], ..Default::default() };
+        let body = compose_body_with(&entries, &[note]);
+        assert!(body.contains(&format!("## {SECTION_ARCHITECTURE}")));
+        assert!(!body.contains(&format!("## {SECTION_BEHAVIOUR}")));
+        assert!(!body.contains(&format!("## {SECTION_USAGE}")));
+
+        // An all-blank note keeps no heading alive at all.
+        let blank = CloseNote {
+            architecture: vec!["   ".to_string()],
+            behaviour: vec![String::new()],
+            usage: vec![],
+        };
+        let body = compose_body_with(&entries, &[blank]);
+        for heading in CLOSE_SECTIONS {
+            assert!(!body.contains(&format!("## {heading}")), "an empty section was printed");
+        }
+    }
+
+    #[test]
+    fn the_feature_close_letter_states_no_fact_no_entry_carries() {
+        // D8's authorship ban, over D14's own path — the mirror of
+        // `composition_never_states_a_fact_no_entry_carries` above. Every word
+        // of the three extra sections must come from the STORED note; the
+        // composing pass may sort, dedupe and drop, and never author.
+        let entries = vec![close_entry()];
+        let note = close_note();
+        let body = compose_body_with(&entries, &[note.clone()]);
+
+        let mut allowed: Vec<String> = Vec::new();
+        for e in &entries {
+            allowed.extend(words(&e.what));
+            allowed.extend(words(&e.kind));
+            allowed.extend(words(&e.at));
+        }
+        for list in note.lists() {
+            for line in list {
+                allowed.extend(words(line));
+            }
+        }
+        for heading in SECTIONS.into_iter().chain(CLOSE_SECTIONS) {
+            allowed.extend(words(heading));
+        }
+
+        for word in words(&body) {
+            assert!(
+                allowed.contains(&word),
+                "the body says {word:?}, which no stored entry carries — that is authoring (D8)"
+            );
+        }
+    }
+
+    #[test]
+    fn a_feature_close_stop_rides_one_line_that_every_older_reader_still_reads() {
+        // The three lists are kind-specific payload on the stop's OWN line —
+        // one append, one line, and `read_entries` reads the entry it always
+        // read without a warning.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        append_entry(root, "run-a", &sample_entry("2026-08-25T01:00:00.000Z", "Did a thing"))
+            .unwrap();
+        append_close_entry(root, "run-a", &close_entry(), &close_note()).unwrap();
+
+        let (entries, notes) = read_run(root, "run-a");
+        assert_eq!(entries.len(), 2, "both stops read back as ordinary entries");
+        assert_eq!(entries[1].kind, KIND_FEATURE_CLOSE);
+        assert_eq!(notes, vec![close_note()], "the note rides the same line, verbatim");
+        // The cap's own line carries no note, so it contributes no section.
+        assert_eq!(read_entries(root, "run-a").len(), 2);
+    }
+
+    #[test]
+    fn the_run_that_closed_a_feature_files_the_letter_that_carries_the_sections() {
+        // End to end, and BOTH directions in one store: two runs, one that
+        // closed a feature and one that did not. Same file shape, same name
+        // rule, same one letter per run (D3, D11) — only the sections differ.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+
+        append_entry(root, "run-night", &sample_entry("2026-08-25T02:00:00.000Z", "Kept going"))
+            .unwrap();
+        append_entry(root, "run-close", &sample_entry("2026-08-25T03:00:00.000Z", "Kept going"))
+            .unwrap();
+        append_close_entry(root, "run-close", &close_entry(), &close_note()).unwrap();
+
+        let RunEnd::Filed(closed) = file_run_letter(root, "run-close") else {
+            panic!("the run that closed a feature files its letter");
+        };
+        let RunEnd::Filed(nightly) = file_run_letter(root, "run-night") else {
+            panic!("the nightly run files its letter");
+        };
+        assert_eq!(letter_files_for_run(root, "run-close").len(), 1, "one letter, one run (D11)");
+
+        let closed = read_letter(&closed).unwrap();
+        let nightly = read_letter(&nightly).unwrap();
+        for heading in CLOSE_SECTIONS {
+            assert!(closed.body.contains(&format!("## {heading}")), "{}", closed.body);
+            assert!(!nightly.body.contains(&format!("## {heading}")), "{}", nightly.body);
+        }
+        // Both are the same record, by the same rules: D3's frontmatter field
+        // list is unchanged and D11 still names both files the same way.
+        assert_eq!(closed.status, STATUS_UNREAD);
+        assert_eq!(nightly.status, STATUS_UNREAD);
+        assert!(closed.filename().ends_with(&format!("-{}.md", short_run_slug("run-close"))));
+        assert!(nightly.filename().ends_with(&format!("-{}.md", short_run_slug("run-night"))));
+        assert_eq!(list_letter_files(root).len(), 2, "one letter per run, no extra file");
     }
 }
