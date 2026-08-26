@@ -476,16 +476,154 @@ pub(crate) fn plan_reattribution(event: &Value) -> Option<Reattribution> {
 }
 
 pub(crate) fn run_reattribute(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !keys_known(&flags, &["dry-run"]) {
+    if !keys_known(&flags, &["dry-run", "id", "to"]) {
         return None;
     }
     let dry_run = bool_flag_present(&flags, "dry-run")?;
+    let id = flags.truthy_str("id").map(str::to_string);
+    let to = match flags.get("to") {
+        None => None,
+        Some(FlagV::S(s)) => Some(s.clone()),
+        Some(FlagV::Present) => return None,
+    };
     let ctx = match decisions_prelude("decisions reattribute", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
-    let out = do_reattribute(&ctx.root, dry_run, DECISIONS_LOCK_RETRY_ATTEMPTS);
+    let out = match (id, to) {
+        (None, None) => do_reattribute(&ctx.root, dry_run, DECISIONS_LOCK_RETRY_ATTEMPTS),
+        (Some(id), Some(to)) => {
+            do_reattribute_named(&ctx.root, &id, &to, DECISIONS_LOCK_RETRY_ATTEMPTS)
+        }
+        _ => Ok(Out::Thrown(
+            "decisions reattribute: --id and --to come together or not at all — the pair names one explicit correction; the bare verb runs the automatic text-claim pass."
+                .into(),
+        )),
+    };
     finish(&ctx, out)
+}
+
+/// decision-attribution D5's residual (filed P3): the correction a HUMAN
+/// names, for a record whose text makes no `<slug> D<n>` claim — the
+/// automatic pass correctly declines those, because it corrects
+/// contradictions and never invents an attribution. This door does not
+/// invent one either: it records the operator's explicit word, and it
+/// REFUSES to contradict a record whose own text claims a different
+/// feature — that territory belongs to the automatic pass.
+pub(crate) fn do_reattribute_named(
+    root: &Path,
+    id: &str,
+    to: &str,
+    lock_retries: u32,
+) -> R2<Out> {
+    let id = js_trim(id);
+    let to = js_trim(to);
+    if id.is_empty() {
+        return Ok(Out::Thrown("decisions reattribute: --id is empty.".into()));
+    }
+    if to.is_empty() {
+        return Ok(Out::Thrown(
+            "decisions reattribute: --to is empty — name the feature this decision is about."
+                .into(),
+        ));
+    }
+    let path = decisions_path(root);
+    let guard = acquire_decisions_lock(root, lock_retries).map_err(Err2::Msg)?;
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => {
+            drop(guard);
+            return Ok(Out::Thrown("decisions reattribute: no decisions store.".into()));
+        }
+    };
+
+    let mut out_lines: Vec<String> = Vec::new();
+    let mut result: Option<(String, String)> = None; // (from, to)
+    let mut found = false;
+    let mut refusal: Option<String> = None;
+    for line in raw.lines() {
+        // First match wins outright: a short --id prefix must never rewrite
+        // a second record further down.
+        if found || refusal.is_some() {
+            out_lines.push(line.to_string());
+            continue;
+        }
+        let parsed = serde_json::from_str::<Value>(line).ok();
+        let matches = parsed
+            .as_ref()
+            .and_then(|e| jget(e, "id"))
+            .and_then(Value::as_str)
+            .is_some_and(|eid| eid == id || eid.starts_with(id));
+        if !matches {
+            out_lines.push(line.to_string());
+            continue;
+        }
+        found = true;
+        let mut event = parsed.unwrap();
+        let stamped = jget(&event, "feature").and_then(Value::as_str).map(js_trim);
+        if stamped == Some(to) {
+            out_lines.push(line.to_string());
+            result = Some((to.to_string(), to.to_string()));
+            continue;
+        }
+        let text_claim = jget(&event, "decision")
+            .and_then(Value::as_str)
+            .and_then(feature_from_decision_text);
+        if let Some(claimed) = text_claim {
+            if claimed != to {
+                refusal = Some(format!(
+                    "decisions reattribute: {id} opens with \"{claimed} D<n>\" — its own text claims a feature, and this door never contradicts a record's text. The automatic pass (`bee decisions reattribute` with no flags) owns text-claimed corrections; pass --to \"{claimed}\" if that is what you meant."
+                ));
+                out_lines.push(line.to_string());
+                continue;
+            }
+        }
+        let from = stamped.unwrap_or("").to_string();
+        if let Some(obj) = event.as_object_mut() {
+            obj.insert("feature".into(), Value::String(to.to_string()));
+        }
+        out_lines.push(serde_json::to_string(&event).map_err(|_| Err2::Ex)?);
+        result = Some((from, to.to_string()));
+    }
+
+    if let Some(msg) = refusal {
+        drop(guard);
+        return Ok(Out::Thrown(msg));
+    }
+    if !found {
+        drop(guard);
+        return Ok(Out::Thrown(format!(
+            "decisions reattribute: no decision matches id \"{id}\"."
+        )));
+    }
+    let (from, to_val) = result.unwrap();
+    let changed = from != to_val;
+    if changed {
+        let tmp = path.with_extension("jsonl.reattribute.tmp");
+        let mut body = out_lines.join("\n");
+        body.push('\n');
+        let write = std::fs::write(&tmp, body).and_then(|()| std::fs::rename(&tmp, &path));
+        if write.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+            drop(guard);
+            return Err(Err2::Ex);
+        }
+    }
+    drop(guard);
+    let text = if changed {
+        let shown = if from.is_empty() { "(none)".to_string() } else { from.clone() };
+        format!("decisions reattribute: corrected 1 — {} : {shown} -> {to_val}", truncate_chars_head(id, 8))
+    } else {
+        format!(
+            "decisions reattribute: corrected 0 — {} already carries \"{to_val}\".",
+            truncate_chars_head(id, 8)
+        )
+    };
+    Ok(Out::Emit(
+        json!({"scanned": 1, "changed": if changed {1} else {0}, "id": id, "from": from, "to": to_val}),
+        text,
+        0,
+    ))
 }
 
 /// decision-attribution D5. The lock is held across the WHOLE pass — the read
