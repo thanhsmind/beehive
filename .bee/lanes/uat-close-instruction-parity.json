@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "uat-close-instruction-parity",
   "mode": "tiny",
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"uat-close-instruction-parity\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"uat-close-instruction-parity\" (lane).",
+  "next_action": "bee close finished \"uat-close-instruction-parity\" — feature is closed.",
   "created_at": "2026-08-26T05:23:14.597Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Tôi kiểm tra nhanh tất cả các bản sao (vendor trees):",
+    "asked_at": "2026-08-26T05:28:43.781Z",
+    "session": "fc596859-0d53-4166-8592-b9b4bc98fb52"
+  },
   "route": {
     "class": "docs",
     "lane": "docs",

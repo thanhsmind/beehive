@@ -3,7 +3,7 @@
   "title": "Seed role descriptions in default_config and add read-before-assign reminders",
   "lane": "standard",
   "role": "code",
-  "status": "claimed",
+  "status": "capped",
   "feature": "models-show-verb",
   "deps": [
     "ms-1"
@@ -33,16 +33,45 @@
   "read_first": [],
   "trace": {
     "worker": "ms-w3",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Fresh installs seed a described role table; both role doors send the author to bee models show",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "Also edited packages/bee-rs/crates/bee/src/verbs/cells/tests.rs (reserved first) — two tests pin the missing-role refusal string verbatim, so changing the refusal without them is a guaranteed red — something else had to be fixed first",
+      "Compared resolve_role answers instead of the whole normalized map — the {model} leaf is not byte-equal to the bare string it replaces, so map equality would fail on a shape change that resolution is blind to — the plan was wrong about a fact",
+      "sync-ack: The cell declares affects_skills [] on purpose: this changes the onboarding seed and two CLI strings (the missing-role refusal, cells add --help), and both now teach bee models show at the point of use. No bee-planning/swarming/reviewing/capturing text states the seed shape or quotes either string, so there is nothing there to keep in sync."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-26T05:29:41.078Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76",
-    "claimed_at": "2026-08-26T05:22:50.967Z"
+    "claimed_at": "2026-08-26T05:22:50.967Z",
+    "sync_ack": "The cell declares affects_skills [] on purpose: this changes the onboarding seed and two CLI strings (the missing-role refusal, cells add --help), and both now teach bee models show at the point of use. No bee-planning/swarming/reviewing/capturing text states the seed shape or quotes either string, so there is nothing there to keep in sync.",
+    "report": {
+      "outcome": "Fresh installs seed a described role table; both role doors send the author to bee models show",
+      "commit": "da8a5f02",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release -p bee onboard cells drivers + --test registry_contracts --test registry_dispatch --test front_door; bee dev regen — green — the seed, refusal, help-text and registry-payload paths this cell touched",
+      "deviations": [
+        "Also edited packages/bee-rs/crates/bee/src/verbs/cells/tests.rs (reserved first) — two tests pin the missing-role refusal string verbatim, so changing the refusal without them is a guaranteed red — something else had to be fixed first",
+        "Compared resolve_role answers instead of the whole normalized map — the {model} leaf is not byte-equal to the bare string it replaces, so map equality would fail on a shape change that resolution is blind to — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

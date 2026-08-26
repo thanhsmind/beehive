@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "capture-queue-signal",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"capture-queue-signal\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"capture-queue-signal\" (lane).",
+  "created_at": "2026-08-26T05:29:46.793Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Let me land my own work first, then deal with that.",
+    "asked_at": "2026-08-26T05:36:17.263Z",
+    "session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "The capture-queue blocker thresholds on every queued stub, so citation rows and promote pointers escalate a message that tells the reader to flush settlements. Measured 20 sweep + 8 promote + 6 settlements; the escape is that everyone learns to ignore it.",
+    "updated_at": "2026-08-26T05:29:46.804Z",
+    "feature": "capture-queue-signal"
+  }
+}
