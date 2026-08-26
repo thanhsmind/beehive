@@ -1,0 +1,49 @@
+{
+  "id": "ucip-1",
+  "title": "Make uat_stop close placement read merge-first across the instruction layer",
+  "lane": "tiny",
+  "role": "docs",
+  "feature": "uat-close-instruction-parity",
+  "deps": [],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [],
+  "action": "Instruction text still describes the old merge-time uat default. Locked decisions defaults-and-agent-env D1/D2 and uat-stop-placement D1-D5 made uat_stop close the default: merge lands first (publish-for-testing, no user question), user tests on main, stop sits at bee close; staging is opt-in. Update: (1) packages/bee/AGENTS.block.md worktree-first rule tail — replace the staging-is-the-test-ground sentence with the uat_stop placement summary; (2) skills/bee-swarming/SKILL.md Completion — branch on uat_stop: close = merge first without asking, keep worktree, hand user main, mark uat wait; merge = staging/worktree presentation plus fixed question Ready to merge; (3) skills/bee-hive/SKILL.md Gates paragraph — uat position follows uat_stop, default close; (4) skills/bee-hive/references/gates-and-delegation.md fourth-stop paragraph — close is the default, merge placement is the explicit opt-in. Then bee dev regen (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) inside this cell to sync AGENTS.md and mirrors.",
+  "must_haves": {
+    "truths": [
+      "No instruction file still calls merge-time uat or staging the default",
+      "Under uat_stop close the swarming ship step says merge first, without asking, worktree kept, user tests on main",
+      "The fixed question Ready to merge applies only under uat_stop merge",
+      "AGENTS.md regenerated from the block, mirrors in sync (bee dev regen green)"
+    ]
+  },
+  "verify": "bee dev regen green, then bee dev release-manifest --check clean; rg confirms no instruction file still says the uat door defaults to merge time",
+  "status": "claimed",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ucip-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc596859-0d53-4166-8592-b9b4bc98fb52",
+    "claimed_at": "2026-08-26T05:25:00.058Z"
+  }
+}

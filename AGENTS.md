@@ -53,9 +53,12 @@ Four boundaries hold in every mode:
   when no other session is live — land through `bee worktree merge`.
   That exemption list is the whole list: with another live session
   present, docs-lane and `tiny` take a worktree like any feature.
-  The user tests at staging (`bee staging add`), the disposable ground
-  between a feature worktree and main; the `uat` gate is the door
-  through to main.
+  The user's acceptance is the `uat` door; config `uat_stop` places it.
+  Default `"close"` (absent means this): the agent merges on green
+  without asking, keeps the worktree, and hands the user main to test —
+  `bee close` holds the stop. `"merge"`: the door blocks
+  `bee worktree merge` until approved. Staging (`bee staging add`) is
+  the opt-in test ground via `staging_before_merge: true`.
 <!-- /rule -->
 
 `bee --help --json` prints the porcelain flow surface; `--names` adds a

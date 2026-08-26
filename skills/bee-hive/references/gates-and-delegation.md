@@ -19,13 +19,14 @@ invoked (rule: agents-review-user-invoked).
 
 **A fourth stop, `uat`, sits later still** — not part of the chain above,
 so "the three gates" stays accurate for Gates 1-3. Config `uat_stop` names
-its POSITION: under `"merge"` (default) it sits at `bee worktree merge`,
-after execution is done — the user's acceptance of the finished work,
-required before merge for `standard`/`high-risk` features
-(`tiny`/`small`/`docs`/`spike` exempt), refused with
-`WORKTREE_MERGE_UAT_PENDING` until approved; under `"close"` the merge
-becomes a publish-for-testing step and the stop moves to `bee close`
-instead. No `gate_bypass` level auto-approves it at either position — not
+its POSITION: under `"close"` (the default — absent means this,
+defaults-and-agent-env D1) the merge is a publish-for-testing step — the
+agent merges on green without asking, the user tests on main, and the
+stop moves to `bee close`; under `"merge"` it sits at
+`bee worktree merge`, after execution is done — the user's acceptance of
+the finished work, required before merge for `standard`/`high-risk`
+features (`tiny`/`small`/`docs`/`spike` exempt), refused with
+`WORKTREE_MERGE_UAT_PENDING` until approved. No `gate_bypass` level auto-approves it at either position — not
 even `total` — because unlike Gates 1-2, `uat` has no `--actor auto` path
 at all: `bee gate --name uat --actor auto` is refused outright
 (uat-gate-before-merge D1). Its escape hatches are per-merge

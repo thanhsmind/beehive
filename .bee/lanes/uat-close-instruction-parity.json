@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "uat-close-instruction-parity",
+  "mode": "tiny",
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"uat-close-instruction-parity\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"uat-close-instruction-parity\" (lane).",
+  "created_at": "2026-08-26T05:23:14.597Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "docs",
+    "lane": "docs",
+    "flags": [],
+    "product_files": 5,
+    "rationale": "instruction-layer parity: uat_stop close placement must read merge-first in swarming ship steps, AGENTS block, hive gate text",
+    "updated_at": "2026-08-26T05:23:38.910Z",
+    "feature": "uat-close-instruction-parity"
+  }
+}

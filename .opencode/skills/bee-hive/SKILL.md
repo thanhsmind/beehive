@@ -59,9 +59,10 @@ Three gates, and only three: **Gate 1** (exploring — approve CONTEXT.md), **Ga
 (planning — shape AND execution in one `bee gate --merge` call), **Gate 3** (reviewing —
 merge approval, only inside a review session the user invoked). Gates 1-2 are the default
 chain; Gate 3 is additive and never automatic (rule: agents-review-user-invoked). A separate stop,
-`uat`, sits later still, at `bee worktree merge` — the user's acceptance of the
-finished work, required for standard/high-risk features, never auto-approved at any
-`gate_bypass` level ("The three gates", `gates-and-delegation.md`).
+`uat`, sits later still — the user's acceptance of the finished work, required for
+standard/high-risk features, never auto-approved at any `gate_bypass` level. Config
+`uat_stop` places it: default `"close"` merges first and stops at `bee close`;
+`"merge"` blocks `bee worktree merge` ("The three gates", `gates-and-delegation.md`).
 
 Gates belong to the user (AGENTS.md), in any mode — headless included: `bee gate`
 records their answer, presented as a plain-language layer plus the fixed
