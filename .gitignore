@@ -49,3 +49,4 @@ crates/target/
 # rust-port: vendored native binary is machine-local, never committed (decision 1f4262ca)
 .bee/bin/bee.exe
 .bee/bin/bee
+dist/

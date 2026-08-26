@@ -1,0 +1,157 @@
+<p>Agent của bạn đột nhiên gọi ra một "trợ lý" khác để làm việc thay nó. Trợ lý đó từ đâu ra, và ai quyết định nó chạy trên model nào?</p>
+
+<p>Câu trả lời: nó không có quyền tự quyết chuyện đó. Có đúng <strong>một cửa</strong> để gọi bất kỳ subagent nào, và cửa đó tên là <code>bee dispatch prepare</code>.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 260" role="img" aria-labelledby="fig-cua-dispatch-title">
+    <title id="fig-cua-dispatch-title">Agent chỉ đi qua một cửa để gọi subagent; tự chọn thẳng loại agent hay model bị chặn lại.</title>
+
+    <rect class="fig-box fig-fill-agent" x="20" y="80" width="150" height="70" rx="10"/>
+    <text class="fig-t" x="95" y="110" text-anchor="middle">Agent</text>
+    <text class="fig-t fig-t--sm" x="95" y="130" text-anchor="middle">muốn giao việc ra</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M170 115 L296 115"/>
+      <path d="M288 109 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--mono" x="233" y="100" text-anchor="middle">--kind cell|gather|reviewer|advisor</text>
+
+    <rect class="fig-box" x="300" y="80" width="230" height="70" rx="10"/>
+    <text class="fig-t" x="415" y="108" text-anchor="middle">bee dispatch prepare</text>
+    <text class="fig-t fig-t--sm" x="415" y="128" text-anchor="middle">chọn model, dựng prompt</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M530 115 L616 115"/>
+      <path d="M608 109 l8 6 -8 6"/>
+    </g>
+
+    <rect class="fig-box fig-fill-ok" x="620" y="80" width="180" height="70" rx="10"/>
+    <text class="fig-t" x="710" y="108" text-anchor="middle">phong bì</text>
+    <text class="fig-t fig-t--sm" x="710" y="128" text-anchor="middle">tool + payload + id</text>
+
+    <g class="fig-line fig-fill-stop" stroke-width="1.5" stroke-dasharray="5 4" fill="none">
+      <path d="M95 150 C 95 200, 330 210, 400 200"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="230" y="222" text-anchor="middle">agent không đi đường này — tự chọn subagent/model</text>
+
+    <rect class="fig-box fig-fill-stop" x="300" y="180" width="230" height="55" rx="8"/>
+    <text class="fig-t" x="415" y="202" text-anchor="middle">tự đặt subagent_type / model</text>
+    <text class="fig-t fig-t--sm" x="415" y="220" text-anchor="middle">model guard: sửa lại hoặc từ chối</text>
+
+    <text class="fig-t fig-t--sm" x="710" y="200" text-anchor="middle">agent gọi đúng payload này, không thêm gì</text>
+  </svg>
+  <p class="guide-fig__cap">Agent không bao giờ tự chọn <code>subagent_type</code>, <code>model</code>, hay tự viết dòng <code>[bee-tier: …]</code> — cả ba đều là thứ cửa này <em>trả về</em>, chưa từng là thứ agent tự gõ.</p>
+</figure>
+
+<h2>Bốn loại việc (kind)</h2>
+
+<p>Mỗi lần đi qua cửa, agent phải nói rõ nó đang xin loại việc gì bằng <code>--kind</code>:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>--kind</th><th>Dùng khi nào</th><th>Cờ bắt buộc thêm</th></tr></thead>
+  <tbody>
+    <tr><td><code>cell</code></td><td>Thực thi đúng một cell đã claim — loại việc duy nhất được phép ghi file.</td><td><code>--cell</code>, <code>--worker</code></td></tr>
+    <tr><td><code>gather</code></td><td>Đọc và báo cáo — tìm kiếm mở rộng trên nhiều file, không sửa gì.</td><td>không có</td></tr>
+    <tr><td><code>reviewer</code></td><td>Soát lại một claim, đọc-only; chưa cấu hình vai trò <code>review</code> thì rơi về <code>generation</code>.</td><td>không có</td></tr>
+    <tr><td><code>advisor</code></td><td>Xin ý kiến — một vai trò riêng, <strong>không</strong> rơi về vai trò khác nếu chưa cấu hình.</td><td>không có</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Với <code>--kind cell --claim</code>, cửa làm luôn ba việc trong một lượt: <code>claim</code> cell, <code>reserve</code> từng file trong <code>files</code> của cell (xem <a href="/guide/phoi-hop">chương 11</a>), rồi mới dựng phong bì. Bất kỳ bước nào xung đột, mọi thứ được tháo lại đúng thứ tự ngược — agent nhận về <code>[BLOCKED]</code>, không phải một cell claim dở dang.</p>
+
+<h2>Bốn agent được đúc sẵn</h2>
+
+<p>bee không tạo agent mới cho mỗi lần gọi. Nó chọn một trong bốn cái đã "đúc sẵn" từ trước — mỗi cái là một file cấu hình, một model cố định, một bộ công cụ cố định:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Agent</th><th>Công cụ</th><th>Việc của nó</th></tr></thead>
+  <tbody>
+    <tr><td><code>bee-gather</code></td><td>Read, Grep, Glob</td><td>Lùng nhiều file, đọc và báo cáo. Không bao giờ viết.</td></tr>
+    <tr><td><code>bee-extract</code></td><td>Read, Grep, Glob</td><td>Lấy đúng một sự kiện đã khoanh vùng sẵn — không tự mở rộng phạm vi tìm.</td></tr>
+    <tr><td><code>bee-build</code></td><td>Read, Edit, Write, Grep, Glob, Bash</td><td>Thực thi đúng một cell đã claim: reserve, viết, commit, cap. Cái <strong>duy nhất</strong> được viết file.</td></tr>
+    <tr><td><code>bee-review</code></td><td>Read, Grep, Glob, Bash</td><td>Kiểm tra một claim, đọc-only — được chạy test/lint/<code>git diff</code>, không bao giờ sửa.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Ba cái đầu không hề đăng ký reservation hay claim gì — máy đó chỉ dành cho <code>bee-build</code>, cái duy nhất viết file thật.</p>
+
+<h2>Bốn từ khoá kết thúc</h2>
+
+<p>Một subagent luôn đóng lại bằng đúng một trong bốn từ khoá — đó là toàn bộ "báo cáo" của nó, và orchestrator đọc từ đó mà quyết định bước kế:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ khoá</th><th>Nghĩa là</th></tr></thead>
+  <tbody>
+    <tr><td><code>[DONE]</code></td><td>Cell đã cap, một commit, mọi reservation đã thả. Từ này không phải bằng chứng — orchestrator còn goal-check lại.</td></tr>
+    <tr><td><code>[BLOCKED]</code></td><td>Không thể đi tiếp an toàn: xung đột claim/reservation/hold, va một quyết định đã khoá, cell mập mờ, đổi kiến trúc, hoặc đòi cài package.</td></tr>
+    <tr><td><code>[HANDOFF]</code></td><td>Hết ngữ cảnh giữa chừng — <code>.bee/HANDOFF.json</code> được ghi <em>trước</em> khi trả từ khoá này.</td></tr>
+    <tr><td><code>[NOOP]</code></td><td>Cell được giao đã biến mất, đã cap rồi, hoặc đụng vào không an toàn.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Chỗ dễ nhầm</span>
+  <p>Một subagent không có "trí nhớ phiên" nào cả — nó chỉ thấy đúng những gì nằm trong prompt được cửa này dựng ra. Một cell mà chỉ đọc mỗi prompt đó thôi là không đủ để làm, thì trả về <code>[BLOCKED]</code> ngay là đúng — không phải đoán bừa rồi làm liều.</p>
+</div>
+
+<h2>Herding — buồng lái không người trông</h2>
+
+<p>Có một chế độ khác hẳn: chạy bee mà không cần ai ngồi canh màn hình. Đó là <strong>herding</strong>.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 250" role="img" aria-labelledby="fig-herding-title">
+    <title id="fig-herding-title">Người tự tay bật một cái công tắc; từ đó vòng lặp lạnh cứ 60 giây lại tự chọn việc và tự tạo agent, không ai nói chuyện với nó nữa.</title>
+
+    <rect class="fig-box fig-fill-gate" x="20" y="90" width="150" height="65" rx="10"/>
+    <text class="fig-t" x="95" y="118" text-anchor="middle">Người</text>
+    <text class="fig-t fig-t--sm" x="95" y="136" text-anchor="middle">touch .enable</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M170 122 L286 122"/>
+      <path d="M278 116 l8 6 -8 6"/>
+    </g>
+
+    <rect class="fig-box fig-fill-agent" x="290" y="90" width="240" height="65" rx="10"/>
+    <text class="fig-t" x="410" y="112" text-anchor="middle">control-loop (dispatch)</text>
+    <text class="fig-t fig-t--sm" x="410" y="132" text-anchor="middle">thức dậy mỗi 60 giây, không nhớ gì lượt trước</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M530 122 L646 122"/>
+      <path d="M638 116 l8 6 -8 6"/>
+    </g>
+
+    <rect class="fig-box fig-fill-ok" x="650" y="90" width="150" height="65" rx="10"/>
+    <text class="fig-t" x="725" y="112" text-anchor="middle">worktree mới</text>
+    <text class="fig-t fig-t--sm" x="725" y="132" text-anchor="middle">+ agent riêng</text>
+
+    <rect class="fig-box fig-fill-stop" x="290" y="180" width="240" height="55" rx="8"/>
+    <text class="fig-t" x="410" y="202" text-anchor="middle">merge — cử chỉ tay, một lần</text>
+    <text class="fig-t fig-t--sm" x="410" y="220" text-anchor="middle">không tự chạy, không tự vượt cổng UAT</text>
+  </svg>
+  <p class="guide-fig__cap">Vòng lặp <code>dispatch</code> chỉ được phép <em>bắt đầu</em> việc; đưa việc về nhánh chính luôn là <code>merge</code> — một cử chỉ người tự tay chạy, không bao giờ tự động.</p>
+</figure>
+
+<p>Hai điều kiện phải cùng đúng trước khi vòng lặp này chạm vào bất cứ thứ gì:</p>
+
+<ul>
+  <li><strong><code>gate_bypass_level</code> phải là <code>full</code> hoặc <code>total</code></strong> — mức thấp hơn, vòng lặp tự từ chối mỗi lượt, không dựng gì cả.</li>
+  <li><strong>Người phải tự tay tạo "enable marker"</strong> (<code>touch .bee/tmp/bee-herding.enable</code>) — cấu hình cho phép chạy không tự động nghĩa là đang chạy; marker mới là "lượt này thật sự chạy".</li>
+</ul>
+
+<div class="guide-note guide-note--stop">
+  <span class="guide-note__title">Nói thẳng</span>
+  <p>Đây là chế độ duy nhất mà <strong>không ai đang xem</strong>. Nó chỉ mở khi bạn tự đặt mình vào tình huống tin tưởng cao nhất, và cổng nghiệm thu (UAT) vẫn không bao giờ bị bỏ qua kể cả ở đây.</p>
+</div>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/phoi-hop">Chương 11 — Nhiều phiên cùng lúc</a>: reservation là cái khiến hai worker không giẫm chân nhau khi cùng viết.</li>
+  <li><a href="/guide/cell-lane">Chương 9 — Cell &amp; Lane</a>: cell là đơn vị việc mà mọi dispatch xoay quanh.</li>
+  <li><a href="/guide/bo-nho">Chương 12 — Bee nhớ những gì</a>: cái gì một worker ghi lại sống được qua khỏi phiên của nó.</li>
+</ul>

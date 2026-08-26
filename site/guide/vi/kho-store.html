@@ -1,0 +1,138 @@
+<p>Bee "nhớ" mọi thứ ở một chỗ duy nhất trên đĩa: thư mục <code>.bee/</code> nằm ngay trong repo. Không có máy chủ, không có tài khoản, không có gì bí ẩn — chỉ là các file JSON và JSONL nằm cạnh code của bạn.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 260" role="img" aria-labelledby="fig-kho-title">
+    <title id="fig-kho-title">Hộp .bee/ chứa state, cells, claims, quyết định, reservation, lane, log. Chỉ CLI được viết vào; mọi thứ khác chỉ đọc ra.</title>
+
+    <rect class="fig-box" x="230" y="30" width="360" height="170" rx="10"/>
+    <text class="fig-t" x="410" y="52" text-anchor="middle">.bee/</text>
+
+    <rect class="fig-box fig-box--on" x="250" y="66" width="150" height="34" rx="6"/>
+    <text class="fig-t fig-t--sm" x="325" y="87" text-anchor="middle">state.json</text>
+
+    <rect class="fig-box fig-box--on" x="410" y="66" width="150" height="34" rx="6"/>
+    <text class="fig-t fig-t--sm" x="485" y="87" text-anchor="middle">cells/, claims/</text>
+
+    <rect class="fig-box" x="250" y="108" width="150" height="34" rx="6"/>
+    <text class="fig-t fig-t--sm" x="325" y="129" text-anchor="middle">decisions.jsonl</text>
+
+    <rect class="fig-box" x="410" y="108" width="150" height="34" rx="6"/>
+    <text class="fig-t fig-t--sm" x="485" y="129" text-anchor="middle">reservations.json</text>
+
+    <rect class="fig-box" x="250" y="150" width="150" height="34" rx="6"/>
+    <text class="fig-t fig-t--sm" x="325" y="171" text-anchor="middle">lanes/, sessions/</text>
+
+    <rect class="fig-box" x="410" y="150" width="150" height="34" rx="6"/>
+    <text class="fig-t fig-t--sm" x="485" y="171" text-anchor="middle">logs/, tmp/</text>
+
+    <rect class="fig-box fig-fill-agent" x="20" y="98" width="140" height="60" rx="8"/>
+    <text class="fig-t" x="90" y="122" text-anchor="middle">bee CLI</text>
+    <text class="fig-t fig-t--sm" x="90" y="140" text-anchor="middle">người viết duy nhất</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M160 122 L226 100"/>
+      <path d="M216 96 l10 -1 -3 10"/>
+    </g>
+    <text class="fig-t fig-t--sm fig-t--mono" x="196" y="90" text-anchor="middle">viết vào</text>
+
+    <rect class="fig-box" x="660" y="98" width="140" height="60" rx="8"/>
+    <text class="fig-t" x="730" y="122" text-anchor="middle">mọi thứ khác</text>
+    <text class="fig-t fig-t--sm" x="730" y="140" text-anchor="middle">hook, hiển thị, bạn</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M594 100 L656 122"/>
+      <path d="M645 118 l11 4 -4 11"/>
+    </g>
+    <text class="fig-t fig-t--sm fig-t--mono" x="626" y="90" text-anchor="middle">chỉ đọc ra</text>
+
+    <text class="fig-t fig-t--sm" x="410" y="222" text-anchor="middle">Một mũi tên đi vào (CLI ghi), một mũi tên đi ra (mọi bên đọc). Không có mũi tên nào khác.</text>
+  </svg>
+  <p class="guide-fig__cap"><code>.bee/</code> là bộ nhớ dùng chung của mọi phiên agent. Chỉ một cửa để ghi, và cửa đó là <code>bee</code>.</p>
+</figure>
+
+<h2>Vì sao không được sửa tay</h2>
+
+<p>Bạn có thể mở <code>.bee/state.json</code> bằng trình soạn thảo và gõ tay một giá trị. Đừng làm vậy. Bee cấm việc đó bằng một hàng rào (<em>direct-edit guard</em>) chặn ngay trước khi cú ghi xảy ra:</p>
+
+<pre class="guide-code">bee direct-edit guard: "state.json" is CLI-owned — direct edits are
+blocked in every phase. FIX: use &lt;lệnh tương ứng&gt; instead of editing
+this file directly.</pre>
+
+<p>Lý do không phải là bee khó tính. Mỗi verb của CLI (<code>bee state set</code>, <code>bee cells claim-next</code>…) đã <em>kiểm tra hình dạng</em> của dữ liệu trước khi ghi — đúng field, đúng kiểu, đúng phase hợp lệ. Một cú sửa tay bỏ qua hết những kiểm tra đó. Kết quả gọi là <strong>schema drift</strong>: file trông vẫn là JSON hợp lệ, nhưng mang một hình dạng mà không lệnh nào từng tạo ra — và lần đọc tiếp theo có thể đọc sai, hoặc một verb khác từ chối chạy vì gặp một giá trị nó không biết xử lý thế nào.</p>
+
+<p>Những file "CLI-owned" theo cách đó gồm: các file trạng thái nòng cốt — <code>cells/</code>, <code>lanes/&lt;feature&gt;.json</code>, <code>state.json</code>, backlog, holds, grants, hồ sơ companion, <code>onboarding.json</code>. Có một góc <strong>không</strong> CLI-owned, cố ý để tay người: <code>config.json</code> và <code>config.local.json</code> — chỗ duy nhất trong <code>.bee/</code> mà bạn được phép sửa trực tiếp. Xem <a href="/guide/config">chương 13</a>.</p>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Chỗ này rất dễ hiểu nhầm</span>
+  <p>"CLI là người viết duy nhất" không có nghĩa "mọi file trong <code>.bee/</code> là bí mật". Đọc thì luôn được phép, ở bất cứ đâu, bất cứ lúc nào — kể cả đọc bằng tay để tò mò. Điều bị cấm chỉ là <em>ghi</em> tay.</p>
+</div>
+
+<h2>Khoá, và vì sao viết không bao giờ bị nửa chừng</h2>
+
+<p>Nhiều phiên agent có thể cùng lúc muốn đổi trạng thái. Bee giải quyết bằng khoá theo tên vùng dữ liệu — <code>state</code>, <code>sessions</code>, <code>decisions</code>, một khoá riêng cho mỗi cell, một khoá riêng cho mỗi lane — nằm dưới <code>.bee/locks/</code>.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Ai giữ khoá bao lâu</th><th>Con số</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Một verb CLI đang ghi (ví dụ <code>bee state set</code>)</td><td>thử lại tối đa 15 lần, cách nhau 20&nbsp;ms</td></tr>
+    <tr><td>Khoá kho chung (store lock)</td><td>thử lại tối đa 100 lần, cách nhau 50&nbsp;ms — khoảng 5 giây</td></tr>
+    <tr><td>Một hook đang canh (không phải verb)</td><td>thử đúng một lần; bận thì bỏ qua nhịp đó, không chờ</td></tr>
+    <tr><td>Khoá bị bỏ quên (tiến trình giữ nó đã chết)</td><td>bị lấy lại sau 30 giây nếu chắc chắn pid đã chết, hoặc vô điều kiện sau 1 giờ</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Hết thời gian thử mà vẫn bận, verb không treo máy — nó trả lời một câu từ chối có tên, kiểu <code>the sessions store is locked by another writer and nothing was written. FIX: run it again.</code> Bạn chạy lại là xong.</p>
+
+<p>Khi đã giữ được khoá, cách ghi chia làm hai kiểu, tuỳ loại file:</p>
+
+<ul>
+  <li><strong>Ghi đè nguyên file, nguyên tử (atomic whole-file rewrite)</strong> — dùng cho các file trạng thái như <code>state.json</code>, cells, lanes, sessions: nội dung mới được viết ra một file tạm bên cạnh, rồi <em>đổi tên</em> đè lên file cũ. Người đọc không bao giờ thấy một file ghi dở — chỉ thấy bản cũ nguyên vẹn hoặc bản mới nguyên vẹn, không có trạng thái lửng lơ ở giữa.</li>
+  <li><strong>Chỉ nối thêm dòng (append-only JSONL)</strong> — dùng cho các log sự kiện như <code>decisions.jsonl</code>, hàng đợi capture, backlog: mỗi sự kiện là một dòng JSON được nối thêm vào cuối file. Nhiều dòng nối chồng lên nhau vẫn an toàn, vì mỗi lần nối là một thao tác riêng biệt.</li>
+</ul>
+
+<h2>Đọc luôn thành công, kể cả khi file hỏng</h2>
+
+<p>Nếu một file trạng thái bị hỏng — ai đó lỡ tay xoá nửa dòng, đĩa ghi lỗi — việc <em>đọc</em> nó vẫn không bao giờ làm sập chương trình. Bee cảnh báo ra stderr và đọc như thể file rỗng, dùng giá trị mặc định:</p>
+
+<pre class="guide-code">bee: could not parse JSON at .bee/state.json — invalid JSON at line 4
+column 2. Using fallback; fix the file.</pre>
+
+<p>Một dòng hỏng trong file JSONL cũng chỉ làm mất đúng dòng đó, phần còn lại vẫn đọc bình thường. Nguyên tắc là: <strong>kho có thể bị ghi sai, nhưng không bao giờ đọc sai kiểu sập chương trình</strong> — cái giá phải trả là dữ liệu hỏng biến mất khỏi kết quả đọc cho đến khi ai đó sửa file.</p>
+
+<h2>Hồ sơ một phiên còn sống hay đã chết</h2>
+
+<p>Mỗi phiên agent có một hồ sơ riêng dưới <code>.bee/sessions/&lt;id&gt;.json</code>. Bốn nấc, đều tính tại thời điểm đọc chứ không lưu sẵn:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Nấc</th><th>Điều kiện</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>live</strong></td><td>nhịp tim (heartbeat) gần nhất trong vòng 90 giây</td></tr>
+    <tr><td><strong>no_signal</strong></td><td>quá 90 giây không có nhịp tim</td></tr>
+    <tr><td><strong>stale</strong></td><td>quá 900 giây không có nhịp tim — phiên khác coi như phiên này đã nghỉ, các <code>claim</code> của nó có thể bị dọn</td></tr>
+    <tr><td><strong>released</strong></td><td><code>bee state session release</code> đóng hồ sơ ngay lập tức, không cần chờ 900 giây</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Nhịp tim này chính là thứ <a href="/guide/phien-session">chương 5</a> gọi là heartbeat — mỗi lần agent dùng một công cụ, nhịp được đóng dấu (tối đa một lần mỗi 60 giây), đồng thời gia hạn luôn các <code>claim</code>, reservation và hold của phiên đó.</p>
+
+<div class="guide-note guide-note--stop">
+  <span class="guide-note__title">Bị chặn thì làm gì</span>
+  <p>Gặp một lỗi kiểu <code>direct-edit guard</code> hay <code>lock busy</code>, đừng tìm cách lách — không sửa file khác để né, không thử lại bằng cách khác. Làm đúng cái <code>FIX:</code> câu lỗi đã nói. Xem toàn bộ danh mục hàng rào ở <a href="/guide/hooks-guards">chương 6</a>.</p>
+</div>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/hooks-guards">Chương 6 — Hooks, người gác cổng</a>: hàng rào nào thật sự chặn được một cú ghi sai vào <code>.bee/</code>.</li>
+  <li><a href="/guide/phien-session">Chương 5 — Phiên làm việc</a>: nhịp tim, waiting-on, handoff — vòng đời một hồ sơ session.</li>
+  <li><a href="/guide/phoi-hop">Chương 11 — Nhiều phiên cùng lúc</a>: claim, reservation, hold dùng chung đúng kho này để không giẫm chân nhau.</li>
+  <li><a href="/guide/config">Chương 13 — Cấu hình chi tiết</a>: <code>config.json</code>, góc duy nhất của <code>.bee/</code> mà tay người được sửa.</li>
+</ul>
+</content>

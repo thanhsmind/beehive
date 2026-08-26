@@ -1,0 +1,148 @@
+<p>Hãy quên hết những gì bạn đoán về bee trong ba mươi giây. Bắt đầu bằng một câu hỏi rất nhỏ:</p>
+
+<p><strong>Ai là người gõ lệnh <code>bee</code>?</strong></p>
+
+<p>Câu trả lời làm hầu hết mọi người bất ngờ: <em>không phải bạn</em>.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 250" role="img" aria-labelledby="fig-ai-dung-title">
+    <title id="fig-ai-dung-title">Bạn nói chuyện với agent; agent gõ lệnh bee. Bạn không bao giờ gõ lệnh bee.</title>
+
+    <rect class="fig-box fig-fill-ok" x="30" y="90" width="150" height="70" rx="10"/>
+    <text class="fig-t" x="105" y="120" text-anchor="middle">Bạn</text>
+    <text class="fig-t fig-t--sm" x="105" y="140" text-anchor="middle">nói bằng tiếng người</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M180 125 L296 125"/>
+      <path d="M288 119 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="238" y="112" text-anchor="middle">"làm cái này giúp tôi"</text>
+
+    <rect class="fig-box fig-fill-agent" x="300" y="90" width="170" height="70" rx="10"/>
+    <text class="fig-t" x="385" y="120" text-anchor="middle">Agent (Claude…)</text>
+    <text class="fig-t fig-t--sm" x="385" y="140" text-anchor="middle">phiên chat đang chạy</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M470 125 L586 125"/>
+      <path d="M578 119 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--mono" x="528" y="112" text-anchor="middle">bee …</text>
+
+    <rect class="fig-box" x="590" y="90" width="200" height="70" rx="10"/>
+    <text class="fig-t" x="690" y="120" text-anchor="middle">bee</text>
+    <text class="fig-t fig-t--sm" x="690" y="140" text-anchor="middle">luật lệ + trí nhớ + hàng rào</text>
+
+    <g class="fig-line fig-fill-stop" stroke-width="1.5" stroke-dasharray="5 4" fill="none">
+      <path d="M105 90 C 105 30, 690 30, 690 90"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="397" y="34" text-anchor="middle">bạn không đi đường này — không bao giờ gõ lệnh bee</text>
+
+    <text class="fig-t fig-t--sm" x="105" y="200" text-anchor="middle">bạn duyệt / bạn từ chối</text>
+    <text class="fig-t fig-t--sm" x="385" y="200" text-anchor="middle">nó đọc, nó viết, nó chứng minh</text>
+    <text class="fig-t fig-t--sm" x="690" y="200" text-anchor="middle">nó cho phép hoặc chặn</text>
+  </svg>
+  <p class="guide-fig__cap">Bee là một sản phẩm mà <strong>khách hàng của nó là một con agent</strong>. Bạn là người ký duyệt, không phải người vận hành.</p>
+</figure>
+
+<h2>Vậy bee là cái gì?</h2>
+
+<p>Nói cho ngắn: bee là <strong>một cái máy trạng thái rất lớn</strong> mà con agent đi trong đó.</p>
+
+<p>Agent muốn làm gì cũng phải đi qua một trong hai cửa:</p>
+
+<ul>
+  <li><strong>Chạy một lệnh</strong> — <code>bee orient</code>, <code>bee cells claim-next</code>, <code>bee close</code>… Mỗi lệnh đọc trạng thái hiện tại, rồi đẩy nó sang trạng thái mới.</li>
+  <li><strong>Làm một hành động bị canh</strong> — ghi một file, gọi một subagent. Không phải lệnh bee, nhưng có một cái <em>hook</em> đứng chặn giữa: nó cho qua, nó sửa lại, hoặc nó từ chối.</li>
+</ul>
+
+<p>Ngoài hai cửa đó, agent không có cách nào tự ý đổi trạng thái. Đó là toàn bộ ý tưởng.</p>
+
+<h2>Nó giải quyết vấn đề gì?</h2>
+
+<p>Hãy tưởng tượng bạn thuê một người rất giỏi nhưng bị mất trí nhớ mỗi tối. Ngày mai họ đi làm lại, không nhớ hôm qua đã quyết gì, đã hứa gì, đã sửa gì.</p>
+
+<p>Đó chính xác là một phiên agent. Và đó là ba vấn đề bee nhắm vào:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Vấn đề</th><th>Nếu không có bee</th><th>Bee làm gì</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Mất trí nhớ</strong></td>
+      <td>Phiên mới không biết hôm qua đã chốt gì. Bạn phải kể lại từ đầu, mỗi lần.</td>
+      <td>Mọi quyết định, mọi mẩu việc, mọi bài học đều nằm trên đĩa trong <a href="/guide/kho-store">kho <code>.bee/</code></a>. Phiên mới đọc kho là biết.</td>
+    </tr>
+    <tr>
+      <td><strong>Tin lời</strong></td>
+      <td>Agent nói "đã fix xong, test xanh". Bạn tin. Đôi khi nó chưa chạy test lần nào.</td>
+      <td>Muốn đóng một mẩu việc phải dán được <a href="/guide/cell-lane">dòng bằng chứng</a>: lệnh gì, kết quả gì, vì sao phạm vi đó là đủ.</td>
+    </tr>
+    <tr>
+      <td><strong>Đi quá đà</strong></td>
+      <td>Bạn nhờ sửa một chỗ, quay lại thấy nó đã refactor 40 file và đẩy lên nhánh chính.</td>
+      <td><a href="/guide/cong-gate">Cổng</a> chặn ở đúng những khúc không quay lui được; <a href="/guide/hooks-guards">hook</a> chặn ghi file khi cổng chưa mở.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Ba tầng, và tầng nào có răng</h2>
+
+<p>Nghe "bee" người ta hay tưởng là một thứ. Thật ra là ba tầng chồng lên nhau, và chỉ hai tầng dưới mới thật sự cưỡng chế được.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 260" role="img" aria-labelledby="fig-ba-tang-title">
+    <title id="fig-ba-tang-title">Ba tầng: chỉ dẫn, kỹ năng, và cưỡng chế. Hai tầng dưới có răng, tầng trên chỉ là lời khuyên.</title>
+
+    <rect class="fig-box" x="130" y="20" width="560" height="58" rx="8"/>
+    <text class="fig-t" x="410" y="44" text-anchor="middle">AGENTS.md — luật luôn nằm trong đầu agent</text>
+    <text class="fig-t fig-t--sm" x="410" y="64" text-anchor="middle">là lời dặn. Agent có thể quên, có thể hiểu sai.</text>
+    <text class="fig-t fig-t--sm fig-t--mono" x="710" y="53">không răng</text>
+
+    <rect class="fig-box" x="130" y="98" width="560" height="58" rx="8"/>
+    <text class="fig-t" x="410" y="122" text-anchor="middle">12 skill — quy trình nạp khi cần</text>
+    <text class="fig-t fig-t--sm" x="410" y="142" text-anchor="middle">bee-hive, bee-planning, bee-swarming… vẫn là chỉ dẫn.</text>
+    <text class="fig-t fig-t--sm fig-t--mono" x="710" y="131">không răng</text>
+
+    <rect class="fig-box fig-fill-stop" x="130" y="176" width="560" height="58" rx="8"/>
+    <text class="fig-t" x="410" y="200" text-anchor="middle">CLI + hooks — cái thật sự chặn</text>
+    <text class="fig-t fig-t--sm" x="410" y="220" text-anchor="middle">từ chối lệnh, chặn ghi file, viết lại tham số sai.</text>
+    <text class="fig-t fig-t--sm fig-t--mono" x="710" y="209">CÓ RĂNG</text>
+  </svg>
+  <p class="guide-fig__cap">Khi tài liệu bee nói "agent phải…", câu đó nằm ở tầng nào quyết định điều gì xảy ra nếu agent không làm.</p>
+</figure>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Chỗ này rất dễ hiểu nhầm</span>
+  <p>Nhiều luật trong tài liệu bee <strong>không có gì cưỡng chế cả</strong> — chúng là lời dặn, và agent có thể lờ đi. Ngược lại, vài thứ nghe như lời khuyên lại được hook chặn thật. <a href="/guide/hooks-guards">Chương 6</a> chỉ rõ ranh giới đó, vì biết cái nào là cái nào sẽ tiết kiệm cho bạn nhiều giờ bối rối.</p>
+</div>
+
+<h2>Bee <em>không</em> phải là gì</h2>
+
+<ul>
+  <li><strong>Không phải một con AI khác.</strong> Bee không sinh ra code. Nó chỉ quyết định con agent được phép làm gì, khi nào, và phải để lại bằng chứng gì.</li>
+  <li><strong>Không phải công cụ quản lý dự án.</strong> Backlog và cell của nó tồn tại để agent có việc rõ ràng mà làm, không phải để bạn theo dõi tiến độ đội ngũ.</li>
+  <li><strong>Không phải cái thay bạn quyết định.</strong> Nó cố tình dừng lại ở đúng những chỗ mà một quyết định sai sẽ khó gỡ.</li>
+</ul>
+
+<h2>Vai trò của bạn, gói trong ba việc</h2>
+
+<ol>
+  <li><strong>Mở cổng.</strong> Ba lần trong một feature: chốt yêu cầu, duyệt kế hoạch, nghiệm thu. <a href="/guide/cong-gate">Chương 3.</a></li>
+  <li><strong>Trả lời câu hỏi.</strong> Khi agent gặp chỗ mập mờ mà đoán bừa sẽ hỏng, nó dừng và hỏi. Câu trả lời của bạn được <a href="/guide/bo-nho">ghi lại thành quyết định</a> — hỏi một lần, dùng mãi.</li>
+  <li><strong>Nghiệm thu.</strong> Bạn thử sản phẩm thật. Đây là cái cổng duy nhất <em>không thể</em> tự động bỏ qua, kể cả khi bạn bật chế độ tin tưởng cao nhất.</li>
+</ol>
+
+<div class="guide-note guide-note--ok">
+  <span class="guide-note__title">Nắm được chương này nghĩa là</span>
+  <p>Bạn hiểu vì sao mình không gõ lệnh bee bao giờ, vì sao bee bắt agent chứng minh thay vì tin lời, và vì sao có luật thì chặn được còn có luật thì không. Ba điều đó là nền cho toàn bộ 13 chương còn lại.</p>
+</div>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/tu-vung">Chương 2 — Từ vựng</a>: khoảng 60 chữ bạn sẽ gặp đi gặp lại. Đọc lướt một lượt rồi quay lại tra khi cần.</li>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: ba việc của bạn, nói cho thật kỹ.</li>
+  <li><a href="/guide/dung-hieu-qua">Chương 14 — Dùng cho hiệu quả</a>: nếu bạn chỉ muốn dùng ngay và học dần.</li>
+</ul>

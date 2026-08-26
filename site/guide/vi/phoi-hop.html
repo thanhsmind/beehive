@@ -1,0 +1,125 @@
+<p>Hai session đang chạy song song. Cả hai đều muốn sửa cùng một file. Ai thắng, và người thua biết chuyện đó bằng cách nào?</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 260" role="img" aria-labelledby="fig-hai-session-title">
+    <title id="fig-hai-session-title">Hai session cùng muốn viết một file; reservation quyết định ai được, ai bị từ chối kèm tên người đang giữ.</title>
+
+    <rect class="fig-box fig-fill-agent" x="20" y="30" width="160" height="65" rx="10"/>
+    <text class="fig-t" x="100" y="58" text-anchor="middle">Session A</text>
+    <text class="fig-t fig-t--sm" x="100" y="76" text-anchor="middle">reserve trước</text>
+
+    <rect class="fig-box fig-fill-agent" x="20" y="165" width="160" height="65" rx="10"/>
+    <text class="fig-t" x="100" y="193" text-anchor="middle">Session B</text>
+    <text class="fig-t fig-t--sm" x="100" y="211" text-anchor="middle">reserve sau</text>
+
+    <rect class="fig-box" x="330" y="98" width="200" height="65" rx="10"/>
+    <text class="fig-t fig-t--mono" x="430" y="126" text-anchor="middle">src/auth/token.rs</text>
+    <text class="fig-t fig-t--sm" x="430" y="146" text-anchor="middle">một lease file trên đĩa</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M180 62 C 250 62, 280 105, 328 118"/>
+      <path d="M320 111 l8 7 -10 4"/>
+    </g>
+    <g class="fig-line fig-fill-stop" stroke-width="1.5" stroke-dasharray="5 4" fill="none">
+      <path d="M180 197 C 250 197, 280 150, 328 138"/>
+      <path d="M320 145 l8 -7 2 10"/>
+    </g>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M530 118 L646 90"/>
+      <path d="M638 88 l9 3 -4 9"/>
+    </g>
+    <rect class="fig-box fig-fill-ok" x="650" y="55" width="150" height="60" rx="8"/>
+    <text class="fig-t fig-t--sm" x="725" y="80" text-anchor="middle">Reserved cho A</text>
+    <text class="fig-t fig-t--sm" x="725" y="98" text-anchor="middle">ttl 3600s</text>
+
+    <g class="fig-line fig-fill-stop" stroke-width="1.5" fill="none">
+      <path d="M530 138 L646 175"/>
+      <path d="M638 168 l9 -3 -4 -9"/>
+    </g>
+    <rect class="fig-box fig-fill-stop" x="650" y="170" width="150" height="60" rx="8"/>
+    <text class="fig-t fig-t--sm" x="725" y="195" text-anchor="middle">CONFLICT</text>
+    <text class="fig-t fig-t--sm" x="725" y="213" text-anchor="middle">"A holds it" — [BLOCKED]</text>
+  </svg>
+  <p class="guide-fig__cap">Reservation không phải là hàng đợi — nó là một câu trả lời nhị phân, tức thì, kèm tên người đang giữ.</p>
+</figure>
+
+<h2>Ba lớp giữ chỗ</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Lớp</th><th>Giữ cái gì</th><th>Sống ở đâu</th><th>TTL</th></tr></thead>
+  <tbody>
+    <tr><td><strong>claim</strong></td><td>Một cell, cho một worker.</td><td><code>.bee/cells/*.json</code></td><td>3600 giây</td></tr>
+    <tr><td><strong>reservation</strong></td><td>Một đường dẫn file, cho một agent trong phạm vi một cell.</td><td><code>.bee/runtime/leases/paths/</code></td><td>3600 giây, tự gia hạn khi session còn "thở"</td></tr>
+    <tr><td><strong>hold</strong></td><td>Bản sao của một reservation, để checkout khác nhìn thấy.</td><td>sổ chung của main, <code>cross-worktree-holds.json</code></td><td>theo reservation gốc</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><code>bee cells claim --cell auth-3</code> giữ cell. Trong khi thực thi, worker giữ luôn từng file nó sắp sửa:</p>
+
+<pre class="guide-code">bee reservations reserve --agent mel --cell auth-3 --path src/auth/token.rs
+<span class="c"># Reserved "src/auth/token.rs" for mel (cell auth-3, ttl 3600s).</span></pre>
+
+<p>Trong thực tế bước này thường đã xảy ra sẵn: <code>bee cells claim</code>, <code>claim-next</code>, và <code>bee dispatch prepare --claim</code> (xem <a href="/guide/giao-viec">chương 10</a>) đều tự động reserve hết mọi file cell đã khai trong <code>files</code>. Bạn chỉ cần tự tay reserve thêm những đường dẫn cell <em>không</em> khai.</p>
+
+<h2>Xung đột: dừng và báo cáo, không chờ, không viết đè</h2>
+
+<p>Khi một reservation bị từ chối, câu trả lời nêu thẳng tên người đang giữ:</p>
+
+<pre class="guide-code">Reservation CONFLICT — return [BLOCKED] to the orchestrator:
+<span class="c">- ana holds "src/auth/token.rs" (cell auth-2)</span></pre>
+
+<p>Đúng một phản xạ cho việc này: worker trả về <code>[BLOCKED]</code>, không tự ý chờ, không viết đè. Orchestrator đọc dòng đó rồi điều việc khác cho worker — xung đột file là dữ liệu để chia việc, không phải câu hỏi phải hỏi người dùng.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 220" role="img" aria-labelledby="fig-hold-title">
+    <title id="fig-hold-title">Một worktree được cấp quyền reserve một file cục bộ; bee tự sao một bản "hold" sang sổ chung của main để checkout khác nhìn thấy.</title>
+
+    <rect class="fig-box fig-fill-agent" x="20" y="80" width="220" height="65" rx="10"/>
+    <text class="fig-t" x="130" y="108" text-anchor="middle">worktree "auth-feature"</text>
+    <text class="fig-t fig-t--sm" x="130" y="126" text-anchor="middle">reserve cục bộ</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M240 112 L356 112"/>
+      <path d="M348 106 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="298" y="98" text-anchor="middle">mirror</text>
+
+    <rect class="fig-box fig-fill-ok" x="360" y="80" width="220" height="65" rx="10"/>
+    <text class="fig-t" x="470" y="108" text-anchor="middle">sổ chung ở main</text>
+    <text class="fig-t fig-t--sm" x="470" y="126" text-anchor="middle">cross-worktree-holds.json</text>
+
+    <g class="fig-line fig-fill-stop" stroke-width="1.5" stroke-dasharray="5 4" fill="none">
+      <path d="M580 112 L696 112"/>
+      <path d="M688 106 l8 6 -8 6"/>
+    </g>
+
+    <rect class="fig-box fig-fill-stop" x="600" y="150" width="200" height="55" rx="8"/>
+    <text class="fig-t fig-t--sm" x="700" y="172" text-anchor="middle">checkout khác</text>
+    <text class="fig-t fig-t--sm" x="700" y="190" text-anchor="middle">thấy hold, bị chặn cứng</text>
+  </svg>
+  <p class="guide-fig__cap">Một reservation lấy trong worktree được cấp quyền không chỉ khoá worktree đó — nó khoá cả những checkout khác đang nhìn cùng một repo.</p>
+</figure>
+
+<h2>Khi người giữ biến mất</h2>
+
+<p>Một session còn sống thì không cần reserve lại — mỗi 60 giây, nhịp tim của session tự đẩy hạn dùng của mọi lease nó đang giữ ra xa thêm. Khi session ngừng đập nhịp, lease không bị thu hồi ngay: nó cứ trôi tới đúng 3600 giây kể từ nhịp cuối rồi hết hạn tự nhiên.</p>
+
+<ul>
+  <li><code>bee reservations sweep</code> dọn mọi lease đã hết hạn và mọi dòng hold đã hết hạn trong sổ chung — chạy tay, bất cứ lúc nào.</li>
+  <li><code>bee orient</code> tự quét lease hết hạn trước khi báo cáo, nên một worker bị bỏ quên không giữ file mãi mãi.</li>
+</ul>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Chỗ dễ nhầm</span>
+  <p>Không có gì tự thu hồi reservation của một session ngay lúc nó chết — chỉ có TTL trôi qua hoặc một <code>sweep</code> mới dọn nó. Nếu bạn thật sự xong việc, đừng để nó tự hết hạn: chạy <code>bee state session release</code> ngay để trả lại checkout, thay vì bắt phiên kế tiếp chờ tới 900 giây nhịp tim nguội.</p>
+</div>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/giao-viec">Chương 10 — Giao việc cho subagent</a>: <code>dispatch prepare --claim</code> chính là cái tự động reserve mọi file của cell.</li>
+  <li><a href="/guide/cell-lane">Chương 9 — Cell &amp; Lane</a>: cell là đơn vị mà claim và reservation xoay quanh.</li>
+  <li><a href="/guide/kho-store">Chương 4 — Kho .bee/</a>: nơi lease file và sổ hold thật sự nằm trên đĩa.</li>
+</ul>

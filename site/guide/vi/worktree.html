@@ -1,0 +1,105 @@
+<p>Hai agent cùng sửa một checkout, cùng lúc. Ai ghi đè lên ai?</p>
+
+<p>Câu trả lời của bee: <strong>đừng để họ dùng chung một cái bàn</strong>. Mỗi việc lớn có bàn riêng — gọi là <code>worktree</code>.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 320" role="img" aria-labelledby="fig-worktree-title">
+    <title id="fig-worktree-title">Main checkout ở giữa, hai feature worktree bên cạnh, staging bên dưới. Kho .bee tách làm hai nửa: điều phối nằm ở main, dữ liệu riêng của feature nằm tại chỗ.</title>
+
+    <rect class="fig-box fig-fill-ok" x="330" y="20" width="160" height="66" rx="8"/>
+    <text class="fig-t" x="410" y="46" text-anchor="middle">main checkout</text>
+    <text class="fig-t fig-t--sm" x="410" y="64" text-anchor="middle">tích hợp, release, docs, tiny lẻ</text>
+
+    <a href="/guide/cell-lane">
+      <rect class="fig-box" x="80" y="120" width="180" height="66" rx="8"/>
+      <text class="fig-t" x="170" y="146" text-anchor="middle">feature worktree A</text>
+      <text class="fig-t fig-t--sm" x="170" y="164" text-anchor="middle">wt/feature-a — cell riêng</text>
+    </a>
+
+    <rect class="fig-box" x="560" y="120" width="180" height="66" rx="8"/>
+    <text class="fig-t" x="650" y="146" text-anchor="middle">feature worktree B</text>
+    <text class="fig-t fig-t--sm" x="650" y="164" text-anchor="middle">wt/feature-b — cell riêng</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M330 60 L260 130"/>
+      <path d="M270 122 l-10 8 2 -13"/>
+      <path d="M490 60 L560 130"/>
+      <path d="M552 122 l8 8 -13 2"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="255" y="100" text-anchor="middle">worktree new</text>
+    <text class="fig-t fig-t--sm" x="565" y="100" text-anchor="middle">worktree new</text>
+
+    <g class="fig-line" stroke-width="1.5" stroke-dasharray="4 4" fill="none">
+      <path d="M260 165 L360 165 L360 90"/>
+      <path d="M560 165 L460 165 L460 90"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="410" y="180" text-anchor="middle">worktree merge — chỉ khi UAT xong</text>
+
+    <rect class="fig-box" x="290" y="230" width="240" height="60" rx="8"/>
+    <text class="fig-t" x="410" y="255" text-anchor="middle">staging (tùy chọn)</text>
+    <text class="fig-t fig-t--sm" x="410" y="273" text-anchor="middle">bàn dùng thử chung, xây lại bất cứ lúc nào</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M330 260 L280 260"/>
+      <path d="M490 260 L540 260"/>
+    </g>
+
+    <text class="fig-t fig-t--mono fig-t--sm" x="170" y="200" text-anchor="middle">.bee/: điều phối ở main, cell riêng tại chỗ</text>
+    <text class="fig-t fig-t--mono fig-t--sm" x="650" y="200" text-anchor="middle">.bee/: điều phối ở main, cell riêng tại chỗ</text>
+  </svg>
+  <p class="guide-fig__cap">Mỗi feature có <strong>bàn riêng</strong>; kho <code>.bee/</code> tách làm hai nửa — điều phối (session, claim, worker) vẫn nằm ở main, chỉ dữ liệu riêng của feature (quyết định, cell) mới ở tại worktree.</p>
+</figure>
+
+<h2>Vì sao mỗi việc cần một bàn riêng</h2>
+
+<p>Hai agent cùng sửa file trong một checkout thì sớm muộn cũng giẫm chân nhau: ai đó commit đè, ai đó test trên code chưa xong của người kia. Bee giải quyết bằng cách cho <strong>mỗi feature một checkout vật lý riêng</strong> — một thư mục anh em của repo gốc, tên dạng <code>&lt;repo&gt;--wt--&lt;feature&gt;</code>, trên nhánh riêng <code>wt/&lt;feature&gt;</code>. Việc code-chạm-tới-file của feature đó sống hoàn toàn ở đây, từ dòng code đầu tiên tới lúc merge.</p>
+
+<p>Lệnh tạo bàn là <code>bee worktree new --feature &lt;tên&gt;</code>, chạy từ main. Bee tạo thư mục, đăng ký nó vào kho của main, dựng một <code>.bee</code> riêng bên trong (copy config, tự dọn sạch cell của feature khác lỡ lọt vào), rồi trả lời bằng đúng một việc phải làm: <strong>mở một phiên chat mới, trỏ vào thư mục worktree đó</strong> — phiên đang gõ lệnh <code>worktree new</code> vẫn ở nguyên tại main.</p>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Chỗ hay nhầm</span>
+  <p>Một worker thực thi <em>kế thừa</em> thư mục làm việc của phiên gọi nó. Gọi worker từ một phiên đang đứng ở main để làm việc cho một feature có worktree riêng thì worker chết ngay ở hàng rào ghi file — nó không tự nhảy sang worktree được. Phải chuyển hẳn phiên vào worktree trước khi giao việc cho worker.</p>
+</div>
+
+<h2>"Granted" nghĩa là gì</h2>
+
+<p>Một worktree do <code>bee worktree new</code> tạo ra được gọi là <strong>granted</strong> — nó có một dòng ghi trong sổ cấp phát ở main, và mang theo cái đặc điểm quan trọng nhất: <strong>kho tách đôi</strong>.</p>
+
+<ul>
+  <li><strong>Điều phối vẫn ở main.</strong> Session, claim, worker, lane, handoff — mọi thứ về "ai đang làm gì" đọc từ <code>.bee/</code> của main. Vài lệnh đọc thẳng điều phối sẽ <em>từ chối</em> chạy trong worktree granted, và nói rõ cách sửa: chạy lại từ main.</li>
+  <li><strong>Dữ liệu của riêng feature nằm tại chỗ.</strong> Quyết định riêng, cell riêng của feature đó sống ngay trong worktree.</li>
+  <li><strong>Vùng đang động chạm được soi từ main.</strong> File worktree đang sửa được phản chiếu vào một sổ giữ chỗ chung ở main, để một checkout khác biết mà tránh hoặc cảnh báo.</li>
+</ul>
+
+<p>Một worktree tạo tay bằng <code>git worktree add</code> thuần thì <em>không</em> granted — nó dùng chung toàn bộ kho với main, không có gì trong đoạn trên áp dụng, cho tới khi <code>bee worktree register</code> đưa nó vào.</p>
+
+<h2>Ai vẫn được làm việc ở main</h2>
+
+<p>Main không phải chỗ cấm code hoàn toàn. Bốn việc vẫn hợp lệ ở đó:</p>
+
+<ul>
+  <li><strong>Tích hợp</strong> — chạy <code>worktree merge</code> để đưa một feature đã xong về main.</li>
+  <li><strong>Release</strong> — đóng gói, gắn tag, việc mang tính "xuất bản" chứ không phải "phát triển".</li>
+  <li><strong>Lane docs</strong> — sửa tài liệu thuần túy không cần cách ly như code.</li>
+  <li><strong>Một fix <code>tiny</code> đơn lẻ</strong> — khi không có phiên nào khác đang sống. Có một phiên khác đang chạy thì ngay cả docs và tiny cũng phải vào worktree như mọi feature.</li>
+</ul>
+
+<h2>Staging — bàn dùng thử, không phải bàn làm việc</h2>
+
+<p>Staging là một worktree đặc biệt (<code>&lt;repo&gt;--wt--staging</code>, nhánh <code>staging</code>), tùy chọn bật/tắt bằng config, dùng để bạn thử <strong>nhiều feature cùng lúc</strong> trước khi nghiệm thu — vì đôi khi hai feature riêng lẻ đều ổn nhưng cộng lại thì đá nhau. Nó bị xây lại từ main bất cứ lúc nào (<code>staging rebuild</code>), và lịch sử của nó <strong>không bao giờ đi tới đâu cả</strong> — không có đường merge nào từ staging, kể cả thủ công. Cái bạn duyệt ở staging là các feature; chúng vẫn về main từng đứa một, từ chính worktree của mình.</p>
+
+<div class="guide-note">
+  <span class="guide-note__title">Nhớ cho dễ</span>
+  <p>Staging giống một phòng thử đồ chung — bạn mặc thử nhiều bộ cùng lúc để xem có hợp không, nhưng bộ đồ bạn mua vẫn được giao thẳng từ cửa hàng (worktree của nó), không phải từ phòng thử.</p>
+</div>
+
+<h2>Đường về — merge</h2>
+
+<p>Khi cổng <a href="/guide/cong-gate">nghiệm thu (UAT)</a> đã duyệt, từ main bạn chạy <code>bee worktree merge --id &lt;id&gt;</code>. Nó đi qua một bậc thang từ chối rõ ràng: tự động commit sổ sách của main trước, từ chối nếu còn <a href="/guide/cell-lane">nợ bằng chứng</a> (cell đã cap mà thiếu dòng bằng chứng), từ chối nếu main hay worktree còn bẩn, từ chối nếu cổng UAT chưa duyệt — rồi mới merge thật (<code>--no-ff</code>) và tự kiểm tra main không bị đụng tới ngoài chính cú merge đó. Worktree được giữ lại theo mặc định; <code>--cleanup</code> mới xoá nó.</p>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/vong-doi">Chương 8 — Vòng đời một feature</a>: worktree ra đời ở chặng planning, sống suốt cells và execution.</li>
+  <li><a href="/guide/cell-lane">Chương 9 — Cell &amp; lane</a>: cell của một feature sống trong đúng worktree của nó.</li>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: cổng UAT là cái mở đường merge.</li>
+</ul>

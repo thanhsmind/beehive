@@ -1,0 +1,100 @@
+<header class="guide-head">
+  <div class="guide-head__eyebrow">Hướng dẫn · 14 chương</div>
+  <h1 class="guide-head__title">bee, kể từ đầu</h1>
+  <p class="guide-head__blurb">Bee biến việc code bằng agent thành việc <strong>có cổng và có bằng chứng</strong>: bạn duyệt ở vài thời điểm không thể quay lui, còn giữa những lần đó agent tự chạy và phải chứng minh từng bước trước khi đi bước tiếp theo.</p>
+</header>
+
+<p>Tài liệu gốc của bee mô tả đầy đủ mọi khái niệm — nhưng nó viết cho người đã biết bee rồi. Trang này kể lại đúng những khái niệm đó cho người chưa biết gì: bắt đầu bằng hình, rồi mới tới chữ.</p>
+
+<h2>Bức tranh lớn</h2>
+
+<p>Nếu bạn chỉ nhớ được một hình trong cả trang này, hãy nhớ hình dưới đây.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 330" role="img" aria-labelledby="fig-map-title">
+    <title id="fig-map-title">Hai làn: làn trên là ba việc của bạn, làn dưới là sáu chặng agent tự chạy. Ba đường đứt nét nối chúng chính là ba cái cổng.</title>
+
+    <text class="fig-t fig-t--mono" x="8" y="54">BẠN</text>
+    <text class="fig-t fig-t--mono" x="8" y="226">AGENT</text>
+
+    <rect class="fig-box fig-fill-gate" x="281" y="24" width="108" height="52" rx="8"/>
+    <text class="fig-t" x="335" y="46" text-anchor="middle">Chốt</text>
+    <text class="fig-t" x="335" y="64" text-anchor="middle">yêu cầu</text>
+
+    <rect class="fig-box fig-fill-gate" x="401" y="24" width="108" height="52" rx="8"/>
+    <text class="fig-t" x="455" y="46" text-anchor="middle">Duyệt</text>
+    <text class="fig-t" x="455" y="64" text-anchor="middle">kế hoạch</text>
+
+    <rect class="fig-box fig-fill-gate" x="641" y="24" width="108" height="52" rx="8"/>
+    <text class="fig-t" x="695" y="46" text-anchor="middle">Nghiệm thu</text>
+    <text class="fig-t" x="695" y="64" text-anchor="middle">(UAT)</text>
+
+    <g class="fig-line" stroke-width="1.5" stroke-dasharray="4 4" fill="none">
+      <path d="M335 76 L335 196"/>
+      <path d="M455 76 L455 196"/>
+      <path d="M695 76 L695 196"/>
+    </g>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M205 222 L221 222"/>
+      <path d="M445 222 L461 222"/>
+      <path d="M565 222 L581 222"/>
+    </g>
+
+    <g class="fig-fill-gate" stroke-width="1.5">
+      <path d="M335 214 l8 8 -8 8 -8 -8 z"/>
+      <path d="M455 214 l8 8 -8 8 -8 -8 z"/>
+      <path d="M695 214 l8 8 -8 8 -8 -8 z"/>
+    </g>
+
+    <a href="/guide/vong-doi">
+      <rect class="fig-box" x="105" y="196" width="100" height="52" rx="8"/>
+      <text class="fig-t" x="155" y="218" text-anchor="middle">orient</text>
+      <text class="fig-t fig-t--sm" x="155" y="236" text-anchor="middle">đang ở đâu</text>
+    </a>
+    <a href="/guide/vong-doi">
+      <rect class="fig-box" x="225" y="196" width="100" height="52" rx="8"/>
+      <text class="fig-t" x="275" y="218" text-anchor="middle">shaping</text>
+      <text class="fig-t fig-t--sm" x="275" y="236" text-anchor="middle">hỏi cho rõ</text>
+    </a>
+    <a href="/guide/vong-doi">
+      <rect class="fig-box" x="345" y="196" width="100" height="52" rx="8"/>
+      <text class="fig-t" x="395" y="218" text-anchor="middle">planning</text>
+      <text class="fig-t fig-t--sm" x="395" y="236" text-anchor="middle">chia việc</text>
+    </a>
+    <a href="/guide/cell-lane">
+      <rect class="fig-box" x="465" y="196" width="100" height="52" rx="8"/>
+      <text class="fig-t" x="515" y="218" text-anchor="middle">cells</text>
+      <text class="fig-t fig-t--sm" x="515" y="236" text-anchor="middle">từng mẩu</text>
+    </a>
+    <a href="/guide/giao-viec">
+      <rect class="fig-box" x="585" y="196" width="100" height="52" rx="8"/>
+      <text class="fig-t" x="635" y="218" text-anchor="middle">execution</text>
+      <text class="fig-t fig-t--sm" x="635" y="236" text-anchor="middle">làm + chứng minh</text>
+    </a>
+    <a href="/guide/vong-doi">
+      <rect class="fig-box" x="705" y="196" width="100" height="52" rx="8"/>
+      <text class="fig-t" x="755" y="218" text-anchor="middle">close</text>
+      <text class="fig-t fig-t--sm" x="755" y="236" text-anchor="middle">đóng sổ</text>
+    </a>
+
+    <rect class="fig-box fig-fill-agent" x="105" y="278" width="700" height="40" rx="8"/>
+    <text class="fig-t" x="455" y="303" text-anchor="middle">Kho .bee/ — mọi thứ vừa xảy ra đều được ghi lại ở đây</text>
+  </svg>
+  <p class="guide-fig__cap">Ba ô vàng là <strong>ba lần duy nhất</strong> bee dừng lại chờ bạn. Ngoài ba lúc đó, nó tự chạy — và mỗi bước đều phải để lại bằng chứng trong kho <code>.bee/</code>.</p>
+</figure>
+
+<h2>Ba điều nên hiểu trước tất cả</h2>
+
+<p><strong>Một.</strong> Người dùng bee <em>không phải là bạn</em> — mà là con agent. Bạn không gõ lệnh <code>bee</code> bao giờ cả. Nghe lạ, nhưng nó giải thích gần như mọi thiết kế còn lại. <a href="/guide/bee-la-gi">Chương 1 nói kỹ chuyện này.</a></p>
+
+<p><strong>Hai.</strong> Bee không tin lời agent nói. Agent bảo "xong rồi" thì chưa tính; nó phải dán được <em>output thật của lệnh test</em> vào lúc đóng mẩu việc. Đó là cái làm bee khác một prompt dài. <a href="/guide/cell-lane">Chương 9 nói về mẩu việc và bằng chứng.</a></p>
+
+<p><strong>Ba.</strong> Mọi thứ agent biết đều nằm trên đĩa, không nằm trong đầu nó. Phiên chat chết đi, mở phiên mới, nó đọc kho <code>.bee/</code> rồi làm tiếp từ đúng chỗ. <a href="/guide/kho-store">Chương 4 mở kho ra xem.</a></p>
+
+<div class="guide-note">
+  <span class="guide-note__title">Đọc theo thứ tự nào?</span>
+  <p>Các chương xếp theo thứ tự đọc: 1 → 14. Nếu vội, đọc <a href="/guide/bee-la-gi">chương 1</a>, <a href="/guide/cong-gate">chương 3</a> và <a href="/guide/dung-hieu-qua">chương 14</a> là đủ dùng. Cần chỉnh cấu hình thì nhảy thẳng tới <a href="/guide/config">chương 13</a>.</p>
+</div>
+
+<h2>Mười bốn chương</h2>

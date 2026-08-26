@@ -1,0 +1,146 @@
+<p>Một feature không được giao cho agent như một khối lớn. Nó bị cắt thành những mẩu nhỏ, mỗi mẩu gọi là một <code>cell</code> — và <code>cell</code> là đơn vị nhỏ nhất mà một worker cầm trong tay.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 260" role="img" aria-labelledby="fig-cell-title">
+    <title id="fig-cell-title">Năm trạng thái của một cell: open, claimed, capped là đường chính; blocked và dropped là hai lối rẽ khi có trục trặc.</title>
+
+    <rect class="fig-box" x="20" y="30" width="130" height="56" rx="8"/>
+    <text class="fig-t" x="85" y="55" text-anchor="middle">open</text>
+    <text class="fig-t fig-t--sm" x="85" y="73" text-anchor="middle">chờ claim</text>
+
+    <rect class="fig-box fig-fill-agent" x="230" y="30" width="130" height="56" rx="8"/>
+    <text class="fig-t" x="295" y="55" text-anchor="middle">claimed</text>
+    <text class="fig-t fig-t--sm" x="295" y="73" text-anchor="middle">một chủ, có thuê bao</text>
+
+    <rect class="fig-box fig-fill-ok" x="440" y="30" width="130" height="56" rx="8"/>
+    <text class="fig-t" x="505" y="55" text-anchor="middle">capped</text>
+    <text class="fig-t fig-t--sm" x="505" y="73" text-anchor="middle">xong, có bằng chứng</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M150 58 L226 58"/>
+      <path d="M218 52 l8 6 -8 6"/>
+      <path d="M360 58 L436 58"/>
+      <path d="M428 52 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="188" y="46" text-anchor="middle">claim</text>
+    <text class="fig-t fig-t--sm" x="398" y="46" text-anchor="middle">finish / cap</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M295 30 C 295 5, 130 5, 100 26"/>
+      <path d="M108 20 l-10 4 4 -10"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="200" y="10" text-anchor="middle">unclaim — trả lại lịch sự</text>
+
+    <rect class="fig-box fig-fill-stop" x="230" y="150" width="130" height="56" rx="8"/>
+    <text class="fig-t" x="295" y="175" text-anchor="middle">blocked</text>
+    <text class="fig-t fig-t--sm" x="295" y="193" text-anchor="middle">kẹt, có lý do</text>
+
+    <rect class="fig-box fig-fill-stop" x="440" y="150" width="130" height="56" rx="8"/>
+    <text class="fig-t" x="505" y="175" text-anchor="middle">dropped</text>
+    <text class="fig-t fig-t--sm" x="505" y="193" text-anchor="middle">bỏ, có lý do</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M295 86 L295 146"/>
+      <path d="M289 138 l6 8 6 -8"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="330" y="120" text-anchor="middle">block, hoặc phiên chủ chết</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M85 86 L85 150 L226 178"/>
+      <path d="M218 172 l8 6 -9 4"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="85" y="120" text-anchor="middle">block / drop</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M230 178 L160 178 L160 86"/>
+      <path d="M154 94 l6 -8 6 8"/>
+    </g>
+    <text class="fig-t fig-t--sm" x="120" y="178" text-anchor="middle">reopen</text>
+  </svg>
+  <p class="guide-fig__cap">Đường chính chỉ có ba trạng thái. <code>blocked</code> và <code>dropped</code> luôn đi kèm một lý do bằng chữ, và cả hai đều có đường quay lại <code>open</code>.</p>
+</figure>
+
+<h2>Một cell mang theo cái gì</h2>
+
+<p>Cell là một bản ghi JSON, không phải một dòng chat. Nó luôn có:</p>
+
+<ul>
+  <li><strong>Việc phải làm</strong> — <code>action</code>, mô tả bằng chữ việc cần làm.</li>
+  <li><strong>Cách chứng minh</strong> — <code>verify</code>, lệnh dùng ở lúc <a href="/guide/vong-doi">đóng feature</a> (worker <em>không</em> chạy lệnh này lúc cap — nó tự chọn phép thử riêng cho phạm vi của mình).</li>
+  <li><strong>File dự kiến đụng tới</strong> — <code>files</code>, dùng để xếp việc thành các đợt không đè lên nhau.</li>
+  <li><strong>Phụ thuộc</strong> — <code>deps</code>, cell nào phải xong trước.</li>
+  <li><strong><code>lane</code></strong> — cỡ và mức rủi ro, xem bảng dưới.</li>
+  <li><strong><code>must_haves.truths</code></strong> — với lane <code>standard</code> trở lên, bắt buộc phải khai rõ "đúng nghĩa là gì" trước khi viết code.</li>
+</ul>
+
+<h2>Sáu lane, sáu mức nghi thức</h2>
+
+<p>Lane là từ duy nhất quyết định feature này cần bao nhiêu thủ tục. Chọn đúng lane tiết kiệm cho bạn rất nhiều bước thừa; chọn sai thì hoặc thiếu kiểm soát, hoặc ngợp trong giấy tờ.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Lane</th><th>Dùng khi</th><th>Nghi thức</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>docs</code></td>
+      <td>Chỉ sửa tài liệu, không chạm code.</td>
+      <td>Bằng chứng là kiểm tra đối chiếu / đường link, không phải test.</td>
+    </tr>
+    <tr>
+      <td><code>tiny</code></td>
+      <td>Một sửa nhỏ, gọn, rủi ro thấp.</td>
+      <td>Một cell, một câu hỏi gộp — nhẹ nhất trong sáu lane.</td>
+    </tr>
+    <tr>
+      <td><code>small</code></td>
+      <td>Việc nhỏ nhưng chạm nhiều hơn một chỗ.</td>
+      <td>Cần <code>files</code> khai rõ và một worker thực thi đã đăng ký — không còn chạy tay tuỳ tiện.</td>
+    </tr>
+    <tr>
+      <td><code>spike</code></td>
+      <td>Thăm dò khả thi — sản phẩm là hiểu biết, không phải code chạy được.</td>
+      <td>Vừa là lane vừa là loại việc; kết quả nằm ở <code>.bee/spikes/</code>.</td>
+    </tr>
+    <tr>
+      <td><code>standard</code></td>
+      <td>Một feature bình thường, nhiều file, cần kế hoạch thật.</td>
+      <td>Bắt buộc <code>must_haves.truths</code>; có phán quyết giám khảo khi đóng.</td>
+    </tr>
+    <tr>
+      <td><code>high-risk</code></td>
+      <td>Việc khó gỡ nếu sai — bảo mật, dữ liệu, hạ tầng chung.</td>
+      <td>Toàn bộ chuỗi cổng, cộng một cố vấn (<code>advisor</code>) tham chiếu mới; không bao giờ tự động duyệt cổng; không bao giờ được hạ lane.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Nâng lane thì luôn được phép; hạ lane thì ngược lại — <code>high-risk</code> không bao giờ hạ, một cờ "cổng cứng" chặn việc hạ, và mỗi feature chỉ được hạ lane đúng một lần trong đời.</p>
+
+<h2>Ngân sách và khi cell cứ thất bại</h2>
+
+<p>Mỗi cell mang theo ba con số giới hạn: số lần được <code>claim</code> lại, số lần thất bại được phép, số lần lặp cùng một kiểu lỗi — mặc định 3/4/2, trần cứng 9/12/6. Chạm trần thì cửa claim đóng lại: cell đó ngừng hút thêm nỗ lực cho tới khi có người thật soát lại lý do rồi mở lại ngân sách bằng tay. Đây là cái chặn một cell "cứ thử lại mãi mà không ai để ý" — thất bại lặp lại là tín hiệu cần một cái đầu khác nhìn vào, không phải thêm một lần thử.</p>
+
+<h2>Dòng bằng chứng — cái làm một <code>cap</code> là một <code>cap</code></h2>
+
+<p>Đóng một cell (<code>bee cells finish</code> hoặc <code>cap</code>) đòi hỏi báo cáo phải mang đúng một dòng bằng chứng, theo khuôn cố định:</p>
+
+<pre class="guide-code">&lt;lệnh đã chạy&gt; — &lt;kết quả&gt; — &lt;vì sao phạm vi này là đủ&gt;</pre>
+
+<p>Ba phần, tách nhau bằng dấu gạch ngang dài (<code>—</code>), không phần nào được để trống. Ví dụ: <code>cargo test -p auth — green — test rate-limit đã phủ đúng thay đổi này</code>.</p>
+
+<div class="guide-note guide-note--stop">
+  <span class="guide-note__title">Vì sao thiếu dòng này thì không phải là "đóng"</span>
+  <p>Agent nói "xong rồi, test xanh" là <em>lời nói</em>. Dòng bằng chứng là bắt agent dán ra <em>cái lệnh thật đã chạy</em> và <em>kết quả thật của nó</em> — không có dòng này, <code>finish</code> từ chối thẳng, không hỏi lại. Và nếu kết quả ghi là "red", nó <strong>không cảnh báo rồi cho qua</strong> — nó chặn hẳn: một cái đỏ không bao giờ được xây tiếp lên, sửa xong rồi mới được cap.</p>
+</div>
+
+<p>Bee không tự chạy lại lệnh đó lúc <code>cap</code> — worker đã tự chạy và tự chọn phạm vi phù hợp với loại thay đổi (code thì chạy test liên quan, docs thì kiểm tra đối chiếu, hành vi thì phán quyết giám khảo). CI là tấm lưới xác định duy nhất, chạy lại đúng lệnh đã khai trên mỗi lần đẩy code.</p>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/vong-doi">Chương 8 — Vòng đời một feature</a>: cell sinh ra ở chặng planning, sống hết chặng execution.</li>
+  <li><a href="/guide/giao-viec">Chương 10 — Giao việc cho subagent</a>: cách một cell tới tay đúng một worker.</li>
+  <li><a href="/guide/phoi-hop">Chương 11 — Nhiều phiên cùng lúc</a>: claim, reservation và hold giữ hai worker khỏi giẫm chân nhau trên cùng cell.</li>
+</ul>

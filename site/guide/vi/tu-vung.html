@@ -1,0 +1,212 @@
+<p>Đọc tài liệu bee một lúc là gặp ngay một mớ chữ Anh viết hoa chữ thường lẫn lộn: <code>cell</code>, <code>gate</code>, <code>claim</code>, <code>worktree</code>… Chương này không giải thích lại từng khái niệm cho kỹ — các chương sau làm việc đó — nó chỉ là <strong>bản tra cứu</strong>: mỗi chữ, một dòng, để bạn không phải đoán.</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 250" role="img" aria-labelledby="fig-chuoi-title">
+    <title id="fig-chuoi-title">Con người nhờ agent; agent chạy trong một session; session làm việc từng cell; mọi kết quả nằm trong kho .bee/.</title>
+
+    <rect class="fig-box fig-fill-ok" x="20" y="90" width="150" height="70" rx="10"/>
+    <text class="fig-t" x="95" y="120" text-anchor="middle">Con người</text>
+    <text class="fig-t fig-t--sm" x="95" y="140" text-anchor="middle">nói bằng tiếng người</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M170 125 L216 125"/>
+      <path d="M208 119 l8 6 -8 6"/>
+    </g>
+
+    <rect class="fig-box fig-fill-agent" x="220" y="90" width="150" height="70" rx="10"/>
+    <text class="fig-t" x="295" y="115" text-anchor="middle">Agent</text>
+    <text class="fig-t fig-t--sm" x="295" y="135" text-anchor="middle">chạy trong một</text>
+    <text class="fig-t fig-t--sm" x="295" y="150" text-anchor="middle"><code>session</code></text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M370 125 L416 125"/>
+      <path d="M408 119 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--sm fig-t--mono" x="393" y="112" text-anchor="middle">claim</text>
+
+    <rect class="fig-box" x="420" y="90" width="150" height="70" rx="10"/>
+    <text class="fig-t" x="495" y="120" text-anchor="middle"><code>cell</code></text>
+    <text class="fig-t fig-t--sm" x="495" y="140" text-anchor="middle">mẩu việc nhỏ nhất</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none">
+      <path d="M570 125 L616 125"/>
+      <path d="M608 119 l8 6 -8 6"/>
+    </g>
+    <text class="fig-t fig-t--sm fig-t--mono" x="593" y="112" text-anchor="middle">cap</text>
+
+    <rect class="fig-box" x="620" y="90" width="180" height="70" rx="10"/>
+    <text class="fig-t" x="710" y="120" text-anchor="middle">Kho <code>.bee/</code></text>
+    <text class="fig-t fig-t--sm" x="710" y="140" text-anchor="middle">nơi mọi thứ ở lại</text>
+
+    <text class="fig-t fig-t--sm" x="95" y="200" text-anchor="middle">nhờ + duyệt cổng</text>
+    <text class="fig-t fig-t--sm" x="295" y="200" text-anchor="middle">đọc kho, gõ lệnh <code>bee</code></text>
+    <text class="fig-t fig-t--sm" x="495" y="200" text-anchor="middle">có deps, có lane, có bằng chứng</text>
+    <text class="fig-t fig-t--sm" x="710" y="200" text-anchor="middle">phiên sau đọc lại là biết hết</text>
+  </svg>
+  <p class="guide-fig__cap">Năm chữ này là xương sống của cả cuốn sách: nắm được chuỗi Con người → Agent → session → cell → kho, chín nhóm từ bên dưới chỉ là chi tiết hoá của chuỗi đó.</p>
+</figure>
+
+<p>Từ vựng bee chia làm chín nhóm, đúng theo cách tài liệu gốc chia. Đọc lướt một lượt, rồi quay lại tra khi cần — không ai nhớ hết 60 chữ sau một lần đọc.</p>
+
+<h2>1. Vai — ai làm gì</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td><code>agent</code></td><td>Phiên LLM đang chạy — người thật sự gõ mọi lệnh <code>bee</code>. Xem <a href="/guide/bee-la-gi">chương 1</a>.</td></tr>
+    <tr><td>human</td><td>Bạn. Người duyệt cổng, trả lời câu hỏi, không bao giờ gõ lệnh bee trong luồng đúng.</td></tr>
+    <tr><td>orchestrator</td><td>Phiên agent đang điều phối: claim cell, giao việc cho worker, nói chuyện với bạn.</td></tr>
+    <tr><td><code>worker</code></td><td>Một subagent được giao đúng một mẩu việc, trả lại đúng một status token. Xem <a href="/guide/giao-viec">chương 10</a>.</td></tr>
+    <tr><td>sibling session</td><td>Một phiên bee khác đang sống trong cùng repo — checkout chính hoặc worktree khác — bạn thấy qua kho. Xem <a href="/guide/phoi-hop">chương 11</a>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>2. Bề mặt — chạy ở đâu</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td>host repo</td><td>Một repo đã cài bee: có <code>.bee/</code>, có hook, có skill sẵn sàng.</td></tr>
+    <tr><td>main checkout</td><td>Bản làm việc chính. Việc tích hợp và release nằm ở đây.</td></tr>
+    <tr><td><code>feature worktree</code></td><td>Một worktree git riêng cho một feature, nhánh <code>wt/&lt;slug&gt;</code>. Xem <a href="/guide/worktree">chương 7</a>.</td></tr>
+    <tr><td>granted worktree</td><td>Một worktree đã đăng ký với main: khung điều phối (session, claim) vẫn ở main, dữ liệu riêng (decision, cell của feature đó) nằm tại chỗ.</td></tr>
+    <tr><td>staging</td><td>Bãi tích hợp dùng-rồi-bỏ giữa worktree và main, nơi bạn thử trước cổng <code>uat</code>.</td></tr>
+    <tr><td>workspace</td><td>Một checkout dưới góc nhìn của luật ghi: chỉ một phiên được quyền ghi tại một thời điểm.</td></tr>
+    <tr><td><code>skill</code></td><td>Một quy trình nạp khi cần (<code>SKILL.md</code>) — chỉ dẫn, không có răng. Xem <a href="/guide/bee-la-gi">chương 1</a>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>3. Kho — thứ nằm trên đĩa</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td>the store</td><td>Mọi thứ bee nhớ, dưới <code>.bee/</code>. Chỉ CLI được ghi vào đây. Xem <a href="/guide/kho-store">chương 4</a>.</td></tr>
+    <tr><td>workflow record</td><td>Bản ghi bền của một lần chạy feature; <code>state.json</code> chỉ là hình chiếu của nó.</td></tr>
+    <tr><td><code>cell</code></td><td>Một mẩu việc có ranh giới: id, action, verify, lane. Xem <a href="/guide/cell-lane">chương 9</a>.</td></tr>
+    <tr><td><code>lane</code></td><td>Cỡ và mức rủi ro của một việc — quyết định bao nhiêu nghi thức, không phải bao nhiêu trí nhớ.</td></tr>
+    <tr><td>decision</td><td>Một thoả thuận đã ghi log, có quan hệ bắt buộc với những gì đang có hiệu lực. Xem <a href="/guide/bo-nho">chương 12</a>.</td></tr>
+    <tr><td>relation</td><td>Khai báo bắt buộc khi log decision: <code>supersedes</code>, <code>touches</code>, hoặc <code>none</code>.</td></tr>
+    <tr><td>locked decision</td><td>Một decision đã đóng băng trong <code>docs/history/&lt;feature&gt;/CONTEXT.md</code> — trích dẫn, không diễn giải lại.</td></tr>
+    <tr><td>capture stub</td><td>Một dòng ghi ngay lúc một điều gì đó vừa chốt, chờ gộp vào knowledge bundle.</td></tr>
+    <tr><td>knowledge bundle</td><td>Lớp trạng thái đã đúc kết dưới <code>docs/knowledge/</code> — đọc trước khi đọc code.</td></tr>
+    <tr><td>PBI</td><td>Một mục backlog đã đánh số, tính ra từ các sự kiện trong <code>.bee/backlog.jsonl</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>4. Phối hợp — không giẫm chân nhau</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td><code>claim</code></td><td>Quyền sở hữu tạm thời một cell, có hạn (TTL), gia hạn bằng heartbeat. Xem <a href="/guide/phoi-hop">chương 11</a>.</td></tr>
+    <tr><td><code>reservation</code></td><td>Một agent giữ chỗ một đường dẫn file, gắn với một cell — chặn ghi đè của người khác.</td></tr>
+    <tr><td>hold</td><td>Một reservation được phản chiếu vào sổ dùng chung của main, để checkout khác cũng thấy.</td></tr>
+    <tr><td>budget</td><td>Giới hạn số lần claim/thất bại của một cell; hết ngân sách thì đóng cửa claim cho tới khi được reset có ghi nhận.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>5. Chặng và cổng</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td>phase</td><td>Feature đang đứng ở đâu: <code>idle</code>, <code>exploring</code>, <code>planning</code>, <code>swarming</code>… Xem <a href="/guide/vong-doi">chương 8</a>.</td></tr>
+    <tr><td><code>gate</code></td><td>Thời điểm bạn duyệt trước khi agent đi tiếp. Xem <a href="/guide/cong-gate">chương 3</a>.</td></tr>
+    <tr><td>gate bypass</td><td>Mức tự-duyệt tùy chọn (<code>off</code>/<code>normal</code>/<code>full</code>/<code>total</code>) cho agent tự bấm một số cổng, luôn ghi lại là <code>auto</code>.</td></tr>
+    <tr><td>idle intake gate</td><td>Luật ghi ở trạng thái nghỉ: file nguồn ngoài <code>.bee/</code>, <code>docs/</code>, <code>plans/</code> bị chặn cho tới khi việc đi qua workflow.</td></tr>
+    <tr><td>intent anchor</td><td>Bản ghim yêu cầu gốc + định nghĩa "xong" — bất biến một khi đã đặt, sống sót qua cả compaction.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>6. Một lần chạy lệnh</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td>invocation</td><td>Một lần chạy binary <code>bee</code>, hoặc một hành động bị hook canh — đơn vị tương tác nhỏ nhất.</td></tr>
+    <tr><td>porcelain</td><td>Tập lệnh chính, hiện ở <code>bee --help</code>. Phần còn lại là "plumbing", ít dùng hơn.</td></tr>
+    <tr><td>refusal</td><td>Bee trả lời một invocation nó không phục vụ, câu chữ cố định — không bao giờ im lặng.</td></tr>
+    <tr><td>deny</td><td>Hook chặn một lời gọi tool trước khi nó chạy, luôn kèm đường sửa. Xem <a href="/guide/hooks-guards">chương 6</a>.</td></tr>
+    <tr><td>fail-open</td><td>Hook không quyết định được thì cho qua, nhưng in ra rõ ràng — không bao giờ coi là cho phép ngầm.</td></tr>
+    <tr><td>fail-closed</td><td>Ngược lại: trạng thái phối hợp hỏng thì chặn ghi, không đoán bừa.</td></tr>
+    <tr><td>repair</td><td>Câu trả lời thứ ba của model guard: tự sửa một tham số sai theo cấu hình, rồi cho qua, báo cho cả hai bên biết.</td></tr>
+    <tr><td>proof line</td><td>Bằng chứng dán vào lúc đóng cell: <code>&lt;lệnh&gt; — &lt;kết quả&gt; — &lt;lý do phạm vi&gt;</code>. Xem <a href="/guide/cell-lane">chương 9</a>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>7. Giao việc</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td>dispatch envelope</td><td>JSON mà <code>bee dispatch prepare</code> trả về và agent chạy nguyên văn — sản phẩm duy nhất của cửa giao việc. Xem <a href="/guide/giao-viec">chương 10</a>.</td></tr>
+    <tr><td>role</td><td>Tên công việc của một lần dispatch, dùng để chọn model.</td></tr>
+    <tr><td>rendered agent</td><td>Một trong bốn định nghĩa subagent bee viết sẵn: <code>bee-gather</code>, <code>bee-extract</code>, <code>bee-build</code>, <code>bee-review</code>.</td></tr>
+    <tr><td>status token</td><td>Chữ duy nhất một worker trả về cuối cùng: <code>[DONE]</code>, <code>[BLOCKED]</code>, <code>[HANDOFF]</code>, <code>[NOOP]</code>.</td></tr>
+    <tr><td>wave</td><td>Tập cell được lên lịch chạy cùng đợt, không đụng file nhau.</td></tr>
+    <tr><td>judge verdict</td><td>Phán quyết goal-check trên một cell: <code>PASS</code> hoặc <code>NEEDS_REVISION</code>.</td></tr>
+    <tr><td>nudge</td><td>Lời nhắc do hook chèn vào, chỉ đề nghị chứ không tự ghi gì.</td></tr>
+    <tr><td>cockpit</td><td>Bố cục các pane mà herding dựng lên: pane chat, pane điều phối, tối đa bốn pane worker.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>8. Sự kiện làm gián đoạn</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td>killed</td><td>Tiến trình chết nửa chừng — ghi luôn atomic nên không bao giờ tạo file dở dang.</td></tr>
+    <tr><td>compaction</td><td>Ngữ cảnh phiên bị tóm tắt giữa chừng; phiên đọc lại đĩa thay vì tin trí nhớ hội thoại.</td></tr>
+    <tr><td>handoff</td><td>Bản ghi mang việc qua ranh giới phiên: <code>planned-next</code> (phiên mới nhận tiếp) hoặc <code>pause</code> (chờ bạn). Xem <a href="/guide/phien-session">chương 5</a>.</td></tr>
+    <tr><td>heartbeat expiry</td><td>Một session im lặng quá 900 giây thì coi như đã chết, các bên khác ngừng đếm nó.</td></tr>
+    <tr><td>lease expiry</td><td>Một claim/reservation hết hạn (mặc định 3600 giây) thì có thể bị dọn hoặc claim lại.</td></tr>
+    <tr><td>sibling change</td><td>Một phiên khác vừa claim, hold, hoặc merge đè lên việc đang làm — trả lời bằng cách nhận việc khác, không ghi đè.</td></tr>
+    <tr><td>coverage gap</td><td>Một sự kiện hook không quyết định nổi — không phải deny, không phải allow — được ghi log để không mất dấu.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>9. Đầu ra</h2>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Từ</th><th>Nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td>preamble</td><td>Bản tóm tắt trạng thái nạp lúc đầu phiên — đã đọc rồi thì đừng đọc lại. Xem <a href="/guide/phien-session">chương 5</a>.</td></tr>
+    <tr><td>progress line</td><td>Một dòng tường thuật mỗi bước: <code>▸</code> bắt đầu, <code>✓</code> xong, <code>⚡</code> tự duyệt, <code>✗</code> đỏ.</td></tr>
+    <tr><td>waiting-on mark</td><td>Dấu ghi lại một lượt vừa kết thúc là đang chờ bạn — cổng, câu hỏi, hoặc hết lượt.</td></tr>
+    <tr><td>privacy marker</td><td>Khối <code>@@BEE_PRIVACY@@…@@END@@</code> khi hook chặn một lần đọc bí mật — chuyển thẳng cho bạn, agent không tự xử lý.</td></tr>
+    <tr><td>doctor verdict</td><td>Chấm điểm sức khoẻ một runtime: <code>ready</code>, <code>degraded</code>, hoặc <code>blocked</code>.</td></tr>
+    <tr><td>staleness warning</td><td>Một câu cảnh báo trong <code>bee status</code> — không đổi mã thoát, không chặn gì.</td></tr>
+    <tr><td><code>--json</code></td><td>Chế độ máy đọc gần như mọi lệnh đều nhận: kết quả và cả lỗi ra <code>stdout</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Bẫy hay gặp</span>
+  <p>Đừng lẫn <code>claim</code> (giữ một <em>cell</em>) với <code>reservation</code> (giữ một <em>file</em>) với <code>hold</code> (bản phản chiếu của reservation cho cả repo thấy). Ba chữ nghe giống nhau, ba phạm vi khác nhau — nhầm cái này với cái kia là nguyên nhân phổ biến nhất của "tại sao nó từ chối ghi file của tôi". <a href="/guide/phoi-hop">Chương 11</a> vẽ rõ ba vòng tròn đó.</p>
+</div>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: đào sâu đúng một nhóm từ ở trên — <code>gate</code>, <code>gate bypass</code>, <code>phase</code>.</li>
+  <li><a href="/guide/cell-lane">Chương 9 — Cell & Lane</a>: <code>cell</code>, <code>lane</code>, <code>proof line</code> nói kỹ hơn một dòng.</li>
+  <li><a href="/guide/phoi-hop">Chương 11 — Nhiều phiên cùng lúc</a>: <code>claim</code>, <code>reservation</code>, <code>hold</code> — ba chữ hay bị nhầm nhất.</li>
+</ul>

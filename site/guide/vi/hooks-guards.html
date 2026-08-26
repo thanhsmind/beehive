@@ -1,0 +1,139 @@
+<p>Agent gọi <code>Edit</code> để sửa một file. Cái gì thật sự đứng giữa lệnh gọi đó và ổ đĩa của bạn?</p>
+
+<figure class="guide-fig">
+  <svg viewBox="0 0 820 240" role="img" aria-labelledby="fig-hang-rao-title">
+    <title id="fig-hang-rao-title">Một cú ghi file đi qua hàng rào và ra theo một trong bốn hướng: cho qua, sửa lại, từ chối, hoặc mở toang vì không quyết được.</title>
+
+    <rect class="fig-box fig-fill-agent" x="20" y="90" width="140" height="60" rx="8"/>
+    <text class="fig-t" x="90" y="114" text-anchor="middle">agent gọi</text>
+    <text class="fig-t fig-t--sm" x="90" y="132" text-anchor="middle">Edit / Write / Bash</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M160 120 L216 120"/><path d="M208 114 l8 6 -8 6"/></g>
+
+    <rect class="fig-box" x="220" y="70" width="140" height="100" rx="8"/>
+    <text class="fig-t" x="290" y="106" text-anchor="middle">hook</text>
+    <text class="fig-t fig-t--sm" x="290" y="124" text-anchor="middle">xét payload</text>
+    <text class="fig-t fig-t--sm" x="290" y="140" text-anchor="middle">trước khi ghi</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M360 90 L410 40"/><path d="M400 40 l10 0 0 10"/></g>
+    <rect class="fig-box fig-fill-ok" x="414" y="10" width="130" height="46" rx="8"/>
+    <text class="fig-t fig-t--sm" x="479" y="38" text-anchor="middle">cho phép</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M360 108 L410 92"/><path d="M400 90 l10 -2 2 10"/></g>
+    <rect class="fig-box" x="414" y="66" width="130" height="46" rx="8"/>
+    <text class="fig-t fig-t--sm" x="479" y="94" text-anchor="middle">sửa lại (repair)</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M360 132 L410 148"/><path d="M400 150 l10 2 -2 -10"/></g>
+    <rect class="fig-box fig-fill-stop" x="414" y="122" width="130" height="46" rx="8"/>
+    <text class="fig-t fig-t--sm" x="479" y="150" text-anchor="middle">từ chối (deny)</text>
+
+    <g class="fig-line" stroke-width="1.5" fill="none"><path d="M360 150 L410 200"/><path d="M400 198 l10 4 -4 10"/></g>
+    <rect class="fig-box fig-fill-gate" x="414" y="178" width="130" height="46" rx="8"/>
+    <text class="fig-t fig-t--sm" x="479" y="206" text-anchor="middle">không quyết được</text>
+
+    <text class="fig-t fig-t--sm" x="640" y="38" text-anchor="middle">exit 0, ghi xảy ra</text>
+    <text class="fig-t fig-t--sm" x="640" y="94" text-anchor="middle">exit 0, tham số bị viết lại</text>
+    <text class="fig-t fig-t--sm" x="640" y="150" text-anchor="middle">exit 2, luôn kèm cách sửa</text>
+    <text class="fig-t fig-t--sm" x="640" y="206" text-anchor="middle">exit 0, "fail-open" — vẫn cho qua</text>
+  </svg>
+  <p class="guide-fig__cap">Bốn ngả, không có ngả thứ năm. Im lặng không bao giờ là sự cho phép — hook chỉ là lưới an toàn, không phải người quyết định cuối cùng.</p>
+</figure>
+
+<h2>Danh mục hook — ai canh cái gì</h2>
+
+<p>Hook chia thành mấy họ, mỗi họ canh một loại nguy cơ khác nhau. Không cần nhớ hết tên — chỉ cần biết họ nào tồn tại, để khi gặp một cú từ chối, bạn biết nó thuộc nhóm gì.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Họ</th><th>Canh cái gì</th><th>Ví dụ deny</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase &amp; containment</strong></td>
+      <td>ghi file đúng phase, đúng phạm vi thư mục, đúng worktree</td>
+      <td>sửa <code>src/</code> khi <code>execution</code> gate chưa duyệt; ghi ra ngoài worktree vật lý</td>
+    </tr>
+    <tr>
+      <td><strong>Store integrity</strong></td>
+      <td>không ai sửa tay file CLI-owned, không file ephemeral lạc vào cây tracked</td>
+      <td><a href="/guide/kho-store">direct-edit guard</a> ở chương 4; scratch-shape guard</td>
+    </tr>
+    <tr>
+      <td><strong>Coordination</strong></td>
+      <td>hai phiên hay hai worker không giẫm chân nhau trên cùng một đường dẫn</td>
+      <td>cross-session hold, swarm reservation conflict, write-policy guard</td>
+    </tr>
+    <tr>
+      <td><strong>Read guards</strong></td>
+      <td>chặn đọc, không phải ghi — file bí mật, cây generated/vendor, file quá dài</td>
+      <td>secret guard (<code>.env</code>, <code>id_rsa</code>…), scout guard, read-size guard</td>
+    </tr>
+    <tr>
+      <td><strong>Dispatch guards</strong></td>
+      <td>hình dạng lệnh <code>bee</code>, và việc gọi subagent đúng vai</td>
+      <td>CLI-shape guard; model guard trên mọi lần dispatch Agent/Task</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Ví dụ một deny thật, đủ hình dạng chuẩn — nói cái gì bị chặn, vì sao, và cách đi tiếp:</p>
+
+<pre class="guide-code">bee gate: phase is "exploring" and gate "execution" is not approved —
+writing "src/lib.rs" is blocked. Allowed now: .bee/, docs/history/,
+plans/, AGENTS.md. <span class="c">FIX:</span> Get execution approval (bee-hive) before
+touching source files.</pre>
+
+<p>Mọi deny trong họ hàng này đều theo đúng ba phần: <em>cái gì vừa bị chặn</em>, <em>vì sao</em>, và <em>cách đi tiếp được cho phép</em>. Theo đúng cách đi tiếp đó là toàn bộ giao thức — thử biến thể khác, hay ghi bằng công cụ khác để né, là hành động duy nhất bị cấm tuyệt đối.</p>
+
+<h2>Fail-open và fail-closed — hai câu trả lời cho hai loại "không biết"</h2>
+
+<p>Khi một hook gặp thứ nó không phân tích được, nó phải chọn: cho qua, hay chặn lại? Câu trả lời không phải lúc nào cũng giống nhau — nó phụ thuộc <strong>cái gì đang không đọc được</strong>.</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead>
+    <tr><th>Thế</th><th>Câu trả lời</th><th>Vì sao</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Payload lạ, dữ liệu store thường (đọc file JSON hỏng, hook không hiểu input)</td>
+      <td><strong>fail-open</strong> — cho qua, nói to lý do</td>
+      <td>chặn nhầm một hành động vốn hợp lệ tệ hơn là bỏ lọt một cú không được canh. Bee thà "canh sót một lần, nói rõ ra" còn hơn đứng hình cả phiên làm việc.</td>
+    </tr>
+    <tr>
+      <td>Dữ liệu phối hợp bị hỏng (reservation, holds ledger, hồ sơ workspace, lane, staging)</td>
+      <td><strong>fail-closed</strong> — từ chối, nêu đúng file cần khôi phục</td>
+      <td>đoán nhầm ở đây làm mất việc của một phiên khác mà bạn không nhìn thấy — cái giá đoán sai quá đắt so với việc dừng lại chờ sửa.</td>
+    </tr>
+    <tr>
+      <td>Số worker đang sống không xác định được (concurrent-worker git guard)</td>
+      <td><strong>fail-closed</strong>, đảo ngược có chủ ý — coi như "có nhiều hơn một"</td>
+      <td>đoán sai chiều này (coi là chỉ một worker) có thể làm một git verb quét sạch mất commit của người khác.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Và một trường hợp riêng: nếu chính <em>binary</em> <code>bee</code> không tìm thấy trên máy, hook không cố đoán gì cả — nó in đúng một dòng <code>bee: hook binary missing (.bee/bin/bee)</code> rồi cho hành động đi qua, luôn công khai, không bao giờ âm thầm.</p>
+
+<div class="guide-note guide-note--stop">
+  <span class="guide-note__title">Chỗ này rất dễ hiểu nhầm</span>
+  <p>Một dòng fail-open không phải là "coi như được duyệt". Nó nghĩa là <strong>hook đó chưa hề chạy trên cú ghi này</strong> — cái đứng sau lưng bạn lúc đó chỉ còn là kỷ luật của chính agent, không có lưới an toàn nào cả. Gặp dòng này, hãy đọc to nó ra cho người dùng, đừng để nó trôi qua trong im lặng.</p>
+</div>
+
+<h2>Một luật chỉ nằm trong AGENTS.md thì không có răng</h2>
+
+<p>Đây là điều dễ nhầm nhất trong toàn bộ bee: không phải câu nào viết trong tài liệu cũng có một hook đứng sau lưng nó. <code>AGENTS.md</code> và các skill là <strong>lời dặn</strong> — agent đọc, agent có thể quên, agent có thể hiểu sai, và không có gì tự động ngăn nó làm khác đi. Chỉ hai tầng dưới cùng — CLI và hook — mới thật sự <em>cưỡng chế</em> được, bằng cách từ chối lệnh hoặc chặn đứng một cú ghi file (xem hình "ba tầng" ở <a href="/guide/bee-la-gi">chương 1</a>).</p>
+
+<p>Vậy khi đọc một câu "agent phải…" ở bất cứ đâu trong tài liệu bee, câu hỏi đúng không phải "câu này có đúng không" mà là: <strong>có hook nào đứng sau câu này không?</strong> Nếu có, phá luật sẽ bị chặn ngay tại chỗ. Nếu không, luật đó sống nhờ vào kỷ luật của agent — và của bạn, khi bạn đọc lại những gì nó làm.</p>
+
+<h2>Đọc tiếp</h2>
+<ul>
+  <li><a href="/guide/kho-store">Chương 4 — Kho .bee/</a>: direct-edit guard, một trong những hàng rào cứng nhất, canh đúng những file mô tả ở chương này.</li>
+  <li><a href="/guide/bee-la-gi">Chương 1 — Bee là gì</a>: ba tầng luật, và vì sao chỉ hai tầng dưới có răng.</li>
+  <li><a href="/guide/phoi-hop">Chương 11 — Nhiều phiên cùng lúc</a>: các hàng rào coordination ở đây chính là cơ chế đứng sau claim, reservation, hold.</li>
+  <li><a href="/guide/cong-gate">Chương 3 — Năm cái cổng</a>: gate guard là hook thực thi cổng bạn đọc ở chương này thành luật.</li>
+</ul>
+</content>
