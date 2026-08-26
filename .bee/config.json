@@ -12,7 +12,7 @@
   },
   "gate_bypass": "normal",
   "ship_visibility": "off",
-  "worktree_first": "off",
+  "worktree_first": "on",
   "worktree_cleanup_on_merge": false,
   "uat_stop": "close",
   "uat_before_merge": false,
