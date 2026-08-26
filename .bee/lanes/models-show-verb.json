@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"models-show-verb\" started at phase \"exploring\" (lane).",
-  "next_action": "Dispatch ms-1 and ms-2 in parallel; ms-3 after ms-1.",
+  "next_action": "Merged into main at fefbdb9; reload the product and test \"models-show-verb\", then either approve uat (\"bee gate --name uat --approved true --lane models-show-verb\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-26T05:09:43.428Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Tình hình: **cả 3 cell của feature đã xong, test xanh, verb chạy thật** — chỉ còn bước merge về main đang chờ phiên làm việc kia commit file",
-    "asked_at": "2026-08-26T05:30:44.351Z",
-    "session": "5a27aa09-a8e9-47fd-bcd3-25f386c64a76"
+    "kind": "gate",
+    "subject": "uat: models-show-verb",
+    "asked_at": "2026-08-26T05:36:36.445Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -30,12 +30,5 @@
     "rationale": "PBI p-0a5e6c44: new read-only verb bee models show (catalog+router+handler), status models keeps descriptions, onboarding seeds descriptions, missing-role refusal and cells-add help name the verb; existing tests assert seed shape and refusal text",
     "updated_at": "2026-08-26T05:10:00.308Z",
     "feature": "models-show-verb"
-  },
-  "merge_ready": {
-    "since": "2026-08-26T05:29:41.086Z",
-    "branch": "wt/models-show-verb",
-    "worktree_id": "beehive--wt--models-show-verb",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
