@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Hàng rào bảo vệ chặn `git add` vì có 2 phiên làm việc trong cùng thư mục. Nó cho phép commit theo đường dẫn. Tôi làm theo cách đó.",
-    "asked_at": "2026-08-26T06:41:00.690Z",
+    "subject": "Binary thật có dữ liệu cần tìm. Tài liệu đã sửa. Giờ tôi chạy lại đúng 2 nhóm test hỏng với PATH đúng.",
+    "asked_at": "2026-08-26T06:56:42.827Z",
     "session": "7a44c92f-5bc8-4252-bb94-8f62de3e55c9"
   }
 }
