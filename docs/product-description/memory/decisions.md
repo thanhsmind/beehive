@@ -9,9 +9,7 @@ The decision log is where an agreement becomes a durable record. Every settled a
 Something is agreed. The agent logs it, naming what it relates to:
 
 ```
-bee decisions log --decision "Use the in-repo registry for CLI commands" \
-  --rationale "Avoids duplicated validation between dispatcher and hook" \
-  --relation none --tags cli,registry
+bee decisions log --decision "Use the in-repo registry for CLI commands" --rationale "Avoids duplicated validation between dispatcher and hook" --relation none --tags cli,registry
 ```
 
 bee answers `Logged decision <id>.` and, under that, up to three lines of the form `possible conflict: <short8> <first 90 characters> — if replaced, run decisions supersede --id <short8>`: active decisions that share a tag or hit two or more of this decision's terms. Those lines are a warning, never a refusal. Under them come any *update obligations* — homed knowledge rules whose area matches a tag or the scope, each naming the files that rule already reaches.
