@@ -97,12 +97,26 @@ and wrote wrong. The text-proven predicate is what keeps it a correction rather
 than a rewrite — the verb can only act where the record already contradicts
 its own stamp, so it cannot express an opinion of its own.
 
+**B7 — A human may name the correction for a record whose text makes no
+claim** (reattribute-by-name, cell rbn-1, 2026-08-26). `bee decisions
+reattribute --id <decision> --to <feature>` corrects exactly one record by
+the operator's explicit word — the case B5's predicate correctly declines,
+because a text-less record carries no contradiction to resolve. The pair
+comes together or not at all; the first id match wins outright so a short
+prefix can never rewrite a second record; a record whose own text claims a
+**different** feature refuses toward the automatic pass — the manual door
+never contradicts a record's text; and only the `feature` field is ever
+written. Applied 2026-08-26: the five `prompt-work-record` records took
+their own feature, and a re-run reports zero.
+
 ## Open Gaps
 
-- Five `prompt-work-record` decisions remain stamped `model-role-split`. Their
-  text is plainly about that feature but opens with no `<slug> D<n>` claim, so
-  B5 correctly declined them. Correcting a record whose text makes no claim
-  needs a human to name the target explicitly, and no such door exists yet.
 - Nothing prevents a session from binding a lane that is not what it is
   actually working on, which would reintroduce a wrong stamp by a different
   route. B1 removes the silent case, not the mistaken one.
+- `.bee/decisions.jsonl` is git-tracked and merges as TEXT, so a worktree
+  branch that diverged before a correction can resurrect the stale stamps at
+  merge time — observed 2026-08-26, when 18 corrected records reverted after
+  a merge and the automatic pass re-fixed them. Recoverable but silent;
+  filed as a P2 (run the automatic pass after a merge touching the store, or
+  merge the store as append-only data).
