@@ -13,7 +13,7 @@
   "summary": "Feature \"reattribute-by-name\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 36f9a33; capture what settled, then bee close --feature reattribute-by-name.",
   "created_at": "2026-08-26T02:43:18.824Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,5 +25,14 @@
     "rationale": null,
     "updated_at": "2026-08-26T02:43:18.834Z",
     "feature": "reattribute-by-name"
+  },
+  "merge_ready": {
+    "since": "2026-08-26T02:49:20.769Z",
+    "branch": "wt/reattribute-by-name",
+    "worktree_id": "beehive--wt--reattribute-by-name",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt"
+    ]
   }
 }

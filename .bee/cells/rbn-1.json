@@ -27,20 +27,42 @@
   "affects_skills": [],
   "affects_specs": [],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "read_first": [],
   "trace": {
     "worker": "main-inline",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "the human-named reattribution door lands and the five prompt-work-record records now carry their own feature; a store-wide re-check also caught and re-fixed 18 merge-resurrected stamps",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "Executed inline; reason on trace.inline_reason."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-26T02:49:20.753Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "c44aee6b-32e8-4e45-a218-0b53c6637f4d",
-    "claimed_at": "2026-08-26T02:43:53.467Z"
+    "claimed_at": "2026-08-26T02:43:53.467Z",
+    "inline_reason": "Small lane, one cell, same recorded inline pattern as the prior lanes; the orchestrator held the D5 residual's full context.",
+    "report": {
+      "outcome": "decisions reattribute gains --id/--to: first match wins outright, a text-claiming record refuses toward the automatic pass, blank/unknown refuse, idempotent, feature the only field written. Applied live: all five prompt-work-record records corrected (each old -> new quoted), re-run reports zero. The post-apply store check found 18 previously-corrected stamps resurrected by a text-merge of the git-tracked decisions store; the automatic pass re-fixed them and the vector is filed P2.",
+      "commit": "d56a080b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green, 3069 passed with only the two node-missing environmental fails — plus the live five-record apply and zero-on-rerun",
+      "deviations": [
+        "Executed inline; reason on trace.inline_reason."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
