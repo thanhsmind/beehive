@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tôi kiểm tra release 2.22.2: tag, CI, và file đính kèm trên GitHub.",
-    "asked_at": "2026-08-26T06:40:29.530Z",
+    "subject": "Hàng rào bảo vệ chặn `git add` vì có 2 phiên làm việc trong cùng thư mục. Nó cho phép commit theo đường dẫn. Tôi làm theo cách đó.",
+    "asked_at": "2026-08-26T06:41:00.690Z",
     "session": "7a44c92f-5bc8-4252-bb94-8f62de3e55c9"
   }
 }
