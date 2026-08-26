@@ -182,7 +182,7 @@ Status is one of `not started`, `drafted`, or `verified`.
 | delegation/dispatch.md | not started |
 | delegation/workers.md | not started |
 | delegation/herding.md | not started |
-| memory/capture.md | not started |
+| memory/capture.md | drafted |
 | memory/decisions.md | not started |
 | memory/knowledge.md | not started |
 | memory/backlog.md | not started |
