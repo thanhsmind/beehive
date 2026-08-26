@@ -41,6 +41,70 @@ fn build_gate_records(ctx: &Ctx, feature: Option<&Value>) -> R<Value> {
     Ok(live_gates.unwrap_or_else(|| Value::Object(default_wf_gates())))
 }
 
+/// models-show-verb D4: the status `models` section carries each role's
+/// `description` back onto the normalized slot — for DISPLAY, and nowhere
+/// else.
+///
+/// `normalize_models` strips `description` on purpose, and that strip is what
+/// keeps resolution blind to the field (D5: resolution, the model guard, and
+/// `dispatch prepare` are untouched — they keep reading the stripped map, so
+/// a described role and an undescribed one dispatch identically). But
+/// `bee status --json` is a READ surface: an agent reading the models section
+/// to pick a role needs the operator's own sentence about what the role is
+/// for, and an open role set means the NAME is the only other thing bee can
+/// publish about a role it never invented. So the merge happens HERE, on the
+/// copy that goes into the JSON, never in `normalize_models`.
+///
+/// Three slot shapes, three answers:
+///
+/// - object slot (`{model}`, `{kind:"cli",…}`, `{kind:"native",…}`, the
+///   explicit-fallback composite): `description` is appended beside the
+///   fields it already carries.
+/// - bare-string slot (`"sonnet"` — a seeded default, or a raw slot whose
+///   only usable content was the description): it widens to
+///   `{model:"sonnet", description:"…"}`. `render::format_slot` already
+///   prints that object as `sonnet`, so the human `Models (…)` line is
+///   unchanged by the widening.
+/// - null slot (the config turned the role off): left alone. There is
+///   nothing to describe, and widening it would turn "off" into an object.
+///
+/// A raw slot with no `description`, an empty/whitespace one, or a
+/// non-string one is untouched — so a config that never uses the field
+/// produces exactly the bytes it produced before this existed.
+///
+/// The text is trimmed but NOT truncated. The dispatch-door line truncates
+/// (`hooks::model_guard::role_slot_description`) because it is a one-line
+/// budget; JSON has no such budget, and a clipped sentence in machine output
+/// is the status stating something the config does not say.
+fn models_with_descriptions(normalized: &JMap, raw_models: Option<&Value>) -> JMap {
+    let mut out = normalized.clone();
+    let Some(raw_models) = raw_models.and_then(Value::as_object) else { return out };
+    for (runtime, slots) in out.iter_mut() {
+        let Some(raw_slots) = raw_models.get(runtime).and_then(Value::as_object) else { continue };
+        let Some(slots) = slots.as_object_mut() else { continue };
+        for (slot, value) in slots.iter_mut() {
+            let described = raw_slots
+                .get(slot)
+                .and_then(Value::as_object)
+                .and_then(|s| s.get("description"))
+                .and_then(Value::as_str)
+                .map(js_trim)
+                .filter(|d| !d.is_empty());
+            let Some(description) = described else { continue };
+            match value {
+                Value::Object(fields) => {
+                    fields.insert("description".into(), json!(description));
+                }
+                Value::String(model) => {
+                    *value = json!({ "model": model.clone(), "description": description });
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
 // ─── buildStatus (bee.mjs ~874-1047) ───────────────────────────────────────
 
 pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
@@ -271,7 +335,14 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         },
     );
     let config_models = read_config(ctx)?; // readConfig: `models`
-    status.insert("models".into(), Value::Object(config_models.models.clone()));
+    // models-show-verb D4: DISPLAY-only merge — see `models_with_descriptions`.
+    status.insert(
+        "models".into(),
+        Value::Object(models_with_descriptions(
+            &config_models.models,
+            config_models.raw.get("models"),
+        )),
+    );
     // ── PUBLIC CONTRACT: `tier_mix` is renamed to `role_mix` (D6) ──────────
     //
     // `bee status --json` is published output, so this is a BREAKING key

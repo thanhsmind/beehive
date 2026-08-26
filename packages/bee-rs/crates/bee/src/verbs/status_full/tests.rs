@@ -4603,3 +4603,129 @@ use crate::version::BEE_VERSION;
         }}})))
         .is_empty());
     }
+
+    // ── models-show-verb D4: descriptions survive into `bee status --json` ──
+
+    /// `normalize_models` strips `description` so resolution stays blind to
+    /// it (D5). `bee status --json` is a READ surface, though, so the status
+    /// `models` section merges the raw sentence back on for display — this
+    /// pins that it does, across every slot shape the config can hold.
+    ///
+    /// The widening case matters most: `review` names ONLY a description, so
+    /// normalization drops the whole value and the slot keeps its seeded
+    /// string default. The description still has to land, which means the
+    /// bare string widens to `{model, description}` — and `format_slot` must
+    /// still print it as the plain model name, or the human `Models (…)`
+    /// line silently re-renders.
+    #[test]
+    fn status_models_section_merges_each_slot_description_for_display() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{
+                "claude":{
+                    "generation":{"model":"sonnet","description":"build and edit code"},
+                    "review":{"description":"  just a note  "},
+                    "extraction":{"model":"haiku","description":"   "},
+                    "test":"opus",
+                    "advisor":{"kind":"cli","command":"codex exec -","description":"second opinion"},
+                    "design":{"kind":"herding","agent":"agy-flash","description":"runs in a pane"}
+                },
+                "codex":{
+                    "generation":{"kind":"native","model":"gpt-5.5","description":"writes code"},
+                    "review":{"description":"nothing normalizes here"}
+                }
+            }}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let models = status.get("models").expect("models section");
+        let claude = vget(models, "claude").expect("claude table");
+        let codex = vget(models, "codex").expect("codex table");
+
+        // An object slot gains the field beside what it already carried —
+        // `model` first, `description` appended, never reordered.
+        assert_eq!(
+            vget(claude, "generation"),
+            Some(&json!({"model": "sonnet", "description": "build and edit code"}))
+        );
+        // A cli slot and a herding slot are objects too: same merge.
+        assert_eq!(
+            vget(claude, "advisor"),
+            Some(&json!({
+                "kind": "cli", "command": "codex exec -", "description": "second opinion"
+            }))
+        );
+        assert_eq!(
+            vget(claude, "design"),
+            Some(&json!({
+                "kind": "herding", "agent": "agy-flash", "description": "runs in a pane"
+            }))
+        );
+        // A bare-string slot widens, and the sentence is trimmed.
+        assert_eq!(
+            vget(claude, "review"),
+            Some(&json!({"model": "opus", "description": "just a note"}))
+        );
+        // …and the widening is invisible to the human line's formatter.
+        assert_eq!(format_slot(vget(claude, "review")), "opus");
+        // A whitespace-only description is no description: the slot is
+        // exactly what normalization produced, with no empty field bolted on.
+        assert_eq!(vget(claude, "extraction"), Some(&json!({"model": "haiku"})));
+        // An undescribed bare-string slot never widens.
+        assert_eq!(vget(claude, "test"), Some(&json!("opus")));
+        // A native slot on another runtime merges the same way.
+        assert_eq!(
+            vget(codex, "generation"),
+            Some(&json!({
+                "kind": "native", "model": "gpt-5.5", "description": "writes code"
+            }))
+        );
+        // A null slot stays null: nothing to describe, and widening it would
+        // turn "this role is off" into an object that looks configured.
+        assert_eq!(vget(codex, "review"), Some(&Value::Null));
+
+        // D5 guard: the map resolution reads is untouched — the stripped
+        // normalization still has no `description` anywhere in it.
+        let raw = read_config_raw(root);
+        let stripped = normalize_models(raw.get("models"));
+        assert!(
+            !serde_json::to_string(&stripped).unwrap().contains("description"),
+            "normalize_models must stay blind to description: {stripped:?}"
+        );
+    }
+
+    /// The guard against the additive change quietly becoming a re-render: a
+    /// config that names no `description` anywhere produces the models
+    /// section bee produced before this field existed — byte for byte, key
+    /// order included.
+    #[test]
+    fn status_models_section_is_unchanged_when_no_slot_declares_a_description() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"models":{
+                "claude":{
+                    "generation":{"model":"sonnet","effort":"medium"},
+                    "review":"opus",
+                    "design":{"kind":"herding","agent":"agy-flash"}
+                },
+                "codex":{"generation":{"kind":"native","model":"gpt-5.5"}},
+                "opencode":{"generation":"opencode/big-pickle"}
+            }}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let raw = read_config_raw(root);
+        let before = Value::Object(normalize_models(raw.get("models")));
+        assert_eq!(
+            serde_json::to_string(status.get("models").expect("models section")).unwrap(),
+            serde_json::to_string(&before).unwrap()
+        );
+    }
