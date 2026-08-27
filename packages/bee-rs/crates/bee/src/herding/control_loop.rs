@@ -55,6 +55,12 @@ use super::TransportKind;
 pub(crate) enum Role {
     Dispatch,
     Merge,
+    /// slp-supervisor-heartbeat D 322695d6 — the OBSERVER. It reads bee's
+    /// existing state surfaces on a cold tick and writes exactly one
+    /// observation record. It is NOT a router: it never dispatches, never
+    /// merges, never approves, and (see `allowed_tools_for`) carries no
+    /// write-scope tool at all.
+    Supervisor,
 }
 
 impl Role {
@@ -62,6 +68,7 @@ impl Role {
         match s {
             "dispatch" => Some(Role::Dispatch),
             "merge" => Some(Role::Merge),
+            "supervisor" => Some(Role::Supervisor),
             _ => None,
         }
     }
@@ -70,11 +77,24 @@ impl Role {
         match self {
             Role::Dispatch => "dispatch",
             Role::Merge => "merge",
+            Role::Supervisor => "supervisor",
+        }
+    }
+
+    /// The tick spacing this role gets when the operator names no
+    /// `--interval`. The observer wakes every 15 minutes (322695d6's
+    /// `--interval 900`); the two cockpit roles keep the 60s the bash script
+    /// shipped with, untouched.
+    fn default_interval(self) -> u64 {
+        match self {
+            Role::Dispatch | Role::Merge => DEFAULT_INTERVAL,
+            Role::Supervisor => SUPERVISOR_DEFAULT_INTERVAL,
         }
     }
 }
 
 const DEFAULT_INTERVAL: u64 = 60;
+const SUPERVISOR_DEFAULT_INTERVAL: u64 = 900;
 const DEFAULT_TIMEOUT: u64 = 900;
 const DEFAULT_MAX_CONSECUTIVE_FAILURES: u64 = 20;
 const DEFAULT_TURN_CEILING: u64 = 50;
@@ -89,6 +109,10 @@ const BACKOFF_CAP: u64 = 600;
 // `timeout -k 30s`.
 const KILL_GRACE: Duration = Duration::from_secs(30);
 const DEFAULT_MODEL: &str = "sonnet";
+/// The model-role NAME the supervisor tick asks the open role set for
+/// (322695d6: "model = configured `supervisor` role (open fall-through
+/// set)"). It is a config key, never a model id.
+const SUPERVISOR_MODEL_ROLE: &str = "supervisor";
 
 #[derive(Debug)]
 pub(crate) struct Options {
@@ -106,7 +130,10 @@ impl Options {
     fn parse(flags: &[&str]) -> Result<Options, String> {
         let mut role: Option<Role> = None;
         let mut main_root: Option<String> = None;
-        let mut interval = DEFAULT_INTERVAL;
+        // Left as `None` until the role is known: the default tick spacing is
+        // per-role (`Role::default_interval`), and an explicit `--interval`
+        // always wins over it.
+        let mut interval: Option<u64> = None;
         let mut timeout = DEFAULT_TIMEOUT;
         let mut max_iterations: Option<u64> = None;
         let mut max_consecutive_failures = DEFAULT_MAX_CONSECUTIVE_FAILURES;
@@ -119,10 +146,9 @@ impl Options {
             match flag {
                 "--role" => {
                     let v = need_value(flag, flags, i)?;
-                    role = Some(
-                        Role::parse(v)
-                            .ok_or_else(|| format!("unknown role '{v}' (expected dispatch or merge)"))?,
-                    );
+                    role = Some(Role::parse(v).ok_or_else(|| {
+                        format!("unknown role '{v}' (expected dispatch, merge or supervisor)")
+                    })?);
                     i += 2;
                 }
                 "--main-root" => {
@@ -132,7 +158,7 @@ impl Options {
                 }
                 "--interval" => {
                     let v = need_value(flag, flags, i)?;
-                    interval = positive_int(flag, v)?;
+                    interval = Some(positive_int(flag, v)?);
                     i += 2;
                 }
                 "--timeout" => {
@@ -163,11 +189,11 @@ impl Options {
             }
         }
 
-        let role = role.ok_or_else(|| "--role dispatch|merge is required".to_string())?;
+        let role = role.ok_or_else(|| "--role dispatch|merge|supervisor is required".to_string())?;
         Ok(Options {
             role,
             main_root,
-            interval,
+            interval: interval.unwrap_or_else(|| role.default_interval()),
             timeout,
             max_iterations: max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS),
             max_consecutive_failures,
@@ -193,7 +219,7 @@ fn positive_int(flag: &str, raw: &str) -> Result<u64, String> {
 
 fn print_usage() {
     eprintln!(
-        "Usage: bee herding control-loop --role dispatch|merge [--main-root PATH] \
+        "Usage: bee herding control-loop --role dispatch|merge|supervisor [--main-root PATH] \
          [--interval N] [--timeout N] [--max-iterations N] \
          [--max-consecutive-failures N] [--turn-ceiling N] [--once]"
     );
@@ -217,8 +243,35 @@ pub(crate) type Argv = Vec<String>;
 /// and nothing else touched. The surface stays enumerated and stays the same
 /// width: a control pane driving tmux needs the tmux client for exactly the
 /// pane work it used herdr for, and gains no other tool.
+///
+/// The `Supervisor` arm (slp-supervisor-heartbeat D 322695d6, R4) is the same
+/// idea taken to its end: an ENUMERATED READ-ONLY surface. It differs from
+/// the two cockpit arms in three deliberate ways, and each one is a rule, not
+/// a taste:
+///
+///   1. No `Write`, no `Edit`, no `Bash(git …)`, no dispatch tool. The
+///      observer reads and asks questions; it never writes product code,
+///      never dispatches work, never merges, never approves (787a9eb0 / R4).
+///   2. No `Bash(.bee/bin/bee:*)`. That wildcard is the whole bee CLI —
+///      gates, caps, merges included. The observer names the QUERY verbs one
+///      by one instead, so widening the surface takes an edit here rather
+///      than a new bee subcommand landing somewhere else.
+///   3. No raw multiplexer entry, on EITHER transport. Pane reading goes
+///      through the transport-neutral `bee herding pane list|read` verbs
+///      (tmux-herding-cockpit D2), which is why both arms are the same
+///      string — a supervisor never needs `herdr` or `tmux` directly, and a
+///      raw multiplexer client is a write surface (`send-text`, `kill-pane`)
+///      wearing a read name.
+///
+/// The one verb here that writes anything is `bee supervisor record` — the
+/// observer's own observation record, the thing a tick MUST end with (it
+/// lands with the `bee supervisor` verb). It writes into the observer's own
+/// store and nowhere else.
 fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
     match (role, kind) {
+        // The observer's surface does not vary by transport: it touches no
+        // multiplexer client at all (see 3. above).
+        (Role::Supervisor, TransportKind::Herdr | TransportKind::Tmux) => SUPERVISOR_ALLOWED_TOOLS,
         (Role::Dispatch, TransportKind::Herdr) => {
             "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
         }
@@ -231,6 +284,76 @@ fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
         (Role::Merge, TransportKind::Tmux) => {
             "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
         }
+    }
+}
+
+/// The observer's whole tool surface, in one place, enumerated verb by verb.
+///
+/// Every entry is a QUERY except the last, which is the observer's own
+/// record write (the tick's required outcome). Read the arm doc on
+/// `allowed_tools_for` for why the `Bash(.bee/bin/bee:*)` wildcard the
+/// cockpit roles carry is deliberately absent here.
+const SUPERVISOR_ALLOWED_TOOLS: &str = "Bash(.bee/bin/bee status:*),\
+Bash(.bee/bin/bee state session list:*),\
+Bash(.bee/bin/bee cells list:*),\
+Bash(.bee/bin/bee herding occupancy:*),\
+Bash(.bee/bin/bee herding pane list:*),\
+Bash(.bee/bin/bee herding pane read:*),\
+Bash(.bee/bin/bee supervisor list:*),\
+Bash(.bee/bin/bee supervisor record:*),\
+Read";
+
+/// Tokens that must never appear in a supervisor's tool surface, whatever
+/// else changes about it (R4 / 787a9eb0). Kept next to the surface itself so
+/// the prohibition and the string it constrains are read together, and
+/// asserted by test rather than trusted.
+#[cfg(test)]
+const SUPERVISOR_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
+    "Write",
+    "Edit",
+    "Bash(git",
+    "Bash(herdr:*)",
+    "Bash(tmux:*)",
+    "Bash(.bee/bin/bee:*)",
+    "Task",
+];
+
+/// The model one control-pane invocation runs on.
+///
+/// The two cockpit roles keep `DEFAULT_MODEL` exactly as the bash script had
+/// it — the D13 byte-identical crossing depends on that and nothing here
+/// touches it. The supervisor instead asks the OPEN model-role set for the
+/// name `supervisor` (322695d6; the resolver is model-role-split D2, store
+/// `06e49368`), so the operator picks the observer's model in
+/// `.bee/config.json` under `models.claude.supervisor` with zero resolver
+/// changes.
+///
+/// It can never fail the tick. `read_models` bowing out (the dogfood-repos
+/// delegate), a role nothing configures, and a slot configured into a shape
+/// this loop cannot spawn (`Cli`, `Herding`, `Inherit`, `Refused`, `Budget` —
+/// all of them mean "no plain model id for a `claude -p` argv") each fall
+/// through to `DEFAULT_MODEL`. The unconfigured case is not silent: the
+/// resolver itself prints the `model role "supervisor" is not configured…`
+/// warning to stderr on its way through (`models::warn_unknown_role`, gated
+/// on the public `models::role_is_unknown` predicate the test below asserts).
+fn model_for(main_root: &Path, role: Role) -> String {
+    match role {
+        Role::Dispatch | Role::Merge => DEFAULT_MODEL.to_string(),
+        Role::Supervisor => supervisor_model(main_root),
+    }
+}
+
+fn supervisor_model(main_root: &Path) -> String {
+    use crate::verbs::drivers::{read_models, resolve_role, Resolved};
+
+    let Ok(models) = read_models(main_root) else {
+        return DEFAULT_MODEL.to_string();
+    };
+    // Runtime is `claude` by construction: this loop's default argv spawns
+    // `claude -p` (D13), so the table it must read is `models.claude`.
+    match resolve_role(&models, &[SUPERVISOR_MODEL_ROLE], "claude", "cell") {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => model,
+        _ => DEFAULT_MODEL.to_string(),
     }
 }
 
@@ -309,7 +432,8 @@ pub(crate) fn resolve_iteration_argv(main_root: &Path, role: Role, turn_ceiling:
     // stops the loop here rather than quietly arming the other multiplexer.
     let allowed_tools = allowed_tools_for(role, super::transport_kind_at(main_root)?);
     let template = super::read_command_template_tokens(main_root, "control_command");
-    Ok(build_control_argv(template.as_deref(), &prompt, DEFAULT_MODEL, turn_ceiling, allowed_tools))
+    let model = model_for(main_root, role);
+    Ok(build_control_argv(template.as_deref(), &prompt, &model, turn_ceiling, allowed_tools))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -721,6 +845,183 @@ mod tests {
                     .to_string(),
             ]
         );
+    }
+
+    // ── the supervisor observer role (slp-supervisor-heartbeat) ───────────
+
+    /// Writes the supervisor prompt file a tick reads and returns the tmpdir.
+    fn supervisor_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("supervisor-prompt.md"), "PROMPT BODY supervisor\n").unwrap();
+        tmp
+    }
+
+    #[test]
+    fn supervisor_is_a_parsed_role_that_names_itself_supervisor() {
+        assert_eq!(Role::parse("supervisor"), Some(Role::Supervisor));
+        assert_eq!(Role::Supervisor.as_str(), "supervisor");
+        // The prompt file this name resolves to is the observer contract,
+        // not a cockpit role document.
+        assert!(Role::parse("observer").is_none());
+    }
+
+    #[test]
+    fn supervisor_role_parses_off_the_real_flag_line_with_the_900s_default() {
+        // 322695d6: the observer's default tick spacing is 900s. The two
+        // cockpit roles keep the 60s the bash script shipped with.
+        let opts = Options::parse(&["--role", "supervisor"]).expect("parses");
+        assert_eq!(opts.role, Role::Supervisor);
+        assert_eq!(opts.interval, 900);
+        assert_eq!(Options::parse(&["--role", "dispatch"]).unwrap().interval, 60);
+        assert_eq!(Options::parse(&["--role", "merge"]).unwrap().interval, 60);
+        // An explicit --interval still wins, for every role.
+        assert_eq!(
+            Options::parse(&["--role", "supervisor", "--interval", "30"]).unwrap().interval,
+            30
+        );
+    }
+
+    #[test]
+    fn unknown_role_names_supervisor_among_the_expected_ones() {
+        let err = Options::parse(&["--role", "observer"]).unwrap_err();
+        assert!(err.contains("supervisor"), "{err}");
+    }
+
+    #[test]
+    fn supervisor_role_gets_the_read_only_allowlist_and_prompt_file() {
+        let tmp = supervisor_root();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        assert_eq!(
+            argv,
+            vec![
+                "claude".to_string(),
+                "-p".to_string(),
+                "PROMPT BODY supervisor\n".to_string(),
+                "--model".to_string(),
+                // No `models.claude.supervisor` in this root: the resolver
+                // warns and falls through, and the loop lands on its default
+                // rather than failing the tick.
+                "sonnet".to_string(),
+                "--max-turns".to_string(),
+                "12".to_string(),
+                "--allowedTools".to_string(),
+                SUPERVISOR_ALLOWED_TOOLS.to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn supervisor_allowlist_carries_no_write_scope_tool_on_either_transport() {
+        // R4 / 787a9eb0: the observer reads. It has no Write, no Edit, no
+        // git, no raw multiplexer client, and not the whole-CLI wildcard the
+        // cockpit roles carry.
+        for kind in [TransportKind::Herdr, TransportKind::Tmux] {
+            let tools = allowed_tools_for(Role::Supervisor, kind);
+            for forbidden in SUPERVISOR_FORBIDDEN_TOOL_TOKENS {
+                assert!(!tools.contains(forbidden), "{kind:?} allowlist contains {forbidden}: {tools}");
+            }
+            // Every Bash entry is enumerated down to the subcommand — never a
+            // bare binary wildcard.
+            for entry in tools.split(',').filter(|e| e.starts_with("Bash(")) {
+                assert!(
+                    entry.starts_with("Bash(.bee/bin/bee ") && entry.ends_with(":*)"),
+                    "{kind:?}: un-enumerated Bash entry {entry}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn supervisor_allowlist_is_the_same_string_on_both_transports() {
+        // Pane reading rides `bee herding pane list|read`, which is already
+        // transport-neutral, so there is no multiplexer entry to swap.
+        assert_eq!(
+            allowed_tools_for(Role::Supervisor, TransportKind::Herdr),
+            allowed_tools_for(Role::Supervisor, TransportKind::Tmux)
+        );
+    }
+
+    #[test]
+    fn supervisor_allowlist_reaches_the_spawned_argv_even_on_tmux() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"tmux"}}"#).unwrap();
+
+        let argv = resolve_iteration_argv(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        assert_eq!(argv.last().unwrap(), SUPERVISOR_ALLOWED_TOOLS);
+    }
+
+    #[test]
+    fn an_unconfigured_supervisor_model_role_warns_and_falls_through() {
+        use crate::verbs::drivers::{normalize_models, role_is_unknown};
+
+        // The warn itself goes to stderr, which an in-process test cannot
+        // read — so assert the exact predicate the resolver warns on, the way
+        // models.rs documents it being provable.
+        let empty = normalize_models(None);
+        assert!(
+            role_is_unknown(&empty, "claude", "supervisor"),
+            "an unconfigured `supervisor` role must be the loud kind, not the silent one"
+        );
+        // …and the fall-through is a value, never an error: the tick runs.
+        let tmp = supervisor_root();
+        assert_eq!(supervisor_model(tmp.path()), DEFAULT_MODEL);
+    }
+
+    #[test]
+    fn a_configured_supervisor_model_role_reaches_the_spawned_argv() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"models":{"claude":{"supervisor":"haiku"}}}"#,
+        )
+        .unwrap();
+
+        let argv = resolve_iteration_argv(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        let model_at = argv.iter().position(|t| t == "--model").expect("--model is in the argv");
+        assert_eq!(argv[model_at + 1], "haiku");
+    }
+
+    #[test]
+    fn the_cockpit_roles_keep_the_hardcoded_default_model() {
+        // The supervisor's config-driven model must not leak into the D13
+        // crossing: a root that configures `supervisor` changes nothing for
+        // dispatch or merge.
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"models":{"claude":{"supervisor":"haiku"}}}"#,
+        )
+        .unwrap();
+        for role in [Role::Dispatch, Role::Merge] {
+            assert_eq!(model_for(tmp.path(), role), DEFAULT_MODEL, "{role:?}");
+        }
+    }
+
+    #[test]
+    fn the_supervisor_prompt_file_shipped_in_this_repo_carries_the_observer_contract() {
+        // `read_prompt_file` resolves `<root>/skills/bee-herding/references/
+        // supervisor-prompt.md`; this asserts the real one exists and is the
+        // OBSERVER contract, not a stub.
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..");
+        let body = read_prompt_file(&repo_root, Role::Supervisor).expect("the shipped prompt file reads");
+        for needle in [
+            "observer",
+            "struggling-loop",
+            "big-decision",
+            "danger-op",
+            "bee supervisor record",
+            "silence",
+        ] {
+            assert!(body.contains(needle), "supervisor-prompt.md is missing {needle:?}");
+        }
     }
 
     // ── the transport swaps exactly one allowlist entry ───────────────────
