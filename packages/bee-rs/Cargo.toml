@@ -30,4 +30,6 @@ unicode-normalization = "0.1"
 # hot path.
 [profile.release]
 opt-level = 1
-incremental = true
+incremental = false # Tắt incremental trong release để không tạo 1.4GB cache
+ [profile.dev]
+debug = 1 # Chỉ giữ lại line tables, giảm đáng kể kích thước file debug
