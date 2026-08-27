@@ -1,0 +1,87 @@
+{
+  "id": "sup-6",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Deliver pending interventions at the next turn boundary",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "sup-5"
+  ],
+  "decisions": [
+    "c80debd7",
+    "9f5cd250"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/*",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Plan Phase 2, second half (per c80debd7): the target session READS its interventions at the NEXT turn boundary — never mid-turn. Find the existing hook that already injects content at the user-prompt/turn boundary (read hooks/ for the UserPromptSubmit-path handler that today emits the bee preamble lines) and extend it: when the calling session has undelivered intervention/escalation rows (via the sup-5 pending surface, in-process, not shelling out), append them as short lines to the hook's existing output and mark them delivered. Ordinary interventions surface to the HUMAN only in reports — the hook line addresses the AGENT session (an open question, no assertion of fault). Danger-class handling stays out of this cell except: an escalation row's line is prefixed so it reads as urgent. Tests at the existing hook test seams: a pending row for this session appears once in the next hook output and is marked delivered; a delivered row never repeats; a row for another session does not leak; zero rows adds zero lines. Regen deferred to the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml hooks",
+  "must_haves": {
+    "truths": [
+      "an undelivered intervention for the calling session appears exactly once at its next turn boundary and is marked delivered",
+      "rows for other sessions never leak into this session's output"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "delivery read path shared with the hook, no duplicated store logic"
+      }
+    ],
+    "key_links": [
+      "the turn-boundary hook consumes the sup-5 pending surface in-process"
+    ],
+    "prohibitions": [
+      "No mid-turn pane injection",
+      "No change to the hook's existing preamble content beyond appending the intervention lines"
+    ]
+  },
+  "trace": {
+    "worker": "w-sup-6",
+    "outcome": "The UserPromptSubmit hook appends and stamps a session's pending supervisor questions at its next turn",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: No doctrine or skill text changes: the delivered lines are runtime mailbox rows the hook prints, not a rule; the cell declares affects_skills empty and the supervisor prompt half is its own cell. Tests are inline #[cfg(test)] modules in the two touched files (no test-shaped path exists for this crate)."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T12:18:36.122Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e689c2df-430b-44e5-b7ad-a04a3826431b",
+    "claimed_at": "2026-08-27T12:12:00.287Z",
+    "sync_ack": "No doctrine or skill text changes: the delivered lines are runtime mailbox rows the hook prints, not a rule; the cell declares affects_skills empty and the supervisor prompt half is its own cell. Tests are inline #[cfg(test)] modules in the two touched files (no test-shaped path exists for this crate).",
+    "report": {
+      "outcome": "The UserPromptSubmit hook appends and stamps a session pending supervisor questions at its next turn",
+      "commit": "4d45963d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor && cargo test --manifest-path packages/bee-rs/Cargo.toml hooks (+ --test hook_contracts) — green — the cell verify plus the hook contract binary, the two surfaces this change touches",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 239 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

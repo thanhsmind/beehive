@@ -1,0 +1,90 @@
+{
+  "id": "sup-7",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "UrgentAlert: a danger-class record notifies immediately",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "sup-5",
+    "sup-6"
+  ],
+  "decisions": [
+    "c80debd7",
+    "da7cb49b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "behavior_change": true,
+  "action": "Close Plan Phase 2 (per c80debd7 'danger-class UrgentAlerts notify immediately' and the plan's Phase-2 row 'UrgentAlert immediate path'). Add a third mailbox kind `urgent` beside intervention|escalation in packages/bee-rs/crates/bee/src/verbs/supervisor.rs, taking the SAME fields and the SAME validation seam (--target-session, --point-key, --question, one line, at most two sentences, control-token/secret refusal). Two differences only: (1) the point-key frequency cap does NOT refuse an urgent row — a danger-class alert is never suppressed by an earlier record on the same point; (2) on a successful write the verb fires exactly ONE best-effort desktop notification, immediately, in-process. Transport: `notify-send` is the cheapest real one on this machine (/usr/bin/notify-send) — build the command behind an injectable seam (a function returning the notifier argv, so tests assert the argv without spawning anything), spawn it detached and IGNORE every failure: a missing or failing notifier must never fail the record, never panic, never block. Honor an opt-out: read `supervisor.notify` from .bee/config.json through the existing config read path, defaulting to enabled, and skip the spawn when it is false. The urgent row is still an ordinary mailbox row: `pending` lists it and the sup-6 turn-boundary hook delivers it with the urgent prefix, so reuse delivery_line rather than adding a second renderer. Tests in the same tests module: an urgent record is accepted on a point that already carries an intervention (no cap); the notifier argv carries the target session and the question text; notify disabled in config builds no argv; a notifier that cannot run still leaves the row written and returns success; pending and mark-delivered treat urgent exactly like the other two kinds. Regen deferred to the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "an urgent record on a point that already has an intervention is accepted, never capped",
+      "a missing or failing notifier leaves the row written and the command green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "urgent kind, cap exemption, injectable notifier seam, config opt-out"
+      }
+    ],
+    "key_links": [
+      "the sup-6 turn-boundary hook delivers an urgent row through the existing delivery_line renderer"
+    ],
+    "prohibitions": [
+      "no new notification subsystem or external provider",
+      "the notifier never blocks, panics, or fails the record",
+      "intervention|escalation|observation|silence behavior unchanged"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-sup-7",
+    "outcome": "urgent mailbox kind: cap-exempt, one best-effort notification, supervisor.notify opt-out",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T12:28:24.112Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e689c2df-430b-44e5-b7ad-a04a3826431b",
+    "claimed_at": "2026-08-27T12:20:51.609Z",
+    "report": {
+      "outcome": "urgent mailbox kind: cap-exempt, one best-effort notification, supervisor.notify opt-out",
+      "commit": "5d9466c9ed8869bc84a096976431589d43421f4b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor (plus --bin bee catalog, --bin bee prompt_context, --test registry_contracts --test registry_dispatch --test front_door --test installer_invocations) — green: 34 supervisor + 11 catalog + 29 prompt_context + 25 registry/front-door tests passed, 0 failed — the cell verb plus every door that reads what I changed: the registry payload, the flag-vocabulary pin, and the turn-boundary renderer",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 319 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

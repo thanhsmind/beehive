@@ -1,0 +1,101 @@
+{
+  "id": "sup-5",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Intervention records with a point-key frequency cap",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "c80debd7",
+    "a8f4b8ab"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Plan Phase 2, first half (per c80debd7): interventions are FILE RECORDS with frequency-cap state. Extend the supervisor verb group: `bee supervisor record` gains --kind intervention, which REQUIRES --target-session, a --point-key (a stable slug naming the point being touched), and --question (an open question, at most 2 sentences — refuse longer). Frequency cap per c80debd7: the SECOND record for the same (target_session, point_key) is refused as a plain intervention and must be recorded with --kind escalation instead (same fields; the refusal names this remedy) — never repeat the same point. Add `bee supervisor pending --target-session <id> --json` listing undelivered intervention/escalation rows, and `bee supervisor mark-delivered --id <row-id>` stamping delivered_at (rows get a stable id). Keep observation|silence behavior byte-identical. Follow the existing validation-before-write seam; extend the same tests file: cap fires on second same-point record; escalation accepted; pending lists only undelivered; mark-delivered stamps and is idempotent-refusing on unknown id. Regen deferred to the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "a second intervention on the same (target_session, point_key) is refused naming --kind escalation as the remedy",
+      "pending lists only undelivered rows for the named session"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "intervention/escalation kinds, point-key cap, pending + mark-delivered verbs, validated before write"
+      }
+    ],
+    "key_links": [
+      "dispatcher routes supervisor pending and supervisor mark-delivered"
+    ],
+    "prohibitions": [
+      "observation|silence behavior unchanged",
+      "no hand-written .bee files outside the supervisor store"
+    ]
+  },
+  "trace": {
+    "worker": "w-sup-5",
+    "outcome": "Intervention/escalation mailbox with a point-key frequency cap, plus pending and mark-delivered verbs",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "Interventions went into their own store .bee/supervisor/interventions.jsonl instead of the observation log — an intervention is stamped delivered while an observation is written once and never touched, and separate stores keep observation|silence behavior byte-identical — found a better route",
+      "KNOWN_KINDS stayed the two tick kinds and the mailbox kinds took their own const (ALL_KINDS is the union the refusal names) — herding::control_loop pins the shipped supervisor prompt to KNOWN_KINDS and that prompt file is outside this cell files — hit an unforeseen obstacle",
+      "supervisor.record registry required went from [kind, note] to [kind] — hooks/cli_shape.rs enforces required statically and cannot express note-only-for-observation, so leaving it would block every intervention record at the hook; the verb still refuses a missing note — the plan was wrong about a fact",
+      "Added a secret/control-token refusal on --question — that text is delivered into another session context, so it takes the same guard capture add puts on stored text — found a better route",
+      "The worker could not commit: the intake gate read the control root default record (phase idle) because the session was bound to no lane; the orchestrator bound the session, re-ran the verify green, and committed — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T12:11:53.030Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e689c2df-430b-44e5-b7ad-a04a3826431b",
+    "claimed_at": "2026-08-27T11:47:34.365Z",
+    "swept_at": "2026-08-27T11:46:49.208Z",
+    "swept_from_session": "6749e6b9-8c8c-4e3c-9fcf-f3af8df0b86c",
+    "blocked_reason": null,
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-27T11:47:23.514Z",
+    "reopened_reason": "swept by stale-session sweep with zero files changed; Phase 2 resumes clean in the feature worktree",
+    "report": {
+      "outcome": "Intervention/escalation mailbox with a point-key frequency cap, plus pending and mark-delivered verbs",
+      "commit": "3e0c105c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor — green — 28 passed, the cell own verify; plus cargo test catalog green (11 passed) for the flag-count ratchet",
+      "deviations": [
+        "Interventions went into their own store .bee/supervisor/interventions.jsonl instead of the observation log — an intervention is stamped delivered while an observation is written once and never touched, and separate stores keep observation|silence behavior byte-identical — found a better route",
+        "KNOWN_KINDS stayed the two tick kinds and the mailbox kinds took their own const (ALL_KINDS is the union the refusal names) — herding::control_loop pins the shipped supervisor prompt to KNOWN_KINDS and that prompt file is outside this cell files — hit an unforeseen obstacle",
+        "supervisor.record registry required went from [kind, note] to [kind] — hooks/cli_shape.rs enforces required statically and cannot express note-only-for-observation, so leaving it would block every intervention record at the hook; the verb still refuses a missing note — the plan was wrong about a fact",
+        "Added a secret/control-token refusal on --question — that text is delivered into another session context, so it takes the same guard capture add puts on stored text — found a better route",
+        "The worker could not commit: the intake gate read the control root default record (phase idle) because the session was bound to no lane; the orchestrator bound the session, re-ran the verify green, and committed — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 815 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

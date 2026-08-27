@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"slp-supervisor-heartbeat\" started at phase \"exploring\" (lane).",
-  "next_action": "Dispatch sup-1 and sup-2 in parallel (wave 1) in the feature worktree; sup-3 after both cap; orchestrator owes the regen chain at wave close (wave-barrier).",
+  "next_action": "Slice 2 (interventions): sup-5 store+verbs then sup-6 hook delivery; worktree synced with main first",
   "created_at": "2026-08-27T01:36:44.583Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -27,13 +27,10 @@
     "feature": "slp-supervisor-heartbeat"
   },
   "merge_ready": {
-    "since": "2026-08-27T08:20:41.996Z",
+    "since": "2026-08-27T12:18:36.127Z",
     "branch": "wt/slp-supervisor-heartbeat",
     "worktree_id": "beehive--wt--slp-supervisor-heartbeat",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt",
-      "doc-deferral"
-    ]
+    "uat": "approved",
+    "blocked_by": []
   }
 }
