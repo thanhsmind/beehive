@@ -147,6 +147,15 @@
 //   supervisor back  [--json]
 //   supervisor presence [--json]
 //   supervisor report [--window <id>] [--json]
+//   supervisor metrics [--window <id>] [--json]
+//
+// Phase 4's first half adds the HEALTH COUNTERS (66c4c251 and a8f4b8ab) — no
+// fifth store, because a counter that had to be persisted could drift from the
+// records it counts. Every number is DERIVED at read time from records bee
+// already holds, each carries a TWO-SIDED band and its sample count, and
+// `not-measurable` is a first-class verdict. The full contract is at the
+// section header below; the report's half is exactly ONE of its existing
+// content lines.
 //
 // CLI-ONLY STATE. Nothing else in the tree writes this file; `record` is
 // the one door, and it VALIDATES BEFORE IT WRITES — a refused row leaves
@@ -1424,13 +1433,19 @@ fn next_action_line(
 /// Pure — no clock, no disk — so the whole shape law is one assertion over a
 /// value, not a walk of the store.
 ///
-/// THE BUDGET. Four headings and the one next-action line are fixed, and each
-/// of the other three sections keeps at least one line (its highest-impact
-/// item, or a plain statement that nothing happened). That floor is 8 lines,
-/// which leaves 2 for further items. When more items than that are honest, the
-/// LAST line becomes a `+N more` count and the spare drops to 1: the report
-/// never silently drops an item, and it never lies by printing "nothing
-/// happened" over a section whose items were cut.
+/// THE BUDGET. Four headings, the one next-action line and the ONE metrics
+/// line (66c4c251) are fixed, and each of the three content sections keeps at
+/// least one line (its highest-impact item, or a plain statement that nothing
+/// happened). That floor is 9 lines, which leaves 1 for further items. When
+/// more items than that are honest, the LAST line becomes a `+N more` count
+/// and the spare drops to 0: the report never silently drops an item, and it
+/// never lies by printing "nothing happened" over a section whose items were
+/// cut.
+///
+/// The metrics line is a FIXED content line inside the first section, never a
+/// ranked item, so a report always carries its health readout — the four
+/// sections and the ten-line ceiling of 9f5cd250 do not move; the readout
+/// takes one of the six content lines that ceiling already allowed.
 ///
 /// Returns the markdown and the number of items it could not fit.
 fn render_report_markdown(
@@ -1438,6 +1453,7 @@ fn render_report_markdown(
     decided: &[ReportItem],
     needs: &[ReportItem],
     next_action: &str,
+    metrics: &str,
 ) -> (String, usize) {
     let empty_text = ["- Nothing happened.", "- Nothing was decided.", "- Nothing needs you."];
     // Impact-if-wrong descending (66c4c251); `sort_by` is stable, so equal
@@ -1449,8 +1465,9 @@ fn render_report_markdown(
     }
 
     let extras: usize = sections.iter().map(|s| s.len().saturating_sub(1)).sum();
-    // 4 headings + one line per content section + the next-action line.
-    const FLOOR: usize = 4 + 3 + 1;
+    // 4 headings + one line per content section + the metrics line + the
+    // next-action line.
+    const FLOOR: usize = 4 + 3 + 1 + 1;
     let (allowance, more) = if FLOOR + extras <= REPORT_MAX_LINES {
         (extras, 0)
     } else {
@@ -1478,12 +1495,18 @@ fn render_report_markdown(
         lines.push(REPORT_SECTIONS[si].to_string());
         if section.is_empty() {
             lines.push(empty_text[si].to_string());
-            continue;
-        }
-        for (ii, item) in section.iter().enumerate() {
-            if ii == 0 || kept.contains(&(si, ii)) {
-                lines.push(item.text.clone());
+        } else {
+            for (ii, item) in section.iter().enumerate() {
+                if ii == 0 || kept.contains(&(si, ii)) {
+                    lines.push(item.text.clone());
+                }
             }
+        }
+        if si == 0 {
+            // The ONE metrics line of 66c4c251, on a fixed line rather than as
+            // a ranked item: a health readout that truncation can drop is a
+            // health readout the report does not carry.
+            lines.push(one_line(metrics));
         }
     }
     lines.push(REPORT_SECTIONS[3].to_string());
@@ -1590,7 +1613,10 @@ fn build_wake_report(control: &Path, win: &PresenceWindow, released: &[String]) 
     let decided = collect_decided(control, win);
     let needs = collect_needs_you(control, win, released);
     let next = next_action_line(control, win, released, decided.len(), happened.len());
-    let (markdown, more) = render_report_markdown(&happened, &decided, &needs, &next);
+    // The health readout is computed here, out of the same records — one more
+    // read of stores this function already reads, and never a new subsystem.
+    let metrics = metrics_report_line(&health_metrics(control, win));
+    let (markdown, more) = render_report_markdown(&happened, &decided, &needs, &next, &metrics);
     WakeReport {
         window_id: win.id.clone(),
         away_at: win.away_at.clone(),
@@ -1668,6 +1694,695 @@ fn notify_report(control: &Path, rep: &WakeReport) -> Option<Vec<String>> {
     notify_report_with(control, rep, spawn_notifier)
 }
 
+// ─── health counters (Phase 4, first half — 66c4c251 + a8f4b8ab) ────────
+
+// 66c4c251 asks the report to carry "a small health-metric set with two-sided
+// bands". Two properties make that set honest, and both are structural here
+// rather than a habit:
+//
+//   1. EVERY NUMBER IS DERIVED. A counter is computed by this deterministic
+//      layer out of records bee already holds — cell files, the decision log,
+//      the mailbox, the observation store. Nothing here asks a model for a
+//      number and nothing here reads a number a worker reported about itself
+//      (a8f4b8ab: "measured by the harness, never self-reported").
+//   2. A BAND HAS TWO SIDES. Each counter carries a LOW bound and a HIGH
+//      bound, and `below-band` is rendered exactly as loudly as `above-band`:
+//      a supervisor that never speaks is as broken as one that never stops,
+//      and a metric set that can only say "too much" cannot see that half.
+//
+// `not-measurable` is a FIRST-CLASS verdict, never a quiet synonym for
+// `in-band`. A counter with no usable input has said nothing, and a report
+// that renders silence as health is the exact failure these counters exist to
+// catch. Every counter therefore carries its SAMPLE COUNT too, so a band
+// verdict on 2 samples never reads like one on 200.
+//
+// SKIP-UNTIL-PRESENT (decision ea02cb68). a8f4b8ab's "work exceeding 2× its
+// recorded estimate" needs an estimate, and bee's cell schema carries none —
+// whoever would fill the field is the agent, and a self-reported estimate is
+// the one input a8f4b8ab forbids. So the overrun counter READS the field and
+// reports the literal state `no estimate recorded` where it is absent. Never
+// zero, never a guess: a gap that is named can be closed, a gap rendered as
+// zero cannot.
+//
+// The verb:
+//   supervisor metrics [--window <id>] [--json]
+//
+// With no --window it measures the last CLOSED presence window through sup-8's
+// shared surface (`last_closed_window`); with --window it measures the named
+// one, open or closed. It reads and computes; it writes nothing.
+//
+// The REPORT's half is exactly ONE line (see `metrics_report_line`). The
+// WakeReport's four sections and its ten-line ceiling do not move: the metrics
+// line takes one of the six content lines the ceiling already allowed.
+//
+// One thing this code deliberately cannot do: the earned-autonomy streak of
+// 66c4c251 is reported as a NUMBER and nothing else. Raising silence-is-consent
+// is EARNED, and the human still flips the switch — so no path here writes a
+// config key, a consent level or any other switch.
+
+/// Escalations per capped cell, LOW. Zero is the good end: an escalation is
+/// the remedy the frequency cap names, never a target to hit.
+const BAND_ESCALATIONS_LOW: f64 = 0.0;
+/// Escalations per capped cell, HIGH. More than one escalation for every two
+/// capped cells means the same points keep coming back after being raised.
+const BAND_ESCALATIONS_HIGH: f64 = 0.5;
+
+/// Blocked rate, LOW. Zero is the good end: a window where nothing blocked is
+/// a window whose plan held.
+const BAND_BLOCKED_LOW: f64 = 0.0;
+/// Blocked rate, HIGH. One cell in four blocked says the plan is wrong, not
+/// the work — that is a re-plan, not more attempts.
+const BAND_BLOCKED_HIGH: f64 = 0.25;
+
+/// Wrong-assumption rate, LOW. Zero is the good end here: the "nobody is
+/// checking" failure shows up as a silent supervisor in the self-answered
+/// band below, and measuring one symptom in two counters double-counts it.
+const BAND_WRONG_ASSUMPTION_LOW: f64 = 0.0;
+/// Wrong-assumption rate, HIGH. One decision in five later superseded means
+/// the decisions are being taken before the facts are in.
+const BAND_WRONG_ASSUMPTION_HIGH: f64 = 0.2;
+
+/// Self-answered band, LOW. A supervisor whose ticks NEVER end in silence is
+/// manufacturing questions to justify itself — under one tick in ten quiet is
+/// that failure, and it is why this band has a bottom at all.
+const BAND_SELF_ANSWERED_LOW: f64 = 0.1;
+/// Self-answered band, HIGH. Over nine ticks in ten quiet is an observer that
+/// has stopped observing — the same failure from the other side.
+const BAND_SELF_ANSWERED_HIGH: f64 = 0.9;
+
+/// Earned-autonomy streak, LOW. 66c4c251 spells the earn window as 40–60
+/// tasks with zero human-reversed one-way decisions; under 40 it is not
+/// earned yet, and that is a below-band reading, not a failure.
+const BAND_STREAK_LOW: f64 = 40.0;
+/// Earned-autonomy streak, HIGH. Past 60 the streak is above the earn window
+/// and the switch is still un-flipped — a fact for the human to read, never a
+/// permission for this code to take.
+const BAND_STREAK_HIGH: f64 = 60.0;
+
+/// Overrun rate, LOW. Zero cells past 2× their estimate is the good end.
+const BAND_OVERRUN_LOW: f64 = 0.0;
+/// Overrun rate, HIGH. Zero as well: a8f4b8ab makes ONE piece of work past
+/// twice its estimate the signal, so any overrun at all is out of band.
+const BAND_OVERRUN_HIGH: f64 = 0.0;
+
+/// Same-region repeat, LOW. Zero repeats is the good end.
+const BAND_SAME_REGION_LOW: f64 = 0.0;
+/// Same-region repeat, HIGH. Zero as well: a8f4b8ab makes TWO consecutive
+/// submissions in the same region the signal, so the first such pair is
+/// already out of band.
+const BAND_SAME_REGION_HIGH: f64 = 0.0;
+
+/// a8f4b8ab's multiplier: work past TWICE its recorded estimate is the signal.
+const OVERRUN_FACTOR: f64 = 2.0;
+
+/// The estimate field the overrun counter reads. NOTHING in bee writes it
+/// today and this cell adds nothing that does (ea02cb68): the field is named
+/// here so the counter can say precisely what it is missing.
+const ESTIMATE_FIELD: &str = "estimate_minutes";
+
+/// The literal state ea02cb68 asks for where a cell records no estimate.
+const NO_ESTIMATE_STATE: &str = "no estimate recorded";
+
+/// The report's metrics line when every counter is healthy.
+const METRICS_IN_BAND_LINE: &str = "- metrics in band";
+
+/// One counter's verdict against its band. `NotMeasurable` is a member of
+/// this enum precisely so it can never be spelled as `InBand` by accident.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Verdict {
+    BelowBand,
+    InBand,
+    AboveBand,
+    NotMeasurable,
+}
+
+impl Verdict {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Verdict::BelowBand => "below-band",
+            Verdict::InBand => "in-band",
+            Verdict::AboveBand => "above-band",
+            Verdict::NotMeasurable => "not-measurable",
+        }
+    }
+
+    /// Does this verdict belong on the report's one metrics line? Everything
+    /// except `in-band` does — and `below-band` is on that list for exactly
+    /// the same reason `above-band` is.
+    pub(crate) fn is_worth_saying(self) -> bool {
+        !matches!(self, Verdict::InBand)
+    }
+}
+
+/// What a counter's value COUNTS. A rate reads as a fraction; a streak or a
+/// repeat count is a whole number, and printing `12.00` for twelve cells
+/// would be a number pretending to a precision it does not have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Unit {
+    Rate,
+    Count,
+}
+
+/// One health counter, judged.
+#[derive(Debug, Clone)]
+pub(crate) struct Counter {
+    /// The stable name, as `--json` answers it.
+    pub(crate) name: &'static str,
+    /// The short name the one report line uses.
+    pub(crate) label: &'static str,
+    pub(crate) unit: Unit,
+    /// `None` for exactly one reason: the counter is not measurable.
+    pub(crate) value: Option<f64>,
+    /// How many records the value was computed over. A band verdict on 2
+    /// samples must never read like one on 200, so this travels with it.
+    pub(crate) samples: usize,
+    pub(crate) low: f64,
+    pub(crate) high: f64,
+    pub(crate) verdict: Verdict,
+    /// The named literal state when there is no usable input — today only
+    /// `no estimate recorded` (ea02cb68). `None` means the ordinary
+    /// no-samples case, which the sample count already explains.
+    pub(crate) state: Option<&'static str>,
+}
+
+/// Build one counter and JUDGE it in the same place, so nothing can compute a
+/// value and forget its verdict. Zero samples is `not-measurable` even when a
+/// ratio could be spelled: 0/0 is not 0, and a band verdict over nothing is
+/// the exact lie this whole surface is built to refuse.
+#[allow(clippy::too_many_arguments)]
+fn counter(
+    name: &'static str,
+    label: &'static str,
+    unit: Unit,
+    low: f64,
+    high: f64,
+    value: Option<f64>,
+    samples: usize,
+    state: Option<&'static str>,
+) -> Counter {
+    let measurable = samples > 0 && value.map(f64::is_finite).unwrap_or(false);
+    let verdict = match value {
+        Some(v) if measurable && v < low => Verdict::BelowBand,
+        Some(v) if measurable && v > high => Verdict::AboveBand,
+        Some(_) if measurable => Verdict::InBand,
+        _ => Verdict::NotMeasurable,
+    };
+    Counter {
+        name,
+        label,
+        unit,
+        value: if measurable { value } else { None },
+        samples,
+        low,
+        high,
+        verdict,
+        state: if measurable { None } else { state },
+    }
+}
+
+impl Counter {
+    fn fmt_value(&self, v: f64) -> String {
+        match self.unit {
+            Unit::Rate => format!("{v:.2}"),
+            Unit::Count => format!("{v:.0}"),
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        json!({
+            "name": self.name,
+            "value": self.value,
+            "samples": self.samples,
+            "band": {"low": self.low, "high": self.high},
+            "unit": match self.unit { Unit::Rate => "rate", Unit::Count => "count" },
+            "verdict": self.verdict.as_str(),
+            "state": self.state,
+        })
+    }
+
+    /// The verb's line: value, verdict, sample count and the band it was
+    /// judged against, so the number is arguable rather than magic.
+    fn line(&self) -> String {
+        match self.value {
+            Some(v) => format!(
+                "- {}: {} {} (n={}, band {}–{})",
+                self.name,
+                self.fmt_value(v),
+                self.verdict.as_str(),
+                self.samples,
+                self.fmt_value(self.low),
+                self.fmt_value(self.high)
+            ),
+            None => format!(
+                "- {}: not-measurable — {} (n={})",
+                self.name,
+                self.state.unwrap_or("no records in this window"),
+                self.samples
+            ),
+        }
+    }
+
+    /// The compact spelling the report's one line uses.
+    fn short(&self) -> String {
+        match self.value {
+            Some(v) => format!(
+                "{} {} {} (n={})",
+                self.label,
+                self.fmt_value(v),
+                match self.verdict {
+                    Verdict::BelowBand => "below band",
+                    Verdict::AboveBand => "above band",
+                    _ => "in band",
+                },
+                self.samples
+            ),
+            None => match self.state {
+                Some(state) => format!("{} ({state})", self.label),
+                None => self.label.to_string(),
+            },
+        }
+    }
+}
+
+/// The whole counter set for one window.
+pub(crate) struct HealthMetrics {
+    pub(crate) window: PresenceWindow,
+    pub(crate) counters: Vec<Counter>,
+}
+
+impl HealthMetrics {
+    fn names_where(&self, f: impl Fn(&Counter) -> bool) -> Vec<&'static str> {
+        self.counters.iter().filter(|c| f(c)).map(|c| c.name).collect()
+    }
+
+    pub(crate) fn to_value(&self) -> Value {
+        json!({
+            "window": self.window.to_value(),
+            "counters": self.counters.iter().map(Counter::to_value).collect::<Vec<_>>(),
+            "out_of_band": self.names_where(|c| {
+                matches!(c.verdict, Verdict::BelowBand | Verdict::AboveBand)
+            }),
+            "not_measurable": self.names_where(|c| c.verdict == Verdict::NotMeasurable),
+        })
+    }
+
+    fn text(&self) -> String {
+        let head = format!(
+            "Health counters for away window {} ({} → {}).",
+            self.window.id,
+            self.window.away_at,
+            self.window.back_at.as_deref().unwrap_or("still open")
+        );
+        let body: Vec<String> = self.counters.iter().map(Counter::line).collect();
+        format!("{head}\n{}", body.join("\n"))
+    }
+}
+
+// ─── the records the counters read ──────────────────────────────────────
+
+/// Every cell record of the CONTROL root, as the raw JSON objects `bee cells`
+/// already writes. This derives nothing new: a counter reads only fields a
+/// cell carries today (`status`, `trace.capped_at`, `trace.claimed_at`,
+/// `trace.attempts`, `trace.files_changed`). Fail-open like every other read
+/// in this module — an unreadable cell file is skipped, never a crash — and
+/// the `archive` child is a directory, never a cell.
+fn read_cells(control: &Path) -> Vec<Value> {
+    let dir = control.join(".bee").join("cells");
+    let Ok(rd) = std::fs::read_dir(&dir) else { return Vec::new() };
+    let mut out: Vec<Value> = Vec::new();
+    for entry in rd.flatten() {
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        if !entry.file_name().to_string_lossy().ends_with(".json") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
+        if let Ok(v) = serde_json::from_str::<Value>(&text) {
+            if v.is_object() {
+                out.push(v);
+            }
+        }
+    }
+    out
+}
+
+fn cell_status(cell: &Value) -> &str {
+    cell.get("status").and_then(Value::as_str).unwrap_or("")
+}
+
+fn trace_str<'a>(cell: &'a Value, key: &str) -> Option<&'a str> {
+    cell.get("trace")?.get(key)?.as_str().filter(|s| !s.is_empty())
+}
+
+/// The cap stamp of a cell capped INSIDE this window, or `None`.
+fn capped_at_in_window<'a>(cell: &'a Value, win: &PresenceWindow) -> Option<&'a str> {
+    if cell_status(cell) != "capped" {
+        return None;
+    }
+    trace_str(cell, "capped_at").filter(|at| in_window(at, win))
+}
+
+/// Did this cell go BLOCKED inside the window? Two stamps say so and both are
+/// already written: a `blocked` attempt in the revision ledger (`bee cells
+/// block`), and `trace.swept_at` (the claim sweep, which blocks a cell whose
+/// owner died). Reading only the first would miss every swept cell.
+fn blocked_in_window(cell: &Value, win: &PresenceWindow) -> bool {
+    if cell_status(cell) != "blocked" {
+        return false;
+    }
+    if trace_str(cell, "swept_at").map(|at| in_window(at, win)).unwrap_or(false) {
+        return true;
+    }
+    cell.get("trace")
+        .and_then(|t| t.get("attempts"))
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter().any(|e| {
+                e.get("verdict").and_then(Value::as_str) == Some("blocked")
+                    && e.get("at")
+                        .and_then(Value::as_str)
+                        .map(|at| in_window(at, win))
+                        .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn claimed_in_window(cell: &Value, win: &PresenceWindow) -> bool {
+    trace_str(cell, "claimed_at").map(|at| in_window(at, win)).unwrap_or(false)
+}
+
+/// The REGION one cell touched: its recorded `files_changed`, sorted and
+/// deduplicated so two spellings of one set compare equal.
+fn files_changed_set(cell: &Value) -> Vec<String> {
+    let mut files: Vec<String> = cell
+        .get("trace")
+        .and_then(|t| t.get("files_changed"))
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .unwrap_or_default();
+    files.sort();
+    files.dedup();
+    files
+}
+
+/// The estimate a cell WOULD record. Nothing writes this field (ea02cb68), so
+/// this read is the skip-until-present half of a8f4b8ab and returns `None`
+/// for every cell bee writes today — on purpose.
+fn cell_estimate_minutes(cell: &Value) -> Option<f64> {
+    cell.get(ESTIMATE_FIELD)
+        .or_else(|| cell.get("trace").and_then(|t| t.get(ESTIMATE_FIELD)))
+        .and_then(Value::as_f64)
+        .filter(|m| m.is_finite() && *m > 0.0)
+}
+
+fn parse_iso_ms(iso: &str) -> Option<f64> {
+    rsv::date_parse_val(Some(&Value::String(iso.to_string()))).ok().flatten()
+}
+
+/// How long the cell actually took, measured by the harness from the two
+/// stamps the store already holds — never from anything a worker said.
+fn cell_elapsed_minutes(cell: &Value) -> Option<f64> {
+    let from = parse_iso_ms(trace_str(cell, "claimed_at")?)?;
+    let to = parse_iso_ms(trace_str(cell, "capped_at")?)?;
+    (to >= from).then_some((to - from) / 60_000.0)
+}
+
+/// Every `(superseded id, date of the event that retired it)` pair in the
+/// decision log — the derivable form of "this assumption turned out wrong".
+fn supersede_marks(events: &[Value]) -> Vec<(String, String)> {
+    let mut marks: Vec<(String, String)> = Vec::new();
+    for e in events {
+        let Some(date) = e.get("date").and_then(Value::as_str) else { continue };
+        let mut push = |raw: &str| {
+            let id = js_trim(raw);
+            if !id.is_empty() {
+                marks.push((id.to_string(), date.to_string()));
+            }
+        };
+        match e.get("supersedes") {
+            Some(Value::String(s)) => push(s),
+            Some(Value::Array(a)) => {
+                for x in a {
+                    if let Some(s) = x.as_str() {
+                        push(s);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    marks
+}
+
+/// Did a ONE-WAY door get reversed while this cell was being worked? The span
+/// is the cell's own claim-to-cap stamps, and a reversal is the irreversible
+/// event the decision log actually carries (`decision_is_one_way`).
+fn cell_saw_a_reversal(cell: &Value, events: &[Value]) -> bool {
+    let Some(capped_at) = trace_str(cell, "capped_at") else { return false };
+    let from = trace_str(cell, "claimed_at").unwrap_or(capped_at);
+    events.iter().any(|e| {
+        decision_is_one_way(e)
+            && e.get("date")
+                .and_then(Value::as_str)
+                .map(|d| d >= from && d <= capped_at)
+                .unwrap_or(false)
+    })
+}
+
+/// THE computation. Every counter of 66c4c251 and a8f4b8ab, over ONE window,
+/// out of records that already exist. No model, no self-report, no write.
+pub(crate) fn health_metrics(control: &Path, win: &PresenceWindow) -> HealthMetrics {
+    let cells = read_cells(control);
+    let events = crate::verbs::decisions::read_jsonl(&decisions_log_path(control));
+    let mailbox = read_interventions(control);
+    let observations = read_observations(control);
+
+    // (1) Escalations per capped cell. The mailbox already knows what a second
+    // pass on one point is: an `escalation` row is the remedy the frequency
+    // cap names, so counting them needs no new record.
+    let mut capped: Vec<&Value> =
+        cells.iter().filter(|c| capped_at_in_window(c, win).is_some()).collect();
+    capped.sort_by(|a, b| {
+        capped_at_in_window(a, win).unwrap_or("").cmp(capped_at_in_window(b, win).unwrap_or(""))
+    });
+    let escalations =
+        mailbox.rows.iter().filter(|r| r.kind == "escalation" && in_window(&r.ts, win)).count();
+    let c_escalations = counter(
+        "escalations-per-capped-cell",
+        "esc/cell",
+        Unit::Rate,
+        BAND_ESCALATIONS_LOW,
+        BAND_ESCALATIONS_HIGH,
+        (!capped.is_empty()).then(|| escalations as f64 / capped.len() as f64),
+        capped.len(),
+        None,
+    );
+
+    // (2) Blocked rate. The denominator is the cells this window WORKED —
+    // claimed inside it, plus any it blocked. A swept block nulls `claimed_at`,
+    // so "blocked over claimed" alone could report a rate above 1; taking the
+    // union keeps the numerator a subset of its own denominator.
+    let blocked = cells.iter().filter(|c| blocked_in_window(c, win)).count();
+    let worked =
+        cells.iter().filter(|c| claimed_in_window(c, win) || blocked_in_window(c, win)).count();
+    let c_blocked = counter(
+        "blocked-rate",
+        "blocked",
+        Unit::Rate,
+        BAND_BLOCKED_LOW,
+        BAND_BLOCKED_HIGH,
+        (worked > 0).then(|| blocked as f64 / worked as f64),
+        worked,
+        None,
+    );
+
+    // (3) Wrong-assumption rate. A decision taken in the window that a LATER
+    // event retired is an assumption that turned out wrong — the decision log
+    // carries both halves already.
+    let marks = supersede_marks(&events);
+    let mut decided_in_window = 0usize;
+    let mut later_superseded = 0usize;
+    for e in &events {
+        if !matches!(e.get("type").and_then(Value::as_str), Some("decide") | Some("supersede")) {
+            continue;
+        }
+        let Some(date) = e.get("date").and_then(Value::as_str) else { continue };
+        if !in_window(date, win) {
+            continue;
+        }
+        decided_in_window += 1;
+        let Some(id) = e.get("id").and_then(Value::as_str).filter(|s| !s.is_empty()) else {
+            continue;
+        };
+        if marks.iter().any(|(target, at)| target == id && at.as_str() >= date) {
+            later_superseded += 1;
+        }
+    }
+    let c_assumptions = counter(
+        "wrong-assumption-rate",
+        "assumptions",
+        Unit::Rate,
+        BAND_WRONG_ASSUMPTION_LOW,
+        BAND_WRONG_ASSUMPTION_HIGH,
+        (decided_in_window > 0).then(|| later_superseded as f64 / decided_in_window as f64),
+        decided_in_window,
+        None,
+    );
+
+    // (4) Self-answered band. "Looked and chose silence" is a logged, legitimate
+    // outcome (SLP §4.7) — this is the share of ticks that ended in it.
+    let seen: Vec<&Observation> =
+        observations.rows.iter().filter(|r| in_window(&r.ts, win)).collect();
+    let silent = seen.iter().filter(|r| r.kind == "silence").count();
+    let c_self_answered = counter(
+        "self-answered-band",
+        "self-answered",
+        Unit::Rate,
+        BAND_SELF_ANSWERED_LOW,
+        BAND_SELF_ANSWERED_HIGH,
+        (!seen.is_empty()).then(|| silent as f64 / seen.len() as f64),
+        seen.len(),
+        None,
+    );
+
+    // (5) Earned-autonomy streak — consecutive capped cells, newest first, with
+    // zero human-reversed one-way decisions inside their own claim-to-cap span.
+    // A streak crosses windows by nature, so it is counted over the whole capped
+    // history UP TO the end of this window and never past it.
+    let mut history: Vec<&Value> = cells
+        .iter()
+        .filter(|c| cell_status(c) == "capped")
+        .filter(|c| match (trace_str(c, "capped_at"), win.back_at.as_deref()) {
+            (Some(at), Some(end)) => at <= end,
+            (Some(_), None) => true,
+            _ => false,
+        })
+        .collect();
+    history.sort_by(|a, b| {
+        trace_str(a, "capped_at").unwrap_or("").cmp(trace_str(b, "capped_at").unwrap_or(""))
+    });
+    let mut streak = 0usize;
+    for cell in history.iter().rev() {
+        if cell_saw_a_reversal(cell, &events) {
+            break;
+        }
+        streak += 1;
+    }
+    let c_streak = counter(
+        "earned-autonomy-streak",
+        "streak",
+        Unit::Count,
+        BAND_STREAK_LOW,
+        BAND_STREAK_HIGH,
+        (!history.is_empty()).then_some(streak as f64),
+        history.len(),
+        None,
+    );
+
+    // (6) Overrun — 2× the recorded estimate (a8f4b8ab), SKIP-UNTIL-PRESENT
+    // (ea02cb68). Only a cell that ALREADY records an estimate is a sample, so
+    // today this counter is not measurable and says exactly why.
+    let estimated: Vec<&&Value> =
+        capped.iter().filter(|c| cell_estimate_minutes(c).is_some()).collect();
+    let overran = estimated
+        .iter()
+        .filter(|c| match (cell_estimate_minutes(c), cell_elapsed_minutes(c)) {
+            (Some(estimate), Some(actual)) => actual > OVERRUN_FACTOR * estimate,
+            _ => false,
+        })
+        .count();
+    let c_overrun = counter(
+        "overrun-2x-estimate",
+        "overrun",
+        Unit::Rate,
+        BAND_OVERRUN_LOW,
+        BAND_OVERRUN_HIGH,
+        (!estimated.is_empty()).then(|| overran as f64 / estimated.len() as f64),
+        estimated.len(),
+        Some(NO_ESTIMATE_STATE),
+    );
+
+    // (7) Same-region repeat — consecutive capped cells whose recorded
+    // `files_changed` sets are identical. That is the derivable form of
+    // a8f4b8ab's "two submissions differing only in the same region": bee holds
+    // the region each cap touched, and two caps over the same region in a row
+    // is the loop the signal is about. An empty set is never a repeat — a cell
+    // that recorded nothing says nothing about where it worked.
+    let regions: Vec<Vec<String>> = capped.iter().map(|c| files_changed_set(c)).collect();
+    let pairs = regions.len().saturating_sub(1);
+    let repeats = regions.windows(2).filter(|w| !w[0].is_empty() && w[0] == w[1]).count();
+    let c_same_region = counter(
+        "same-region-repeat",
+        "same-region",
+        Unit::Count,
+        BAND_SAME_REGION_LOW,
+        BAND_SAME_REGION_HIGH,
+        (pairs > 0).then_some(repeats as f64),
+        pairs,
+        None,
+    );
+
+    HealthMetrics {
+        window: win.clone(),
+        counters: vec![
+            c_escalations,
+            c_blocked,
+            c_assumptions,
+            c_self_answered,
+            c_streak,
+            c_overrun,
+            c_same_region,
+        ],
+    }
+}
+
+/// The REPORT's half of the counter set: exactly ONE line (66c4c251). It lists
+/// only what is worth saying — every counter that is out of band or not
+/// measurable — and says `metrics in band` when all seven are healthy. An
+/// `in-band` counter is deliberately unnamed here: the ten-line ceiling is the
+/// whole budget, and `bee supervisor metrics` is the full surface.
+pub(crate) fn metrics_report_line(m: &HealthMetrics) -> String {
+    // ONE predicate decides what reaches this line, and `below-band` is inside
+    // it for exactly the same reason `above-band` is.
+    let worth_saying: Vec<&Counter> =
+        m.counters.iter().filter(|c| c.verdict.is_worth_saying()).collect();
+    if worth_saying.is_empty() {
+        return METRICS_IN_BAND_LINE.to_string();
+    }
+    let flagged: Vec<&Counter> = worth_saying
+        .iter()
+        .copied()
+        .filter(|c| matches!(c.verdict, Verdict::BelowBand | Verdict::AboveBand))
+        .collect();
+    let mut unmeasured: Vec<&Counter> = worth_saying
+        .iter()
+        .copied()
+        .filter(|c| c.verdict == Verdict::NotMeasurable)
+        .collect();
+    // A counter carrying a NAMED state (`no estimate recorded`) says more than
+    // a bare label, so it leads the list: this line is clipped to one readable
+    // width, and what is clipped away must be the least informative end of it.
+    unmeasured.sort_by_key(|c| c.state.is_none());
+    // The whole set silent: say that once, plainly, instead of listing seven
+    // names — and still name the one state ea02cb68 asks for in its own words.
+    if flagged.is_empty() && unmeasured.len() == m.counters.len() {
+        return clip(
+            "- metrics: not measurable — no cells, observations or decisions in this window; \
+             overrun: no estimate recorded",
+        );
+    }
+    let mut parts: Vec<String> = flagged.iter().map(|c| c.short()).collect();
+    if !unmeasured.is_empty() {
+        parts.push(format!(
+            "not measurable: {}",
+            unmeasured.iter().map(|c| c.short()).collect::<Vec<_>>().join(", ")
+        ));
+    }
+    clip(&format!("- metrics: {}", parts.join("; ")))
+}
+
 // ─── argv plumbing ──────────────────────────────────────────────────────
 
 struct Ctx {
@@ -1712,6 +2427,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "back" => run_back(parse_shape(rest, &[])?, t0),
         "presence" => run_presence(parse_shape(rest, &[])?, t0),
         "report" => run_report(parse_shape(rest, &["window"])?, t0),
+        "metrics" => run_metrics(parse_shape(rest, &["window"])?, t0),
         _ => None,
     }
 }
@@ -1949,6 +2665,49 @@ fn run_report(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         "unreadable_lines": store.unreadable,
     });
     Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &result, &text, t0))
+}
+
+// ─── metrics ─────────────────────────────────────────────────────────────
+
+/// READ AND COMPUTE ONLY. Every number comes from a record bee already holds,
+/// and nothing on this path writes a store, a config key or a consent level —
+/// the earned-autonomy streak is answered as a NUMBER, and flipping the switch
+/// stays the human's (66c4c251).
+fn run_metrics(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "supervisor metrics";
+    let ctx = match preamble(cmd, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let win = match flag(&parsed, "window") {
+        Some(id) => match read_presence(&ctx.control).windows.into_iter().find(|w| w.id == id) {
+            Some(w) => w,
+            None => {
+                let msg = format!(
+                    "bee {cmd}: no away window {id:?}. \
+                     `bee supervisor presence --json` names the open window and the last \
+                     closed one."
+                );
+                return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+            }
+        },
+        // No --window is "the window I just came back from", read through
+        // sup-8's shared surface rather than re-derived here.
+        None => match last_closed_window(&ctx.control) {
+            Some(w) => w,
+            None => {
+                let msg = format!(
+                    "bee {cmd}: no closed away window to measure. \
+                     `bee supervisor away` opens one and `bee supervisor back` closes it; \
+                     `--window <id>` measures a named window, open or closed."
+                );
+                return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+            }
+        },
+    };
+    let metrics = health_metrics(&ctx.control, &win);
+    let text = metrics.text();
+    Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &metrics.to_value(), &text, t0))
 }
 
 fn run_presence(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -2907,29 +3666,47 @@ mod tests {
         away_into(control, "supervisor away", None).unwrap();
 
         // Recorded lowest-impact FIRST, so store order alone would print them
-        // upside down (66c4c251 sorts by impact-if-wrong, not by arrival).
-        ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        // upside down (66c4c251 sorts by impact-if-wrong, not by arrival). Two
+        // rows per fixture: one content line now belongs to the metrics readout,
+        // so a third row in one section is a truncation case, which the pair
+        // below and `an_over_long_report_...` cover separately.
         ask(control, "escalation", "sess-1", "retry-loop", "Is this still the plan?").unwrap();
         ask(control, "urgent", "sess-1", "rm-rf-on-main", "Stop that delete?").unwrap();
 
         let (closed, released) = back_into(control, "supervisor back").unwrap();
-        assert_eq!(released.len(), 2, "urgent is never queued, so only two release");
+        assert_eq!(released.len(), 1, "urgent is never queued, so only one releases");
         let rep = report_for_window(control, &closed.id).unwrap();
         assert_legal_report(&rep.markdown);
-        assert_eq!(rep.more, 0, "three items in one section still fit: {}", rep.markdown);
+        assert_eq!(rep.more, 0, "two items in one section still fit: {}", rep.markdown);
 
-        let urgent = position_of(&rep.markdown, "Stop that delete?");
-        let escalation = position_of(&rep.markdown, "Is this still the plan?");
-        let intervention = position_of(&rep.markdown, "What ends the retry?");
         assert!(
-            urgent < escalation && escalation < intervention,
-            "urgent before escalation before intervention: {}",
+            position_of(&rep.markdown, "Stop that delete?")
+                < position_of(&rep.markdown, "Is this still the plan?"),
+            "urgent before escalation: {}",
             rep.markdown
         );
         assert!(
             rep.markdown.lines().next().unwrap() == REPORT_SECTIONS[0],
             "the report opens on its first section: {}",
             rep.markdown
+        );
+
+        // The other half of the same order, in its own window: an escalation is
+        // a second pass on one point, an intervention is the first.
+        let tmp1 = tempfile::tempdir().unwrap();
+        let c1 = tmp1.path();
+        away_into(c1, "supervisor away", None).unwrap();
+        ask(c1, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        ask(c1, "escalation", "sess-1", "other-point", "Is this still the plan?").unwrap();
+        let (closed1, _) = back_into(c1, "supervisor back").unwrap();
+        let rep1 = report_for_window(c1, &closed1.id).unwrap();
+        assert_legal_report(&rep1.markdown);
+        assert_eq!(rep1.more, 0, "{}", rep1.markdown);
+        assert!(
+            position_of(&rep1.markdown, "Is this still the plan?")
+                < position_of(&rep1.markdown, "What ends the retry?"),
+            "escalation before intervention: {}",
+            rep1.markdown
         );
 
         // A one-way-door decision outranks a reversible one in its own section.
@@ -3002,7 +3779,17 @@ mod tests {
         assert!(rep.markdown.contains("- Nothing happened."), "{}", rep.markdown);
         assert!(rep.markdown.contains("- Nothing was decided."), "{}", rep.markdown);
         assert!(rep.markdown.contains("- Nothing needs you."), "{}", rep.markdown);
-        assert_eq!(rep.markdown.lines().count(), 8, "four headings, four lines: {}", rep.markdown);
+        assert_eq!(
+            rep.markdown.lines().count(),
+            9,
+            "four headings, four lines and the one metrics line: {}",
+            rep.markdown
+        );
+        assert!(
+            rep.markdown.contains("- metrics: not measurable"),
+            "an empty window measures nothing and says so, never 'in band': {}",
+            rep.markdown
+        );
     }
 
     #[test]
@@ -3174,25 +3961,37 @@ mod tests {
         // Ten low-impact items in one section, one high-impact item in another.
         let many: Vec<ReportItem> =
             (0..10).map(|i| item(0, &format!("- low {i}"))).collect();
-        let (md, more) = render_report_markdown(&many, &[item(2, "- one-way")], &[], "- do this");
+        let (md, more) =
+            render_report_markdown(&many, &[item(2, "- one-way")], &[], "- do this", "- metrics in band");
         assert_legal_report(&md);
         assert_eq!(md.lines().count(), REPORT_MAX_LINES);
-        // The floor is 8 lines and the `+N more` count takes the tenth, so a
-        // truncated report has exactly ONE spare line to spend.
-        assert_eq!(more, 8, "ten items, one kept plus one spare: {md}");
+        // The floor is 9 lines — four headings, one line per content section,
+        // the metrics line and the action — and the `+N more` count takes the
+        // tenth, so a truncated report has NO spare line to spend.
+        assert_eq!(more, 9, "ten items, one kept per section and no spare: {md}");
         assert!(md.contains("- one-way"), "{md}");
-        assert!(md.ends_with("+8 more"), "{md}");
+        assert!(md.contains("- metrics in band"), "the readout is never truncated away: {md}");
+        assert!(md.ends_with("+9 more"), "{md}");
 
-        // Nothing at all is still four sections and one action.
-        let (empty, more) = render_report_markdown(&[], &[], &[], "- Nothing needs you.");
+        // Nothing at all is still four sections, one action and one readout.
+        let (empty, more) =
+            render_report_markdown(&[], &[], &[], "- Nothing needs you.", "- metrics in band");
         assert_legal_report(&empty);
         assert_eq!(more, 0);
-        assert_eq!(empty.lines().count(), 8);
+        assert_eq!(empty.lines().count(), 9);
 
         // A next action carrying its own line breaks cannot re-shape the report.
-        let (folded, _) = render_report_markdown(&[], &[], &[], "- do\nthis\nnow");
+        let (folded, _) =
+            render_report_markdown(&[], &[], &[], "- do\nthis\nnow", "- metrics in band");
         assert_legal_report(&folded);
         assert_eq!(folded.lines().last().unwrap(), "- do this now");
+
+        // Neither can a metrics line that arrives with its own line breaks.
+        let (folded, _) =
+            render_report_markdown(&[], &[], &[], "- do this", "- metrics:\nbroken\nline");
+        assert_legal_report(&folded);
+        assert_eq!(folded.lines().count(), 9);
+        assert!(folded.contains("- metrics: broken line"), "{folded}");
     }
 
     #[test]
@@ -3212,5 +4011,358 @@ mod tests {
         assert_eq!(store.rows.len(), 1, "the one good report still reads back");
         assert_eq!(store.rows[0].window_id, closed.id);
         assert_eq!(store.unreadable, vec![2, 3]);
+    }
+
+    // ─── health counters (Phase 4, 66c4c251 + a8f4b8ab + ea02cb68) ──────
+
+    /// A CLOSED window with fixed ends, so every planted stamp below is inside
+    /// or outside it by arithmetic rather than by timing.
+    fn fixed_window() -> PresenceWindow {
+        PresenceWindow {
+            id: "w-fixed".to_string(),
+            away_at: "2026-01-01T00:00:00.000Z".to_string(),
+            note: None,
+            back_at: Some("2026-01-02T00:00:00.000Z".to_string()),
+        }
+    }
+
+    fn at(hour: u32) -> String {
+        format!("2026-01-01T{hour:02}:00:00.000Z")
+    }
+
+    /// Plant one cell record exactly as `bee cells` writes it. The counters
+    /// read bee's own store, so the fixture writes bee's own row shape.
+    fn plant_cell(control: &Path, id: &str, status: &str, trace: Value) {
+        let cell = json!({"id": id, "feature": "slp", "status": status, "trace": trace});
+        write(
+            control,
+            &format!(".bee/cells/{id}.json"),
+            &serde_json::to_string(&cell).unwrap(),
+        );
+    }
+
+    /// A capped cell: claimed at `from`, capped at `to`, having touched `files`.
+    fn plant_capped(control: &Path, id: &str, from: &str, to: &str, files: &[&str]) {
+        plant_cell(
+            control,
+            id,
+            "capped",
+            json!({"claimed_at": from, "capped_at": to, "files_changed": files}),
+        );
+    }
+
+    /// Plant one mailbox row at a CHOSEN timestamp, through the real row shape.
+    fn plant_mailbox(control: &Path, ts: &str, kind: &str, point: &str) {
+        let row = Intervention {
+            id: new_row_id(),
+            ts: ts.to_string(),
+            kind: kind.to_string(),
+            signal: "none".to_string(),
+            point_key: point.to_string(),
+            question: format!("What about {point}?"),
+            target_session: "sess-1".to_string(),
+            tick: None,
+            delivered_at: None,
+            queued: false,
+            released_at: None,
+        };
+        append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
+    }
+
+    /// Plant one tick row of either kind — `silence` is the half the
+    /// self-answered band is about.
+    fn plant_tick(control: &Path, ts: &str, kind: &str, note: &str) {
+        let rec = Observation {
+            ts: ts.to_string(),
+            kind: kind.to_string(),
+            signal: "none".to_string(),
+            note: note.to_string(),
+            target_session: None,
+            tick: None,
+        };
+        append_jsonl(&observations_path(control), &rec.to_value()).unwrap();
+    }
+
+    fn counter_named<'a>(m: &'a HealthMetrics, name: &str) -> &'a Counter {
+        m.counters
+            .iter()
+            .find(|c| c.name == name)
+            .unwrap_or_else(|| panic!("no counter named {name}"))
+    }
+
+    #[test]
+    fn every_counter_computes_off_records_that_already_exist() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let win = fixed_window();
+
+        // Two capped cells over the SAME region, one blocked cell.
+        plant_capped(control, "c1", &at(1), &at(2), &["a.rs"]);
+        plant_capped(control, "c2", &at(3), &at(4), &["a.rs"]);
+        plant_cell(
+            control,
+            "c3",
+            "blocked",
+            json!({
+                "claimed_at": at(5),
+                "attempts": [{"n": 1, "at": at(6), "verdict": "blocked"}],
+            }),
+        );
+        // One capped cell OUTSIDE the window: it must reach no counter of it.
+        plant_capped(control, "c0", "2020-01-01T00:00:00.000Z", "2020-01-01T01:00:00.000Z", &["z.rs"]);
+
+        // Two escalations, one ordinary intervention.
+        plant_mailbox(control, &at(2), "escalation", "retry-loop");
+        plant_mailbox(control, &at(4), "escalation", "other-point");
+        plant_mailbox(control, &at(4), "intervention", "third-point");
+
+        // Three observations, one of them silence.
+        for h in 7..10 {
+            plant_tick(control, &at(h), "observation", "Saw something.");
+        }
+        plant_tick(control, &at(10), "silence", "Looked; nothing to ask.");
+
+        // Three decision events in the window; the last retires the first.
+        plant_decision(control, &at(7), "D-one", None);
+        plant_decision(control, &at(8), "D-two", None);
+        plant_decision(control, &at(9), "D-three", Some("D-one"));
+
+        let m = health_metrics(control, &win);
+
+        let esc = counter_named(&m, "escalations-per-capped-cell");
+        assert_eq!(esc.samples, 2, "two capped cells in the window");
+        assert_eq!(esc.value, Some(1.0), "two escalations over two capped cells");
+        assert_eq!(esc.verdict, Verdict::AboveBand);
+
+        let blocked = counter_named(&m, "blocked-rate");
+        assert_eq!(blocked.samples, 3, "two claimed-and-capped plus the blocked one");
+        assert_eq!(blocked.value, Some(1.0 / 3.0));
+        assert_eq!(blocked.verdict, Verdict::AboveBand);
+
+        let assumptions = counter_named(&m, "wrong-assumption-rate");
+        assert_eq!(assumptions.samples, 3, "three decision events in the window");
+        assert_eq!(assumptions.value, Some(1.0 / 3.0), "one of them was later superseded");
+        assert_eq!(assumptions.verdict, Verdict::AboveBand);
+
+        let self_answered = counter_named(&m, "self-answered-band");
+        assert_eq!(self_answered.samples, 4);
+        assert_eq!(self_answered.value, Some(0.25), "one tick in four chose silence");
+        assert_eq!(self_answered.verdict, Verdict::InBand);
+
+        let streak = counter_named(&m, "earned-autonomy-streak");
+        assert_eq!(streak.unit, Unit::Count);
+        assert_eq!(streak.value, Some(3.0), "three capped cells, none saw a reversal");
+        assert_eq!(streak.verdict, Verdict::BelowBand, "three is far under the 40-task earn window");
+
+        let same_region = counter_named(&m, "same-region-repeat");
+        assert_eq!(same_region.samples, 1, "two capped cells make exactly one adjacent pair");
+        assert_eq!(same_region.value, Some(1.0), "and that pair touched the same region");
+        assert_eq!(same_region.verdict, Verdict::AboveBand);
+
+        // Nothing outside the window leaked in.
+        let json = m.to_value();
+        assert_eq!(json["window"]["id"], "w-fixed");
+        assert_eq!(json["counters"].as_array().unwrap().len(), 7);
+    }
+
+    #[test]
+    fn a_counter_below_its_band_is_flagged_as_loudly_as_one_above_it() {
+        let low = tempfile::tempdir().unwrap();
+        let high = tempfile::tempdir().unwrap();
+        let win = fixed_window();
+
+        // Never silent: four observations, no silence row at all.
+        for h in 1..5 {
+            plant_tick(low.path(), &at(h), "observation", "Something again.");
+        }
+        // Never speaks: four silence rows and nothing else.
+        for h in 1..5 {
+            plant_tick(high.path(), &at(h), "silence", "Nothing to ask.");
+        }
+
+        let below = health_metrics(low.path(), &win);
+        let above = health_metrics(high.path(), &win);
+        let c_below = counter_named(&below, "self-answered-band");
+        let c_above = counter_named(&above, "self-answered-band");
+
+        assert_eq!(c_below.value, Some(0.0));
+        assert_eq!(c_below.verdict, Verdict::BelowBand);
+        assert_eq!(c_above.value, Some(1.0));
+        assert_eq!(c_above.verdict, Verdict::AboveBand);
+        assert_eq!(c_below.samples, c_above.samples, "same n on both sides");
+
+        // Same predicate, same shape of line: neither side is quieter.
+        assert!(Verdict::BelowBand.is_worth_saying() && Verdict::AboveBand.is_worth_saying());
+        assert!(!Verdict::InBand.is_worth_saying());
+        let line_below = metrics_report_line(&below);
+        let line_above = metrics_report_line(&above);
+        assert!(
+            line_below.contains("self-answered 0.00 below band (n=4)"),
+            "the low side is named, valued and counted: {line_below}"
+        );
+        assert!(
+            line_above.contains("self-answered 1.00 above band (n=4)"),
+            "and so is the high side, in the same words: {line_above}"
+        );
+    }
+
+    #[test]
+    fn a_zero_sample_counter_reports_not_measurable_never_in_band() {
+        let tmp = tempfile::tempdir().unwrap();
+        let m = health_metrics(tmp.path(), &fixed_window());
+        assert_eq!(m.counters.len(), 7);
+        for c in &m.counters {
+            assert_eq!(c.samples, 0, "{} had no records to read", c.name);
+            assert_eq!(c.verdict, Verdict::NotMeasurable, "{}", c.name);
+            assert_eq!(c.value, None, "{} reports nothing, never zero", c.name);
+            assert!(c.line().contains("not-measurable"), "{}", c.line());
+        }
+        let json = m.to_value();
+        assert_eq!(json["out_of_band"].as_array().unwrap().len(), 0);
+        assert_eq!(json["not_measurable"].as_array().unwrap().len(), 7);
+        for c in json["counters"].as_array().unwrap() {
+            assert_eq!(c["value"], Value::Null, "{c}");
+            assert_ne!(c["verdict"], "in-band", "silence is never rendered as health: {c}");
+        }
+
+        let line = metrics_report_line(&m);
+        assert_ne!(line, METRICS_IN_BAND_LINE, "nothing measured is not 'in band'");
+        assert!(line.contains("not measurable"), "{line}");
+        assert!(line.chars().count() <= MAX_ITEM_CHARS, "still one readable line: {line}");
+    }
+
+    #[test]
+    fn a_cell_with_no_recorded_estimate_reports_the_literal_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let win = fixed_window();
+        // A capped cell exactly as bee writes one today: no estimate anywhere.
+        plant_capped(control, "c1", &at(1), &at(2), &["a.rs"]);
+
+        let overrun = counter_named(&health_metrics(control, &win), "overrun-2x-estimate").clone();
+        assert_eq!(overrun.verdict, Verdict::NotMeasurable);
+        assert_eq!(overrun.value, None, "never zero and never a guess");
+        assert_eq!(overrun.samples, 0, "a cell with no estimate is not a sample");
+        assert_eq!(overrun.state, Some(NO_ESTIMATE_STATE));
+        assert!(overrun.line().contains("no estimate recorded"), "{}", overrun.line());
+        assert!(
+            metrics_report_line(&health_metrics(control, &win)).contains("no estimate recorded"),
+            "the report says the words too"
+        );
+
+        // And the counter is real: give a cell an estimate and it measures.
+        let over = tempfile::tempdir().unwrap();
+        plant_cell(
+            over.path(),
+            "c1",
+            "capped",
+            json!({
+                "claimed_at": at(1),
+                "capped_at": at(2),          // sixty minutes of work
+                "files_changed": ["a.rs"],
+                ESTIMATE_FIELD: 10,          // against a ten-minute estimate
+            }),
+        );
+        let measured = counter_named(&health_metrics(over.path(), &win), "overrun-2x-estimate").clone();
+        assert_eq!(measured.samples, 1);
+        assert_eq!(measured.value, Some(1.0), "six times the estimate is past 2x");
+        assert_eq!(measured.verdict, Verdict::AboveBand);
+        assert_eq!(measured.state, None, "a measurable counter carries no literal state");
+
+        let under = tempfile::tempdir().unwrap();
+        plant_cell(
+            under.path(),
+            "c1",
+            "capped",
+            json!({
+                "claimed_at": at(1),
+                "capped_at": at(2),
+                "files_changed": ["a.rs"],
+                ESTIMATE_FIELD: 240,
+            }),
+        );
+        let ok = counter_named(&health_metrics(under.path(), &win), "overrun-2x-estimate").clone();
+        assert_eq!(ok.value, Some(0.0));
+        assert_eq!(ok.verdict, Verdict::InBand);
+    }
+
+    #[test]
+    fn the_streak_is_a_number_and_nothing_here_flips_a_switch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let win = fixed_window();
+        plant_capped(control, "c1", &at(1), &at(2), &["a.rs"]);
+        plant_capped(control, "c2", &at(3), &at(4), &["b.rs"]);
+        plant_capped(control, "c3", &at(5), &at(6), &["c.rs"]);
+
+        let clean = counter_named(&health_metrics(control, &win), "earned-autonomy-streak").clone();
+        assert_eq!(clean.value, Some(3.0), "three consecutive caps with no reversal");
+        assert_eq!(clean.samples, 3);
+        assert_eq!(clean.line(), "- earned-autonomy-streak: 3 below-band (n=3, band 40–60)");
+
+        // A one-way door reversed inside the NEWEST cell's own span ends it.
+        plant_decision(control, &at(5), "A rule two moves back is restored.", Some("older-id"));
+        let broken = counter_named(&health_metrics(control, &win), "earned-autonomy-streak").clone();
+        assert_eq!(broken.value, Some(0.0), "the newest cap saw a reversal");
+        assert_eq!(broken.verdict, Verdict::BelowBand);
+
+        // 66c4c251: raising consent is EARNED and the human still flips the
+        // switch. Reading the counters writes no config and no store at all.
+        assert!(!control.join(".bee").join("config.json").exists(), "no config was written");
+        assert!(!supervisor_dir(control).exists(), "and no supervisor store either");
+        let json = serde_json::to_string(&health_metrics(control, &win).to_value()).unwrap();
+        for forbidden in ["consent", "gate_bypass", "silence-is-consent", "level"] {
+            assert!(!json.contains(forbidden), "the answer is numbers only: {forbidden} in {json}");
+        }
+    }
+
+    #[test]
+    fn the_report_still_fits_its_ceiling_with_the_metrics_line_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        // Records the counters can actually measure, planted before the window
+        // so the metrics line has something to say about the window itself.
+        plant_capped(control, "c1", &at(1), &at(2), &["a.rs"]);
+
+        away_into(control, "supervisor away", None).unwrap();
+        for i in 0..3 {
+            record_into(
+                control,
+                "supervisor record",
+                Some("observation"),
+                Some("struggling-loop"),
+                Some(&format!("A loop was seen, number {i}.")),
+                Some("sess-1"),
+                None,
+            )
+            .unwrap();
+        }
+        plant_decision(control, &now_iso(), "A call taken while away.", None);
+        ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+
+        let rep = report_for_window(control, &closed.id).unwrap();
+        // The ceiling and the four sections are unchanged by the readout.
+        assert_legal_report(&rep.markdown);
+        let metrics: Vec<&str> =
+            rep.markdown.lines().filter(|l| l.starts_with("- metrics")).collect();
+        assert_eq!(metrics.len(), 1, "exactly ONE metrics line: {}", rep.markdown);
+        assert!(
+            metrics[0].chars().count() <= MAX_ITEM_CHARS,
+            "and it is one readable line: {}",
+            metrics[0]
+        );
+        // It sits inside the first section, never as a fifth heading.
+        assert!(
+            position_of(&rep.markdown, "- metrics")
+                < position_of(&rep.markdown, REPORT_SECTIONS[1]),
+            "{}",
+            rep.markdown
+        );
+        // A healthy set says so in one short line instead of listing counters.
+        let (in_band, _) =
+            render_report_markdown(&[], &[], &[], "- Nothing needs you.", METRICS_IN_BAND_LINE);
+        assert!(in_band.contains(METRICS_IN_BAND_LINE), "{in_band}");
+        assert_legal_report(&in_band);
     }
 }
