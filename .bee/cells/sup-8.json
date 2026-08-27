@@ -1,0 +1,87 @@
+{
+  "id": "sup-8",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Away/back presence mark with exactly two effects",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "9f5cd250",
+    "c80debd7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "behavior_change": true,
+  "action": "Plan Phase 3, first half (per 9f5cd250): a lightweight presence mark with EXACTLY TWO effects and no others. Add to packages/bee-rs/crates/bee/src/verbs/supervisor.rs, following the same validation-before-write seam the mailbox uses: `bee supervisor away [--note <one line>]` opens a presence window, `bee supervisor back` closes the open window, and `bee supervisor presence --json` reads the current state (present|away, window start, note, id). Store windows as event-sourced rows in .bee/supervisor/presence.jsonl beside the other two stores, resolved against the control root by the SAME control_root_path helper — a linked worktree must write to one store. Effect ONE: the closed window carries away_at and back_at, which is what Phase 3's WakeReport (sup-9) reads as its report window; give it a shared read surface `pub(crate) fn current_window(control: &Path)` plus `pub(crate) fn last_closed_window(control: &Path)` so sup-9 never re-derives the fold. Effect TWO: while a window is open, a NON-URGENT mailbox row (kind intervention|escalation) recorded through record_intervention_into is stamped queued=true and takes NO immediate path — no notification; kind urgent is unaffected and still notifies immediately per sup-7. `back` clears queued on every row it releases. THESE ARE THE ONLY TWO EFFECTS: touch no gate, no gate-bypass level, no permission or approval path, and no waiting-on behavior — a presence flag that changed permission posture would violate 9f5cd250 and R4. Refusals: `away` while already away is a typed refusal naming `presence`; `back` with no open window is a typed refusal; both write nothing. Tests in the same tests module: away opens exactly one window and presence reports it; a second away is refused and writes nothing; an intervention recorded while away is stamped queued and produces no notifier argv; an urgent recorded while away still produces its argv; back closes the window, clears queued, and last_closed_window returns the pair; back with no window is refused. Regen deferred to the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "while away a non-urgent row is queued and fires no notification, while an urgent row still notifies",
+      "back closes the window and exposes the away_at/back_at pair sup-9 reads"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "presence store, away/back/presence verbs, queued stamping, shared window read surface"
+      }
+    ],
+    "key_links": [
+      "dispatcher routes supervisor away, supervisor back and supervisor presence"
+    ],
+    "prohibitions": [
+      "no change to any gate, gate-bypass level, permission or approval path",
+      "urgent notification behavior unchanged",
+      "observation|silence and delivery behavior unchanged"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-sup-8",
+    "outcome": "Presence away/back/presence verbs with exactly two effects: the report window pair and the quiet queue",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T13:15:14.020Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e689c2df-430b-44e5-b7ad-a04a3826431b",
+    "claimed_at": "2026-08-27T13:02:59.678Z",
+    "report": {
+      "outcome": "Presence away/back/presence verbs with exactly two effects: the report window pair and the quiet queue",
+      "commit": "c2dc14bff67d6ae6e75bc67d7fcfdd8044cdd39f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor (plus catalog, registry_contracts, registry_dispatch, prompt_context filters) — green: 40 supervisor + 11 catalog + 10 contracts + 8 dispatch + 29 prompt_context passed — the touched module, the flag/registry pins the new verbs move, and the delivery hook whose row shape changed",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 590 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

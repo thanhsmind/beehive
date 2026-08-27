@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"slp-supervisor-heartbeat\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at cabe03b; capture what settled, then bee close --feature slp-supervisor-heartbeat.",
+  "next_action": "Phase 2 merged at cabe03b (sup-5/6/7). Next: Phase 3 night watch — away/back presence mark, non-urgent queueing, one WakeReport on back. Plan cells before dispatch.",
   "created_at": "2026-08-27T01:36:44.583Z",
   "run_state": "done",
   "waiting_on": null,
@@ -25,5 +25,12 @@
     "rationale": "slp-supervisor-heartbeat: observer role across herding control loop + hooks + new state records; story-sized; no hard-gate flags",
     "updated_at": "2026-08-27T01:43:24.110Z",
     "feature": "slp-supervisor-heartbeat"
+  },
+  "merge_ready": {
+    "since": "2026-08-27T13:31:15.644Z",
+    "branch": "wt/slp-supervisor-heartbeat",
+    "worktree_id": "beehive--wt--slp-supervisor-heartbeat",
+    "uat": "approved",
+    "blocked_by": []
   }
 }
