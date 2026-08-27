@@ -538,7 +538,38 @@ mod tests {
         // control loop's iteration index; nothing meant "which iteration"
         // before — `--interval` is a duration and `--limit` is a cap on a
         // listing.
-        const PINNED_FLAG_COUNT: usize = 192;
+        // 192 -> 194 (slp-supervisor-heartbeat sup-5): `bee supervisor
+        // record` gains the intervention mailbox, and `supervisor pending` /
+        // `supervisor mark-delivered` read and stamp it. Reused, not
+        // reinvented: `--id` is the row this verb acts on, exactly as it is
+        // on every cells verb and on `mailbox mark`; `--target-session`,
+        // `--kind`, `--signal` and `--tick` keep the meanings sup-2 gave
+        // them. Two names are new. `--point-key` is the stable slug the
+        // frequency cap counts per point; nothing meant "which recurring
+        // subject is this" before — `--key` is a config path (config
+        // get/set/unset), and `--id` names a row that already exists, where a
+        // point key is deliberately reused across rows. `--question` is the
+        // open question delivered to another session, and it is NOT `--note`:
+        // a note is the observer writing to itself with a 500-character
+        // bound, while a question is text that lands in someone else's
+        // context and carries its own two-sentence law, so one flag name
+        // could not carry both rules honestly. The plan
+        // (docs/history/slp-supervisor-heartbeat/plan.md, cell sup-5) names
+        // both flags explicitly.
+        // 194 -> 194 (slp-supervisor-heartbeat sup-7): `bee supervisor
+        // record --kind urgent` adds the danger class of c80debd7 and adds
+        // NO flag name. That is the point of the design: an urgent row is an
+        // ordinary mailbox row that takes the same --target-session,
+        // --point-key, --question, --signal and --tick, so a caller who knows
+        // how to raise an intervention already knows how to raise an alert.
+        // The two differences (the frequency cap does not refuse it, and one
+        // best-effort notification fires) are behavior of the closed --kind
+        // set, never new vocabulary — spelling either of them as its own flag
+        // (`--urgent`, `--notify`) would have made a second way to say a word
+        // --kind already says, and the opt-out is a config key
+        // (supervisor.notify), which is where every other switch of this shape
+        // lives.
+        const PINNED_FLAG_COUNT: usize = 194;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

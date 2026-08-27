@@ -187,6 +187,10 @@ struct Plan {
     inject_key: String,
     inject_reminder: bool,
     nudge: Option<Nudge>,
+    /// c80debd7: the supervisor's undelivered questions for THIS session,
+    /// oldest first, as `(row id, line)`. Read-only here; execute() stamps
+    /// each row before it prints the line.
+    pending_interventions: Vec<(String, String)>,
 }
 
 /// Ok(None) = hook disabled (native exit 0). Err = delegate.
@@ -260,6 +264,21 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
         None => None,
     };
 
+    // c80debd7: an intervention is READ at the target session's NEXT turn
+    // boundary, never injected mid-turn — and this hook IS that boundary. The
+    // read is scoped to the session that sent this prompt, so a row addressed
+    // to another session can never surface here. It is total (a missing or
+    // corrupt mailbox reads as nothing pending), it runs LAST so no delegate
+    // can follow a read that already warned, and the delivery stamp itself is
+    // a side effect that belongs to execute().
+    //
+    // Known gap, inherited not added: a linked worktree returns Delegate far
+    // above, so a worktree session takes no delivery yet.
+    let pending_interventions = match &session_id {
+        Some(sid) => crate::verbs::supervisor::pending_delivery_for_session(root, sid),
+        None => Vec::new(),
+    };
+
     Ok(Some(Plan {
         session_id,
         feature,
@@ -268,6 +287,7 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
         inject_key,
         inject_reminder,
         nudge,
+        pending_interventions,
     }))
 }
 
@@ -317,6 +337,25 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
             }
         }
     }
+    // c80debd7 delivery. Stamp FIRST, print second — the anchor nudge's own
+    // order, and for the same reason: a row whose stamp failed stays pending
+    // and is offered again next turn, while a printed-then-unstamped row
+    // would REPEAT a point, which the frequency cap exists to forbid. Each
+    // stamp is isolated and best-effort: a failure is crash-logged and never
+    // takes the turn (or the other rows) down with it. Delivered lines ride
+    // one appended block, after every existing part — the preamble content
+    // above is untouched.
+    let mut delivered: Vec<String> = Vec::new();
+    for (id, line) in &plan.pending_interventions {
+        match crate::verbs::supervisor::mark_delivered_for_session(root, id) {
+            Ok(()) => delivered.push(line.clone()),
+            Err(err) => log_crash(Some(root), HOOK_NAME, &err, Some("supervisor-delivery")),
+        }
+    }
+    if !delivered.is_empty() {
+        parts.push(delivered.join("\n"));
+    }
+
     if !parts.is_empty() {
         // UserPromptSubmit stdout stays PLAIN developer context — direct
         // write, never a JSON envelope, no trailing newline.
@@ -2549,5 +2588,155 @@ mod tests {
             crash_log.contains("prompt-context"),
             "a failing clear must be crash-logged (log_crash), not silently eaten: {crash_log}"
         );
+    }
+
+    // ─── c80debd7: the supervisor's questions land at the NEXT turn boundary ──
+    //
+    // These drive the same two seams the D2 tests above use: `plan()` for what
+    // the turn WILL say (its `pending_interventions` are exactly the lines
+    // execute() appends, one per row) and `run()` for the wiring end to end —
+    // a real UserPromptSubmit payload, the stamp written to the real mailbox.
+
+    /// Put one undelivered row in the mailbox, exactly as `supervisor record`
+    /// would. The tempdir is an ordinary checkout, so it is its own control
+    /// root — the same store the hook resolves.
+    fn ask(root: &Path, kind: &str, target: &str, point: &str, question: &str) -> String {
+        crate::verbs::supervisor::record_intervention_into(
+            root,
+            "supervisor record",
+            kind,
+            None,
+            Some(target),
+            Some(point),
+            Some(question),
+            None,
+        )
+        .expect("the fixture row must be accepted")
+        .id
+    }
+
+    fn pending_ids(root: &Path, session: &str) -> Vec<String> {
+        crate::verbs::supervisor::pending_delivery_for_session(root, session)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    fn prompt_payload(root: &Path, session: &str) -> String {
+        json!({ "cwd": root.to_string_lossy(), "session_id": session }).to_string()
+    }
+
+    /// TRUTH: "an undelivered intervention for the calling session appears
+    /// exactly once at its next turn boundary and is marked delivered."
+    #[test]
+    fn a_pending_intervention_is_delivered_once_at_the_next_turn_and_never_repeats() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let id = ask(
+            tmp.path(),
+            "intervention",
+            "sess-a",
+            "retry-loop",
+            "What tells you the retry will end?",
+        );
+
+        // What this turn will say: the row, once, worded for the agent.
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert_eq!(
+            p.pending_interventions,
+            vec![(id.clone(), "bee supervisor: What tells you the retry will end?".to_string())],
+            "the pending row is exactly the line the turn appends"
+        );
+
+        // And the real hook entry point delivers it AND stamps it.
+        let outcome = run(&[], &prompt_payload(tmp.path(), "sess-a"));
+        assert!(matches!(outcome, Outcome::Done(_)), "a plain repo must decide natively");
+        assert!(
+            pending_ids(tmp.path(), "sess-a").is_empty(),
+            "the delivered row must be stamped, not left pending"
+        );
+
+        // The next turn says nothing: never repeat a point (c80debd7).
+        let p2 = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert!(
+            p2.pending_interventions.is_empty(),
+            "a delivered row must never surface a second time: {:?}",
+            p2.pending_interventions
+        );
+    }
+
+    /// TRUTH: "rows for other sessions never leak into this session's output."
+    #[test]
+    fn a_row_addressed_to_another_session_never_leaks_into_this_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let other = ask(
+            tmp.path(),
+            "intervention",
+            "sess-other",
+            "big-decision",
+            "What made this the one-way door to take now?",
+        );
+
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert!(
+            p.pending_interventions.is_empty(),
+            "sess-a must see nothing addressed to sess-other: {:?}",
+            p.pending_interventions
+        );
+
+        run(&[], &prompt_payload(tmp.path(), "sess-a"));
+        assert_eq!(
+            pending_ids(tmp.path(), "sess-other"),
+            vec![other],
+            "another session's turn must never consume — or stamp — this row"
+        );
+    }
+
+    /// TRUTH: zero rows add zero lines (and write nothing at all).
+    #[test]
+    fn an_empty_mailbox_adds_no_lines_and_no_events() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        assert!(p.pending_interventions.is_empty());
+        // The reminder itself is unchanged by an empty mailbox.
+        assert!(p.reminder_text.starts_with("bee: phase="), "{}", p.reminder_text);
+
+        run(&[], &prompt_payload(tmp.path(), "sess-a"));
+        assert!(
+            !crate::verbs::supervisor::interventions_store_path(tmp.path()).exists(),
+            "an empty mailbox stays absent — delivery writes nothing when there is nothing"
+        );
+    }
+
+    /// An escalation is the one row this cell marks differently: its line
+    /// reads as urgent (danger-class handling itself is a later cell).
+    #[test]
+    fn an_escalation_line_is_prefixed_so_it_reads_as_urgent() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        ask(tmp.path(), "escalation", "sess-a", "retry-loop", "What tells you the retry will end?");
+
+        let p = plan(tmp.path(), &parse_payload(&prompt_payload(tmp.path(), "sess-a")))
+            .ok()
+            .flatten()
+            .unwrap();
+        let line = &p.pending_interventions[0].1;
+        assert!(line.starts_with("bee supervisor URGENT: "), "{line}");
+        assert!(line.ends_with("What tells you the retry will end?"), "{line}");
     }
 }
