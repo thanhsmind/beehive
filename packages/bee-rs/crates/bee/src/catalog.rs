@@ -519,7 +519,26 @@ mod tests {
         // the reversal as `--tier generation` is precisely what D4
         // retires. `--off` reads the same on any future flag-shaped
         // marking, which is the property this ratchet protects.
-        const PINNED_FLAG_COUNT: usize = 189;
+        // 189 -> 192 (slp-supervisor-heartbeat sup-2): `bee supervisor
+        // record` lands the observation store the cold supervisor tick
+        // writes its memory into. Reused, not reinvented: `--kind` already
+        // spells "which member of a closed row-type set" (state handoff
+        // write, state waiting-on set) and means exactly that here;
+        // `--note` is already the short free-text line a record carries.
+        // Three names are new. `--signal` is the day-1 signal class
+        // (struggling-loop / big-decision / danger-op / none) — a closed
+        // classification of WHAT was seen, where `--kind` classifies the
+        // ROW and no existing flag names an observed condition.
+        // `--target-session` is the OBSERVED session, deliberately not
+        // `--session`: everywhere else in this vocabulary `--session` is
+        // the caller's own session key (intent show/set, state verbs), and
+        // an observer whose subject is another session must not collide
+        // with that — the plan (docs/history/slp-supervisor-heartbeat/
+        // plan.md, cell sup-2) names the flag explicitly. `--tick` is the
+        // control loop's iteration index; nothing meant "which iteration"
+        // before — `--interval` is a duration and `--limit` is a cap on a
+        // listing.
+        const PINNED_FLAG_COUNT: usize = 192;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
