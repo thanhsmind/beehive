@@ -596,6 +596,18 @@ mod tests {
         // reason applies to the same surface here. `--key` is a config path,
         // and `--feature`/`--lane` name work, not a span of time. Nothing else
         // in this vocabulary meant "which away window".
+        // 195 -> 195 (slp-supervisor-heartbeat sup-10): `bee supervisor
+        // metrics` reads the health counters of 66c4c251 over one away window
+        // and adds NO flag name. `--window` already means exactly "which away
+        // window" on this same surface (sup-9 recorded why it is not `--id`),
+        // and measuring a window is the same question as reading its report,
+        // so a second spelling would be the drift this ratchet exists to
+        // catch. Nothing else earned a flag either: the band bounds are named
+        // consts in the code, not tunables (a band a caller can move is a band
+        // that stops meaning anything), and there is deliberately NO flag on
+        // this surface that could raise a consent level or flip any switch —
+        // 66c4c251 keeps that in the human's hands, and a verb that only ever
+        // reads must not carry the vocabulary of one that writes.
         const PINNED_FLAG_COUNT: usize = 195;
 
         let names: std::collections::BTreeSet<&str> =
