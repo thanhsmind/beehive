@@ -71,17 +71,17 @@ From the quick scout only. Downstream agents read these before planning.
 ### Reusable Assets
 
 - `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1420` — `build_close_report_doors`, the single door builder for close. A dissent-debt door is one more entry here.
-- `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1461-1516` — the judge-debt door arm itself: lane-gated existence, a debt count, a named escape decision, and a `command` remedy. The exact arm to copy.
+- `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1457-1517` — the judge-debt door arm itself: lane-gated existence, a debt count, a named escape decision, and a `command` remedy. The exact arm to copy.
 - `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:382` — `judge_debt`, which counts a capped cell as debt when its trace carries no verdict. A dissent-debt counter mirrors it one for one.
 - `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:2016-2046` — the three-line refusal emit (headline, `remedy:`, `next:`), reading the door's own verdict and never recomputing it.
-- `packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs:169-289` — `run_judge_record`: a `--file` payload, validated, appended to the cell trace, and — on a negative verdict — the cell is REOPENED and a decision logged. The dissent verdict mirrors this.
+- `packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs:169-311` — `run_judge_record`: a `--file` payload, validated, appended to the cell trace, and — on a negative verdict — the cell is REOPENED and a decision logged. The dissent verdict mirrors this.
 - `packages/bee-rs/crates/bee/src/verbs/cells/judge.rs:244` — `validate_judge_verdict` with its versioned schema string and closed enum sets. The template for a `dissent-verdict/1`.
 - `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1102-1143` — `run_block`, which writes the blocked status and its reason plus an attempt record. The "blocker dissent parks the work" half.
-- `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1249-1292` — `run_reopen`, the only unblock path.
+- `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1241-1292` — `run_reopen`, the only unblock path.
 - `packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs:98-111` — a blocked dependency makes its dependents unschedulable. This is the REAL tooth behind "the related work stays unclaimable".
-- `packages/bee-rs/crates/bee/src/herding/mailbox.rs:318-345` — the result contract rendered into every worker brief; its shape is `{status, summary, files_changed, proof}`. Where `options[]` and `leaning` graft on.
+- `packages/bee-rs/crates/bee/src/herding/mailbox.rs:327-337` — the result contract rendered into every worker brief; its shape is `{status, summary, files_changed, proof}`. Where `options[]` and `leaning` graft on.
 - `packages/bee-rs/crates/bee/src/herding/mailbox.rs:367-397` — the parsed result struct, its two-value status, and its typed errors. A new field needs a change here too.
-- `packages/bee-rs/crates/bee/src/verbs/mailbox.rs:226-238` — the closed departure-kind set, with the header comment stating why a fifth kind is a decision and never a worker's word choice. The precedent for a closed severity set.
+- `packages/bee-rs/crates/bee/src/verbs/mailbox.rs:221-231` — the closed departure-kind set, with the header comment stating why a fifth kind is a decision and never a worker's word choice. The precedent for a closed severity set.
 - `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs:56` — the five cap-report keys. There is no `concerns` key; consider-grade dissent genuinely has no carrier today.
 
 ### Established Patterns
@@ -95,12 +95,12 @@ From the quick scout only. Downstream agents read these before planning.
 
 ### Integration Points
 
-- Handler module plus its group `mod.rs`; the sub-verb dispatch table at `packages/bee-rs/crates/bee/src/verbs/cells/util.rs:75-100`.
+- Handler module plus its group `mod.rs`; the sub-verb dispatch table at `packages/bee-rs/crates/bee/src/verbs/cells/util.rs:68-101`.
 - `packages/bee-rs/crates/bee/src/generated/registry_payload.json` — HAND-EDITED; `bee dev regen` never touches it.
 - `packages/bee-rs/crates/bee/src/catalog.rs:611` — `PINNED_FLAG_COUNT`, bumped on purpose with the reason recorded.
 - `packages/bee-rs/crates/bee/src/router.rs:70-71` — the cells coverage lines a new sub-verb must join.
 - Contract tests that walk the declared set: `tests/registry_dispatch.rs`, `tests/registry_contracts.rs`, `tests/front_door.rs`, `tests/installer_invocations.rs`.
-- Worker prompt surfaces, two of them: `skills/bee-swarming/references/swarming-reference.md:539-544` (the `[BLOCKED]` form) and `packages/bee-rs/crates/bee/src/herding/mailbox.rs:318-345` (the herding brief).
+- Worker prompt surfaces, two of them: `skills/bee-swarming/references/swarming-reference.md:539-544` (the `[BLOCKED]` form) and `packages/bee-rs/crates/bee/src/herding/mailbox.rs:327-337` (the herding brief).
 - `packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs:240` — `set_blocked_by` already takes door names, so a `dissent-debt` door name flows into the projection for free. Note that nothing reads `merge_ready`; it is additive only.
 
 ### Two facts that correct the research digest
