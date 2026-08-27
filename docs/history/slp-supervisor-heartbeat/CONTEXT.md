@@ -111,6 +111,8 @@ research digests below name the anchors.
 
 (none — every product decision is a locked D-ID above)
 
+<!-- bee:not-a-deferral: CONTEXT template sections that record the shaping state of this feature. Every item listed here was answered in plan.md Discovery before Gate 2, or carries its own decision id / map Out-of-scope reason. This prose documents the deferral sections of the template, it does not promise future action. -->
+
 ### Deferred To Planning
 
 - [ ] Intervention record + queue schema and location under `.bee/` — read the two mailbox implementations, pick one pattern.
@@ -125,9 +127,13 @@ research digests below name the anchors.
 - Detector (cheap signal poller over transcripts) — next feature-sized upgrade of this same role (da7cb49b).
 - Sub-supervisor fan-in, voice WakeReport, heterogeneous lane models — Out of scope on the map, return as fresh efforts.
 
+<!-- /bee:not-a-deferral -->
+
 ## Handoff Note
 
+<!-- bee:not-a-deferral: Handoff Note describing which parts of this template planning reads. It names the deferred-to-planning section as machinery, it does not defer anything. -->
 CONTEXT.md is the source of truth. Decision IDs are bee decision-log
 ids, stable. Planning reads locked decisions, code context, canonical
 references, and deferred-to-planning questions. Planning's Gate 2
 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->

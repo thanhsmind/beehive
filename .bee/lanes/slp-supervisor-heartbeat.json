@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-supervisor-heartbeat",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"slp-supervisor-heartbeat\" started at phase \"exploring\" (lane).",
-  "next_action": "All four plan phases merged (Phase 4 at b22572e). Feature is code-complete; remaining: user UAT on main, then bee-capturing flush and bee close --feature slp-supervisor-heartbeat.",
+  "next_action": "bee close finished \"slp-supervisor-heartbeat\" — feature is closed.",
   "created_at": "2026-08-27T01:36:44.583Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Next: when it finishes, I merge Phase 4. That is the last phase — the whole feature.",
-    "asked_at": "2026-08-27T16:49:19.748Z",
-    "session": "e689c2df-430b-44e5-b7ad-a04a3826431b"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

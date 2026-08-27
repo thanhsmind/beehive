@@ -25,3 +25,10 @@ of at most 10 lines, four sections (what happened / what was decided /
 what needs you / next action) — plus a single push notification.
 UrgentAlerts skip the queue as always. Voice rendering is out of
 scope for this effort.
+
+Post-close narrowing: c706053e adds a NARROW opt-in silence-is-consent
+mode — with it enabled, a non-gate queued ask may auto-proceed after a
+user-set timeout, logged and prominent in the WakeReport; gates and
+one-way low-confidence asks still always wait. a8f4b8ab sorts the queue
+by the confidence×door predicate; 66c4c251 sorts the WakeReport's
+assumptions by impact-if-wrong descending.

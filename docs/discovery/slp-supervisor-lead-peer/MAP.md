@@ -14,9 +14,10 @@ rules win on conflict unless a point is re-decided explicitly.
 Map closed 2026-08-26 — 7 tickets, 13 decisions, no fog left. Ready
 for bee-shaping's Lock, which consumes the decisions below into each
 feature's CONTEXT.md, in build order (a020319d):
-1. slp-supervisor-heartbeat (322695d6, da7cb49b, c80debd7, 9f5cd250)
+1. slp-supervisor-heartbeat (322695d6, da7cb49b, c80debd7, 9f5cd250;
+   post-close: a8f4b8ab, c706053e, 66c4c251, ea02cb68)
 2. slp-dissent-stop-and-ask (4b7aa303, a2affcba)
-3. slp-blind-lanes (9cffdfb5, 5981246b)
+3. slp-blind-lanes (9cffdfb5, 5981246b; post-close: 5144314c)
 4. slp-contract-original-request (ca9960f5, 3899fa60, 9c0104e0)
 
 ## Notes
@@ -116,7 +117,9 @@ feature's CONTEXT.md, in build order (a020319d):
 - a8f4b8ab (post-close, harness distill): the supervisor feature
   absorbs two extra stuck signals (over-2x-estimate, same-region
   repeat), harness-measured overrun telemetry, and the
-  confidence×door queue-sort predicate.
+  confidence×door queue-sort predicate. Narrowed by ea02cb68: the
+  over-2x signal is skip-until-present — bee adds no estimate field,
+  and a cell with none reports "no estimate recorded" by name.
 - c706053e (post-close, user): a NARROW opt-in silence-is-consent
   mode — enabled explicitly, non-gate queued asks only, user-set
   timeout, every auto-proceed logged and prominent in the WakeReport;
@@ -144,7 +147,9 @@ advisor tier per the user's "use the biggest model" instruction.
 Nothing. Every open question this map could phrase has an answer.
 Resolved on close: the 80%-budget-warning telemetry is named as new
 machinery inside the slp-supervisor-heartbeat feature (da7cb49b) —
-its exact emitter is a shaping question, not a map question; Better
+its emitter is answered post-close by a8f4b8ab: the deterministic
+layer computes the overrun and injects it into the supervisor's
+input; Better
 SLP dissolved to "covered" — bee-evolving over the feedback digest
 already is the weekly retro; wake-report medium answered by 9f5cd250.
 

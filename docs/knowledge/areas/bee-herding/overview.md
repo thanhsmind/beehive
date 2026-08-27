@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: "Bee Herding — the three-role cockpit, its safety boundaries, and adoption"
-description: "A cockpit that runs several Claude Code sessions in parallel worktrees, over whichever pane transport one config key names (herdr or tmux): a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
+description: "A cockpit that runs several Claude Code sessions in parallel worktrees, over whichever pane transport one config key names (herdr or tmux): a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, a read-only supervisor role that observes beside them, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
 timestamp: 2026-08-20
 bee:
   id: bee-herding-overview
@@ -27,6 +27,8 @@ The machinery it starts is documented beside it:
 | [Handing a foreign agent its brief](handing-a-foreign-agent-its-brief.md) | The mailbox channel, the standalone-worker contract, and delivery receipts |
 | [The run verb and worker outcomes](the-run-verb-and-worker-outcomes.md) | The poll's signal ladder, the typed outcomes, and pane lifecycle |
 | [Waves and occupancy](waves-and-occupancy.md) | Fan-out over running workers, the ledger, and slot counting |
+| [The supervisor observer and its interventions](the-supervisor-observer-and-its-interventions.md) | The cold observer role, its one-record tick, and how an open question reaches a session |
+| [Presence, wake reports, and earned autonomy](presence-wake-reports-and-earned-autonomy.md) | The away/back mark, the single bounded report, health counters, and silence-is-consent |
 
 ## Entry Points & Triggers
 
@@ -43,6 +45,10 @@ The machinery it starts is documented beside it:
   role calls it — see [waves and occupancy](waves-and-occupancy.md).
 - **A herding run** is a fifth entry point that starts a worker rather than briefing one that
   already exists — see [the run verb and worker outcomes](the-run-verb-and-worker-outcomes.md).
+- **The supervisor** is a fourth role of the same control loop, and bootstrap does not start it.
+  It is an OBSERVER: it reads, asks open questions, and reports, and it may never dispatch, merge,
+  approve, or write product code — see
+  [the supervisor observer and its interventions](the-supervisor-observer-and-its-interventions.md).
 
 ## Data Dictionary
 

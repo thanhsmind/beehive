@@ -14,7 +14,7 @@ Most of its load-bearing ideas are ALREADY decided in the slp map or already exi
 | Harness spec concept | Where it already lands |
 |---|---|
 | `raw_request` verbatim in the envelope, "nguyên văn human, không chỉnh sửa"; verbatim UP the chain, compressed only DOWN (context_slice) | `Local` decided: 3899fa60 + 9c0104e0 (bee intent anchor into every dispatch) |
-| Silent Brainstorming: 5 Hats parallel, absolute isolation before synthesis | `Local` decided: 9cffdfb5 + 5981246b (blind lanes over advisor dispatches) |
+| Silent Brainstorming: 5 Hats parallel, absolute isolation before synthesis | `Local` decided: 9cffdfb5 + 5981246b (blind lanes over advisor dispatches); corrected by 5144314c — hats are a review instrument (bee-reviewing/judge), lanes generate designs. See "The 5 Hats in detail" below |
 | "Không ai tự chấm bài mình" — independent QA Checker, separate call, Given/When/Then per criteria, max 2 fails | `Local` exists: bee-review tier, judge-debt (`bee cells judge-record`), reviewer isolation contract |
 | "Luật vật lý nằm ở code" — non-LLM orchestrator holds loop counters, call ceilings, timeouts; LLM never widens its own limits | `Local` exists partially: cell budgets (`max_claims/max_failed_attempts/max_same_signature`), herding control-loop timeouts/backoff; per-request LLM-call ceilings do not exist |
 | 3-speed lanes, upgrade-only mid-flight, deterministic R0 rule before an LLM classifier | `Local` exists: bee lanes + `bee route` / `bee herding classify-lane`; upgrade-only matches bee's escalate-never-relax posture |
@@ -23,7 +23,7 @@ Most of its load-bearing ideas are ALREADY decided in the slp map or already exi
 
 ## Four steals (worth taking)
 
-1. **Two stuck-detection rules** for the supervisor feature's signal set (extends da7cb49b's day-1 list): `Upstream` `vuot_uoc_luong` — wall-clock or tool-calls > 2× the task's own estimate, measured by the harness, not self-reported; and `sua_lap_cho_cu` — two consecutive submissions differing only in the same region. Both are computable from bee's existing surfaces (cell trace attempts, activity transitions) plus one estimate field.
+1. **Two stuck-detection rules** for the supervisor feature's signal set (extends da7cb49b's day-1 list): `Upstream` `vuot_uoc_luong` — wall-clock or tool-calls > 2× the task's own estimate, measured by the harness, not self-reported; and `sua_lap_cho_cu` — two consecutive submissions differing only in the same region. Both are computable from bee's existing surfaces (cell trace attempts, activity transitions) plus one estimate field. `Local` narrowed by ea02cb68: bee adds NO estimate field — the over-2x signal is SKIP-UNTIL-PRESENT, computed only where an estimate is already recorded, and reported as "no estimate recorded" otherwise.
 2. **An 80%-style *measured* budget trigger lives in the harness, not the agent** — their Orchestrator measures and INJECTS the overrun into the Supervisor's input. Confirms the slp map's stance that the 80% warning is harness telemetry (named in da7cb49b), and says who computes it: the deterministic layer.
 3. **R0: a deterministic keyword list that grows one keyword per incident** before any LLM classifier, with `lane_source` recorded (`rule | classifier | supervisor_upgrade`). Cheap-learning loop for `bee route`: when a low-lane task causes an incident, its keyword joins the always-high-lane list. Candidate one-line improvement to bee route, independent of the slp features.
 4. **do_tin (confidence) × door type as the escalation predicate**: assume freely on two-way doors; assume-and-log on one-way doors with high/medium confidence; ALWAYS escalate one-way + low confidence, regardless of autonomy level. A crisp, checkable rule the slp night-watch queue (9f5cd250) can reuse to sort "queue silently" vs "UrgentAlert".
@@ -34,7 +34,7 @@ Most of its load-bearing ideas are ALREADY decided in the slp map or already exi
 
 ## One flagged idea (user's call, not taken)
 
-`Upstream` Autonomy Policy B, "**Silence is consent**": on a one-way door the system notifies async with a recommendation; if the human stays silent X minutes (30–60 configurable), it proceeds with the recommendation. This CONFLICTS with bee's standing rule that gates are never self-approved (gate_bypass is the one recorded exception) and would extend 9f5cd250's "non-urgent asks queue silently". `Inference` It could exist in bee only as a new opt-in bypass mode. Flag for the user at slp-supervisor-heartbeat shaping; not a decision here.
+`Upstream` Autonomy Policy B, "**Silence is consent**": on a one-way door the system notifies async with a recommendation; if the human stays silent X minutes (30–60 configurable), it proceeds with the recommendation. This CONFLICTS with bee's standing rule that gates are never self-approved (gate_bypass is the one recorded exception) and would extend 9f5cd250's "non-urgent asks queue silently". `Inference` It could exist in bee only as a new opt-in bypass mode. `Local` DECIDED since, as c706053e: a NARROW opt-in silence-is-consent mode — non-gate queued asks only, user-set timeout, every auto-proceed logged and prominent in the WakeReport; gates and one-way low-confidence asks always wait. 66c4c251 adds that raising the level is EARNED (zero human-reversed one-way decisions across 40–60 tasks).
 
 ## The 5 Hats in detail (from the full text, §11.3, §12.4–12.8, §13–14)
 
@@ -122,4 +122,4 @@ is only valid when it names what is missing.
 
 ## Next step
 
-Feed this brief plus the two research digests into bee-shaping for `slp-supervisor-heartbeat`: take steals 1–2 into the feature's signal/telemetry shape, take steal 4 into the wake-queue sort rule, and put the "silence is consent" flag in front of the user as one shaping question. Steal 3 (R0 keyword growth) is a separate tiny backlog item on `bee route`.
+Feed this brief plus the two research digests into bee-shaping for `slp-supervisor-heartbeat`: take steals 1–2 into the feature's signal/telemetry shape, take steal 4 into the wake-queue sort rule, and note that the "silence is consent" flag was since decided as c706053e (narrow opt-in, gates always wait). Steal 3 (R0 keyword growth) is a separate tiny backlog item on `bee route`.
