@@ -1024,6 +1024,86 @@ mod tests {
         }
     }
 
+    /// The prompt tells the model which words to use; `verbs::supervisor`
+    /// REFUSES every other word. Those are two copies of one vocabulary, and
+    /// a guard plus a prompt that drift apart fail in the worst possible
+    /// way — the tick burns its turns on a record the verb rejects, and a
+    /// cold tick has no memory to learn from the rejection. This ties them:
+    /// widen the verb's closed sets and this test demands the prompt learn
+    /// the new word too.
+    #[test]
+    fn the_shipped_prompt_pins_the_record_verbs_own_closed_sets() {
+        use crate::verbs::supervisor::{KNOWN_KINDS, KNOWN_SIGNALS};
+
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..");
+        let body = read_prompt_file(&repo_root, Role::Supervisor).expect("the shipped prompt file reads");
+
+        for kind in KNOWN_KINDS {
+            assert!(body.contains(kind), "supervisor-prompt.md never names the record kind {kind:?}");
+        }
+        for signal in KNOWN_SIGNALS {
+            assert!(body.contains(signal), "supervisor-prompt.md never names the signal {signal:?}");
+        }
+        // The two required flags of the one write a tick makes, and the
+        // silence row's reason obligation (da7cb49b: "reviewed and chose
+        // silence" is a LOGGED outcome, never an absent one).
+        for needle in ["--kind", "--signal", "--note", "Record the silence, with its reason"] {
+            assert!(body.contains(needle), "supervisor-prompt.md is missing {needle:?}");
+        }
+    }
+
+    /// The end-to-end tick (this cell's whole point): the REAL flag line
+    /// `--role supervisor --once`, parsed by the real parser, wired into the
+    /// real `RealArgvProvider` exactly the way the CLI entry point wires it,
+    /// driven by the real `run_loop` — and the argv that reaches the spawner
+    /// carries the supervisor prompt body, the enumerated read-only surface,
+    /// and the model the `supervisor` role resolved to. The tests above prove
+    /// each piece against `resolve_iteration_argv`; this proves the pieces are
+    /// actually joined, and that `--once` spawns exactly ONE tick.
+    #[test]
+    fn a_supervisor_once_run_spawns_exactly_one_tick_with_prompt_tools_and_role_model() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"models":{"claude":{"supervisor":"haiku"}}}"#).unwrap();
+
+        // The real flag line, through the real parser.
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        assert!(parsed.once);
+        assert_eq!(parsed.role, Role::Supervisor);
+
+        // Wired exactly as `control_loop()` wires it.
+        let provider =
+            RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1, "--once must spawn exactly one tick");
+        assert!(sleeper.recorded().is_empty(), "--once must not wait out the 900s interval");
+        assert_eq!(
+            counting.seen(),
+            vec![vec![
+                "claude".to_string(),
+                "-p".to_string(),
+                "PROMPT BODY supervisor\n".to_string(),
+                "--model".to_string(),
+                // the `supervisor` model role, not the cockpit default
+                "haiku".to_string(),
+                "--max-turns".to_string(),
+                DEFAULT_TURN_CEILING.to_string(),
+                "--allowedTools".to_string(),
+                SUPERVISOR_ALLOWED_TOOLS.to_string(),
+            ]],
+            "the supervisor tick's whole invocation must reach the spawner intact"
+        );
+    }
+
     // ── the transport swaps exactly one allowlist entry ───────────────────
 
     #[test]

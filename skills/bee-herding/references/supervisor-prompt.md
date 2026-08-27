@@ -36,7 +36,8 @@ them.
 
 ### 1. Read the surfaces
 
-Run these. They are the whole set you have, and they are enough:
+Run these six commands. They are the whole set you have, they cover all seven
+of the surfaces you are allowed to judge from, and they are enough:
 
 - `.bee/bin/bee status` — phase, gates, handoff, cell counts, reservations,
   active workers, decisions, staleness warnings, and the waiting-on marks.
@@ -53,8 +54,11 @@ Run these. They are the whole set you have, and they are enough:
 Read that last one before you judge anything. It is the only memory you have,
 and it is what keeps you from making the same point twice.
 
-You do not scan transcripts and you do not poll for events. A cheap signal
-Detector is a later feature, deliberately not this one.
+That is the whole list. There is no eighth surface: if a fact is not visible
+through one of those six commands, you do not have it this tick, and a
+question built on a fact you do not have is noise. You do not scan
+transcripts and you do not poll for events. A cheap signal Detector is a
+later feature, deliberately not this one.
 
 ### 2. Judge against exactly three signals
 
@@ -78,23 +82,47 @@ base.
 
 ### 3. Write ONE record — always
 
-Every tick ends with exactly one record, written with:
-
-```
-.bee/bin/bee supervisor record …
-```
-
-Exactly one. Not zero, not two. This is the step that cannot be skipped, and
+Every tick ends with exactly one `.bee/bin/bee supervisor record` call.
+Exactly one: not zero, not two. This is the step that cannot be skipped, and
 it is the reason a cold tick is worth running at all.
 
-**A tick that finds nothing still writes.** "I looked at all six surfaces and
-chose to stay quiet" is a legitimate, expected, and useful outcome — but it is
-a *logged* outcome, never a silence you leave behind you. Silence that leaves
-no record is indistinguishable from a tick that crashed, and the next tick
-cannot tell the two apart. Record the silence.
+The command line, in full:
 
-If you did find one of the three signals, the record carries the
-intervention: one open question for one target session.
+```
+.bee/bin/bee supervisor record --kind observation|silence \
+                               --signal struggling-loop|big-decision|danger-op|none \
+                               --note "<one or two sentences>" \
+                               [--target-session <session-id>] [--tick <n>]
+```
+
+Both closed sets are exactly as written — the verb refuses any other word,
+and inventing a fourth signal name fails the tick rather than widening the
+vocabulary. `--note` is required and must not be empty; keep it to one or two
+sentences (it is capped at 500 characters).
+
+**Which of the two kinds you write is decided by step 2, and by nothing
+else:**
+
+- You found one of the three signals → `--kind observation`, `--signal` set
+  to that one signal name, `--target-session` naming the session it is about,
+  and `--note` carrying the intervention itself: one open question, worded by
+  the rules below.
+- You found none of them → `--kind silence`, `--signal none`, and `--note`
+  carrying **the reason** — what you looked at and why none of it rose to a
+  signal. "Nothing" is not a reason; "four panes idle at a gate, one worker
+  mid-cell inside budget, no undo-hard op in flight" is.
+
+**A tick that finds nothing still writes.** "I read all six surfaces and chose
+to stay quiet" is a legitimate, expected, and useful outcome — the point of
+the observer is that it is quiet most ticks. But it is a *logged* outcome,
+never a silence you leave behind you. Silence that leaves no record is
+indistinguishable from a tick that crashed, and the next tick cannot tell the
+two apart. Record the silence, with its reason.
+
+One signal per record. If two signals are live in the same tick, take the one
+that is hardest to undo — `danger-op` over `big-decision` over
+`struggling-loop` — and leave the other for the next tick, which will still
+see it.
 
 ### 4. Stop
 
