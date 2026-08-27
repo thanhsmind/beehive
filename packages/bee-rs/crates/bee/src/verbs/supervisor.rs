@@ -104,6 +104,36 @@
 // Refusals, both writing nothing: `away` while a window is already open, and
 // `back` with no open window.
 //
+// The second half of Phase 3 is THE WAKE REPORT (9f5cd250, ordered by
+// 66c4c251), stored in the fourth file at the same control root:
+//
+//   .bee/supervisor/reports.jsonl
+//
+//   {ts, window_id, away_at, back_at, markdown, lines, more}
+//
+// `back` closes a window and, on that same path, renders EXACTLY ONE report
+// over it. The shape is fixed: markdown, at most 10 lines, exactly four
+// sections in one order — What happened / What was decided / What needs you /
+// Next action. Nothing is computed by a new subsystem; every line comes from a
+// record that already exists — observation rows inside the window, decision-log
+// events inside the window, the queued rows `back` just released plus any
+// urgent row and the waiting-on mark, and one next-action line.
+//
+// TRUNCATION IS THE SHAPE, NOT A BUG. Ten lines is four headings plus six
+// lines of content, so an honest report that would run long keeps its
+// highest-impact items and ends with a `+N more` count. It never silently
+// drops an item, and it never prints "nothing happened" over a section whose
+// items were cut. An empty window still renders a legal report that says
+// plainly that nothing happened.
+//
+// EXACTLY ONCE is a property of the STORE, not of a call site: the row is
+// keyed by window id and `ensure_report_for_window` is the one door, so a
+// second `back` cannot produce a second report and `supervisor report` — which
+// only ever READS — answers with the same bytes every time. One best-effort
+// notification fires per closed window through the same seam the urgent alert
+// uses (same program, same detached spawn, same `supervisor.notify` opt-out),
+// and a notifier that fails never fails `back`.
+//
 // Verbs:
 //   supervisor record --kind observation|silence [--signal <s>] --note <text>
 //                     [--target-session <id>] [--tick <n>] [--json]
@@ -116,6 +146,7 @@
 //   supervisor away  [--note <one line>] [--json]
 //   supervisor back  [--json]
 //   supervisor presence [--json]
+//   supervisor report [--window <id>] [--json]
 //
 // CLI-ONLY STATE. Nothing else in the tree writes this file; `record` is
 // the one door, and it VALIDATES BEFORE IT WRITES — a refused row leaves
@@ -1139,6 +1170,12 @@ pub(crate) fn back_into(
             released.push(row.id.clone());
         }
     }
+    // The WakeReport is rendered HERE, on the one path that closes a window,
+    // so no caller can close one and skip the report. Storing it is
+    // idempotent per window id (`ensure_report_for_window`), which is what
+    // makes "exactly one report" a property of the store rather than of this
+    // call site. The notification is the verb's half — see `run_back`.
+    ensure_report_for_window(control, &closed, &released);
     Ok((closed, released))
 }
 
@@ -1146,6 +1183,489 @@ pub(crate) fn back_into(
 /// number `presence` and a later report both want, counted in one place.
 pub(crate) fn queued_count(control: &Path) -> usize {
     read_interventions(control).rows.iter().filter(|r| r.queued).count()
+}
+
+// ─── the WakeReport (Phase 3, second half — 9f5cd250 + 66c4c251) ────────
+
+/// The four sections, in the ONE order 9f5cd250 fixes. Every renderer and
+/// every test reads THIS constant, so a heading can never drift in one of the
+/// two and stay green in the other.
+pub(crate) const REPORT_SECTIONS: [&str; 4] =
+    ["## What happened", "## What was decided", "## What needs you", "## Next action"];
+
+/// The hard bound of 9f5cd250. Ten lines is FOUR headings plus six lines of
+/// content, and the truncation below is part of that shape, never a bug: an
+/// honest report that would run long keeps its highest-impact items and says
+/// how many it dropped.
+const REPORT_MAX_LINES: usize = 10;
+
+/// One item is one LINE, and a line a human has to scroll is not a line they
+/// read. Longer text is clipped with an ellipsis rather than wrapped — the
+/// count 9f5cd250 bounds is lines, and the full text is always one
+/// `bee supervisor pending` or `bee decisions show` away.
+const MAX_ITEM_CHARS: usize = 110;
+
+/// Where the rendered reports live, one JSON row per window:
+///   {ts, window_id, away_at, back_at, markdown, lines, more}
+fn reports_path(control: &Path) -> PathBuf {
+    supervisor_dir(control).join("reports.jsonl")
+}
+
+/// The decision log of the SAME root the presence window lives at. The report
+/// reads bee's existing surfaces (da7cb49b) and re-roots none of them: the
+/// supervisor's own three stores sit at the control root, so its "what was
+/// decided" half reads the control root's log too, and one worktree's report
+/// never disagrees with another's about which window it covers.
+fn decisions_log_path(control: &Path) -> PathBuf {
+    control.join(".bee").join("decisions.jsonl")
+}
+
+/// One rendered line plus the rank that ORDERS it. `rank` is impact-if-wrong
+/// (66c4c251), sorted DESCENDING; equal ranks keep store order, which a stable
+/// sort gives for free.
+#[derive(Debug, Clone)]
+struct ReportItem {
+    rank: u8,
+    text: String,
+}
+
+/// Impact-if-wrong for one observation row: the day-1 signal set of da7cb49b,
+/// danger first. A signal-less row is the floor — it was worth recording, but
+/// nothing about it says "getting this wrong costs".
+fn observation_rank(signal: &str) -> u8 {
+    match signal {
+        "danger-op" => 3,
+        "big-decision" => 2,
+        "struggling-loop" => 1,
+        _ => 0,
+    }
+}
+
+/// Impact-if-wrong for one row of "what needs you" (66c4c251): urgent before
+/// escalation before intervention, with a GATE the human is waited on for
+/// sitting between the danger class and a second ask about one point — a gate
+/// blocks a whole session, an escalation blocks one point.
+fn needs_you_rank(kind: &str) -> u8 {
+    match kind {
+        "urgent" => 4,
+        "gate" => 3,
+        "escalation" => 2,
+        _ => 1,
+    }
+}
+
+/// One line, clipped to something a human reads at a glance.
+fn clip(text: &str) -> String {
+    let text = one_line(text);
+    if text.chars().count() <= MAX_ITEM_CHARS {
+        return text;
+    }
+    let kept: String = text.chars().take(MAX_ITEM_CHARS - 1).collect();
+    format!("{}…", kept.trim_end())
+}
+
+/// Does this ISO-8601 stamp fall inside the window? Every timestamp compared
+/// here is written by `now_iso` (or by the decision log, which uses the same
+/// UTC `…Z` millisecond spelling), and that format sorts lexicographically —
+/// so this is a string comparison on purpose, with no date parsing to get
+/// wrong. A window with no `back_at` is still open and has no upper bound.
+fn in_window(ts: &str, win: &PresenceWindow) -> bool {
+    if ts < win.away_at.as_str() {
+        return false;
+    }
+    match win.back_at.as_deref() {
+        Some(back) => ts <= back,
+        None => true,
+    }
+}
+
+/// "What happened" — the observation rows the cold ticks wrote inside the
+/// window. Store order, ranked by signal.
+fn collect_happened(control: &Path, win: &PresenceWindow) -> Vec<ReportItem> {
+    read_observations(control)
+        .rows
+        .iter()
+        .filter(|r| in_window(&r.ts, win))
+        .map(|r| ReportItem {
+            rank: observation_rank(&r.signal),
+            text: format!("- {}: {}", r.signal, clip(&r.note)),
+        })
+        .collect()
+}
+
+/// Whether a decision event closed a ONE-WAY door (66c4c251). The decision log
+/// carries no explicit door field, so this reads the irreversible member it
+/// DOES carry: an event that retires an already-agreed decision, by type or by
+/// a non-empty `supersedes`. Undoing one of those means restoring a rule two
+/// moves back, while an ordinary `decide` is simply logged over. The fuller
+/// confidence×door predicate is Phase 4's (a8f4b8ab), and lands with the
+/// metrics that can measure it.
+fn decision_is_one_way(e: &Value) -> bool {
+    if e.get("type").and_then(Value::as_str) == Some("supersede") {
+        return true;
+    }
+    match e.get("supersedes") {
+        Some(Value::String(s)) => !js_trim(s).is_empty(),
+        Some(Value::Array(a)) => !a.is_empty(),
+        _ => false,
+    }
+}
+
+/// "What was decided" — decision-log events whose timestamp falls inside the
+/// window. Nothing is re-derived here and nothing new is stored: this is the
+/// existing log, filtered by the existing window.
+fn collect_decided(control: &Path, win: &PresenceWindow) -> Vec<ReportItem> {
+    let mut items = Vec::new();
+    for e in crate::verbs::decisions::read_jsonl(&decisions_log_path(control)) {
+        match e.get("type").and_then(Value::as_str) {
+            Some("decide") | Some("supersede") => {}
+            _ => continue,
+        }
+        let Some(date) = e.get("date").and_then(Value::as_str) else { continue };
+        if !in_window(date, win) {
+            continue;
+        }
+        let Some(text) = e.get("decision").and_then(Value::as_str) else { continue };
+        let text = clip(text);
+        if text.is_empty() {
+            continue;
+        }
+        items.push(ReportItem {
+            rank: if decision_is_one_way(&e) { 2 } else { 1 },
+            text: format!("- {text}"),
+        });
+    }
+    items
+}
+
+/// The live waiting-on mark of the control root, as `(kind, subject)`, or
+/// `None`. `turn-end` is deliberately not a member: it is the ordinary end of
+/// a turn with nothing owed, so putting it under "what needs you" would be the
+/// report crying wolf. Total — a missing or unreadable state file reads as no
+/// mark, never an error.
+fn live_waiting_on(control: &Path) -> Option<(String, String)> {
+    let text = std::fs::read_to_string(crate::state::state_path(control)).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    let m = v.get("waiting_on")?.as_object()?;
+    let kind = m.get("kind")?.as_str()?.to_string();
+    let subject = js_trim(m.get("subject")?.as_str()?).to_string();
+    if subject.is_empty() || !matches!(kind.as_str(), "gate" | "question") {
+        return None;
+    }
+    Some((kind, subject))
+}
+
+/// "What needs you" — the queued rows `back` just released, the urgent rows
+/// that came in during the window (never queued, and still the human's to
+/// answer), and the waiting-on mark. Store order inside a rank.
+fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) -> Vec<ReportItem> {
+    let mut items = Vec::new();
+    for row in read_interventions(control).rows.iter() {
+        let is_released = released.iter().any(|id| id == &row.id);
+        let is_urgent_in_window = row.kind == "urgent" && in_window(&row.ts, win);
+        if !is_released && !is_urgent_in_window {
+            continue;
+        }
+        items.push(ReportItem {
+            rank: needs_you_rank(&row.kind),
+            text: format!("- {} ({}): {}", row.kind, row.target_session, clip(&row.question)),
+        });
+    }
+    if let Some((kind, subject)) = live_waiting_on(control) {
+        items.push(ReportItem {
+            rank: needs_you_rank(&kind),
+            text: format!("- waiting on you ({kind}): {}", clip(&subject)),
+        });
+    }
+    items
+}
+
+/// The ONE next-action line. It names the single highest-impact thing to do
+/// and its command, in exactly the order the section above is ranked, so the
+/// report's last section never disagrees with its third.
+fn next_action_line(
+    control: &Path,
+    win: &PresenceWindow,
+    released: &[String],
+    decided: usize,
+    happened: usize,
+) -> String {
+    let store = read_interventions(control);
+    let urgent = store
+        .rows
+        .iter()
+        .find(|r| r.kind == "urgent" && in_window(&r.ts, win) && r.delivered_at.is_none());
+    if let Some(row) = urgent {
+        return format!(
+            "- Answer the urgent question first: `bee supervisor pending --target-session {}`",
+            row.target_session
+        );
+    }
+    let waiting = live_waiting_on(control);
+    if let Some((_, subject)) = waiting.as_ref().filter(|(k, _)| k == "gate") {
+        return format!("- Answer the gate waiting on you: {}", clip(subject));
+    }
+    if !released.is_empty() {
+        return format!(
+            "- Read the {} queued question(s): `bee supervisor pending --target-session <id>`",
+            released.len()
+        );
+    }
+    if let Some((_, subject)) = waiting {
+        return format!("- Answer the question waiting on you: {}", clip(&subject));
+    }
+    if decided + happened > 0 {
+        return "- Nothing needs you — skim the two sections above and carry on.".to_string();
+    }
+    "- Nothing needs you.".to_string()
+}
+
+/// Render the four sections into markdown of AT MOST `REPORT_MAX_LINES` lines.
+/// Pure — no clock, no disk — so the whole shape law is one assertion over a
+/// value, not a walk of the store.
+///
+/// THE BUDGET. Four headings and the one next-action line are fixed, and each
+/// of the other three sections keeps at least one line (its highest-impact
+/// item, or a plain statement that nothing happened). That floor is 8 lines,
+/// which leaves 2 for further items. When more items than that are honest, the
+/// LAST line becomes a `+N more` count and the spare drops to 1: the report
+/// never silently drops an item, and it never lies by printing "nothing
+/// happened" over a section whose items were cut.
+///
+/// Returns the markdown and the number of items it could not fit.
+fn render_report_markdown(
+    happened: &[ReportItem],
+    decided: &[ReportItem],
+    needs: &[ReportItem],
+    next_action: &str,
+) -> (String, usize) {
+    let empty_text = ["- Nothing happened.", "- Nothing was decided.", "- Nothing needs you."];
+    // Impact-if-wrong descending (66c4c251); `sort_by` is stable, so equal
+    // ranks keep the order the store handed them over in.
+    let mut sections: Vec<Vec<ReportItem>> =
+        vec![happened.to_vec(), decided.to_vec(), needs.to_vec()];
+    for section in sections.iter_mut() {
+        section.sort_by(|a, b| b.rank.cmp(&a.rank));
+    }
+
+    let extras: usize = sections.iter().map(|s| s.len().saturating_sub(1)).sum();
+    // 4 headings + one line per content section + the next-action line.
+    const FLOOR: usize = 4 + 3 + 1;
+    let (allowance, more) = if FLOOR + extras <= REPORT_MAX_LINES {
+        (extras, 0)
+    } else {
+        // The `+N more` count takes the last line, so the content budget loses
+        // one.
+        let allowance = REPORT_MAX_LINES - 1 - FLOOR;
+        (allowance, extras - allowance)
+    };
+
+    // Which extra items survive: highest impact first across all three
+    // sections, ties broken by section order and then store order (the order
+    // this vector is built in, kept by a stable sort).
+    let mut candidates: Vec<(u8, usize, usize)> = Vec::new();
+    for (si, section) in sections.iter().enumerate() {
+        for (ii, item) in section.iter().enumerate().skip(1) {
+            candidates.push((item.rank, si, ii));
+        }
+    }
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    let kept: Vec<(usize, usize)> =
+        candidates.iter().take(allowance).map(|(_, si, ii)| (*si, *ii)).collect();
+
+    let mut lines: Vec<String> = Vec::new();
+    for (si, section) in sections.iter().enumerate() {
+        lines.push(REPORT_SECTIONS[si].to_string());
+        if section.is_empty() {
+            lines.push(empty_text[si].to_string());
+            continue;
+        }
+        for (ii, item) in section.iter().enumerate() {
+            if ii == 0 || kept.contains(&(si, ii)) {
+                lines.push(item.text.clone());
+            }
+        }
+    }
+    lines.push(REPORT_SECTIONS[3].to_string());
+    lines.push(one_line(next_action));
+    if more > 0 {
+        lines.push(format!("+{more} more"));
+    }
+    debug_assert!(lines.len() <= REPORT_MAX_LINES, "the report ran long: {lines:?}");
+    (lines.join("\n"), more)
+}
+
+/// One rendered report, exactly as it is stored and read back.
+#[derive(Debug, Clone)]
+pub(crate) struct WakeReport {
+    pub(crate) window_id: String,
+    pub(crate) away_at: String,
+    pub(crate) back_at: String,
+    pub(crate) ts: String,
+    pub(crate) markdown: String,
+    pub(crate) more: usize,
+}
+
+impl WakeReport {
+    fn to_value(&self) -> Value {
+        json!({
+            "ts": self.ts,
+            "window_id": self.window_id,
+            "away_at": self.away_at,
+            "back_at": self.back_at,
+            "markdown": self.markdown,
+            "lines": self.markdown.lines().count(),
+            "more": self.more,
+        })
+    }
+
+    /// `None` for anything missing a required field — read exactly like a
+    /// parse failure by every caller, the same rule the three stores beside
+    /// this one use.
+    fn from_value(v: &Value) -> Option<Self> {
+        let m = v.as_object()?;
+        let non_empty = |name: &str| {
+            m.get(name).and_then(Value::as_str).map(str::to_string).filter(|s| !s.is_empty())
+        };
+        Some(Self {
+            window_id: non_empty("window_id")?,
+            away_at: non_empty("away_at")?,
+            back_at: non_empty("back_at")?,
+            ts: non_empty("ts")?,
+            markdown: non_empty("markdown")?,
+            more: m.get("more").and_then(Value::as_u64).unwrap_or(0) as usize,
+        })
+    }
+}
+
+pub(crate) struct ReportStore {
+    /// Stored reports, oldest first, at most one per window.
+    pub(crate) rows: Vec<WakeReport>,
+    /// 1-based line numbers that did not read as a report.
+    pub(crate) unreadable: Vec<usize>,
+}
+
+/// Read the stored reports oldest-first. EXACTLY ONCE is enforced on the read
+/// side too: a second row for a window already present is passed over, so even
+/// a store that somehow grew a duplicate answers with the first report and the
+/// same bytes for ever.
+pub(crate) fn read_reports(control: &Path) -> ReportStore {
+    let path = reports_path(control);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return ReportStore { rows: Vec::new(), unreadable: Vec::new() };
+    };
+    let mut rows: Vec<WakeReport> = Vec::new();
+    let mut unreadable: Vec<usize> = Vec::new();
+    for (i, raw) in text.lines().enumerate() {
+        let line_no = i + 1;
+        if js_trim(raw).is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<Value>(raw).ok().as_ref().and_then(WakeReport::from_value) {
+            Some(rep) => {
+                if !rows.iter().any(|r| r.window_id == rep.window_id) {
+                    rows.push(rep);
+                }
+            }
+            None => {
+                warn_corrupt_jsonl_line(&path, line_no);
+                unreadable.push(line_no);
+            }
+        }
+    }
+    ReportStore { rows, unreadable }
+}
+
+/// The stored report for one window, or `None`.
+pub(crate) fn report_for_window(control: &Path, window_id: &str) -> Option<WakeReport> {
+    read_reports(control).rows.into_iter().find(|r| r.window_id == window_id)
+}
+
+/// Build the report for a closed window from records that already exist: the
+/// observation rows in the window, the decision-log events in the window, the
+/// queued rows `back` just released plus any urgent row, and the waiting-on
+/// mark. Nothing here is a new subsystem and nothing here writes.
+fn build_wake_report(control: &Path, win: &PresenceWindow, released: &[String]) -> WakeReport {
+    let happened = collect_happened(control, win);
+    let decided = collect_decided(control, win);
+    let needs = collect_needs_you(control, win, released);
+    let next = next_action_line(control, win, released, decided.len(), happened.len());
+    let (markdown, more) = render_report_markdown(&happened, &decided, &needs, &next);
+    WakeReport {
+        window_id: win.id.clone(),
+        away_at: win.away_at.clone(),
+        back_at: win.back_at.clone().unwrap_or_default(),
+        ts: now_iso(),
+        markdown,
+        more,
+    }
+}
+
+/// EXACTLY ONE report per window (9f5cd250). The store is keyed by window id
+/// and this is the ONE door into it: a window that already carries a report
+/// gets that report back untouched, so a second `back` — or any second call
+/// through any path — can never render a second one, and `report` always
+/// answers with the same bytes.
+///
+/// `None` only when the row could not be appended; the caller treats that the
+/// way `back` treats every other best-effort half — the window is already
+/// closed and the release events are already on disk.
+pub(crate) fn ensure_report_for_window(
+    control: &Path,
+    win: &PresenceWindow,
+    released: &[String],
+) -> Option<WakeReport> {
+    if let Some(existing) = report_for_window(control, &win.id) {
+        return Some(existing);
+    }
+    let rep = build_wake_report(control, win, released);
+    if append_jsonl(&reports_path(control), &rep.to_value()).is_err() {
+        return None;
+    }
+    Some(rep)
+}
+
+/// The report's half of the sup-7 notifier seam. It is a SIBLING of
+/// `notifier_argv`, not a second transport: same program, same detached
+/// `spawn_notifier`, same `supervisor.notify` opt-out. It is not that function
+/// called with a made-up mailbox row, because a WakeReport is not an urgent
+/// intervention — it is the calm one-per-window notice 9f5cd250 asks for, so
+/// it carries normal urgency and says what it is.
+pub(crate) fn report_notifier_argv(rep: &WakeReport, enabled: bool) -> Option<Vec<String>> {
+    if !enabled {
+        return None;
+    }
+    let last = rep.markdown.lines().last().unwrap_or("").to_string();
+    Some(vec![
+        NOTIFIER.to_string(),
+        "--urgency".to_string(),
+        "normal".to_string(),
+        "--app-name".to_string(),
+        "bee".to_string(),
+        "bee supervisor — welcome back".to_string(),
+        one_line(&last),
+    ])
+}
+
+/// Build the report notification and hand it to `spawn`. Returns what it built
+/// (`None` = nothing to fire); the spawn's outcome is deliberately
+/// unobservable, exactly like the urgent path — a failed notifier never fails
+/// `back`.
+fn notify_report_with(
+    control: &Path,
+    rep: &WakeReport,
+    spawn: impl FnOnce(&[String]),
+) -> Option<Vec<String>> {
+    let argv = report_notifier_argv(rep, notify_enabled(control))?;
+    spawn(&argv);
+    Some(argv)
+}
+
+/// The verb-level step: exactly ONE best-effort notification per closed
+/// window, fired where the urgent one is — at the verb, never inside the store
+/// seam, so nothing but a real `bee supervisor back` ever reaches a desktop.
+fn notify_report(control: &Path, rep: &WakeReport) -> Option<Vec<String>> {
+    notify_report_with(control, rep, spawn_notifier)
 }
 
 // ─── argv plumbing ──────────────────────────────────────────────────────
@@ -1191,6 +1711,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "away" => run_away(parse_shape(rest, &["note"])?, t0),
         "back" => run_back(parse_shape(rest, &[])?, t0),
         "presence" => run_presence(parse_shape(rest, &[])?, t0),
+        "report" => run_report(parse_shape(rest, &["window"])?, t0),
         _ => None,
     }
 }
@@ -1351,15 +1872,82 @@ fn run_back(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Ok(out) => out,
         Err(msg) => return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0)),
     };
-    let text = format!(
+    // `back_into` already stored the ONE report for this window; this reads it
+    // back rather than rendering a second copy, and fires the single
+    // best-effort notification 9f5cd250 asks for. A window can only be closed
+    // once (a second `back` is refused above), so reaching here IS the
+    // exactly-once boundary for that notification — and whatever the notifier
+    // does, `back` is already green.
+    let report = report_for_window(&ctx.control, &win.id);
+    if let Some(rep) = report.as_ref() {
+        notify_report(&ctx.control, rep);
+    }
+    let head = format!(
         "Back at {}. Away window {} opened at {}; {} queued question(s) released.",
         win.back_at.as_deref().unwrap_or("-"),
         win.id,
         win.away_at,
         released.len()
     );
+    let text = match report.as_ref() {
+        Some(rep) => format!("{head}\n\n{}", rep.markdown),
+        None => head,
+    };
     let mut result = win.to_value();
     result["released"] = json!(released);
+    result["report"] = report.as_ref().map(WakeReport::to_value).unwrap_or(Value::Null);
+    Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &result, &text, t0))
+}
+
+// ─── report ──────────────────────────────────────────────────────────────
+
+/// READ ONLY. This verb never renders a report: `back` did that once, at the
+/// moment the window closed, and re-rendering later would answer with a
+/// different report than the one the human was notified about. Called twice,
+/// it returns the same bytes because it returns the same stored row.
+fn run_report(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "supervisor report";
+    let ctx = match preamble(cmd, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let store = read_reports(&ctx.control);
+    let wanted = flag(&parsed, "window");
+    let found = match wanted {
+        Some(id) => match store.rows.iter().find(|r| r.window_id == id) {
+            Some(rep) => Some(rep),
+            None => {
+                let msg = format!(
+                    "bee {cmd}: no WakeReport for window {id:?}. \
+                     `bee supervisor report --json` answers with the newest one, and \
+                     `bee supervisor presence --json` names the last closed window."
+                );
+                return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+            }
+        },
+        // No --window is "the window I just came back from", read through
+        // sup-8's shared surface rather than re-derived here. The newest
+        // stored report is the fallback for the odd case where the last
+        // closed window carries none.
+        None => match last_closed_window(&ctx.control) {
+            Some(w) => store
+                .rows
+                .iter()
+                .find(|r| r.window_id == w.id)
+                .or_else(|| store.rows.last()),
+            None => store.rows.last(),
+        },
+    };
+    let text = match found {
+        Some(rep) => rep.markdown.clone(),
+        None => "No WakeReport has been written yet — one is rendered when `bee supervisor back` \
+                 closes an away window."
+            .to_string(),
+    };
+    let result = json!({
+        "report": found.map(WakeReport::to_value),
+        "unreadable_lines": store.unreadable,
+    });
     Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &result, &text, t0))
 }
 
@@ -2176,7 +2764,10 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         files.sort();
-        assert_eq!(files, vec!["interventions.jsonl", "presence.jsonl"]);
+        // reports.jsonl joins the two stores here because `back` renders the
+        // one WakeReport for the window it just closed — inside the supervisor
+        // store, which is the whole point of the assertion above it.
+        assert_eq!(files, vec!["interventions.jsonl", "presence.jsonl", "reports.jsonl"]);
         assert!(!observations_path(control).exists(), "the observation store is untouched");
     }
 
@@ -2201,5 +2792,425 @@ mod tests {
         assert!(store.windows[0].back_at.is_none(), "a close for an unknown window lands nowhere");
         assert_eq!(store.unreadable, vec![2, 3, 4]);
         assert!(current_window(control).is_some(), "and presence still answers");
+    }
+
+    // ─── the WakeReport (Phase 3, 9f5cd250 + 66c4c251) ──────────────────
+
+    fn reports(control: &Path) -> Vec<String> {
+        std::fs::read_to_string(reports_path(control))
+            .map(|t| t.lines().map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+
+    /// The one shape assertion every report test goes through: at most ten
+    /// lines, exactly the four headings, in exactly the fixed order.
+    fn assert_legal_report(markdown: &str) {
+        let lines: Vec<&str> = markdown.lines().collect();
+        assert!(
+            lines.len() <= REPORT_MAX_LINES,
+            "a report is at most {REPORT_MAX_LINES} lines, got {}: {markdown}",
+            lines.len()
+        );
+        let headings: Vec<&str> =
+            lines.iter().copied().filter(|l| l.starts_with("## ")).collect();
+        assert_eq!(
+            headings,
+            REPORT_SECTIONS.to_vec(),
+            "exactly four sections, in order: {markdown}"
+        );
+    }
+
+    fn position_of(markdown: &str, needle: &str) -> usize {
+        markdown
+            .lines()
+            .position(|l| l.contains(needle))
+            .unwrap_or_else(|| panic!("{needle:?} is not in the report:\n{markdown}"))
+    }
+
+    /// Plant a decision-log event the report can read. The log is bee's own
+    /// existing surface, so the fixture writes the same rows `bee decisions
+    /// log` appends rather than going through a helper this module owns.
+    /// Plant an observation row at a CHOSEN timestamp. `record_into` always
+    /// stamps `now`, and `now` has millisecond resolution, so a row written in
+    /// the same tick as `away` is genuinely inside the window — this is how a
+    /// test says "long before" without a sleep, and it goes through the real
+    /// row shape rather than a hand-written JSON copy of it.
+    fn plant_observation(control: &Path, ts: &str, signal: &str, note: &str) {
+        let rec = Observation {
+            ts: ts.to_string(),
+            kind: "observation".to_string(),
+            signal: signal.to_string(),
+            note: note.to_string(),
+            target_session: None,
+            tick: None,
+        };
+        append_jsonl(&observations_path(control), &rec.to_value()).unwrap();
+    }
+
+    fn plant_decision(control: &Path, date: &str, text: &str, supersedes: Option<&str>) {
+        let mut ev = json!({"id": text, "type": "decide", "date": date, "decision": text});
+        if let Some(target) = supersedes {
+            ev["supersedes"] = json!(target);
+        }
+        append_jsonl(&decisions_log_path(control), &ev).unwrap();
+    }
+
+    #[test]
+    fn back_stores_exactly_one_legal_report_over_the_window_it_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let win = away_into(control, "supervisor away", Some("dinner")).unwrap();
+
+        // Three events of different impact, one per section.
+        record_into(
+            control,
+            "supervisor record",
+            Some("observation"),
+            Some("danger-op"),
+            Some("A worker was about to delete the worktree."),
+            Some("sess-1"),
+            None,
+        )
+        .unwrap();
+        plant_decision(control, &now_iso(), "Phase 2 merges with one pre-existing red.", None);
+        let queued = ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?")
+            .unwrap();
+        assert!(queued.queued, "a non-urgent row recorded while away is queued");
+
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert_eq!(released, vec![queued.id.clone()], "back released the queued row");
+
+        let rows = reports(control);
+        assert_eq!(rows.len(), 1, "exactly one stored report: {rows:?}");
+        let stored: Value = serde_json::from_str(&rows[0]).unwrap();
+        assert_eq!(stored["window_id"], closed.id);
+        assert_eq!(stored["away_at"], closed.away_at);
+        assert_eq!(stored["back_at"], closed.back_at.clone().unwrap());
+        assert_eq!(stored["more"], 0, "three items fit inside ten lines");
+
+        let rep = report_for_window(control, &closed.id).expect("the report reads back");
+        assert_legal_report(&rep.markdown);
+        assert!(rep.markdown.contains("A worker was about to delete"), "{}", rep.markdown);
+        assert!(rep.markdown.contains("Phase 2 merges"), "{}", rep.markdown);
+        assert!(rep.markdown.contains("What ends the retry?"), "{}", rep.markdown);
+        assert!(
+            rep.markdown.contains("bee supervisor pending"),
+            "the next action names its command: {}",
+            rep.markdown
+        );
+    }
+
+    #[test]
+    fn the_report_sorts_by_impact_if_wrong_descending() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+
+        // Recorded lowest-impact FIRST, so store order alone would print them
+        // upside down (66c4c251 sorts by impact-if-wrong, not by arrival).
+        ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        ask(control, "escalation", "sess-1", "retry-loop", "Is this still the plan?").unwrap();
+        ask(control, "urgent", "sess-1", "rm-rf-on-main", "Stop that delete?").unwrap();
+
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert_eq!(released.len(), 2, "urgent is never queued, so only two release");
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert_eq!(rep.more, 0, "three items in one section still fit: {}", rep.markdown);
+
+        let urgent = position_of(&rep.markdown, "Stop that delete?");
+        let escalation = position_of(&rep.markdown, "Is this still the plan?");
+        let intervention = position_of(&rep.markdown, "What ends the retry?");
+        assert!(
+            urgent < escalation && escalation < intervention,
+            "urgent before escalation before intervention: {}",
+            rep.markdown
+        );
+        assert!(
+            rep.markdown.lines().next().unwrap() == REPORT_SECTIONS[0],
+            "the report opens on its first section: {}",
+            rep.markdown
+        );
+
+        // A one-way-door decision outranks a reversible one in its own section.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let c2 = tmp2.path();
+        let win = away_into(c2, "supervisor away", None).unwrap();
+        plant_decision(c2, &now_iso(), "A reversible call.", None);
+        plant_decision(c2, &now_iso(), "A one-way door.", Some("older-id"));
+        let (closed2, _) = back_into(c2, "supervisor back").unwrap();
+        assert_eq!(closed2.id, win.id);
+        let rep2 = report_for_window(c2, &closed2.id).unwrap();
+        assert_legal_report(&rep2.markdown);
+        assert!(
+            position_of(&rep2.markdown, "A one-way door.")
+                < position_of(&rep2.markdown, "A reversible call."),
+            "a one-way door is reported before a reversible decision: {}",
+            rep2.markdown
+        );
+    }
+
+    #[test]
+    fn a_second_back_stores_no_second_report_and_report_reads_the_same_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+        ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+
+        let first = report_for_window(control, &closed.id).unwrap();
+        // The verb refuses a second close, and the store refuses a second
+        // report even when the render is driven directly at the same window.
+        let err = back_into(control, "supervisor back").unwrap_err();
+        assert!(err.contains("presence is present"), "{err}");
+        ensure_report_for_window(control, &closed, &[]);
+        ensure_report_for_window(control, &closed, &["another-id".to_string()]);
+
+        assert_eq!(reports(control).len(), 1, "one window, one report, for ever");
+        let second = report_for_window(control, &closed.id).unwrap();
+        assert_eq!(second.markdown, first.markdown, "report reads back byte-identical");
+        assert_eq!(second.ts, first.ts, "and it is the same row, not a fresh render");
+
+        // Even a store that somehow grew a duplicate answers with the first.
+        let dup = json!({
+            "ts": "2099-01-01T00:00:00.000Z",
+            "window_id": closed.id,
+            "away_at": closed.away_at,
+            "back_at": closed.back_at,
+            "markdown": "## What happened\n- something else",
+            "more": 0,
+        });
+        append_jsonl(&reports_path(control), &dup).unwrap();
+        assert_eq!(
+            report_for_window(control, &closed.id).unwrap().markdown,
+            first.markdown,
+            "the first report wins the fold"
+        );
+    }
+
+    #[test]
+    fn an_empty_window_still_renders_a_legal_report() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert!(released.is_empty());
+
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert_eq!(rep.more, 0);
+        assert!(rep.markdown.contains("- Nothing happened."), "{}", rep.markdown);
+        assert!(rep.markdown.contains("- Nothing was decided."), "{}", rep.markdown);
+        assert!(rep.markdown.contains("- Nothing needs you."), "{}", rep.markdown);
+        assert_eq!(rep.markdown.lines().count(), 8, "four headings, four lines: {}", rep.markdown);
+    }
+
+    #[test]
+    fn an_over_long_report_keeps_the_highest_impact_items_and_counts_the_rest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+
+        // Well past the six content lines ten lines allow.
+        for i in 0..4 {
+            record_into(
+                control,
+                "supervisor record",
+                Some("observation"),
+                Some("struggling-loop"),
+                Some(&format!("A loop was seen, number {i}.")),
+                Some("sess-1"),
+                None,
+            )
+            .unwrap();
+        }
+        record_into(
+            control,
+            "supervisor record",
+            Some("observation"),
+            Some("danger-op"),
+            Some("The danger one."),
+            Some("sess-1"),
+            None,
+        )
+        .unwrap();
+        for i in 0..3 {
+            ask(
+                control,
+                "intervention",
+                "sess-1",
+                &format!("point-{i}"),
+                &format!("Question number {i}?"),
+            )
+            .unwrap();
+        }
+
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert_eq!(
+            rep.markdown.lines().count(),
+            REPORT_MAX_LINES,
+            "a truncated report uses its whole budget: {}",
+            rep.markdown
+        );
+        let last = rep.markdown.lines().last().unwrap();
+        assert!(last.starts_with('+') && last.ends_with(" more"), "last line is the count: {last}");
+        assert_eq!(last, format!("+{} more", rep.more), "the count and the line agree");
+        assert!(rep.more > 0, "something was dropped and said so");
+        assert!(
+            rep.markdown.contains("The danger one."),
+            "the highest-impact observation survives truncation: {}",
+            rep.markdown
+        );
+        assert!(
+            !rep.markdown.contains("- Nothing happened."),
+            "truncation never prints a section empty when it had items: {}",
+            rep.markdown
+        );
+    }
+
+    #[test]
+    fn the_report_reads_the_window_and_never_the_records_outside_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        // Written BEFORE the window opens, and never in it.
+        plant_observation(
+            control,
+            "2020-01-01T00:00:00.000Z",
+            "big-decision",
+            "This happened yesterday.",
+        );
+        plant_decision(control, "2020-01-01T00:00:00.000Z", "An ancient decision.", None);
+
+        away_into(control, "supervisor away", None).unwrap();
+        plant_decision(control, &now_iso(), "A decision inside the window.", None);
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert!(!rep.markdown.contains("yesterday"), "{}", rep.markdown);
+        assert!(!rep.markdown.contains("ancient"), "{}", rep.markdown);
+        assert!(rep.markdown.contains("A decision inside the window."), "{}", rep.markdown);
+        assert!(rep.markdown.contains("- Nothing happened."), "{}", rep.markdown);
+    }
+
+    #[test]
+    fn the_waiting_on_mark_reaches_the_report_and_turn_end_never_does() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        write(control, ".bee/state.json", r#"{"waiting_on": {"kind": "turn-end", "subject": "done"}}"#);
+        assert!(live_waiting_on(control).is_none(), "turn-end owes the human nothing");
+        write(control, ".bee/state.json", r#"{"waiting_on": {"kind": "gate", "subject": "uat: slp"}}"#);
+        assert_eq!(
+            live_waiting_on(control),
+            Some(("gate".to_string(), "uat: slp".to_string()))
+        );
+        write(control, ".bee/state.json", "{broken");
+        assert!(live_waiting_on(control).is_none(), "an unreadable state file is no mark");
+        write(control, ".bee/state.json", r#"{"waiting_on": {"kind": "gate", "subject": "uat: slp"}}"#);
+
+        away_into(control, "supervisor away", None).unwrap();
+        ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert!(rep.markdown.contains("uat: slp"), "{}", rep.markdown);
+        assert!(
+            position_of(&rep.markdown, "uat: slp")
+                < position_of(&rep.markdown, "What ends the retry?"),
+            "a gate outranks an ordinary intervention: {}",
+            rep.markdown
+        );
+        assert!(
+            rep.markdown.lines().last().unwrap().contains("Answer the gate waiting on you"),
+            "the next action follows the same ranking: {}",
+            rep.markdown
+        );
+    }
+
+    #[test]
+    fn the_report_notification_reuses_the_urgent_seam_and_honors_the_opt_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+        let rep = report_for_window(control, &closed.id).unwrap();
+
+        let argv = report_notifier_argv(&rep, true).expect("a closed window earns one notice");
+        assert_eq!(argv[0], NOTIFIER, "the same program the urgent path uses: {argv:?}");
+        assert!(
+            argv.iter().any(|a| a.contains("welcome back")),
+            "the notice says what it is: {argv:?}"
+        );
+        assert!(
+            argv.last().unwrap().contains("Nothing needs you"),
+            "the body is the report's next action: {argv:?}"
+        );
+
+        write(control, ".bee/config.json", r#"{"supervisor": {"notify": false}}"#);
+        assert!(!notify_enabled(control), "the same opt-out key, not a second switch");
+        assert!(
+            notify_report_with(control, &rep, |_| panic!("nothing may be spawned when notify is off"))
+                .is_none(),
+            "notify disabled builds no argv and spawns nothing"
+        );
+
+        // And a notifier that cannot run is swallowed: `back` is already green.
+        write(control, ".bee/config.json", "{}");
+        let fired = notify_report_with(control, &rep, |argv| {
+            let mut missing = argv.to_vec();
+            missing[0] = "bee-no-such-notifier-9f2c1a04".to_string();
+            spawn_notifier(&missing);
+        });
+        assert!(fired.is_some(), "the argv was built and handed to the spawner");
+        assert_eq!(reports(control).len(), 1, "and the store is untouched by any of it");
+    }
+
+    #[test]
+    fn the_renderer_is_pure_and_keeps_the_shape_whatever_it_is_handed() {
+        let item = |rank: u8, text: &str| ReportItem { rank, text: text.to_string() };
+        // Ten low-impact items in one section, one high-impact item in another.
+        let many: Vec<ReportItem> =
+            (0..10).map(|i| item(0, &format!("- low {i}"))).collect();
+        let (md, more) = render_report_markdown(&many, &[item(2, "- one-way")], &[], "- do this");
+        assert_legal_report(&md);
+        assert_eq!(md.lines().count(), REPORT_MAX_LINES);
+        // The floor is 8 lines and the `+N more` count takes the tenth, so a
+        // truncated report has exactly ONE spare line to spend.
+        assert_eq!(more, 8, "ten items, one kept plus one spare: {md}");
+        assert!(md.contains("- one-way"), "{md}");
+        assert!(md.ends_with("+8 more"), "{md}");
+
+        // Nothing at all is still four sections and one action.
+        let (empty, more) = render_report_markdown(&[], &[], &[], "- Nothing needs you.");
+        assert_legal_report(&empty);
+        assert_eq!(more, 0);
+        assert_eq!(empty.lines().count(), 8);
+
+        // A next action carrying its own line breaks cannot re-shape the report.
+        let (folded, _) = render_report_markdown(&[], &[], &[], "- do\nthis\nnow");
+        assert_legal_report(&folded);
+        assert_eq!(folded.lines().last().unwrap(), "- do this now");
+    }
+
+    #[test]
+    fn one_bad_report_line_is_skipped_with_a_count_never_a_crash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+
+        let path = reports_path(control);
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        text.push_str("{\"ts\":\"2026-08-27T00:00:00.000Z\",\"window_id\":\n");
+        text.push_str("{\"ts\":\"2026-08-27T00:00:01.000Z\",\"window_id\":\"zz\"}\n");
+        std::fs::write(&path, text).unwrap();
+
+        let store = read_reports(control);
+        assert_eq!(store.rows.len(), 1, "the one good report still reads back");
+        assert_eq!(store.rows[0].window_id, closed.id);
+        assert_eq!(store.unreadable, vec![2, 3]);
     }
 }
