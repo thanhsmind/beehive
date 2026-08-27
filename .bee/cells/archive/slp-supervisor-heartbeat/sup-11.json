@@ -87,6 +87,61 @@
     "warnings": [
       "advisory: this cap's commit changes 941 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "config-fails-closed-and-off-by-default",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1335 CONSENT_OFF, :1340 parse_consent is pure and total: a non-object, a missing key, anything but literal true, and a missing/short/non-finite timeout all return CONSENT_OFF; :1359 consent_config reads supervisor.consent through the same seam notify_enabled uses; test consent_is_off_by_default_and_every_malformed_shape_reads_off ok"
+          },
+          {
+            "id": "off-means-the-path-does-not-exist-at-runtime",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1602-1604 consent_sweep_into returns before any mailbox read, clock read or write when config.enabled is false"
+          },
+          {
+            "id": "scope-is-a-named-predicate-refusing-each-case-by-name",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1457 consent_refusal is THE predicate: Gate, Urgent, Escalation, UnknownKind, OneWayLowConfidence, NotQueued, AlreadyConsented; :1416 ONE_WAY_SIGNALS = [danger-op, big-decision] refuses on the signal alone, stricter and never wider; tests the_consent_predicate_refuses_a_gate_an_urgent_row_and_an_escalation_by_name and the_sweep_reads_and_writes_no_gate_at_all ok"
+          },
+          {
+            "id": "deterministic-timeout-clock-read-once",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1593-1608 consent_sweep_into reads the clock once into now_ms, :1499 age_seconds is pure arithmetic against it, an unreadable age is skipped never proceeded; test an_ask_younger_than_the_timeout_is_untouched_and_an_older_one_goes_ahead_once ok"
+          },
+          {
+            "id": "two-marks-with-the-decision-written-first",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1620 log_consent_decision (:1522) runs BEFORE the row stamp at :1624-1637, so a row whose decision cannot be written is not proceeded at all; a second sweep is refused by AlreadyConsented (:1471)"
+          },
+          {
+            "id": "prominent-in-the-report-and-counted-in-metrics",
+            "status": "PASS",
+            "evidence": "test the_wake_report_puts_the_auto_proceeded_row_first_with_its_marker ok; the eighth counter auto-proceeded-without-you at supervisor.rs:2828-2830 with bands at :2288-2290 rides the metrics line (assertion at supervisor.rs:5241)"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat 20154c99 = verbs/supervisor.rs, generated/registry_payload.json - both inside the declared files; supervisor.consent-sweep is present in the registry payload; bee cells judge --id sup-11 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor -> test result: ok. 61 passed; 0 failed; cargo test --test registry_contracts --test registry_dispatch --test front_door --test hook_contracts --test installer_invocations -> 35 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.749Z"
+      }
+    ]
   }
 }

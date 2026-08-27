@@ -90,6 +90,66 @@
     "warnings": [
       "advisory: this cap's commit changes 1033 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "exactly-one-report-per-window-is-a-store-property",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1240-1245 back_into calls ensure_report_for_window on the one path that closes a window; :2120 ensure_report_for_window is keyed by window id; tests back_stores_exactly_one_legal_report_over_the_window_it_closed and a_second_back_stores_no_second_report_and_report_reads_the_same_bytes ok"
+          },
+          {
+            "id": "fixed-shape-four-sections-ten-lines",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1653 REPORT_SECTIONS is the one ordered constant, :1660 REPORT_MAX_LINES = 10, :1932 render_report_markdown with debug_assert on the ceiling; tests an_empty_window_still_renders_a_legal_report and the_renderer_is_pure_and_keeps_the_shape_whatever_it_is_handed ok"
+          },
+          {
+            "id": "built-only-from-records-that-already-exist",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1744 collect_happened, :1777 collect_decided, :1806 live_waiting_on, :1821 collect_needs_you - no new subsystem; test the_report_reads_the_window_and_never_the_records_outside_it ok"
+          },
+          {
+            "id": "impact-if-wrong-descending",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1695 observation_rank, :1708 needs_you_rank (urgent > escalation > intervention), :1763 decision_is_one_way; stable sort at :1943-1946 keeps store order on ties; test the_report_sorts_by_impact_if_wrong_descending ok"
+          },
+          {
+            "id": "truncation-keeps-highest-impact-and-counts-the-rest",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1949-1997 allowance/more arithmetic ends the report with +N more, never a silent drop; test an_over_long_report_keeps_the_highest_impact_items_and_counts_the_rest ok"
+          },
+          {
+            "id": "report-verb-reads-and-never-regenerates",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2084 report_for_window is a pure read of reports.jsonl and :3138 run_report calls only it; asserted byte-identical by a_second_back_stores_no_second_report_and_report_reads_the_same_bytes"
+          },
+          {
+            "id": "one-notification-through-the-sup-7-seam",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2141 report_notifier_argv and :2174 notify_report share NOTIFIER/spawn_notifier and the same supervisor.notify opt-out; test the_report_notification_reuses_the_urgent_seam_and_honors_the_opt_out ok"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat 4b9943bc = verbs/supervisor.rs, catalog.rs, generated/registry_payload.json - all inside the declared files, including the recorded PINNED_FLAG_COUNT 194->195 bump for --window; bee cells judge --id sup-9 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test supervisor -> 61 passed, 0 failed; --test registry_contracts --test registry_dispatch --test front_door --test hook_contracts --test installer_invocations -> 35 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.743Z"
+      }
+    ]
   }
 }

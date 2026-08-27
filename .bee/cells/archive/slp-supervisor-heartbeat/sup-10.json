@@ -89,6 +89,66 @@
     "warnings": [
       "advisory: this cap's commit changes 1234 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "seven-counters-derived-by-the-deterministic-layer",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2650 health_metrics reads cells, the decision log, the mailbox and the observation store only; counters at :2666 escalations-per-capped-cell, :2684 blocked-rate, :2717 wrong-assumption-rate, :2733 self-answered, :2767 earned-autonomy-streak, :2790 overrun, :2810 same-region-repeat; test every_counter_computes_off_records_that_already_exist ok"
+          },
+          {
+            "id": "two-sided-bands-as-named-consts-with-reasons",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2226-2274 every bound is a named const with a one-line why: BAND_ESCALATIONS_LOW/HIGH, BAND_BLOCKED_LOW/HIGH, BAND_WRONG_ASSUMPTION_LOW/HIGH, BAND_SELF_ANSWERED_LOW/HIGH, BAND_STREAK_LOW/HIGH, BAND_OVERRUN_LOW/HIGH, BAND_SAME_REGION_LOW/HIGH"
+          },
+          {
+            "id": "below-band-reads-as-loudly-as-above-band",
+            "status": "PASS",
+            "evidence": "test a_counter_below_its_band_is_flagged_as_loudly_as_one_above_it ok - the verdict set is below-band|in-band|above-band|not-measurable at supervisor.rs:2367 counter()"
+          },
+          {
+            "id": "not-measurable-is-first-class-and-sample-count-carried",
+            "status": "PASS",
+            "evidence": "each counter takes an explicit sample count argument (supervisor.rs:2367-2397) and a zero-sample counter is never rendered in-band; test a_zero_sample_counter_reports_not_measurable_never_in_band ok"
+          },
+          {
+            "id": "overrun-is-skip-until-present-never-a-guessed-zero",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2282 ESTIMATE_FIELD, :2293 NO_ESTIMATE_STATE = 'no estimate recorded', :2587 cell_estimate_minutes returns None where no estimate exists; test a_cell_with_no_recorded_estimate_reports_the_literal_state ok"
+          },
+          {
+            "id": "one-report-line-and-the-ceiling-still-holds",
+            "status": "PASS",
+            "evidence": "supervisor.rs:2859 metrics_report_line lists only out-of-band/not-measurable counters and reads METRICS_IN_BAND_LINE (:2301) when healthy; one FIXED line inside section one at render_report_markdown :1985-1990 (recorded deviation: floor 8 -> 9); test the_report_still_fits_its_ceiling_with_the_metrics_line_present ok"
+          },
+          {
+            "id": "streak-is-a-number-and-flips-no-switch",
+            "status": "PASS",
+            "evidence": "test the_streak_is_a_number_and_nothing_here_flips_a_switch ok - no path in health_metrics writes a config key or a consent level"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat 3cb8fa94 = verbs/supervisor.rs, catalog.rs, generated/registry_payload.json - all inside the declared files; bee cells judge --id sup-10 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test supervisor -> 61 passed, 0 failed; the five contract test binaries -> 35 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.746Z"
+      }
+    ]
   }
 }

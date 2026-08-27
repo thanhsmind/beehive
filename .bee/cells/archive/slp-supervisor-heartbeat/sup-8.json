@@ -82,6 +82,56 @@
     "warnings": [
       "advisory: this cap's commit changes 590 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "away-back-presence-on-one-control-root-store",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1178 away_into, :1214 back_into, :3284 run_presence; :212 presence_path beside the other two stores, resolved by :219 control_root_path; test the_store_resolves_to_the_control_root_from_a_linked_worktree ok"
+          },
+          {
+            "id": "effect-one-the-shared-report-window",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1164 current_window and :1171 last_closed_window are the shared read surface; a closed window carries away_at and back_at (:1229-1232); test back_closes_the_window_clears_queued_and_hands_over_the_pair ok"
+          },
+          {
+            "id": "effect-two-the-quiet-queue-urgent-unaffected",
+            "status": "PASS",
+            "evidence": "queued is stamped at record time in record_intervention_into (supervisor.rs:740-753) and back_into appends one released event per queued row (:1233-1240); tests a_non_urgent_row_recorded_while_away_is_queued_and_takes_no_immediate_path and pending_and_mark_delivered_treat_urgent_like_every_other_kind ok"
+          },
+          {
+            "id": "exactly-two-effects-no-gate-no-permission-no-waiting-on",
+            "status": "PASS",
+            "evidence": "test away_and_back_write_nothing_outside_the_supervisor_store asserts the two verbs touch nothing under .bee/ but their own store; no gate, gate-bypass, permission or waiting-on symbol appears on the away/back path (supervisor.rs:1178-1250)"
+          },
+          {
+            "id": "both-refusals-write-nothing",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1183-1189 away while away returns before any append and names the open window; :1219-1224 back with no window is a typed refusal; test a_second_away_is_refused_and_back_needs_an_open_window ok"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat c2dc14bf = verbs/supervisor.rs, catalog.rs, generated/registry_payload.json - all inside the declared files; bee cells judge --id sup-8 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test supervisor -> 61 passed, 0 failed (the sup-8 tests still pass at HEAD after sup-9/10/11 landed on the same module)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.740Z"
+      }
+    ]
   }
 }

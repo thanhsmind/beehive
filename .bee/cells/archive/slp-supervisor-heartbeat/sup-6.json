@@ -82,6 +82,51 @@
     "warnings": [
       "advisory: this cap's commit changes 239 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "delivery-at-the-user-prompt-turn-boundary",
+            "status": "PASS",
+            "evidence": "hooks/prompt_context.rs:190 the part comment, :278 pending_delivery_for_session read in plan(), :350 mark_delivered_for_session stamp in execute() - the existing UserPromptSubmit hook, extended, not a new surface"
+          },
+          {
+            "id": "in-process-not-shelling-out",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1023 pending_delivery_for_session and :1038 mark_delivered_for_session are pub(crate) Rust entry points called directly at prompt_context.rs:278,350; no Command spawn on that path"
+          },
+          {
+            "id": "escalation-carries-the-urgent-prefix",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1010 delivery_line is the one renderer; prompt_context.rs:2739 asserts the line starts with 'bee supervisor URGENT: ' and the ordinary line reads 'bee supervisor: <open question>' (prompt_context.rs:2650)"
+          },
+          {
+            "id": "no-repeat-no-leak-zero-rows-zero-lines",
+            "status": "PASS",
+            "evidence": "prompt_context.rs:2619-2721 test seam: a delivered row never repeats, a row for another session does not leak, and zero rows creates no store (assert on interventions_store_path not existing, prompt_context.rs:2721)"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat 4d45963d = hooks/prompt_context.rs, verbs/supervisor.rs - both inside the cell declared files; bee cells judge --id sup-6 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test supervisor -> 61 passed, 0 failed; cargo test --test hook_contracts --test registry_contracts --test registry_dispatch --test front_door --test installer_invocations -> 35 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.734Z"
+      }
+    ]
   }
 }

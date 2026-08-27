@@ -85,6 +85,56 @@
     "warnings": [
       "advisory: this cap's commit changes 319 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "urgent-is-a-third-kind-on-the-same-validation-seam",
+            "status": "PASS",
+            "evidence": "supervisor.rs:236 MAILBOX_KINDS = [intervention, escalation, urgent]; :684 record_intervention_into is the one seam for all three; test an_urgent_row_takes_the_same_validation_as_an_intervention ok"
+          },
+          {
+            "id": "urgent-is-cap-exempt",
+            "status": "PASS",
+            "evidence": "supervisor.rs:237-243 CAPPED_KINDS = [intervention] only, with the reason in its doc comment; :717 the cap arm is entered for capped kinds only; test an_urgent_row_is_never_capped_by_a_point_already_raised ok"
+          },
+          {
+            "id": "one-best-effort-notification-behind-an-injectable-seam",
+            "status": "PASS",
+            "evidence": "supervisor.rs:920 NOTIFIER=notify-send, :945 notifier_argv (pure), :965 spawn_notifier (detached, failures swallowed), :993 notify_urgent; tests the_notifier_argv_carries_the_target_session_and_the_question and a_notifier_that_cannot_run_still_leaves_the_row_written_and_green ok"
+          },
+          {
+            "id": "supervisor-notify-opt-out-default-enabled",
+            "status": "PASS",
+            "evidence": "supervisor.rs:926 notify_enabled reads supervisor.notify through the existing config seam and defaults enabled; test notify_disabled_in_config_builds_no_argv ok"
+          },
+          {
+            "id": "urgent-reuses-the-one-delivery-renderer",
+            "status": "PASS",
+            "evidence": "supervisor.rs:1010 delivery_line unchanged as the single renderer; test pending_and_mark_delivered_treat_urgent_like_every_other_kind ok - no second renderer was added"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat 5d9466c9 = verbs/supervisor.rs, catalog.rs, generated/registry_payload.json - all inside the declared files; bee cells judge --id sup-7 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test supervisor -> 61 passed, 0 failed; registry/front-door/hook/installer test binaries -> 35 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.737Z"
+      }
+    ]
   }
 }

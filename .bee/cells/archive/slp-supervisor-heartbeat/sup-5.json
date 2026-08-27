@@ -96,6 +96,51 @@
     "warnings": [
       "advisory: this cap's commit changes 815 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "mailbox-kinds-and-point-key-cap",
+            "status": "PASS",
+            "evidence": "supervisor.rs:236 MAILBOX_KINDS, :243 CAPPED_KINDS=[intervention], :717-726 the second intervention on one (target_session, point_key) is refused and names --kind escalation; test the_second_intervention_on_one_point_is_refused_and_names_escalation ok"
+          },
+          {
+            "id": "required-fields-validated-before-write",
+            "status": "PASS",
+            "evidence": "supervisor.rs:591 normalise_point_key, :648 check_question (one line, at most 2 sentences); tests a_question_is_two_sentences_at_most_and_always_one_line, a_question_carrying_control_text_is_refused_before_it_reaches_a_session, every_mailbox_refusal_writes_nothing ok"
+          },
+          {
+            "id": "pending-and-mark-delivered",
+            "status": "PASS",
+            "evidence": "supervisor.rs:874 pending_for, :882 mark_delivered_into, :3026 run_pending, :3055 run_mark_delivered; tests pending_lists_only_undelivered_rows_for_the_named_session and mark_delivered_stamps_once_and_refuses_an_unknown_id ok"
+          },
+          {
+            "id": "observation-silence-behavior-unchanged",
+            "status": "PASS",
+            "evidence": "separate stores: supervisor.rs:204 observations_path vs :208 interventions_path; test an_intervention_row_carries_its_id_and_leaves_the_observation_store_alone ok. Recorded deviation (registry required [kind,note] -> [kind]) does not weaken the verb: supervisor.rs:396 still refuses a missing --note"
+          },
+          {
+            "id": "scope-and-frozen-judge",
+            "status": "PASS",
+            "evidence": "git show --stat 3e0c105c = verbs/supervisor.rs, catalog.rs, generated/registry_payload.json - all inside the cell declared files; bee cells judge --id sup-5 --json -> hits []"
+          },
+          {
+            "id": "tests-green-at-head",
+            "status": "PASS",
+            "evidence": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor -> test result: ok. 61 passed; 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-27T20:54:04.731Z"
+      }
+    ]
   }
 }
