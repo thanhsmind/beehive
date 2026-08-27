@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "2f1bfeb0ba369203b3044c281d95dd32006dc426734f659f30e6fd7e4011bea7",
+      "sha256": "29f147f5b0239ef8db1a3817334f908d8ca728992ab8e9f56f6dd112662df1d0",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -294,6 +294,13 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/spawn-proof.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+      "sha256": "b5adcedec650c1d4df5d343b5f3431f033b62acb143adecfa1b7a2f9f4a914fc",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md"
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/wave-runs.md",
@@ -647,7 +654,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "27a20ee616a29fe43903e73a15952dd2b38fe2589dc083df985acbd17abe391c",
+      "sha256": "0fbd32f9f910b017e710bd5dc3d7e635758e6ed04f6c9ca8e060998a10f2a195",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -805,6 +812,13 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/spawn-proof.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+      "sha256": "b5adcedec650c1d4df5d343b5f3431f033b62acb143adecfa1b7a2f9f4a914fc",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md"
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/wave-runs.md",
@@ -1520,6 +1534,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/spawn-proof.md"
+    },
+    {
+      "path": "skills/bee-herding/references/supervisor-prompt.md",
+      "sha256": "b5adcedec650c1d4df5d343b5f3431f033b62acb143adecfa1b7a2f9f4a914fc",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-herding/references/supervisor-prompt.md"
     },
     {
       "path": "skills/bee-herding/references/wave-runs.md",
