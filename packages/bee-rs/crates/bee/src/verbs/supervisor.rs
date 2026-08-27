@@ -707,6 +707,56 @@ pub(crate) fn mark_delivered_into(
     Ok((stamped, true))
 }
 
+// ─── turn-boundary delivery (c80debd7) ──────────────────────────────────
+
+/// One pending row as the turn boundary spells it to the AGENT session it is
+/// addressed to. Ordinary interventions reach the HUMAN only through a report
+/// (c80debd7), so this wording talks to the agent and asks — the question text
+/// is already an open question with no asserted fault (`check_question`), and
+/// nothing is added to it here.
+///
+/// An escalation (the second time one point comes up) is the one thing this
+/// cell marks differently: its line is prefixed so it reads as urgent. Every
+/// other piece of danger-class handling is a later cell.
+pub(crate) fn delivery_line(row: &Intervention) -> String {
+    if row.kind == "escalation" {
+        format!("bee supervisor URGENT: {}", row.question)
+    } else {
+        format!("bee supervisor: {}", row.question)
+    }
+}
+
+/// The READ half of turn-boundary delivery: the undelivered rows addressed to
+/// `target`, oldest first, as `(row id, line)` pairs. `root` is a WORK root —
+/// the mailbox's control root is resolved in here, so the caller (the
+/// UserPromptSubmit hook) never learns where the store lives or how a row
+/// folds. Total: a missing or unreadable store reads as "nothing pending".
+pub(crate) fn pending_delivery_for_session(root: &Path, target: &str) -> Vec<(String, String)> {
+    let target = one_line(target);
+    if target.is_empty() {
+        return Vec::new();
+    }
+    let control = control_root_path(root);
+    let store = read_interventions(&control);
+    pending_for(&store, &target).into_iter().map(|r| (r.id.clone(), delivery_line(r))).collect()
+}
+
+/// The WRITE half: stamp one row delivered, addressed by work root the same
+/// way. An error is the caller's to swallow — a row that fails to stamp stays
+/// pending and is offered again at the next turn boundary, which is the safe
+/// direction: c80debd7 forbids repeating a point, so a line is only ever
+/// printed once its stamp is on disk.
+pub(crate) fn mark_delivered_for_session(root: &Path, id: &str) -> Result<(), String> {
+    mark_delivered_into(&control_root_path(root), "supervisor mark-delivered", Some(id)).map(|_| ())
+}
+
+/// Where the mailbox of a WORK root lives. The delivery caller needs this only
+/// to assert about the store it never otherwise touches — one owner for the
+/// path, here.
+pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
+    interventions_path(&control_root_path(root))
+}
+
 // ─── argv plumbing ──────────────────────────────────────────────────────
 
 struct Ctx {
