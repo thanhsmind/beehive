@@ -556,6 +556,19 @@ mod tests {
         // could not carry both rules honestly. The plan
         // (docs/history/slp-supervisor-heartbeat/plan.md, cell sup-5) names
         // both flags explicitly.
+        // 194 -> 194 (slp-supervisor-heartbeat sup-7): `bee supervisor
+        // record --kind urgent` adds the danger class of c80debd7 and adds
+        // NO flag name. That is the point of the design: an urgent row is an
+        // ordinary mailbox row that takes the same --target-session,
+        // --point-key, --question, --signal and --tick, so a caller who knows
+        // how to raise an intervention already knows how to raise an alert.
+        // The two differences (the frequency cap does not refuse it, and one
+        // best-effort notification fires) are behavior of the closed --kind
+        // set, never new vocabulary — spelling either of them as its own flag
+        // (`--urgent`, `--notify`) would have made a second way to say a word
+        // --kind already says, and the opt-out is a config key
+        // (supervisor.notify), which is where every other switch of this shape
+        // lives.
         const PINNED_FLAG_COUNT: usize = 194;
 
         let names: std::collections::BTreeSet<&str> =
