@@ -74,6 +74,36 @@
 // the turn boundary renders it through the one `delivery_line` renderer, with
 // the same URGENT prefix an escalation carries.
 //
+// Phase 3 adds the PRESENCE MARK (9f5cd250) in the third store at the same
+// control root, event-sourced and folded exactly like the mailbox:
+//
+//   .bee/supervisor/presence.jsonl
+//
+//   {ts, event:"away", id, note}      opens one window
+//   {ts, event:"back", id, back_at}   closes it
+//
+// A presence mark has EXACTLY TWO EFFECTS and no others (9f5cd250 —
+// "permission control never hides in a presence flag"):
+//
+//   1. THE REPORT WINDOW. A closed window carries `away_at` and `back_at`,
+//      which is the span the WakeReport is written over. `current_window` and
+//      `last_closed_window` are the shared read surface, so no other module
+//      ever re-derives the fold.
+//   2. THE QUIET QUEUE. While a window is open, a NON-URGENT mailbox row
+//      (`intervention` | `escalation`) is stamped `queued` at record time and
+//      takes NO immediate path — it earns no notification. `back` appends one
+//      `released` event per queued row, which clears the flag.
+//
+// Everything else is deliberately untouched: no gate, no gate-bypass level, no
+// permission or approval path, no waiting-on behavior. `urgent` is untouched
+// too — it is never queued and still notifies immediately (sup-7) — and so is
+// turn-boundary DELIVERY: a queued row is still `pending` for its target
+// session and still read at its next turn. The queue is about the human's
+// attention, never the agent's.
+//
+// Refusals, both writing nothing: `away` while a window is already open, and
+// `back` with no open window.
+//
 // Verbs:
 //   supervisor record --kind observation|silence [--signal <s>] --note <text>
 //                     [--target-session <id>] [--tick <n>] [--json]
@@ -83,6 +113,9 @@
 //   supervisor list   [--json]
 //   supervisor pending --target-session <id> [--json]
 //   supervisor mark-delivered --id <row-id> [--json]
+//   supervisor away  [--note <one line>] [--json]
+//   supervisor back  [--json]
+//   supervisor presence [--json]
 //
 // CLI-ONLY STATE. Nothing else in the tree writes this file; `record` is
 // the one door, and it VALIDATES BEFORE IT WRITES — a refused row leaves
@@ -124,6 +157,10 @@ fn observations_path(control: &Path) -> PathBuf {
 
 fn interventions_path(control: &Path) -> PathBuf {
     supervisor_dir(control).join("interventions.jsonl")
+}
+
+fn presence_path(control: &Path) -> PathBuf {
+    supervisor_dir(control).join("presence.jsonl")
 }
 
 /// The control root for a (possibly linked-worktree) repo root — the same
@@ -382,6 +419,10 @@ pub(crate) struct Intervention {
     pub(crate) target_session: String,
     pub(crate) tick: Option<u64>,
     pub(crate) delivered_at: Option<String>,
+    /// Effect TWO of the presence mark (9f5cd250): this row was recorded while
+    /// an away window was open, so it took no immediate path. `back` clears it.
+    pub(crate) queued: bool,
+    pub(crate) released_at: Option<String>,
 }
 
 impl Intervention {
@@ -398,6 +439,7 @@ impl Intervention {
             "question": self.question,
             "target_session": self.target_session,
             "tick": self.tick,
+            "queued": self.queued,
         })
     }
 
@@ -413,6 +455,8 @@ impl Intervention {
             "target_session": self.target_session,
             "tick": self.tick,
             "delivered_at": self.delivered_at,
+            "queued": self.queued,
+            "released_at": self.released_at,
         })
     }
 }
@@ -443,13 +487,16 @@ impl Intervention {
             target_session: non_empty("target_session")?,
             tick: m.get("tick").and_then(Value::as_u64),
             delivered_at: None,
+            queued: m.get("queued").and_then(Value::as_bool).unwrap_or(false),
+            released_at: None,
         })
     }
 
     fn line(&self) -> String {
-        let state = match &self.delivered_at {
-            Some(at) => format!("delivered {at}"),
-            None => "pending".to_string(),
+        let state = match (&self.delivered_at, self.queued) {
+            (Some(at), _) => format!("delivered {at}"),
+            (None, true) => "pending, queued".to_string(),
+            (None, false) => "pending".to_string(),
         };
         format!(
             "- {} [{}/{}] {} {} for {} ({state}) — {}",
@@ -615,6 +662,13 @@ pub(crate) fn record_intervention_into(
         }
     }
 
+    // Effect TWO of the presence mark (9f5cd250): while a window is open a
+    // NON-URGENT row is stamped queued and takes no immediate path. `urgent` is
+    // the danger class and is never queued — c80debd7 puts it on an immediate
+    // path, and a presence flag that could swallow an alert would be a third
+    // effect this mark is not allowed to have.
+    let queued = kind != "urgent" && current_window(control).is_some();
+
     let rec = Intervention {
         id: new_row_id(),
         ts: now_iso(),
@@ -625,6 +679,8 @@ pub(crate) fn record_intervention_into(
         target_session,
         tick,
         delivered_at: None,
+        queued,
+        released_at: None,
     };
     if append_jsonl(&interventions_path(control), &rec.record_event()).is_err() {
         return Err(format!("bee {cmd}: could not append to the intervention mailbox."));
@@ -682,6 +738,26 @@ pub(crate) fn read_interventions(control: &Path) -> MailboxStore {
                     (Some(id), Some(at)) => {
                         if let Some(row) = rows.iter_mut().find(|r| r.id == id) {
                             row.delivered_at = Some(at);
+                        }
+                    }
+                    _ => folded = false,
+                }
+            }
+            // `back` releasing one queued row (9f5cd250). Same fold shape as
+            // `delivered`: a stamp for an id this store never recorded lands
+            // nowhere and is not an unreadable line.
+            Some("released") => {
+                let id = v.get("id").and_then(Value::as_str).map(str::to_string);
+                let at = v
+                    .get("released_at")
+                    .and_then(Value::as_str)
+                    .or_else(|| v.get("ts").and_then(Value::as_str))
+                    .map(str::to_string);
+                match (id, at) {
+                    (Some(id), Some(at)) => {
+                        if let Some(row) = rows.iter_mut().find(|r| r.id == id) {
+                            row.queued = false;
+                            row.released_at = Some(at);
                         }
                     }
                     _ => folded = false,
@@ -765,9 +841,12 @@ fn notify_enabled(control: &Path) -> bool {
 /// notification ever appearing on anyone's desktop.
 ///
 /// `None` for every non-`urgent` kind (an ordinary intervention reaches the
-/// human through a report, never a popup) and for `enabled == false`.
+/// human through a report, never a popup), for `enabled == false`, and for a
+/// row queued behind an open away window (9f5cd250, effect two) — the queue is
+/// spelled here as a law rather than left to follow from the kind, so a queued
+/// row can never earn an immediate path by some other route.
 pub(crate) fn notifier_argv(row: &Intervention, enabled: bool) -> Option<Vec<String>> {
-    if !enabled || row.kind != "urgent" {
+    if !enabled || row.queued || row.kind != "urgent" {
         return None;
     }
     Some(vec![
@@ -870,6 +949,205 @@ pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
     interventions_path(&control_root_path(root))
 }
 
+// ─── the presence mark (Phase 3, 9f5cd250) ──────────────────────────────
+
+/// One away window, folded from its two events. A window with no `back_at` is
+/// OPEN; a closed one carries the `away_at`/`back_at` pair the WakeReport is
+/// written over (effect one).
+#[derive(Debug, Clone)]
+pub(crate) struct PresenceWindow {
+    pub(crate) id: String,
+    pub(crate) away_at: String,
+    pub(crate) note: Option<String>,
+    pub(crate) back_at: Option<String>,
+}
+
+impl PresenceWindow {
+    /// The `away` event as it is appended — the window minus what `back` owns.
+    fn away_event(&self) -> Value {
+        json!({"ts": self.away_at, "event": "away", "id": self.id, "note": self.note})
+    }
+
+    pub(crate) fn to_value(&self) -> Value {
+        json!({
+            "id": self.id,
+            "away_at": self.away_at,
+            "note": self.note,
+            "back_at": self.back_at,
+            "open": self.back_at.is_none(),
+        })
+    }
+
+    /// `None` for anything missing a required field — read exactly like a
+    /// parse failure by every caller.
+    fn from_away_event(v: &Value) -> Option<Self> {
+        let m = v.as_object()?;
+        let non_empty = |name: &str| {
+            m.get(name).and_then(Value::as_str).map(str::to_string).filter(|s| !s.is_empty())
+        };
+        Some(Self {
+            id: non_empty("id")?,
+            away_at: non_empty("ts")?,
+            note: non_empty("note"),
+            back_at: None,
+        })
+    }
+}
+
+pub(crate) struct PresenceStore {
+    /// Folded windows, oldest first.
+    pub(crate) windows: Vec<PresenceWindow>,
+    /// 1-based line numbers that did not fold into anything.
+    pub(crate) unreadable: Vec<usize>,
+}
+
+/// Read the presence store oldest-first, folding `back` onto its `away`. A
+/// missing store reads as PRESENT (nobody has ever marked away), never an
+/// error; an unreadable line warns and is skipped with its number. A duplicate
+/// id keeps the first window, and a `back` naming no known window has nothing
+/// to fold onto — the same rules the mailbox fold uses next door.
+pub(crate) fn read_presence(control: &Path) -> PresenceStore {
+    let path = presence_path(control);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return PresenceStore { windows: Vec::new(), unreadable: Vec::new() };
+    };
+    let mut windows: Vec<PresenceWindow> = Vec::new();
+    let mut unreadable: Vec<usize> = Vec::new();
+    for (i, raw) in text.lines().enumerate() {
+        let line_no = i + 1;
+        if js_trim(raw).is_empty() {
+            continue;
+        }
+        let Ok(v) = serde_json::from_str::<Value>(raw) else {
+            warn_corrupt_jsonl_line(&path, line_no);
+            unreadable.push(line_no);
+            continue;
+        };
+        let mut folded = true;
+        match v.get("event").and_then(Value::as_str) {
+            Some("away") => match PresenceWindow::from_away_event(&v) {
+                Some(w) => {
+                    if !windows.iter().any(|x| x.id == w.id) {
+                        windows.push(w);
+                    }
+                }
+                None => folded = false,
+            },
+            Some("back") => {
+                let id = v.get("id").and_then(Value::as_str).map(str::to_string);
+                let at = v
+                    .get("back_at")
+                    .and_then(Value::as_str)
+                    .or_else(|| v.get("ts").and_then(Value::as_str))
+                    .map(str::to_string);
+                match (id, at) {
+                    (Some(id), Some(at)) => {
+                        if let Some(w) = windows.iter_mut().find(|w| w.id == id) {
+                            if w.back_at.is_none() {
+                                w.back_at = Some(at);
+                            }
+                        }
+                    }
+                    _ => folded = false,
+                }
+            }
+            _ => folded = false,
+        }
+        if !folded {
+            warn_corrupt_jsonl_line(&path, line_no);
+            unreadable.push(line_no);
+        }
+    }
+    PresenceStore { windows, unreadable }
+}
+
+/// THE shared read surface, half one: the open window, or `None` when the
+/// human is present. `away` refuses a second window, so there is at most one;
+/// the newest open window is answered either way rather than guessing.
+pub(crate) fn current_window(control: &Path) -> Option<PresenceWindow> {
+    read_presence(control).windows.into_iter().rev().find(|w| w.back_at.is_none())
+}
+
+/// THE shared read surface, half two: the most recently CLOSED window — the
+/// `away_at`/`back_at` pair the WakeReport uses as its report window, so that
+/// report never re-derives this fold.
+pub(crate) fn last_closed_window(control: &Path) -> Option<PresenceWindow> {
+    read_presence(control).windows.into_iter().rev().find(|w| w.back_at.is_some())
+}
+
+/// Open a window. Validate, then append — the same seam shape the two stores
+/// beside it use, so a refusal leaves the store byte-identical (still absent
+/// included).
+pub(crate) fn away_into(
+    control: &Path,
+    cmd: &str,
+    note: Option<&str>,
+) -> Result<PresenceWindow, String> {
+    if let Some(open) = current_window(control) {
+        return Err(format!(
+            "bee {cmd}: presence is already away since {} (window {}). Close that window with \
+             `bee supervisor back` before opening another.",
+            open.away_at, open.id
+        ));
+    }
+    let note = note.map(one_line).filter(|s| !s.is_empty());
+    if let Some(text) = &note {
+        if text.chars().count() > MAX_NOTE_CHARS {
+            return Err(format!(
+                "bee {cmd}: --note is {} characters; it is one line on a report \
+                 ({MAX_NOTE_CHARS} max).",
+                text.chars().count()
+            ));
+        }
+    }
+    let win = PresenceWindow { id: new_row_id(), away_at: now_iso(), note, back_at: None };
+    if append_jsonl(&presence_path(control), &win.away_event()).is_err() {
+        return Err(format!("bee {cmd}: could not append to the presence store."));
+    }
+    Ok(win)
+}
+
+/// Close the open window and RELEASE what queued behind it: one `released`
+/// event per queued mailbox row, which clears the flag on the next fold. The
+/// closed window is returned with the ids it released.
+///
+/// The window is closed FIRST on purpose: if a release append fails, presence
+/// still reads present and the row simply stays flagged, which a later read can
+/// see. The other order would leave the human away with an emptied queue.
+pub(crate) fn back_into(
+    control: &Path,
+    cmd: &str,
+) -> Result<(PresenceWindow, Vec<String>), String> {
+    let Some(open) = current_window(control) else {
+        return Err(format!(
+            "bee {cmd}: presence is present — there is no open away window to close. \
+             `bee supervisor away` opens one."
+        ));
+    };
+    let at = now_iso();
+    let event = json!({"ts": at, "event": "back", "id": open.id, "back_at": at});
+    if append_jsonl(&presence_path(control), &event).is_err() {
+        return Err(format!("bee {cmd}: could not append to the presence store."));
+    }
+    let mut closed = open;
+    closed.back_at = Some(at.clone());
+
+    let mut released: Vec<String> = Vec::new();
+    for row in read_interventions(control).rows.iter().filter(|r| r.queued) {
+        let ev = json!({"ts": at, "event": "released", "id": row.id, "released_at": at});
+        if append_jsonl(&interventions_path(control), &ev).is_ok() {
+            released.push(row.id.clone());
+        }
+    }
+    Ok((closed, released))
+}
+
+/// How many mailbox rows are still queued behind an open window — the one
+/// number `presence` and a later report both want, counted in one place.
+pub(crate) fn queued_count(control: &Path) -> usize {
+    read_interventions(control).rows.iter().filter(|r| r.queued).count()
+}
+
 // ─── argv plumbing ──────────────────────────────────────────────────────
 
 struct Ctx {
@@ -910,6 +1188,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "list" => run_list(parse_shape(rest, &[])?, t0),
         "pending" => run_pending(parse_shape(rest, &["target-session"])?, t0),
         "mark-delivered" => run_mark_delivered(parse_shape(rest, &["id"])?, t0),
+        "away" => run_away(parse_shape(rest, &["note"])?, t0),
+        "back" => run_back(parse_shape(rest, &[])?, t0),
+        "presence" => run_presence(parse_shape(rest, &[])?, t0),
         _ => None,
     }
 }
@@ -1037,6 +1318,83 @@ fn run_mark_delivered(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     };
     let mut result = rec.to_value();
     result["changed"] = Value::Bool(changed);
+    Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &result, &text, t0))
+}
+
+// ─── away / back / presence ──────────────────────────────────────────────
+
+fn run_away(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "supervisor away";
+    let ctx = match preamble(cmd, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let win = match away_into(&ctx.control, cmd, flag(&parsed, "note")) {
+        Ok(win) => win,
+        Err(msg) => return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0)),
+    };
+    let text = format!(
+        "Away since {} (window {}). Non-urgent supervisor questions queue quietly until \
+         `bee supervisor back`; urgent alerts still come through.",
+        win.away_at, win.id
+    );
+    Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &win.to_value(), &text, t0))
+}
+
+fn run_back(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "supervisor back";
+    let ctx = match preamble(cmd, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let (win, released) = match back_into(&ctx.control, cmd) {
+        Ok(out) => out,
+        Err(msg) => return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0)),
+    };
+    let text = format!(
+        "Back at {}. Away window {} opened at {}; {} queued question(s) released.",
+        win.back_at.as_deref().unwrap_or("-"),
+        win.id,
+        win.away_at,
+        released.len()
+    );
+    let mut result = win.to_value();
+    result["released"] = json!(released);
+    Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &result, &text, t0))
+}
+
+fn run_presence(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "supervisor presence";
+    let ctx = match preamble(cmd, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let store = read_presence(&ctx.control);
+    let open = store.windows.iter().rev().find(|w| w.back_at.is_none());
+    let last_closed = store.windows.iter().rev().find(|w| w.back_at.is_some());
+    let queued = queued_count(&ctx.control);
+    let text = match open {
+        Some(w) => {
+            let note = w.note.as_deref().map(|n| format!(" — {n}")).unwrap_or_default();
+            format!("Away since {} (window {}){note}. {queued} question(s) queued.", w.away_at, w.id)
+        }
+        None => match last_closed {
+            Some(w) => format!(
+                "Present. The last away window {} ran {} to {}.",
+                w.id,
+                w.away_at,
+                w.back_at.as_deref().unwrap_or("-")
+            ),
+            None => "Present. No away window has ever been opened.".to_string(),
+        },
+    };
+    let result = json!({
+        "state": if open.is_some() { "away" } else { "present" },
+        "window": open.map(PresenceWindow::to_value),
+        "last_closed_window": last_closed.map(PresenceWindow::to_value),
+        "queued": queued,
+        "unreadable_lines": store.unreadable,
+    });
     Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &result, &text, t0))
 }
 
@@ -1245,6 +1603,17 @@ mod tests {
         assert_eq!(
             n(&observations_path(&control_root_path(&wt))),
             n(&main.join(".bee").join("supervisor").join("observations.jsonl"))
+        );
+        // All three stores, one control root: a linked worktree that marked
+        // away must be away for the tick reading from main.
+        assert_eq!(
+            n(&presence_path(&control_root_path(&wt))),
+            n(&main.join(".bee").join("supervisor").join("presence.jsonl"))
+        );
+        away_into(&control_root_path(&wt), "supervisor away", None).unwrap();
+        assert!(
+            current_window(&control_root_path(&main)).is_some(),
+            "the away mark written from the worktree is read from main"
         );
     }
 
@@ -1636,5 +2005,201 @@ mod tests {
         let still_pending: Vec<&str> =
             pending_for(&after, "sess-1").iter().map(|r| r.id.as_str()).collect();
         assert_eq!(still_pending, vec![calm.id.as_str()], "only the stamped row leaves the list");
+    }
+
+    // ─── the presence mark (Phase 3, 9f5cd250) ──────────────────────────
+
+    fn pres(control: &Path) -> Vec<String> {
+        std::fs::read_to_string(presence_path(control))
+            .map(|t| t.lines().map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn away_opens_exactly_one_window_and_presence_reads_it_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        assert!(current_window(control).is_none(), "a missing store reads as present");
+        assert!(last_closed_window(control).is_none(), "and has no report window yet");
+
+        let win = away_into(control, "supervisor away", Some("  out for\ndinner  ")).unwrap();
+        assert_eq!(win.note.as_deref(), Some("out for dinner"), "the note is one line");
+        assert_eq!(win.id.len(), 8, "the window id is a short stable id: {}", win.id);
+        assert!(win.back_at.is_none(), "a fresh window is open");
+
+        let rows = pres(control);
+        assert_eq!(rows.len(), 1, "exactly one event: {rows:?}");
+        let ev: Value = serde_json::from_str(&rows[0]).unwrap();
+        assert_eq!(ev["event"], "away");
+        assert_eq!(ev["note"], "out for dinner");
+        assert!(ev["ts"].as_str().unwrap().ends_with('Z'), "ts is ISO-8601: {}", ev["ts"]);
+        assert!(ev.get("back_at").is_none(), "the away event carries no close — back owns that");
+
+        let open = current_window(control).expect("presence reads away");
+        assert_eq!(open.id, win.id);
+        assert_eq!(open.away_at, win.away_at);
+        assert_eq!(open.note.as_deref(), Some("out for dinner"));
+        assert_eq!(open.to_value()["open"], Value::Bool(true));
+        assert!(last_closed_window(control).is_none(), "an open window is not a closed one");
+        assert!(read_presence(control).unreadable.is_empty());
+    }
+
+    #[test]
+    fn a_second_away_is_refused_and_back_needs_an_open_window() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        let err = back_into(control, "supervisor back").unwrap_err();
+        assert!(err.contains("presence is present"), "the refusal names presence: {err}");
+        assert!(err.contains("no open away window"), "{err}");
+        assert!(!presence_path(control).exists(), "a refused back writes nothing");
+        assert!(!supervisor_dir(control).exists(), "not even the store directory");
+
+        let first = away_into(control, "supervisor away", None).unwrap();
+        let before = pres(control);
+        let err = away_into(control, "supervisor away", Some("again")).unwrap_err();
+        assert!(err.contains("presence is already away"), "{err}");
+        assert!(err.contains(&first.id), "the refusal names the open window: {err}");
+        assert!(err.contains("bee supervisor back"), "and names its one remedy: {err}");
+        assert_eq!(pres(control), before, "a refused away leaves the store byte-identical");
+        assert!(current_window(control).is_some(), "and the open window is still the open one");
+
+        // The note bound, in a store that has never been written to.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let fresh = tmp2.path();
+        let long = "s".repeat(MAX_NOTE_CHARS + 1);
+        let err = away_into(fresh, "supervisor away", Some(&long)).unwrap_err();
+        assert!(err.contains("--note is"), "{err}");
+        assert!(!presence_path(fresh).exists(), "a refused away writes nothing at all");
+    }
+
+    #[test]
+    fn a_non_urgent_row_recorded_while_away_is_queued_and_takes_no_immediate_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        let present = ask(control, "intervention", "sess-1", "point-a", "What is a?").unwrap();
+        assert!(!present.queued, "nothing queues while the human is present");
+
+        away_into(control, "supervisor away", None).unwrap();
+        let calm = ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let esc = ask(control, "escalation", "sess-1", "point-a", "Is this still the plan?").unwrap();
+        assert!(calm.queued, "an intervention recorded while away is queued");
+        assert!(esc.queued, "an escalation recorded while away is queued too");
+        assert!(notifier_argv(&calm, true).is_none(), "a queued row earns no notification");
+        assert!(notifier_argv(&esc, true).is_none(), "nor does a queued escalation");
+
+        // The danger class is untouched: never queued, and it still notifies.
+        let urgent = ask(control, "urgent", "sess-1", "rm-rf-on-main", "Stop that delete?").unwrap();
+        assert!(!urgent.queued, "an urgent row is never queued by the presence mark");
+        let argv = notifier_argv(&urgent, true).expect("an urgent row still notifies while away");
+        assert!(argv.iter().any(|a| a.contains("sess-1")), "{argv:?}");
+
+        // The flag survives the fold, and DELIVERY is unchanged — every row is
+        // still pending for the target session's next turn boundary.
+        let store = read_interventions(control);
+        assert!(store.unreadable.is_empty(), "the queued stamp folds like every other field");
+        let pending: Vec<&str> = pending_for(&store, "sess-1").iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(
+            pending,
+            vec![present.id.as_str(), calm.id.as_str(), esc.id.as_str(), urgent.id.as_str()],
+            "a queued row is still delivered at the next turn boundary"
+        );
+        assert_eq!(store.rows.iter().filter(|r| r.queued).count(), 2);
+        assert_eq!(queued_count(control), 2);
+        assert_eq!(delivery_line(&calm), "bee supervisor: What ends the retry?", "unchanged");
+    }
+
+    #[test]
+    fn back_closes_the_window_clears_queued_and_hands_over_the_pair() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let win = away_into(control, "supervisor away", Some("dinner")).unwrap();
+        let calm = ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let urgent = ask(control, "urgent", "sess-1", "rm-rf-on-main", "Stop that delete?").unwrap();
+
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert_eq!(closed.id, win.id);
+        assert_eq!(closed.away_at, win.away_at, "the pair keeps the window it opened with");
+        let back_at = closed.back_at.clone().expect("a closed window carries back_at");
+        assert!(back_at.ends_with('Z'), "back_at is ISO-8601: {back_at}");
+        assert_eq!(released, vec![calm.id.clone()], "only the queued row is released");
+        assert_eq!(pres(control).len(), 2, "the close is one appended event");
+
+        // Effect ONE: the pair sup-9 reads as its report window.
+        assert!(current_window(control).is_none(), "presence reads present again");
+        let last = last_closed_window(control).expect("the closed window is the report window");
+        assert_eq!(last.id, win.id);
+        assert_eq!(last.away_at, win.away_at);
+        assert_eq!(last.back_at, Some(back_at));
+        assert_eq!(last.note.as_deref(), Some("dinner"));
+
+        // Effect TWO, released: nothing is queued any more, and the urgent row
+        // was never touched by any of it.
+        let store = read_interventions(control);
+        assert!(store.unreadable.is_empty(), "the released event folds like the others");
+        assert!(store.rows.iter().all(|r| !r.queued), "back clears queued on every row");
+        assert_eq!(queued_count(control), 0);
+        let released_row = store.rows.iter().find(|r| r.id == calm.id).unwrap();
+        assert!(released_row.released_at.is_some(), "the release is stamped, not just cleared");
+        assert!(notifier_argv(released_row, true).is_none(), "a released intervention still never pops up");
+        let urgent_row = store.rows.iter().find(|r| r.id == urgent.id).unwrap();
+        assert!(notifier_argv(urgent_row, true).is_some(), "the urgent row notifies as it always did");
+
+        // A row recorded after back queues nothing, and a second back is refused.
+        let after = ask(control, "intervention", "sess-2", "point-z", "What now?").unwrap();
+        assert!(!after.queued);
+        assert!(back_into(control, "supervisor back").unwrap_err().contains("presence is present"));
+    }
+
+    #[test]
+    fn away_and_back_write_nothing_outside_the_supervisor_store() {
+        // The prohibition of 9f5cd250, asserted rather than trusted: a presence
+        // mark has exactly two effects, so it touches no gate, no bypass level,
+        // no permission or approval path and no waiting-on mark — every one of
+        // which is a file under .bee/ that must simply never appear.
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", Some("dinner")).unwrap();
+        ask(control, "intervention", "sess-1", "point-a", "What is a?").unwrap();
+        back_into(control, "supervisor back").unwrap();
+
+        let mut top: Vec<String> = std::fs::read_dir(control.join(".bee"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        top.sort();
+        assert_eq!(top, vec!["supervisor"], "presence wrote outside its own store: {top:?}");
+
+        let mut files: Vec<String> = std::fs::read_dir(supervisor_dir(control))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        files.sort();
+        assert_eq!(files, vec!["interventions.jsonl", "presence.jsonl"]);
+        assert!(!observations_path(control).exists(), "the observation store is untouched");
+    }
+
+    #[test]
+    fn one_bad_presence_line_is_skipped_with_a_count_never_a_crash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let win = away_into(control, "supervisor away", None).unwrap();
+        let path = presence_path(control);
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        // A half-written line, an away event with no id, an event word this
+        // store does not know, and a back for a window never opened.
+        text.push_str("{\"ts\":\"2026-08-27T00:00:00.000Z\",\"event\":\"aw\n");
+        text.push_str("{\"ts\":\"2026-08-27T00:00:01.000Z\",\"event\":\"away\"}\n");
+        text.push_str("{\"ts\":\"2026-08-27T00:00:02.000Z\",\"event\":\"approve\",\"id\":\"aa\"}\n");
+        text.push_str("{\"ts\":\"2026-08-27T00:00:03.000Z\",\"event\":\"back\",\"id\":\"nosuchid\",\"back_at\":\"2026-08-27T00:00:03.000Z\"}\n");
+        std::fs::write(&path, text).unwrap();
+
+        let store = read_presence(control);
+        assert_eq!(store.windows.len(), 1, "the one good window still reads back");
+        assert_eq!(store.windows[0].id, win.id);
+        assert!(store.windows[0].back_at.is_none(), "a close for an unknown window lands nowhere");
+        assert_eq!(store.unreadable, vec![2, 3, 4]);
+        assert!(current_window(control).is_some(), "and presence still answers");
     }
 }

@@ -569,6 +569,19 @@ mod tests {
         // --kind already says, and the opt-out is a config key
         // (supervisor.notify), which is where every other switch of this shape
         // lives.
+        // 194 -> 194 (slp-supervisor-heartbeat sup-8): `bee supervisor away`,
+        // `bee supervisor back` and `bee supervisor presence` add the presence
+        // mark of 9f5cd250 and add NO flag name. `away` takes `--note`, which
+        // already means "the short free-text line this record carries"
+        // (supervisor record, capture add, decisions log) and means exactly
+        // that on a window; `back` and `presence` take nothing but `--json`.
+        // The two effects are the verbs themselves, so neither earns a flag:
+        // spelling the queue as `--queue` or the window as `--window` would be
+        // a second way to say what `away` and `back` already say. There is
+        // deliberately no flag for the third thing a presence flag must never
+        // grow — no permission, gate or bypass word appears on this surface at
+        // all, which is the vocabulary half of "permission control never hides
+        // in a presence flag".
         const PINNED_FLAG_COUNT: usize = 194;
 
         let names: std::collections::BTreeSet<&str> =
