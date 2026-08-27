@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "29f147f5b0239ef8db1a3817334f908d8ca728992ab8e9f56f6dd112662df1d0",
+      "sha256": "3e8e4b17ce029c727860cadfea4050a1575129a863f69186d3d30e7643301025",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -297,7 +297,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
-      "sha256": "b5adcedec650c1d4df5d343b5f3431f033b62acb143adecfa1b7a2f9f4a914fc",
+      "sha256": "0852de14cc3de66a9cff245e3b833cce0d7ac17a0a4188a10ac99e0a35afdf08",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md"
@@ -654,7 +654,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "0fbd32f9f910b017e710bd5dc3d7e635758e6ed04f6c9ca8e060998a10f2a195",
+      "sha256": "0842f702039731186f4034f65600d97e6849c4cf2bce6ebb6eedd45eba27753d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -815,7 +815,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
-      "sha256": "b5adcedec650c1d4df5d343b5f3431f033b62acb143adecfa1b7a2f9f4a914fc",
+      "sha256": "0852de14cc3de66a9cff245e3b833cce0d7ac17a0a4188a10ac99e0a35afdf08",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md"
@@ -1537,7 +1537,7 @@
     },
     {
       "path": "skills/bee-herding/references/supervisor-prompt.md",
-      "sha256": "b5adcedec650c1d4df5d343b5f3431f033b62acb143adecfa1b7a2f9f4a914fc",
+      "sha256": "0852de14cc3de66a9cff245e3b833cce0d7ac17a0a4188a10ac99e0a35afdf08",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/supervisor-prompt.md"

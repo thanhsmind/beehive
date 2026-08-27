@@ -164,8 +164,8 @@ When 2–3 design lanes run in parallel, information can leak across several cha
 │                                                                         │
 │  ├── [Clear Winner / Consensus]                                         │
 │  │   └── Log settled agreement:                                         │
-│  │       `bee decisions log --decision "..." --rationale "..." \`       │
-│  │       `  --alternatives "..." --trigger "..." --relation "..."`      │
+│  │       `bee decisions log --decision "…" --rationale "…" \`           │
+│  │       `  --alternatives "…" --trigger "…" --relation "…"`            │
 │  │                                                                      │
 │  └── [Deadlock / Unresolved Trade-offs]                                 │
 │      └── Escalate to Human:                                             │

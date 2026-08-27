@@ -89,8 +89,8 @@ it is the reason a cold tick is worth running at all.
 The command line, in full:
 
 ```
-.bee/bin/bee supervisor record --kind observation|silence \
-                               --signal struggling-loop|big-decision|danger-op|none \
+.bee/bin/bee supervisor record --kind {observation|silence} \
+                               --signal {struggling-loop|big-decision|danger-op|none} \
                                --note "<one or two sentences>" \
                                [--target-session <session-id>] [--tick <n>]
 ```
