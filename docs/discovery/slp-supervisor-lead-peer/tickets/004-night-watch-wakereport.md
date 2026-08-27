@@ -1,6 +1,6 @@
 ---
 type: grilling
-status: open
+status: closed
 claimed-by:
 blocked-by: none
 ---
@@ -16,4 +16,12 @@ UrgentAlert that skips the queue.
 
 ## Answer
 
-(filled on close)
+(D 9f5cd250) Presence is an explicit lightweight away/back mark with
+exactly two effects: it defines the report accumulation window, and
+non-urgent asks queue silently while away. Gate behavior and bypass
+levels are NOT touched by presence — permission control never hides
+in a presence flag. On back: exactly one WakeReport — a markdown file
+of at most 10 lines, four sections (what happened / what was decided /
+what needs you / next action) — plus a single push notification.
+UrgentAlerts skip the queue as always. Voice rendering is out of
+scope for this effort.

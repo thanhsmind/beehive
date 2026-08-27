@@ -1,0 +1,134 @@
+{
+  "id": "sup-2",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Supervisor observation store and CLI verbs",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "c80debd7",
+    "da7cb49b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/intent_group.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "New append-only store .bee/supervisor/observations.jsonl written ONLY through new verbs (CLI-only state law): `bee supervisor record` with --kind observation|silence (closed set, typed refusal otherwise), --signal <struggling-loop|big-decision|danger-op|none>, --note (one or two sentences), optional --target-session; and `bee supervisor list --json`. Record row: {ts, kind, signal, note, target_session, tick}. Follow an existing small verb group as the pattern (intent_group.rs is a clean single-file example); register in the dispatcher exactly as its siblings are. Regen is deferred to the wave barrier (orchestrator runs the full chain at wave close). Unit tests: a valid record appends one row; a bad --kind is a typed refusal that writes nothing; list reads rows back; the store directory is created on first write.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "bee supervisor record --kind silence --signal none --note X appends exactly one JSONL row",
+      "a bad --kind refuses typed and writes nothing"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "record + list verbs with validation, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "dispatcher routes `bee supervisor record` and `bee supervisor list`"
+    ],
+    "prohibitions": [
+      "No hand-written file under .bee/ outside the new store",
+      "No change to any existing verb behavior"
+    ]
+  },
+  "trace": {
+    "worker": "w-sup-2",
+    "outcome": "supervisor record/list verbs land the append-only observation store, validated before write and wired into the dispatcher + registry",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "added an optional --tick flag to supervisor record — the cell mandates a tick field in the row but no verb-visible tick source exists in the tree, so the control loop must pass its index — the plan was wrong about a fact",
+      "--signal is optional and records as none when omitted, instead of being required — a silence row and a signal-free observation are both ordinary, and the closed-set refusal still fires on any unknown value — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T02:23:40.837Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6749e6b9-8c8c-4e3c-9fcf-f3af8df0b86c",
+    "claimed_at": "2026-08-27T01:43:24.140Z",
+    "report": {
+      "outcome": "supervisor record/list verbs land the append-only observation store, validated before write and wired into the dispatcher + registry",
+      "commit": "7f87c92d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor — green — 17 supervisor-named tests (7 new store tests) ; also ran --test registry_dispatch --test registry_contracts and catalog::tests (pinned flags 189->192), all green, because this cell edits registry_payload.json and catalog.rs",
+      "deviations": [
+        "added an optional --tick flag to supervisor record — the cell mandates a tick field in the row but no verb-visible tick source exists in the tree, so the control loop must pass its index — the plan was wrong about a fact",
+        "--signal is optional and records as none when omitted, instead of being required — a silence row and a signal-free observation are both ordinary, and the closed-set refusal still fires on any unknown value — found a better route"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 578 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "valid-record-appends-one-row",
+            "status": "PASS",
+            "evidence": "supervisor.rs:167-215 record_into validates then appends; a_valid_record_appends_exactly_one_row_and_creates_the_store ok"
+          },
+          {
+            "id": "bad-kind-typed-refusal-writes-nothing",
+            "status": "PASS",
+            "evidence": "supervisor.rs:174-176 closed_set_error before any write; a_bad_kind_is_a_typed_refusal_that_writes_nothing ok; every_other_refusal_also_writes_nothing ok"
+          },
+          {
+            "id": "closed-sets-and-row-shape",
+            "status": "PASS",
+            "evidence": "supervisor.rs:78-79 KNOWN_KINDS/KNOWN_SIGNALS; Observation::to_value emits exactly {ts,kind,signal,note,target_session,tick}; list_reads_the_rows_back_in_order ok"
+          },
+          {
+            "id": "one-validation-seam",
+            "status": "PASS",
+            "evidence": "run_record is the only CLI path; single append_jsonl call at supervisor.rs:209"
+          },
+          {
+            "id": "dispatcher-and-registry-wiring",
+            "status": "PASS",
+            "evidence": "verbs/mod.rs:124 supervisor::try_native; registry_payload commands 88/89; registry_dispatch + registry_contracts suites ok (8 and 10 passed)"
+          },
+          {
+            "id": "no-other-verb-behavior-changed",
+            "status": "PASS",
+            "evidence": "git show --stat 7f87c92d touches only catalog.rs test constant, registry_payload.json, mod.rs +4, new supervisor.rs"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-27T08:04:52.626Z"
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 ---
 type: grilling
-status: open
+status: closed
 claimed-by:
 blocked-by: none
 ---
@@ -17,4 +17,17 @@ the user (spec: the dossier, never a coin flip).
 
 ## Answer
 
-(filled on close)
+User half (D 9cffdfb5): the agent opens 2–3 blind lanes on ITS OWN
+judgment when a decision is high-stakes AND ambiguous, logging the
+reason at open time; the user may also order lanes directly; deadlock
+always hands the user the dossier. Mechanism half (D 5981246b): lanes
+are a procedure over the existing dispatch door — one
+neutrality-linted LaneBrief (prose-guard-style lint at the door), 2–3
+parallel advisor-kind dispatches with a byte-identical brief and an
+explicit read diet (advisor dispatches are already isolated by
+construction), cross-critique as a second advisor round, convergence
+as a dossier doc + one decisions-log entry with a registered revisit
+trigger. Blind lanes never run as cell-kind (learned_context leaks).
+Heterogeneous lane models moved to Out of scope (breaks the one-name
+advisor slot, decision 4faf1de9). Findings:
+docs/history/research/slp-blind-lanes-surfaces.md.

@@ -11,6 +11,14 @@ verbatim original_request pass-down. Source of ideas:
 docs/specs/slp-supervisor-lead-peer/ — mined, not obeyed; bee's locked
 rules win on conflict unless a point is re-decided explicitly.
 
+Map closed 2026-08-26 — 7 tickets, 13 decisions, no fog left. Ready
+for bee-shaping's Lock, which consumes the decisions below into each
+feature's CONTEXT.md, in build order (a020319d):
+1. slp-supervisor-heartbeat (322695d6, da7cb49b, c80debd7, 9f5cd250)
+2. slp-dissent-stop-and-ask (4b7aa303, a2affcba)
+3. slp-blind-lanes (9cffdfb5, 5981246b)
+4. slp-contract-original-request (ca9960f5, 3899fa60, 9c0104e0)
+
 ## Notes
 
 - The user confirmed all four clusters in scope and picked the
@@ -48,6 +56,12 @@ rules win on conflict unless a point is re-decided explicitly.
   escalation role is configuration, not new machinery.
 - The spec's own chapter 9 endorses the merge-into-bee stance: separate
   mechanism (infrastructure) from policy (opinionated workflow).
+- Post-close input (2026-08-26): the sibling harness spec distilled at
+  docs/history/research/agent-harness-slap-distill.md feeds feature 1's
+  shaping — two extra stuck signals, harness-measured budget telemetry,
+  the confidence×door escalation predicate, and one flagged user
+  question ("silence is consent"). Its "Supervisor" is a router, not
+  this map's observer — mechanisms imported, name not.
 - Deviation, recorded: the first gather worker's digest was lost in the
   herding transport (only its summary line returned); the mapping above
   was re-derived inline from the two discovery maps and the session
@@ -79,25 +93,60 @@ rules win on conflict unless a point is re-decided explicitly.
   immutably; layers only add —
   tickets/007-contract-status-original-request.md.
 
+- a2affcba: dissent mechanism — a cell-level dissent record, verdict
+  enforced at the close/merge doors (judge-debt pattern), StopAndAsk
+  via the herding round-mailbox, no live Q&A channel —
+  tickets/005-dissent-stop-and-ask.md.
+- 5981246b: blind-lane mechanism — a procedure over the dispatch door:
+  linted brief, parallel advisor dispatches, second-round
+  cross-critique, dossier + decision + trigger —
+  tickets/006-blind-lanes.md.
+- 9c0104e0: contract label = `contract:<name>` tag view over active
+  decisions with a dispatch-time tripwire; original_request = bee
+  intent's verbatim anchor injected at dispatch prepare —
+  tickets/007-contract-status-original-request.md.
+- c80debd7: interventions are mailbox records read at the next turn
+  boundary, carrying the frequency-cap state; human sees them in
+  reports only, UrgentAlert excepted —
+  tickets/003-intervention-channel.md.
+- 9f5cd250: an explicit lightweight away/back mark defines the report
+  window and queues non-urgent asks; gates untouched; on back exactly
+  one ≤10-line four-section WakeReport plus one push notification —
+  tickets/004-night-watch-wakereport.md.
+- a8f4b8ab (post-close, harness distill): the supervisor feature
+  absorbs two extra stuck signals (over-2x-estimate, same-region
+  repeat), harness-measured overrun telemetry, and the
+  confidence×door queue-sort predicate.
+- c706053e (post-close, user): a NARROW opt-in silence-is-consent
+  mode — enabled explicitly, non-gate queued asks only, user-set
+  timeout, every auto-proceed logged and prominent in the WakeReport;
+  gates and one-way low-confidence asks always wait.
+- 5144314c (post-close, harness 5-Hats detail): the 5-Layer rubric +
+  Truth Table + CRUD Lifecycle join the reviewer/judge checklists;
+  blind-lane dossiers validate citations against the verbatim
+  proposals (anti-fabrication); pushback must name the missing
+  context. Hats = review instrument, distinct from lanes.
+- 66c4c251 (post-close, harness full-text tail): supervisor reports
+  carry a small health-metric set with two-sided bands; raising
+  silence-is-consent is EARNED (zero human-reversed one-way decisions
+  across 40-60 tasks); WakeReport sorts assumptions by
+  impact-if-wrong; forwarded-up content is verbatim with a mechanical
+  length-compare guard.
+
 Named deviation (2026-08-26): three with-user tickets (005/006/007)
 were grilled in one session on the user's explicit "tiếp tục xây dựng
 cho 3 phần còn lại" — the one-ticket cap yields to the user's say-so;
-mechanism research for the same tickets runs in parallel at the
+mechanism research for the same tickets ran in parallel at the
 advisor tier per the user's "use the biggest model" instruction.
 
 ## Not yet specified
 
-- Many sub-supervisors fanning events to one main supervisor (spec
-  allows 100+) — matters only after one supervisor works.
-  (agent-suspected)
-- Per-ticket / per-day budgets: bee enforces cell budgets only at
-  100% exhaustion (ticket 001's finding); does the supervisor feature
-  need an 80%-warning telemetry event, and who emits it?
-  (agent-suspected)
-- Whether Better SLP adds anything bee-evolving does not already do —
-  may dissolve to "covered". (agent-suspected)
-- Voice/wake-report delivery medium (text file vs notification vs
-  audio). (agent-suspected)
+Nothing. Every open question this map could phrase has an answer.
+Resolved on close: the 80%-budget-warning telemetry is named as new
+machinery inside the slp-supervisor-heartbeat feature (da7cb49b) —
+its exact emitter is a shaping question, not a map question; Better
+SLP dissolved to "covered" — bee-evolving over the feedback digest
+already is the weekly retro; wake-report medium answered by 9f5cd250.
 
 ## Out of scope
 
@@ -107,3 +156,11 @@ advisor tier per the user's "use the biggest model" instruction.
   split) in the name of night-watch autonomy.
 - Adopting the spec's MUST/invariant list as binding — it reads as
   source material only.
+- Heterogeneous lane models (spec §10.b) — requires breaking the
+  one-name advisor slot (decision 4faf1de9); returns only as a fresh
+  effort.
+- Many sub-supervisors fanning events to one main supervisor (spec
+  allows 100+) — matters only after one supervisor works; returns as
+  a fresh effort.
+- Voice rendering of the WakeReport — a delivery upgrade on top of
+  the text report; returns as a fresh effort.
