@@ -15,9 +15,9 @@
   "created_at": "2026-08-26T04:33:57.386Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "SLP: close cluster 1 bookkeeping now, or start cluster 2 (dissent/stop-and-ask)?",
-    "asked_at": "2026-08-27T20:43:39.521Z",
+    "kind": "turn-end",
+    "subject": "Cluster 1 is closed and committed. Starting part 2 now.",
+    "asked_at": "2026-08-27T20:59:46.860Z",
     "session": "6c826f6d-0970-4902-a994-c87f96d17650"
   }
 }
