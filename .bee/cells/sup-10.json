@@ -1,0 +1,94 @@
+{
+  "id": "sup-10",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Health counters with two-sided bands, and one metrics line in the report",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "66c4c251",
+    "a8f4b8ab",
+    "ea02cb68"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "behavior_change": true,
+  "action": "Plan Phase 4, first half (per 66c4c251 and a8f4b8ab). Add a health-counter surface to packages/bee-rs/crates/bee/src/verbs/supervisor.rs, computed by the DETERMINISTIC layer only — every number comes from records bee already holds, never from a model and never self-reported. Add `bee supervisor metrics [--window <id>] [--json]`: with no --window it measures the last closed presence window (last_closed_window from sup-8), with --window a named one. Counters, each carrying a TWO-SIDED band (a low bound and a high bound, so 'suspiciously low' reads as loudly as 'too high'), and each carrying an explicit sample count so a band verdict on 2 samples never reads like one on 200: (1) escalations per capped cell in the window; (2) blocked rate — blocked cells over claimed cells; (3) wrong-assumption rate — decision-log events in the window that were later superseded, over all decision events in the window; (4) self-answered band — silence observations over all observations (a supervisor that never speaks and one that never stays quiet are both out of band); (5) earned-autonomy streak — consecutive capped cells with zero human-reversed one-way decisions, per 66c4c251, reported as a NUMBER only: code never raises a consent level, that switch stays the human's; (6) overrun — 2x-estimate per a8f4b8ab, SKIP-UNTIL-PRESENT per decision ea02cb68: compute it only for a cell that already records an estimate, and where none does, report the counter as the literal state 'no estimate recorded', never zero and never a guess; (7) same-region repeat — consecutive capped cells whose trace.files_changed sets are identical, which is the derivable form of a8f4b8ab's two-submissions-differ-in-one-region signal. Each counter verdict is one of below-band | in-band | above-band | not-measurable, and 'not-measurable' is a first-class outcome that is never silently rendered as in-band. Every band bound is a named const with a one-line comment saying why that number, so the bands are readable and arguable rather than magic. Then wire ONE compact line into the sup-9 WakeReport: the report's 10-line ceiling and four sections do not change — the metrics block occupies exactly ONE of the existing content lines, listing only counters whose verdict is out of band or not-measurable, and reading 'metrics in band' when every counter is healthy. Tests in the same tests module: each counter computes off planted records; a below-band value is flagged, not just an above-band one; a zero-sample counter reports not-measurable; a cell with no recorded estimate reports 'no estimate recorded'; the report still fits its ceiling with the metrics line present; the streak is a number and no config value changes. Regen deferred to the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "a counter below its band is flagged exactly as loudly as one above it",
+      "a counter with no usable input reports not-measurable, never zero or in-band"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "seven counters with two-sided bands and sample counts, the metrics verb, one report line"
+      }
+    ],
+    "key_links": [
+      "metrics reads sup-8's window surface and the existing stores, deriving nothing new"
+    ],
+    "prohibitions": [
+      "no model-supplied or self-reported number",
+      "code never raises a consent level or flips any config switch",
+      "the WakeReport's four sections and 10-line ceiling are unchanged"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-sup-10",
+    "outcome": "supervisor metrics answers seven derived counters with two-sided bands, sample counts and a first-class not-measurable verdict; the WakeReport carries them on one line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "The metrics line is a FIXED content line inside the first report section rather than a ranked item, which costs the report one spare item line (floor 8 -> 9); a readout truncation can drop is a readout the report does not carry, and the cell requires the line to be present either way — found a better route",
+      "the_report_sorts_by_impact_if_wrong_descending now proves urgent<escalation and escalation<intervention across two windows of two rows instead of one window of three, because the metrics line takes the content line the third row used to occupy; the empty-window and pure-renderer line counts moved 8 -> 9 for the same reason — hit an unforeseen obstacle",
+      "blocked-rate takes its denominator as the union of cells claimed in the window and cells blocked in it, not literally claimed cells: a real swept-blocked cell (.bee/cells/mdp-1.json) has claimed_at null, so blocked-over-claimed can exceed 1 and is not derivable — the plan was wrong about a fact",
+      "The not-measurable list on the report line puts counters carrying a named literal state first, so a clip at 110 characters can never eat overrun (no estimate recorded) — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T14:58:39.046Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e689c2df-430b-44e5-b7ad-a04a3826431b",
+    "claimed_at": "2026-08-27T14:36:49.512Z",
+    "report": {
+      "outcome": "supervisor metrics answers seven derived counters with two-sided bands, sample counts and a first-class not-measurable verdict; the WakeReport carries them on one line",
+      "commit": "3cb8fa94",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor; cargo test --manifest-path packages/bee-rs/Cargo.toml catalog; cargo test --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch --test front_door — green (56 supervisor + 10 catalog + 10 registry_contracts + 8 registry_dispatch + 5 front_door passed, 0 failed) — the cell touched only the supervisor verb module, the catalog flag ratchet and the registry payload, so the proof is those three surfaces: the counter/renderer unit tests, the flag-vocabulary pin, and the walks that dispatch every declared command against the real binary",
+      "deviations": [
+        "The metrics line is a FIXED content line inside the first report section rather than a ranked item, which costs the report one spare item line (floor 8 -> 9); a readout truncation can drop is a readout the report does not carry, and the cell requires the line to be present either way — found a better route",
+        "the_report_sorts_by_impact_if_wrong_descending now proves urgent<escalation and escalation<intervention across two windows of two rows instead of one window of three, because the metrics line takes the content line the third row used to occupy; the empty-window and pure-renderer line counts moved 8 -> 9 for the same reason — hit an unforeseen obstacle",
+        "blocked-rate takes its denominator as the union of cells claimed in the window and cells blocked in it, not literally claimed cells: a real swept-blocked cell (.bee/cells/mdp-1.json) has claimed_at null, so blocked-over-claimed can exceed 1 and is not derivable — the plan was wrong about a fact",
+        "The not-measurable list on the report line puts counters carrying a named literal state first, so a clip at 110 characters can never eat overrun (no estimate recorded) — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1234 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -424,6 +424,8 @@
     "promotion",
     "knowledge-loop",
     "slp",
-    "merge-door"
+    "merge-door",
+    "slp-supervisor",
+    "metrics"
   ]
 }

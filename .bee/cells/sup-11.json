@@ -1,0 +1,92 @@
+{
+  "id": "sup-11",
+  "feature": "slp-supervisor-heartbeat",
+  "title": "Narrow opt-in silence-is-consent with a deterministic timeout",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "sup-10"
+  ],
+  "decisions": [
+    "c706053e",
+    "9f5cd250",
+    "66c4c251"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/*",
+    "packages/bee/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-supervisor-heartbeat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "behavior_change": true,
+  "action": "Plan Phase 4, second half (per c706053e): a NARROW opt-in silence-is-consent mode. Default OFF, and off means the code path does not exist at runtime. Read `supervisor.consent` from .bee/config.json through the existing notify_enabled config seam: an object {enabled: bool, timeout_seconds: number}; enabled defaults to false, and a malformed or missing value is read as OFF (fail closed — the opposite of the notify default, because a wrong guess here auto-proceeds instead of merely staying quiet). Scope is the whole point and is enforced as a named predicate, not an inline condition: consent applies ONLY to a queued non-gate ask — a mailbox row of kind intervention that sup-8 stamped queued while the human is away. It NEVER applies to a gate, never to kind urgent, never to kind escalation, and never to a one-way-door low-confidence ask; give that predicate its own function and its own test naming each excluded case. The timeout lives in the DETERMINISTIC layer, never the model: add `bee supervisor consent-sweep [--json]`, a pure tick that reads the clock once, auto-proceeds every eligible queued row whose age exceeds timeout_seconds, and returns the ids it proceeded. Every auto-proceed leaves two marks: the row is stamped consented_at with the timeout that applied, and one decision is logged through the existing decision-log path naming the row, the point-key, and the elapsed time — an auto-proceed that left no record is the failure mode this whole mode is judged on. Render it PROMINENTLY in the sup-9 WakeReport: an auto-proceeded row takes the FIRST line of 'What needs you' with a marker that reads unmistakably as 'this went ahead without you', ranked above every other item regardless of the sup-9 impact order, and the count also appears in the sup-10 metrics line. Tests in the same tests module: consent off (default, missing key, malformed value) sweeps nothing; a gate ask, an urgent row and an escalation row are each refused by name; an eligible row younger than the timeout is untouched; an eligible row older is proceeded, stamped, and logged exactly once; a second sweep does not re-proceed it; the WakeReport puts the auto-proceeded row first with its marker. Regen deferred to the wave barrier.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "a gate, an urgent row and an escalation row are each refused by the consent predicate by name",
+      "every auto-proceed stamps the row and logs exactly one decision, and a second sweep re-proceeds nothing"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "substantive": "fail-closed config read, the eligibility predicate, the deterministic sweep, the report marker"
+      }
+    ],
+    "key_links": [
+      "the sweep consumes sup-8's queued rows and its result reaches the sup-9 report and the sup-10 metrics line"
+    ],
+    "prohibitions": [
+      "no gate or gate-bypass level is ever read or written by this path",
+      "the timeout is never supplied by a model",
+      "a missing or malformed config value is OFF, never on"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-sup-11",
+    "outcome": "Narrow opt-in silence-is-consent: fail-closed config, a named-refusal eligibility predicate, a deterministic sweep, and a prominent report marker",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "The dispatched worker died mid-cell on an API rate limit after writing the implementation and its tests but before committing; the orchestrator recovered the working tree rather than re-dispatching — hit an unforeseen obstacle",
+      "sup-10 test every_counter_computes_off_records_that_already_exist now expects 8 counters, not 7, because this cell adds auto-proceeded-without-you to the set — something else had to be fixed first",
+      "The worker never reached the registry declaration, so the orchestrator added supervisor.consent-sweep to generated/registry_payload.json by hand, the same route sup-5, sup-7, sup-8 and sup-9 took for their verbs — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-27T16:47:37.999Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e689c2df-430b-44e5-b7ad-a04a3826431b",
+    "claimed_at": "2026-08-27T14:59:01.303Z",
+    "report": {
+      "outcome": "Narrow opt-in silence-is-consent: fail-closed config, a named-refusal eligibility predicate, a deterministic sweep, and a prominent report marker",
+      "commit": "20154c99",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml supervisor; cargo test hooks; cargo test catalog; cargo test --test registry_contracts --test registry_dispatch --test front_door --test installer_invocations — green (61 supervisor + 548 hooks + 11 catalog + 25 registry/front-door/installer passed, 0 failed) — the cell touched the supervisor verb module and the registry payload, so the proof is the module unit tests, the delivery hook whose row shape grew consented_at, the flag ratchet, and the walks that dispatch every declared command against the real binary",
+      "deviations": [
+        "The dispatched worker died mid-cell on an API rate limit after writing the implementation and its tests but before committing; the orchestrator recovered the working tree rather than re-dispatching — hit an unforeseen obstacle",
+        "sup-10 test every_counter_computes_off_records_that_already_exist now expects 8 counters, not 7, because this cell adds auto-proceeded-without-you to the set — something else had to be fixed first",
+        "The worker never reached the registry declaration, so the orchestrator added supervisor.consent-sweep to generated/registry_payload.json by hand, the same route sup-5, sup-7, sup-8 and sup-9 took for their verbs — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 941 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
