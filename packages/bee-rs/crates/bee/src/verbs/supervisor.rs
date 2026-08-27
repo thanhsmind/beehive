@@ -148,6 +148,7 @@
 //   supervisor presence [--json]
 //   supervisor report [--window <id>] [--json]
 //   supervisor metrics [--window <id>] [--json]
+//   supervisor consent-sweep [--json]
 //
 // Phase 4's first half adds the HEALTH COUNTERS (66c4c251 and a8f4b8ab) — no
 // fifth store, because a counter that had to be persisted could drift from the
@@ -156,6 +157,15 @@
 // `not-measurable` is a first-class verdict. The full contract is at the
 // section header below; the report's half is exactly ONE of its existing
 // content lines.
+//
+// Phase 4's second half adds SILENCE-IS-CONSENT (c706053e) — the one place in
+// this module where the absence of a human answer moves anything. It is OFF
+// unless a human typed it on, it reaches exactly one kind of row, its timeout
+// is a number out of config rather than a judgement call, and every use of it
+// leaves two records and a line the human cannot miss. The full contract is at
+// its own section header below; `bee supervisor consent-sweep` is its whole
+// runtime surface, and with the switch off that verb reads a config key, finds
+// nothing, and stops.
 //
 // CLI-ONLY STATE. Nothing else in the tree writes this file; `record` is
 // the one door, and it VALIDATES BEFORE IT WRITES — a refused row leaves
@@ -463,6 +473,15 @@ pub(crate) struct Intervention {
     /// an away window was open, so it took no immediate path. `back` clears it.
     pub(crate) queued: bool,
     pub(crate) released_at: Option<String>,
+    /// Phase 4's second half (c706053e): this ask was AUTO-PROCEEDED by the
+    /// deterministic consent sweep instead of being answered. `None` for every
+    /// row a human actually answered, and for every row while the switch is
+    /// off — which is every row anywhere until somebody types it on.
+    pub(crate) consented_at: Option<String>,
+    /// The timeout that applied when it was auto-proceeded, in seconds. It is
+    /// stamped ON the row rather than read back out of config, so editing the
+    /// config later can never rewrite what the human is told happened.
+    pub(crate) consent_timeout_seconds: Option<u64>,
 }
 
 impl Intervention {
@@ -497,6 +516,8 @@ impl Intervention {
             "delivered_at": self.delivered_at,
             "queued": self.queued,
             "released_at": self.released_at,
+            "consented_at": self.consented_at,
+            "consent_timeout_seconds": self.consent_timeout_seconds,
         })
     }
 }
@@ -529,14 +550,20 @@ impl Intervention {
             delivered_at: None,
             queued: m.get("queued").and_then(Value::as_bool).unwrap_or(false),
             released_at: None,
+            consented_at: None,
+            consent_timeout_seconds: None,
         })
     }
 
     fn line(&self) -> String {
-        let state = match (&self.delivered_at, self.queued) {
-            (Some(at), _) => format!("delivered {at}"),
-            (None, true) => "pending, queued".to_string(),
-            (None, false) => "pending".to_string(),
+        // An auto-proceeded row says so BEFORE it says anything else about
+        // its state: whatever else is true of it, the thing the reader must
+        // not miss is that it went ahead without them (c706053e).
+        let state = match (&self.consented_at, &self.delivered_at, self.queued) {
+            (Some(at), _, _) => format!("{CONSENT_MARKER} {at}"),
+            (None, Some(at), _) => format!("delivered {at}"),
+            (None, None, true) => "pending, queued".to_string(),
+            (None, None, false) => "pending".to_string(),
         };
         format!(
             "- {} [{}/{}] {} {} for {} ({state}) — {}",
@@ -721,6 +748,8 @@ pub(crate) fn record_intervention_into(
         delivered_at: None,
         queued,
         released_at: None,
+        consented_at: None,
+        consent_timeout_seconds: None,
     };
     if append_jsonl(&interventions_path(control), &rec.record_event()).is_err() {
         return Err(format!("bee {cmd}: could not append to the intervention mailbox."));
@@ -798,6 +827,34 @@ pub(crate) fn read_interventions(control: &Path) -> MailboxStore {
                         if let Some(row) = rows.iter_mut().find(|r| r.id == id) {
                             row.queued = false;
                             row.released_at = Some(at);
+                        }
+                    }
+                    _ => folded = false,
+                }
+            }
+            // The consent sweep stamping ONE row it auto-proceeded
+            // (c706053e). Same fold shape as the two stamps above, and the
+            // timeout that applied travels with the stamp rather than being
+            // read back out of a config file that may since have changed.
+            Some("consented") => {
+                let id = v.get("id").and_then(Value::as_str).map(str::to_string);
+                let at = v
+                    .get("consented_at")
+                    .and_then(Value::as_str)
+                    .or_else(|| v.get("ts").and_then(Value::as_str))
+                    .map(str::to_string);
+                match (id, at) {
+                    (Some(id), Some(at)) => {
+                        if let Some(row) = rows.iter_mut().find(|r| r.id == id) {
+                            // FIRST stamp wins, exactly like `back_at` next
+                            // door: a row can only go ahead without the human
+                            // once, and a second stamp must never move the
+                            // moment it happened.
+                            if row.consented_at.is_none() {
+                                row.consented_at = Some(at);
+                                row.consent_timeout_seconds =
+                                    v.get("timeout_seconds").and_then(Value::as_u64);
+                            }
                         }
                     }
                     _ => folded = false,
@@ -1194,6 +1251,400 @@ pub(crate) fn queued_count(control: &Path) -> usize {
     read_interventions(control).rows.iter().filter(|r| r.queued).count()
 }
 
+// ─── silence-is-consent (Phase 4, second half — c706053e) ───────────────
+
+// c706053e allows a NARROW opt-in silence-is-consent mode, and every word of
+// that sentence is a constraint made structural here rather than left as a
+// habit:
+//
+//   NARROW. It reaches exactly ONE thing: a mailbox row of kind
+//   `intervention` that sup-8 stamped `queued` while the human was away. A
+//   gate, an `urgent` row, an `escalation` and a one-way-door low-confidence
+//   ask are each refused BY NAME by ONE predicate (`consent_refusal`), never
+//   by an inline condition at a call site — a scope spread across call sites
+//   is a scope that drifts, and this one is the whole point of the mode.
+//
+//   OPT-IN, AND FAIL CLOSED. The switch is `supervisor.consent` in
+//   .bee/config.json — the same config seam `supervisor.notify` uses — read as
+//   `{enabled: bool, timeout_seconds: number}`. Absent, not an object, not
+//   exactly `true`, or carrying no usable timeout: all OFF. That is the
+//   OPPOSITE default to `notify`, on purpose. Guessing wrong about a
+//   notification costs a popup nobody wanted; guessing wrong here means going
+//   ahead without the human, so the guess is never taken. OFF also means the
+//   path does not exist at runtime: `consent_sweep_into` reads the switch,
+//   finds it off, and returns before it opens the mailbox.
+//
+//   THE TIMEOUT IS DETERMINISTIC. It is a number the HUMAN wrote in config,
+//   compared against a clock this layer reads ONCE per tick. No model supplies
+//   it and no model decides an ask has waited long enough — `bee supervisor
+//   consent-sweep` is a pure tick, and an enabled switch with no usable
+//   timeout is OFF rather than "on with some default", because inventing that
+//   default here is exactly the model-supplied timeout c706053e forbids.
+//
+//   EVERY AUTO-PROCEED LEAVES TWO MARKS. The row is stamped `consented_at`
+//   with the timeout that applied, and ONE decision is logged into bee's own
+//   decision log naming the row, the point key and the elapsed time. The
+//   decision is written FIRST: a row whose decision could not be written is
+//   NOT proceeded and simply stays queued. An auto-proceed that left no record
+//   is the one failure mode this whole mode is judged on, so the ordering is
+//   the guarantee, not the comment.
+//
+//   AND IT IS SAID OUT LOUD. An auto-proceeded row takes the FIRST line of the
+//   WakeReport's "What needs you", above every other item whatever sup-9's
+//   impact order says, marked `WENT AHEAD WITHOUT YOU`; the report's next
+//   action points at it; and the count reaches sup-10's one metrics line as
+//   its own two-sided counter.
+//
+// NOTHING HERE READS OR WRITES A GATE. No gate, no gate-bypass level, no
+// approval record is touched on this path. c706053e is a recorded exception in
+// the gate_bypass SPIRIT, never a second door into it — `gate` is a word in
+// the kind space this predicate refuses, not a state it consults.
+
+/// The marker an auto-proceeded row wears everywhere it is rendered. It is
+/// deliberately blunt: the one thing a human must never have to INFER from a
+/// report is that something already happened without them.
+pub(crate) const CONSENT_MARKER: &str = "WENT AHEAD WITHOUT YOU";
+
+/// The impact-if-wrong rank of an auto-proceeded row — above `urgent` (4) and
+/// therefore above every rank `needs_you_rank` can return. 66c4c251 orders the
+/// report by impact-if-wrong, and nothing on a report is worse to get wrong
+/// than a thing that has already been done.
+const CONSENT_RANK: u8 = 5;
+
+/// The config key, inside the same `supervisor` object `notify` lives in.
+const CONSENT_KEY: &str = "consent";
+
+/// The shortest timeout that means anything. Zero would make "silence is
+/// consent" mean "consent", and a sub-second one is the same thing with a
+/// decimal point in it.
+const CONSENT_MIN_TIMEOUT_SECONDS: f64 = 1.0;
+
+/// How long the sweep waits for the decision store's own lock. The same bound
+/// `decisions log` itself uses, because it IS that store's lock.
+const CONSENT_LOCK_RETRIES: u32 = 15;
+
+/// The switch, resolved. There is no third state: everything that is not a
+/// well-formed enabled record is `CONSENT_OFF`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ConsentConfig {
+    pub(crate) enabled: bool,
+    pub(crate) timeout_seconds: u64,
+}
+
+/// OFF — and off is the only thing a bad read can produce.
+pub(crate) const CONSENT_OFF: ConsentConfig = ConsentConfig { enabled: false, timeout_seconds: 0 };
+
+/// Read `supervisor.consent` out of a raw config value. PURE and TOTAL, so the
+/// malformed shapes are walked in tests as VALUES rather than as files, and
+/// every one of them lands on the same closed answer.
+pub(crate) fn parse_consent(raw: Option<&Value>) -> ConsentConfig {
+    let Some(Value::Object(m)) = raw else { return CONSENT_OFF };
+    // Exactly `true`, never "truthy". A `"yes"`, a `1` or a `"true"` is a
+    // config somebody guessed at, and a guess must not switch this on.
+    if m.get("enabled") != Some(&Value::Bool(true)) {
+        return CONSENT_OFF;
+    }
+    let seconds = match m.get("timeout_seconds") {
+        Some(Value::Number(n)) => n.as_f64(),
+        _ => None,
+    };
+    match seconds.filter(|s| s.is_finite() && *s >= CONSENT_MIN_TIMEOUT_SECONDS) {
+        None => CONSENT_OFF,
+        Some(s) => ConsentConfig { enabled: true, timeout_seconds: s as u64 },
+    }
+}
+
+/// The switch of one control root, through the same merged tracked+overlay
+/// config seam `notify_enabled` reads — one config door for this module.
+fn consent_config(control: &Path) -> ConsentConfig {
+    parse_consent(
+        crate::state::read_config_raw(control)
+            .get("supervisor")
+            .and_then(Value::as_object)
+            .and_then(|m| m.get(CONSENT_KEY)),
+    )
+}
+
+/// Why an ask is NOT eligible. Every case c706053e names is its OWN variant,
+/// so a refusal is asserted by name rather than as a bare `false` — a boolean
+/// guard cannot tell you which law it enforced, and a law nobody can name is a
+/// law that quietly loses a member.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConsentRefusal {
+    /// A gate. Never, under any config, at any timeout: permission is the
+    /// human's, and c706053e says gates always wait.
+    Gate,
+    /// The danger class of c80debd7. A danger notice is never answered by
+    /// nobody answering it.
+    Urgent,
+    /// The second pass on one point. It already went unanswered once — that is
+    /// what made it an escalation.
+    Escalation,
+    /// A kind this mode was not designed for. Closed by default: an unknown
+    /// kind is refused, never allowed through on the grounds that no rule
+    /// mentioned it.
+    UnknownKind,
+    /// A one-way door asked about with no answer to offer (a8f4b8ab: "one-way
+    /// door + low confidence always waits").
+    OneWayLowConfidence,
+    /// Not queued behind an away window — the human was here to answer.
+    NotQueued,
+    /// Already auto-proceeded once. A thing can only go ahead without you the
+    /// first time.
+    AlreadyConsented,
+}
+
+impl ConsentRefusal {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            ConsentRefusal::Gate => "gate",
+            ConsentRefusal::Urgent => "urgent",
+            ConsentRefusal::Escalation => "escalation",
+            ConsentRefusal::UnknownKind => "unknown-kind",
+            ConsentRefusal::OneWayLowConfidence => "one-way-low-confidence",
+            ConsentRefusal::NotQueued => "not-queued",
+            ConsentRefusal::AlreadyConsented => "already-consented",
+        }
+    }
+}
+
+/// The signals that mark a ONE-WAY door. An intervention is BY CONSTRUCTION
+/// the low-confidence half of a8f4b8ab's predicate — `check_question` makes it
+/// an open question with no suggested answer, which IS the supervisor saying
+/// it does not know — so the door is the half left to decide, and these are
+/// the two day-1 signals of da7cb49b that name one.
+const ONE_WAY_SIGNALS: [&str; 2] = ["danger-op", "big-decision"];
+
+/// The facts the predicate judges. `kind` is the SAME kind space
+/// `needs_you_rank` ranks — the three mailbox kinds plus `gate` and `question`
+/// off the waiting-on mark — so an ask the report can SHOW is an ask this
+/// predicate can REFUSE, in one vocabulary rather than two.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ConsentAsk<'a> {
+    pub(crate) kind: &'a str,
+    pub(crate) signal: &'a str,
+    pub(crate) queued: bool,
+    pub(crate) already_consented: bool,
+}
+
+impl<'a> ConsentAsk<'a> {
+    fn from_row(row: &'a Intervention) -> Self {
+        Self {
+            kind: &row.kind,
+            signal: &row.signal,
+            queued: row.queued,
+            already_consented: row.consented_at.is_some(),
+        }
+    }
+
+    /// A GATE, as this predicate sees one. The sweep can never actually be
+    /// handed one — it walks the mailbox, and a gate is not a mailbox row — so
+    /// this exists to keep the refusal a LAW rather than an accident of what
+    /// the caller happens to iterate over. Nothing here reads gate state: the
+    /// word `gate` is a member of the kind space, never a door consulted.
+    //
+    // Only the law test calls it, and it stays in the source anyway: the
+    // refusal is spelled beside the predicate it belongs to, never only inside
+    // the test that checks it.
+    #[allow(dead_code)]
+    pub(crate) fn gate() -> ConsentAsk<'static> {
+        ConsentAsk { kind: "gate", signal: "none", queued: true, already_consented: false }
+    }
+}
+
+/// THE predicate. `None` means eligible; anything else names the law that
+/// refused it. Every call site of the sweep goes through this and only this.
+pub(crate) fn consent_refusal(ask: &ConsentAsk) -> Option<ConsentRefusal> {
+    match ask.kind {
+        "gate" => return Some(ConsentRefusal::Gate),
+        "urgent" => return Some(ConsentRefusal::Urgent),
+        "escalation" => return Some(ConsentRefusal::Escalation),
+        "intervention" => {}
+        _ => return Some(ConsentRefusal::UnknownKind),
+    }
+    if ONE_WAY_SIGNALS.contains(&ask.signal) {
+        return Some(ConsentRefusal::OneWayLowConfidence);
+    }
+    if !ask.queued {
+        return Some(ConsentRefusal::NotQueued);
+    }
+    if ask.already_consented {
+        return Some(ConsentRefusal::AlreadyConsented);
+    }
+    None
+}
+
+/// Was this ask AUTO-PROCEEDED inside this window? One owner for the question,
+/// because the report's third section, its last section and the metrics
+/// counter all ask it and must never disagree.
+fn auto_proceeded_in(row: &Intervention, win: &PresenceWindow) -> bool {
+    row.consented_at.as_deref().map(|at| in_window(at, win)).unwrap_or(false)
+}
+
+/// Was this ask ever queued behind THIS window — the pool an auto-proceed
+/// count is honestly measured against? Three stamps can say so and any one is
+/// enough: the row was recorded inside the window, `back` released it inside
+/// the window, or the sweep proceeded it inside the window.
+fn queued_behind(row: &Intervention, win: &PresenceWindow) -> bool {
+    let ever_queued = row.queued || row.released_at.is_some() || row.consented_at.is_some();
+    let touched = in_window(&row.ts, win)
+        || row.released_at.as_deref().map(|at| in_window(at, win)).unwrap_or(false)
+        || auto_proceeded_in(row, win);
+    ever_queued && touched
+}
+
+/// How long an ask has been waiting, in seconds, against a clock the caller
+/// read ONCE. `None` when the stamp is not a readable date or the arithmetic
+/// runs backwards — an age that cannot be read is never "old enough".
+fn age_seconds(now_ms: f64, ts: &str) -> Option<f64> {
+    let then = parse_iso_ms(ts)?;
+    let secs = (now_ms - then) / 1000.0;
+    (secs.is_finite() && secs >= 0.0).then_some(secs)
+}
+
+/// MARK ONE of an auto-proceed: one `decide` event in bee's OWN decision log,
+/// at the same control root every supervisor store sits at, under that store's
+/// own lock and in that store's own event shape (`decisions log` and `cells`'
+/// `log_decision` write this same object).
+///
+/// It is deliberately NOT the `decisions log` VERB path. That path resolves a
+/// mutation target, requires a `--relation`, and can refuse outright on a
+/// taxonomy that wants tags — and a refusal there would produce an
+/// auto-proceed that left no record, which is the one outcome this mode may
+/// not have. This narrow write cannot refuse for a reason that has nothing to
+/// do with consent.
+///
+/// The text is assembled from STRUCTURED fields only: the row id (8 hex), the
+/// point key (a validated slug), the target session (one collapsed line) and
+/// two numbers. The question's free text is deliberately not copied in — the
+/// row id is one `bee supervisor pending` away, and model-written prose does
+/// not belong inside a record that reads as bee's own agreement.
+fn log_consent_decision(
+    control: &Path,
+    cmd: &str,
+    row: &Intervention,
+    elapsed_seconds: u64,
+    timeout_seconds: u64,
+) -> Result<String, String> {
+    let id = rsv::pseudo_uuid_v4();
+    let event = json!({
+        "id": id,
+        "type": "decide",
+        "date": now_iso(),
+        "decision": format!(
+            "Silence is consent: supervisor intervention {} on point {} went ahead without the \
+             human after {elapsed_seconds}s.",
+            row.id, row.point_key
+        ),
+        "rationale": format!(
+            "supervisor.consent is enabled with timeout_seconds={timeout_seconds}. The queued \
+             non-gate ask for session {} waited {elapsed_seconds}s unanswered, so the \
+             deterministic sweep `bee supervisor consent-sweep` proceeded it (c706053e). No \
+             gate and no gate-bypass level was read or written.",
+            row.target_session
+        ),
+        "alternatives": Value::Null,
+        "scope": "repo",
+        "source": "supervisor",
+        "confidence": Value::Null,
+        "tags": ["orchestration"],
+        "relation": "none",
+    });
+    let guard = crate::verbs::decisions::acquire_decisions_lock(control, CONSENT_LOCK_RETRIES)
+        .map_err(|why| format!("bee {cmd}: {why}"))?;
+    let wrote = append_jsonl(&decisions_log_path(control), &event);
+    drop(guard);
+    if wrote.is_err() {
+        return Err(format!(
+            "bee {cmd}: could not append to the decision log, so nothing was proceeded — an \
+             auto-proceed with no record is not allowed to happen."
+        ));
+    }
+    Ok(id)
+}
+
+/// What one sweep tick did.
+pub(crate) struct ConsentSweep {
+    pub(crate) config: ConsentConfig,
+    /// The clock, read ONCE for the whole tick.
+    pub(crate) at: String,
+    /// The rows this tick proceeded, already stamped.
+    pub(crate) proceeded: Vec<Intervention>,
+    /// The decision-log ids it wrote — one per proceeded row, same order.
+    pub(crate) decisions: Vec<String>,
+    /// Every queued row it did NOT proceed, with the law that refused it. A
+    /// sweep that quietly does nothing is indistinguishable from a broken one,
+    /// so the tick says which rule stopped each row rather than leaving the
+    /// operator to guess.
+    pub(crate) skipped: Vec<(String, &'static str)>,
+}
+
+/// THE deterministic tick. It reads the switch, reads the clock once, and
+/// auto-proceeds every ELIGIBLE queued ask whose age has passed the human's
+/// timeout. Nothing about it is a judgement: eligibility is one predicate, the
+/// timeout is one config number, and the clock is arithmetic.
+///
+/// An unwritable decision log stops the tick with a typed error. Rows already
+/// proceeded in this same tick keep BOTH their marks and stay proceeded; the
+/// row that failed keeps neither and stays queued, so the next tick picks it
+/// up exactly where this one stopped.
+pub(crate) fn consent_sweep_into(control: &Path, cmd: &str) -> Result<ConsentSweep, String> {
+    let config = consent_config(control);
+    let at = now_iso();
+    let mut sweep = ConsentSweep {
+        config,
+        at: at.clone(),
+        proceeded: Vec::new(),
+        decisions: Vec::new(),
+        skipped: Vec::new(),
+    };
+    // OFF means the path does not exist at runtime — no mailbox read, no clock
+    // arithmetic, no write, nothing to render.
+    if !config.enabled {
+        return Ok(sweep);
+    }
+    let Some(now_ms) = parse_iso_ms(&at) else {
+        return Err(format!("bee {cmd}: could not read the clock as an ISO-8601 stamp ({at})."));
+    };
+    for row in read_interventions(control).rows {
+        if let Some(why) = consent_refusal(&ConsentAsk::from_row(&row)) {
+            sweep.skipped.push((row.id.clone(), why.as_str()));
+            continue;
+        }
+        let Some(elapsed) = age_seconds(now_ms, &row.ts) else {
+            sweep.skipped.push((row.id.clone(), "unreadable-age"));
+            continue;
+        };
+        if elapsed <= config.timeout_seconds as f64 {
+            sweep.skipped.push((row.id.clone(), "still-inside-the-timeout"));
+            continue;
+        }
+        let elapsed = elapsed.round() as u64;
+        // MARK ONE, and first. A row whose record cannot be written is not
+        // proceeded at all.
+        let decision = log_consent_decision(control, cmd, &row, elapsed, config.timeout_seconds)?;
+        // MARK TWO.
+        let event = json!({
+            "ts": at,
+            "event": "consented",
+            "id": row.id,
+            "consented_at": at,
+            "timeout_seconds": config.timeout_seconds,
+            "elapsed_seconds": elapsed,
+            "decision": decision,
+        });
+        if append_jsonl(&interventions_path(control), &event).is_err() {
+            return Err(format!("bee {cmd}: could not append to the intervention mailbox."));
+        }
+        let mut stamped = row;
+        stamped.consented_at = Some(at.clone());
+        stamped.consent_timeout_seconds = Some(config.timeout_seconds);
+        sweep.proceeded.push(stamped);
+        sweep.decisions.push(decision);
+    }
+    Ok(sweep)
+}
+
 // ─── the WakeReport (Phase 3, second half — 9f5cd250 + 66c4c251) ────────
 
 /// The four sections, in the ONE order 9f5cd250 fixes. Every renderer and
@@ -1372,13 +1823,33 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
     for row in read_interventions(control).rows.iter() {
         let is_released = released.iter().any(|id| id == &row.id);
         let is_urgent_in_window = row.kind == "urgent" && in_window(&row.ts, win);
-        if !is_released && !is_urgent_in_window {
+        // c706053e: a row that went ahead without the human is on this list
+        // whatever else is true of it, and it is on it FIRST.
+        let went_ahead = auto_proceeded_in(row, win);
+        if !is_released && !is_urgent_in_window && !went_ahead {
             continue;
         }
-        items.push(ReportItem {
-            rank: needs_you_rank(&row.kind),
-            text: format!("- {} ({}): {}", row.kind, row.target_session, clip(&row.question)),
-        });
+        let item = if went_ahead {
+            ReportItem {
+                // Above every rank `needs_you_rank` can return, deliberately.
+                // sup-9 orders this section by impact-if-wrong; an ask that was
+                // already answered by nobody outranks every ask still waiting.
+                rank: CONSENT_RANK,
+                text: clip(&format!(
+                    "- {CONSENT_MARKER}: {} ({}) went ahead after {}s — {}",
+                    row.kind,
+                    row.target_session,
+                    row.consent_timeout_seconds.unwrap_or(0),
+                    row.question
+                )),
+            }
+        } else {
+            ReportItem {
+                rank: needs_you_rank(&row.kind),
+                text: format!("- {} ({}): {}", row.kind, row.target_session, clip(&row.question)),
+            }
+        };
+        items.push(item);
     }
     if let Some((kind, subject)) = live_waiting_on(control) {
         items.push(ReportItem {
@@ -1400,6 +1871,16 @@ fn next_action_line(
     happened: usize,
 ) -> String {
     let store = read_interventions(control);
+    // c706053e first, above the urgent row: the section above ranks an
+    // auto-proceeded ask top, and this line must never disagree with it. What
+    // already happened is checked before what still needs doing.
+    if let Some(row) = store.rows.iter().find(|r| auto_proceeded_in(r, win)) {
+        return clip(&format!(
+            "- {CONSENT_MARKER} — check what went ahead: `bee supervisor pending \
+             --target-session {}`",
+            row.target_session
+        ));
+    }
     let urgent = store
         .rows
         .iter()
@@ -1800,8 +2281,21 @@ const OVERRUN_FACTOR: f64 = 2.0;
 /// here so the counter can say precisely what it is missing.
 const ESTIMATE_FIELD: &str = "estimate_minutes";
 
+/// Auto-proceeded asks, LOW — and the HIGH bound is the same number. Zero is
+/// both ends on purpose: silence-is-consent is an opt-in exception (c706053e),
+/// so ANY use of it is worth saying on the report's one metrics line. It is
+/// not an alarm, it is a fact the human is told rather than left to find.
+const BAND_AUTO_PROCEEDED_LOW: f64 = 0.0;
+/// Auto-proceeded asks, HIGH. See the low bound — deliberately identical.
+const BAND_AUTO_PROCEEDED_HIGH: f64 = 0.0;
+
 /// The literal state ea02cb68 asks for where a cell records no estimate.
 const NO_ESTIMATE_STATE: &str = "no estimate recorded";
+
+/// The literal state where no ask ever queued behind the window. An empty pool
+/// is not "zero went ahead without you" — it is nothing to count, and the same
+/// first-class `not-measurable` rule the seven counters beside it obey.
+const NO_QUEUED_ASK_STATE: &str = "no queued asks in this window";
 
 /// The report's metrics line when every counter is healthy.
 const METRICS_IN_BAND_LINE: &str = "- metrics in band";
@@ -2324,6 +2818,24 @@ pub(crate) fn health_metrics(control: &Path, win: &PresenceWindow) -> HealthMetr
         None,
     );
 
+    // (8) Auto-proceeded without you (c706053e). The POOL is every ask that
+    // queued behind this window; the value is how many of them the consent
+    // sweep proceeded inside it. An empty pool is not-measurable and says so —
+    // rendering "0 went ahead" over a window where nothing could have is the
+    // same comforting lie the seven counters above already refuse.
+    let pool: Vec<&Intervention> = mailbox.rows.iter().filter(|r| queued_behind(r, win)).collect();
+    let auto_proceeded = pool.iter().filter(|r| auto_proceeded_in(r, win)).count();
+    let c_auto_proceeded = counter(
+        "auto-proceeded-without-you",
+        "auto-proceeded",
+        Unit::Count,
+        BAND_AUTO_PROCEEDED_LOW,
+        BAND_AUTO_PROCEEDED_HIGH,
+        (!pool.is_empty()).then_some(auto_proceeded as f64),
+        pool.len(),
+        Some(NO_QUEUED_ASK_STATE),
+    );
+
     HealthMetrics {
         window: win.clone(),
         counters: vec![
@@ -2334,6 +2846,7 @@ pub(crate) fn health_metrics(control: &Path, win: &PresenceWindow) -> HealthMetr
             c_streak,
             c_overrun,
             c_same_region,
+            c_auto_proceeded,
         ],
     }
 }
@@ -2428,6 +2941,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "presence" => run_presence(parse_shape(rest, &[])?, t0),
         "report" => run_report(parse_shape(rest, &["window"])?, t0),
         "metrics" => run_metrics(parse_shape(rest, &["window"])?, t0),
+        "consent-sweep" => run_consent_sweep(parse_shape(rest, &[])?, t0),
         _ => None,
     }
 }
@@ -2708,6 +3222,63 @@ fn run_metrics(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let metrics = health_metrics(&ctx.control, &win);
     let text = metrics.text();
     Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &metrics.to_value(), &text, t0))
+}
+
+// ─── consent-sweep ───────────────────────────────────────────────────────
+
+/// THE DETERMINISTIC TICK of c706053e, and the whole runtime surface of
+/// silence-is-consent. It reads one config key and one clock; no model is
+/// consulted about whether an ask has waited long enough, and no gate or
+/// gate-bypass level is read or written on this path.
+///
+/// With the switch off it writes nothing at all and says so, naming the exact
+/// key that would turn it on — the mode is opt-in, so the verb's job with the
+/// switch off is to be boring and honest about it.
+fn run_consent_sweep(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "supervisor consent-sweep";
+    let ctx = match preamble(cmd, parsed.pre_json, t0) {
+        Err(code) => return Some(code),
+        Ok(c) => c?,
+    };
+    let sweep = match consent_sweep_into(&ctx.control, cmd) {
+        Ok(sweep) => sweep,
+        Err(msg) => return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0)),
+    };
+    let text = if !sweep.config.enabled {
+        "Silence-is-consent is off, so nothing was proceeded. It is opt-in: set \
+         supervisor.consent to {\"enabled\": true, \"timeout_seconds\": <n>} in .bee/config.json. \
+         Gates, urgent alerts and escalations never take this path at any setting."
+            .to_string()
+    } else if sweep.proceeded.is_empty() {
+        format!(
+            "Silence-is-consent is on with a {}s timeout. No queued question had waited that \
+             long; nothing went ahead.",
+            sweep.config.timeout_seconds
+        )
+    } else {
+        let head = format!(
+            "{CONSENT_MARKER}: {} queued question(s) went ahead after {}s, each logged as a \
+             decision.",
+            sweep.proceeded.len(),
+            sweep.config.timeout_seconds
+        );
+        let body: Vec<String> = sweep.proceeded.iter().map(Intervention::line).collect();
+        format!("{head}\n{}", body.join("\n"))
+    };
+    let result = json!({
+        "enabled": sweep.config.enabled,
+        "timeout_seconds": sweep.config.timeout_seconds,
+        "at": sweep.at,
+        "proceeded": sweep.proceeded.iter().map(Intervention::to_value).collect::<Vec<_>>(),
+        "proceeded_ids": sweep.proceeded.iter().map(|r| r.id.clone()).collect::<Vec<_>>(),
+        "decisions": sweep.decisions,
+        "skipped": sweep
+            .skipped
+            .iter()
+            .map(|(id, why)| json!({"id": id, "refused_by": why}))
+            .collect::<Vec<_>>(),
+    });
+    Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &result, &text, t0))
 }
 
 fn run_presence(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -4065,6 +4636,8 @@ mod tests {
             delivered_at: None,
             queued: false,
             released_at: None,
+            consented_at: None,
+            consent_timeout_seconds: None,
         };
         append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
     }
@@ -4162,7 +4735,8 @@ mod tests {
         // Nothing outside the window leaked in.
         let json = m.to_value();
         assert_eq!(json["window"]["id"], "w-fixed");
-        assert_eq!(json["counters"].as_array().unwrap().len(), 7);
+        // Seven counters from sup-10 plus the auto-proceed count sup-11 adds.
+        assert_eq!(json["counters"].as_array().unwrap().len(), 8);
     }
 
     #[test]
@@ -4210,7 +4784,7 @@ mod tests {
     fn a_zero_sample_counter_reports_not_measurable_never_in_band() {
         let tmp = tempfile::tempdir().unwrap();
         let m = health_metrics(tmp.path(), &fixed_window());
-        assert_eq!(m.counters.len(), 7);
+        assert_eq!(m.counters.len(), 8);
         for c in &m.counters {
             assert_eq!(c.samples, 0, "{} had no records to read", c.name);
             assert_eq!(c.verdict, Verdict::NotMeasurable, "{}", c.name);
@@ -4219,7 +4793,7 @@ mod tests {
         }
         let json = m.to_value();
         assert_eq!(json["out_of_band"].as_array().unwrap().len(), 0);
-        assert_eq!(json["not_measurable"].as_array().unwrap().len(), 7);
+        assert_eq!(json["not_measurable"].as_array().unwrap().len(), 8);
         for c in json["counters"].as_array().unwrap() {
             assert_eq!(c["value"], Value::Null, "{c}");
             assert_ne!(c["verdict"], "in-band", "silence is never rendered as health: {c}");
@@ -4364,5 +4938,346 @@ mod tests {
             render_report_markdown(&[], &[], &[], "- Nothing needs you.", METRICS_IN_BAND_LINE);
         assert!(in_band.contains(METRICS_IN_BAND_LINE), "{in_band}");
         assert_legal_report(&in_band);
+    }
+
+    // ─── silence-is-consent (Phase 4, c706053e) ─────────────────────────
+
+    /// Turn the switch ON the only way it can be turned on: a human writing it
+    /// into `.bee/config.json`, through the same seam `supervisor.notify` uses.
+    fn enable_consent(control: &Path, timeout_seconds: u64) {
+        let body = json!({
+            "supervisor": {"consent": {"enabled": true, "timeout_seconds": timeout_seconds}}
+        });
+        write(control, ".bee/config.json", &serde_json::to_string(&body).unwrap());
+    }
+
+    /// A stamp one calendar year before whatever clock this test run sees, so
+    /// "older than the timeout" needs no sleep and pins no date. Derived from
+    /// `now_iso` rather than hard-coded: a fixed literal would silently stop
+    /// being "long ago" on a machine whose clock says otherwise.
+    fn long_ago() -> String {
+        let now = now_iso();
+        let year: i64 = now[..4].parse().expect("now_iso starts with a 4-digit year");
+        format!("{}-01-01{}", year - 1, &now[10..])
+    }
+
+    /// Plant one QUEUED mailbox row at a chosen timestamp, through the real
+    /// row shape and the real `record` event — the same trick `plant_mailbox`
+    /// uses to say "long before" without a sleep.
+    fn plant_queued(control: &Path, ts: &str, kind: &str, signal: &str, point: &str) -> String {
+        let row = Intervention {
+            id: new_row_id(),
+            ts: ts.to_string(),
+            kind: kind.to_string(),
+            signal: signal.to_string(),
+            point_key: point.to_string(),
+            question: format!("What tells you the {point} will end?"),
+            target_session: "sess-1".to_string(),
+            tick: None,
+            delivered_at: None,
+            queued: true,
+            released_at: None,
+            consented_at: None,
+            consent_timeout_seconds: None,
+        };
+        append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
+        row.id
+    }
+
+    fn decision_events(control: &Path) -> Vec<Value> {
+        std::fs::read_to_string(decisions_log_path(control))
+            .map(|t| {
+                t.lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(|l| serde_json::from_str(l).unwrap())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn sweep(control: &Path) -> ConsentSweep {
+        consent_sweep_into(control, "supervisor consent-sweep").expect("the tick is green")
+    }
+
+    #[test]
+    fn consent_is_off_by_default_and_every_malformed_shape_reads_off() {
+        // The PURE half: every shape that is not a well-formed enabled record
+        // lands on OFF. Fail closed is the opposite default to `notify`, and
+        // this is the list that makes that structural rather than hoped for.
+        assert_eq!(parse_consent(None), CONSENT_OFF, "the key is absent");
+        for raw in [
+            json!(null),
+            json!(true),
+            json!("on"),
+            json!(900),
+            json!([true, 900]),
+            json!({}),
+            json!({"timeout_seconds": 900}),
+            json!({"enabled": false, "timeout_seconds": 900}),
+            json!({"enabled": "true", "timeout_seconds": 900}),
+            json!({"enabled": 1, "timeout_seconds": 900}),
+            json!({"enabled": true}),
+            json!({"enabled": true, "timeout_seconds": "900"}),
+            json!({"enabled": true, "timeout_seconds": 0}),
+            json!({"enabled": true, "timeout_seconds": -900}),
+            json!({"enabled": true, "timeout_seconds": 0.5}),
+            json!({"enabled": true, "timeout_seconds": null}),
+        ] {
+            assert_eq!(parse_consent(Some(&raw)), CONSENT_OFF, "must read OFF: {raw}");
+        }
+        // Exactly one shape turns it on, and it carries the human's number.
+        let on = json!({"enabled": true, "timeout_seconds": 900});
+        assert_eq!(
+            parse_consent(Some(&on)),
+            ConsentConfig { enabled: true, timeout_seconds: 900 }
+        );
+
+        // The FILE half: with no config, a malformed config and an unreadable
+        // one, the tick reads the switch and stops — no store is even opened.
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let id = plant_queued(control, &long_ago(), "intervention", "none", "retry-loop");
+        let before = mbx(control);
+        for body in ["", r#"{"supervisor": {"consent": true}}"#, "{broken", r#"{"supervisor": {"consent": {"enabled": true}}}"#] {
+            if !body.is_empty() {
+                write(control, ".bee/config.json", body);
+            }
+            let out = sweep(control);
+            assert!(!out.config.enabled, "off for {body:?}");
+            assert!(out.proceeded.is_empty(), "and nothing went ahead: {body:?}");
+        }
+        assert_eq!(mbx(control), before, "the mailbox is byte-identical");
+        assert!(!decisions_log_path(control).exists(), "and no decision was logged");
+        let row = read_interventions(control).rows.into_iter().find(|r| r.id == id).unwrap();
+        assert!(row.consented_at.is_none(), "the row is untouched");
+        assert!(row.queued, "and still queued");
+    }
+
+    #[test]
+    fn the_consent_predicate_refuses_a_gate_an_urgent_row_and_an_escalation_by_name() {
+        // A GATE. Never, at any config, at any timeout — and the predicate
+        // says WHICH law refused it, not just "no".
+        assert_eq!(consent_refusal(&ConsentAsk::gate()), Some(ConsentRefusal::Gate));
+
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        // Each excluded case, named, over a REAL row of the real store.
+        let cases: [(&str, &str, ConsentRefusal); 5] = [
+            ("urgent", "none", ConsentRefusal::Urgent),
+            ("escalation", "none", ConsentRefusal::Escalation),
+            ("intervention", "danger-op", ConsentRefusal::OneWayLowConfidence),
+            ("intervention", "big-decision", ConsentRefusal::OneWayLowConfidence),
+            ("question", "none", ConsentRefusal::UnknownKind),
+        ];
+        for (kind, signal, expected) in cases {
+            let row = Intervention {
+                id: new_row_id(),
+                ts: long_ago(),
+                kind: kind.to_string(),
+                signal: signal.to_string(),
+                point_key: "retry-loop".to_string(),
+                question: "What ends it?".to_string(),
+                target_session: "sess-1".to_string(),
+                tick: None,
+                delivered_at: None,
+                queued: true,
+                released_at: None,
+                consented_at: None,
+                consent_timeout_seconds: None,
+            };
+            assert_eq!(
+                consent_refusal(&ConsentAsk::from_row(&row)),
+                Some(expected),
+                "{kind}/{signal} must be refused as {}",
+                expected.as_str()
+            );
+        }
+        // An ask nobody queued: the human was here to answer it.
+        let mut present = Intervention {
+            id: new_row_id(),
+            ts: long_ago(),
+            kind: "intervention".to_string(),
+            signal: "none".to_string(),
+            point_key: "retry-loop".to_string(),
+            question: "What ends it?".to_string(),
+            target_session: "sess-1".to_string(),
+            tick: None,
+            delivered_at: None,
+            queued: false,
+            released_at: None,
+            consented_at: None,
+            consent_timeout_seconds: None,
+        };
+        assert_eq!(
+            consent_refusal(&ConsentAsk::from_row(&present)),
+            Some(ConsentRefusal::NotQueued)
+        );
+        // Queued, ordinary, un-stamped: the ONE eligible shape.
+        present.queued = true;
+        assert_eq!(consent_refusal(&ConsentAsk::from_row(&present)), None);
+        // And once it has gone ahead, it can never go ahead again.
+        present.consented_at = Some(now_iso());
+        assert_eq!(
+            consent_refusal(&ConsentAsk::from_row(&present)),
+            Some(ConsentRefusal::AlreadyConsented)
+        );
+
+        // END TO END over the real store, with the switch ON: the four
+        // excluded kinds sit there and NONE of them is proceeded.
+        enable_consent(control, 1);
+        away_into(control, "supervisor away", None).unwrap();
+        plant_queued(control, &long_ago(), "urgent", "none", "disk-wipe");
+        plant_queued(control, &long_ago(), "escalation", "none", "retry-loop");
+        plant_queued(control, &long_ago(), "intervention", "danger-op", "rm-rf");
+        plant_queued(control, &long_ago(), "intervention", "big-decision", "swap-db");
+        let out = sweep(control);
+        assert!(out.config.enabled, "the switch is on for this half");
+        assert!(out.proceeded.is_empty(), "not one of them went ahead: {:?}", out.proceeded);
+        assert!(!decisions_log_path(control).exists(), "and none of them logged a decision");
+    }
+
+    #[test]
+    fn an_ask_younger_than_the_timeout_is_untouched_and_an_older_one_goes_ahead_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        enable_consent(control, 900);
+        away_into(control, "supervisor away", None).unwrap();
+
+        // YOUNGER: recorded just now, against a 900s timeout.
+        let young = ask(control, "intervention", "sess-1", "fresh-point", "What ends the retry?")
+            .unwrap();
+        assert!(young.queued, "sup-8 queued it behind the open window");
+        let out = sweep(control);
+        assert!(out.proceeded.is_empty(), "an ask younger than the timeout is untouched");
+        assert!(!decisions_log_path(control).exists(), "and logs nothing");
+
+        // OLDER: the same shape, planted long before the timeout would expire.
+        let old = plant_queued(control, &long_ago(), "intervention", "none", "retry-loop");
+        let out = sweep(control);
+        assert_eq!(out.proceeded.len(), 1, "exactly the old one went ahead");
+        assert_eq!(out.proceeded[0].id, old);
+        assert_eq!(out.decisions.len(), 1, "and it left exactly one decision");
+
+        // MARK TWO: the row carries the stamp AND the timeout that applied, so
+        // editing the config later cannot rewrite what happened.
+        let row = read_interventions(control).rows.into_iter().find(|r| r.id == old).unwrap();
+        assert_eq!(row.consented_at.as_deref(), Some(out.at.as_str()));
+        assert_eq!(row.consent_timeout_seconds, Some(900));
+        assert!(row.line().contains(CONSENT_MARKER), "and it says so on sight: {}", row.line());
+
+        // MARK ONE: exactly one decision, naming the row, the point key and
+        // the elapsed time. The elapsed number is cross-checked against the
+        // one the mailbox stamped, so the two records cannot drift apart.
+        let events = decision_events(control);
+        assert_eq!(events.len(), 1, "exactly one decision per auto-proceed: {events:?}");
+        let stamp: Value = mbx(control)
+            .iter()
+            .map(|l| serde_json::from_str::<Value>(l).unwrap())
+            .find(|v| v["event"] == "consented")
+            .expect("the consented stamp is on disk");
+        let elapsed = stamp["elapsed_seconds"].as_u64().expect("elapsed is a number");
+        let text = format!("{} {}", events[0]["decision"], events[0]["rationale"]);
+        assert!(text.contains(&old), "names the row: {text}");
+        assert!(text.contains("retry-loop"), "names the point key: {text}");
+        assert!(text.contains(&format!("{elapsed}s")), "names the elapsed time: {text}");
+        assert!(text.contains("timeout_seconds=900"), "and the timeout that applied: {text}");
+        assert_eq!(events[0]["type"], "decide", "it is an ordinary decision event");
+
+        // A SECOND SWEEP re-proceeds nothing and writes nothing.
+        let mailbox_before = mbx(control);
+        let again = sweep(control);
+        assert!(again.proceeded.is_empty(), "a second sweep re-proceeds nothing");
+        assert_eq!(mbx(control), mailbox_before, "and writes no second stamp");
+        assert_eq!(decision_events(control).len(), 1, "and no second decision");
+        // The young ask is STILL untouched by either tick.
+        let fresh = read_interventions(control).rows.into_iter().find(|r| r.id == young.id).unwrap();
+        assert!(fresh.consented_at.is_none(), "the young ask never went ahead");
+    }
+
+    #[test]
+    fn the_wake_report_puts_the_auto_proceeded_row_first_with_its_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        enable_consent(control, 900);
+        away_into(control, "supervisor away", None).unwrap();
+        // An URGENT row — the top of sup-9's own impact order (rank 4).
+        ask(control, "urgent", "sess-2", "disk-wipe", "What restores this if it is wrong?")
+            .unwrap();
+        // And one ask old enough to have gone ahead without the human.
+        let old = plant_queued(control, &long_ago(), "intervention", "none", "retry-loop");
+        let out = sweep(control);
+        assert_eq!(out.proceeded.len(), 1);
+
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+        let rep = report_for_window(control, &closed.id).expect("back stored the one report");
+        assert_legal_report(&rep.markdown);
+
+        // FIRST line of "What needs you", above the urgent row, whatever
+        // sup-9's impact order would otherwise have said.
+        let heading = position_of(&rep.markdown, REPORT_SECTIONS[2]);
+        let marker = position_of(&rep.markdown, CONSENT_MARKER);
+        assert_eq!(
+            marker,
+            heading + 1,
+            "the auto-proceeded row takes the FIRST line under 'What needs you':\n{}",
+            rep.markdown
+        );
+        let urgent = position_of(&rep.markdown, "urgent (sess-2)");
+        assert!(marker < urgent, "above the urgent row:\n{}", rep.markdown);
+        // The last section never disagrees with the third.
+        let next = position_of(&rep.markdown, REPORT_SECTIONS[3]);
+        assert!(
+            rep.markdown.lines().nth(next + 1).unwrap().contains(CONSENT_MARKER),
+            "the next action points at what went ahead:\n{}",
+            rep.markdown
+        );
+
+        // And the COUNT reaches sup-10's one metrics line.
+        let metrics = health_metrics(control, &closed);
+        let auto = counter_named(&metrics, "auto-proceeded-without-you").clone();
+        assert_eq!(auto.value, Some(1.0), "one ask went ahead");
+        assert_eq!(auto.verdict, Verdict::AboveBand, "any use of the exception is said out loud");
+        let line = metrics_report_line(&metrics);
+        assert!(line.contains("auto-proceeded 1"), "the count is on the metrics line: {line}");
+        assert!(line.chars().count() <= MAX_ITEM_CHARS, "still one readable line: {line}");
+        assert_eq!(out.proceeded[0].id, old, "and it is the row the sweep named");
+    }
+
+    #[test]
+    fn the_sweep_reads_and_writes_no_gate_at_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        enable_consent(control, 1);
+        // A state record carrying every switch this path must never touch.
+        write(
+            control,
+            ".bee/state.json",
+            r#"{"phase":"executing","gates":{"shape":false,"execution":false},"gate_bypass":"off","waiting_on":{"kind":"gate","subject":"approve the shape"}}"#,
+        );
+        let state_before = std::fs::read_to_string(control.join(".bee/state.json")).unwrap();
+        let config_before = std::fs::read_to_string(control.join(".bee/config.json")).unwrap();
+
+        away_into(control, "supervisor away", None).unwrap();
+        plant_queued(control, &long_ago(), "intervention", "none", "retry-loop");
+        let out = sweep(control);
+        assert_eq!(out.proceeded.len(), 1, "the mailbox ask did go ahead");
+
+        assert_eq!(
+            std::fs::read_to_string(control.join(".bee/state.json")).unwrap(),
+            state_before,
+            "the gate record is byte-identical — no gate is read or written by this path"
+        );
+        assert_eq!(
+            std::fs::read_to_string(control.join(".bee/config.json")).unwrap(),
+            config_before,
+            "and the switch itself is never flipped by the code it switches"
+        );
+        // The one decision it wrote names no gate and no bypass level either.
+        let events = decision_events(control);
+        assert_eq!(events.len(), 1);
+        let text = serde_json::to_string(&events[0]).unwrap();
+        for forbidden in ["gate_bypass", "\"gates\"", "approved", "bypass_level"] {
+            assert!(!text.contains(forbidden), "{forbidden} must not appear in {text}");
+        }
     }
 }
