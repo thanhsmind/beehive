@@ -569,7 +569,34 @@ mod tests {
         // --kind already says, and the opt-out is a config key
         // (supervisor.notify), which is where every other switch of this shape
         // lives.
-        const PINNED_FLAG_COUNT: usize = 194;
+        // 194 -> 194 (slp-supervisor-heartbeat sup-8): `bee supervisor away`,
+        // `bee supervisor back` and `bee supervisor presence` add the presence
+        // mark of 9f5cd250 and add NO flag name. `away` takes `--note`, which
+        // already means "the short free-text line this record carries"
+        // (supervisor record, capture add, decisions log) and means exactly
+        // that on a window; `back` and `presence` take nothing but `--json`.
+        // The two effects are the verbs themselves, so neither earns a flag:
+        // spelling the queue as `--queue` or the window as `--window` would be
+        // a second way to say what `away` and `back` already say. There is
+        // deliberately no flag for the third thing a presence flag must never
+        // grow — no permission, gate or bypass word appears on this surface at
+        // all, which is the vocabulary half of "permission control never hides
+        // in a presence flag".
+        // 194 -> 195 (slp-supervisor-heartbeat sup-9): `bee supervisor report`
+        // reads back the one stored WakeReport of 9f5cd250 and adds ONE flag
+        // name, `--window`. The near miss is `--id`, which everywhere else in
+        // this vocabulary — `cells`, `mailbox mark`, `supervisor
+        // mark-delivered` — names a row of the store the verb itself writes.
+        // A stored report is keyed by the id of a row in a DIFFERENT store
+        // (the presence window), and `--id` on this same `supervisor` surface
+        // already means "a mailbox row id"; one flag carrying both would make
+        // `--id` ambiguous on the one surface a caller reads them together.
+        // That is exactly the reason sup-2 recorded for spelling the observed
+        // session `--target-session` rather than `--session`, and the same
+        // reason applies to the same surface here. `--key` is a config path,
+        // and `--feature`/`--lane` name work, not a span of time. Nothing else
+        // in this vocabulary meant "which away window".
+        const PINNED_FLAG_COUNT: usize = 195;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
