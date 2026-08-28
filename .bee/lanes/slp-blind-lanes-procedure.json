@@ -14,12 +14,7 @@
   "next_action": "Continue bee-exploring for \"slp-blind-lanes-procedure\" (lane).",
   "created_at": "2026-08-28T13:22:58.633Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "The second reader is still working on where the procedure prose belongs. When it lands I write the plan and bring you one approval question.",
-    "asked_at": "2026-08-28T13:34:12.058Z",
-    "session": "b97c221a-fd60-40c2-bd86-9681b9f547bf"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -33,5 +28,13 @@
     "rationale": null,
     "updated_at": "2026-08-28T13:24:03.723Z",
     "feature": "slp-blind-lanes-procedure"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-28T13:42:09.070Z",
+    "feature": "slp-blind-lanes-procedure",
+    "newest_decision_id": "870c650c-9727-4b0e-a6b6-87c6697acd60",
+    "plan_sha256": "4d2f6bb3bfcc7f68d21b9a1ee13e5ff7c8dc39a9ae7c75500859c70a56f64852",
+    "advisor": "fable (advisor slot) — shape gate",
+    "digest_head": "# Advisor consult — slp-blind-lanes-procedure shape gate\n\n- Date: 2026-08-28 · Tier: advisor (fable) · Repo HEAD at consult: `099cfef3`\n- Question: is the plan safe to approve at the shape gate?\n- Verdict: **SAFE WITH NAMED CHANGES**\n\n## 1. Phase 2's bet is unsound as written\n\nA blanket fence-skip is a one-keystroke bypass of the leaning guard, in every\nround — not only round two. After the change as drafted, a round-ONE brief can\ncarry a fenced \"I recommend option A\" and pass the guard while ev"
   }
 }
