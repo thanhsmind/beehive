@@ -505,7 +505,9 @@ impl LetterItem {
 /// by hm-2 and [`KIND_FEATURE_CLOSE`] by hm-10 (`verbs/drivers/close.rs`
 /// `record_feature_close_in_mailbox`, on close's non-dry-run tail — a
 /// `--dry-run` close stops nothing, so it appends nothing). [`KIND_BLOCKER`]
-/// is wired by the cell that owns it.
+/// is wired by `verbs/cells/handlers_close.rs` `record_block_in_mailbox`, on
+/// `bee cells block`'s tail — the one stop that also carries a D13
+/// Needs-your-call item, because it is the one stop with something to ask.
 pub(crate) const KIND_CAP: &str = "cap";
 pub(crate) const KIND_FEATURE_CLOSE: &str = "feature-close";
 pub(crate) const KIND_BLOCKER: &str = "blocker";
@@ -790,6 +792,42 @@ pub(crate) fn cap_sentence(outcome: Option<&str>, title: Option<&str>) -> String
 fn first_line(s: Option<&str>) -> Option<String> {
     let s = s?;
     s.lines().map(str::trim).find(|l| !l.is_empty()).map(str::to_string)
+}
+
+/// D8's plain-language sentence for a cell that stopped on a blocker, written
+/// HERE — at the moment of the stop, exactly like [`cap_sentence`] and
+/// [`close_sentence`], and for the same reason.
+///
+/// The reason `bee cells block` just stored IS the sentence, taken verbatim.
+/// It is not wrapped in a frame of this module's own words and it is not
+/// composed out of the cell's title: the reason is the one line a human wrote
+/// about why the work stopped, and this is the one moment those words may be
+/// chosen (D8).
+///
+/// The door refuses an empty reason, so the last resort is only ever reached
+/// by a caller that is not that door. It says nothing but what the stop
+/// itself makes true.
+pub(crate) fn block_sentence(reason: &str) -> String {
+    first_line(Some(reason)).unwrap_or_else(|| "Stopped on a blocker.".to_string())
+}
+
+/// D13's Needs-your-call item for a blocked cell — the first real material
+/// the [`SECTION_NEEDS_YOU`] section has ever had.
+///
+/// Every part is a fact the block itself stored, and nothing else:
+///
+///   * `id` — the blocked cell's own id. D13 asks for a STABLE id so a reply
+///     surface stays reachable later without rewriting an already-filed
+///     letter, and a cell id is already exactly that.
+///   * `what` — the reason the blocker recorded, in its own words.
+///   * `blocks` — the cell's title: the work that stops until the human
+///     answers. A cell carrying no title falls back to its id rather than to
+///     a sentence composed here, because a composed one would be a fact no
+///     record carries (D8).
+pub(crate) fn block_needs_you(cell_id: &str, title: Option<&str>, reason: &str) -> NeedsYou {
+    let id = one_line(cell_id);
+    let blocks = title.map(one_line).filter(|t| !t.is_empty()).unwrap_or_else(|| id.clone());
+    NeedsYou { id, what: one_line(reason), blocks }
 }
 
 /// Append at a clean stop, FAIL-OPEN.
@@ -2924,6 +2962,25 @@ mod tests {
         assert_eq!(cap_sentence(Some("   "), Some("a job.")), "Finished a job.");
         // Nothing to go on: say only what is certainly true.
         assert_eq!(cap_sentence(None, None), "Finished a piece of work.");
+    }
+
+    #[test]
+    fn a_blocked_stop_says_only_what_the_block_stored() {
+        // D8 at the PRODUCER, not just at the composing pass: the reason is
+        // the sentence, verbatim to its first line.
+        assert_eq!(block_sentence("Which door wins?\nsecond line"), "Which door wins?");
+        assert_eq!(block_sentence("   "), "Stopped on a blocker.");
+
+        // D13's item: the cell's id, the cell's title, the recorded reason —
+        // three stored facts and no fourth.
+        let item = block_needs_you("blp-4", Some("Wire the blocker letter"), "  Which door\n wins? ");
+        assert_eq!(item.id, "blp-4");
+        assert_eq!(item.what, "Which door wins?");
+        assert_eq!(item.blocks, "Wire the blocker letter");
+
+        // No title to name: the id, never a sentence composed here.
+        assert_eq!(block_needs_you("blp-4", None, "why").blocks, "blp-4");
+        assert_eq!(block_needs_you("blp-4", Some("   "), "why").blocks, "blp-4");
     }
 
     // ── D7/D8/D9/D11: composing and filing the letter at run end ────────
