@@ -13,6 +13,9 @@ that produces thirty observations.
 | Assigning blocker / major / minor | Severity calibration |
 | Tempted to inflate, or torn between two levels | Severity is a spent signal |
 | Reading a diff for defects | Adversarial reading |
+| Building the list of what a correct change must handle | The 5-Layer rubric |
+| The diff adds branches, guards, or a new case | The Truth Table Test |
+| The change brings a thing into being or takes it away | The CRUD Lifecycle check |
 | About to file a suspected defect | Verify before reporting |
 | Cannot fully verify a finding | Label uncertainty exactly |
 | Writing the finding up | Evidence standards |
@@ -106,6 +109,84 @@ Concretely:
 
 The author's tests tell you what the author worried about. Your job is
 the worry they did not have.
+
+## The 5-Layer rubric
+
+**Five layers, and this file writes out none of them.** "Adversarial
+reading" tells you to list what a correct change must handle before you
+read the diff. This is the shape of that list — five layers, each one
+already written down somewhere in this repo. Go to the home and read the
+rule there. A second copy of a rule is the copy that goes stale.
+
+| Layer | The question it asks | Where the rule already lives |
+|---|---|---|
+| Data contract | What does the store promise about this data, and what holds the promise? | [data.md](data.md) ("The store is a contract", "Constraints belong beside the data") |
+| Happy path | Is the representative, intended use covered at its smallest demonstrating size? | [tests.md](tests.md) ("Choosing cases") |
+| Failure edge | Empty, boundary, arrives twice, dependency dies halfway — which of these does the change meet? | [tests.md](tests.md) ("Choosing cases"); on `high-risk` work, `skills/bee-planning/references/edge-dimensions.md` ("The 12 Edge-Case Dimensions") |
+| NFR | Speed, exposure, failure handling — the qualities no request names out loud | [performance.md](performance.md), [security.md](security.md), and the triggers in `skills/bee-reviewing/references/reviewing-reference.md` ("Conditional roles — spawned by diff triggers") |
+| Definition of done | What proof exists that this works, and who checked it? | `AGENTS.md` ("Done means done", "Prove, then say so"), and the cell's own `must_haves` |
+
+The rubric earns its keep by finding the layer you skipped, never by
+producing five sections of write-up. A layer the change does not touch
+is answered "n/a" and left there. A layer it does touch, whose home
+answer you cannot state, is where this review starts.
+
+## The Truth Table Test
+
+**Every branch the diff adds owes you its other side.** A condition
+splits the world in two and the diff shows you one half. Write the
+halves down: one row per branch, one column for the condition true, one
+for the condition false, and fill every cell. An empty cell is the
+finding.
+
+Read for the shapes that hide a missing half:
+
+- An `if` with no `else`, where falling through is a real outcome and
+  nobody said what that outcome is.
+- A guard that returns early and hands the caller a value it did not
+  expect — a null, a zero, an empty list that reads as "none found"
+  when it means "never looked".
+- A chain of `else if` with no final `else`: the input that matches no
+  arm does nothing at all, silently.
+- A `switch` or `match` on a type that can grow — the case added next
+  month lands in a default nobody chose for it.
+- Two conditions read one at a time that can both be true. Two
+  branches make four rows: A, B, both, neither.
+
+For each empty cell, name the input that reaches it. That input is the
+missing test, and it is what turns the empty cell into a finding with a
+scenario — "What a finding is". If no input can reach the cell, the
+branch is dead code: still a finding, at minor, and say which of the two
+it is.
+
+## The CRUD Lifecycle check
+
+**Pick one thing the change touches and follow its whole life.** A diff
+usually adds one verb — a create, or an update — and gets reviewed as
+that one verb. The defects sit in the other three, which someone else
+wrote earlier and nobody has read beside this change.
+
+Take the record, the file, the session, the lock — whatever the change
+brings into being — and walk all four:
+
+- **Create.** What happens on a second create with the same identity —
+  refuse, overwrite, or a duplicate nobody can tell apart?
+- **Read.** What does a reader see between the create and the commit,
+  and what comes back for a thing that does not exist: an error, or a
+  shape that reads as empty?
+- **Update.** Two updates at once — last write wins, or lost update?
+  Does a half-applied update leave the thing in a shape no reader
+  expects?
+- **Delete.** What happens to whatever points at it? Is the delete real
+  or a flag, and does every reader honor the flag? May a later create
+  reuse the deleted identity?
+
+Then close the loop the diff almost never closes: delete it, then create
+it again. Re-create-after-delete is where stale caches, orphaned
+children, and a unique constraint over soft-deleted rows all surface at
+once. When the change owns only one of the four verbs, the other three
+are still the requirement it must not break — file that as the caller's
+expectation, not as an out-of-scope note.
 
 ## Verify before reporting
 
