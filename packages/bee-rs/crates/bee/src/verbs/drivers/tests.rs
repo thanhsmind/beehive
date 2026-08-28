@@ -3349,6 +3349,7 @@ use std::time::Instant;
                 "door tests: open — no capped cells yet — nothing to prove\n",
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
+                "door dissent-debt: clear\n",
                 "door pattern-check: clear\n",
                 "door knowledge-freshness: clear\n",
                 "door impact: clear\n",
@@ -3765,6 +3766,9 @@ use std::time::Instant;
             vec![
                 "door scribing-debt: BLOCKING — pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it | settle: bee-capturing",
                 "door capture-queue: open — pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing",
+                // sd-4: the dissent-debt door joined the builder; this
+                // feature carries no dissent, so it reports clear.
+                "door dissent-debt: clear",
             ]
         );
 

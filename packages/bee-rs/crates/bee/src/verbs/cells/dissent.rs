@@ -468,6 +468,89 @@ pub(crate) fn record_dissent_verdict(
     Ok((cell, outcome))
 }
 
+
+// The debt both boundary doors read (sd-4, and the merge door that follows).
+//
+// a2affcba puts the obligation at TWO doors, and a debt that two doors read
+// two ways is not one obligation, it is two. So the count and the escape live
+// HERE, beside the record and its ONE reading of "unanswered", and each door
+// reaches them through `crate::verbs::cells::`. Exactly the placement
+// `feature_proof_check` (proof.rs) already uses for the same reason: two
+// boundary drivers call it, and neither owns it.
+//
+// Each door still writes its OWN wording, headline and command: the split
+// kept here is "a `{count, ids}`-shaped summary in, door prose out".
+
+/// Every cell of `feature` (live store AND archive, ANY status) carrying at
+/// least one dissent with no recorded verdict. The offending ids are named in
+/// full, never just the first, because a door that names one of three sends
+/// the reader back twice.
+///
+/// THREE things this deliberately does NOT copy from `judge_debt`
+/// (drivers/close.rs), each one a locked requirement:
+///
+///   - NO STATUS FILTER. A dissent lands on a cell in any status: `blocker`
+///     leaves it `blocked`, `consider` leaves it `open` or `claimed`. Counting
+///     only `capped` cells would blind the door to exactly the cells a blocker
+///     dissent parks. That is why `list_cells_including_archive` (guard.rs)
+///     now takes `Option<&str>`, where `None` means every status.
+///   - NO GRANDFATHER CUTOFF. `judge_debt` skips a cell capped before its own
+///     door existed; a dissent record cannot predate the feature that created
+///     it, so there is nothing to grandfather.
+///   - NO `behavior_change` FILTER. A worker records a dissent against any
+///     cell it was handed.
+///
+/// "Unanswered" is `dissent_is_answered` and nothing else: one reading, shared
+/// by the record, the verdict, and both doors. Its corrupt-row semantics come
+/// with it, a non-object row reads as ANSWERED, so a garbled entry can never
+/// block a feature forever.
+pub(crate) fn feature_dissent_debt(
+    root: &Path,
+    feature: &str,
+) -> Result<crate::verbs::drivers::DebtSummary, crate::verbs::drivers::Delegate> {
+    let mut ids: Vec<Value> = Vec::new();
+    for cell in crate::verbs::drivers::list_cells_including_archive(root, feature, None)? {
+        let entries =
+            cell.get("trace").and_then(|t| t.get(DISSENT_TRACE_KEY)).and_then(Value::as_array);
+        let Some(entries) = entries else { continue };
+        if entries.iter().all(dissent_is_answered) {
+            continue;
+        }
+        if let Some(id) = cell.get("id") {
+            ids.push(id.clone());
+        }
+    }
+    Ok(crate::verbs::drivers::DebtSummary { count: ids.len(), ids })
+}
+
+/// The named escape, the fourth of its shape: a logged decision tagged
+/// `dissent-deferral` whose text names the feature lifts the dissent-debt
+/// refusal at BOTH doors. Mirrors `has_judge_deferral_decision`,
+/// `has_capture_deferral_decision` and `has_uat_deferral_decision`
+/// (drivers/close.rs) exactly: the decisions verb's own read model, the same
+/// tag-exact, whole-token feature match the decisions read path already uses,
+/// and no new matching rule. It lives here rather than beside its three
+/// siblings only because the merge door must reach the SAME escape. An escape
+/// that worked at one door and not the other would be neither the judge-debt
+/// shape a2affcba names nor the proof-debt shape merge has.
+pub(crate) fn has_dissent_deferral_decision(
+    root: &Path,
+    feature: &str,
+) -> Result<bool, crate::verbs::drivers::Delegate> {
+    let active = crate::verbs::decisions::active_decisions(root, false)
+        .map_err(|_| crate::verbs::drivers::Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("dissent-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| crate::verbs::drivers::Delegate)?;
+    Ok(!filtered.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

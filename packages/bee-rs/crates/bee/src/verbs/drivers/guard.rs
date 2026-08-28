@@ -477,7 +477,13 @@ pub(crate) fn read_cell(root: &Path, id: &str) -> D<Option<Value>> {
 /// scribing-debt door detail, so the order reaches an emitted byte (caught by
 /// a live diff against the beehive repo itself, where a plain byte sort put
 /// "rust-port-5" after "rust-port-23").
-pub(crate) fn list_cells(root: &Path, feature: &str, status: &str) -> D<Vec<Value>> {
+/// slp-dissent-stop-and-ask sd-4: `status` is `Option<&str>` — `None` means
+/// EVERY status, the same shape `verbs/cells/read.rs list_cells` already
+/// uses. The dissent-debt door counts a dissent on a cell in ANY status (a
+/// `blocker` dissent leaves it `blocked`, a `consider` dissent leaves it
+/// `open` or `claimed`), so a single hard-coded status string would have made
+/// that door blind to exactly the cells a blocker dissent parks.
+pub(crate) fn list_cells(root: &Path, feature: &str, status: Option<&str>) -> D<Vec<Value>> {
     let mut cells: Vec<Value> = Vec::new();
     let Ok(entries) = std::fs::read_dir(cells_dir(root)) else {
         return Ok(cells);
@@ -498,8 +504,10 @@ pub(crate) fn list_cells(root: &Path, feature: &str, status: &str) -> D<Vec<Valu
         if !matches!(vget(&cell, "feature"), Some(Value::String(f)) if f == feature) {
             continue;
         }
-        if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
-            continue;
+        if let Some(status) = status {
+            if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
+                continue;
+            }
         }
         cells.push(cell);
     }
@@ -520,7 +528,7 @@ pub(crate) fn list_cells(root: &Path, feature: &str, status: &str) -> D<Vec<Valu
 /// is untouched and stays active-only: every other caller (`bee cells list`,
 /// `bee cells ready`, …) keeps its current behavior. Only
 /// `close::scribing_debt` calls this variant.
-pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: &str) -> D<Vec<Value>> {
+pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: Option<&str>) -> D<Vec<Value>> {
     let mut cells = list_cells(root, feature, status)?;
     let mut seen_ids: HashSet<String> = cells.iter().map(|c| tpl(vget(c, "id"))).collect();
     let archive_dir = cells_dir(root).join(ARCHIVE_DIR_NAME).join(feature);
@@ -543,8 +551,10 @@ pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: &
         if !matches!(vget(&cell, "feature"), Some(Value::String(f)) if f == feature) {
             continue;
         }
-        if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
-            continue;
+        if let Some(status) = status {
+            if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
+                continue;
+            }
         }
         let id = tpl(vget(&cell, "id"));
         if !seen_ids.insert(id) {
