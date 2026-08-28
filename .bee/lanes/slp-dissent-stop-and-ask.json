@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-dissent-stop-and-ask",
   "mode": "high-risk",
-  "phase": "idle",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"slp-dissent-stop-and-ask\" — feature is closed.",
+  "next_action": "Proposal reviewed and the delivery record written; the feature still owes its close",
   "created_at": "2026-08-27T20:58:29.709Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**Next:** 28 capture stubs wait in the queue. Say the word and I run bee-capturing to drain them.",
-    "asked_at": "2026-08-28T07:10:18.852Z",
-    "session": "311024fe-729d-4bd8-8165-39fbb8f5fba2"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -45,12 +40,12 @@
   "last_scribing_run": {
     "feature": "slp-dissent-stop-and-ask",
     "date": "2026-08-28",
-    "at": "2026-08-28T05:20:04.331Z",
+    "at": "2026-08-28T13:06:04.911Z",
     "areas_synced": [
       "workflow-state",
       "worktree-parallelism",
       "bee-herding"
     ],
-    "next_action": "User accepts on main (uat gate), then bee close --feature slp-dissent-stop-and-ask"
+    "next_action": "Proposal reviewed and the delivery record written; the feature still owes its close"
   }
 }

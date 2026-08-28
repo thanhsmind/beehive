@@ -142,6 +142,12 @@ nothing had ever looked.
 
 - **Only reference-document pointers are checked.** Citations to source files, history documents, or
   external URLs are out of scope. Whether they deserve the same treatment is undecided.
+- **A citation that names a line number is outside every check.** The gate resolves a pointer that
+  names a document and, optionally, a heading; a line range is not a pointer it can resolve. History
+  records routinely cite a source by line range, and those ranges rot on the next edit to the cited
+  file while every check stays green — two records still point at ranges the named behavior left long
+  ago. A reader who follows one lands in unrelated code with no signal that the anchor moved, so a
+  line range is read as a hint, never as an address.
 - Pointer erratum (2026-08-10): the Node implementation this concept's pointers name retired with
   the Rust port; the gate lives in `packages/bee-rs/crates/bee/tests/pointer_integrity.rs`
   (its own header records the Node provenance).

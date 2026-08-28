@@ -87,6 +87,12 @@ Three field failures (reported against a host repo, fixed generically):
   feature, that feature's own live `docs/history/<feature>/` dir
   (self-citation of live work is not staleness) — a different feature's
   history is still a real citation and is never excluded.
+  **A decision that only RECORDS a sweep answer must relate to nothing.**
+  Naming the swept ids as touched re-runs the sweep over every doc that cites
+  them, so the answer mints one fresh stub per citing line — the same lines
+  the decision just certified. Answering 4 touched ids this way produced 22
+  new stubs in one call (2026-08-28). Log the answer with no relation; the
+  decision's own text is the record that the read happened.
 - **R2a — Supersession is an edge, never prose, and every write now declares
   its relation to what's already active** (`252102b5`; knowledge-distill-trigger
   D3, cell kdt-3). Every `decisions log` call requires `--relation

@@ -106,9 +106,18 @@ trade than a worker occasionally re-deriving something.
 - **A cell whose `read_first` already names a learned path** keeps it there. The
   block does not deduplicate against `read_first`, and does not need to: one is
   the cell's own contract, the other is ambient context.
-- **A host running a stale vendored `prompts/`** is the same class of drift as a
-  stale vendored binary and is healed the same way — by onboarding, not by a
-  prompt-specific mechanism.
+- **A host running a stale vendored prompt copy** is the same class of drift as a
+  stale vendored tool, and onboarding alone does NOT heal it. The regeneration
+  chain re-vendors prompts, libraries, helpers and hooks; it never re-vendors the
+  tool's own executable, which is ignored by version control and protected from
+  removal on purpose. The skew check compares both the source prompt and the
+  vendored prompt against the copy compiled into the running executable, so
+  editing a prompt without rebuilding and reinstalling that executable puts every
+  dispatch preparation in the checkout into skew, where it returns nothing and has
+  nothing behind it to fall back to. A feature worktree cannot repair it either:
+  its copy of the tool is a link back to the main checkout, and the write guard
+  refuses a write that travels through a link. A prompt edit and a rebuilt,
+  reinstalled executable are therefore one unit of work, never two.
 
 ## Open Gaps
 

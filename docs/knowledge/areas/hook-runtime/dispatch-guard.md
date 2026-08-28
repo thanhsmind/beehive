@@ -227,6 +227,18 @@ decision auditable.
 
 ## Edge Cases Settled
 
+- **A role that renders no helper of its own is never repaired onto another
+  role's helper.** The advisor role is that case: its prepared dispatch travels
+  under the catch-all helper type with the advisor's own model attached, and the
+  guard allows the pair because the declared role and the model agree. Naming a
+  different role's rendered helper by hand does not carry the advisor model with
+  it — the helper stands for that other role, and where the prompt declares that
+  role too, the guard rewrites the model to the role's configured one and
+  announces the repair. An advisor-model reviewer is therefore reached only by
+  running the prepared payload exactly as the door returns it; a hand-assembled
+  pair either loses the model or leaves its two halves describing different
+  roles, and the independence recorded on the verdict follows whichever model
+  actually ran.
 - The second-runtime branch of the anchored tier-marker check alone
   recognizes an advisor role token in addition to the existing tier names
   (the first runtime's branch is byte-unchanged); before this, a confirmed

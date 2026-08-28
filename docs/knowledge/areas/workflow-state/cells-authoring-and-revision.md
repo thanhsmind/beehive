@@ -246,6 +246,14 @@ silent.
   replacement — so the proof recorded on the cap was never the command the
   author wrote. Two filters are two commands joined by `&&`, or one wider
   filter; never two positionals.
+- **A unit's verification command names tests that exist by the time it runs.**
+  A filter that matches nothing exits green, so a filter naming a module or a
+  symbol the unit is about to create reports success before a line is written.
+  Author the filter over the module the tests will actually live in, or make the
+  command assert the count of tests it expects. The general form — any
+  name-matching runner passes a selector that resolves to nothing — is the
+  selector-matches-nothing pitfall; this is its authoring-time half, because the
+  scope decision is made when the unit is written.
 
 - R46 — A unit's change classification is set explicitly or derived only from
   the behavior-change flag — never any richer auto-derivation — and an

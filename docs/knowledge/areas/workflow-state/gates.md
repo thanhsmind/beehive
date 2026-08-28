@@ -634,6 +634,14 @@ a malformed record has earned none.
 
 ## Edge Cases Settled
 
+- **A feature's record of its own finished work trips the deferral door.** A
+  deviation line saying a shape belongs to a later unit stays deferral-shaped
+  after that later unit lands and caps, so the feature cannot close on the
+  record of work it has already done. Registering a condition is wrong by
+  construction here — a trigger for finished work can never fire — and the
+  baseline forgives only lines that were already there. The fitting remedy is
+  the reasoned marker pair around the passage, naming why the prose records a
+  past routing decision rather than an open promise.
 - A capped prior-feature cell never blocks a new start; an expired-by-TTL
   reservation never blocks a new start (only active ones do), and an active
   one blocks only within R86's scope.

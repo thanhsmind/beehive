@@ -44,6 +44,17 @@ is the other way a unit's record moves without a mutator having asked it to.
 
 ## Behaviors & Operations
 
+**The recorded verdict has closed vocabularies, and the command's help states
+the payload's field names without them.** A verdict reads PASS or
+NEEDS_REVISION. Each check names itself with an id — never a name — and carries
+a status of PASS or FAIL plus its evidence; a failing check owes a failure
+signature. Fixability reads automatic or authority, and confidence reads low,
+medium or high. A judge prompt written from the help text alone therefore
+produces a payload the recorder refuses. The refusal names every offending
+field and value at once, so the cost is one round trip rather than a silent
+pass — but that round trip is bought by help text stopping one step short of
+the contract.
+
 **Judge-debt close door (workflow-lessons wfl-3, 2026-08-11; ownership,
 grandfather, deferral, and archive fixes review-p1-fixes hpf-1,
 2026-08-12).** When the closing feature's route lane is standard or
