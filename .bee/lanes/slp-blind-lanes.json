@@ -8,17 +8,17 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"slp-blind-lanes\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 6d257ef; reload the product and test \"slp-blind-lanes\", then either approve uat (\"bee gate --name uat --approved true --lane slp-blind-lanes\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming for slice 1a: bln-1 then bln-2, in the feature worktree.",
   "created_at": "2026-08-28T07:11:26.254Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: slp-blind-lanes",
-    "asked_at": "2026-08-28T13:01:07.458Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for slp-blind-lanes: reload main and test bee blind check",
+    "asked_at": "2026-08-28T13:06:30.078Z",
+    "session": "b97c221a-fd60-40c2-bd86-9681b9f547bf"
   },
   "route": {
     "class": "feature",

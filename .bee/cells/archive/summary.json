@@ -948,5 +948,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-28T06:13:17.164Z"
+  },
+  "slp-blind-lanes": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-08-28T13:10:32.116Z"
   }
 }
