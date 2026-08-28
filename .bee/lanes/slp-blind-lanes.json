@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "`bln-2` — the door guard — is still building.",
-    "asked_at": "2026-08-28T08:29:12.219Z",
+    "subject": "▸ Two running now: `bln-4` builds the three lie-detectors, and an independent judge reads `bln-3`.",
+    "asked_at": "2026-08-28T09:44:17.787Z",
     "session": "311024fe-729d-4bd8-8165-39fbb8f5fba2"
   },
   "route": {

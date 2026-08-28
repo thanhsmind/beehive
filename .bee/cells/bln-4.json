@@ -1,0 +1,90 @@
+{
+  "id": "bln-4",
+  "feature": "slp-blind-lanes",
+  "title": "Make bee blind check catch a fabricated citation, a divergent brief and a diet breach",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "bln-3"
+  ],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "docs/history/slp-blind-lanes/plan.md",
+    "docs/history/slp-blind-lanes/advisor-consult.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind",
+  "action": "Give `bee blind check` its three evidence checks (per D4 and D2b). Build each RED FIRST — a failing probe per hole before the arm that closes it.\n\nCHECK 1, CITATIONS. A citation line under `## Citations` is `<lane-id> :: <quote>`. Verify the quote against THAT lane's own proposal bytes only, never the concatenated set. Normalize both sides identically: collapse every whitespace run to one space, trim, ASCII case-fold. Enforce a minimum quote span so a generic fragment cannot pass. The advisor consult named FOUR distinct holes, and each needs its own red-first probe:\n  a. short-generic — \"the dispatch door\" is inside nearly any proposal;\n  b. fabricated — a quote in no proposal at all;\n  c. negation strip — the proposal says \"we should NOT cache the token\" and the dossier cites \"cache the token\", which is contained and means the opposite. Catch it by requiring the quote to match a whole-sentence span rather than any substring, so a citation cannot silently drop the clause that reverses it;\n  d. cross-lane misattribution — a quote attributed to lane A that exists only in lane B. This is THE fabrication D4 exists to catch, so it must refuse even though the text is genuine somewhere.\nAnd one green probe: a real quote differing from the proposal only in whitespace passes.\n\nCHECK 2, BRIEF DIGEST EQUALITY. Every lane section records a `dispatch_id` and a `brief_sha256`. Do NOT simply compare the recorded digests with each other — that verifies the dossier's author against itself. Read the authoritative record instead: `.bee/logs/dispatch.jsonl`, written by `append_prepare_record` (drivers/prepare.rs:601-613) as one line per prepare carrying `ts`, `source: \"prepare\"`, and the whole dispatch record including `dispatch_id` and `brief_sha256`. For each lane, find its `dispatch_id` line and refuse when the dossier's digest differs from the logged one. That log is FAIL-OPEN by design — its doc comment at :599-600 says \"a log failure never blocks the payload\" — so a `dispatch_id` with NO line in the log must refuse BY NAME, never pass silently. Then refuse when the lanes' logged digests are not all equal: that is the brief having changed between lane 1 and lane 3, which this feature detects rather than prevents (decision f0f21142 accepted exactly that cost).\n\nCHECK 3, READ DIET. Each lane section records the paths it read. Refuse when any is outside the diet the dossier's `## Question` section declares, and refuse when any names `.bee/` at all. State the trust level honestly in the refusal text and in any doc line: this is SELF-REPORTED by the lane being checked, so it catches a careless breach and a recorded lie, not a determined one. It is NOT the same trust level as the citation check, which reads bytes the checker holds. Do not write a line claiming otherwise.\n\nAll three refusals take the typed shape already used in this module: {ok:false, type:\"refused\", reason, ..., fix} with a `fix` naming what to change. A dossier passing all three exits 0 with a summary naming how many lanes, citations and paths were checked — a count of zero for any of them refuses rather than reporting success over nothing.\n\nTests go in the same inline `mod tests` inside `verbs/blind/mod.rs` that bln-3 created, so the verify filter `verbs::blind` matches them.\n\nINHERITED FROM bln-3 — read these before you plan a line of code; they are facts about the code you are extending, not suggestions:\n- `parse_dossier` returns `Dossier { run_id, brief, lanes: Vec<LaneSection>, sections }`, and each lane already carries its `proposal` and its `paths_read` separated out. All three checks read THAT, never the document text again. Do not write a second parser.\n- The pass result carries `checks_run`, today `[\"sections\",\"lane_fields\",\"brief_lint\"]`, and an existing test asserts that `citations`, `digest_equality` and `read_diet` are ABSENT from it. Extend the list and that same test TOGETHER — leaving the test asserting absence while the checks exist is a green that proves the opposite of the truth.\n- The dossier's `## Question` section records the WHOLE LaneBrief verbatim, not only the brief's Question section. bln-3 found the plan wrong about this: `lint_brief`'s shape arm requires all four brief sections, so a Question-only recording would refuse every dossier. Your digest check hashes those bytes.\n- The brief and every proposal ride inside FENCED blocks, and the heading scan skips fenced lines. A proposal is arbitrary prose that may quote a heading; outside a fence a lane's own text would move the dossier's section boundaries. Respect the fences.\n",
+  "must_haves": {
+    "truths": [
+      "A short generic citation is refused for failing the minimum quote span",
+      "A fabricated citation found in no proposal is refused",
+      "A citation that drops a negation and so inverts the proposal's meaning is refused",
+      "A citation attributed to one lane but present only in another is refused",
+      "A real citation differing only in whitespace passes",
+      "A lane whose dossier digest differs from its logged dispatch_id digest is refused",
+      "A lane whose dispatch_id has no line in .bee/logs/dispatch.jsonl is refused by name, never passed silently",
+      "Lanes whose logged digests are not all equal are refused, naming the divergence",
+      "A lane reporting a path outside the declared diet, or any path naming .bee/, is refused",
+      "A check that found zero lanes, zero citations or zero paths refuses rather than reporting success over nothing"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "substantive": "the three evidence checks and their red-first probes, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the digest check reads .bee/logs/dispatch.jsonl rather than comparing the dossier against itself"
+    ],
+    "prohibitions": [
+      "No claim, in refusal text or any doc line, that the read-diet check has the same trust level as the citation check",
+      "The citation check must never match against the concatenated proposal set",
+      "No new store and no new dispatch kind",
+      "A zero-count check must not report success"
+    ]
+  },
+  "trace": {
+    "worker": "bln4-writer",
+    "outcome": "bee blind check now runs the citation, digest-equality and read-diet evidence checks, each red-first",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T09:54:57.985Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T09:39:10.577Z",
+    "report": {
+      "outcome": "bee blind check now runs the citation, digest-equality and read-diet evidence checks, each red-first",
+      "commit": "c47fd241a1f66e783276ebb1f4ae2a18c4c4da70",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green (42 passed, 0 failed; 21 new probes went red against a stub first) — the cell touches one module, and its inline tests plus registry_dispatch/registry_contracts (19 passed) are everything that reads this verb",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 998 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

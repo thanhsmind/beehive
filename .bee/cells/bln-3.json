@@ -1,0 +1,173 @@
+{
+  "id": "bln-3",
+  "feature": "slp-blind-lanes",
+  "title": "Serve bee blind check and refuse a malformed dossier by section name",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "docs/history/slp-blind-lanes/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch --test registry_contracts",
+  "action": "Serve `bee blind check --dossier <path>`: the one new verb decision f0f21142 allows. This cell delivers the verb, its namespace wiring, the dossier's fixed section contract, and a re-run of bln-2's brief guard over the dossier's recorded brief. The three EVIDENCE checks (citations, digest equality, read diet) are bln-4 — do not build them here.\n\nCopy the shape of an existing small namespace: `packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs` is 728 lines with `pub fn try_native` at :352 and its own inline `mod tests` at :501-727. Follow it.\n\nWIRING — a new top-level namespace is invisible to more checks than a new sub-verb, so all four land here:\n1. `verbs/mod.rs` — declare `pub mod blind;` beside its siblings and add `if let Some(code) = blind::try_native(args, t0) { return Some(code); }` to the probe chain that starts at `pub fn try_native` (:47). Help probes stay FIRST; put the new arm with the other verb groups, not before them.\n2. `router.rs` — add `\"blind check\"` to the `PORTED` list (the doc comment at :24 says keep it in sync with the probes).\n3. `src/generated/registry_payload.json` — hand-edit. `bee dev regen` does NOT write this file. Declare `blind.check` with a runnable `examples[0]`: `tests/registry_dispatch.rs` executes every entry's first example against the built binary, so the example must succeed on a dossier this repo actually has — ship one under `docs/history/slp-blind-lanes/blind/` as the example's target, or make the example a refusal the runner accepts.\n4. `tests/registry_dispatch.rs` — the served-but-undeclared law at `every_namespace_the_dispatcher_serves_is_declared_in_the_registry` (:400) scans exactly three tables (`devtools/mod.rs`, `herding.rs`, `served_cells_verbs()`) plus two bare probes, and would NOT see `bee blind` at all. Add a scanner arm for it, the same shape as the `bee dev` and `bee herding` arms. Without this, a served-and-undeclared blind sub-verb would ship silently and read as unknown to `bee --help --all`.\n5. `catalog.rs` — bump `PINNED_FLAG_COUNT`, which bln-1 already moved to 197 and now sits at `catalog.rs:649` (the line MOVED from 632, so search for the constant, never the old number). Carry the written reuse check the ledger comment demands. Address `--file` (six uses), `--dossier` is new; say why `--file` was not reused (it names a payload path on commands that CONSUME the file's content as input to a write; blind check reads a document as evidence and writes nothing).\n\nTHE DOSSIER CONTRACT — the fixed sections plan.md locks, in order: `# Blind lane run <run-id>`, `## Question`, `## Lanes` (one `### <lane-id>` each, carrying its `dispatch_id`, its `brief_sha256`, its role, its paths read, and the proposal verbatim), `## Cross-critiques`, `## Chosen`, `## Rejected`, `## Citations`, `## Revisit trigger`. A missing, extra or misordered section REFUSES BY NAME of the offending section — never by silently checking less. Copy the refusal shape from `unmapped_kind_refusal` (drivers/prepare.rs:56-69): {ok:false, type:\"refused\", reason, ..., fix}.\n\nTHE LINT RE-RUN — call `lint_brief` from `verbs/drivers/brief_lint.rs` over the brief the dossier records under `## Question`, so a convergence built on an unlinted brief refuses. That is the second caller the bln-2 cell exposed the function for; do not copy its stem list, and author the test that asserts both callers use the one function (a rule living in n places needs one test that reads all n).\n\nTests — put them in an inline `mod tests` INSIDE `verbs/blind/mod.rs` so the verify filter `verbs::blind` actually matches them. bln-2 shipped a verify half filtering on `brief_lint` that matched ZERO tests and still exited green; if you place tests anywhere else, change the verify line and record the deviation. Author: each section arm red-first (missing, extra, misordered, no headings at all), a lane section missing its dispatch_id or brief_sha256 refusing by name, a well-formed dossier passing, and the shared-lint test.",
+  "must_haves": {
+    "truths": [
+      "bee blind check --dossier <path> is served by the binary and declared in the registry, so bee --help --all lists it",
+      "A dossier missing, adding or misordering any fixed section is refused by the offending section's name",
+      "A lane section missing its dispatch_id or its brief_sha256 is refused by name",
+      "A dossier whose recorded brief carries leaning language is refused by the same guard the dispatch door uses",
+      "A well-formed dossier passes this cell's checks",
+      "The served-but-undeclared law now scans the blind namespace, so a future undeclared sub-verb fails the suite"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "substantive": "try_native, the check sub-verb, the section contract and its inline tests, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "declares blind.check with a runnable examples[0]"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+        "substantive": "a scanner arm that sees the blind namespace"
+      }
+    ],
+    "key_links": [
+      "verbs/mod.rs probe chain calls blind::try_native",
+      "router.rs PORTED names blind check",
+      "verbs/blind/mod.rs calls lint_brief from verbs/drivers/brief_lint.rs rather than copying its stems"
+    ],
+    "prohibitions": [
+      "No citation check, no digest equality check and no read-diet check in this cell — those are bln-4",
+      "No new store: the dossier is a document the caller names, never a bee-owned record",
+      "No second copy of the leaning-stem list anywhere",
+      "No dispatch kind added or changed"
+    ]
+  },
+  "trace": {
+    "worker": "bln3-writer",
+    "outcome": "bee blind check serves the dossier section contract, refuses a malformed one by section or field name, and re-runs the dispatch door's own leaning guard over the recorded brief",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+      "docs/history/slp-blind-lanes/blind/example-run.md"
+    ],
+    "deviations": [
+      "Shipped docs/history/slp-blind-lanes/blind/example-run.md, a path the cell did not declare, after reserving it — tests/registry_dispatch.rs executes every registry entry's first example against the built binary, so the declared example needed a real target, and an inline test now pins that the shipped shape is the shape the parser accepts — hit an unforeseen obstacle",
+      "The dossier's ## Question records the WHOLE LaneBrief verbatim, not only the brief's Question section as plan.md deferred-answer 3 words it — lint_brief's shape arm requires the brief's four level-2 sections, so a Question-only recording would refuse every dossier, and the digest check in bln-4 needs those bytes — the plan was wrong about a fact",
+      "The brief and every proposal ride inside fenced blocks and the heading scan skips fenced lines, which the plan's section list did not state — a proposal is arbitrary prose that may quote a heading, and outside a fence a lane's own text would move the dossier's section boundaries — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T09:38:32.052Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T08:35:44.449Z",
+    "report": {
+      "outcome": "bee blind check serves the dossier section contract, refuses a malformed one by section or field name, and re-runs the dispatch door's own leaning guard over the recorded brief",
+      "commit": "5678b2f8acf5adad6a450fecfdaeb604c54e2812",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+        "docs/history/slp-blind-lanes/blind/example-run.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind && ... catalog && ... --test registry_dispatch --test registry_contracts — green — the cell's own verify chain: 21 new blind tests ran by name, the flag ratchet at 198, and both registry laws over the namespace this cell adds (the example walk runs bee blind check out of process)",
+      "deviations": [
+        "Shipped docs/history/slp-blind-lanes/blind/example-run.md, a path the cell did not declare, after reserving it — tests/registry_dispatch.rs executes every registry entry's first example against the built binary, so the declared example needed a real target, and an inline test now pins that the shipped shape is the shape the parser accepts — hit an unforeseen obstacle",
+        "The dossier's ## Question records the WHOLE LaneBrief verbatim, not only the brief's Question section as plan.md deferred-answer 3 words it — lint_brief's shape arm requires the brief's four level-2 sections, so a Question-only recording would refuse every dossier, and the digest check in bln-4 needs those bytes — the plan was wrong about a fact",
+        "The brief and every proposal ride inside fenced blocks and the heading scan skips fenced lines, which the plan's section list did not state — a proposal is arbitrary prose that may quote a heading, and outside a fence a lane's own text would move the dossier's section boundaries — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "served-and-declared",
+            "status": "PASS",
+            "evidence": "verbs/mod.rs:128 puts blind::try_native in the probe chain with help still first at :52; router.rs:140 PORTED carries 'blind check --dossier <path> [--json]'; registry_payload.json declares blind.check with examples[0] 'bee blind check --dossier docs/history/slp-blind-lanes/blind/example-run.md --json'; the built bee --help --all prints 'bee blind check' at line 417; the registry_dispatch example walk ran it out of process, 9 of 9 green"
+          },
+          {
+            "id": "sections-refused-by-name",
+            "status": "PASS",
+            "evidence": "blind/mod.rs:337-417 arms dossier_title_missing, dossier_section_unexpected, dossier_section_missing and dossier_section_out_of_order each carry the section name; tests at mod.rs:751-794 loop EVERY DOSSIER_SECTIONS drop and assert the reason AND that field(section) equals the dropped name"
+          },
+          {
+            "id": "lane-fields-refused-by-name",
+            "status": "PASS",
+            "evidence": "blind/mod.rs:477-487 dossier_lane_field_missing names both the lane and the field; test mod.rs:797-806 loops all four LANE_FIELDS asserting field and lane; an empty value counts as absent (mod.rs:809-818)"
+          },
+          {
+            "id": "leaning-brief-refused-by-shared-guard",
+            "status": "PASS",
+            "evidence": "blind/mod.rs:61 imports lint_brief from verbs/drivers and calls it at :533; test mod.rs:875-889 pulls LEANING_VERDICT_STEMS[0] from the frozen list and asserts reason brief_leaning_language plus the phrase; the shape arm also reaches the dossier (mod.rs:894-903)"
+          },
+          {
+            "id": "well-formed-passes",
+            "status": "PASS",
+            "evidence": "a_well_formed_dossier_passes (mod.rs:715-730) plus the_shipped_example_dossier_passes_this_door (mod.rs:978-987) reading the REAL docs/history/slp-blind-lanes/blind/example-run.md via CARGO_MANIFEST_DIR, not a copy; cargo test verbs::blind: 21 passed 0 failed"
+          },
+          {
+            "id": "scanner-arm-sees-blind",
+            "status": "PASS",
+            "evidence": "tests/registry_dispatch.rs:416 feeds match_arm_verbs(crate_src(\"verbs/blind/mod.rs\"), \"pub fn try_native\", 1) into the served set; undeclared() at :377-387 flags any 'bee blind <verb>' absent from the declared invocations, and the floor of 1 refuses a vacuous scan; blind.check being declared blocks parking the namespace in NOT_A_COMMAND_SURFACE"
+          },
+          {
+            "id": "prohibitions-held",
+            "status": "PASS",
+            "evidence": "CHECKS_RUN is [sections, lane_fields, brief_lint] only, pinned by test mod.rs:961-973; the module's only fs call is std::fs::read of the caller-named path (mod.rs:603), so no store is written; rg for the stems over verbs/blind/ found none, and both_doors_call_the_one_guard_and_neither_carries_its_stems (mod.rs:909-925) reads both callers' sources; the commit stat touches no dispatch or prepare file and changes no kind"
+          },
+          {
+            "id": "flag-ratchet-198-with-reuse-check",
+            "status": "PASS",
+            "evidence": "catalog.rs:649-665 carries PINNED_FLAG_COUNT=198 WITH the written reuse check: --file, --task-file, --digest-file and --brief-file all name payloads consumed as input to a WRITE, while blind check reads evidence and writes nothing, so --dossier is a new concept rather than a rename"
+          },
+          {
+            "id": "deviations-legitimate",
+            "status": "PASS",
+            "evidence": "Both 'the plan was wrong about a fact' deviations are genuinely FORCED, not convenience. (a) brief_lint.rs:221-232 hard-refuses any brief missing one of the four BRIEF_SECTIONS, so a Question-only recording would refuse every dossier - whole-brief recording is required by the plan's own lint-re-run, and bln-4's digest check needs those bytes. (b) Proposals are stored verbatim and are arbitrary prose, so without the fence mask a quoted '## Chosen' inside a proposal would become a section boundary; pinned by mod.rs:930-940. The undeclared example-run.md was PRE-AUTHORIZED by the cell action's own text ('ship one under docs/history/slp-blind-lanes/blind/ as the example's target'), was reserved before the write, and is anti-drift tested against the real repo path"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T09:44:11.156Z"
+      }
+    ]
+  }
+}
