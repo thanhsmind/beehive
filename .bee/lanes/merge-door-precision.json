@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "merge-door-precision",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"merge-door-precision\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at d45732d; reload the product and test \"merge-door-precision\", then either approve uat (\"bee gate --name uat --approved true --lane merge-door-precision\") or fix it in the worktree and merge again.",
+  "next_action": "Judge mdp-1, then uat and close",
   "created_at": "2026-08-26T06:16:12.166Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
@@ -28,5 +28,14 @@
     "rationale": "bee worktree merge refuses on any dirt outside its bookkeeping allowlist, including UNTRACKED files in another feature's docs/history that this merge can never touch. With several live sessions the steady state is that nobody merges until everybody commits — hit four times in two days.",
     "updated_at": "2026-08-26T06:16:12.177Z",
     "feature": "merge-door-precision"
+  },
+  "last_scribing_run": {
+    "feature": "merge-door-precision",
+    "date": "2026-08-28",
+    "at": "2026-08-28T06:00:47.573Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "Judge mdp-1, then uat and close"
   }
 }

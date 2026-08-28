@@ -88,6 +88,71 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "untracked-outside-changed-set-no-longer-refuses",
+            "status": "PASS",
+            "evidence": "phases.rs:260-270 filters dirt.untracked by the changed set; tests.rs:2318-2338 (an_untracked_path_the_branch_never_touches_no_longer_blocks_the_merge) asserts answer.ok and result[\"merged\"]==true — green in the 8-test run"
+          },
+          {
+            "id": "untracked-and-touched-still-refuses-named",
+            "status": "PASS",
+            "evidence": "tests.rs:2367-2409 (an_untracked_path_the_branch_does_write_still_refuses_and_is_named) commits docs/history/other-feature/plan.md on the branch, asserts WORKTREE_MERGE_MAIN_DIRTY and msg.contains(\"docs/history/other-feature/plan.md\") — green"
+          },
+          {
+            "id": "tracked-dirt-refusal-unchanged",
+            "status": "PASS",
+            "evidence": "phases.rs:271 `if !dirt.tracked.is_empty() || !blocking_untracked.is_empty()` — tracked dirt alone still refuses with no collision test; tests.rs:1961-1979 and 2186-2200 refuse on tracked-and-modified fixtures — green"
+          },
+          {
+            "id": "no-untracked-path-swept-into-auto-commit",
+            "status": "PASS",
+            "evidence": "tests.rs:2352-2364 asserts git ls-files for the peer path is empty and porcelain -uall still names it AFTER a merged==true run; git show c68b02b7 has no hunk touching main_bookkeeping_roots or the bookkeeping commit helper"
+          },
+          {
+            "id": "refusal-text-names-what-still-blocks",
+            "status": "PASS",
+            "evidence": "phases.rs:288 message: \"What still blocks: any TRACKED change outside {scope}, plus any UNTRACKED file this branch itself writes (the merge would overwrite it). An untracked file the branch never touches cannot collide, so it no longer blocks\"; tests.rs:2000-2004 still asserts all four scope roots appear"
+          },
+          {
+            "id": "merge-base-not-head-with-disagreeing-fixture",
+            "status": "PASS",
+            "evidence": "merge.rs:213-219 uses `merge-base HEAD <branch>` then `diff --no-renames --name-only -z <base> <branch>`; tests.rs:2437-2452 asserts !base_spelling.contains(\"stale.txt\") AND head_spelling.contains(\"stale.txt\") in the same fixture (main deleted stale.txt after the fork) — the two spellings provably disagree, then the merge proceeds"
+          },
+          {
+            "id": "fail-closed-on-unreadable-branch-or-base",
+            "status": "PASS",
+            "evidence": "merge.rs:214-224 returns None on non-zero merge-base, empty base, or non-zero diff; merge.rs:505-511 current_branch returns None on detached HEAD; phases.rs:267-269 `None => dirt.untracked.clone()` blocks every untracked path"
+          },
+          {
+            "id": "six-existing-tests-keep-every-assertion",
+            "status": "PASS",
+            "evidence": "git show c68b02b7 -- tests.rs | rg '^-.*(assert|panic!)' prints exactly 2 deleted lines, both from the replaced test and both restored stronger at tests.rs:2392-2402; the other five gained only a seed_tracked_file call; #[test] count 146 -> 148"
+          },
+          {
+            "id": "deleted-helper-had-no-outside-callers",
+            "status": "PASS",
+            "evidence": "git show c68b02b7^:tests.rs | rg git_status_porcelain_excluding_untracked_all -> lines 2102/2234/2272 plus phases.rs = 4 callers, all rewritten; repo-wide rg over packages/ now returns 0 matches; rationale preserved at merge.rs:132-142"
+          },
+          {
+            "id": "cell-verify-command-green",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee --bins worktree -> \"test result: ok. 235 passed; 0 failed\"; --bins merge -> \"test result: ok. 129 passed; 0 failed; 1 ignored\""
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T06:02:53.526Z"
+      }
+    ]
   }
 }
