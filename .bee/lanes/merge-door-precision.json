@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "merge-door-precision",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"merge-door-precision\" started at phase \"planning\" (lane).",
-  "next_action": "Judge mdp-1, then uat and close",
+  "next_action": "bee close finished \"merge-door-precision\" — feature is closed.",
   "created_at": "2026-08-26T06:16:12.166Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
