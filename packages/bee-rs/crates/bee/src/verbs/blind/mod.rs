@@ -558,7 +558,10 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
 //      Containment over all proposals at once passes a quote attributed to
 //      lane A but written only by lane B, and that misattribution IS the
 //      fabrication D4 exists to catch: it manufactures agreement between
-//      lanes that never agreed.
+//      lanes that never agreed. What a resolved citation proves is
+//      PROVENANCE — the quote is a whole sentence of the named lane's own
+//      bytes — never faithfulness to what that lane meant; `is_sentence_end`
+//      states the boundary rule's own limits.
 //   2. DIGEST EQUALITY. Every lane's `brief_sha256` is checked against the
 //      digest its `dispatch_id` carries in `.bee/logs/dispatch.jsonl`, the
 //      record the dispatch door itself wrote. Comparing the dossier's
@@ -662,6 +665,63 @@ fn is_terminator(b: u8) -> bool {
     matches!(b, b'.' | b'!' | b'?')
 }
 
+/// Dots that do NOT end a sentence. CLOSED on purpose: a set that grows by
+/// guesswork would start refusing honest citations, and every miss here is a
+/// dot the boundary rule reads as a sentence end — the safe direction is to
+/// list the marks that actually appear in design prose. Lowercase, dot
+/// included, because both sides of the scan are `normalize`d.
+const NON_TERMINAL_ABBREVIATIONS: [&str; 8] =
+    ["i.e.", "e.g.", "etc.", "cf.", "vs.", "no.", "fig.", "approx."];
+
+/// Is the terminator at `at` the END OF A SENTENCE, or only a dot?
+///
+/// ─── WHAT THIS RULE CATCHES, AND WHAT IT CANNOT ───────────────────────────
+///
+/// The rule exists for ONE class: a citation that starts mid-sentence and
+/// drops the words that reverse it — "we should not cache the token" cited as
+/// "cache the token". Requiring the span to sit between two sentence
+/// boundaries makes that strip impossible WITHIN a sentence, because the
+/// dropped negation is exactly the text between the boundary and the quote.
+///
+/// A dot alone is not a boundary. "we should not follow lane-b here, i.e.
+/// cache the token" has a dot before the clause, and reading it as a sentence
+/// end hands back the whole hole this rule closes. So a dot ends a sentence
+/// only when it is not part of a run (an ellipsis is one mark, not three
+/// ends) and the token it closes is not a listed abbreviation.
+///
+/// WHAT IT CANNOT DO. This is a mechanical string check over ONE sentence,
+/// and it cannot decide whether a citation is faithful to what the lane
+/// meant. Three limits, named rather than papered over:
+///   * framing one sentence back — "Never do the following. Cache the token
+///     on the worker side." cited as the second sentence alone is a whole
+///     sentence of the lane's own bytes and PASSES. That is decided, not
+///     missed: refusing it needs the meaning of the previous sentence, and a
+///     rule that guessed there would refuse honest citations wholesale;
+///   * the abbreviation set is closed, so an unlisted abbreviation ("resp.",
+///     a name's initial) still reads as a sentence end;
+///   * a real sentence that genuinely ends in a listed abbreviation is
+///     refused. Both misses land on the strict side except the first, which
+///     is why the first is stated everywhere this check is described.
+///
+/// The true claim, and the only one any refusal or doc may make: a resolved
+/// citation is a WHOLE SENTENCE of the named lane's own bytes. Provenance,
+/// not faithfulness.
+fn is_sentence_end(h: &[u8], at: usize) -> bool {
+    if h[at] != b'.' {
+        return true;
+    }
+    // A run of two or more dots is one mark — an ellipsis ends nothing.
+    if (at > 0 && h[at - 1] == b'.') || h.get(at + 1) == Some(&b'.') {
+        return false;
+    }
+    let mut k = at;
+    while k > 0 && h[k - 1] != b' ' {
+        k -= 1;
+    }
+    let token = &h[k..=at];
+    !NON_TERMINAL_ABBREVIATIONS.iter().any(|a| a.as_bytes() == token)
+}
+
 /// Does `needle` stand in `hay` as a WHOLE-SENTENCE span — starting where a
 /// sentence starts and ending where one ends?
 ///
@@ -687,9 +747,9 @@ fn quote_resolves(hay: &str, needle: &str) -> bool {
             while k > 0 && h[k - 1] == b' ' {
                 k -= 1;
             }
-            k < start && k > 0 && is_terminator(h[k - 1])
+            k < start && k > 0 && is_terminator(h[k - 1]) && is_sentence_end(h, k - 1)
         };
-        let ends_sentence = end == h.len() || is_terminator(h[end]);
+        let ends_sentence = end == h.len() || (is_terminator(h[end]) && is_sentence_end(h, end));
         if starts_sentence && ends_sentence {
             return true;
         }
@@ -1650,6 +1710,75 @@ mod tests {
             "lane-a ::   The  OLDER lease   wins on every read,  so a stale claim never outranks a LIVE one.",
         ]);
         let counts = checked(&doc, &control_log()).expect("a re-wrapped real quote is not a fake");
+        assert_eq!(counts.citations, 1);
+    }
+
+    /// The judge's verbatim counterexample quote: 34 characters and 7 words,
+    /// so it clears BOTH floors and only the sentence rule can refuse it.
+    const GOVERNED_CLAUSE: &str = "cache the token on the worker side";
+
+    /// A proposal whose negation is separated from `GOVERNED_CLAUSE` by `sep`
+    /// alone, cited as if the clause were a sentence of its own.
+    fn governed_clause_case(sep: &str) -> String {
+        let proposal = format!("We should not follow lane-b here{sep} {GOVERNED_CLAUSE}.");
+        assert!(
+            proposal.contains(GOVERNED_CLAUSE),
+            "the probe is only about the sentence rule: {proposal}"
+        );
+        let lanes = [lane("lane-a", &proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        dossier_of(&lanes, &[format!("lane-a :: {GOVERNED_CLAUSE}")])
+    }
+
+    /// HOLE e — an abbreviation's dot faking a sentence start. This is the
+    /// judge's counterexample against the first fix, verbatim: "i.e." ends in
+    /// a dot, so a rule that trusts ANY dot lets the citation begin past the
+    /// "should not" that governs the clause. The lane then reads as
+    /// recommending exactly what it refused.
+    #[test]
+    fn a_citation_starting_after_an_i_e_abbreviation_is_refused() {
+        let doc = governed_clause_case(", i.e.");
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+        assert!(
+            field(&v, "fix").to_ascii_lowercase().contains("sentence"),
+            "the refusal must name the sentence rule that caught it: {v}"
+        );
+    }
+
+    /// The same hole through the other everyday abbreviation.
+    #[test]
+    fn a_citation_starting_after_an_e_g_abbreviation_is_refused() {
+        let doc = governed_clause_case(", e.g.");
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// The same hole through an ASCII ellipsis: three dots are one mark, and
+    /// the last of them is not the end of a sentence.
+    #[test]
+    fn a_citation_starting_after_an_ascii_ellipsis_is_refused() {
+        let doc = governed_clause_case("...");
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// THE LIMIT, PINNED. Cross-sentence framing passes and is MEANT to: the
+    /// quote IS a whole sentence of lane-a's own bytes, and the words that
+    /// reverse it live in the sentence BEFORE it. Deciding it explicitly
+    /// (carried, not refused) keeps the contract honest — this check reads one
+    /// sentence, so a mechanical rule cannot see a negation one sentence back
+    /// without refusing honest citations wholesale. This probe exists so the
+    /// green is a recorded limit and never mistaken for proof of faithfulness.
+    #[test]
+    fn a_whole_sentence_quote_framed_by_the_sentence_before_it_still_passes() {
+        let proposal = "Never do the following. Cache the token on the worker side.";
+        let lanes = [lane("lane-a", proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc = dossier_of(&lanes, &[format!("lane-a :: {GOVERNED_CLAUSE}")]);
+        let counts = checked(&doc, &control_log())
+            .expect("carried by decision: cross-sentence framing is outside the within-sentence contract");
         assert_eq!(counts.citations, 1);
     }
 
