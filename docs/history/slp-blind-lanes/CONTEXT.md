@@ -98,7 +98,7 @@ before planning.
 
 - `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` — where the lint
   refusal attaches so neutrality is enforced at the chokepoint, not by discipline
-- `packages/bee-rs/crates/bee/src/verbs/state/set_gate.rs` — Gate 3 already
+- `packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs` — Gate 3 already
   requires a recorded advisor consult for high-risk work
   (`high_risk_advisor_refusal`, `bee state advisor-ref record`): one mandatory
   consult today, the natural hook point for a multi-lane rung

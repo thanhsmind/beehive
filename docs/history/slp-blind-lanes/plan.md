@@ -93,18 +93,25 @@ feature's work.
 
 ## Approach
 
-**Recommended path.** Build blind lanes as a procedure over the EXISTING
-`--kind advisor`, not a new kind (D2 locks the chokepoint, not the spelling).
-One new record type keeps the run — open reason, brief, verbatim proposals,
-critiques — and ONE new flag, `dispatch prepare --blind <run-id>`, renders the
-brief into the payload FROM THOSE STORED BYTES. Byte-identity (D2b) is then a
-property of the design, not a check run after the fact: three lanes cannot read
-three different files because they read no file at all.
+**Recommended path** (shape B, settled by decision `f0f21142`). Build blind
+lanes as a procedure over the EXISTING `--kind advisor`, with no new store and
+no new command family. `dispatch prepare --kind advisor --brief-file <path>`
+carries the LaneBrief into the payload and the lint refuses at that door. The
+lane-opening reason (D1) is logged through the existing `bee decisions log`. The
+dossier document itself holds every lane proposal verbatim, so a program has real
+bytes to check. ONE new verb, `bee blind check <dossier>`, runs three mechanical
+checks over that document's fixed sections: D4's citation check, brief-digest
+equality across lanes, and the read-diet check. Byte-identity (D2b) is VERIFIED
+rather than constructed — `dispatch prepare` stamps the brief's sha256 on the
+dispatch record it already returns, the dossier records one digest per lane, and
+`blind check` refuses when they differ.
 
-**The lint, stated honestly.** One shared guard function runs at two doors —
-`bee blind open` (fail fast) and `dispatch prepare --blind` (the chokepoint
-refusal D2(a) locks) — with one test asserting both doors call it. Its scope is
-EXACTLY the brief bytes and the open reason. It never reads `--purpose`,
+**The lint, stated honestly.** One shared guard function runs at two callers —
+`dispatch prepare --brief-file` (the chokepoint refusal D2(a) locks) and
+`bee blind check`, which re-runs it over the dossier's recorded brief so a
+convergence built on an unlinted brief refuses — one shared function, one test
+asserting both callers use it. Its scope is EXACTLY the brief bytes. It never
+reads `--purpose`,
 `--expertise`, or any other dispatch text: a false fire on those would block the
 advisor consult Gate 3 itself requires (`high_risk_advisor_refusal`,
 `set_gate.rs`) and deadlock the high-risk workflow. The guard has two arms: a
@@ -118,13 +125,14 @@ one is delivery-plus within D2(a), not a supersession.
 
 **Blindness is stated, not enforced — so breach becomes evidence.** bee's hooks
 guard writes and secrets, never reads, so a lane can read anywhere the
-orchestrator wrote its leaning — including `.bee/blind/` itself, where D1's
-logged open reason routinely states that leaning. Two cheap teeth close it
-without a read hook: `.bee/blind/` and `.bee/state.json` are excluded from every
-diet by construction, and `bee blind proposal add` REFUSES a proposal whose
-returned paths-read list falls outside the recorded diet or names `.bee/` at
-all. A silent breach becomes a typed refusal or a recorded lie — the same trust
-level as D4's citation check. Convergence renders a dossier and RECORDS — never prints — one
+orchestrator wrote its leaning. Shape B removes one such path by not creating a
+run store, but it does not remove the hazard: D1's open reason now lands in
+`.bee/decisions.jsonl`, which sits on the same disk. Two cheap teeth close it
+without a read hook: every LaneBrief's read diet excludes `.bee/` by
+construction, and `bee blind check` REFUSES a dossier whose lane sections report
+a paths-read entry outside that diet or naming `.bee/` at all. The advisor prompt
+already obliges a lane to return the paths it read, so a silent breach becomes a
+typed refusal or a recorded lie — the same trust level as D4's citation check. Convergence renders a dossier and RECORDS — never prints — one
 `bee decisions log` entry with a registered trigger. The rejected set rides
 today's flat `--alternatives` string, in the fixed form
 `<lane-id>: <one-line reason>; <lane-id>: <reason>`. That is the single answer to
@@ -141,10 +149,11 @@ bump. Deadlock reuses
 - Reusing `--expertise` as the brief carrier — rejected: it means "paths to
   read, with purpose", the read diet, not the question. Overloading it would
   make the diet and the brief one field that the lint cannot scan cleanly.
-- A free `--brief-file <path>` read per dispatch — rejected: the file can change
-  between lane 1 and lane 3, so a record-time equality check would fire only
-  after the lanes already ran on divergent briefs. Rendering from stored run
-  bytes removes the failure class instead of detecting it.
+- A `bee blind` namespace over a `.bee/blind/` run store (shape A) — rejected by
+  the user at the shape gate (`f0f21142`): byte-identity by construction did not
+  justify a new command family, six new flag spellings, new registry entries, a
+  new served-but-undeclared scanner arm, and a readable on-disk copy of the
+  orchestrator's leaning.
 - A shared forbidden-word constant across both prose guards and the new lint —
   rejected: neither existing guard has one, the vocabularies do not overlap
   (deferral stems versus leaning language), and merging them would put three
@@ -168,20 +177,21 @@ would drop D2(a)'s door refusal and D4's mechanical check, both locked.
 |---|---|---|---|
 | The lint at the door | HIGH | A guard and its tests are one model (`docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md`). Worse here: a false fire on the wrong input blocks the advisor consult Gate 3 requires, deadlocking the high-risk workflow that approves guards | Red-first refusal per arm; a scope test proving the lint NEVER reads `--purpose`/`--expertise`; a corpus run over every `packages/bee/prompts/*.md` and every checked-in brief-shaped doc asserting zero fires; one test asserting both doors call the same function |
 | Word list co-tuned with its corpus | MEDIUM | The zero-false-fire corpus and the stem list are authored together and will agree with each other rather than with reality | The shape arm carries the load; the lexical arm's stems are frozen in the plan and any later addition needs its own recorded reason |
-| Leaning stored on disk | MEDIUM | D1 forces an open reason that states the orchestrator's suspicion, and `.bee/blind/` sits on the same disk the lanes can read | `.bee/blind/` and `.bee/state.json` excluded from every diet by construction; `proposal add` refuses a paths-read list outside the diet or naming `.bee/` |
+| Leaning readable on disk | MEDIUM | D1 forces an open reason that states the orchestrator's suspicion, and it lands in `.bee/decisions.jsonl` on the same disk the lanes can read | Every diet excludes `.bee/` by construction; `bee blind check` refuses a dossier whose lane sections report a paths-read entry outside the diet or naming `.bee/` |
 | Editing `advisor.md` without re-vendoring | HIGH | `prompts_match_disk` (`prompt.rs:72-89`) byte-compares the embedded template against BOTH `packages/bee/prompts/advisor.md` and `.bee/bin/prompts/advisor.md`; on skew `prepare.rs:1733-1735` returns `None`, and the Node delegate it would fall to was deleted at the R6 cutover. A source-only edit breaks EVERY `dispatch prepare` in this checkout | The prompt edit and `bee dev regen` land in ONE commit, with a probe asserting `prompts_match_disk(root, "advisor")` after the edit |
 | First non-empty vars slice for a non-cell template | LOW | Proven feasible: `prompt.rs:156` treats an absent var as falsy and `render_conditional_blocks_leave_no_residue` pins it, so a `{{brief}}` INSIDE a `{{#if brief}}` block leaves today's bytes untouched when no brief is passed. A `{{brief}}` outside a block is a hard refusal (`prompt.rs:176-181`), and the block must not start at byte 0 (`prompt.rs:118`) | `embedded_prompts_are_the_checked_out_files_byte_for_byte`, `c4_embedded_prompts_match_disk`, `real_templates_render_end_to_end` and the runtime×kind label walk all green; a brief-absent render byte-identical to today |
 | Empty-vs-whitespace brief | MEDIUM | `{{#if}}` truthiness is `!v.is_empty()` (`prompt.rs:156`), so a whitespace-only brief splices an empty block instead of rendering today's bytes | The carrier trims before it renders; the whitespace-only probe asserts the trimmed-empty render is byte-identical to no-brief |
 | New flag vs `PINNED_FLAG_COUNT` | MEDIUM | `catalog.rs:271-282` demands a written per-flag reuse check before a bump, and `bee dev regen` does NOT write `src/generated/registry_payload.json` — that file is hand-maintained (`devtools/mod.rs:141-150`; both dissent commits edited it by hand) | The full chain in one commit: hand-edit `registry_payload.json` keeping `examples[0]` runnable (`tests/registry_dispatch.rs:50-80` executes it), bump `PINNED_FLAG_COUNT` with the recorded reuse reason, parse the flag, rebuild, `bee dev regen` to re-vendor. Gated by `distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision`, `registry_dispatch.rs`, `registry_contracts.rs` |
-| Blind-run record | MEDIUM | New store type; `.bee/lanes/` already means per-feature lane records | Name the store `.bee/blind/`, verb `bee blind` — CLI round-trip tests in the `reviews` style |
+| The dossier as the record | MEDIUM | A hand-written document is the only place proposals live, so a malformed section makes the whole check unrunnable | `bee blind check` parses the fixed section set and refuses a malformed dossier by NAME of the missing section, never by silently checking less |
 | Citation check | HIGH | Plain containment has three separate holes, not one: a short generic quote ("the dispatch door") is inside every proposal; a NEGATION strip inverts meaning (proposal says "we should NOT cache the token", the dossier cites "cache the token" and passes); and containment against the concatenated set lets a citation attributed to lane A but written only by lane B pass — misattribution IS the fabrication D4 exists to catch | A citation is `<lane-id> :: <quote>`, checked against THAT lane's normalized bytes only, with a minimum quote span. Four red-first probes, one per hole: short-generic refuses, fabricated refuses, negation-strip refuses, cross-lane misattribution refuses; a real quote differing only in whitespace passes |
 | Deadlock hand-off | MEDIUM | Only one of the two channels exists. `waiting-on --kind question` works but carries the dossier path as prose only; the mailbox's `needs_you[]` blocker path has no producer and must be wired | A `question` mark naming the dossier path, plus the first real `KIND_BLOCKER` producer with its own letter-render test |
 | Skill prose (D1, D5, D6, D7) | MEDIUM | Instruction text is an untested code path (critical pattern, 2026-08-21) | `--test instruction_laws --test pointer_integrity` green |
 
 ## Answers to CONTEXT.md's deferred questions
 
-1. **Where the lint attaches.** On the existing `--kind advisor`, as one shared
-   guard function called at two doors, with one test asserting both call it. No
+1. **Where the lint attaches.** On the existing `--kind advisor`, at
+   `dispatch prepare --brief-file`, as one shared guard function that
+   `bee blind check` also calls, with one test asserting both callers use it. No
    new kind.
 2. **The rejected set.** Today's flat `--alternatives` string, in the fixed form
    `<lane-id>: <one-line reason>; <lane-id>: <reason>`. The structured
@@ -230,8 +240,8 @@ are the brief carrier, the lint, the run record, and the convergence check.
 | Epic | Capability / risk area | Why it exists | Slices | Proof needed |
 |---|---|---|---|---|
 | E1 | LaneBrief carrier + the lint at the dispatch door | D2(a); today no caller text reaches a non-cell prompt body and nothing lints it | 1a | Red-first typed refusal per arm, a lint-scope test, a zero-false-fire corpus run |
-| E2 | The blind-run record (`bee blind`) | D1's logged open reason, D2(b)'s byte-identity by construction, and D4's mechanical check all need real stored bytes | 1a, 2 | CLI round-trip; the diet/paths-read refusal at `proposal add` |
-| E3 | Convergence: dossier render, citation check, decision + trigger link | D2(d), D4 | 1b, 3 | Fabricated and short-generic citations both refuse red-first |
+| E2 | The brief digest on the dispatch record | D2(b) byte-identity has to be checkable, and the dispatch record is the one artifact prepare already returns | 1a | Two prepares over one file give one digest; an edited file gives two |
+| E3 | `bee blind check` — the dossier contract, citation check, digest equality, diet check | D2(d), D4, and the blindness teeth | 1b, 3 | Fabricated, short-generic, negation-strip and cross-lane citations all refuse red-first |
 | E4 | Cross-critique round, the read diet, and the `--kind cell` refusal | D2(b) read diet, D2(c) round two, D3 | 2 | Round-2 payload carries the rival proposal verbatim; a blind brief on `--kind cell` refuses |
 | E5 | Deadlock hand-off | D2(e) | 3 | `waiting-on --kind question` carries the dossier path; unattended writes a letter |
 | E6 | Blind-lane procedure prose | D1, D5, D7 | 4 | `instruction_laws`, `pointer_integrity` green |
@@ -239,28 +249,31 @@ are the brief carrier, the lint, the run record, and the convergence check.
 
 **Slice queue.**
 
-- **Slice 1a — walking skeleton (current).** A real end-to-end blind run with no
-  stubs, convergence done by hand: `bee blind open` records the brief, the open
-  reason and the read diet, and REFUSES a leaning brief on either lint arm;
-  `dispatch prepare --kind advisor --blind <run-id>` re-lints the STORED bytes
-  and renders them into the advisor payload; `bee blind proposal add` stores a
-  lane's answer verbatim and refuses a paths-read list outside the diet. Depends
-  on nothing.
-- **Slice 1b — convergence.** `bee blind converge` renders the dossier, runs the
-  lane-scoped citation check with its minimum quote length, and prints the exact
-  `decisions log` + `triggers add` calls that link it. Cut from 1a because the
-  citation check is its own risk surface with its own red-first proof; welding it
-  to the door change makes one big-bang gate out of two independent
-  verifications. Depends on slice 1a.
+- **Slice 1a — the door (current).** `dispatch prepare --kind advisor
+  --brief-file <path>` carries the brief into the advisor payload through a
+  `{{#if brief}}` block in `advisor.md`, the lint refuses a leaning brief on
+  either arm at that door, and the returned dispatch record gains the brief's
+  sha256. One commit carries the prompt edit AND `bee dev regen`, because a
+  source-only prompt edit breaks every `dispatch prepare` in this checkout. Ends
+  end-to-end and usable: three lanes can be fired on one linted brief by hand
+  today. Depends on nothing.
+- **Slice 1b — `bee blind check`.** The dossier's fixed section contract, the
+  lane-scoped citation check with its minimum quote span, brief-digest equality
+  across lanes, and the read-diet check. Cut from 1a because the checks are their
+  own risk surface with their own red-first proofs; welding them to the door
+  change makes one big-bang gate out of two independent verifications. Depends on
+  slice 1a for the digest.
 - **Slice 2 — cross-critique and the read diet.** Round-2 payloads carrying the
-  rival proposal verbatim; the read-diet list carried into the advisor payload;
-  the `--kind cell` refusal for a blind brief (D3). Depends on slice 1.
-- **Slice 3 — deadlock and the rejected set.** `bee blind deadlock` marking
-  `waiting-on --kind question` with the dossier path in its subject, wiring the
-  first real `KIND_BLOCKER` producer so an unattended run files a letter whose
-  "Needs your call" section actually renders, and a structured rejected set
-  (`--rejected`, list-typed like `--tags`) on the convergence decision. Costs one
-  `PINNED_FLAG_COUNT` bump and a `bee dev regen`. Depends on slice 1.
+  rival proposal verbatim; the read-diet list carried into the advisor payload
+  beside the brief; the `--kind cell` refusal for a blind brief (D3). Depends on
+  slice 1a.
+- **Slice 3 — deadlock and the rejected set.** A `waiting-on --kind question`
+  mark carrying the dossier path in its subject, wiring the first real
+  `KIND_BLOCKER` producer so an unattended run files a letter whose "Needs your
+  call" section actually renders, and a structured rejected set (`--rejected`,
+  list-typed like `--tags`) on the convergence decision. Costs the full flag
+  chain: a hand-edit to `registry_payload.json`, a `PINNED_FLAG_COUNT` bump with
+  its recorded reuse reason, and `bee dev regen`. Depends on slice 1b.
 - **Slice 4 — blind-lane procedure prose.** When the agent opens lanes and logs
   the reason (D1), pushback names the missing context (D5), hats are not lanes
   (D7). Depends on slices 1a–3 landing so the prose describes shipped behavior.
@@ -294,49 +307,20 @@ fixture. Slice 1a carries a corpus test that runs the lint over every checked-in
 prompt and brief-shaped doc in the repo and asserts zero fires, and a scope test
 proving the lint never reads any dispatch text but the brief and the open reason.
 
-## Open scope question — the user's call, not planning's
+## The scope question, settled
 
-D2's rationale in `CONTEXT.md` reads: *"Blind lanes are a PROCEDURE over the
-existing dispatch door, **not new machinery** … the two genuinely missing pieces
-are the brief lint and a structured rejected-set on the decision record."*
+D2's rationale reads *"a PROCEDURE over the existing dispatch door, not new
+machinery — the two genuinely missing pieces are the brief lint and a structured
+rejected-set"*. An earlier draft of this plan added a `bee blind` namespace over
+a `.bee/blind/` run store, which is machinery that rationale excluded. Planning
+raised it rather than deciding it.
 
-This plan's shape names FOUR missing pieces and adds a new `bee blind` CLI
-namespace plus a `.bee/blind/` store. That is machinery D2's rationale excluded.
-The engineering reason is real — D4 calls the citation check MECHANICAL, and a
-program cannot check text that only ever lived in an agent's message — but
-widening a locked decision is not planning's call to make silently. Two shapes,
-one choice:
-
-**A — the run record.** `bee blind open` / `proposal add` / `converge`, storing
-the brief, the open reason, the read diet and every proposal verbatim under
-`.bee/blind/`. Byte-identity becomes a property of the design (lanes render from
-stored bytes, so they cannot read different files), the citation check reads real
-stored bytes, and the diet breach check has somewhere to compare against. Costs a
-new namespace: a `try_native` probe, a router `PORTED` entry, registry entries
-with runnable examples, a new scanner arm in `registry_dispatch.rs` (the
-served-but-undeclared law scans three named tables and would not see `bee blind`
-at all), and roughly six new flag spellings against `PINNED_FLAG_COUNT`. It also
-writes the orchestrator's own leaning to a readable path the lanes can reach,
-which the advisor consult flags as a hazard needing its own two teeth.
-
-**B — no new store.** `dispatch prepare --brief-file <path>` carries the brief
-and the lint refuses at the door; the open reason is logged through the EXISTING
-`bee decisions log`; the dossier document itself holds every proposal verbatim;
-and ONE new verb, `bee blind check <dossier>`, runs the citation check
-mechanically over that document's own fixed sections. Byte-identity is verified
-rather than constructed: `dispatch prepare` records the brief's sha256 on the
-dispatch record, and `blind check` refuses when the lanes' recorded digests
-differ. Strictly closer to D2's letter, no `.bee/blind/` leaning leak, one new
-verb instead of a namespace. The cost is honest and bounded: a brief edited
-between lane 1 and lane 3 is CAUGHT at convergence rather than made impossible,
-and the diet-breach check has no stored diet to compare against, so it reads the
-diet from the dossier.
-
-Recommendation: **B** — smaller, closer to the locked decision, and it removes
-the stored-leaning hazard instead of adding two teeth to contain it.
-
-Either choice needs a new decision id or a supersession note on D2 before cells
-are drafted.
+The user picked shape B, recorded as decision `f0f21142`: no new store, no new
+command family. The brief rides `--brief-file`, the open reason rides the
+existing decision log, the dossier holds the proposals, and one new verb runs the
+checks. The accepted cost is named in that decision — a brief edited between lane
+1 and lane 3 is caught by digest equality at convergence rather than made
+impossible by construction.
 
 ## Advisor consult
 
