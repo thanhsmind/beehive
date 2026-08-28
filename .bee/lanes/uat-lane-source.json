@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "uat-lane-source",
   "mode": "feature",
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"uat-lane-source\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 7ae5996; capture what settled, then bee close --feature uat-lane-source.",
+  "next_action": "bee close --feature uat-lane-source",
   "created_at": "2026-08-19T03:00:05.080Z",
   "run_state": null,
   "waiting_on": null,
@@ -25,5 +25,14 @@
     "rationale": null,
     "updated_at": "2026-08-19T03:00:12.927Z",
     "feature": "uat-lane-source"
+  },
+  "last_scribing_run": {
+    "feature": "uat-lane-source",
+    "date": "2026-08-28",
+    "at": "2026-08-28T05:34:00.379Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "bee close --feature uat-lane-source"
   }
 }

@@ -13,8 +13,13 @@
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"slp-dissent-stop-and-ask\" — feature is closed.",
   "created_at": "2026-08-27T20:58:29.709Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Một agent đang đọc code main để trả lời: 3 cell kẹt (`uls-1`, `mdp-1`, `koh-11`) đã làm rồi hay chưa. Feature của cả 3 đều đã merge, nên có",
+    "asked_at": "2026-08-28T05:30:52.411Z",
+    "session": "be014001-263f-451f-b775-5f601ff73817"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",

@@ -25,7 +25,7 @@
     "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
   ],
   "acceptance": "Untracked files the branch never touches stop blocking; untracked files it does touch still refuse; tracked dirt is unchanged; the worktree suite is green and a new test pins the clobber case.",
-  "status": "blocked",
+  "status": "open",
   "deps": [],
   "decisions": [],
   "read_first": [],
@@ -44,6 +44,11 @@
     "claimed_at": null,
     "swept_at": "2026-08-26T09:50:19.811Z",
     "swept_from_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
-    "blocked_reason": "swept by bee: session \"e79d1e09-87fb-491a-9e3a-7ade73f3bd0c\"'s claim on this cell expired and its heartbeat went stale; its half-finished work, if any, may be at worktree \"/home/thanhsmind/Projects/goglbe/beehive\" (workspace \"main\")."
+    "blocked_reason": null,
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-28T05:32:04.640Z",
+    "reopened_reason": "Stale claim from a dead session was swept to blocked. An independent read of main confirms none of the work landed: phases.rs still refuses on any dirt and never computes the merging branch's changed-file set. Returning it to open for a fresh worker."
   }
 }

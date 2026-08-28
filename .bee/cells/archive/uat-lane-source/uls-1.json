@@ -29,25 +29,50 @@
       "The uat, worktree, and close suites are green."
     ]
   },
-  "status": "blocked",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "uls-w1",
+    "outcome": "uat_lane_mode resolves the lane from route.lane, with mode kept only as a legacy fallback when its value is a real route-lane",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/uat.rs"
+    ],
+    "deviations": [
+      "Capped from main rather than from a worker run — the work already landed as commit c9c01ca7 and merged at 7ae59965; a dead session's swept claim left the record blocked while the work was done — found a better route",
+      "Capped from main rather than from a worker run — the work already landed as c9c01ca7 while a swept claim left the record blocked"
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-28T05:32:52.005Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
+    "claim_session": "be014001-263f-451f-b775-5f601ff73817",
+    "claimed_at": "2026-08-28T05:32:34.618Z",
     "swept_at": "2026-08-19T09:56:44.521Z",
     "swept_from_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "blocked_reason": "swept by bee: session \"837fbcd4-540d-49a6-a882-7366f6bc3f97\"'s claim on this cell expired and its heartbeat went stale; its half-finished work, if any, may be at worktree \"/home/thanhsmind/projects/goglbe/beehive\" (workspace \"main\")."
+    "blocked_reason": null,
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-28T05:32:34.612Z",
+    "reopened_reason": "Stale claim swept it to blocked, but the work already landed on main as commit c9c01ca7 (merged at 7ae59965). Reopening only so it can be capped with its proof line — no code change is owed.",
+    "commit_pending": "Commit c9c01ca7 predates this cap and carries no cell trailer: it was authored by the session whose claim was later swept, and rewriting merged history to add one is not worth it.",
+    "inline_reason": "No execution worker was dispatched because there is no execution to do: the code, its doc-comment rewrite and its six tests already landed as commit c9c01ca7 and merged at 7ae59965. A dead session's swept claim left the record blocked while the work was done. This cap is bookkeeping over shipped code, verified by an independent read of uat.rs:179-203 plus a fresh run of the three suites that read the resolver.",
+    "report": {
+      "outcome": "uat_lane_mode resolves the lane from route.lane, with mode kept only as a legacy fallback when its value is a real route-lane",
+      "commit": "c9c01ca7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/uat.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bins uat, --bins worktree, --bins close — green — 70 + 233 + 196 passed, 0 failed; the three suites that read uat_lane_mode: the resolver, the merge-side precondition, and the close-side uat door",
+      "deviations": [
+        "Capped from main rather than from a worker run — the work already landed as c9c01ca7 while a swept claim left the record blocked"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   },
   "role": "code"
 }
