@@ -183,6 +183,68 @@ pub(crate) fn resolve_brief_file(kind: &str, path: Option<&str>) -> Result<Optio
     Ok(Some(trimmed.to_string()))
 }
 
+/// slp-blind-lanes-procedure P1: a reading list may NEVER ride beside a
+/// brief.
+///
+/// `--expertise` is prose that reaches the lane's prompt exactly as the brief
+/// does, and two things break when the two travel together:
+///
+/// * the leaning guard reads BRIEF BYTES ONLY, by deliberate design
+///   (`lint_brief` is handed one `&str` and nothing more), so a reading list
+///   riding alongside is an unlinted prose channel straight into a blind
+///   lane — the one channel `brief_lint.rs` exists to close;
+/// * `brief_sha256` would keep proving the BRIEFS were byte-identical across
+///   2–3 lanes while the payloads themselves diverged, which is precisely
+///   what the digest is stamped to rule out.
+///
+/// So the combination is a typed refusal, in the same
+/// `{ok:false, type:"refused", reason, fix}` shape `brief_kind_not_advisor`
+/// takes, and its fix names the brief's OWN `## Read diet` section — a
+/// required section of every LaneBrief, already checked against the reported
+/// paths by `bee blind check` — as the one carrier. One list, one carrier,
+/// one linted channel.
+///
+/// It speaks only for `advisor`: every other kind may not carry a brief at
+/// all, and the kind arm below owns that refusal with its own remedy.
+/// `expertise` here is the RENDERED block, so an empty or absent list carries
+/// nothing and refuses nothing.
+pub(crate) fn expertise_beside_brief_refusal(
+    kind: &str,
+    brief_path: Option<&str>,
+    expertise: Option<&str>,
+) -> Option<Value> {
+    if kind != "advisor" {
+        return None;
+    }
+    brief_path?;
+    let expertise = expertise?;
+    if expertise.is_empty() {
+        return None;
+    }
+    Some(brief_refusal(
+        "expertise_beside_brief",
+        &[],
+        "--expertise cannot travel with --brief-file. The leaning guard reads the brief's bytes and nothing else, so a reading list passed alongside reaches the lane unlinted, and brief_sha256 would keep certifying that the briefs matched while the payloads differed. A brief already carries its reading list: put the paths in the brief's own `## Read diet` section — the section `bee blind check` checks the reported paths against — and drop --expertise from this dispatch.".to_string(),
+    ))
+}
+
+/// `resolve_brief_file` with the combination check in front of it — the
+/// arity-adapter shape `prepare_dispatch_with_brief` already uses, so there
+/// is ONE resolution order and a caller cannot accidentally read the brief
+/// first. The refusal fires BEFORE any file is touched: an unreadable path
+/// passed beside a reading list earns `expertise_beside_brief`, never
+/// `brief_file_unreadable`.
+pub(crate) fn resolve_brief_with_expertise(
+    kind: &str,
+    path: Option<&str>,
+    expertise: Option<&str>,
+) -> Result<Option<String>, Value> {
+    if let Some(refusal) = expertise_beside_brief_refusal(kind, path, expertise) {
+        return Err(refusal);
+    }
+    resolve_brief_file(kind, path)
+}
+
 /// A non-empty string field off a loaded cell record, or `None`. Written once
 /// because the dispatch now reads TWO of them in precedence order (`role`,
 /// then a pre-mrs-8 record's `tier`) and two hand-rolled copies of the same
@@ -681,12 +743,22 @@ pub(crate) fn prompt_body_for(
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
-        // The FIRST non-empty vars slice a non-cell template has ever been
-        // rendered with. `brief` absent renders the empty string, which is
-        // falsy to `{{#if brief}}`, which drops the block WITH its own
-        // leading newline — so a briefless gather/reviewer/advisor payload
-        // is byte-identical to what this line produced when it passed `&[]`.
-        return Ok(render(&template, &[("brief", brief.unwrap_or(""))]));
+        // Every var a non-cell template can carry. Absent renders the empty
+        // string, which is falsy to `{{#if}}`, which drops the block WITH
+        // its own leading newline — so a gather/reviewer/advisor payload
+        // carrying neither is byte-identical to what this line produced when
+        // it passed `&[]`.
+        //
+        // `expertise` is here because it was NOT: this arm rendered `brief`
+        // alone, so a dispatcher's `--expertise` reading list was parsed,
+        // rendered to a block and then silently dropped for every kind but
+        // `cell`. Pass 2 refuses a `{{NAME}}` with no supplied value, so a
+        // var declared in a template MUST appear in this slice or every
+        // dispatch of that kind dies at the door.
+        return Ok(render(
+            &template,
+            &[("brief", brief.unwrap_or("")), ("expertise", expertise.unwrap_or(""))],
+        ));
     }
     let cell = cell.expect("kind cell always carries a loaded cell");
     let Some(template) = load_prompt("worker-cell") else { return Err(Delegate) };
@@ -1903,27 +1975,9 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         Some(FlagV::S(s)) => Some(s.clone()),
         Some(FlagV::Present) => Some(String::new()),
     };
-    // Resolved here, before anything is built, so a refused brief never
-    // reaches the payload build at all. A typed refusal, never a Thrown: the
-    // caller of this door is an orchestrator firing 2–3 lanes, and it reads
-    // `{ok:false, reason}` off every other refusal this command returns.
-    //
-    // The LEANING GUARD runs here too, on the resolved brief bytes and NOTHING
-    // else — never `--purpose`, never `--expertise`, never the cell record. A
-    // false fire on those would refuse the advisor consult Gate 3 itself
-    // requires (`high_risk_advisor_refusal`) and deadlock the high-risk
-    // workflow that approves guards, so the guard is handed one `&str` and the
-    // door hands it nothing more. Its list and its arms live in
-    // `brief_lint.rs` alone, so `bee blind check` can re-run the SAME rule
-    // over a dossier's recorded brief without a second copy to drift.
-    let (brief_text, brief_arg_refusal) = match resolve_brief_file(&kind, brief_flag.as_deref()) {
-        Ok(Some(brief)) => match lint_brief(&brief) {
-            Ok(()) => (Some(brief), None),
-            Err(refusal) => (None, Some(refusal)),
-        },
-        Ok(None) => (None, None),
-        Err(refusal) => (None, Some(refusal)),
-    };
+    // The rendered reading list, resolved BEFORE the brief: the two may not
+    // travel together (`expertise_beside_brief_refusal`), and that refusal
+    // has to fire before the brief file is read.
     let (expertise_arg_error, expertise_block) = match expertise_entries {
         Ok(entries) => {
             let block = if entries.is_empty() {
@@ -1938,6 +1992,36 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             (None, block)
         }
         Err(err) => (Some(err), None),
+    };
+    // Resolved here, before anything is built, so a refused brief never
+    // reaches the payload build at all. A typed refusal, never a Thrown: the
+    // caller of this door is an orchestrator firing 2–3 lanes, and it reads
+    // `{ok:false, reason}` off every other refusal this command returns.
+    //
+    // The LEANING GUARD runs here too, on the resolved brief bytes and NOTHING
+    // else — never `--purpose`, never `--expertise`, never the cell record. A
+    // false fire on those would refuse the advisor consult Gate 3 itself
+    // requires (`high_risk_advisor_refusal`) and deadlock the high-risk
+    // workflow that approves guards, so the guard is handed one `&str` and the
+    // door hands it nothing more. Its list and its arms live in
+    // `brief_lint.rs` alone, so `bee blind check` can re-run the SAME rule
+    // over a dossier's recorded brief without a second copy to drift.
+    //
+    // `resolve_brief_with_expertise`, never `resolve_brief_file`: a reading
+    // list beside a brief is refused here, before the brief file is read,
+    // because a list that reached a lane's payload would ride around the
+    // guard on this very line.
+    let (brief_text, brief_arg_refusal) = match resolve_brief_with_expertise(
+        &kind,
+        brief_flag.as_deref(),
+        expertise_block.as_deref(),
+    ) {
+        Ok(Some(brief)) => match lint_brief(&brief) {
+            Ok(()) => (Some(brief), None),
+            Err(refusal) => (None, Some(refusal)),
+        },
+        Ok(None) => (None, None),
+        Err(refusal) => (None, Some(refusal)),
     };
 
     // ── everything that can still delegate happens BEFORE prelude: its

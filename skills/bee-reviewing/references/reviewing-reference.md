@@ -27,11 +27,16 @@ Lead with findings. Do not rewrite code.
 ### Reviewer method (shared by all roles)
 
 1. From the scope you were handed, write down what a correct change
-   must handle before reading the diff — "Adversarial reading".
+   must handle before reading the diff — "Adversarial reading". The
+   five layers that list must cover, and where each one is already
+   written down, are in "The 5-Layer rubric".
 2. Read the diff through your Purpose's lens only, hunting what the
    diff does not say: absent handling, the cases the author was least
    likely to run, the edges just outside the changed region —
-   "Adversarial reading".
+   "Adversarial reading". Name the other side of every branch the diff
+   adds — "The Truth Table Test" — and where the change brings a thing
+   into being, walk its create, read, update and delete together —
+   "The CRUD Lifecycle check".
 3. Reproduce or trace every suspected defect before filing — "Verify
    before reporting"; what qualifies as a finding at all — "What a
    finding is".

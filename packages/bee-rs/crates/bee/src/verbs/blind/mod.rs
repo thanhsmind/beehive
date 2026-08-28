@@ -60,7 +60,7 @@ use super::feedback::{emit_error, emit_success, js_trim, parse_shape, ParsedArgs
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
-use crate::verbs::drivers::{brief_refusal, lint_brief};
+use crate::verbs::drivers::{brief_refusal, fence_mask, lint_brief};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -174,39 +174,10 @@ impl Dossier {
 
 // ─── markdown, read the way a record must be read ───────────────────────
 
-/// Per-line "is this line inside (or itself) a fenced block?".
-///
-/// Fence delimiters count as fenced, so an opening ```` ``` ```` never reads
-/// as prose. A closing delimiter must use the same character as its opener,
-/// be at least as long, and carry nothing else — so a proposal may contain
-/// its own shorter fences without ending the block that quotes it.
-fn fence_mask(lines: &[&str]) -> Vec<bool> {
-    let mut mask = Vec::with_capacity(lines.len());
-    let mut open: Option<(char, usize)> = None;
-    for line in lines {
-        let t = line.trim_start();
-        let marker = t.chars().next().filter(|c| *c == '`' || *c == '~');
-        let run = marker.map_or(0, |c| t.chars().take_while(|x| *x == c).count());
-        match open {
-            None => {
-                if run >= 3 {
-                    open = Some((marker.unwrap_or('`'), run));
-                }
-                mask.push(run >= 3);
-            }
-            Some((c, n)) => {
-                mask.push(true);
-                let closes = marker == Some(c)
-                    && run >= n
-                    && t.trim_end().chars().all(|x| x == c);
-                if closes {
-                    open = None;
-                }
-            }
-        }
-    }
-    mask
-}
+// `fence_mask` is IMPORTED, not defined here: the same scanner the brief
+// guard reads its one tagged block with (verbs/drivers/brief_lint.rs). Two
+// copies of a markdown rule answer differently the first time one is tuned,
+// which is the argument this file already makes about the stem list.
 
 /// `(level, text)` for an ATX heading line, or `None`. A `#` run with no
 /// whitespace after it is not a heading — the same rule `brief_lint`'s own

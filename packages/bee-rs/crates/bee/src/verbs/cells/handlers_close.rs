@@ -660,10 +660,15 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
 //      have passed. (D14's feature-close LETTER is phase 4; the feature-close
 //      ENTRY is what `mailbox::KIND_FEATURE_CLOSE` is for.)
 //   3. blocker — `bee cells block --id <id> --reason <why>`: `run_block`
-//      (this file) -> `mutate_cell(root, id, "blockCell", …)`, which writes
-//      `status: "blocked"` and `trace.blocked_reason` under the per-cell
-//      lock. The stop is complete when `mutate_cell` returns the cell, and
-//      the reason it just stored is the sentence's raw material.
+//      (this file) -> `block_cell` -> `mutate_cell(root, id, "blockCell", …)`,
+//      which writes `status: "blocked"` and `trace.blocked_reason` under the
+//      per-cell lock. The stop is complete when `mutate_cell` returns the
+//      cell, and the reason it just stored is the sentence's raw material.
+//      WIRED, by `record_block_in_mailbox` below — and it is the only stop
+//      that carries a D13 Needs-your-call item, because it is the only one
+//      with something to ask. `cells dissent` at blocker severity shares the
+//      mutation, not this hook: a dissent is a recorded disagreement the
+//      orchestrator answers, not a run reaching the human.
 //
 // Deliberately NOT stops: `cells drop` (work abandoned, not done), `cells
 // unclaim` and `cells reopen` (a claim moved; nothing finished), and
@@ -1108,31 +1113,109 @@ pub(crate) fn run_block(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
     let (session_flag, force) = ownership_args(&flags)?;
     dispatch("cells block", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        if js_trim(&reason).is_empty() {
-            return Err(Fail::Thrown("blockCell: a reason is required.".into()));
-        }
-        let root2 = root.clone();
-        let id2 = id.clone();
-        let reason2 = reason.clone();
-        let cell = mutate_cell(&root, &id, "blockCell", Some("blockCell"), true, move |cell_map| {
-            let trace = merge_trace(cell_map.get("trace"))?;
-            let trace = guard_claim_ownership(
-                &root2,
-                &id2,
-                trace,
-                "blockCell",
-                session_flag.as_deref(),
-                force,
-            )?;
-            // The blocked-status write itself lives in `apply_block_mutation`
-            // (util.rs) — `cells dissent` at blocker severity arms the same
-            // tooth, and one mutation with two callers is the only way the
-            // status, the attempts row and the reason field cannot drift apart.
-            apply_block_mutation(&root2, &id2, cell_map, trace, &reason2)
-        })?;
+        let cell = block_cell(&root, &id, &reason, session_flag.as_deref(), force)?;
         let text = format!("Blocked {}.", js_string_or_undefined(cell.get("id")));
         Ok(Out::Emit(cell, text, 0))
     })
+}
+
+/// `bee cells block`'s whole stop: the guarded mutation, then D4's mailbox
+/// append. Extracted from `run_block` so the stop is reachable without a
+/// dispatch context — the same shape `cap_cell_from_flags` already has, and
+/// the reason the blocker letter can be proved end to end.
+pub(crate) fn block_cell(
+    root: &Path,
+    id: &str,
+    reason: &str,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Value> {
+    if js_trim(reason).is_empty() {
+        return Err(Fail::Thrown("blockCell: a reason is required.".into()));
+    }
+    let root2 = root.to_path_buf();
+    let id2 = id.to_string();
+    let reason2 = reason.to_string();
+    let session_owned = session_flag.map(str::to_string);
+    let cell = mutate_cell(root, id, "blockCell", Some("blockCell"), true, move |cell_map| {
+        let trace = merge_trace(cell_map.get("trace"))?;
+        let trace = guard_claim_ownership(
+            &root2,
+            &id2,
+            trace,
+            "blockCell",
+            session_owned.as_deref(),
+            force,
+        )?;
+        // The blocked-status write itself lives in `apply_block_mutation`
+        // (util.rs) — `cells dissent` at blocker severity arms the same
+        // tooth, and one mutation with two callers is the only way the
+        // status, the attempts row and the reason field cannot drift apart.
+        apply_block_mutation(&root2, &id2, cell_map, trace, &reason2)
+    })?;
+    // D4 (human-mailbox): the stop is COMPLETE the moment `mutate_cell`
+    // returns — `status: "blocked"` and the reason are on disk — so the
+    // entry is appended now. Fail-open (`record_stop` warns and returns):
+    // nothing about a letter may turn a recorded block into a refusal.
+    record_block_in_mailbox(root, &cell, reason, session_flag);
+    Ok(cell)
+}
+
+/// D4/D8/D9/D13 (docs/history/human-mailbox/CONTEXT.md): record this block as
+/// one human-mailbox entry, THE MOMENT the block lands — and, unlike every
+/// producer before it, with a Needs-your-call item.
+///
+/// It is the FIRST producer `mailbox::KIND_BLOCKER` has ever had. A cap
+/// records finished work and a green feature close left nothing outstanding,
+/// so both hard-code an empty item list and the letter's `Needs your call`
+/// section has been dropped from every letter this repo has written. A block
+/// is the opposite stop: the run stopped and something has to be answered
+/// before it can go on, which is exactly what D13's item is for (D2(e) of
+/// docs/history/slp-blind-lanes/CONTEXT.md — an unattended run's deadlock
+/// channel).
+///
+/// EVERY PART IS ALREADY STORED. The sentence is the reason `cells block`
+/// just wrote to `trace.blocked_reason`, verbatim; the item's id is the
+/// cell's own id and what it blocks is the cell's own title. Nothing here
+/// composes a second reason, and nothing states a fact the cell file does not
+/// carry — D8's authorship ban reaches a producer exactly as hard as it
+/// reaches the composing pass.
+///
+/// UNCONDITIONAL, by D9, and FAIL-OPEN, by D10 — the same posture as
+/// `record_cap_in_mailbox` above, for the same reasons.
+fn record_block_in_mailbox(root: &Path, blocked: &Value, reason: &str, session_flag: Option<&str>) {
+    // The same run resolution the cap uses (D9, D12): the caller's own
+    // session, then the claim's recorded session for a block typed in a plain
+    // shell against a cell some session claimed.
+    let session = resolve_session_flag_env(session_flag).or_else(|| {
+        match blocked.get("trace").and_then(|t| t.get("claim_session")) {
+            Some(Value::String(s)) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
+            _ => None,
+        }
+    });
+    let run = mailbox::run_id(session.as_deref());
+    let id = blocked.get("id").and_then(Value::as_str).unwrap_or_default();
+    let entry = mailbox::Entry {
+        at: utc_now(),
+        kind: mailbox::KIND_BLOCKER.to_string(),
+        // D8: the plain-language sentence is written HERE, at the moment of
+        // the event, never at composition.
+        what: mailbox::block_sentence(reason),
+        // A block edited nothing and proved nothing — it is where the work
+        // stopped. Empty rather than guessed.
+        files: Vec::new(),
+        commit: None,
+        proof: None,
+        // A block is not a departure from a plan (D5); it is the plan running
+        // out of road.
+        departure: None,
+        needs_you: vec![mailbox::block_needs_you(
+            id,
+            blocked.get("title").and_then(Value::as_str),
+            reason,
+        )],
+    };
+    mailbox::record_stop(root, &run, &entry);
 }
 
 pub(crate) fn run_drop(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -1598,6 +1681,88 @@ mod tests {
         let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
         assert_eq!(entries[0].what, "Finished the store that holds a letter.");
     }
+
+    // ── D4/D13 + slp D2(e): the blocker stop, the first producer of an
+    //    item for the letter's `Needs your call` section ──────────────────
+
+    const BLOCK_REASON: &str = "Which name do you want for the folder?";
+
+    #[test]
+    fn a_block_files_the_item_the_needs_your_call_section_never_had() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        // D9: unarmed, and it still records — arming decides only whether a
+        // letter is composed at the end of the run.
+        assert!(!crate::verbs::mailbox::armed(root));
+        mailbox_cell(root, "mb-5");
+
+        let blocked = block_cell(root, "mb-5", BLOCK_REASON, Some("mb-run"), false).unwrap();
+        assert_eq!(blocked["status"], json!("blocked"));
+        assert_eq!(blocked["trace"]["blocked_reason"], json!(BLOCK_REASON));
+
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 1, "the block appended exactly one entry");
+        let entry = &entries[0];
+        assert_eq!(entry.kind, crate::verbs::mailbox::KIND_BLOCKER);
+        // D8: the reason it just stored IS the sentence, verbatim — never
+        // re-worded, and never composed out of the cell's title.
+        assert_eq!(entry.what, BLOCK_REASON);
+        assert!(!entry.at.is_empty(), "the moment is recorded");
+        // D13: the blocked cell and the recorded reason, and nothing else.
+        assert_eq!(entry.needs_you.len(), 1);
+        let item = &entry.needs_you[0];
+        assert_eq!(item.id, "mb-5");
+        assert_eq!(item.what, BLOCK_REASON);
+        assert_eq!(item.blocks, "the store that holds a letter");
+
+        // The section every letter so far has dropped now has something to
+        // report, and the blocker's own sentence lands under D7's
+        // "Broken or unfinished" rather than under "Done".
+        let body = crate::verbs::mailbox::compose_body(&entries);
+        assert!(body.contains("## Needs your call"), "body was:\n{body}");
+        assert!(
+            body.contains(
+                "- [mb-5] Which name do you want for the folder? — blocks: the store that holds a letter"
+            ),
+            "body was:\n{body}"
+        );
+        let broken_at = body.find("## Broken or unfinished").unwrap();
+        assert!(body.find(&format!("- {BLOCK_REASON}")).unwrap() > broken_at, "body was:\n{body}");
+    }
+
+    #[test]
+    fn a_block_whose_mailbox_cannot_be_written_is_still_a_recorded_block() {
+        // D10: the block is the operation, the letter is the notification. A
+        // letter that cannot be written must never turn a recorded block into
+        // a different error.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(crate::verbs::mailbox::mailbox_dir(root)).unwrap();
+        std::fs::write(crate::verbs::mailbox::entries_dir(root), "not a directory").unwrap();
+
+        mailbox_cell(root, "mb-6");
+        let blocked =
+            block_cell(root, "mb-6", "The two doors disagree", Some("mb-run"), false).unwrap();
+        assert_eq!(blocked["status"], json!("blocked"));
+        assert_eq!(blocked["trace"]["blocked_reason"], json!("The two doors disagree"));
+        assert!(crate::verbs::mailbox::read_entries(root, "mb-run").is_empty());
+    }
+
+    #[test]
+    fn a_cap_still_asks_the_human_for_nothing() {
+        // The other half of the same rule: a cap records finished work, so
+        // its entry carries no item and its letter drops the section.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-7");
+        cap_cell_from_flags(root, &mailbox_cap_flags("mb-7", "Did the work"), false).unwrap();
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert!(entries[0].needs_you.is_empty());
+        assert!(!crate::verbs::mailbox::compose_body(&entries).contains("## Needs your call"));
+    }
+
     // ── D5 + D10: the departure contract, enforced only while armed ─────
 
     const DEPARTURE: &str =

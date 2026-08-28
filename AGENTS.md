@@ -271,7 +271,7 @@ The full mechanics live in `skills/bee-hive/SKILL.md` and its
 references, loaded when routing work: lanes and gate wording; § Gate
 bypass mode; § Progress ticks; § Judgment contract; § Goal-check
 judge tier; § Concurrency law in full; § Delegation contract;
-worktrees; plus the worker contract
+§ Blind lanes and convergence; worktrees; plus the worker contract
 in `bee-swarming` ("Execute") — including native-Codex subagent tending on
 a Codex runtime — the capture discipline in
 `bee-capturing` ("Capture the moment it settles"), and the question

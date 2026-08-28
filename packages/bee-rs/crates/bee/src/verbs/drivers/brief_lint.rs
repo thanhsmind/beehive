@@ -32,11 +32,117 @@
 // `matches_deferral_prose` each inline their own literals at the use site,
 // and this guard does the same — three refusals behind one list would be one
 // list nobody dares to change.
+//
+// ─── THE TAGGED FENCE, AND WHAT THE TAG IS NOT ────────────────────────────
+//
+// The cross-critique round (D2(c)) hands each lane the RIVAL proposal
+// verbatim, and a real proposal contains "I recommend X", its own headings
+// and its own bullet lists. So one bounded exception exists: a fenced block
+// whose opening info string is `QUOTED_PROPOSAL_FENCE_TAG` is skipped by all
+// three scans. Every other fence — tagged with anything else, or tagged with
+// nothing — scans exactly as it did before the exception existed.
+//
+// THE TAG IS A CLAIM, NOT A PROOF. Anyone can type it, and nothing here
+// checks that the fenced bytes came from another lane. Its whole value is
+// that it is an EXPLICIT, recorded claim inside a brief a convergence later
+// reads: a forged tag is a named lie in the record, which is the trust
+// posture decision 79b5437b already states for the citation check. No comment,
+// refusal or doc line here may say the tag prevents leaning — it does not.
+// It moves one bounded block out of a lexical scan, and that is all.
+//
+// THIS IS THE LAST RUNG. A lexical rule cannot decide meaning, so each new
+// written form that escapes it invites one more spelling of the test
+// (`docs/knowledge/patterns/20260828-bound-the-fix-ladder-when-a-lexical-rule-stands-in-for-a-semantic-claim.md`).
+// If a judge breaks this rule with a form the fence test does not see, the
+// answer is to REDUCE THE CLAIM in this banner — never a fourth fence rule,
+// and never a stem removed to make a case pass.
+//
+// An unclosed fence is therefore its own refusal (`brief_fence_unclosed`):
+// an unmatched opener would otherwise hide every line after it from every
+// scan, which is a silent skip, and a silent skip is the one thing a guard
+// may never do.
 #![allow(unused_imports)]
 
 use super::*;
 use crate::verbs::decisions::{boundary_before, is_word, starts_with_ci, ws_run};
 use serde_json::{Map, Value};
+
+// ─── fences: ONE implementation, two doors ──────────────────────────────
+//
+// `verbs/blind/mod.rs` reads fences to keep a quoted `## Chosen` from moving
+// a dossier's section boundaries; this guard reads them to find the one
+// tagged block it may skip. Both call `scan_fences` — a markdown rule living
+// in two places drifts the first time one side is tuned, which is the same
+// argument the frozen stem list's own both-doors test makes.
+
+/// The one info string that marks a fenced block as a QUOTED rival proposal.
+///
+/// Written by hand into a round-2 brief. It is a claim, never a proof — see
+/// the module banner, and never widen this to a prefix or a set.
+pub(crate) const QUOTED_PROPOSAL_FENCE_TAG: &str = "lane-proposal";
+
+/// Per-line fence state for one markdown document.
+pub(crate) struct Fences {
+    /// Is this line inside (or itself) a fenced block?
+    pub(crate) fenced: Vec<bool>,
+    /// Is this line inside (or itself) a fence opened with the tag?
+    pub(crate) tagged: Vec<bool>,
+    /// The line index of an opener that never closed, when there is one.
+    pub(crate) unclosed: Option<usize>,
+}
+
+/// Scan `lines` for fenced blocks.
+///
+/// Fence delimiters count as fenced, so an opening ```` ``` ```` never reads
+/// as prose. A closing delimiter must use the same character as its opener,
+/// be at least as long, and carry nothing else — so a proposal may contain
+/// its own shorter fences without ending the block that quotes it.
+///
+/// `tagged` is true only for a block whose opening INFO STRING (everything
+/// after the delimiter run) trims to `QUOTED_PROPOSAL_FENCE_TAG`, ASCII case
+/// folded. `lane-proposal rust` is not the tag: the exception is one exact
+/// token, and a prefix match would let any info string starting with it
+/// through.
+pub(crate) fn scan_fences(lines: &[&str]) -> Fences {
+    let mut fenced = Vec::with_capacity(lines.len());
+    let mut tagged = Vec::with_capacity(lines.len());
+    // (delimiter char, delimiter length, is this block tagged, opener line)
+    let mut open: Option<(char, usize, bool, usize)> = None;
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim_start();
+        let marker = t.chars().next().filter(|c| *c == '`' || *c == '~');
+        let run = marker.map_or(0, |c| t.chars().take_while(|x| *x == c).count());
+        match open {
+            None => {
+                let opens = run >= 3;
+                let info: String = t.chars().skip(run).collect();
+                let is_tagged =
+                    opens && info.trim().eq_ignore_ascii_case(QUOTED_PROPOSAL_FENCE_TAG);
+                if opens {
+                    open = Some((marker.unwrap_or('`'), run, is_tagged, i));
+                }
+                fenced.push(opens);
+                tagged.push(opens && is_tagged);
+            }
+            Some((c, n, is_tagged, _)) => {
+                fenced.push(true);
+                tagged.push(is_tagged);
+                let closes =
+                    marker == Some(c) && run >= n && t.trim_end().chars().all(|x| x == c);
+                if closes {
+                    open = None;
+                }
+            }
+        }
+    }
+    Fences { fenced, tagged, unclosed: open.map(|(_, _, _, at)| at) }
+}
+
+/// Per-line "is this line inside (or itself) a fenced block?" — the dossier
+/// parser's view of `scan_fences`, which is all it needs.
+pub(crate) fn fence_mask(lines: &[&str]) -> Vec<bool> {
+    scan_fences(lines).fenced
+}
 
 /// The FROZEN verdict-stem set — seventeen phrases, arm 1.
 ///
@@ -130,6 +236,27 @@ pub(crate) fn first_leaning_stem(text: &str) -> Option<&'static str> {
     None
 }
 
+/// ARM 1 over a brief, with every TAGGED-fence line removed.
+///
+/// The scan runs per contiguous run of unskipped lines, never over a joined
+/// copy: joining the text across a removed block would let the last word
+/// before a fence and the first word after it read as one phrase, and the
+/// guard would report a stem nobody wrote.
+fn first_leaning_stem_outside_tagged(lines: &[&str], fences: &Fences) -> Option<&'static str> {
+    let mut segment: Vec<&str> = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if fences.tagged[i] {
+            if let Some(stem) = first_leaning_stem(&segment.join("\n")) {
+                return Some(stem);
+            }
+            segment.clear();
+        } else {
+            segment.push(line);
+        }
+    }
+    first_leaning_stem(&segment.join("\n"))
+}
+
 /// The trimmed text of a level-2 (`##`) heading line, or `None`. `###` is a
 /// sub-heading inside a section, never a section of its own.
 fn heading_text(line: &str) -> Option<&str> {
@@ -176,10 +303,28 @@ fn is_enumerated(line: &str) -> bool {
 /// a door that mentions neutrality while refusing a phrase reads as a door
 /// that certifies it when it stays quiet.
 ///
-/// Arms run stem-first, then shape: the stem refusal quotes a phrase the
-/// author can delete outright, which is the cheaper fix of the two.
+/// Arms run fence-first, then stem, then shape: an unclosed fence makes the
+/// other two arms read the wrong lines, and the stem refusal quotes a phrase
+/// the author can delete outright, which is the cheaper fix of the two.
 pub(crate) fn lint_brief(brief: &str) -> Result<(), Value> {
-    if let Some(stem) = first_leaning_stem(brief) {
+    let lines: Vec<&str> = brief.lines().collect();
+    let fences = scan_fences(&lines);
+
+    // ARM 0 — a fence still open at the end of the brief. Skipping in silence
+    // is the failure this refusal exists to prevent: every line after an
+    // unmatched opener would be invisible to both arms below.
+    if let Some(at) = fences.unclosed {
+        let opener = lines[at].trim().to_string();
+        return Err(brief_refusal(
+            "brief_fence_unclosed",
+            &[("line".into(), Value::String(opener.clone()))],
+            format!(
+                "the brief opens a fenced block at \"{opener}\" and never closes it, so every line below it would go unread. Close the block with a matching fence line, then re-run the dispatch."
+            ),
+        ));
+    }
+
+    if let Some(stem) = first_leaning_stem_outside_tagged(&lines, &fences) {
         return Err(brief_refusal(
             "brief_leaning_language",
             &[("phrase".into(), Value::String(stem.to_string()))],
@@ -188,13 +333,24 @@ pub(crate) fn lint_brief(brief: &str) -> Result<(), Value> {
             ),
         ));
     }
-    lint_brief_shape(brief)
+    lint_brief_shape(&lines, &fences)
 }
 
 /// ARM 2 — the four sections, in order, and no enumerated candidates under
 /// Question.
-fn lint_brief_shape(brief: &str) -> Result<(), Value> {
-    let headings: Vec<&str> = brief.lines().filter_map(heading_text).collect();
+///
+/// Both halves skip TAGGED-fence lines: a quoted rival proposal carries its
+/// own headings and its own bullets, and either would fire this arm as loudly
+/// as the stems fire arm 1. A quoted heading must not close the section it
+/// sits in either, so the enumeration walk skips those lines outright rather
+/// than merely ignoring them as headings.
+fn lint_brief_shape(lines: &[&str], fences: &Fences) -> Result<(), Value> {
+    let headings: Vec<&str> = lines
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !fences.tagged[*i])
+        .filter_map(|(_, line)| heading_text(line))
+        .collect();
     let expected = BRIEF_SECTIONS.join(", ");
 
     // EXTRA first (an unknown or repeated heading names ITSELF, which is the
@@ -246,7 +402,10 @@ fn lint_brief_shape(brief: &str) -> Result<(), Value> {
     // lists them has already led the witness, and lanes exist to generate the
     // options. Scoped to Question — a read diet is a list by nature.
     let mut in_question = false;
-    for line in brief.lines() {
+    for (i, line) in lines.iter().enumerate() {
+        if fences.tagged[i] {
+            continue;
+        }
         if let Some(head) = heading_text(line) {
             in_question = head.eq_ignore_ascii_case(BRIEF_SECTIONS[0]);
             continue;

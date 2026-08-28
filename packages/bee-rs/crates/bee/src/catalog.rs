@@ -662,7 +662,24 @@ mod tests {
         // is taken on, not a document to read, and `--dossier` is the word the
         // feature's own vocabulary already uses for this artifact
         // (docs/history/slp-blind-lanes/CONTEXT.md, "Convergence dossier").
-        const PINNED_FLAG_COUNT: usize = 198;
+        // 198 -> 199 (slp-blind-lanes blp-2): `decisions.log` adds exactly ONE
+        // new spelling, `--rejected`, the convergence's rejected set — the
+        // options NOT taken, one `<what>: <why>` entry each, list-typed like
+        // `--tags`. Checked first, on this same command: `--alternatives` is
+        // the nearest miss and the reason the new name is earned rather than a
+        // rename. It is a single free-prose STRING meaning "what else was
+        // considered", and it stays exactly that; `--rejected` names the
+        // subset that LOST, each entry paired with its reason, as a walkable
+        // list. Collapsing the two would either force a list flag to keep
+        // being read as one sentence (silently breaking six existing readers
+        // of the flat field) or force a per-option reason back into prose,
+        // which is the very thing D2(d) exists to stop. Checked next, the
+        // other list-shaped spellings this vocabulary carries: `--tags`
+        // classifies for recall, `--relation` names prior DECISIONS by id,
+        // `--files` names repo paths, and `--alternative` (cells dissent) is
+        // singular and means "the one thing to do INSTEAD" — a proposal, not
+        // a discard. None of them meant "the options ruled out, with why".
+        const PINNED_FLAG_COUNT: usize = 199;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

@@ -149,6 +149,31 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
   never needed in the first place (`bee-herding/references/operational-invariants.md`, "`bee
   herding run` — one foreign agent as a cell-execution worker"). prepare's transport_ready is the reachability fact; the fallback model applies only when it is false — never guess from channel.
 
+### Blind lanes and convergence
+
+Two or three isolated advisor consults design an answer to ONE hard question, critique each other, and converge into one document plus one decision entry. **This section is the single home for the blind-lane PROCEDURE** — when lanes open, the four moves, the rule that binds the checker, and the three named limits. Every other surface (AGENTS.md, `bee blind check`'s own help, the `advisor-protocol` knowledge concept) carries a one-line pointer back here, never a second copy.
+
+**When lanes open.** The agent opens 2-3 lanes on its OWN judgment when a decision is both high-stakes AND ambiguous, and logs the reason at open time with `bee decisions log` — there is no approve-each-lane wait. The user may order lanes directly at any point. A convergence that produces no chosen answer hands the human the dossier unchanged — `bee state waiting-on set --kind question` when attended, `bee cells block --id <id> --reason <why>` when unattended, which is the one producer of a letter's "Needs your call" item — and never resolves itself by coin flip (slp-blind-lanes D1, D2(e)).
+
+**Lanes are not hats.** Lanes GENERATE designs from one byte-identical brief; hats CRITIQUE one request from fixed disjoint perspectives. Different purpose, so neither replaces the other, and a hat wave is never reported as a lane run (slp-blind-lanes D7).
+
+**The four moves** — the shape `bee-reviewing`'s wave already uses, applied to generation instead of critique:
+
+1. **Fan out.** One `bee dispatch prepare --runtime <rt> --kind advisor --brief-file <path>` per lane, in parallel. Each lane gets the SAME brief bytes and the read diet that brief declares; it is denied every sibling proposal, the orchestrator's own leaning, session history, and `--expertise` beside a brief (a second, unlinted reading channel is refused at the door). A lane never runs as `--kind cell` — refused by type, before the file is read (D3).
+2. **Cross-critique.** Round two: fresh advisor dispatches, each handed the rival proposal VERBATIM inside a fence whose info string is the one tag `lane-proposal`. A brief over the 8192-byte cap does not paste the proposal: the round-2 brief names its PATH in the read diet and the lane reads it there.
+3. **Converge.** One dossier at `docs/history/<feature>/blind/<run-id>.md`, holding every proposal verbatim, the critiques with their round-2 dispatch ids, the chosen answer, the rejected set with reasons, and the citations.
+4. **Record.** `bee decisions log --rejected "<what>: <why>" --trigger <id>` — the rejected set is a list on the record, and the revisit condition is a registered `bee triggers` id, never a memory.
+
+**Convergence RUNS `bee blind check --dossier <path>` green BEFORE it logs the decision.** No door forces that — the verb is one a caller must choose to run, so this sentence is the whole enforcement. Its digest check resolves each lane's `dispatch_id` against `.bee/logs/dispatch.jsonl`, so the check runs AT THE ROOT whose log holds the run: a run dispatched from a worktree checks in that worktree. The shipped example (`docs/history/slp-blind-lanes/blind/example-run.md`) refuses in the main checkout for exactly that reason — its dispatch ids never ran there — and that refusal is the rule working, not a broken example.
+
+**Three limits, said plainly rather than buried:**
+
+- **Provenance, never faithfulness.** A resolved citation proves the quoted span is a whole sentence of the named lane's own bytes, and nothing more. A quote whose meaning is governed by the sentence BEFORE it still resolves and passes (decision `79b5437b`).
+- **Round two sits outside the evidence chain.** Round-2 briefs differ per lane by construction, so the brief-digest check, the recorded-brief re-lint and the citation check all cover round ONE only. The dossier's `## Cross-critiques` section therefore CARRIES the round-2 dispatch ids in its text, and nothing mechanically checks them — round two is audited by a reader against that log, or not at all.
+- **The tagged fence is a claim, not a proof.** `lane-proposal` matches as one exact token, trimmed and ASCII-case-folded; anyone can type it, and nothing checks that the fenced bytes came from another lane. A forged tag is a named lie inside a recorded brief, settled by evidence at convergence — the same trust posture the citation check already takes.
+
+**Pushback counts only when it names the specific missing context.** An objection with no named gap does not stand — in a lane, in a cross-critique, or at convergence (slp-blind-lanes D5).
+
 ### Judgment contract — rails for workers, boundaries for the orchestrator
 
 Rules bind differently by rule kind and by role.

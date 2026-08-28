@@ -7048,9 +7048,9 @@ advance_on — falling to another model there hides the defect (D11)"
         }
     }
 
-    /// ARM 1, honestly: the guard is lexical and does not parse markdown, so a
-    /// stem inside a fenced code sample refuses too. Asserted as the real
-    /// behaviour rather than special-cased away.
+    /// ARM 1, honestly: a stem inside an ORDINARY fenced code sample refuses
+    /// too. Being fenced is not the exception — only the designated tag below
+    /// is, and everything else scans as it always did.
     #[test]
     fn a_verdict_stem_inside_a_fenced_code_sample_still_refuses() {
         let brief = shaped_brief("Where does the dossier live?").replace(
@@ -7060,6 +7060,133 @@ advance_on — falling to another model there hides the defect (D11)"
         let refusal = refusal_of(&brief);
         assert_eq!(refusal.get("reason"), Some(&json!("brief_leaning_language")), "{refusal}");
         assert_eq!(refusal.get("phrase"), Some(&json!("we should use")), "{refusal}");
+    }
+
+    // ── the tagged fence: the cross-critique round's ONE bounded exception ──
+    //
+    // D2(c) asks that round two hand each lane the rival proposal VERBATIM,
+    // and a real proposal carries verdict stems, its own headings and its own
+    // bullet lists. Only a fence whose opening info string is the designated
+    // tag is skipped, and it is skipped by ALL THREE scans. Every other fence
+    // scans exactly as the test above proves it does today.
+
+    /// The tag spelled as a LITERAL, not read off the constant: a test that
+    /// reads the constant it checks follows a silent rename, and this string
+    /// is what a brief author types by hand.
+    const QUOTED_FENCE_TAG_LITERAL: &str = "lane-proposal";
+
+    /// SCAN 1 — the verdict-stem arm. The same bytes pass inside a tagged
+    /// fence, refuse inside an untagged one, and refuse outside any fence.
+    #[test]
+    fn a_verdict_stem_inside_a_tagged_fence_no_longer_refuses() {
+        let quoted = format!(
+            "The rival lane returned this:\n\n```{QUOTED_FENCE_TAG_LITERAL}\n\
+             we should use the second reader.\n```"
+        );
+        let ok = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", &quoted);
+        assert!(lint_brief(&ok).is_ok(), "a tagged fence may carry the rival proposal: {ok}");
+
+        // The IDENTICAL bytes, untagged, still refuse: the exception is the
+        // tag, never the fence.
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_leaning_language")), "{r}");
+        assert_eq!(r.get("phrase"), Some(&json!("we should use")), "{r}");
+
+        // And outside any fence, exactly as before.
+        let bare = shaped_brief("Where does the dossier live?").replace(
+            "The answer stays inside the existing dispatch door.",
+            "we should use the second reader.",
+        );
+        assert_eq!(refusal_of(&bare).get("phrase"), Some(&json!("we should use")));
+    }
+
+    /// SCAN 2 — the four-section shape arm. A quoted proposal carries its own
+    /// headings; inside the tag they are prose, outside it they are sections.
+    #[test]
+    fn a_heading_inside_a_tagged_fence_does_not_become_a_section() {
+        let quoted = format!(
+            "```{QUOTED_FENCE_TAG_LITERAL}\n## Recommendation\n\nTake the second reader.\n```"
+        );
+        let ok = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", &quoted);
+        assert!(lint_brief(&ok).is_ok(), "a quoted heading is not a section: {ok}");
+
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Recommendation")), "{r}");
+    }
+
+    /// SCAN 3 — the Question-enumeration arm. A quoted proposal carries its
+    /// own bullet list, and the lane did that enumerating, not the brief.
+    #[test]
+    fn a_bullet_list_inside_a_tagged_fence_under_question_is_not_answer_enumeration() {
+        let quoted = format!(
+            "Lane A returned this:\n\n```{QUOTED_FENCE_TAG_LITERAL}\n\
+             ## Constraints\n\n- keep it in docs/\n- or beside the plan\n```"
+        );
+        let ok = shaped_brief(&quoted);
+        assert!(lint_brief(&ok).is_ok(), "a quoted list is the lane's, not the brief's: {ok}");
+
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+
+        // The tagged fence's own "## Constraints" must not close the Question
+        // section either: a bullet AFTER the fence, still under Question,
+        // still refuses. Were the quoted heading counted, the shape arm would
+        // have fired first and this reason would read differently.
+        let leaked = format!("{quoted}\n\n- and one the brief added itself");
+        let r = refusal_of(&shaped_brief(&leaked));
+        assert_eq!(r.get("reason"), Some(&json!("brief_question_enumerates_answers")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Question")), "{r}");
+    }
+
+    /// An opener with no closer would hide every following line from every
+    /// scan. It refuses BY NAME instead — tagged or not — so the guard never
+    /// skips material in silence.
+    #[test]
+    fn a_fence_left_open_in_a_brief_is_refused_by_name() {
+        for opener in [format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text".to_string()] {
+            let brief = shaped_brief("Where does the dossier live?").replace(
+                "The answer stays inside the existing dispatch door.",
+                &format!("{opener}\nthe rival proposal, with no closing fence"),
+            );
+            let r = refusal_of(&brief);
+            assert_eq!(r.get("reason"), Some(&json!("brief_fence_unclosed")), "{opener}: {r}");
+            assert_eq!(r.get("line"), Some(&json!(opener)), "the refusal names the opener: {r}");
+            let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("close"), "the fix says what to do: {fix}");
+        }
+    }
+
+    /// ONE fence implementation, two callers. A rule that lives in two places
+    /// drifts the first time one side is tuned — the same argument the stem
+    /// list's own both-doors test makes.
+    #[test]
+    fn one_fence_implementation_serves_the_guard_and_the_dossier() {
+        const GUARD_SOURCE: &str = include_str!("brief_lint.rs");
+        const BLIND_SOURCE: &str = include_str!("../blind/mod.rs");
+
+        assert!(
+            GUARD_SOURCE.contains("pub(crate) fn scan_fences"),
+            "the one fence scanner lives in verbs/drivers/brief_lint.rs"
+        );
+        assert!(
+            BLIND_SOURCE.contains("fence_mask(&lines)"),
+            "the dossier parser calls the shared scanner"
+        );
+        assert!(
+            !BLIND_SOURCE.contains("fn fence_mask"),
+            "verbs/blind/mod.rs defines a SECOND fence scanner — the rule lives in \
+             verbs/drivers/brief_lint.rs alone"
+        );
+        assert_eq!(
+            QUOTED_PROPOSAL_FENCE_TAG, QUOTED_FENCE_TAG_LITERAL,
+            "the tag a brief author types by hand is the tag the guard reads"
+        );
     }
 
     /// ARM 2, the arm that carries the real load: leaning is mostly
@@ -7323,6 +7450,273 @@ advance_on — falling to another model there hides the defect (D11)"
             assert!(
                 !PREPARE_SOURCE.to_ascii_lowercase().contains(stem),
                 "prepare.rs carries its own copy of {stem:?} — the list lives in brief_lint.rs alone"
+            );
+        }
+    }
+
+    // ── slp-blind-lanes-procedure P1: the reading list reaches the prompt
+    //    it was passed for, and never rides beside a brief ─────────────────
+    //
+    // `--expertise` was declared, accepted, parsed and rendered into a block
+    // for every kind, and then DROPPED for every kind but `cell`: the
+    // non-cell arm of `prompt_body_for` rendered a vars slice carrying
+    // `brief` alone. The cases below are the positive proof PER KIND,
+    // because the absent-case byte-identity walk above cannot see that
+    // defect — an `{{#if}}` over an absent variable is silently falsy, so a
+    // template twin that missed the edit would swallow the list again with
+    // every other test in this file green.
+
+    /// The `--expertise` argv value, in the flag's own
+    /// `<path> :: <purpose> :: <read-to>` shape.
+    const EXPERTISE_RAW: &str = "skills/bee-swarming/SKILL.md :: the worker contract :: follow the loop\ndocs/knowledge/index.md :: the knowledge index :: find the area concept";
+
+    /// What `run_dispatch_prepare` renders `EXPERTISE_RAW` into before it
+    /// hands the block to the prompt renderer.
+    const EXPERTISE_BLOCK: &str = concat!(
+        "- skills/bee-swarming/SKILL.md — the worker contract. Read it to follow the loop.\n",
+        "- docs/knowledge/index.md — the knowledge index. Read it to find the area concept."
+    );
+
+    /// The exact bytes the block must add to a non-cell body — heading,
+    /// blank line and all. Written out literally rather than derived from
+    /// the template, so a template edit that moves the newlines fails here.
+    const EXPERTISE_SECTION: &str = concat!(
+        "\n\nExpertise — dispatcher-picked; read/load before you start:\n",
+        "- skills/bee-swarming/SKILL.md — the worker contract. Read it to follow the loop.\n",
+        "- docs/knowledge/index.md — the knowledge index. Read it to find the area concept."
+    );
+
+    fn non_cell_body(root: &Path, runtime: &str, kind: &str, expertise: Option<&str>) -> String {
+        let Prepared::Value(v) =
+            prepare_dispatch(root, runtime, kind, None, None, false, None, None, false, expertise)
+                .unwrap()
+        else {
+            panic!("expected a {kind} envelope on {runtime}")
+        };
+        dispatched_body(&v)
+    }
+
+    #[test]
+    fn a_gather_dispatch_carrying_expertise_renders_the_reading_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for runtime in DISPATCH_RUNTIMES {
+            let plain = non_cell_body(&root, runtime, "gather", None);
+            let carried = non_cell_body(&root, runtime, "gather", Some(EXPERTISE_BLOCK));
+            assert_eq!(
+                carried,
+                format!("{plain}{EXPERTISE_SECTION}"),
+                "{runtime}: a gather dispatch dropped the reading list it was passed"
+            );
+            assert_eq!(
+                carried.matches("skills/bee-swarming/SKILL.md").count(),
+                1,
+                "{runtime}: the list must render exactly once"
+            );
+        }
+    }
+
+    #[test]
+    fn a_reviewer_dispatch_carrying_expertise_renders_the_reading_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for runtime in DISPATCH_RUNTIMES {
+            let plain = non_cell_body(&root, runtime, "reviewer", None);
+            let carried = non_cell_body(&root, runtime, "reviewer", Some(EXPERTISE_BLOCK));
+            assert_eq!(
+                carried,
+                format!("{plain}{EXPERTISE_SECTION}"),
+                "{runtime}: a reviewer dispatch dropped the reading list it was passed"
+            );
+            assert_eq!(
+                carried.matches("docs/knowledge/index.md").count(),
+                1,
+                "{runtime}: the list must render exactly once"
+            );
+        }
+    }
+
+    /// The advisor kind carries a brief block too, so this case also pins
+    /// that the two blocks stay disjoint: a briefless dispatch with a
+    /// reading list carries the list and no brief prose at all.
+    #[test]
+    fn a_briefless_advisor_dispatch_carrying_expertise_renders_the_reading_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for runtime in DISPATCH_RUNTIMES {
+            let carried = non_cell_body(&root, runtime, "advisor", Some(EXPERTISE_BLOCK));
+            assert_eq!(
+                carried,
+                format!("{ADVISOR_BODY_WITHOUT_A_BRIEF}{EXPERTISE_SECTION}"),
+                "{runtime}: a briefless advisor dispatch dropped the reading list"
+            );
+            assert!(
+                !carried.contains("Brief ("),
+                "{runtime}: no brief travelled, so no brief block may render"
+            );
+        }
+    }
+
+    /// THE EXCEPTION. A reading list may never ride beside a brief. The
+    /// leaning guard reads brief bytes and nothing else, by design, so an
+    /// `--expertise` list travelling with a brief is an unlinted channel
+    /// into a blind lane; and `brief_sha256` would keep proving the BRIEFS
+    /// were equal while the payloads diverged. It is a typed refusal, in the
+    /// same shape `brief_kind_not_advisor` takes, and it fires BEFORE the
+    /// brief file is read.
+    #[test]
+    fn a_reading_list_beside_a_brief_is_refused_before_the_brief_is_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let path = brief_file(&root, "brief.md", &shaped_brief("Where does the dossier live?"));
+
+        let refusal =
+            resolve_brief_with_expertise("advisor", Some(&path), Some(EXPERTISE_BLOCK)).unwrap_err();
+        assert_eq!(refusal.get("ok"), Some(&json!(false)), "{refusal}");
+        assert_eq!(refusal.get("type"), Some(&json!("refused")), "{refusal}");
+        assert_eq!(refusal.get("reason"), Some(&json!("expertise_beside_brief")), "{refusal}");
+        let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            fix.contains("## Read diet"),
+            "the fix must name the brief's own Read diet section as the one carrier: {fix}"
+        );
+
+        // Refused before ANY file is read: an unreadable path earns this
+        // refusal, never `brief_file_unreadable`.
+        let missing =
+            resolve_brief_with_expertise("advisor", Some("no/such/brief.md"), Some(EXPERTISE_BLOCK))
+                .unwrap_err();
+        assert_eq!(
+            missing.get("reason"),
+            Some(&json!("expertise_beside_brief")),
+            "the combination is refused before the read is attempted: {missing}"
+        );
+
+        // Neither half alone refuses, and an EMPTY list carries nothing, so
+        // there is nothing unlinted to refuse.
+        assert!(resolve_brief_with_expertise("advisor", Some(&path), None).is_ok());
+        assert!(resolve_brief_with_expertise("advisor", Some(&path), Some("")).is_ok());
+        assert!(resolve_brief_with_expertise("gather", None, Some(EXPERTISE_BLOCK)).is_ok());
+
+        // And the kind arm keeps its own refusal — the combination check
+        // never speaks for a kind that may not carry a brief at all.
+        let kind_refusal =
+            resolve_brief_with_expertise("cell", Some(&path), Some(EXPERTISE_BLOCK)).unwrap_err();
+        assert_eq!(
+            kind_refusal.get("reason"),
+            Some(&json!("brief_kind_not_advisor")),
+            "{kind_refusal}"
+        );
+    }
+
+    const BRIEF_WITH_EXPERTISE_CHILD: &str =
+        "verbs::drivers::tests::dispatch_prepare_brief_with_expertise_child";
+    const EXPERTISE_NO_BRIEF_CHILD: &str =
+        "verbs::drivers::tests::dispatch_prepare_expertise_without_brief_child";
+
+    /// Runs ONLY as a child of the door test below.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_reading_list_beside_a_brief"]
+    fn dispatch_prepare_brief_with_expertise_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime",
+            "claude",
+            "--kind",
+            "advisor",
+            "--brief-file",
+            "shaped.md",
+            "--expertise",
+            EXPERTISE_RAW,
+            "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// Runs ONLY as a child of the door test below.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_reading_list_beside_a_brief"]
+    fn dispatch_prepare_expertise_without_brief_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime",
+            "claude",
+            "--kind",
+            "gather",
+            "--expertise",
+            EXPERTISE_RAW,
+            "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// The door itself, through the REAL cli entry: the combination refuses
+    /// with nothing reaching a payload, and the same list WITHOUT a brief
+    /// reaches the rendered body. Without the second half a door that
+    /// refused every `--expertise` would pass the first half.
+    #[test]
+    fn the_dispatch_door_refuses_a_reading_list_beside_a_brief() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        std::fs::write(root.join("shaped.md"), shaped_brief("Where does the dossier live?"))
+            .unwrap();
+
+        let refused = child_payload(&root, BRIEF_WITH_EXPERTISE_CHILD);
+        assert_eq!(refused.get("ok"), Some(&json!(false)), "{refused}");
+        assert_eq!(refused.get("type"), Some(&json!("refused")), "{refused}");
+        assert_eq!(refused.get("reason"), Some(&json!("expertise_beside_brief")), "{refused}");
+        assert!(
+            refused.get("payload").is_none(),
+            "a refused combination never reaches a payload: {refused}"
+        );
+        assert!(
+            refused.get("brief_sha256").is_none(),
+            "nothing travelled, so nothing is digested: {refused}"
+        );
+
+        let carried = child_payload(&root, EXPERTISE_NO_BRIEF_CHILD);
+        assert!(carried.get("payload").is_some(), "a briefless list reaches a payload: {carried}");
+        assert!(
+            dispatched_body(&carried).ends_with(EXPERTISE_SECTION),
+            "the door rendered the list it was passed: {carried}"
+        );
+    }
+
+    /// The vendored half. Each of the three edited templates gets its OWN
+    /// disk probe, the same hazard the advisor brief block already carries:
+    /// a source-only prompt edit skews the embedded template from disk,
+    /// `dispatch prepare` returns None, and the Node delegate it would fall
+    /// to was deleted at the R6 cutover. A twin that missed THIS edit is
+    /// worse than loud — `{{#if}}` over an absent variable is falsy, so it
+    /// would silently swallow the reading list again.
+    #[test]
+    fn every_non_cell_template_carries_the_expertise_block_and_matches_disk() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        for name in ["gather", "reviewer", "advisor"] {
+            assert!(
+                prompts_match_disk(&repo_root, name),
+                "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
+                 compiled-in template — run `bee dev regen` and rebuild, or every dispatch \
+                 prepare in this checkout resolves to nothing"
+            );
+            let template = load_prompt(name).unwrap();
+            let at = template
+                .find("{{#if expertise}}")
+                .unwrap_or_else(|| panic!("{name}.md carries no expertise block"));
+            assert!(at > 0, "{name}: a block at byte 0 has no leading newline to consume");
+            assert_eq!(&template[at - 1..at], "\n", "{name}: the marker needs its leading newline");
+            assert!(
+                template.contains("{{expertise}}"),
+                "{name}: the block must hold the expertise placeholder"
+            );
+            assert_eq!(
+                render(&template, &[]).unwrap(),
+                render(&template, &[("expertise", "")]).unwrap(),
+                "{name}: an empty list must leave zero residue bytes"
             );
         }
     }
