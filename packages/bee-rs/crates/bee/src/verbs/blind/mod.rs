@@ -29,14 +29,17 @@
 //   * the recorded brief, re-run through `lint_brief` — the SAME function the
 //     dispatch door runs (verbs/drivers/brief_lint.rs), never a second copy of
 //     its stems — so a convergence built on an unlinted brief refuses here
-//     even though the door it bypassed never saw it.
+//     even though the door it bypassed never saw it;
+//   * the three EVIDENCE checks, each reading a source outside the sentence
+//     that makes the claim: every citation resolved against the proposal of
+//     the lane it names, every lane's brief digest checked against the
+//     dispatch log the door wrote, and every reported path held to the diet
+//     the brief declared. They are not equally strong, and § "the three
+//     evidence checks" below says exactly where each one's word comes from.
 //
-// The three EVIDENCE checks — citations resolving against the proposals they
-// cite, one brief digest across every lane, and the read diet — are NOT here
-// yet, and the result object says so in `checks_run` rather than implying a
-// completeness it does not have. Parsing is written so they can be added
-// without re-reading the document: `Dossier` hands them the lane bytes, the
-// brief bytes and each section's body already separated.
+// `checks_run` on the result names all six, and the pass line carries the
+// COUNTS — lanes, citations, paths. A zero count for any of them refuses
+// instead: "checked nothing" must never render as "checked".
 //
 // ─── VERBATIM PAYLOADS RIDE IN FENCED BLOCKS ──────────────────────────────
 //
@@ -60,6 +63,7 @@ use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::verbs::drivers::{brief_refusal, lint_brief};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -93,19 +97,22 @@ pub(crate) const LANE_FIELDS: [&str; 4] =
 
 /// What `bee blind check` actually ran, reported on every pass. The list is
 /// the honest inventory of this door, not a badge: a caller reading `ok:true`
-/// can see that citations were never looked at.
-const CHECKS_RUN: [&str; 3] = ["sections", "lane_fields", "brief_lint"];
+/// reads exactly which checks stand behind it, and the counts beside it say
+/// how much material each one had.
+const CHECKS_RUN: [&str; 6] = [
+    "sections",
+    "lane_fields",
+    "brief_lint",
+    "citations",
+    "digest_equality",
+    "read_diet",
+];
 
 // ─── the parsed document ────────────────────────────────────────────────
 
 /// One `### <lane-id>` section: its machine fields plus its verbatim proposal.
-///
-/// `allow(dead_code)`: `proposal` and `paths_read` are parsed and PINNED by the
-/// tests here, and read for real by the three evidence checks that land next
-/// (citations against the lane's own bytes, one brief digest across the lanes,
-/// the read diet). Parsing them here rather than later is what keeps the
-/// document read once, by one contract.
-#[allow(dead_code)]
+/// Every field here is read by an evidence check — the document is parsed
+/// once, by one contract, and the checks read THIS rather than the text again.
 #[derive(Debug, Clone)]
 pub(crate) struct LaneSection {
     pub id: String,
@@ -120,7 +127,6 @@ pub(crate) struct LaneSection {
 }
 
 /// A dossier that satisfied the section contract.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) struct Dossier {
     pub run_id: String,
@@ -133,7 +139,6 @@ pub(crate) struct Dossier {
 }
 
 impl Dossier {
-    #[allow(dead_code)]
     pub(crate) fn section(&self, name: &str) -> &str {
         self.sections
             .iter()
@@ -142,7 +147,7 @@ impl Dossier {
             .unwrap_or("")
     }
 
-    fn to_value(&self) -> Value {
+    fn to_value(&self, counts: &Counts) -> Value {
         let lanes: Vec<Value> = self
             .lanes
             .iter()
@@ -160,6 +165,8 @@ impl Dossier {
             "ok": true,
             "run_id": self.run_id,
             "lanes": lanes,
+            "citations_checked": counts.citations,
+            "paths_checked": counts.paths,
             "checks_run": CHECKS_RUN,
         })
     }
@@ -540,6 +547,471 @@ pub(crate) fn parse_dossier(text: &str) -> Result<Dossier, Value> {
     Ok(Dossier { run_id, brief, lanes, sections: bodies })
 }
 
+// ─── the three evidence checks ──────────────────────────────────────────
+//
+// The section contract proves a dossier is SHAPED like a record. These three
+// ask whether it is TRUE, and each one answers from a source outside the
+// sentence that makes the claim.
+//
+//   1. CITATIONS (D4). Every `<lane-id> :: <quote>` line resolves against
+//      THAT lane's own proposal bytes — never against the concatenated set.
+//      Containment over all proposals at once passes a quote attributed to
+//      lane A but written only by lane B, and that misattribution IS the
+//      fabrication D4 exists to catch: it manufactures agreement between
+//      lanes that never agreed.
+//   2. DIGEST EQUALITY. Every lane's `brief_sha256` is checked against the
+//      digest its `dispatch_id` carries in `.bee/logs/dispatch.jsonl`, the
+//      record the dispatch door itself wrote. Comparing the dossier's
+//      transcribed digests with each other would only verify the transcriber
+//      against itself. Then the logged digests must be equal across the
+//      lanes: unequal means the brief CHANGED between lane 1 and lane 3 —
+//      the cost decision f0f21142 accepted, detected here, not prevented.
+//   3. READ DIET. Every path a lane reports sits inside the diet the recorded
+//      brief declares, and no path names `.bee/` at all.
+//
+// ─── THE THREE ARE NOT EQUALLY STRONG, AND THE DOOR SAYS SO ───────────────
+//
+// Checks 1 and 2 read bytes this process holds: the proposal inside the
+// dossier, the line inside the dispatch log. Check 3 reads the lane's OWN
+// REPORT of what it read. Nothing here observed a single read. It catches a
+// careless breach and a recorded lie; it does NOT catch a lane that read
+// `.bee/decisions.jsonl` and then wrote a tidy `paths_read` line. That
+// limit is stated in the refusal itself and in this comment, because a check
+// whose strength is misread is worse than no check: it retires a suspicion it
+// never earned.
+
+/// A quote shorter than this is generic enough to sit inside almost any
+/// proposal, so resolving it proves nothing. Both floors must be cleared.
+const MIN_CITATION_CHARS: usize = 24;
+const MIN_CITATION_WORDS: usize = 5;
+
+/// What a citation line puts between the lane it names and the quote.
+const CITATION_SEP: &str = "::";
+
+/// What the evidence pass actually looked at, reported on the result so a
+/// reader can tell a checked dossier from a small one.
+pub(crate) struct Counts {
+    pub citations: usize,
+    pub paths: usize,
+}
+
+/// `.bee/logs/dispatch.jsonl`, read as the authoritative record of what was
+/// dispatched — the chain of custody the dossier's own fields cannot supply.
+///
+/// A line counts when it carries a `dispatch_id`; `append_prepare_record`
+/// writes one per served prepare with `source: "prepare"`, and the digest is
+/// taken from whichever line for that id carries one. Broader than
+/// prepare-only on purpose: a false "unlogged" refusal would block an honest
+/// convergence, while an id that appears NOWHERE is still refused by name.
+pub(crate) struct DispatchLog {
+    path: String,
+    by_id: HashMap<String, Option<String>>,
+}
+
+impl DispatchLog {
+    pub(crate) fn parse(path: &str, text: &str) -> Self {
+        let mut by_id: HashMap<String, Option<String>> = HashMap::new();
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
+            let Some(id) = v.get("dispatch_id").and_then(Value::as_str) else { continue };
+            let digest = v.get("brief_sha256").and_then(Value::as_str).map(str::to_string);
+            let slot = by_id.entry(id.to_string()).or_insert(None);
+            if slot.is_none() {
+                *slot = digest;
+            }
+        }
+        DispatchLog { path: path.to_string(), by_id }
+    }
+
+    /// The log as it sits on disk. A missing file reads as an EMPTY log, and
+    /// an empty log refuses every lane by name — the write side is fail-open
+    /// ("a log failure never blocks the payload", `append_prepare_record`),
+    /// so the read side must be the opposite or the hole would pass silently.
+    pub(crate) fn read(root: &Path) -> Self {
+        let file = root.join(".bee").join("logs").join("dispatch.jsonl");
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        DispatchLog::parse(&file.display().to_string(), &text)
+    }
+}
+
+/// Whitespace runs collapse to one space, edges trim, ASCII case folds. Both
+/// sides of every citation comparison go through THIS function — a quote
+/// re-wrapped by hand is still the lane's own sentence.
+fn normalize(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut space = false;
+    for c in text.chars() {
+        if c.is_whitespace() {
+            space = !out.is_empty();
+        } else {
+            if space {
+                out.push(' ');
+            }
+            space = false;
+            out.push(c.to_ascii_lowercase());
+        }
+    }
+    out
+}
+
+fn is_terminator(b: u8) -> bool {
+    matches!(b, b'.' | b'!' | b'?')
+}
+
+/// Does `needle` stand in `hay` as a WHOLE-SENTENCE span — starting where a
+/// sentence starts and ending where one ends?
+///
+/// Plain containment is what makes the negation strip work: a proposal that
+/// says "we should not cache the token" contains "cache the token", and a
+/// dossier citing the second reports the lane as saying the opposite of what
+/// it said. Requiring the span to begin at a sentence boundary means a
+/// citation cannot silently drop the clause that reverses it — the dropped
+/// "we should not" is exactly the text between the sentence start and the
+/// quote. Both `hay` and `needle` arrive normalized, so the scan is over
+/// ASCII bytes and a byte equal to `.` or ` ` can only be that character.
+fn quote_resolves(hay: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
+    let h = hay.as_bytes();
+    let mut from = 0usize;
+    while let Some(off) = hay[from..].find(needle) {
+        let start = from + off;
+        let end = start + needle.len();
+        let starts_sentence = start == 0 || {
+            let mut k = start;
+            while k > 0 && h[k - 1] == b' ' {
+                k -= 1;
+            }
+            k < start && k > 0 && is_terminator(h[k - 1])
+        };
+        let ends_sentence = end == h.len() || is_terminator(h[end]);
+        if starts_sentence && ends_sentence {
+            return true;
+        }
+        from = start + 1;
+    }
+    false
+}
+
+/// The quote as it is compared: normalized, with its own trailing sentence
+/// punctuation dropped so citing the closing period is not a mismatch.
+fn citation_quote(raw: &str) -> String {
+    normalize(raw).trim_end_matches(['.', '!', '?', ' ']).to_string()
+}
+
+// ─── CHECK 1 — every citation resolves against the lane it names ────────
+
+fn check_citations(d: &Dossier) -> Result<usize, Value> {
+    let proposals: Vec<(&str, String)> =
+        d.lanes.iter().map(|l| (l.id.as_str(), normalize(&l.proposal))).collect();
+    let known = d.lanes.iter().map(|l| l.id.as_str()).collect::<Vec<_>>().join(", ");
+    let mut checked = 0usize;
+
+    for raw in d.section("Citations").lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts = line.split_once(CITATION_SEP);
+        let (lane_id, quote_raw) = match parts {
+            Some((l, q)) if !l.trim().is_empty() && !q.trim().is_empty() => (l.trim(), q.trim()),
+            _ => {
+                return Err(refuse(
+                    "dossier_citation_malformed",
+                    &[("line".into(), s(line))],
+                    format!(
+                        "the citation line \"{line}\" is not \"<lane-id> {CITATION_SEP} <quote>\". Every line under \"## Citations\" names the lane it came from and then quotes it, so the quote can be resolved against that lane's own proposal. Rewrite it in that form, or delete the line."
+                    ),
+                ));
+            }
+        };
+        let quote = citation_quote(quote_raw);
+        let words = quote.split(' ').filter(|w| !w.is_empty()).count();
+        if quote.chars().count() < MIN_CITATION_CHARS || words < MIN_CITATION_WORDS {
+            return Err(refuse(
+                "dossier_citation_too_short",
+                &[("lane".into(), s(lane_id)), ("quote".into(), s(quote_raw))],
+                format!(
+                    "the citation \"{quote_raw}\" is too short to be evidence: a fragment that brief sits inside almost any proposal, so resolving it proves nothing about what {lane_id} actually said. Quote at least {MIN_CITATION_CHARS} characters and {MIN_CITATION_WORDS} words — a whole sentence of the lane's own text."
+                ),
+            ));
+        }
+        let Some((_, own)) = proposals.iter().find(|(id, _)| id.eq_ignore_ascii_case(lane_id))
+        else {
+            return Err(refuse(
+                "dossier_citation_lane_unknown",
+                &[("lane".into(), s(lane_id)), ("quote".into(), s(quote_raw))],
+                format!(
+                    "the citation names the lane \"{lane_id}\", and this dossier has no \"### {lane_id}\" section. The lanes it records are: {known}. Fix the lane id, or add the missing lane section with its proposal verbatim."
+                ),
+            ));
+        };
+        if quote_resolves(own, &quote) {
+            checked += 1;
+            continue;
+        }
+        // The text may be genuine and simply in the WRONG lane. Saying so is
+        // both the more actionable message and the louder one: misattribution
+        // is a dossier reporting agreement the lanes never reached.
+        if let Some((other, _)) = proposals
+            .iter()
+            .find(|(id, body)| !id.eq_ignore_ascii_case(lane_id) && quote_resolves(body, &quote))
+        {
+            return Err(refuse(
+                "dossier_citation_misattributed",
+                &[
+                    ("lane".into(), s(lane_id)),
+                    ("found_in".into(), s(other)),
+                    ("quote".into(), s(quote_raw)),
+                ],
+                format!(
+                    "the citation credits \"{lane_id}\" with a sentence only \"{other}\" wrote. Blind lanes are worth their cost because they answered independently; moving one lane's words onto another manufactures an agreement that never happened. Attribute the quote to {other}, or cite what {lane_id} actually said."
+                ),
+            ));
+        }
+        return Err(refuse(
+            "dossier_citation_unresolved",
+            &[("lane".into(), s(lane_id)), ("quote".into(), s(quote_raw))],
+            format!(
+                "the citation \"{quote_raw}\" does not resolve against the proposal \"{lane_id}\" recorded here. A quote must stand as a WHOLE SENTENCE of that lane's text: a span that starts mid-sentence can drop the very words that reverse the meaning — \"we should not cache the token\" cited as \"cache the token\" reads as the opposite of the lane's answer. Copy the sentence from the lane's proposal block, or drop the citation."
+            ),
+        ));
+    }
+
+    if checked == 0 {
+        return Err(refuse(
+            "dossier_citations_empty",
+            &[("section".into(), s("Citations"))],
+            "the dossier records no citation, so the chosen answer rests on nothing this door can resolve against the lanes. A convergence cites the lanes it synthesized: write one \"<lane-id> :: <quote>\" line per claim the answer leans on. Zero citations is refused rather than reported as checked."
+                .to_string(),
+        ));
+    }
+    Ok(checked)
+}
+
+// ─── CHECK 2 — one brief, proven against the dispatch log ───────────────
+
+fn check_digests(d: &Dossier, log: &DispatchLog) -> Result<(), Value> {
+    let where_ = &log.path;
+    let mut logged: Vec<(&str, &str)> = Vec::with_capacity(d.lanes.len());
+
+    for lane in &d.lanes {
+        let Some(entry) = log.by_id.get(&lane.dispatch_id) else {
+            return Err(refuse(
+                "dossier_dispatch_unlogged",
+                &[
+                    ("lane".into(), s(&lane.id)),
+                    ("dispatch_id".into(), s(&lane.dispatch_id)),
+                    ("log".into(), s(where_)),
+                ],
+                format!(
+                    "the lane \"{}\" names dispatch_id {} and no line in {where_} carries it, so there is no record that this dispatch ever happened. That log is written fail-open — a log failure never blocks a payload — which is exactly why a missing line is refused here instead of passed: an unlogged dispatch_id is either a dispatch that did not run or a log this check cannot see. Re-run the lane through `bee dispatch prepare`, or point the check at the root whose .bee/logs holds the run.",
+                    lane.id, lane.dispatch_id
+                ),
+            ));
+        };
+        let Some(digest) = entry else {
+            return Err(refuse(
+                "dossier_brief_digest_unlogged",
+                &[
+                    ("lane".into(), s(&lane.id)),
+                    ("dispatch_id".into(), s(&lane.dispatch_id)),
+                    ("log".into(), s(where_)),
+                ],
+                format!(
+                    "the lane \"{}\" names dispatch_id {}, and that line in {where_} records no brief_sha256 — so it carried no brief, and nothing pins the bytes this lane answered. A blind lane is dispatched with `--brief-file`; a dispatch without one is not a lane. Re-run it with the brief.",
+                    lane.id, lane.dispatch_id
+                ),
+            ));
+        };
+        if !digest.eq_ignore_ascii_case(&lane.brief_sha256) {
+            return Err(refuse(
+                "dossier_brief_digest_mismatch",
+                &[
+                    ("lane".into(), s(&lane.id)),
+                    ("dispatch_id".into(), s(&lane.dispatch_id)),
+                    ("recorded".into(), s(&lane.brief_sha256)),
+                    ("logged".into(), s(digest)),
+                    ("log".into(), s(where_)),
+                ],
+                format!(
+                    "the lane \"{}\" records brief_sha256 {}, and {where_} logged {} for its dispatch_id. The log is the record the dispatch door wrote; the dossier line was transcribed by hand. Correct the dossier to the logged digest — and if the logged one is the surprise, the lane did not answer the brief this dossier says it answered.",
+                    lane.id, lane.brief_sha256, digest
+                ),
+            ));
+        }
+        logged.push((lane.id.as_str(), digest.as_str()));
+    }
+
+    let Some((first_lane, first)) = logged.first().copied() else { return Ok(()) };
+    for (lane, digest) in &logged[1..] {
+        if !digest.eq_ignore_ascii_case(first) {
+            return Err(refuse(
+                "dossier_brief_digest_divergent",
+                &[
+                    ("lane".into(), s(lane)),
+                    ("other_lane".into(), s(first_lane)),
+                    ("digest".into(), s(digest)),
+                    ("other_digest".into(), s(first)),
+                    ("log".into(), s(where_)),
+                ],
+                format!(
+                    "the lanes did not answer one brief: {where_} logged {digest} for \"{lane}\" and {first} for \"{first_lane}\". Blind lanes are comparable only because the brief is byte-identical across them, so a divergence means the brief changed between one dispatch and the next — this run compared answers to two different questions. Re-run every lane on ONE brief, then rebuild the dossier."
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+// ─── CHECK 3 — the read diet, as far as a self-report can carry ─────────
+
+/// The one honest sentence about this check's strength, carried on every one
+/// of its refusals. It is written ONCE so no arm can quietly state a stronger
+/// claim than the check earns.
+const DIET_TRUST: &str = "This check reads the lane's own self-reported paths_read line — nothing here observed a read — so it is weaker than the citation check, which resolves quotes against proposal bytes this door holds. It catches a careless breach and a recorded lie, never a determined one.";
+
+/// The paths the recorded brief's `## Read diet` section declares. The brief
+/// is parsed as its own document — its `##` headings are top-level there.
+fn declared_diet(brief: &str) -> Vec<String> {
+    let lines: Vec<&str> = brief.lines().collect();
+    let mask = fence_mask(&lines);
+    let heads = headings(&lines, &mask);
+    let Some(at) = heads.iter().position(|h| h.text.eq_ignore_ascii_case("Read diet")) else {
+        return Vec::new();
+    };
+    let from = heads[at].line + 1;
+    let to = heads.get(at + 1).map_or(lines.len(), |h| h.line);
+    let mut out = Vec::new();
+    for i in from..to.min(lines.len()) {
+        if mask[i] {
+            continue;
+        }
+        let mut t = lines[i].trim();
+        if let Some(rest) = t.strip_prefix('-').or_else(|| t.strip_prefix('*')) {
+            t = rest.trim_start();
+        }
+        // A diet entry is a path; anything after the first whitespace is the
+        // note a human wrote beside it.
+        if let Some(first) = t.split_whitespace().next() {
+            let p = normalize_path(first);
+            if !p.is_empty() {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+fn normalize_path(p: &str) -> String {
+    p.trim().replace('\\', "/").trim_start_matches("./").to_string()
+}
+
+/// A diet entry covers a path when it IS the path or is a directory above it.
+fn diet_covers(diet: &[String], path: &str) -> bool {
+    diet.iter().any(|entry| {
+        let e = entry.trim_end_matches('/');
+        if path.eq_ignore_ascii_case(e) {
+            return true;
+        }
+        path.len() > e.len()
+            && path.as_bytes()[e.len()] == b'/'
+            && path[..e.len()].eq_ignore_ascii_case(e)
+    })
+}
+
+/// Does any segment of this path name `.bee`? Segment-wise, so a file called
+/// `notes-about-bee.md` is not a hit and `docs/.bee/x` is.
+fn names_bee_store(path: &str) -> bool {
+    path.split('/').any(|seg| seg == ".bee")
+}
+
+fn check_read_diet(d: &Dossier) -> Result<usize, Value> {
+    let diet = declared_diet(&d.brief);
+    if diet.is_empty() {
+        return Err(refuse(
+            "dossier_read_diet_undeclared",
+            &[("section".into(), s("Read diet")), ("trust".into(), s("self_reported"))],
+            format!(
+                "the recorded brief's \"## Read diet\" section lists no path, so there is no diet to check the lanes against and this check would report success over nothing. A blind lane is dispatched with an explicit read-only path diet (D2(b)); list one path per line under that heading. {DIET_TRUST}"
+            ),
+        ));
+    }
+
+    let mut checked = 0usize;
+    for lane in &d.lanes {
+        if lane.paths_read.is_empty() {
+            return Err(refuse(
+                "dossier_read_diet_empty",
+                &[("lane".into(), s(&lane.id)), ("trust".into(), s("self_reported"))],
+                format!(
+                    "the lane \"{}\" reports no path in its paths_read line, so its proposal came from nothing this dossier records reading. An empty report is refused rather than counted as a clean one — zero paths checked is not a diet kept. List the paths the lane read. {DIET_TRUST}",
+                    lane.id
+                ),
+            ));
+        }
+        for raw in &lane.paths_read {
+            let path = normalize_path(raw);
+            if names_bee_store(&path) {
+                return Err(refuse(
+                    "dossier_read_diet_bee_path",
+                    &[
+                        ("lane".into(), s(&lane.id)),
+                        ("path".into(), s(raw)),
+                        ("trust".into(), s("self_reported")),
+                    ],
+                    format!(
+                        "the lane \"{}\" reports reading \"{raw}\", inside the bee store. That is where the orchestrator's own leaning lives — D1 forces an open reason, and it lands in .bee/decisions.jsonl on the same disk the lane can read — so a lane that reads .bee/ is no longer blind, whatever the brief allowed. No diet can license a .bee/ path. Re-run the lane without it. {DIET_TRUST}",
+                        lane.id
+                    ),
+                ));
+            }
+            if !diet_covers(&diet, &path) {
+                return Err(refuse(
+                    "dossier_read_diet_breach",
+                    &[
+                        ("lane".into(), s(&lane.id)),
+                        ("path".into(), s(raw)),
+                        ("trust".into(), s("self_reported")),
+                        ("diet".into(), json!(diet)),
+                    ],
+                    format!(
+                        "the lane \"{}\" reports reading \"{raw}\", which the brief's read diet does not declare. The diet is what makes two lanes comparable: a lane that read more answered a different question. The declared diet is: {}. Add the path to the brief and re-run the lanes, or drop the lane from this dossier. {DIET_TRUST}",
+                        lane.id,
+                        diet.join(", ")
+                    ),
+                ));
+            }
+            checked += 1;
+        }
+    }
+    Ok(checked)
+}
+
+/// The three evidence checks, in contract order. Any one of them refusing is
+/// the whole door refusing: a dossier that fails one check has not been
+/// checked, and a partial pass is the "looks checked" failure this verb was
+/// written to prevent.
+pub(crate) fn check_evidence(d: &Dossier, log: &DispatchLog) -> Result<Counts, Value> {
+    if d.lanes.is_empty() {
+        return Err(refuse(
+            "dossier_lanes_missing",
+            &[("section".into(), s("Lanes"))],
+            "the dossier records no lane, so there is no proposal to resolve a citation against, no dispatch_id to check the brief digest with, and no reported path to hold to a diet. A run with no lane is refused rather than reported as three checks passed. Record every lane under \"## Lanes\"."
+                .to_string(),
+        ));
+    }
+    let citations = check_citations(d)?;
+    check_digests(d, log)?;
+    let paths = check_read_diet(d)?;
+    Ok(Counts { citations, paths })
+}
+
 // ─── argv plumbing ──────────────────────────────────────────────────────
 
 struct Ctx {
@@ -626,18 +1098,32 @@ fn run_check(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
                     }
                     r
                 }
-                Ok(dossier) => {
-                    let result = dossier.to_value();
-                    let line = format!(
-                        "Dossier {} passes the section contract, {} lane section(s) and the brief lint. Checks run: {}.",
-                        dossier.run_id,
-                        dossier.lanes.len(),
-                        CHECKS_RUN.join(", ")
-                    );
-                    return Some(emit_success(
-                        &ctx.root, cmd, parsed.json, &ctx.drift, &result, &line, t0,
-                    ));
-                }
+                Ok(dossier) => match check_evidence(&dossier, &DispatchLog::read(&ctx.root)) {
+                    Err(mut r) => {
+                        if let Some(map) = r.as_object_mut() {
+                            map.insert("path".into(), s(path));
+                        }
+                        r
+                    }
+                    Ok(counts) => {
+                        let result = dossier.to_value(&counts);
+                        // The counts ride in the line, not only the JSON: a
+                        // pass over one lane and one citation is a much
+                        // smaller claim than a pass over three of each, and
+                        // the reader must be able to tell them apart.
+                        let line = format!(
+                            "Dossier {} passes: {} lane(s), {} citation(s) and {} reported path(s) checked. Checks run: {}.",
+                            dossier.run_id,
+                            dossier.lanes.len(),
+                            counts.citations,
+                            counts.paths,
+                            CHECKS_RUN.join(", ")
+                        );
+                        return Some(emit_success(
+                            &ctx.root, cmd, parsed.json, &ctx.drift, &result, &line, t0,
+                        ));
+                    }
+                },
             },
         },
     };
@@ -670,21 +1156,102 @@ mod tests {
         .join("\n")
     }
 
+    /// The digest every lane in the control fixture reports, and the one the
+    /// control dispatch log carries for each of their dispatch_ids.
+    const FIXTURE_DIGEST: &str = "9c1185a5c5e9fc54612808977ee8f548b2258d31";
+
+    /// A lane's dispatch_id, derived from its id so two lanes never share one.
+    /// A shared dispatch_id would make the per-lane log lookup ambiguous, which
+    /// is the very ambiguity the chain of custody exists to remove.
+    fn dispatch_id_of(id: &str) -> String {
+        let n = u32::from(id.bytes().last().unwrap_or(b'a') - b'a') + 1;
+        format!("3f1c9a20-0000-4000-8000-{n:012}")
+    }
+
     fn lane(id: &str, proposal: &str) -> String {
+        lane_full(id, &dispatch_id_of(id), FIXTURE_DIGEST, DIET_PATH, proposal)
+    }
+
+    /// The one path the control brief's read diet declares.
+    const DIET_PATH: &str = "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs";
+
+    const LANE_A_PROPOSAL: &str =
+        "The older lease wins on every read, so a stale claim never outranks a live one.";
+    const LANE_B_PROPOSAL: &str =
+        "A second store keyed by path would answer this without reading the lease at all.";
+    const LANE_A_CITATION: &str =
+        "lane-a :: The older lease wins on every read, so a stale claim never outranks a live one";
+
+    /// A lane section with every machine field spelled out — the builder the
+    /// evidence probes use to break exactly one field at a time.
+    fn lane_full(id: &str, dispatch: &str, digest: &str, paths: &str, proposal: &str) -> String {
         format!(
-            "### {id}\n\n- dispatch_id: 3f1c9a20-0000-4000-8000-00000000000{}\n- brief_sha256: 9c1185a5c5e9fc54612808977ee8f548b2258d31\n- role: advisor\n- paths_read: packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs\n\n```\n{proposal}\n```\n",
-            id.len() % 10
+            "### {id}\n\n- dispatch_id: {dispatch}\n- brief_sha256: {digest}\n- role: advisor\n- paths_read: {paths}\n\n```\n{proposal}\n```\n"
+        )
+    }
+
+    /// A dossier with the control prose and the given lanes and citations.
+    fn dossier_of(lanes: &[String], citations: &[String]) -> String {
+        format!(
+            "# Blind lane run example-0001\n\n## Question\n\n```\n{}\n```\n\n## Lanes\n\n{}\n## Cross-critiques\n\nlane-a read lane-b verbatim and named one missing constraint.\n\n## Chosen\n\nlane-a: the older lease wins.\n\n## Rejected\n\nlane-b: it needs a second store to answer.\n\n## Citations\n\n{}\n\n## Revisit trigger\n\nlease-shape-changes__3f1c9a20\n",
+            brief(),
+            lanes.join("\n"),
+            citations.join("\n"),
         )
     }
 
     /// The well-formed dossier: every section, in order, with two lanes.
     fn well_formed() -> String {
-        format!(
-            "# Blind lane run example-0001\n\n## Question\n\n```\n{}\n```\n\n## Lanes\n\n{}\n{}\n## Cross-critiques\n\nlane-a read lane-b verbatim and named one missing constraint.\n\n## Chosen\n\nlane-a: the older lease wins.\n\n## Rejected\n\nlane-b: it needs a second store to answer.\n\n## Citations\n\nlane-a :: the older lease wins on every read\n\n## Revisit trigger\n\nlease-shape-changes__3f1c9a20\n",
-            brief(),
-            lane("lane-a", "The older lease wins on every read, so a stale claim never outranks a live one."),
-            lane("lane-b", "A second store keyed by path would answer this without reading the lease at all."),
+        dossier_of(
+            &[lane("lane-a", LANE_A_PROPOSAL), lane("lane-b", LANE_B_PROPOSAL)],
+            &[LANE_A_CITATION.to_string()],
         )
+    }
+
+    /// The control dossier with its citation list swapped out.
+    fn cited(citations: &[&str]) -> String {
+        let lanes = [lane("lane-a", LANE_A_PROPOSAL), lane("lane-b", LANE_B_PROPOSAL)];
+        dossier_of(&lanes, &citations.iter().map(|c| (*c).to_string()).collect::<Vec<_>>())
+    }
+
+    /// A dispatch log built from `(dispatch_id, brief_sha256)` pairs — the
+    /// authoritative record the digest check reads, never the dossier itself.
+    fn log_of(entries: &[(&str, Option<&str>)]) -> DispatchLog {
+        let text = entries
+            .iter()
+            .map(|(id, digest)| {
+                let mut line = json!({
+                    "ts": "2026-08-28T09:00:00.000Z",
+                    "source": "prepare",
+                    "dispatch_id": id,
+                    "kind": "advisor",
+                });
+                if let Some(d) = digest {
+                    line["brief_sha256"] = json!(d);
+                }
+                line.to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        DispatchLog::parse(".bee/logs/dispatch.jsonl", &text)
+    }
+
+    /// The log that matches the control fixture: both lanes, one brief.
+    fn control_log() -> DispatchLog {
+        log_of(&[
+            (&dispatch_id_of("lane-a"), Some(FIXTURE_DIGEST)),
+            (&dispatch_id_of("lane-b"), Some(FIXTURE_DIGEST)),
+        ])
+    }
+
+    /// Parse, then run the three evidence checks over the result.
+    fn checked(doc: &str, log: &DispatchLog) -> Result<Counts, Value> {
+        let d = parse_dossier(doc).unwrap_or_else(|r| panic!("this fixture must parse: {r}"));
+        check_evidence(&d, log)
+    }
+
+    fn evidence_refusal(doc: &str, log: &DispatchLog) -> Value {
+        checked(doc, log).err().expect("this dossier must be refused by an evidence check")
     }
 
     fn refusal_of(doc: &str) -> Value {
@@ -808,7 +1375,7 @@ mod tests {
     #[test]
     fn a_field_written_with_no_value_counts_as_absent() {
         let doc = well_formed().replacen(
-            "- dispatch_id: 3f1c9a20-0000-4000-8000-000000000006",
+            &format!("- dispatch_id: {}", dispatch_id_of("lane-a")),
             "- dispatch_id:",
             1,
         );
@@ -953,23 +1520,29 @@ mod tests {
         assert_eq!(d.lanes.len(), 2);
     }
 
-    /// The honest inventory. This door does NOT check citations, digest
-    /// equality or the read diet, and the result must not let a reader think
-    /// it did — those are the next cell's, and a silent `ok:true` is exactly
-    /// how a dossier comes to look checked without being checked.
+    /// The honest inventory. `checks_run` names every check that stands
+    /// behind `ok:true` — no more, and no fewer. The three evidence checks
+    /// join it in the SAME change that made them run: a list that named a
+    /// check nobody ran, or omitted one that did, is how a dossier comes to
+    /// look checked without being checked.
     #[test]
-    fn the_pass_result_names_only_the_checks_this_door_ran() {
+    fn the_pass_result_names_every_check_this_door_ran() {
         let d = parse_dossier(&well_formed()).unwrap();
-        let v = d.to_value();
+        let counts = check_evidence(&d, &control_log()).expect("the control passes");
+        let v = d.to_value(&counts);
         assert_eq!(v["ok"], json!(true));
         assert_eq!(v["run_id"], json!("example-0001"));
         assert_eq!(v["lanes"].as_array().map(Vec::len), Some(2));
         let checks: Vec<&str> =
             v["checks_run"].as_array().unwrap().iter().map(|c| c.as_str().unwrap()).collect();
-        assert_eq!(checks, vec!["sections", "lane_fields", "brief_lint"]);
-        for later in ["citations", "digest_equality", "read_diet"] {
-            assert!(!checks.contains(&later), "{later} is not checked here yet");
-        }
+        assert_eq!(
+            checks,
+            vec!["sections", "lane_fields", "brief_lint", "citations", "digest_equality", "read_diet"]
+        );
+        // The counts say how much material the pass covered — a pass over
+        // nothing is refused, so a reported count is always at least one.
+        assert_eq!(v["citations_checked"], json!(1));
+        assert_eq!(v["paths_checked"], json!(2));
     }
 
     /// The example the registry ships must be the shape this parser accepts —
@@ -984,6 +1557,333 @@ mod tests {
         let d = parse_dossier(&text)
             .unwrap_or_else(|r| panic!("the shipped example must pass: {r}"));
         assert_eq!(d.lanes.len(), 2, "the example shows a real 2-lane run");
+    }
+
+    // ── CHECK 1 — citations resolve against the lane they name ──────────
+    //
+    // Four holes, four probes. Plain containment against the concatenated
+    // proposal set passes every one of them, which is why none of them is a
+    // variation of the others.
+
+    /// HOLE a — a short generic quote sits inside almost any proposal. This
+    /// one IS contained in lane-a's bytes, so only the minimum span refuses it.
+    #[test]
+    fn a_short_generic_citation_is_refused_for_failing_the_minimum_span() {
+        let lanes = [
+            lane("lane-a", "The answer stays at the dispatch door, so no new machinery is needed."),
+            lane("lane-b", LANE_B_PROPOSAL),
+        ];
+        let doc = dossier_of(&lanes, &["lane-a :: the dispatch door".to_string()]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_too_short", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-a", "{v}");
+        assert!(field(&v, "quote").contains("dispatch door"), "{v}");
+    }
+
+    /// HOLE b — a quote in no proposal at all. The plain fabrication.
+    #[test]
+    fn a_fabricated_citation_found_in_no_proposal_is_refused() {
+        let doc = cited(&["lane-a :: A third store settles the tie between two live leases"]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-a", "{v}");
+    }
+
+    /// HOLE c — the negation strip. The quote IS a substring of the proposal
+    /// and it is long, but it starts mid-sentence, past the word that reverses
+    /// the meaning. Containment says yes; the record would then cite the lane
+    /// as saying the opposite of what it said.
+    #[test]
+    fn a_citation_that_drops_a_negation_and_inverts_the_meaning_is_refused() {
+        let proposal = "We should not cache the token on the worker side, because a cached token outlives the lease that granted it.";
+        let quote = "cache the token on the worker side, because a cached token outlives the lease that granted it";
+        assert!(proposal.contains(quote), "the probe is only about the sentence rule");
+        let lanes = [lane("lane-a", proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc = dossier_of(&lanes, &[format!("lane-a :: {quote}")]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+        assert!(
+            field(&v, "fix").to_ascii_lowercase().contains("sentence"),
+            "the refusal must name the sentence rule that caught it: {v}"
+        );
+    }
+
+    /// HOLE d — misattribution. The text is genuine, in the WRONG lane. This
+    /// is the fabrication D4 exists to catch: a dossier that reads as three
+    /// lanes agreeing when one lane said it and the citation moved it.
+    #[test]
+    fn a_citation_attributed_to_one_lane_but_present_only_in_another_is_refused() {
+        let doc = cited(&[
+            "lane-b :: The older lease wins on every read, so a stale claim never outranks a live one",
+        ]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_misattributed", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-b", "{v}");
+        assert_eq!(field(&v, "found_in"), "lane-a", "the refusal names where it really lives: {v}");
+    }
+
+    /// The prohibition itself: never check against the concatenated set. This
+    /// quote is two whole sentences that exist only ACROSS the lane boundary,
+    /// so it resolves against the joined proposals and against neither lane.
+    #[test]
+    fn the_citation_check_never_matches_against_the_concatenated_proposal_set() {
+        let quote = format!("{LANE_A_PROPOSAL} {LANE_B_PROPOSAL}");
+        let joined = format!("{LANE_A_PROPOSAL}\n{LANE_B_PROPOSAL}");
+        assert!(
+            quote_resolves(&normalize(&joined), &normalize(quote.trim_end_matches('.'))),
+            "the probe is only meaningful while the concatenation WOULD match"
+        );
+        let doc = cited(&[&format!("lane-a :: {quote}")]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// The green probe: same bytes, different whitespace and case. A citation
+    /// is transcribed by hand; re-wrapping it is not fabricating it.
+    #[test]
+    fn a_real_citation_differing_only_in_whitespace_and_case_passes() {
+        let doc = cited(&[
+            "lane-a ::   The  OLDER lease   wins on every read,  so a stale claim never outranks a LIVE one.",
+        ]);
+        let counts = checked(&doc, &control_log()).expect("a re-wrapped real quote is not a fake");
+        assert_eq!(counts.citations, 1);
+    }
+
+    #[test]
+    fn a_citation_naming_a_lane_the_dossier_has_no_section_for_is_refused() {
+        let doc = cited(&["lane-z :: The older lease wins on every read, so a stale claim never outranks a live one"]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_lane_unknown", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-z", "{v}");
+    }
+
+    #[test]
+    fn a_citation_line_that_carries_no_lane_id_is_refused_as_malformed() {
+        let doc = cited(&["the older lease wins on every read"]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_malformed", "{v}");
+    }
+
+    /// A zero count is not a pass. A dossier citing nothing has synthesized
+    /// its chosen answer out of nothing this door can resolve.
+    #[test]
+    fn a_dossier_with_no_citation_at_all_refuses_rather_than_reporting_success() {
+        let doc = cited(&[]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citations_empty", "{v}");
+    }
+
+    // ── CHECK 2 — the brief digest, read from the authoritative log ──────
+
+    #[test]
+    fn a_lane_whose_recorded_digest_differs_from_the_logged_one_is_refused() {
+        let other = "0000000000000000000000000000000000000000";
+        let log = log_of(&[
+            (&dispatch_id_of("lane-a"), Some(other)),
+            (&dispatch_id_of("lane-b"), Some(FIXTURE_DIGEST)),
+        ]);
+        let v = evidence_refusal(&well_formed(), &log);
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_brief_digest_mismatch", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-a", "{v}");
+        assert_eq!(field(&v, "recorded"), FIXTURE_DIGEST, "{v}");
+        assert_eq!(field(&v, "logged"), other, "{v}");
+    }
+
+    /// The dispatch log is FAIL-OPEN at write (`append_prepare_record`: "a log
+    /// failure never blocks the payload"). So an absent line is a hole, and a
+    /// hole must be NAMED — a silent pass here would let any dossier claim a
+    /// dispatch that never happened.
+    #[test]
+    fn a_dispatch_id_with_no_line_in_the_log_is_refused_by_name() {
+        let log = log_of(&[(&dispatch_id_of("lane-a"), Some(FIXTURE_DIGEST))]);
+        let v = evidence_refusal(&well_formed(), &log);
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_dispatch_unlogged", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-b", "{v}");
+        assert_eq!(field(&v, "dispatch_id"), dispatch_id_of("lane-b"), "{v}");
+        assert!(field(&v, "log").contains("dispatch.jsonl"), "the refusal names the log: {v}");
+
+        // An empty or missing log is the same hole for every lane, never a pass.
+        let v = evidence_refusal(&well_formed(), &log_of(&[]));
+        assert_eq!(reason(&v), "dossier_dispatch_unlogged", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-a", "{v}");
+    }
+
+    #[test]
+    fn a_logged_dispatch_that_records_no_digest_is_refused_rather_than_skipped() {
+        let log = log_of(&[
+            (&dispatch_id_of("lane-a"), None),
+            (&dispatch_id_of("lane-b"), Some(FIXTURE_DIGEST)),
+        ]);
+        let v = evidence_refusal(&well_formed(), &log);
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_brief_digest_unlogged", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-a", "{v}");
+    }
+
+    /// Byte-identical briefs is what makes the lanes comparable (D2(b)). Two
+    /// different logged digests mean the brief CHANGED between lane 1 and
+    /// lane 3 — the cost decision f0f21142 accepted, detected here rather
+    /// than prevented at the door.
+    #[test]
+    fn logged_digests_that_are_not_all_equal_are_refused_naming_the_divergence() {
+        let other = "1111111111111111111111111111111111111111";
+        let lanes = [
+            lane("lane-a", LANE_A_PROPOSAL),
+            lane_full("lane-b", &dispatch_id_of("lane-b"), other, DIET_PATH, LANE_B_PROPOSAL),
+        ];
+        let doc = dossier_of(&lanes, &[LANE_A_CITATION.to_string()]);
+        let log = log_of(&[
+            (&dispatch_id_of("lane-a"), Some(FIXTURE_DIGEST)),
+            (&dispatch_id_of("lane-b"), Some(other)),
+        ]);
+        let v = evidence_refusal(&doc, &log);
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_brief_digest_divergent", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-b", "{v}");
+        assert_eq!(field(&v, "other_lane"), "lane-a", "{v}");
+    }
+
+    // ── CHECK 3 — the read diet, and how far it can be trusted ───────────
+
+    #[test]
+    fn a_lane_reporting_a_path_outside_the_declared_diet_is_refused() {
+        let stray = "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs";
+        let lanes = [
+            lane("lane-a", LANE_A_PROPOSAL),
+            lane_full(
+                "lane-b",
+                &dispatch_id_of("lane-b"),
+                FIXTURE_DIGEST,
+                &format!("{DIET_PATH}, {stray}"),
+                LANE_B_PROPOSAL,
+            ),
+        ];
+        let doc = dossier_of(&lanes, &[LANE_A_CITATION.to_string()]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_read_diet_breach", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-b", "{v}");
+        assert_eq!(field(&v, "path"), stray, "{v}");
+    }
+
+    /// `.bee/` is where the orchestrator's own leaning lives — the open reason
+    /// D1 forces lands in `.bee/decisions.jsonl`. So a `.bee/` read refuses
+    /// even when the brief itself listed it: a diet cannot license it.
+    #[test]
+    fn any_path_naming_dot_bee_is_refused_even_when_the_diet_declares_it() {
+        let lanes = [
+            lane_full(
+                "lane-a",
+                &dispatch_id_of("lane-a"),
+                FIXTURE_DIGEST,
+                ".bee/decisions.jsonl",
+                LANE_A_PROPOSAL,
+            ),
+            lane("lane-b", LANE_B_PROPOSAL),
+        ];
+        let doc = dossier_of(&lanes, &[LANE_A_CITATION.to_string()]).replace(
+            &format!("## Read diet\n- {DIET_PATH}"),
+            &format!("## Read diet\n- {DIET_PATH}\n- .bee/decisions.jsonl"),
+        );
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_read_diet_bee_path", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-a", "{v}");
+    }
+
+    /// The honesty rule. This check reads the lane's OWN report; checks 1 and
+    /// 2 read bytes this door holds. The refusal says so, because a check
+    /// whose strength is misread retires a suspicion it never earned.
+    #[test]
+    fn the_read_diet_refusal_states_that_it_is_self_reported_and_weaker() {
+        let lanes = [
+            lane_full(
+                "lane-a",
+                &dispatch_id_of("lane-a"),
+                FIXTURE_DIGEST,
+                "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+                LANE_A_PROPOSAL,
+            ),
+            lane("lane-b", LANE_B_PROPOSAL),
+        ];
+        let doc = dossier_of(&lanes, &[LANE_A_CITATION.to_string()]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_eq!(field(&v, "trust"), "self_reported", "{v}");
+        let fix = field(&v, "fix").to_ascii_lowercase();
+        assert!(fix.contains("self-report"), "{v}");
+        assert!(fix.contains("weaker"), "the refusal must not read as strong as the citation check: {v}");
+    }
+
+    #[test]
+    fn a_lane_reporting_no_path_at_all_refuses_rather_than_checking_nothing() {
+        let lanes = [
+            lane_full("lane-a", &dispatch_id_of("lane-a"), FIXTURE_DIGEST, ",", LANE_A_PROPOSAL),
+            lane("lane-b", LANE_B_PROPOSAL),
+        ];
+        let doc = dossier_of(&lanes, &[LANE_A_CITATION.to_string()]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_read_diet_empty", "{v}");
+        assert_eq!(field(&v, "lane"), "lane-a", "{v}");
+    }
+
+    #[test]
+    fn a_brief_declaring_no_diet_leaves_nothing_to_check_and_refuses() {
+        let doc = well_formed().replace(&format!("## Read diet\n- {DIET_PATH}\n"), "## Read diet\n");
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_read_diet_undeclared", "{v}");
+    }
+
+    // ── the whole door ──────────────────────────────────────────────────
+
+    /// Zero lanes is zero evidence. Parsing already refuses it, and so does
+    /// the evidence pass — a check that can be handed nothing must never
+    /// answer "checked".
+    #[test]
+    fn an_evidence_pass_over_no_lane_refuses_rather_than_reporting_success() {
+        let mut d = parse_dossier(&well_formed()).unwrap();
+        d.lanes.clear();
+        let v = check_evidence(&d, &control_log()).err().expect("no lane is no evidence");
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_lanes_missing", "{v}");
+    }
+
+    #[test]
+    fn the_control_dossier_passes_all_three_evidence_checks() {
+        let counts = checked(&well_formed(), &control_log()).expect("the control must pass");
+        assert_eq!(counts.citations, 1);
+        assert_eq!(counts.paths, 2, "one reported path per lane");
+    }
+
+    /// The shipped example is a worked record, so it must survive the EVIDENCE
+    /// checks too — not only the section contract. An example that could not
+    /// pass would teach a dossier the door refuses.
+    #[test]
+    fn the_shipped_example_dossier_passes_every_evidence_check() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../..")
+            .join("docs/history/slp-blind-lanes/blind/example-run.md");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let d = parse_dossier(&text).unwrap();
+        let log = log_of(&d
+            .lanes
+            .iter()
+            .map(|l| (l.dispatch_id.as_str(), Some(l.brief_sha256.as_str())))
+            .collect::<Vec<_>>());
+        let counts = check_evidence(&d, &log)
+            .unwrap_or_else(|r| panic!("the shipped example must pass every check: {r}"));
+        assert_eq!(counts.citations, 2, "the example cites both lanes");
+        assert_eq!(counts.paths, 2);
     }
 
     #[test]
