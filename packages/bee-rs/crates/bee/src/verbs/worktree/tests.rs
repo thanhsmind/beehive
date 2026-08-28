@@ -968,6 +968,252 @@ use std::time::Instant;
         );
     }
 
+    // ── slp-dissent-stop-and-ask sd-5: the merge door's dissent precondition ──
+    //
+    // a2affcba names BOTH doors, and `bee worktree merge` had no cell-debt
+    // precondition but proof debt. These cases sit beside the proof cases
+    // above on purpose: same slot, same zero-mutation posture, same feature.
+    //
+    // Two of them invert the proof twins deliberately — the dissent helper
+    // counts a cell in ANY status (a blocker dissent parks its cell as
+    // `blocked`, never `capped`), and the refusal carries a named escape
+    // that the escape-less proof refusal does not have.
+
+    /// A cell of `feature` carrying ONE dissent entry, written straight into
+    /// the MAIN checkout's live `.bee/cells/` the same way `bee cells
+    /// dissent` leaves it — `feature_dissent_debt`'s own read path
+    /// (verbs/cells/dissent.rs), not a fixture-only shape. `status` is a
+    /// parameter on purpose: the helper counts every status.
+    ///
+    /// A `capped` cell also gets a VALID proof report, because the proof
+    /// door sits above the dissent door and would otherwise mask it.
+    fn write_dissenting_cell(
+        main: &Path,
+        id: &str,
+        feature: &str,
+        status: &str,
+        verdict: Option<&str>,
+    ) {
+        let mut entry = json!({
+            "target": id,
+            "claim": "the cell's shape is wrong",
+            "alternative": "do it the other way",
+            "severity": "blocker",
+            "recorded_at": "2026-08-28T00:00:00.000Z",
+        });
+        if let Some(v) = verdict {
+            let m = entry.as_object_mut().unwrap();
+            m.insert("verdict".into(), json!(v));
+            m.insert("verdict_reason".into(), json!("because"));
+            m.insert("answered_at".into(), json!("2026-08-28T01:00:00.000Z"));
+        }
+        let mut trace = json!({ "dissent": [entry] });
+        if status == "capped" {
+            trace["report"] = valid_proof_report();
+        }
+        let cell = json!({
+            "id": id,
+            "feature": feature,
+            "status": status,
+            "trace": trace,
+        });
+        let dir = main.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    /// The named escape: one `decisions.jsonl` row tagged `dissent-deferral`
+    /// whose text names `named` — the same row shape the close door's own
+    /// deferral case writes (verbs/cells/tests.rs).
+    fn write_dissent_deferral(main: &Path, named: &str) {
+        std::fs::write(
+            main.join(".bee").join("decisions.jsonl"),
+            format!(
+                "{{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-28T00:00:00.000Z\",\"decision\":\"defer the dissent for {named}\",\"rationale\":\"r\",\"tags\":[\"dissent-deferral\"],\"scope\":\"repo\"}}\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    /// sd-5: an unanswered dissent on ANY cell of the merging feature refuses
+    /// the merge, zero-mutation, naming EVERY offending cell — including a
+    /// cell that was never capped, which is the normal state of a cell a
+    /// blocker dissent just parked.
+    #[test]
+    fn an_unanswered_dissent_refuses_the_merge_naming_every_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "dissenting");
+        let wt = created.worktree_root.clone();
+
+        // NOT capped: the helper counts every status on purpose.
+        write_dissenting_cell(&main, "dissenting-1", "dissenting", "blocked", None);
+        // Capped AND fully proven: proves the proof door is not what refuses.
+        write_dissenting_cell(&main, "dissenting-2", "dissenting", "capped", None);
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "an unanswered dissent must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_DISSENT_DEBT] "), "{message}");
+        assert!(message.contains("dissenting-1"), "the uncapped offender is named: {message}");
+        assert!(message.contains("dissenting-2"), "every offender is named: {message}");
+        assert!(
+            message.contains("bee cells dissent-verdict"),
+            "the refusal carries its own remedy: {message}"
+        );
+        assert!(message.contains("dissent-deferral"), "the refusal names its escape: {message}");
+        // Zero mutation: HEAD on main never moved, and the worktree stands.
+        let head_after =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(head_after, pre_merge_head, "a refused merge must never touch main");
+        assert!(wt.exists(), "the worktree stands — nothing was torn down");
+    }
+
+    /// sd-5: recording the verdict clears the precondition with NO other
+    /// change to the fixture — same cell, same status, one `verdict` key.
+    #[test]
+    fn a_recorded_dissent_verdict_lets_the_same_merge_proceed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "answered");
+        write_dissenting_cell(&main, "answered-1", "answered", "blocked", Some("accept"));
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an answered dissent must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// sd-5: the named escape. A logged `dissent-deferral` decision naming
+    /// THIS feature lets the merge through; the same tag naming a different
+    /// feature never does.
+    #[test]
+    fn a_logged_dissent_deferral_naming_this_feature_lets_the_merge_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "deferred");
+        write_dissenting_cell(&main, "deferred-1", "deferred", "blocked", None);
+
+        // The same tag naming SOMEONE ELSE never lifts this block.
+        write_dissent_deferral(&main, "elsewhere");
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "a deferral naming another feature must not clear this door: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_DISSENT_DEBT] "), "{message}");
+
+        // Naming THIS feature does.
+        write_dissent_deferral(&main, "deferred");
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a logged deferral must clear the door: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// sd-5: a worktree whose identity carries NO feature merges exactly as
+    /// it does today — the dissent helper is never called at all, so cells
+    /// carrying unanswered dissents under some other feature slug cannot
+    /// reach it. The same posture the proof door's `None` arm takes.
+    #[test]
+    fn a_worktree_with_no_resolvable_feature_merges_past_the_dissent_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "nofeat");
+        let wt = created.worktree_root.clone();
+
+        // Both identity sources removed: `resolve_worktree_feature` reads
+        // `None`, and the branch check falls back to the `wt/<slug>` shape.
+        let _ =
+            std::fs::remove_file(wt.join(".bee").join("runtime").join("worktree-identity.json"));
+        let _ = std::fs::remove_file(wt.join(".bee").join("state.json"));
+
+        write_dissenting_cell(&main, "nofeat-1", "nofeat", "blocked", None);
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an unresolved feature must merge ungated: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// sd-5: a `WORKTREE_MERGE_DISSENT_DEBT` refusal is a zero-mutation
+    /// precondition too — it writes nothing to the merging feature's lane
+    /// either. The twin of
+    /// `a_proof_debt_refusal_leaves_the_lane_record_byte_identical`.
+    #[test]
+    fn a_dissent_debt_refusal_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "dissenting");
+        write_dissenting_cell(&main, "dissenting-1", "dissenting", "blocked", None);
+        write_stranded_lane(&main, "dissenting", "scribing");
+        let lane_path = main.join(".bee").join("lanes").join("dissenting.json");
+        let before = std::fs::read(&lane_path).unwrap();
+
+        let result = merge_feature_worktree(&main, &created.id, false, None, true, None);
+        let Err(err) = result else { panic!("an unanswered dissent must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_DISSENT_DEBT"), "{msg}");
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "a dissent-debt refusal must not touch the lane record at all");
+    }
+
+    /// sd-5, THE POINT OF THE PHASE: ONE fixture state — a cell carrying an
+    /// unanswered dissent plus ONE `dissent-deferral` row naming the feature
+    /// — clears BOTH doors. `bee close`'s dissent-debt door reads
+    /// NON-BLOCKING and `bee worktree merge` proceeds past its precondition,
+    /// because both read the SAME two functions. An escape that worked at
+    /// one door and not the other is the defect this pins.
+    #[test]
+    fn one_dissent_deferral_clears_both_the_close_door_and_the_merge_precondition() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "bothdoors");
+        write_dissenting_cell(&main, "bothdoors-1", "bothdoors", "blocked", None);
+
+        // Before the escape: BOTH doors say no.
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothdoors").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(door.blocking, "the close door blocks first: {}", door.detail);
+
+        write_dissent_deferral(&main, "bothdoors");
+
+        // After it: the close door reads non-blocking...
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothdoors").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking, "one escape, close door: {}", door.detail);
+        assert!(door.detail.contains("bothdoors-1"), "the count is untouched: {}", door.detail);
+
+        // ...and the merge walks past its precondition on the SAME state.
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("one escape must clear the merge door too: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
     /// performCleanup's refusal shapes carry Node's exact key ORDER — the
     /// bytes `--json` prints and the twin diff pins.
     #[test]

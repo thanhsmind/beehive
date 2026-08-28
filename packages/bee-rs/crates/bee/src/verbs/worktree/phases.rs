@@ -172,6 +172,48 @@ pub(crate) fn merge_stage(
         }
     }
 
+    // slp-dissent-stop-and-ask sd-5 (a2affcba, 4b7aa303): the merge door's
+    // OWN dissent precondition. a2affcba names BOTH doors — the branch must
+    // not land while a worker's blocker question is unanswered — and merge
+    // had no cell-debt precondition but proof debt, so this is new code
+    // rather than a copied close-door arm.
+    //
+    // Both readers are the SAME two functions `bee close`'s dissent-debt
+    // door calls (verbs/cells/dissent.rs, sd-4), never a second reading of
+    // the rule: one obligation, two doors. The escape is consulted ONLY
+    // when there is debt to escape, exactly as the close door consults it.
+    //
+    // Placed HERE — after the proof door, before the main-dirty bookkeeping
+    // auto-commit below — because everything above that auto-commit is the
+    // zero-mutation zone: a dissent-debt merge is refused, never staged. A
+    // proof-debt refusal therefore MASKS a dissent refusal on the same
+    // feature; that matches the close door's own ordering (its judge arm
+    // precedes its dissent arm) and is deliberate.
+    //
+    // A worktree whose feature cannot be resolved has no cell record to
+    // check, so the helper is never called at all — the same `None` posture
+    // the proof door above and `uat_merge_precheck` below both take.
+    if let Some(feature) = identity.feature.as_deref() {
+        let dissent = crate::verbs::cells::feature_dissent_debt(main_root, feature)
+            .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+        if dissent.count > 0 {
+            let deferred = crate::verbs::cells::has_dissent_deferral_decision(main_root, feature)
+                .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+            if !deferred {
+                // `DebtSummary.ids` is `Vec<Value>`, not `Vec<String>` — the
+                // close door renders it through `js_join` and so does this.
+                return Err(refuse_merge(
+                    "WORKTREE_MERGE_DISSENT_DEBT",
+                    format!(
+                        "worktree {id}'s feature \"{feature}\" has {} cell(s) carrying a dissent with no recorded verdict ({}) — \"bee worktree merge\" refuses until each one is answered: bee cells dissent-verdict --id <id> --verdict accept|reject|escalate --reason \"<why>\". To defer instead, log a decision tagged dissent-deferral naming \"{feature}\" — the same escape \"bee close\"'s dissent-debt door reads.",
+                        dissent.count,
+                        crate::verbs::drivers::js_join(&dissent.ids, ", "),
+                    ),
+                ));
+            }
+        }
+    }
+
     // trun-4: `bee worktree merge` used to refuse on ANY dirty path in main,
     // but the dirt is routinely bee's OWN bookkeeping (cell traces,
     // decisions, backlog under .bee/, and this feature's own
