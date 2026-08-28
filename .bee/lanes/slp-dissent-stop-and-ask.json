@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Push bị chặn. Đây là lỗi thật của bee, không phải của bạn.",
-    "asked_at": "2026-08-28T06:16:17.893Z",
-    "session": "be014001-263f-451f-b775-5f601ff73817"
+    "subject": "**Next:** 28 capture stubs wait in the queue. Say the word and I run bee-capturing to drain them.",
+    "asked_at": "2026-08-28T07:10:18.852Z",
+    "session": "311024fe-729d-4bd8-8165-39fbb8f5fba2"
   },
   "route": {
     "class": "feature",
