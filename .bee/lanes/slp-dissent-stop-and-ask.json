@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-dissent-stop-and-ask",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "User accepts on main (uat gate), then bee close --feature slp-dissent-stop-and-ask",
+  "next_action": "bee close finished \"slp-dissent-stop-and-ask\" — feature is closed.",
   "created_at": "2026-08-27T20:58:29.709Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
