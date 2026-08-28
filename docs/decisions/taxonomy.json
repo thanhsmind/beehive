@@ -431,6 +431,7 @@
     "blind-lanes",
     "capture-queue",
     "discovery-wayfinding",
-    "impact-sweep"
+    "impact-sweep",
+    "slp-blind-lanes"
   ]
 }

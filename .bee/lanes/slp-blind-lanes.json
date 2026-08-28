@@ -14,12 +14,7 @@
   "next_action": "Invoke bee-swarming for slice 1a: bln-1 then bln-2, in the feature worktree.",
   "created_at": "2026-08-28T07:11:26.254Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**Next: I am draining the knowledge queue, not starting slice 2.** bee is flagging it as overdue and blocking, and it is right. Nine settlem",
-    "asked_at": "2026-08-28T10:52:09.143Z",
-    "session": "311024fe-729d-4bd8-8165-39fbb8f5fba2"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -47,11 +42,6 @@
     "branch": "wt/slp-blind-lanes",
     "worktree_id": "beehive--wt--slp-blind-lanes",
     "uat": "pending",
-    "blocked_by": [
-      "scribing-debt",
-      "impact",
-      "routing",
-      "doc-deferral"
-    ]
+    "blocked_by": []
   }
 }
