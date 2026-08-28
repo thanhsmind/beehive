@@ -1836,6 +1836,50 @@ use std::time::Instant;
         git_status_porcelain(dir).unwrap()
     }
 
+    /// `git status --porcelain --untracked-files=all` as one string — the
+    /// spelling that NAMES an untracked file inside an otherwise-untracked
+    /// directory instead of collapsing it to `?? docs/`.
+    fn git_status_untracked_all_str(dir: &Path) -> String {
+        git_stdout(dir, &["status", "--porcelain", "--untracked-files=all"])
+    }
+
+    /// `git ls-files -- <path>`, trimmed: empty means the path is UNTRACKED
+    /// — nothing added it to the index or to a commit.
+    fn git_ls_files_str(dir: &Path, rel: &str) -> String {
+        git_stdout(dir, &["ls-files", "--", rel]).trim().to_string()
+    }
+
+    /// Seed a file in main and COMMIT it, so a later `std::fs::write` to the
+    /// same path leaves TRACKED-and-modified dirt instead of a brand-new
+    /// untracked file. (mdp-1) That is what a peer's dirt really looks like —
+    /// a capture sync dirties an existing tracked doc, it does not conjure an
+    /// untracked one — and tracked dirt outside the swept roots is what this
+    /// door still refuses on, unconditionally. Call it BEFORE the worktree is
+    /// created: main is then clean at creation, and the branch never carries
+    /// a change to this path, so the refusal cannot come from a collision.
+    fn seed_tracked_file(main: &Path, rel: &str) {
+        let path = main.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "seeded, already tracked\n").unwrap();
+        git_ok(main, &["add", "-A"]);
+        git_ok(main, &["commit", "-qm", "seed a tracked fixture file"]);
+    }
+
+    /// A read-only `git` call whose stdout an assertion needs verbatim.
+    fn git_stdout(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?} could not run in {dir:?}: {e}"));
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
     /// A real worktree with one new commit on its branch — the smallest
     /// fixture that reaches the STAGED path (not ALREADY_UP_TO_DATE) in
     /// every test below.
@@ -1909,11 +1953,15 @@ use std::time::Instant;
 
     /// Truth 2: a dirty path OUTSIDE `.bee/` (and outside this feature's own
     /// `docs/history/<feature>/`) still refuses, and the message names it —
-    /// the auto-commit never widens past its two allowed roots.
+    /// the auto-commit never widens past its two allowed roots. (mdp-1) The
+    /// fixture is TRACKED-and-modified: tracked dirt refuses whether or not
+    /// the merging branch touches it, and the untracked narrowing never
+    /// reaches it.
     #[test]
     fn dirt_outside_bee_still_refuses_and_names_the_offending_path() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "unrelated.txt");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
@@ -1939,6 +1987,7 @@ use std::time::Instant;
     fn refusal_scope_string_names_the_widened_roots() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "unrelated.txt");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
@@ -2074,15 +2123,17 @@ use std::time::Instant;
     /// on `another_features_docs_history_dirt_still_refuses_and_is_named`.
     /// Only the exact paths THIS feature's own capped cells recorded are
     /// ever in scope; anything else under `docs/knowledge/` still refuses
-    /// and is named.
+    /// and is named. (mdp-1) The peer's file is TRACKED-and-modified, which
+    /// is what the 7429dfda incident actually was: a capture sync dirties an
+    /// existing tracked doc. Tracked dirt refuses unconditionally.
     #[test]
     fn another_features_docs_knowledge_dirt_still_refuses_and_is_named() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "docs/knowledge/areas/gates.md");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
         std::fs::write(
             main.join("docs").join("knowledge").join("areas").join("gates.md"),
             "a peer's in-flight capture sync\n",
@@ -2096,10 +2147,10 @@ use std::time::Instant;
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
         assert!(msg.contains("gates.md"), "{msg}");
         // Nothing committed, nothing merged: the peer's file is left exactly
-        // as dirtied (plain porcelain collapses an all-untracked `docs/` to
-        // one summary line, per D8a — `--untracked-files=all` is what names
-        // it, already proven above via `msg`).
-        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        // as dirtied. (mdp-1) A TRACKED modification is never collapsed by
+        // porcelain the way an untracked directory is, so plain porcelain
+        // names it here.
+        let after = git_status_porcelain_str(&main);
         assert!(
             after.contains("docs/knowledge/areas/gates.md"),
             "the peer's docs/knowledge file must be left untouched: {after}"
@@ -2110,17 +2161,20 @@ use std::time::Instant;
     /// recorded by no cell of THIS feature stays uncommitted even though the
     /// feature has other capped cells that recorded a DIFFERENT knowledge
     /// path — only the exact recorded paths are ever swept, never the whole
-    /// root just because the feature touched some part of it.
+    /// root just because the feature touched some part of it. (mdp-1) The
+    /// unrecorded file is TRACKED-and-modified, the dirt a capture sync
+    /// really leaves; tracked dirt outside the swept roots refuses
+    /// unconditionally.
     #[test]
     fn docs_knowledge_dirt_unrecorded_by_any_of_this_features_cells_stays_uncommitted() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "docs/knowledge/areas/unrecorded.md");
         let created = worktree_with_a_real_commit(&main, "demo");
 
         write_capped_cell_with_files(&main, "demo-1", "demo", &["docs/knowledge/areas/recorded.md"]);
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
         std::fs::write(
             main.join("docs").join("knowledge").join("areas").join("unrecorded.md"),
             "dirt this feature never recorded touching\n",
@@ -2205,16 +2259,18 @@ use std::time::Instant;
     /// dirty-main refusal names it, the same mechanism that already names
     /// an unscoped `docs/history` file today. Modelled on
     /// `another_features_docs_knowledge_dirt_still_refuses_and_is_named`.
+    /// (mdp-1) The file is TRACKED-and-modified, the dirt a capture sync
+    /// really leaves; tracked dirt refuses unconditionally.
     #[test]
     fn feature_less_merge_docs_knowledge_dirt_stays_uncommitted_and_is_named() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
+        seed_tracked_file(&main, "docs/knowledge/areas/example.md");
         let created = worktree_with_a_real_commit(&main, "demo");
         make_feature_unresolvable(&created.worktree_root);
         assert_eq!(resolve_worktree_feature(&created.worktree_root).feature, None);
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
         std::fs::write(
             main.join("docs").join("knowledge").join("areas").join("example.md"),
             "captured, but nobody can name whose feature this is\n",
@@ -2231,48 +2287,176 @@ use std::time::Instant;
         assert!(msg.contains("example.md"), "{msg}");
         // Nothing committed, nothing merged: the file is left exactly as
         // dirtied, same as an unscoped docs/history file is today.
-        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        let after = git_status_porcelain_str(&main);
         assert!(
             after.contains("docs/knowledge/areas/example.md"),
             "the unscoped docs/knowledge file must be left untouched: {after}"
         );
     }
 
-    /// The sharper half of this cell: another feature's OWN
-    /// `docs/history/<other>/` must never be swept into THIS merge's
-    /// auto-commit — a sibling session can be writing it at the same
-    /// moment, and sweeping it would land a peer's uncommitted work without
-    /// their say-so. Only `docs/history/<the-merging-feature>/` is ever in
-    /// scope; anything under a DIFFERENT feature's history dir still
-    /// refuses and is named.
+    // ── mdp-1: an untracked path in main blocks the merge only where the
+    //    merging branch actually writes it ─────────────────────────────────
+    //
+    // These two replace `another_features_docs_history_dirt_still_refuses_
+    // and_is_named`, whose fixture was an untracked
+    // `docs/history/<other>/plan.md`. That test argued the REFUSAL was a
+    // safety property because sweeping a peer's `docs/history/<other>/` into
+    // this merge's bookkeeping commit would land their work without their
+    // say-so. The argument is sound, but it is about the AUTO-COMMIT, and
+    // the two are separable: do-not-commit is kept (and now PROVEN three
+    // ways in the first test below, instead of assumed from the refusal),
+    // while do-not-refuse is dropped, because refusing on a path this merge
+    // can never write bought nothing and cost every parallel session a
+    // merge. `main_bookkeeping_roots` is untouched, so the peer's file is
+    // exempted from the REFUSAL and from nothing else.
+
+    /// mdp-1, the half this cell FREES. A peer session's untracked
+    /// `docs/history/<other>/` file is not something this merge can touch:
+    /// the merging branch never writes that path, so no collision is
+    /// possible. Refusing on it made the steady state with several live
+    /// sessions "nobody merges until everybody commits" — a coordination
+    /// cost paid daily for a collision that cannot happen. The merge must
+    /// PROCEED, and the peer's file must still be there afterwards,
+    /// untracked and uncommitted: "stop refusing" must never quietly become
+    /// "sweep it into my commit".
     #[test]
-    fn another_features_docs_history_dirt_still_refuses_and_is_named() {
+    fn an_untracked_path_the_branch_never_touches_no_longer_blocks_the_merge() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo");
 
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
-        std::fs::create_dir_all(main.join("docs").join("history").join("other-feature")).unwrap();
-        std::fs::write(
-            main.join("docs").join("history").join("other-feature").join("plan.md"),
+        let peer = main.join("docs").join("history").join("other-feature").join("plan.md");
+        std::fs::create_dir_all(peer.parent().unwrap()).unwrap();
+        std::fs::write(&peer, "a peer's in-flight work\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("an untracked path the branch never writes must not refuse the merge: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+
+        // The do-not-commit half, proven rather than assumed — three ways.
+        // Still on disk, byte-identical:
+        assert!(peer.exists(), "the peer's file must survive the merge");
+        assert_eq!(
+            std::fs::read_to_string(&peer).unwrap(),
             "a peer's in-flight work\n",
-        )
-        .unwrap();
+            "the peer's file must be left byte-untouched"
+        );
+        // still UNTRACKED (nothing added it to the index or to a commit):
+        assert!(
+            git_ls_files_str(&main, "docs/history/other-feature/plan.md").is_empty(),
+            "the peer's file must still be untracked after the merge"
+        );
+        // and still reported as uncommitted dirt by git itself:
+        let after = git_status_untracked_all_str(&main);
+        assert!(
+            after.contains("docs/history/other-feature/plan.md"),
+            "the peer's file must still be uncommitted: {after}"
+        );
+    }
+
+    /// mdp-1, the half this cell KEEPS. The narrowing is a collision test,
+    /// never a blanket pardon for untracked files: when the merging branch
+    /// itself writes the path, the merge WOULD overwrite whatever is sitting
+    /// there, so it still refuses and still names it. Without this arm the
+    /// narrowing would be a way to clobber.
+    #[test]
+    fn an_untracked_path_the_branch_does_write_still_refuses_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        // The branch's own history adds exactly this path.
+        let on_branch = created
+            .worktree_root
+            .join("docs")
+            .join("history")
+            .join("other-feature")
+            .join("plan.md");
+        std::fs::create_dir_all(on_branch.parent().unwrap()).unwrap();
+        std::fs::write(&on_branch, "the branch's own version\n").unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "the branch writes that path"]);
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        let collides = main.join("docs").join("history").join("other-feature").join("plan.md");
+        std::fs::create_dir_all(collides.parent().unwrap()).unwrap();
+        std::fs::write(&collides, "uncommitted work the merge would clobber\n").unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
-        let Err(err) = result else { panic!("another feature's docs/history dirt must still refuse") };
+        let Err(err) = result else {
+            panic!("an untracked path the branch itself writes must still refuse")
+        };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
-        assert!(msg.contains("other-feature"), "{msg}");
-        // Nothing committed, nothing merged: the peer's file is left exactly
-        // as dirtied (plain porcelain collapses an all-untracked `docs/` to
-        // one summary line, per D8a — `--untracked-files=all` is what names
-        // it, already proven above via `msg`).
-        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        assert!(msg.contains("docs/history/other-feature/plan.md"), "{msg}");
+        // Nothing merged, nothing clobbered: the file is left exactly as it was.
+        assert_eq!(
+            std::fs::read_to_string(&collides).unwrap(),
+            "uncommitted work the merge would clobber\n"
+        );
+    }
+
+    /// mdp-1's sharp edge: the changed-file set is read against the branch's
+    /// MERGE BASE with main, never against main's HEAD. This fixture is the
+    /// one where the two spellings DISAGREE — main has moved on since the
+    /// fork and DELETED `stale.txt`, which the branch still carries
+    /// untouched. `git diff HEAD wt/demo` therefore names `stale.txt` (the
+    /// merge RESULT differs from HEAD there), but the branch never wrote it,
+    /// so an untracked `stale.txt` in main cannot be clobbered and must not
+    /// refuse. Without a fixture where main moved on since the fork, both
+    /// spellings agree and the test proves nothing.
+    #[test]
+    fn the_changed_file_set_is_read_against_the_merge_base_not_mains_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        std::fs::write(main.join("stale.txt"), "seeded before the fork\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "seed stale.txt"]);
+
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        // Main moves on AFTER the fork: it deletes the file and commits.
+        git_ok(&main, &["rm", "-q", "stale.txt"]);
+        git_ok(&main, &["commit", "-qm", "main deletes stale.txt"]);
+        // …and an untracked file of the same name is left sitting in main.
+        std::fs::write(main.join("stale.txt"), "a peer's fresh scratch file\n").unwrap();
+
+        // The two spellings disagree — the whole reason this fixture exists.
+        let base = git_stdout(&main, &["merge-base", "HEAD", "wt/demo"]);
+        let base_spelling =
+            git_stdout(&main, &["diff", "--no-renames", "--name-only", base.trim(), "wt/demo"]);
         assert!(
-            after.contains("docs/history/other-feature/plan.md"),
-            "the peer's docs/history dir must be left untouched: {after}"
+            !base_spelling.contains("stale.txt"),
+            "the branch never wrote stale.txt: {base_spelling}"
+        );
+        let head_spelling =
+            git_stdout(&main, &["diff", "--no-renames", "--name-only", "HEAD", "wt/demo"]);
+        assert!(
+            head_spelling.contains("stale.txt"),
+            "the HEAD spelling must name stale.txt, or this fixture proves nothing: {head_spelling}"
+        );
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the merge-base spelling must let this merge through: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            std::fs::read_to_string(main.join("stale.txt")).unwrap(),
+            "a peer's fresh scratch file\n",
+            "the untracked file must be left byte-untouched"
         );
     }
 

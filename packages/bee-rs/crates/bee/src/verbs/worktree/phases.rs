@@ -224,8 +224,9 @@ pub(crate) fn merge_stage(
     // bee-store bookkeeping auto-commit (drivers/close.rs,
     // commit_close_bookkeeping): before the refusal fires, auto-commit ONLY
     // the two allowed roots (merge.rs's main_bookkeeping_roots — never
-    // wider) and proceed; any dirt OUTSIDE them still refuses, named by
-    // path, exactly as before.
+    // wider) and proceed; dirt OUTSIDE them still refuses, named by path —
+    // narrowed by mdp-1 to the dirt this merge can actually collide with
+    // (see the split right below).
     let mut bookkeeping_commit: Option<Value> = None;
     if is_tree_dirty(main_root).map_err(MErr::Thrown)? {
         if !worktree_merge_commit_bookkeeping_enabled(main_root) {
@@ -238,8 +239,45 @@ pub(crate) fn merge_stage(
             ));
         }
         let roots = main_bookkeeping_roots(main_root, identity.feature.as_deref());
-        if is_tree_dirty_excluding(main_root, &roots).map_err(MErr::Thrown)? {
-            let offending = git_status_porcelain_excluding_untracked_all(main_root, &roots).map_err(MErr::Thrown)?;
+        let dirt = main_dirt_excluding(main_root, &roots).map_err(MErr::Thrown)?;
+        // mdp-1: the leftover dirt is no longer one undifferentiated pile.
+        //
+        // A TRACKED modification outside the bookkeeping roots refuses
+        // exactly as it always did — this narrowing never reaches it. An
+        // UNTRACKED path is different: the merge can only harm it by
+        // WRITING it, so it blocks only when it is in the merging branch's
+        // own changed-file set (`branch_changed_files`, read against the
+        // MERGE BASE — main's HEAD would name a file main deleted after the
+        // fork as "changed" and refuse for a collision that cannot happen).
+        // Anything else is a peer session's in-flight file this merge will
+        // never touch; refusing on it made the steady state with several
+        // live sessions "nobody merges until everybody commits" — a
+        // coordination cost paid daily, four refusals in two days, for a
+        // collision that cannot happen. Exempting it from the REFUSAL is
+        // not exempting it from anything else: `main_bookkeeping_roots` is
+        // untouched below, so no untracked path is ever swept into the
+        // auto-commit, and git's own "untracked working tree file would be
+        // overwritten by merge" stays the backstop for whatever the branch
+        // does touch.
+        let blocking_untracked: Vec<String> = if dirt.untracked.is_empty() {
+            Vec::new()
+        } else {
+            match current_branch(&worktree_root).and_then(|b| branch_changed_files(main_root, &b)) {
+                Some(changed) => dirt.untracked.iter().filter(|u| changed.contains(*u)).cloned().collect(),
+                // Fail closed: a detached HEAD or an unresolvable merge base
+                // leaves the collision question unanswerable, so every
+                // untracked path blocks, exactly as before the narrowing.
+                None => dirt.untracked.clone(),
+            }
+        };
+        if !dirt.tracked.is_empty() || !blocking_untracked.is_empty() {
+            let offending = dirt
+                .tracked
+                .iter()
+                .cloned()
+                .chain(blocking_untracked.iter().map(|u| format!("?? {u}")))
+                .collect::<Vec<String>>()
+                .join("\n");
             let scope = match &identity.feature {
                 Some(f) => format!(".bee/, docs/decisions/, docs/knowledge/ paths this feature recorded, or docs/history/{f}/"),
                 None => ".bee/ or docs/decisions/".to_string(),
@@ -247,7 +285,7 @@ pub(crate) fn merge_stage(
             return Err(refuse_merge(
                 "WORKTREE_MERGE_MAIN_DIRTY",
                 format!(
-                    "the MAIN checkout at {} has uncommitted changes outside {scope} that \"bee worktree merge\" will not auto-commit — commit or stash them before merging:\n{offending}",
+                    "the MAIN checkout at {} has uncommitted changes that \"bee worktree merge\" will not auto-commit — commit or stash them before merging:\n{offending}\nWhat still blocks: any TRACKED change outside {scope}, plus any UNTRACKED file this branch itself writes (the merge would overwrite it). An untracked file the branch never touches cannot collide, so it no longer blocks — it is left uncommitted and untouched.",
                     p(main_root)
                 ),
             ));
