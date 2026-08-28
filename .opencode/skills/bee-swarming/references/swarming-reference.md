@@ -379,9 +379,10 @@ The orchestrator's loop for one herding cell:
    idle-timeout + ceiling, D5) already does the waiting at zero token
    cost; the orchestrator does not poll it itself.
 3. **Read the result.** `bee herding run` prints the validated
-   `result-N.json` JSON on completion (`status: done|blocked`, `summary`,
-   `files_changed[]`, `proof`) — read that, never re-derive it by
-   screen-scraping the pane.
+   `result-N.json` JSON on completion (`outcome: done|blocked` — the
+   envelope carries no `status` key — plus `summary`, `files_changed[]`,
+   `proof`, and, only when the worker offered them, `options[]` and
+   `leaning`) — read that, never re-derive it by screen-scraping the pane.
 4. **Do the bookkeeping the worker never could:** verify per the cell's
    own proof type (re-run the declared test/parity check against the
    `files_changed` diff), then `.bee/bin/bee cells finish --id <id>
@@ -468,8 +469,15 @@ Next action: <suggestion for the orchestrator>
 Requested files: <paths>
 Blocker: <conflict | failing verification | ambiguity | locked-decision conflict>
 What happened: <description + diagnosis>
+Options: <one self-contained sentence per way forward, one per line>
+Leaning: <the option you would pick, repeated word for word>
 What I need next: <specific parent action>
 ```
+
+`Options:` and `Leaning:` are the StopAndAsk half of this form: a blocked
+worker hands the orchestrator a CHOICE instead of prose. Fill both when the
+block leaves a decision to make, omit both when it does not. `Leaning:`
+repeats one option verbatim — never an index, never a new proposal.
 
 ```text
 [HANDOFF] <cell-id or none>
@@ -486,6 +494,8 @@ Suggested next action: <re-check ready set, fix assignment, respawn later>
 ```
 
 On each result: update the cell if the worker could not (`block` with reason), clear the worker from `.bee/state.json`, and confirm with `.bee/bin/bee reservations list --active-only` that nothing leaked.
+
+A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells dissent-verdict --id <cell> --verdict accept|reject|escalate --reason "<why>"` before the related work resumes — the verdict is the orchestrator's, and 4b7aa303 makes it an obligation, not a courtesy; `bee close` and `bee worktree merge` both refuse while one is unanswered.
 
 **The departure line** (decisions D5/D8/D10, `docs/history/human-mailbox/CONTEXT.md`). The `Departure:` line of a `[DONE]` result and the `deviations` entries of the same worker's `--report` carry one thing in THREE required parts — what was done differently, why, and which kind — on the same ` — ` separator the proof line uses (first separator ends `what`, last starts `kind`, so a `why` may carry the separator itself). A report entry may also spell those parts structurally, as `{what, why, kind}`.
 

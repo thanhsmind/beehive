@@ -123,14 +123,22 @@ outputs — when a verb refuses, its message names the fix.
    existing helpers, match the codebase's idiom. Authoring tests? Judge
    existing coverage first — `.bee/expertise/tests.md`.
 2. Implement exactly the assigned cell. Reserve any additional path before
-   writing (`bee reservations reserve`). Package installs and
-   architectural changes are not yours to make — `[BLOCKED]` with the
-   proposal.
+   writing (`bee reservations reserve`). Package installs, any new
+   dependency (vendored or declared), and architectural changes are not
+   yours to make — `[BLOCKED]` with the proposal. A
+   contract or API change the cell did not name is the orchestrator's
+   call — `[BLOCKED]` with the options. Trading data quality or the
+   user's experience for a technical target (speed, a green test, a
+   smaller diff) is never a worker's trade — `[BLOCKED]` with the
+   options.
 3. When reality disagrees with the cell: a bug in touched code → fix it,
    record the deviation; a missing piece the outcome depends on → add it,
    record; blocking breakage in your path → fix, record; anything
    architectural → `[BLOCKED]`. Never reinterpret a locked decision to
-   make the cell fit. An unexpected red or an unfamiliar mechanism
+   make the cell fit. Disagreeing with the cell is a RECORD, never a
+   silent workaround — `bee cells dissent --id <cell> --reason "<claim>"
+   --alternative "<instead>" --severity blocker|consider`, then
+   `[BLOCKED]`. An unexpected red or an unfamiliar mechanism
    mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
    surfaces matching patterns and area concepts before you guess.
 4. Commit once: subject describes the change in imperative mood; the last

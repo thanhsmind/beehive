@@ -331,8 +331,13 @@ this schema, and nothing else, to the result file:\n\n\
   \"status\": \"done\" | \"blocked\",\n\
   \"summary\": \"<one line: what happened>\",\n\
   \"files_changed\": [\"<path>\", \"...\"],\n\
-  \"proof\": \"<command or evidence that backs the status>\"\n\
+  \"proof\": \"<command or evidence that backs the status>\",\n\
+  \"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\
+  \"leaning\": \"<the one option you would pick, repeated word for word>\"\n\
 }}\n\n\
+When \"blocked\" leaves a choice to make, fill \"options\" with one \
+self-contained sentence per way forward and \"leaning\" with the one you would \
+pick, repeated word for word; leave both out when there is no choice.\n\n\
 # How to write it — write to a temp file, then rename (do not skip this)\n\n\
 Write the JSON above to a temp file in the SAME directory as the result file,\n\
 then RENAME the temp file onto the result file's exact final name. Never write\n\
@@ -369,6 +374,16 @@ pub(crate) struct MailboxResult {
     pub summary: String,
     pub files_changed: Vec<String>,
     pub proof: String,
+    /// StopAndAsk (a2affcba): the ways forward the worker offers instead of
+    /// guessing — one self-contained sentence each. OPTIONAL at parse and
+    /// empty when absent, because a foreign agent that skips it still owes a
+    /// usable result: strict validation here would turn a good blocked answer
+    /// into `Malformed` and cost a whole round.
+    pub options: Vec<String>,
+    /// StopAndAsk (a2affcba): the option the worker would pick, written as a
+    /// verbatim repeat of one `options` entry. Free text, never an index —
+    /// membership is NOT enforced, for the same reason `options` is optional.
+    pub leaning: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -497,7 +512,18 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         .ok_or(MailboxError::MissingField { round, field: "proof" })?
         .to_string();
 
-    Ok(MailboxResult { status, summary, files_changed, proof })
+    // StopAndAsk: both fields are OPTIONAL and never checked for membership —
+    // absent, wrong-typed, or a leaning matching no option all parse, exactly
+    // as a result parsed before this pair existed.
+    let options = obj
+        .get("options")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect())
+        .unwrap_or_default();
+
+    let leaning = obj.get("leaning").and_then(Value::as_str).map(str::to_string);
+
+    Ok(MailboxResult { status, summary, files_changed, proof, options, leaning })
 }
 
 #[cfg(test)]
@@ -571,6 +597,14 @@ mod tests {
         assert!(text.contains("\"summary\""), "missing summary field:\n{text}");
         assert!(text.contains("\"files_changed\""), "missing files_changed field:\n{text}");
         assert!(text.contains("\"proof\""), "missing proof field:\n{text}");
+        // StopAndAsk (a2affcba): the brief teaches the two optional fields, so
+        // a blocked worker can hand back a choice instead of prose.
+        assert!(text.contains("\"options\""), "missing options field:\n{text}");
+        assert!(text.contains("\"leaning\""), "missing leaning field:\n{text}");
+        assert!(
+            text.contains("leave both out when there is no choice"),
+            "brief never says the two fields are optional:\n{text}"
+        );
     }
 
     #[test]
@@ -614,6 +648,11 @@ mod tests {
         assert!(text.contains("Ignore any bee or agent-workflow instructions (gates, cells, claims, state)"), "missing ignore-workflow wording:\n{text}");
         assert!(text.contains("files listed under the Expertise section are yours to read"), "missing expertise-reading wording:\n{text}");
         assert!(text.contains("Never run any `bee` command"), "missing never-run-bee wording:\n{text}");
+        // The brief must never name a bee verb, StopAndAsk included: dissent
+        // is a swarming-worker verb (6a6b9975 scoped herding-lane dissent
+        // out), and a `bee` command here would contradict the line above it.
+        assert!(!text.contains("bee cells"), "the brief names a bee verb:\n{text}");
+        assert!(!text.contains("dissent"), "the brief names the dissent verb:\n{text}");
         assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox result file (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
     }
 
@@ -694,7 +733,10 @@ mod tests {
         let spec = sample_spec(worktree_root, bee_dir, &files, 1);
         let text = render_brief(&spec);
 
-        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\"\n}\n\n"), "Result-form block drifted:\n{text}");
+        // StopAndAsk (a2affcba) added two OPTIONAL schema lines and one
+        // sentence saying when to fill them; every other byte of this block —
+        // heading, lead-in, and the four original fields — is unchanged.
+        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\"\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\n\n"), "Result-form block drifted:\n{text}");
         assert!(
             text.contains(&format!(
                 "temp file (write your JSON here):   {}/result-1.json.tmp\n",
@@ -862,6 +904,57 @@ mod tests {
         let result = parse_result_text(1, text).expect("valid result should parse");
         assert_eq!(result.status, MailboxStatus::Blocked);
         assert!(result.files_changed.is_empty());
+    }
+
+    // ─── StopAndAsk: options[] and leaning (a2affcba) ────────────────────
+
+    #[test]
+    fn parse_result_text_reads_options_and_leaning_off_a_blocked_result() {
+        let text = r#"{"status":"blocked","summary":"two ways to do this","files_changed":[],"proof":"n/a","options":["Widen the cell to cover the parser too.","Split the parser into its own cell."],"leaning":"Split the parser into its own cell."}"#;
+        let result = parse_result_text(1, text).expect("valid result should parse");
+        assert_eq!(result.status, MailboxStatus::Blocked);
+        assert_eq!(
+            result.options,
+            vec![
+                "Widen the cell to cover the parser too.".to_string(),
+                "Split the parser into its own cell.".to_string(),
+            ]
+        );
+        assert_eq!(result.leaning.as_deref(), Some("Split the parser into its own cell."));
+    }
+
+    #[test]
+    fn parse_result_text_leaves_options_and_leaning_empty_when_a_result_carries_neither() {
+        // The negative half of the round trip: a result written before this
+        // pair existed parses exactly as it always did.
+        let text = r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#;
+        let result = parse_result_text(1, text).expect("valid result should parse");
+        assert!(result.options.is_empty(), "options must be empty when absent: {:?}", result.options);
+        assert_eq!(result.leaning, None);
+    }
+
+    #[test]
+    fn parse_result_text_accepts_a_leaning_that_matches_no_option() {
+        // Membership is NEVER enforced: strict validation of foreign-agent
+        // output would turn a useful blocked answer into a whole lost round.
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":["Do A."],"leaning":"Actually, do C."}"#;
+        let result = parse_result_text(1, text).expect("a mismatched leaning still parses");
+        assert_eq!(result.options, vec!["Do A.".to_string()]);
+        assert_eq!(result.leaning.as_deref(), Some("Actually, do C."));
+    }
+
+    #[test]
+    fn parse_result_text_ignores_wrong_typed_options_and_leaning() {
+        // Same lenience one level down: a wrong-typed pair is absent, never a
+        // refusal, and a non-string element degrades to "" like files_changed.
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":"not an array","leaning":7}"#;
+        let result = parse_result_text(1, text).expect("wrong-typed fields must not refuse");
+        assert!(result.options.is_empty());
+        assert_eq!(result.leaning, None);
+
+        let mixed = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":["Do A.",7]}"#;
+        let result = parse_result_text(1, mixed).expect("a non-string option must not refuse");
+        assert_eq!(result.options, vec!["Do A.".to_string(), String::new()]);
     }
 
     #[test]
