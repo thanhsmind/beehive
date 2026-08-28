@@ -1336,7 +1336,7 @@
     },
     {
       "path": "packages/bee/prompts/advisor.md",
-      "sha256": "cc970fc08c6aa0bdccb77351926b481baa7b6176a281efdbeb5c4f1a3383a05e",
+      "sha256": "d0366f97975cc5d6e82c45acb3ee2badf08321f5ecaff6f3c98dd2b91aa78673",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/advisor.md"

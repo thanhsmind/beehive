@@ -136,6 +136,8 @@ pub const PORTED: &[&str] = &[
     // wayfinding-flow — the discovery map registry (D2, D4, D6.3)
     "discovery list [--json]",
     "discovery stub --effort <slug> --from <text> [--json]",
+    // slp-blind-lanes — the convergence door over a blind-lane dossier
+    "blind check --dossier <path> [--json]",
 ];
 
 // ── the front door's two namespaces ────────────────────────────────────────
