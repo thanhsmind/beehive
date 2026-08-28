@@ -13,8 +13,13 @@
   "summary": "Feature \"slp-blind-lanes-procedure\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"slp-blind-lanes-procedure\" — feature is closed.",
   "created_at": "2026-08-28T13:22:58.633Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Nói A hoặc B, tôi bắt đầu ngay khi CI xanh.",
+    "asked_at": "2026-08-28T15:08:08.920Z",
+    "session": "b97c221a-fd60-40c2-bd86-9681b9f547bf"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
