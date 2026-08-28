@@ -6575,3 +6575,403 @@ advance_on — falling to another model there hides the defect (D11)"
         let t2 = tempfile::tempdir().unwrap();
         assert!(read_fallback_chains(&chain_repo(&t2, "")).is_empty());
     }
+
+    // ── slp-blind-lanes: the LaneBrief carrier (E1) and its digest (E2) ────
+
+    /// A host that can resolve BOTH runtimes' advisor slot, so the brief
+    /// probes below can walk `DISPATCH_RUNTIMES` without a config detour.
+    const BRIEF_HOST: &str = r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet","review":"opus","advisor":"opus"},"codex":{"generation":"gpt-5","code":"gpt-5","review":"gpt-5","advisor":"gpt-5-pro"}}}"#;
+
+    /// The advisor prompt EXACTLY as it read before the `{{#if brief}}` block
+    /// was added, pinned as literal bytes rather than re-derived from the
+    /// template. Re-deriving it would compare the template against itself and
+    /// pass whatever the block does; this fails the moment a falsy block
+    /// leaves one byte of residue behind — the newline around `{{/if}}` being
+    /// the byte that is easiest to get wrong.
+    const ADVISOR_BODY_WITHOUT_A_BRIEF: &str = concat!(
+        "Advisor consult: produce an independent digest/opinion on the given question. Read-only.\n",
+        "\n",
+        "Paths: <caller fills in the exact files/paths to read>\n",
+        "\n",
+        "Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked."
+    );
+
+    /// The rendered body a dispatch payload carries, whichever transport key
+    /// this runtime used (`prompt` for an Agent, `message` for spawn_agent,
+    /// `stdin` for a cli executor), with the `[bee-tier: …]` marker line
+    /// stripped so what is compared is the TEMPLATE's bytes.
+    fn dispatched_body(v: &Value) -> String {
+        let payload = v.get("payload").expect("an envelope carries a payload");
+        let raw = ["prompt", "message", "stdin"]
+            .iter()
+            .find_map(|k| payload.get(*k).and_then(Value::as_str))
+            .expect("a payload carries its rendered prompt under prompt/message/stdin");
+        match raw.strip_prefix("[bee-tier: ") {
+            Some(rest) => rest
+                .split_once('\n')
+                .map(|(_, body)| body.to_string())
+                .unwrap_or_else(|| raw.to_string()),
+            None => raw.to_string(),
+        }
+    }
+
+    fn brief_file(root: &Path, name: &str, body: &str) -> String {
+        let file = root.join(name);
+        std::fs::write(&file, body).unwrap();
+        file.to_string_lossy().into_owned()
+    }
+
+    fn advisor_envelope(root: &Path, runtime: &str, brief: Option<&str>) -> Value {
+        let Prepared::Value(v) = prepare_dispatch_with_brief(
+            root, runtime, "advisor", None, None, None, false, None, None, false, None, brief,
+        )
+        .unwrap() else {
+            panic!("expected an advisor envelope on {runtime}")
+        };
+        v
+    }
+
+    /// E1's integration edge: with no `--brief-file`, EVERY runtime × kind
+    /// pair renders what it rendered before the block existed, and no
+    /// envelope grows a `brief_sha256`. The non-cell kinds are compared
+    /// against `render(template, &[])` — the literal expression the carrier
+    /// replaced — so the walk pins the old behaviour, not the new code's
+    /// opinion of it.
+    #[test]
+    fn no_brief_leaves_every_runtime_and_kind_pair_exactly_as_it_was() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = repo(&tmp, BRIEF_HOST);
+                w(
+                    &root,
+                    ".bee/cells/c-1.json",
+                    r#"{"id":"c-1","feature":"f","title":"carry a brief","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+                );
+                let (cell, worker) =
+                    if kind == "cell" { (Some("c-1"), Some("w")) } else { (None, None) };
+                let Prepared::Value(v) = prepare_dispatch_with_brief(
+                    &root, runtime, kind, None, cell, worker, false, None, None, false, None, None,
+                )
+                .unwrap() else {
+                    panic!("expected an envelope for {runtime}/{kind}")
+                };
+                assert_eq!(
+                    v.get("brief_sha256"),
+                    None,
+                    "{runtime}/{kind}: a briefless dispatch must not stamp a digest"
+                );
+                let body = dispatched_body(&v);
+                assert!(
+                    !body.contains("Brief ("),
+                    "{runtime}/{kind}: a briefless payload must carry no brief block"
+                );
+                if kind != "cell" {
+                    let before = render(&load_prompt(kind).unwrap(), &[]).unwrap();
+                    assert_eq!(body, before, "{runtime}/{kind}: payload bytes drifted");
+                }
+            }
+        }
+        // And the advisor template's own bytes, pinned literally.
+        assert_eq!(
+            render(&load_prompt("advisor").unwrap(), &[]).unwrap(),
+            ADVISOR_BODY_WITHOUT_A_BRIEF
+        );
+        assert_eq!(
+            render(&load_prompt("advisor").unwrap(), &[("brief", "")]).unwrap(),
+            ADVISOR_BODY_WITHOUT_A_BRIEF,
+            "an empty brief var must drop the block WITH its own leading newline"
+        );
+    }
+
+    /// A brief that is nothing but whitespace must reach the renderer as NO
+    /// brief. `{{#if}}` truthiness is `!v.is_empty()`, so an untrimmed
+    /// whitespace brief would splice an EMPTY block in place of today's
+    /// bytes — the one way a "no brief" call could stop being byte-identical.
+    #[test]
+    fn a_whitespace_only_brief_is_no_brief_at_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for body in ["", "   ", "\n\n", " \t \r\n  \n"] {
+            let path = brief_file(&root, "brief.md", body);
+            assert_eq!(
+                resolve_brief_file("advisor", Some(&path)).unwrap(),
+                None,
+                "a brief of {body:?} must resolve to no brief"
+            );
+        }
+        let path = brief_file(&root, "ws.md", "  \n \t\n");
+        let carried = resolve_brief_file("advisor", Some(&path)).unwrap();
+        let v = advisor_envelope(&root, "claude", carried.as_deref());
+        assert_eq!(dispatched_body(&v), ADVISOR_BODY_WITHOUT_A_BRIEF);
+        assert_eq!(v.get("brief_sha256"), None, "no brief travelled, so no digest is stamped");
+    }
+
+    /// The carrier itself: the brief's bytes reach the advisor body ONCE,
+    /// the block leaves no marker residue, and the untouched prose above it
+    /// is still there.
+    #[test]
+    fn a_carried_brief_renders_into_the_advisor_body_exactly_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        // Leading and trailing whitespace on purpose: the carrier trims, so
+        // what renders is the trimmed text and the assertion can be exact.
+        let question = "## Question\n\nWhich door enforces the read diet?\n\n## Constraints\n\n- no new store";
+        let path = brief_file(&root, "brief.md", &format!("\n{question}\n\n"));
+        let carried = resolve_brief_file("advisor", Some(&path)).unwrap();
+        assert_eq!(carried.as_deref(), Some(question), "the carried brief is the trimmed file");
+
+        for runtime in DISPATCH_RUNTIMES {
+            let v = advisor_envelope(&root, runtime, carried.as_deref());
+            let body = dispatched_body(&v);
+            assert_eq!(
+                body.matches(question).count(),
+                1,
+                "{runtime}: the brief must render exactly once, got {body}"
+            );
+            assert!(!body.contains("{{"), "{runtime}: unrendered marker left behind: {body}");
+            assert!(
+                body.starts_with(ADVISOR_BODY_WITHOUT_A_BRIEF),
+                "{runtime}: the standing advisor prose must survive above the brief"
+            );
+            assert!(body.contains("Brief (the question to answer"), "{runtime}: {body}");
+        }
+    }
+
+    /// The size guard. Over the cap is a TYPED refusal that names the cap, in
+    /// the same `{ok:false, type:"refused", reason, …, fix}` shape every
+    /// other refusal at this door takes; exactly at the cap still passes, so
+    /// the boundary is a decision rather than an off-by-one.
+    #[test]
+    fn a_brief_over_the_cap_is_refused_by_a_typed_refusal_naming_the_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+
+        let at_cap = brief_file(&root, "at-cap.md", &"x".repeat(BRIEF_MAX_BYTES));
+        assert_eq!(
+            resolve_brief_file("advisor", Some(&at_cap)).unwrap().map(|b| b.len()),
+            Some(BRIEF_MAX_BYTES),
+            "a brief of exactly {BRIEF_MAX_BYTES} bytes is carried, not refused"
+        );
+
+        let over = brief_file(&root, "over.md", &"x".repeat(BRIEF_MAX_BYTES + 1));
+        let refusal = resolve_brief_file("advisor", Some(&over)).unwrap_err();
+        assert_eq!(refusal.get("ok"), Some(&json!(false)));
+        assert_eq!(refusal.get("type"), Some(&json!("refused")));
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_too_large")));
+        assert_eq!(refusal.get("bytes"), Some(&json!(BRIEF_MAX_BYTES + 1)));
+        assert_eq!(refusal.get("max_bytes"), Some(&json!(BRIEF_MAX_BYTES)));
+        let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            fix.contains(&BRIEF_MAX_BYTES.to_string()),
+            "the fix must name the cap in bytes: {fix}"
+        );
+
+        // A path that names nothing is refused the same way — never a silent
+        // "no brief", which would fire a lane on an empty question.
+        let missing = root.join("nope.md").to_string_lossy().into_owned();
+        let refusal = resolve_brief_file("advisor", Some(&missing)).unwrap_err();
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_file_unreadable")));
+        assert_eq!(refusal.get("type"), Some(&json!("refused")));
+
+        // Invalid UTF-8 is refused rather than decoded lossily: a lossy
+        // decode would change the very bytes brief_sha256 exists to pin.
+        let bad = root.join("bad.md");
+        std::fs::write(&bad, [0x51u8, 0xff, 0xfe, 0x51]).unwrap();
+        let refusal = resolve_brief_file("advisor", Some(&bad.to_string_lossy())).unwrap_err();
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_not_utf8")));
+    }
+
+    /// D3 plus the silent-swallow window it leaves open. `--kind cell` is
+    /// refused because the worker-cell prompt injects shared learned_context;
+    /// `gather` and `reviewer` are refused because their templates carry no
+    /// brief block at all, so accepting a brief would swallow it with nothing
+    /// to show for it.
+    #[test]
+    fn a_brief_is_refused_for_every_kind_but_advisor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let path = brief_file(&root, "brief.md", "## Question\n\nWhat?");
+        for kind in DISPATCH_KINDS {
+            let outcome = resolve_brief_file(kind, Some(&path));
+            if kind == "advisor" {
+                assert!(outcome.is_ok(), "advisor must accept a brief");
+                continue;
+            }
+            let refusal = outcome.unwrap_err();
+            assert_eq!(refusal.get("ok"), Some(&json!(false)), "{kind}");
+            assert_eq!(refusal.get("type"), Some(&json!("refused")), "{kind}");
+            assert_eq!(
+                refusal.get("reason"),
+                Some(&json!("brief_kind_not_advisor")),
+                "{kind}: a brief must never be swallowed silently"
+            );
+            assert_eq!(refusal.get("kind"), Some(&json!(kind)), "{kind}");
+            let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("--kind advisor"), "{kind}: the fix must name the way out: {fix}");
+        }
+        // The refusal fires before the file is even looked at, so a bad path
+        // on a wrong kind still says which mistake to fix first.
+        let refusal = resolve_brief_file("cell", Some("no/such/file.md")).unwrap_err();
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_kind_not_advisor")));
+    }
+
+    /// E2 (D2b): byte-identity across lanes is CHECKABLE. Two prepares over
+    /// one unchanged file stamp one digest; an edited file stamps another;
+    /// and the digest is the sha256 of the bytes the lane actually received.
+    #[test]
+    fn one_brief_file_digests_the_same_on_every_lane_and_an_edit_moves_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let question = "## Question\n\nWhere does the dossier live?";
+        let path = brief_file(&root, "brief.md", question);
+
+        let carried = resolve_brief_file("advisor", Some(&path)).unwrap();
+        let lane_a = advisor_envelope(&root, "claude", carried.as_deref());
+        let carried_again = resolve_brief_file("advisor", Some(&path)).unwrap();
+        let lane_b = advisor_envelope(&root, "codex", carried_again.as_deref());
+
+        let digest_a = lane_a.get("brief_sha256").and_then(Value::as_str).unwrap().to_string();
+        let digest_b = lane_b.get("brief_sha256").and_then(Value::as_str).unwrap();
+        assert_eq!(digest_a, digest_b, "one unchanged brief file is one digest");
+        assert_eq!(
+            digest_a,
+            crate::verbs::reservations::sha256_hex(question),
+            "the digest is over the bytes the lane received"
+        );
+        assert_ne!(
+            lane_a.get("dispatch_id"),
+            lane_b.get("dispatch_id"),
+            "two lanes are two dispatches — only the BRIEF is shared"
+        );
+
+        // The same digest reaches the prepare-time record, which is what a
+        // later convergence check reads back by dispatch_id.
+        assert!(
+            std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl"))
+                .unwrap_or_default()
+                .is_empty(),
+            "record_it=false must leave no log line behind"
+        );
+        let Prepared::Value(recorded) = prepare_dispatch_with_brief(
+            &root,
+            "claude",
+            "advisor",
+            None,
+            None,
+            None,
+            false,
+            None,
+            None,
+            true,
+            None,
+            carried.as_deref(),
+        )
+        .unwrap() else {
+            panic!("expected an advisor envelope")
+        };
+        let logged = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
+        let line: Value = serde_json::from_str(logged.trim()).unwrap();
+        assert_eq!(line.get("brief_sha256"), Some(&json!(digest_a)));
+        assert_eq!(line.get("dispatch_id"), recorded.get("dispatch_id"));
+
+        // An EDIT of the same file moves the digest.
+        let edited = brief_file(&root, "brief.md", "## Question\n\nWhere does the DOSSIER live?");
+        let carried_edit = resolve_brief_file("advisor", Some(&edited)).unwrap();
+        let lane_c = advisor_envelope(&root, "claude", carried_edit.as_deref());
+        assert_ne!(
+            lane_c.get("brief_sha256").and_then(Value::as_str),
+            Some(digest_a.as_str()),
+            "an edited brief must report a different digest"
+        );
+    }
+
+    /// The prompt edit's OWN hazard, from the plan's risk map: a source-only
+    /// prompt edit skews the embedded template from disk, `dispatch prepare`
+    /// returns None, and the Node delegate it would fall to was deleted at
+    /// the R6 cutover — so every dispatch in this checkout would break. This
+    /// asserts the vendored copy travelled with the source one.
+    #[test]
+    fn the_advisor_template_still_matches_disk_after_the_brief_block() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        assert!(
+            prompts_match_disk(&repo_root, "advisor"),
+            "packages/bee/prompts/advisor.md or .bee/bin/prompts/advisor.md drifted from the \
+             compiled-in template — run `bee dev regen` and rebuild, or every dispatch prepare \
+             in this checkout resolves to nothing"
+        );
+        // The block the carrier depends on is really in the shipped bytes,
+        // and really not at byte 0 (the renderer needs a leading newline).
+        let template = load_prompt("advisor").unwrap();
+        let at = template.find("{{#if brief}}").expect("advisor.md carries a brief block");
+        assert!(at > 0, "a block at byte 0 has no leading newline for the renderer to consume");
+        assert_eq!(&template[at - 1..at], "\n");
+        assert!(template.contains("{{brief}}"), "the block must hold the brief placeholder");
+    }
+
+    /// The two ends of the flag, which live in different files and are the
+    /// pair that historically drifts: `run_dispatch_prepare`'s own
+    /// known-key list (an unlisted key makes the whole command refuse as an
+    /// unproven shape) and the embedded registry payload (an undeclared key
+    /// is rejected by the argv-shape guard before the handler ever runs). A
+    /// flag declared in one and not the other is a flag that is either
+    /// swallowed or unreachable — the "unknown flag is a refusal, never a
+    /// shrug" pattern, checked here because `dispatch prepare` itself cannot
+    /// be invoked from inside a granted worktree.
+    ///
+    /// Derived from the sources, never hand-copied: the same `include_str!`
+    /// + scan discipline `tests/registry_contracts.rs` uses for `state gate`.
+    #[test]
+    fn brief_file_is_both_accepted_by_the_handler_and_declared_in_the_registry() {
+        const PREPARE_SOURCE: &str = include_str!("prepare.rs");
+        let anchor = "pub(crate) fn run_dispatch_prepare(";
+        let at = PREPARE_SOURCE.find(anchor).expect("run_dispatch_prepare moved — re-anchor this");
+        let after = &PREPARE_SOURCE[at..];
+        let kk = after.find("keys_known(").expect("run_dispatch_prepare has a keys_known call");
+        let rest = &after[at_open(&after[kk..]) + kk..];
+        let close = rest.find(']').expect("the keys_known array literal closes");
+        let listed: Vec<&str> = rest[..close]
+            .split(',')
+            .filter_map(|e| e.trim().strip_prefix('"')?.strip_suffix('"'))
+            .collect();
+        // Not vacuous: the parse must still see the flags that were always
+        // there, or a silently-empty scan would pass on anything.
+        for known in ["runtime", "kind", "cell", "worker", "purpose", "expertise", "role"] {
+            assert!(listed.contains(&known), "the keys_known parse lost {known:?}: {listed:?}");
+        }
+        assert!(
+            listed.contains(&"brief-file"),
+            "run_dispatch_prepare does not accept --brief-file, so the whole command would \
+             refuse as an unproven shape: {listed:?}"
+        );
+
+        let payload: Value =
+            serde_json::from_str(include_str!("../../generated/registry_payload.json")).unwrap();
+        let entry = payload["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == json!("dispatch.prepare"))
+            .expect("the registry declares dispatch.prepare");
+        let props = entry["parameters"]["properties"].as_object().unwrap();
+        assert!(
+            props.contains_key("brief-file"),
+            "the registry payload does not declare --brief-file, so the argv-shape guard \
+             rejects it before the handler runs"
+        );
+        assert_eq!(props["brief-file"]["type"], json!("string"));
+        let described = props["brief-file"]["description"].as_str().unwrap_or_default();
+        assert!(
+            described.contains("8192") && described.contains("advisor"),
+            "the declaration must name the cap and the one kind that accepts it: {described}"
+        );
+    }
+
+    /// The offset of the `[` that opens a `keys_known(...)` array literal.
+    fn at_open(from_keys_known: &str) -> usize {
+        from_keys_known.find('[').expect("keys_known(...) opens an array literal") + 1
+    }

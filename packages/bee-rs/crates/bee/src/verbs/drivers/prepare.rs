@@ -68,6 +68,121 @@ pub(crate) fn unmapped_kind_refusal(kind: &str) -> Value {
     Value::Object(refusal)
 }
 
+// ─── the LaneBrief carrier (slp-blind-lanes E1/E2, decision 5981246b D2) ───
+//
+// `--brief-file <path>` is the FIRST caller text that reaches a non-cell
+// prompt body: every non-cell kind used to render with an empty vars slice.
+// It exists so a blind lane can be handed one question, byte-identical across
+// 2–3 parallel advisor dispatches, without a new dispatch kind and without a
+// new store (decision f0f21142).
+
+/// The cap on a carried brief, in bytes of the file as read from disk.
+///
+/// A brief is a QUESTION plus its constraints and read diet, not a document:
+/// past this size the thing being carried is context, and context is what the
+/// lane is supposed to go and read for itself.
+pub(crate) const BRIEF_MAX_BYTES: usize = 8192;
+
+/// The typed refusal shape every `--brief-file` failure takes — the same
+/// `{ok:false, type:"refused", reason, …, fix}` `unmapped_kind_refusal`
+/// returns, so a caller at this door parses ONE refusal shape, never two.
+/// `fix` is inserted last so it reads at the end of the object, as it does
+/// there.
+pub(crate) fn brief_refusal(reason: &str, extra: &[(&str, Value)], fix: String) -> Value {
+    let mut refusal = Map::new();
+    refusal.insert("ok".into(), Value::Bool(false));
+    refusal.insert("type".into(), Value::String("refused".into()));
+    refusal.insert("reason".into(), Value::String(reason.to_string()));
+    for (k, v) in extra {
+        refusal.insert((*k).to_string(), v.clone());
+    }
+    refusal.insert("fix".into(), Value::String(fix));
+    Value::Object(refusal)
+}
+
+/// Resolve `--brief-file` into the brief THIS dispatch carries.
+///
+/// * `Ok(None)` — no brief travels. Either the flag was absent, or the file
+///   held nothing but whitespace: `{{#if}}` truthiness is `!v.is_empty()`
+///   (`prompt.rs`), so a whitespace-only brief that reached the renderer
+///   would splice an EMPTY block where today's bytes are. Trimmed-empty
+///   therefore resolves to no brief at all, and the payload stays
+///   byte-identical to a dispatch that passed no `--brief-file`.
+/// * `Ok(Some(text))` — the trimmed brief, which is both what renders into
+///   the prompt and what `brief_sha256` digests. Digesting the CARRIED bytes
+///   rather than the file's is deliberate: equal digests then mean the lanes
+///   received equal payloads, which is exactly what D2(b)'s byte-identity
+///   claim is about.
+/// * `Err(refusal)` — a typed `{ok:false, type:"refused", …}` value.
+///
+/// ADVISOR ONLY, and refused loudly everywhere else. `--kind cell` is D3: a
+/// worker-cell prompt injects machine-assembled `learned_context` shared
+/// across workers, which leaks the very thing blindness protects. `gather`
+/// and `reviewer` carry no `{{#if brief}}` block at all, so accepting a brief
+/// for them would swallow it silently — the one outcome this door must never
+/// have.
+///
+/// The path is read AS GIVEN, relative to the process cwd, the same way every
+/// other file-consuming flag in this CLI reads one (`read_file_text`,
+/// verbs/cells/handlers_write.rs).
+pub(crate) fn resolve_brief_file(kind: &str, path: Option<&str>) -> Result<Option<String>, Value> {
+    let Some(path) = path else { return Ok(None) };
+    if kind != "advisor" {
+        return Err(brief_refusal(
+            "brief_kind_not_advisor",
+            &[("kind".into(), Value::String(kind.to_string()))],
+            format!(
+                "--brief-file is only valid with --kind advisor (got --kind {kind}). A blind lane never runs as --kind cell — the worker-cell prompt injects learned_context shared across workers, which leaks what blindness protects — and the gather/reviewer prompts carry no brief block, so a brief passed to them would be swallowed with nothing to show for it. Re-run the dispatch as --kind advisor."
+            ),
+        ));
+    }
+    let trimmed_path = js_trim(path);
+    if trimmed_path.is_empty() {
+        return Err(brief_refusal(
+            "brief_file_unreadable",
+            &[("path".into(), Value::String(path.to_string()))],
+            "--brief-file needs the path of a readable file holding the brief; it was given no path at all. Pass --brief-file <path>.".to_string(),
+        ));
+    }
+    let Ok(bytes) = std::fs::read(trimmed_path) else {
+        return Err(brief_refusal(
+            "brief_file_unreadable",
+            &[("path".into(), Value::String(trimmed_path.to_string()))],
+            format!(
+                "--brief-file \"{trimmed_path}\" could not be read. The path is resolved from the current working directory — check the spelling, or pass an absolute path."
+            ),
+        ));
+    };
+    if bytes.len() > BRIEF_MAX_BYTES {
+        return Err(brief_refusal(
+            "brief_too_large",
+            &[
+                ("path".into(), Value::String(trimmed_path.to_string())),
+                ("bytes".into(), Value::Number(Number::from(bytes.len()))),
+                ("max_bytes".into(), Value::Number(Number::from(BRIEF_MAX_BYTES))),
+            ],
+            format!(
+                "--brief-file \"{trimmed_path}\" is {} bytes; the cap is {BRIEF_MAX_BYTES} bytes. A brief is the QUESTION plus its constraints and read diet — anything longer is context, which the lane reads for itself from the paths the brief names. Cut it, or move the bulk into the read diet.",
+                bytes.len()
+            ),
+        ));
+    }
+    let Ok(text) = String::from_utf8(bytes) else {
+        return Err(brief_refusal(
+            "brief_not_utf8",
+            &[("path".into(), Value::String(trimmed_path.to_string()))],
+            format!(
+                "--brief-file \"{trimmed_path}\" is not valid UTF-8. It is refused rather than decoded lossily: a lossy decode would change the very bytes brief_sha256 exists to pin, and every lane would agree on the corrupted text. Save the brief as UTF-8."
+            ),
+        ));
+    };
+    let trimmed = js_trim(&text);
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(trimmed.to_string()))
+}
+
 /// A non-empty string field off a loaded cell record, or `None`. Written once
 /// because the dispatch now reads TWO of them in precedence order (`role`,
 /// then a pre-mrs-8 record's `tier`) and two hand-rolled copies of the same
@@ -560,10 +675,18 @@ pub(crate) fn prompt_body_for(
     // strips to nothing when its var is empty.
     worktree_location: Option<(&str, &str)>,
     expertise: Option<&str>,
+    // The carried LaneBrief, already resolved and trimmed by
+    // `resolve_brief_file` (advisor kind only; `None` everywhere else).
+    brief: Option<&str>,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
-        return Ok(render(&template, &[]));
+        // The FIRST non-empty vars slice a non-cell template has ever been
+        // rendered with. `brief` absent renders the empty string, which is
+        // falsy to `{{#if brief}}`, which drops the block WITH its own
+        // leading newline — so a briefless gather/reviewer/advisor payload
+        // is byte-identical to what this line produced when it passed `&[]`.
+        return Ok(render(&template, &[("brief", brief.unwrap_or(""))]));
     }
     let cell = cell.expect("kind cell always carries a loaded cell");
     let Some(template) = load_prompt("worker-cell") else { return Err(Delegate) };
@@ -750,6 +873,49 @@ pub(crate) fn prepare_dispatch_with_role(
     purpose: Option<&str>,
     record_it: bool,
     expertise: Option<&str>,
+) -> D<Prepared> {
+    prepare_dispatch_with_brief(
+        root,
+        runtime,
+        kind,
+        role,
+        cell_id,
+        worker,
+        force_ownership,
+        classification,
+        purpose,
+        record_it,
+        expertise,
+        None,
+    )
+}
+
+/// `prepare_dispatch_with_role` plus the carried LaneBrief (slp-blind-lanes
+/// E1/E2).
+///
+/// The SAME arity-adapter shape the eleven-argument spelling above already
+/// uses for `role`, and for the same reason: "no brief" is every existing
+/// call site, so threading a `None` through each of them would buy nothing
+/// but churn in files this change has no business touching. There is exactly
+/// one implementation — this body — so the no-brief path cannot drift from
+/// the brief path.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_dispatch_with_brief(
+    root: &Path,
+    runtime: &str,
+    kind: &str,
+    role: Option<&str>,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    force_ownership: bool,
+    classification: Option<&str>,
+    purpose: Option<&str>,
+    record_it: bool,
+    expertise: Option<&str>,
+    // Already resolved and trimmed by `resolve_brief_file`, which refuses
+    // every kind but `advisor` — so this is `None` for every other kind by
+    // the time it reaches here.
+    brief: Option<&str>,
 ) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
@@ -1069,6 +1235,7 @@ pub(crate) fn prepare_dispatch_with_role(
         resolved_worker.as_deref(),
         worktree_location.as_ref().map(|(w, c)| (w.as_str(), c.as_str())),
         expertise,
+        brief,
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
@@ -1388,8 +1555,24 @@ pub(crate) fn prepare_dispatch_with_role(
 
     let dispatch_id = pseudo_uuid_v4();
 
+    // slp-blind-lanes E2 (D2b). Byte-identity of the LaneBrief across 2–3
+    // parallel lanes has to be CHECKABLE, and the dispatch record is the one
+    // artifact prepare already returns AND already logs — so the digest goes
+    // there rather than into a new store (decision f0f21142). Reuses the ONE
+    // hasher this codebase has (`verbs/reservations/leases.rs`), never a
+    // second one.
+    //
+    // Over the CARRIED brief, not the file: two lanes agreeing on this digest
+    // agree on the bytes they were actually handed. Absent entirely when no
+    // brief travelled, so every existing dispatch record — and every existing
+    // envelope — stays byte-identical to before this key existed.
+    let brief_sha256 = brief.map(crate::verbs::reservations::sha256_hex);
+
     let mut record = Map::new();
     record.insert("dispatch_id".into(), Value::String(dispatch_id.clone()));
+    if let Some(digest) = &brief_sha256 {
+        record.insert("brief_sha256".into(), Value::String(digest.clone()));
+    }
     record.insert("kind".into(), Value::String(kind.to_string()));
     record.insert(
         "cell".into(),
@@ -1429,6 +1612,13 @@ pub(crate) fn prepare_dispatch_with_role(
     envelope.insert("tool".into(), Value::String(tool));
     envelope.insert("payload".into(), Value::Object(payload));
     envelope.insert("dispatch_id".into(), Value::String(dispatch_id));
+    // The same digest the logged record carries, on the artifact the CALLER
+    // holds: an orchestrator firing three lanes reads it straight off each
+    // returned envelope instead of re-reading the log to find out what it
+    // just sent. Present only when a brief travelled.
+    if let Some(digest) = brief_sha256 {
+        envelope.insert("brief_sha256".into(), Value::String(digest));
+    }
     envelope.insert("economics".into(), Value::Object(economics));
     // Present only when the cell's feature has a granted worktree — see
     // `worktree_location` above. A feature with no worktree split (or a
@@ -1639,6 +1829,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             "purpose",
             "expertise",
             "role",
+            "brief-file",
         ],
     ) {
         return None;
@@ -1700,6 +1891,25 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             Err(e) => Err(e),
         },
         None => Ok(Vec::new()),
+    };
+    // slp-blind-lanes E1: the LaneBrief path. `FlagV::Present` (a bare
+    // `--brief-file` with no value) is deliberately NOT a delegation like the
+    // boolean-shaped flags above — the Node runtime it would delegate to was
+    // deleted at the R6 cutover, so it resolves to the empty path and earns
+    // `brief_file_unreadable`, a refusal that names its own remedy. An
+    // argument shape this door cannot honour is refused, never shrugged at.
+    let brief_flag: Option<String> = match flags.get("brief-file") {
+        None => None,
+        Some(FlagV::S(s)) => Some(s.clone()),
+        Some(FlagV::Present) => Some(String::new()),
+    };
+    // Resolved here, before anything is built, so a refused brief never
+    // reaches the payload build at all. A typed refusal, never a Thrown: the
+    // caller of this door is an orchestrator firing 2–3 lanes, and it reads
+    // `{ok:false, reason}` off every other refusal this command returns.
+    let (brief_text, brief_arg_refusal) = match resolve_brief_file(&kind, brief_flag.as_deref()) {
+        Ok(brief) => (brief, None),
+        Err(refusal) => (None, Some(refusal)),
     };
     let (expertise_arg_error, expertise_block) = match expertise_entries {
         Ok(entries) => {
@@ -1770,10 +1980,10 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // post-claim build produces. Its verdict is discarded; only "would this
     // delegate?" is kept, and it is kept because after the claim's O_EXCL
     // write nothing may delegate at all (campaign rule 2).
-    let prepared = if arg_error.is_some() {
+    let prepared = if arg_error.is_some() || brief_arg_refusal.is_some() {
         Prepared::Value(Value::Null) // unused — the refusal short-circuits below
     } else {
-        prepare_dispatch_with_role(
+        prepare_dispatch_with_brief(
             &root,
             &runtime,
             &kind,
@@ -1785,6 +1995,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             purpose.as_deref(),
             false,
             expertise_block.as_deref(),
+            brief_text.as_deref(),
         )
         .ok()?
     };
@@ -1805,6 +2016,14 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     };
     if let Some(message) = arg_error {
         return finish(&ctx, Ok(Out::Thrown(message)));
+    }
+    // The `--brief-file` refusals, in the shape every other prepare refusal
+    // takes: emitted as the command's own JSON, exit 0, `{ok:false}` saying
+    // which arm fired and how to fix it. Nothing was claimed, reserved or
+    // logged before this point, so a refusal here leaves no state behind.
+    if let Some(refusal) = brief_arg_refusal {
+        let text = jsjson::stringify_pretty(&refusal);
+        return finish(&ctx, Ok(Out::Emit(refusal, text, 0)));
     }
 
     // ── the claim + reserve gesture, before the payload build (Node's order).
@@ -1840,7 +2059,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         _ => {
             // Re-run for real so the prepare-time record is appended exactly
             // once, with a freshly minted dispatch_id/ts like Node's.
-            match prepare_dispatch_with_role(
+            match prepare_dispatch_with_brief(
                 &ctx.root,
                 &runtime,
                 &kind,
@@ -1852,6 +2071,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 purpose.as_deref(),
                 true,
                 expertise_block.as_deref(),
+                brief_text.as_deref(),
             ) {
                 Ok(Prepared::Value(result)) => {
                     // `claimOutcome ? {...out, claimed:true, reserved} : out`
