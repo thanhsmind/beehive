@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "uat-lane-source",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"uat-lane-source\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature uat-lane-source",
+  "next_action": "bee close finished \"uat-lane-source\" — feature is closed.",
   "created_at": "2026-08-19T03:00:05.080Z",
   "run_state": null,
   "waiting_on": null,
