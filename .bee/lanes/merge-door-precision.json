@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"merge-door-precision\" started at phase \"planning\" (lane).",
   "next_action": "Judge mdp-1, then uat and close",
