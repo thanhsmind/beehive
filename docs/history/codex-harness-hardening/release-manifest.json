@@ -1336,21 +1336,21 @@
     },
     {
       "path": "packages/bee/prompts/advisor.md",
-      "sha256": "d0366f97975cc5d6e82c45acb3ee2badf08321f5ecaff6f3c98dd2b91aa78673",
+      "sha256": "8bbcb1b21c14e862023405f12a39d53bbc53f1705405e07a0fb92f0e17104824",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/advisor.md"
     },
     {
       "path": "packages/bee/prompts/gather.md",
-      "sha256": "593521c49a0983b1a50ad437f89905ded6cc1ee588730e6402920ae585eeb622",
+      "sha256": "4071b7a9f0234f98cb286c93392e56e73f32c3cebe79a543dffad26f951056b8",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/gather.md"
     },
     {
       "path": "packages/bee/prompts/reviewer.md",
-      "sha256": "0c830dcb1ee67b8b27ea823984e487c1e16c31d5554d1e49f51a4562526e197c",
+      "sha256": "0360a3bae43ae56cad5dfb4df1cfb14d7ccef252c503a9da8b820c5807753d47",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/reviewer.md"
