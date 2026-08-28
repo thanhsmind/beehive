@@ -1,0 +1,75 @@
+{
+  "id": "bln-2",
+  "feature": "slp-blind-lanes",
+  "title": "Refuse a leaning LaneBrief at the dispatch door",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "open",
+  "deps": [
+    "bln-1"
+  ],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "docs/history/slp-blind-lanes/plan.md",
+    "docs/history/slp-blind-lanes/advisor-consult.md",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml brief_lint",
+  "action": "Add the LaneBrief guard and call it from `dispatch prepare` when --brief-file is present (per D2a: the lint is enforced at the dispatch door as a lexical prose-guard refusal). Build it RED FIRST, one failing case per arm before the arm exists.\n\nSCOPE, and this is the highest-risk property of the whole feature: the guard reads the brief bytes and NOTHING else. It never reads --purpose, --expertise, the cell json, or any other dispatch text. A false fire on those would refuse the advisor consult that Gate 3 itself requires (high_risk_advisor_refusal in verbs/state_group/set_gate.rs), which would deadlock the high-risk workflow that approves guards. Author a test that proves this: a dispatch carrying EVERY phrase on the verdict-stem list below in --purpose and --expertise, with no --brief-file, must prepare cleanly.\n\nName it honestly. The refusal text and every doc line say \"leaning language refused\", never \"neutrality enforced\" — the advisor consult found a word list cannot certify neutrality, and calling it that converts \"unlinted\" into \"certified\", which is false confidence at the door the whole feature rests on.\n\nARM 1, verdict stems. Word-bounded, ASCII case-folded. Reuse the primitives in verbs/decisions/scanners.rs rather than writing new ones: is_word (:25), boundary_before (:29), starts_with_ci (:33), ws_run (:51). There is no regex crate in this workspace and no shared word-list constant — matches_supersession_prose (verbs_read.rs:313-353) and matches_deferral_prose (:365-430) each inline their own literals at the use site, and this guard does the same. The FROZEN set, exactly these 17: \"i recommend\", \"we recommend\", \"my recommendation\", \"i prefer\", \"we prefer\", \"i lean\", \"leaning toward\", \"leaning towards\", \"the correct answer\", \"the obvious answer\", \"the obvious choice\", \"clearly the best\", \"obviously better\", \"we should pick\", \"we should use\", \"you should pick\", \"you should use\". (\"the right answer\" and \"the right approach\" were cut at the re-consult: they fire on neutral interrogative phrasing such as \"What is the right approach for X?\", which the impersonal stems have no natural use for.) Do not add to it and do not shrink it to make a test pass — a change needs its own recorded reason. Shrinking the list to satisfy the corpus is the exact failure the pattern at docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md describes.\n\nARM 2, shape. This arm carries the real load: leaning is mostly structural, not lexical. The brief must carry exactly four level-2 sections, in this order and matched case-insensitively on the trimmed heading text: Question, Constraints, Read diet, Digest contract. A missing, extra, or misordered section refuses BY NAME of the offending section. Inside the Question section, an enumerated list line (a line whose first non-space character is `-`, `*`, or a digit run followed by `.`) refuses: a brief that lists candidate answers has already led the witness, and lanes exist to generate options.\n\nRefusal shape: copy `unmapped_kind_refusal` at prepare.rs:56-69 verbatim in structure ({ok:false, type:\"refused\", reason, ..., fix}) and give the `fix` field a runnable remedy — which arm fired, which phrase or section, and what to change. Do not copy `advisor_not_configured` at prepare.rs:990-996; it is missing its `type` field.\n\nExpose the guard as one shared pub(crate) function so a later cell's `bee blind check` can call the same code, and author the test that asserts prepare calls it (a rule living in more than one place needs one test that reads all of them — docs/knowledge/patterns/20260826-a-rule-living-in-n-places-needs-one-test-that-reads-all-n.md).\n\nTests to author:\n- one red-first refusal per arm, written and shown failing before the arm exists;\n- the scope test above (every stem in --purpose and --expertise, with no --brief-file, prepares cleanly). Two formatting facts so the test is buildable: --purpose is never refused for length, it is truncated by one_line(..., DESCRIPTION_TITLE_MAX) at prepare.rs:1113-1118; --expertise MUST be newline-delimited `<path> :: <purpose> :: <read-to>` entries or parse_expertise (prepare.rs:527-539) refuses on parse before the guard is ever reached;\n- a corpus test over the VERDICT-STEM ARM ONLY: run that arm over every file matching packages/bee/prompts/*.md and assert ZERO fires (verified today: zero of the 17 stems appear in any of them). Do NOT run the whole guard over that corpus — no prompt file carries the four required sections, so the shape arm fires on every one of them, and a whole-guard corpus would force you to quietly re-scope it. Excluding the shape arm on purpose is what stops the corpus and the stem list being co-tuned into agreement. If a real file fires the stem arm, that is evidence about the list, and the fix is a recorded reason, never a silent trim;\n- a stem that appears inside a fenced code sample inside the Constraints section still refuses (the guard is lexical and does not parse code — assert the honest behavior, do not special-case it);\n- section arm: missing section, extra section, misordered sections, and an enumerated list under Question each refuse and each names the offending section.",
+  "must_haves": {
+    "truths": [
+      "A brief carrying any of the 17 frozen verdict stems is refused at dispatch prepare with a typed refusal naming the phrase",
+      "A brief whose Question section enumerates candidate answers is refused, naming that section",
+      "A brief missing, adding, or misordering any of the four required sections is refused by the offending section's name",
+      "A dispatch carrying every frozen stem in --purpose and --expertise, with no --brief-file, prepares cleanly",
+      "The verdict-stem arm fires zero times over every checked-in packages/bee/prompts/*.md",
+      "The refusal text says leaning language is refused and never claims neutrality is enforced"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+        "substantive": "the two-arm guard plus its frozen 17-stem list, exposed as one pub(crate) entry point, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "red-first cases per arm, the scope test, the corpus test, and the section-arm cases"
+      }
+    ],
+    "key_links": [
+      "prepare.rs calls the shared guard on the brief bytes only, before building the payload",
+      "brief_lint.rs uses the scanners.rs primitives rather than new ones"
+    ],
+    "prohibitions": [
+      "The guard must never read --purpose, --expertise, the cell json, or any dispatch text other than the brief",
+      "The 17-phrase stem list must not be shortened to make a test pass",
+      "No refusal text or doc line may claim neutrality is enforced",
+      "No new dispatch kind, no new store, no new command namespace",
+      "The corpus test must not run the shape arm over packages/bee/prompts/*.md"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -108,3 +108,109 @@ high-risk workflow itself.
 
 Safe with named changes (a)–(d) above. Cutting slice 1 at `converge` is
 recommended but not blocking.
+
+---
+
+# Round 2 — re-consult on the settled shape-B plan
+
+- Date: 2026-08-28 · Tier: advisor (fable)
+- Why: the user picked shape B at the scope fork, so `plan.md` changed and a new
+  decision (`f0f21142`) landed. The execution gate refused the round-1 consult as
+  stale, by design.
+- Verdict: **SAFE WITH NAMED CHANGES** — three text-level edits, none of which
+  touches the approved shape.
+
+## A. Is the leak hazard reduced, or moved?
+
+Split. **Reduced for proposals**: in shape A round-1 proposals sat in
+`.bee/blind/` before stragglers ran; in shape B they exist nowhere on disk until
+the dossier renders. **Moved, not reduced, for the open reason**:
+`.bee/blind/` → `.bee/decisions.jsonl` is the same disk and the same
+readability, and D1 locks "logs the reason at open time", so that window is a
+locked decision rather than a plan choice.
+
+The plan's claim that the diet check has "the same trust level as D4's citation
+check" was FALSE and is corrected. D4 checks bytes the checker holds, so a
+fabricating lane is caught whether or not it cooperates. The diet check reads the
+lane's own paths-read list: a lane that reads `.bee/decisions.jsonl` and omits it
+passes clean. It is a prompt instruction plus a confession requirement. What IS
+structural is `prepare.rs:563-566` — zero store context reaches a non-cell
+payload — so a breach takes active defiance of the prompt.
+
+## B. Byte-identity verified rather than constructed — the failure walk
+
+Lane 1 reads brief v1 and gets `sha_a`, appended to `.bee/logs/dispatch.jsonl`
+by `append_prepare_record` (`prepare.rs:601-613`). The file is edited. Lane 3
+gets `sha_b`. Nothing during the run compares anything. Three holes decision
+`f0f21142` did not name:
+
+1. **No chain of custody.** The dossier's lane section carried no `dispatch_id`,
+   so `blind check` would compare the orchestrator's own transcriptions against
+   each other — verifying the transcriber against itself.
+2. **The authoritative record is fail-open.** `prepare.rs:599-600`: "a log
+   failure never blocks the payload".
+3. **Nothing forces the check.** No door gates the convergence decision on a
+   green `blind check`.
+
+Cost to the human: prevention became optional post-hoc detection over
+self-transcribed data, found after two rounds across three lanes of spend, with
+the cross-critique round already contaminated by proposals answering different
+questions. Acceptable with two cheap fixes, both folded: the dossier carries a
+per-lane `dispatch_id` and `blind check` verifies against `dispatch.jsonl`
+(refusing by name when the id is absent); and slice 4's prose makes convergence
+run `blind check` green before it logs the decision.
+
+## C. Cold read of `bln-1` and `bln-2`
+
+Every code anchor in both cells verified correct against HEAD — the render call
+at `prepare.rs:565-566`, the ten-name `keys_known` list at `:1629`, the record
+build at `:1389-1392`, `sha256_hex` at `leases.rs:89`, `PINNED_FLAG_COUNT` at
+`catalog.rs:632`, and `prompt.rs:72/:118/:156/:176-181`. `unmapped_kind_refusal`
+carries its `type` field; `advisor_not_configured` verifiably lacks it.
+
+**`bln-1` is one cell, defensibly** — the prompt edit, rebuild, regen and
+manifest rewrite are one atomic unit, and splitting the digest out would cost a
+second regen cycle over the same files. It sits at the ceiling: 8 files, one
+hand-edited generated file, six test authorships.
+
+Guess points found and closed: the cell never said what `--brief-file` does on a
+non-advisor kind (gather and reviewer templates carry no brief block, so it would
+silently vanish) — now an explicit refusal for cell, gather and reviewer; the
+regen step invited duplicate hand-runs of `onboard --apply` and
+`release-manifest --write`, which `bee dev regen` already does
+(`devtools/mod.rs:141-150`); and the reuse-check reason argued only against
+`--purpose`/`--expertise` when the nearest existing spellings are `--file`,
+`--task-file` and `--digest-file`. Most likely failure: the vendoring tail, or
+the trailing-newline trap where a falsy `{{#if}}` block eats its own leading
+newline — both caught red by the cell's own probes.
+
+**`bln-2` carried one instruction that contradicted itself.** The corpus test
+("run the guard over every `packages/bee/prompts/*.md`, assert zero fires")
+cannot pass with the shape arm included: no prompt file carries the four required
+sections, so the shape arm fires on all of them. The cold worker's only path
+would have been silently re-scoping the corpus — the exact silent deviation the
+cell forbids. Now scoped to the verdict-stem arm explicitly. Verified: zero of
+the stems appear in any prompt file today. Also closed: the shape arm's section
+matching is case-insensitive on trimmed heading text, and the scope test's
+`--expertise` leg must use `<path> :: <purpose> :: <read-to>` lines or
+`parse_expertise` (`prepare.rs:527-539`) refuses before the guard is reached.
+
+## D. The stem list
+
+Ship it. It is not pure false-confidence: the honest "leaning language refused"
+naming already defuses the certification critique, and the shape arm cannot catch
+a declarative verdict smuggled into a prose line of Constraints. Two cut:
+**"the right answer"** and **"the right approach"** — they fire on neutral
+interrogative phrasing ("What is the right approach for X?"), which the
+impersonal stems have no natural use for. Seventeen remain.
+
+## E. Ranked misses, all folded
+
+1. Digest chain of custody — no `dispatch_id` in the dossier.
+2. `blind check` wired to nothing; the traded-away by-construction guarantee was
+   replaced by a verification nothing forces.
+3. The self-contradictory corpus test.
+4. An internal lint-scope contradiction (brief bytes only, versus "the brief and
+   the open reason"), plus a fold-claim that overstated round 1 — "lint the open
+   reason" was dropped, rightly, and now says so.
+5. `bln-1`'s silence on non-advisor kinds.

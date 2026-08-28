@@ -1,0 +1,88 @@
+{
+  "id": "bln-1",
+  "feature": "slp-blind-lanes",
+  "title": "Carry a LaneBrief into the advisor payload and stamp its digest",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee/prompts/advisor.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".bee/bin/prompts/advisor.md",
+    ".bee/bin/bee"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "docs/history/slp-blind-lanes/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee/prompts/advisor.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools::prompts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch --test registry_contracts && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check",
+  "action": "Add an optional --brief-file flag to `dispatch prepare` that reads a LaneBrief file and renders it into the advisor prompt body, and stamp the brief's sha256 onto the returned dispatch record (per D2b: byte-identity must be CHECKABLE, and the dispatch record is the one artifact prepare already returns). Do NOT add a lint here — the lint is bl-2. Do NOT add a `lane` kind and do NOT create any new store: decision f0f21142 settled the no-new-store shape.\n\nThe chain, in this order, all in ONE commit:\n\n1. `packages/bee/prompts/advisor.md` — add a conditional brief block. Grammar constraint proven by review: the renderer only knows `{{NAME}}` and `{{#if NAME}}`, an ABSENT var is falsy (`prompt.rs:156`, `if lookup(name).map(|v| !v.is_empty()).unwrap_or(false)`), and a `{{brief}}` placed OUTSIDE a conditional block is a hard refusal (`prompt.rs:176-181`, \"no value supplied for placeholder\"). So the placeholder MUST sit inside a `{{#if brief}}` block, and that block must not start at byte 0 (`prompt.rs:118` requires a leading newline).\n\n2. `prepare.rs` — the non-cell render currently drops every var. The two lines are:\n   565:        let Some(template) = load_prompt(kind) else { return Err(Delegate) };\n   566:        return Ok(render(&template, &[]));\n   Pass the brief var here instead of the empty slice. TRIM the brief before deciding whether to pass it: `{{#if}}` truthiness is `!v.is_empty()`, so a whitespace-only brief would splice an empty block instead of rendering today's bytes.\n\n3. `prepare.rs` — register the flag name in the known-key list so an unknown-flag refusal does not eat it. The list starts at:\n   1629:    if !crate::verbs::reservations::keys_known(\n   and today reads: runtime, kind, cell, worker, force-ownership, claim, session-id, purpose, expertise, role.\n\n4. `prepare.rs` — stamp the digest. The record is built at:\n   1389:    let dispatch_id = pseudo_uuid_v4();\n   1392:    record.insert(\"dispatch_id\".into(), Value::String(dispatch_id.clone()));\n   Insert a `brief_sha256` entry beside it when a brief was carried, absent otherwise. Reuse the existing helper `sha256_hex` at `packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs:89` rather than writing a second hasher.\n\n5. `catalog.rs` — bump the pinned flag vocabulary. The constant is:\n   632:        const PINNED_FLAG_COUNT: usize = 196;\n   The ledger comment above it REQUIRES a written reuse check first. Record this reason in the commit body: `--expertise` already means \"paths the worker should read, with purpose\" (the read diet), and `--purpose` is a 60-char dispatch LABEL (`DESCRIPTION_TITLE_MAX: usize = 60` at prepare.rs:205, collapsed by one_line). Neither means \"the question the lanes answer\". Also address the nearest existing FILE-shaped spellings, because the ledger asks whether an existing name already means this: `--file` (used in six places), `--task-file` and `--digest-file` all name \"a path whose CONTENTS this command consumes\", but each is bound to its own command's payload and none is reachable from `dispatch prepare`. So --brief-file is a new concept at this door, not a rename.\n\n6. `src/generated/registry_payload.json` — hand-edit the `dispatch.prepare` entry to declare the new property. `bee dev regen` does NOT write this file; it is hand-maintained, and both `bee cells dissent` commits (156b9566, d7726926) edited it by hand. Keep `examples[0]` runnable — `tests/registry_dispatch.rs` executes every entry's first example against the built binary.\n\n7. Rebuild, then run `bee dev regen` ONCE. It already runs `onboard --repo-root . --apply` and `release-manifest --write` itself (devtools/mod.rs:141-150), so do not run those again by hand. This is not optional and it is not a later step: `prompts_match_disk` (`prompt.rs:72`) byte-compares the embedded template against BOTH `packages/bee/prompts/advisor.md` and `.bee/bin/prompts/advisor.md`, `prepare.rs:1733-1735` returns None on any skew, and the Node delegate it would fall back to was deleted at the R6 cutover. A source-only prompt edit therefore breaks EVERY `dispatch prepare` in this checkout. Regen also re-vendors `.bee/bin/bee` and `.bee/bin/prompts/` and rewrites the stored manifest; commit all of it.\n\nTests to author (judge existing coverage first and author only the gap; `embedded_prompts_are_the_checked_out_files_byte_for_byte` at tests.rs:92, `c4_embedded_prompts_match_disk`, `render_conditional_blocks_leave_no_residue` and `real_templates_render_end_to_end` already exist and must stay green):\n- a brief-absent `dispatch prepare` renders the advisor body byte-identically to today, walked over every DISPATCH_RUNTIMES x DISPATCH_KINDS pair;\n- a whitespace-only brief renders byte-identically to no brief;\n- a brief present renders into the advisor body once, with no residue;\n- a brief over 8192 bytes refuses with a typed refusal naming the cap (the cap is stated in plan.md; the LINT arms are bl-2's, this is the size guard only);\n- two prepares over one unchanged brief file report the same `brief_sha256`; an edited file reports a different one;\n- `prompts_match_disk(root, \"advisor\")` is true after the edit.\n\nNON-ADVISOR KINDS, so nothing is left to guess: --brief-file is REFUSED for `--kind cell` with a typed refusal naming the reason (a blind lane never runs as a cell — the worker-cell template injects shared learned_context, which leaks; that is D3, and stating it here closes the silent-swallow window rather than deferring it). For `--kind gather` and `--kind reviewer` it is also refused: their templates carry no brief block, so accepting it would swallow the brief silently. `brief_sha256` is therefore stamped only on an advisor dispatch that actually rendered a brief.\n\nWATCH THE TRAILING NEWLINE. A falsy `{{#if brief}}` block consumes its own leading newline, so byte-identity with today's output needs the newline placement around `{{/if}}` checked against the every-runtime-by-kind probe, not assumed.\n\nCopy the typed-refusal shape from `unmapped_kind_refusal` at prepare.rs:56-69 ({ok:false, type:\"refused\", reason, ..., fix}). Do NOT copy `advisor_not_configured` at prepare.rs:990-996 — review found it is the one refusal missing its `type` field.",
+  "must_haves": {
+    "truths": [
+      "dispatch prepare --kind advisor --brief-file <path> renders the file's contents into the advisor prompt body",
+      "dispatch prepare with no --brief-file returns byte-identical payloads to today on every runtime and kind pair",
+      "A whitespace-only brief renders byte-identically to no brief at all",
+      "The returned dispatch record carries brief_sha256 when a brief was carried and omits it otherwise",
+      "A brief over 8192 bytes is refused by a typed refusal that names the cap",
+      "prompts_match_disk(root, \"advisor\") is true after the change, so dispatch prepare still resolves in this checkout",
+      "--brief-file is refused with a typed refusal on --kind cell, gather and reviewer, so a brief is never silently swallowed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/advisor.md",
+        "substantive": "carries a {{#if brief}} block holding {{brief}}, not starting at byte 0"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "parses --brief-file, passes the trimmed brief as a render var for non-cell kinds, stamps brief_sha256 on the dispatch record"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "dispatch.prepare declares brief-file with examples[0] still runnable"
+      },
+      {
+        "path": "docs/history/codex-harness-hardening/release-manifest.json",
+        "substantive": "rewritten so the shipped-frame hashes match the re-vendored tree"
+      }
+    ],
+    "key_links": [
+      "prepare.rs passes a non-empty vars slice to render for non-cell kinds",
+      "prepare.rs reuses sha256_hex from verbs/reservations/leases.rs rather than a second hasher",
+      "catalog.rs PINNED_FLAG_COUNT is bumped with the reuse check recorded in the commit body",
+      ".bee/bin/prompts/advisor.md matches packages/bee/prompts/advisor.md after bee dev regen"
+    ],
+    "prohibitions": [
+      "No neutrality or leaning lint in this cell — that is bl-2",
+      "No new dispatch kind and no new store or command namespace (decision f0f21142)",
+      "No change to the payload of any kind when no brief is passed",
+      "The lint-shaped scan must not read --purpose or --expertise in this cell or any later one",
+      "No kind other than advisor may accept --brief-file in this cell"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

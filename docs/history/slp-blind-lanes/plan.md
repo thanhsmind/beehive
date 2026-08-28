@@ -110,8 +110,8 @@ dispatch record it already returns, the dossier records one digest per lane, and
 `dispatch prepare --brief-file` (the chokepoint refusal D2(a) locks) and
 `bee blind check`, which re-runs it over the dossier's recorded brief so a
 convergence built on an unlinted brief refuses — one shared function, one test
-asserting both callers use it. Its scope is EXACTLY the brief bytes. It never
-reads `--purpose`,
+asserting both callers use it. Its scope is EXACTLY the brief bytes, in both
+callers. It never reads `--purpose`,
 `--expertise`, or any other dispatch text: a false fire on those would block the
 advisor consult Gate 3 itself requires (`high_risk_advisor_refusal`,
 `set_gate.rs`) and deadlock the high-risk workflow. The guard has two arms: a
@@ -132,7 +132,14 @@ without a read hook: every LaneBrief's read diet excludes `.bee/` by
 construction, and `bee blind check` REFUSES a dossier whose lane sections report
 a paths-read entry outside that diet or naming `.bee/` at all. The advisor prompt
 already obliges a lane to return the paths it read, so a silent breach becomes a
-typed refusal or a recorded lie — the same trust level as D4's citation check. Convergence renders a dossier and RECORDS — never prints — one
+typed refusal or a recorded lie. State the trust level honestly: this is NOT the
+same trust level as D4's citation check. D4 checks bytes the checker holds, so a
+fabricating lane is caught whether or not it cooperates; the diet check reads the
+lane's OWN paths-read list, so a lane that reads `.bee/decisions.jsonl` and omits
+it passes clean. The diet check is a prompt instruction plus a confession
+requirement. What IS structural is that `prepare.rs:563-566` injects zero store
+context into a non-cell payload, so a breach takes active defiance of the
+prompt. Convergence renders a dossier and RECORDS — never prints — one
 `bee decisions log` entry with a registered trigger. The rejected set rides
 today's flat `--alternatives` string, in the fixed form
 `<lane-id>: <one-line reason>; <lane-id>: <reason>`. That is the single answer to
@@ -199,21 +206,34 @@ would drop D2(a)'s door refusal and D4's mechanical check, both locked.
 3. **Where the dossier lives.** `docs/history/<feature>/blind/<run-id>.md` when
    the run carries a feature; `docs/history/blind/<run-id>.md` when it does not.
    One rule, one fallback. Fixed sections, in order: `# Blind lane run <run-id>`,
-   `## Question` (the brief's Question verbatim), `## Brief digest` (the brief's
-   sha256), `## Lanes` (one `### <lane-id>` each: role, paths read, the proposal
-   verbatim), `## Cross-critiques`, `## Chosen`, `## Rejected` (one line per
-   rejected lane with its reason), `## Citations` (`<lane-id> :: <quote>` per
-   line), `## Revisit trigger`.
+   `## Question` (the brief's Question verbatim), `## Lanes` (one `### <lane-id>`
+   each, carrying its `dispatch_id`, its `brief_sha256`, its role, its paths
+   read, and the proposal verbatim), `## Cross-critiques`, `## Chosen`,
+   `## Rejected` (one line per rejected lane with its reason), `## Citations`
+   (`<lane-id> :: <quote>` per line), `## Revisit trigger`.
+
+   The per-lane `dispatch_id` is what gives `bee blind check` a chain of
+   custody: without it the check compares the orchestrator's own transcribed
+   digests against each other, which verifies the transcriber against itself. It
+   reads the authoritative record instead — `.bee/logs/dispatch.jsonl`, written
+   by `append_prepare_record` (`prepare.rs:601-613`) — and refuses when a lane's
+   recorded digest does not match its dispatch_id's logged one. That log is
+   FAIL-OPEN by design ("a log failure never blocks the payload",
+   `prepare.rs:599-600`), so a dispatch_id absent from it refuses by name rather
+   than passing silently.
 4. **The lint's vocabulary, frozen here so it can be reviewed before it is
    written.** Two arms, both word-bounded and ASCII case-folded, reusing
    `decisions/scanners.rs` (`is_word:25`, `boundary_before:29`,
    `starts_with_ci:33`, `ws_run:51`).
    - *Verdict-stem arm*: `i recommend`, `we recommend`, `my recommendation`,
      `i prefer`, `we prefer`, `i lean`, `leaning toward`, `leaning towards`,
-     `the right answer`, `the right approach`, `the correct answer`,
+     `the correct answer`,
      `the obvious answer`, `the obvious choice`, `clearly the best`,
      `obviously better`, `we should pick`, `we should use`, `you should pick`,
-     `you should use`. That set is frozen: a later addition needs its own
+     `you should use` — seventeen. `the right answer` and `the right approach`
+     were cut at the re-consult: they collide with neutral interrogative
+     phrasing ("What is the right approach for X?"), which the other impersonal
+     stems have no natural use for. That set is frozen: a later addition needs its own
      recorded reason, so the list can never be quietly shrunk to make a corpus
      test pass.
    - *Shape arm*: the brief must carry exactly four `##` sections — Question,
@@ -222,9 +242,14 @@ would drop D2(a)'s door refusal and D4's mechanical check, both locked.
      that lists candidate answers has already led the witness. This arm is where
      real leaning lives; the verdict-stem arm catches only the lazy leak.
    - *Cap*: a brief over 8192 bytes refuses.
-   - *Red-first per arm*, plus the corpus: the lint runs over every file matching
-     `packages/bee/prompts/*.md` and `docs/history/*/blind/*.md` and must fire
-     zero times.
+   - *Red-first per arm*, plus a corpus test scoped to the VERDICT-STEM ARM
+     ONLY: that arm runs over every file matching `packages/bee/prompts/*.md`
+     and must fire zero times (verified today: zero of the stems appear in any
+     of them). The shape arm is deliberately excluded from the corpus — no
+     prompt file carries the four required sections, so a whole-guard corpus
+     would fire on every one of them and force a silent re-scoping. That
+     exclusion is the reason the corpus cannot be quietly co-tuned with the stem
+     list.
 
 ## Shape
 
@@ -276,7 +301,9 @@ are the brief carrier, the lint, the run record, and the convergence check.
   its recorded reuse reason, and `bee dev regen`. Depends on slice 1b.
 - **Slice 4 — blind-lane procedure prose.** When the agent opens lanes and logs
   the reason (D1), pushback names the missing context (D5), hats are not lanes
-  (D7). Depends on slices 1a–3 landing so the prose describes shipped behavior.
+  (D7), and — the rule that makes slice 1b bite — convergence RUNS
+  `bee blind check` green before it logs the decision. No door forces that today;
+  the prose is what forces it until one does. Depends on slices 1a–3 landing so the prose describes shipped behavior.
 - **Slice 5 — reviewer/judge checklist material (D6).** The 5-Layer rubric, the
   Truth Table Test and the CRUD Lifecycle check. Depends on NOTHING: D6 is
   reviewer craft, not blind-lane behavior, so it must not sit undelivered behind
@@ -324,11 +351,25 @@ impossible by construction.
 
 ## Advisor consult
 
-`docs/history/slp-blind-lanes/advisor-consult.md` — verdict SAFE WITH NAMED
-CHANGES; all four named changes are folded into this plan (lint scope, the
-stored-leaning teeth, byte-identity by construction, the honest "leaning
-language" claim plus the shape arm), as is the recommended cut at `converge`
-and the D6 independence fix.
+`docs/history/slp-blind-lanes/advisor-consult.md` — two consults, both SAFE WITH
+NAMED CHANGES.
+
+Round 1 named four changes. Three are folded here: the lint scope, byte-identity
+no longer left to a re-read path, and the honest "leaning language" claim plus
+the shape arm. The fourth — "lint the open reason" — was deliberately DROPPED,
+not folded: an open reason is inherently a statement of why the agent suspects
+something, so linting it for leaning would refuse every honest one. The teeth
+that remain on it are the diet exclusion and the paths-read check. Round 1's
+recommended cut at `converge` and its D6-independence fix are both in.
+
+Round 2 re-read the settled shape-B plan and the two drafted cells and named
+three text-level changes, all folded: the dossier carries a per-lane
+`dispatch_id` so `bee blind check` reads the authoritative dispatch log instead
+of the orchestrator's own transcription; the corpus test is scoped to the
+verdict-stem arm, because the shape arm would fire on every prompt file in it;
+and `bln-1` states what `--brief-file` does on a non-advisor kind. It also cut
+two stems from the frozen list and corrected the diet check's claimed trust
+level. Round 2 confirmed every code anchor in both cells against HEAD.
 
 ## Known red base
 
