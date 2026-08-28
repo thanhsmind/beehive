@@ -7048,9 +7048,9 @@ advance_on — falling to another model there hides the defect (D11)"
         }
     }
 
-    /// ARM 1, honestly: the guard is lexical and does not parse markdown, so a
-    /// stem inside a fenced code sample refuses too. Asserted as the real
-    /// behaviour rather than special-cased away.
+    /// ARM 1, honestly: a stem inside an ORDINARY fenced code sample refuses
+    /// too. Being fenced is not the exception — only the designated tag below
+    /// is, and everything else scans as it always did.
     #[test]
     fn a_verdict_stem_inside_a_fenced_code_sample_still_refuses() {
         let brief = shaped_brief("Where does the dossier live?").replace(
@@ -7060,6 +7060,133 @@ advance_on — falling to another model there hides the defect (D11)"
         let refusal = refusal_of(&brief);
         assert_eq!(refusal.get("reason"), Some(&json!("brief_leaning_language")), "{refusal}");
         assert_eq!(refusal.get("phrase"), Some(&json!("we should use")), "{refusal}");
+    }
+
+    // ── the tagged fence: the cross-critique round's ONE bounded exception ──
+    //
+    // D2(c) asks that round two hand each lane the rival proposal VERBATIM,
+    // and a real proposal carries verdict stems, its own headings and its own
+    // bullet lists. Only a fence whose opening info string is the designated
+    // tag is skipped, and it is skipped by ALL THREE scans. Every other fence
+    // scans exactly as the test above proves it does today.
+
+    /// The tag spelled as a LITERAL, not read off the constant: a test that
+    /// reads the constant it checks follows a silent rename, and this string
+    /// is what a brief author types by hand.
+    const QUOTED_FENCE_TAG_LITERAL: &str = "lane-proposal";
+
+    /// SCAN 1 — the verdict-stem arm. The same bytes pass inside a tagged
+    /// fence, refuse inside an untagged one, and refuse outside any fence.
+    #[test]
+    fn a_verdict_stem_inside_a_tagged_fence_no_longer_refuses() {
+        let quoted = format!(
+            "The rival lane returned this:\n\n```{QUOTED_FENCE_TAG_LITERAL}\n\
+             we should use the second reader.\n```"
+        );
+        let ok = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", &quoted);
+        assert!(lint_brief(&ok).is_ok(), "a tagged fence may carry the rival proposal: {ok}");
+
+        // The IDENTICAL bytes, untagged, still refuse: the exception is the
+        // tag, never the fence.
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_leaning_language")), "{r}");
+        assert_eq!(r.get("phrase"), Some(&json!("we should use")), "{r}");
+
+        // And outside any fence, exactly as before.
+        let bare = shaped_brief("Where does the dossier live?").replace(
+            "The answer stays inside the existing dispatch door.",
+            "we should use the second reader.",
+        );
+        assert_eq!(refusal_of(&bare).get("phrase"), Some(&json!("we should use")));
+    }
+
+    /// SCAN 2 — the four-section shape arm. A quoted proposal carries its own
+    /// headings; inside the tag they are prose, outside it they are sections.
+    #[test]
+    fn a_heading_inside_a_tagged_fence_does_not_become_a_section() {
+        let quoted = format!(
+            "```{QUOTED_FENCE_TAG_LITERAL}\n## Recommendation\n\nTake the second reader.\n```"
+        );
+        let ok = shaped_brief("Where does the dossier live?")
+            .replace("The answer stays inside the existing dispatch door.", &quoted);
+        assert!(lint_brief(&ok).is_ok(), "a quoted heading is not a section: {ok}");
+
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Recommendation")), "{r}");
+    }
+
+    /// SCAN 3 — the Question-enumeration arm. A quoted proposal carries its
+    /// own bullet list, and the lane did that enumerating, not the brief.
+    #[test]
+    fn a_bullet_list_inside_a_tagged_fence_under_question_is_not_answer_enumeration() {
+        let quoted = format!(
+            "Lane A returned this:\n\n```{QUOTED_FENCE_TAG_LITERAL}\n\
+             ## Constraints\n\n- keep it in docs/\n- or beside the plan\n```"
+        );
+        let ok = shaped_brief(&quoted);
+        assert!(lint_brief(&ok).is_ok(), "a quoted list is the lane's, not the brief's: {ok}");
+
+        let untagged = ok.replace(&format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text");
+        let r = refusal_of(&untagged);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+
+        // The tagged fence's own "## Constraints" must not close the Question
+        // section either: a bullet AFTER the fence, still under Question,
+        // still refuses. Were the quoted heading counted, the shape arm would
+        // have fired first and this reason would read differently.
+        let leaked = format!("{quoted}\n\n- and one the brief added itself");
+        let r = refusal_of(&shaped_brief(&leaked));
+        assert_eq!(r.get("reason"), Some(&json!("brief_question_enumerates_answers")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Question")), "{r}");
+    }
+
+    /// An opener with no closer would hide every following line from every
+    /// scan. It refuses BY NAME instead — tagged or not — so the guard never
+    /// skips material in silence.
+    #[test]
+    fn a_fence_left_open_in_a_brief_is_refused_by_name() {
+        for opener in [format!("```{QUOTED_FENCE_TAG_LITERAL}"), "```text".to_string()] {
+            let brief = shaped_brief("Where does the dossier live?").replace(
+                "The answer stays inside the existing dispatch door.",
+                &format!("{opener}\nthe rival proposal, with no closing fence"),
+            );
+            let r = refusal_of(&brief);
+            assert_eq!(r.get("reason"), Some(&json!("brief_fence_unclosed")), "{opener}: {r}");
+            assert_eq!(r.get("line"), Some(&json!(opener)), "the refusal names the opener: {r}");
+            let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("close"), "the fix says what to do: {fix}");
+        }
+    }
+
+    /// ONE fence implementation, two callers. A rule that lives in two places
+    /// drifts the first time one side is tuned — the same argument the stem
+    /// list's own both-doors test makes.
+    #[test]
+    fn one_fence_implementation_serves_the_guard_and_the_dossier() {
+        const GUARD_SOURCE: &str = include_str!("brief_lint.rs");
+        const BLIND_SOURCE: &str = include_str!("../blind/mod.rs");
+
+        assert!(
+            GUARD_SOURCE.contains("pub(crate) fn scan_fences"),
+            "the one fence scanner lives in verbs/drivers/brief_lint.rs"
+        );
+        assert!(
+            BLIND_SOURCE.contains("fence_mask(&lines)"),
+            "the dossier parser calls the shared scanner"
+        );
+        assert!(
+            !BLIND_SOURCE.contains("fn fence_mask"),
+            "verbs/blind/mod.rs defines a SECOND fence scanner — the rule lives in \
+             verbs/drivers/brief_lint.rs alone"
+        );
+        assert_eq!(
+            QUOTED_PROPOSAL_FENCE_TAG, QUOTED_FENCE_TAG_LITERAL,
+            "the tag a brief author types by hand is the tag the guard reads"
+        );
     }
 
     /// ARM 2, the arm that carries the real load: leaning is mostly
