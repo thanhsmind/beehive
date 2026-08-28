@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-dissent-stop-and-ask",
   "mode": "high-risk",
-  "phase": "idle",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"slp-dissent-stop-and-ask\" — feature is closed.",
+  "next_action": "Both SLP features are closed; an independent review is the user's call",
   "created_at": "2026-08-27T20:58:29.709Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "CI started (Linux + Windows). I am watching it and will tell you the result.",
+    "asked_at": "2026-08-28T13:17:45.246Z",
+    "session": "b97c221a-fd60-40c2-bd86-9681b9f547bf"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",

@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "feature": "slp-blind-lanes-procedure",
+  "mode": "high-risk",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"slp-blind-lanes-procedure\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"slp-blind-lanes-procedure\" (lane).",
+  "created_at": "2026-08-28T13:22:58.633Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The second reader is still working on where the procedure prose belongs. When it lands I write the plan and bring you one approval question.",
+    "asked_at": "2026-08-28T13:34:12.058Z",
+    "session": "b97c221a-fd60-40c2-bd86-9681b9f547bf"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": null,
+    "updated_at": "2026-08-28T13:24:03.723Z",
+    "feature": "slp-blind-lanes-procedure"
+  }
+}
