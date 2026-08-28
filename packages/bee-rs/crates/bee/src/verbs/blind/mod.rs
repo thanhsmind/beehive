@@ -784,9 +784,21 @@ fn is_enumerator(word: &[u8]) -> bool {
 /// drop cost a boundary the citation has to find — the dropped "we should
 /// not" is the text between the sentence start and the quote, so the strip
 /// works only where `is_sentence_end` reads a boundary, and that function
-/// states exactly which marks it reads and which it does not. Both `hay` and
-/// `needle` arrive normalized, so the scan is over ASCII bytes and a byte
-/// equal to `.` or ` ` can only be that character.
+/// states exactly which marks it reads and which it does not.
+///
+/// BOTH SIDES ARRIVE NORMALIZED, AND NORMALIZED IS NOT ASCII. `normalize`
+/// folds ASCII case and collapses whitespace; it PRESERVES every non-ASCII
+/// character on purpose, because rewriting the bytes a citation is checked
+/// against would hollow out the check. So the scan runs over UTF-8 bytes.
+/// Two consequences, and they pull in opposite directions:
+///   * the byte TESTS are sound as written — an ASCII byte (`.`, ` `, a
+///     letter, a digit) never appears inside a multi-byte sequence, so a byte
+///     equal to `.` or ` ` can still only be that character;
+///   * any index used to SLICE the `&str` must land on a character boundary,
+///     or the slice panics. That is why the retry cursor below advances by a
+///     whole character and never by a raw byte: a citation copied out of a
+///     rendered document opens with a curly quote or an em dash as a matter of
+///     course, and a one-byte step past a failed match landed inside it.
 fn quote_resolves(hay: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return false;
@@ -807,7 +819,10 @@ fn quote_resolves(hay: &str, needle: &str) -> bool {
         if starts_sentence && ends_sentence {
             return true;
         }
-        from = start + 1;
+        // Retry PAST the first character of this match, never past its first
+        // byte: `start` is a boundary because `find` returns one, and the
+        // matched character's own width is the next boundary after it.
+        from = start + hay[start..].chars().next().map_or(1, char::len_utf8);
     }
     false
 }
@@ -1900,6 +1915,77 @@ mod tests {
         let doc = dossier_of(&lanes, &[format!("lane-a :: {GOVERNED_CLAUSE}")]);
         let counts = checked(&doc, &control_log())
             .expect("carried by decision: cross-sentence framing is outside the within-sentence contract");
+        assert_eq!(counts.citations, 1);
+    }
+
+    // ── MULTIBYTE PROSE, which is what a copied citation actually looks like ─
+    //
+    // `normalize` PRESERVES non-ASCII by design, so every scan here runs over
+    // UTF-8 bytes, not ASCII ones. A quote lifted out of a rendered document
+    // opens with a curly quote or an em dash as a matter of course. The retry
+    // cursor used to step ONE BYTE past a failed match, which sliced into the
+    // middle of such a character and aborted the process — a door whose whole
+    // job is to refuse dishonest evidence died with no verdict at all. Each
+    // probe below asserts the ANSWER the input must get; a panic fails them.
+
+    /// The judge's reproduction, verbatim. The quote clears both floors (35
+    /// characters, 7 words), so only the sentence rule can decide it — and it
+    /// must DECIDE it. The citation starts mid-sentence, so the answer is a
+    /// typed refusal.
+    #[test]
+    fn a_citation_opening_with_a_curly_quote_is_refused_rather_than_panicking() {
+        let proposal = "He said “cache the token on the worker side” loudly today.";
+        let lanes = [lane("lane-a", proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc =
+            dossier_of(&lanes, &["lane-a :: “cache the token on the worker side".to_string()]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// The same defect through the other everyday mark. An em dash is three
+    /// bytes wide, so a one-byte retry step lands inside it exactly as it does
+    /// inside a curly quote.
+    #[test]
+    fn a_citation_opening_with_an_em_dash_is_refused_rather_than_panicking() {
+        let proposal = "x — cache the token on the worker side y.";
+        let lanes = [lane("lane-a", proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc =
+            dossier_of(&lanes, &["lane-a :: — cache the token on the worker side y".to_string()]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// Past the two reported strings: the multibyte character sits in the
+    /// MIDDLE of both sides, and the first occurrence of the quote is
+    /// mid-sentence — so the retry loop has to walk over that character and
+    /// still find the whole-sentence occurrence that follows. The answer is a
+    /// PASS: the second occurrence is a whole sentence of lane-a's own bytes.
+    #[test]
+    fn a_multibyte_character_inside_the_quote_still_resolves_on_the_retry() {
+        let sentence = "The lease — the older one — wins on every read";
+        let proposal = format!("We noted that the lease — the older one — wins on every read. {sentence}.");
+        let lanes = [lane("lane-a", &proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc = dossier_of(&lanes, &[format!("lane-a :: {sentence}")]);
+        let counts = checked(&doc, &control_log())
+            .expect("a whole sentence carrying an em dash is still the lane's own sentence");
+        assert_eq!(counts.citations, 1);
+    }
+
+    /// The far end of the same class: a citation with NO ASCII letter in it at
+    /// all, whose first occurrence is mid-sentence and whose second is a whole
+    /// sentence. Every index the scan takes — the retry cursor, the word
+    /// walk-back, the abbreviation and enumerator lookups — meets multibyte
+    /// bytes here, and the answer must still be the right one.
+    #[test]
+    fn an_entirely_non_ascii_citation_resolves_without_panicking() {
+        let sentence = "Старая аренда всегда выигрывает при каждом чтении";
+        let proposal = format!("Мы считаем что {sentence}. {sentence}.");
+        let lanes = [lane("lane-a", &proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc = dossier_of(&lanes, &[format!("lane-a :: {sentence}")]);
+        let counts = checked(&doc, &control_log())
+            .expect("a non-ASCII whole sentence is a citation like any other");
         assert_eq!(counts.citations, 1);
     }
 
