@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The final judge is reading `bln-4` now. After that, three slices remain: the cross-critique round, the deadlock hand-off, and the written pr",
-    "asked_at": "2026-08-28T10:02:24.330Z",
+    "subject": "▸ Round three of judging is running now — a fresh model with one job: break it again. It has the list of everything already tried, so it mus",
+    "asked_at": "2026-08-28T10:36:41.346Z",
     "session": "311024fe-729d-4bd8-8165-39fbb8f5fba2"
   },
   "route": {

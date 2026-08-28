@@ -1,0 +1,169 @@
+{
+  "id": "bln-6",
+  "feature": "slp-blind-lanes",
+  "title": "Fix the abbreviation lookup and stop an enumerator dot ending a sentence",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind",
+  "action": "FIX-FIRST, and READ THE BOUND AT THE END BEFORE YOU START. An independent judge broke the citation boundary rule for the second time. It did not read the tests — it copied `normalize`, `is_terminator`, `NON_TERMINAL_ABBREVIATIONS`, `is_sentence_end`, `quote_resolves` and `citation_quote` byte-for-byte out of the module, compiled them, and probed. Two defects, both real bugs rather than heuristic gaps:\n\nDEFECT 1 — the abbreviation lookup is defeated by ONE adjacent character. `is_sentence_end` (mod.rs:709-725) matches the set by byte equality on the space-delimited token, so a leading bracket or quote slips straight past it:\n  proposal: \"We should not follow lane-b (i.e. cache the token on the worker side.\"\n  citation: \"cache the token on the worker side\"  -> PASSES today, and inverts the lane.\nThe judge confirmed all 28 combinations of a leading `(`, `\\\"`, `'`, `[`, `-`, `*`, em dash and `:` against i.e./e.g./etc./cf. `(i.e. ...)` is the single most common written form of the abbreviation this rule was added for.\n\nDEFECT 2 — an ENUMERATOR dot ends a sentence. `1.` is not in the set, so:\n  proposal: \"We must not do any of the following:\\n\\n1. Cache the token on the worker side.\\n2. Skip the lease check.\"\n  citation: \"cache the token on the worker side\"  -> PASSES today.\nSame for `a.` and `ii.`. A markdown numbered list under a negated stem is ordinary design prose, not an exotic input. The END side mirrors it: \"Cache the token on the worker side 1. only when the lease is dead and gone.\" cited as \"Cache the token on the worker side 1.\" passes.\n\nDEFECT 3 — the comment block OVER-CLAIMS, and that is a defect of the same weight as the other two. mod.rs:682-684 states as fact that requiring the span to sit between two sentence boundaries 'makes that strip impossible WITHIN a sentence'. The two probes above are within-sentence strips that succeed, so the headline claim is false and contradicts the block's own bullet at :700.\n\nWHAT TO DO.\n1. Probes FIRST, one per defect, run red before you touch the rule: the `(i.e.` form, the numbered-list form, and the end-side enumerator mirror. Cover at least `(` and `\\\"` for defect 1 and at least `1.` and `a.` for defect 2.\n2. Fix defect 1 by trimming leading non-alphanumeric bytes from the token BEFORE the set lookup. Do not widen the set to spell out punctuated variants — that is the same bug with more rows.\n3. Fix defect 2 by treating a token as non-terminal when, with its trailing dot removed, it is entirely digits, or one to three ASCII letters that are all lowercase or all uppercase (covering `a.`, `ii.`, `iv.`). Comment why that shape is an enumerator and not a word.\n4. Fix defect 3 by rewriting mod.rs:682-684. The true claim is that the whole-sentence rule RAISES THE COST of a negation strip and refuses the written forms the rule enumerates; it does NOT make one impossible. Say that, and keep the existing bullets that already name the framing miss.\n5. Every existing `verbs::blind` test stays green and none is edited. If one goes red, that is information about your fix.\n\nPROHIBITIONS. Do not weaken MIN_CITATION_CHARS, MIN_CITATION_WORDS, the per-lane scoping, or any other check. Do not delete or relax the framing probe at mod.rs:1776-1783 — that limit is decided by decision 79b5437b and stays pinned green.\n\nTHE BOUND, and it is part of the cell. This is the LAST rung on the boundary rule. If a judge breaks it again, the answer is NOT a fourth fix: it is to stop claiming the check resists negation stripping at all and to reduce the claim to bare whole-sentence provenance. So when you write the comment in step 4, write it as though this were already the final state — no promise that another case will be handled later, no wording that invites rung four.",
+  "must_haves": {
+    "truths": [
+      "A citation starting after a bracketed or quoted abbreviation, at least '(i.e.' and '\"e.g.', is refused, each pinned by a probe",
+      "A citation starting after a numeric or alpha enumerator, at least '1.' and 'a.', is refused, each pinned by a probe",
+      "A citation ENDING on an enumerator dot is refused, pinned by a probe",
+      "The boundary comment no longer claims a within-sentence strip is impossible, and states instead that the rule raises the cost and refuses the forms it enumerates",
+      "Every pre-existing verbs::blind test stays green and none is edited",
+      "The framing probe at mod.rs:1776-1783 still passes and is unmodified"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "substantive": "punctuation-trimmed abbreviation lookup, the enumerator rule, the corrected comment, and one red-first probe per defect"
+      }
+    ],
+    "key_links": [
+      "the abbreviation lookup trims leading non-alphanumeric bytes before consulting the closed set"
+    ],
+    "prohibitions": [
+      "No loosening of MIN_CITATION_CHARS, MIN_CITATION_WORDS, the per-lane scoping or any other check",
+      "No widening of the abbreviation set to spell out punctuated variants",
+      "No existing test edited, and the framing probe left exactly as it is",
+      "No wording anywhere that promises a further case will be handled later"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": "The abbreviation lookup reads the word not the token, a list-marker dot no longer ends a sentence, and the boundary comment drops its impossibility claim",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "The enumerator shape is digits, ONE letter, or a run of the numeral letters i/v/x — not the cell's literal 'one to three ASCII letters, all lowercase or all uppercase' — because normalize() folds case before the scan, so the all-uppercase half can never fire and the all-lowercase half swallows ordinary sentence-final words; applying the literal shape turned 14 pre-existing tests red (the control proposal ends 'a live one.'), and the narrow shape keeps all 5 probes green with zero pre-existing regressions — the plan was wrong about a fact",
+      "Softened the same over-claim in the quote_resolves doc comment ('a citation cannot silently drop the clause that reverses it'), which repeats defect 3 verbatim eight lines below the block the cell named — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T10:26:59.810Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "report": {
+      "outcome": "The abbreviation lookup reads the word not the token, a list-marker dot no longer ends a sentence, and the boundary comment drops its impossibility claim",
+      "commit": "417fff74232efeb3729e7b198eed4de9cc39c41f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green, 51 passed 0 failed (46 pre-existing plus 5 new probes; the same 5 probes ran red before the fix) — the cell changes only the citation boundary rule in verbs::blind, so its own suite is the proof; CI runs the full declared command",
+      "deviations": [
+        "The enumerator shape is digits, ONE letter, or a run of the numeral letters i/v/x — not the cell's literal 'one to three ASCII letters, all lowercase or all uppercase' — because normalize() folds case before the scan, so the all-uppercase half can never fire and the all-lowercase half swallows ordinary sentence-final words; applying the literal shape turned 14 pre-existing tests red (the control proposal ends 'a live one.'), and the narrow shape keeps all 5 probes green with zero pre-existing regressions — the plan was wrong about a fact",
+        "Softened the same over-claim in the quote_resolves doc comment ('a citation cannot silently drop the clause that reverses it'), which repeats defect 3 verbatim eight lines below the block the cell named — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 151 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "round2-forms-dead",
+            "status": "PASS",
+            "evidence": "Byte-identical, diff-verified copy of normalize/is_terminator/NON_TERMINAL_ABBREVIATIONS/is_enumerator/is_sentence_end/quote_resolves/citation_quote/floors from mod.rs:586-819 compiled standalone: '(i.e.', '\"e.g.', the '1.' list, the 'a.' list and the end-side enumerator mirror ALL REFUSE; the whole-sentence control and the re-wrapped whitespace control both PASS; round-1 forms still refuse"
+          },
+          {
+            "id": "bracketed-and-quoted-abbrev-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:742-746 strips leading non-alphanumeric bytes off the token before the set lookup; probes at mod.rs:1828 and :1838 pin dossier_citation_unresolved; the scratch compile confirms both refuse"
+          },
+          {
+            "id": "enumerator-forms-refused",
+            "status": "PASS",
+            "evidence": "is_enumerator at mod.rs:762-775; numeric probe :1849 and alpha probe :1864 pin dossier_citation_unresolved; the scratch compile confirms 1., a., ii. and ix. all refuse"
+          },
+          {
+            "id": "end-side-enumerator-refused",
+            "status": "PASS",
+            "evidence": "the end check at mod.rs:806 routes through is_sentence_end; probe :1879 pins it; the scratch compile refuses the end-side citation"
+          },
+          {
+            "id": "comment-over-claim-removed-whole-file",
+            "status": "PASS",
+            "evidence": "rg over the WHOLE file for impossible/cannot silently/guarantee/prevents finds only mod.rs:689, which is the negation ('does NOT make a within-sentence strip impossible'); :686-693 states the rule RAISES THE COST and refuses the enumerated forms; the second copy in the quote_resolves doc is GONE and :783-786 now says the drop 'costs a boundary the citation has to find'; :723-725 pins the claim to provenance"
+          },
+          {
+            "id": "preexisting-tests-green-none-edited",
+            "status": "PASS",
+            "evidence": "test count 46 at 6eaf4955 and 51 at 417fff74; every removed line in the diff is a doc-comment line plus the single rule line; no test line removed or edited; 51 passed 0 failed"
+          },
+          {
+            "id": "framing-probe-unmodified-and-passing",
+            "status": "PASS",
+            "evidence": "the probe body diff between 6eaf4955 and 417fff74 is EMPTY, and the probe is among the 51 green"
+          },
+          {
+            "id": "deviation-enumerator-shape",
+            "status": "PASS",
+            "evidence": "Right call, loudly recorded, not a quiet narrowing. normalize (mod.rs:658) lowercases every ASCII char before the scan, so the cell's 'all uppercase' half is dead code. The literal 'one to three lowercase letters' shape would make 'one.' an enumerator, so the control proposal ending 'a live one.' (mod.rs:1293) would stop resolving; well_formed() with that citation backs 26 call sites, so double-digit reds are the expected blast radius and 14 is plausible. The narrow shape's own cost (ab., A1., xl. still read as sentence ends) is named in the comment at :715-717 and in the trace"
+          },
+          {
+            "id": "red-first-probes-not-vacuous",
+            "status": "PASS",
+            "evidence": "Mechanically confirmed rather than taken on trust: the 6eaf4955 versions of the same functions, compiled standalone, return PASS for all five probe forms, so all five probes were necessarily RED pre-fix. None can pass vacuously - each pins the exact reason string, so an over-refusal for a different reason also fails"
+          },
+          {
+            "id": "break-attempt-no-bypass-outside-named-limits",
+            "status": "PASS",
+            "evidence": "36 probes run. Everything that passes falls inside a limit the comment already names: unlisted abbreviations (Dr., U.S., a.m.), markers outside the shape (ab., A1., xl.), and the decided framing case. REFUTED attacks: decimals, spaced version numbers, dotted filenames, CJK and unicode terminators, quoted and parenthesised sentences, dot-before-newline, single initials, end-side ellipsis. No input found where a citation clears the floors, resolves, and inverts meaning outside the enumerated limits"
+          },
+          {
+            "id": "quote-resolves-unicode-panic",
+            "status": "FAIL",
+            "evidence": "mod.rs:796 'hay[from..].find(needle)' with from = start + 1 (mod.rs:810) slices MID-CHARACTER when the needle's first char is multibyte and an occurrence fails the boundary check. Reproduced through the exact pipeline: proposal 'He said “cache the token on the worker side” loudly today.' with citation '“cache the token on the worker side' clears both floors (35 chars, 7 words) then PANICS: 'byte index 9 is not a char boundary; it is inside curly-quote (bytes 8..11 of string)'. Same with a leading em dash. normalize (:647-661) preserves non-ASCII, so the :787-788 assumption that the scan is over ASCII bytes is false, and bee blind check aborts with a Rust panic instead of the typed refusal - reachable by any dossier whose citation starts with a smart quote or dash copied from rendered prose"
+          },
+          {
+            "id": "bln4-negation-strip-refused",
+            "status": "PASS",
+            "evidence": "The truth holds as currently worded: every written form the boundary rule enumerates - plain '.', ', i.e.', '...', '(i.e.', '\"e.g.', '1.', 'a.', 'ii.' on the start side and the enumerator on the end side - is refused, and the rule's own comment states it RAISES THE COST rather than making a strip impossible. No surviving over-claim beyond provenance anywhere in refusal text or comments"
+          },
+          {
+            "id": "verify-command-green",
+            "status": "PASS",
+            "evidence": "worktree HEAD 417fff74; cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind -> 51 passed, 0 failed, matching the cap"
+          }
+        ],
+        "failure_signature": "quote_resolves (blind/mod.rs:796,810) advances the retry cursor by one BYTE (from = start + 1) and then slices the &str, so a citation whose first character is multibyte (curly quote, em dash) and whose occurrence fails the boundary check panics at a non-char boundary instead of refusing - bee blind check CRASHES on citation '“cache the token on the worker side' against a proposal containing that curly-quoted phrase",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:35:31.848Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-28T10:35:31.848Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  }
+}

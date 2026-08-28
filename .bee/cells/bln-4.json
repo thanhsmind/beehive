@@ -29,7 +29,7 @@
     "truths": [
       "A short generic citation is refused for failing the minimum quote span",
       "A fabricated citation found in no proposal is refused",
-      "A citation that drops a negation and so inverts the proposal's meaning is refused",
+      "A citation that drops a negation by starting mid-sentence is refused in every written form the boundary rule enumerates, and that rule's own comment states plainly that it raises the cost of a strip rather than making one impossible — the check claims whole-sentence provenance, never a guarantee against every inversion (decision 79b5437b)",
       "A citation attributed to one lane but present only in another is refused",
       "A real citation differing only in whitespace passes",
       "A lane whose dossier digest differs from its logged dispatch_id digest is refused",

@@ -1,0 +1,77 @@
+{
+  "id": "bln-7",
+  "feature": "slp-blind-lanes",
+  "title": "Stop bee blind check panicking on a citation that starts with a curly quote",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind",
+  "action": "FIX-FIRST, and read the scope note: this is NOT another rung on the sentence-boundary rule. That rule SURVIVED its third judge round — 36 probes, and everything that still passes falls inside a limit the comment already names. This is a different defect class: a panic.\n\nTHE DEFECT. `quote_resolves` (blind/mod.rs:796, :810) advances its retry cursor by one BYTE — `from = start + 1` — and then slices the `&str`. When the citation's first character is MULTIBYTE and its first occurrence fails the boundary check, the slice lands mid-character and the process panics instead of returning a refusal.\n\nThe judge's reproduction, verbatim:\n  proposal: He said “cache the token on the worker side” loudly today.\n  citation: “cache the token on the worker side\n  It clears both floors (35 chars, 7 words), then panics with `byte index 9 is not a char boundary; it is inside '“' (bytes 8..11 of string)`.\nAn em dash does the same: proposal `x — cache the token on the worker side y.` cited as `— cache the token on the worker side y`.\n\nWHY IT MATTERS BEYOND THE CRASH. `normalize` (:647-661) deliberately PRESERVES non-ASCII, so the comment at :787-788 claiming the scan is over ASCII bytes is FALSE — fix that line too. A curly quote or an em dash is what you get from any prose copied out of a rendered document, which is exactly where a lane proposal comes from. So `bee blind check` aborts on ordinary input rather than answering, and a verb whose whole job is to refuse dishonest evidence instead dies without a verdict.\n\nWHAT TO DO.\n1. Probes FIRST, run red before the fix: the curly-quote reproduction and the em-dash one, both verbatim from above. A panicking test fails loudly, so assert the REFUSAL these must produce, not the panic.\n2. Fix the cursor. Advance to the next CHARACTER boundary, never a raw byte — walk `char_indices`, or step by the matched character's `len_utf8`. Audit every other slice and index in `quote_resolves`, `citation_quote`, `is_sentence_end` and `is_enumerator` for the same assumption while you are in there, and say in your report which ones you checked.\n3. Correct the :787-788 comment: the scan is over UTF-8 bytes and `normalize` preserves non-ASCII, so byte indexing here must be char-boundary safe.\n4. Add one probe with a multibyte character in the MIDDLE of both proposal and citation, and one where the citation is entirely non-ASCII, so the fix is proven past the two reported strings rather than only against them.\n5. All 51 existing `verbs::blind` tests stay green and none is edited.\n\nPROHIBITIONS. Do not make `normalize` strip or fold non-ASCII to dodge this — that would silently rewrite the bytes a citation is checked against, which is the whole point of the check. Do not weaken the floors, the per-lane scoping, the boundary rule or any other check. Do not touch the framing probe.",
+  "must_haves": {
+    "truths": [
+      "The curly-quote citation returns a typed refusal instead of panicking, pinned by a probe using the judge's verbatim strings",
+      "The em-dash citation does the same, pinned by its own probe",
+      "A multibyte character in the middle of proposal and citation is handled, and an all-non-ASCII citation is handled, each pinned by a probe",
+      "The comment that claims the scan is over ASCII bytes is corrected",
+      "All 51 pre-existing verbs::blind tests stay green and none is edited",
+      "normalize still preserves non-ASCII — the fix is in the cursor, never in the normalizer"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "substantive": "a char-boundary-safe retry cursor, the corrected comment, and one red-first probe per reported and per generalised case"
+      }
+    ],
+    "key_links": [
+      "the retry cursor advances by a character, never by a raw byte"
+    ],
+    "prohibitions": [
+      "normalize must not strip, fold or otherwise rewrite non-ASCII",
+      "No loosening of the floors, the per-lane scoping, the boundary rule or any other check",
+      "No existing test edited, and the framing probe left exactly as it is"
+    ]
+  },
+  "trace": {
+    "worker": "bln7-writer",
+    "outcome": "quote_resolves advances its retry cursor by a character, so a multibyte citation gets a typed refusal instead of a panic",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T10:41:57.138Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T10:35:59.493Z",
+    "report": {
+      "outcome": "quote_resolves advances its retry cursor by a character, so a multibyte citation gets a typed refusal instead of a panic",
+      "commit": "a5ad786430cf155003c2c67aefcd5c025a2de2a0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green (55 passed, 0 failed; the 4 new probes red first with the reported panic) — the verb whose scan the fix changes",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
