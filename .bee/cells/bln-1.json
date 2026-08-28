@@ -4,7 +4,7 @@
   "title": "Carry a LaneBrief into the advisor payload and stamp its digest",
   "lane": "high-risk",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D2"
@@ -73,16 +73,141 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "bln1-writer",
+    "outcome": "dispatch prepare --kind advisor --brief-file carries a trimmed LaneBrief into the advisor prompt body and stamps brief_sha256 on the dispatch record and envelope; every other kind, an over-cap brief, an unreadable path and non-UTF-8 bytes each earn a typed refusal",
+    "files_changed": [
+      "packages/bee/prompts/advisor.md",
+      ".bee/bin/prompts/advisor.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Added a brief_not_utf8 refusal arm the cell did not name, instead of the sibling read_file_text lossy decode — a lossy decode silently rewrites the very bytes brief_sha256 exists to pin, so every lane would agree on corrupted text — found a better route",
+      "Threaded the brief through a new prepare_dispatch_with_brief arity adapter instead of widening prepare_dispatch_with_role, so no existing call site changed — the file already documents that adapter shape for --role — found a better route",
+      "Could not replace the worktree .bee/bin/bee: it is a symlink into the main checkout and the write guard correctly refuses to write through it, so the vendored binary in this checkout is still one build behind — hit an unforeseen obstacle",
+      "Could not run dispatch prepare live: the command refuses inside a granted feature worktree, so the CLI end of the flag is proven by a source-plus-registry contract test (brief_file_is_both_accepted_by_the_handler_and_declared_in_the_registry) instead of an invocation — hit an unforeseen obstacle",
+      "bee dev regen also rewrote .bee/onboarding.json, a file the cell did not list; reserved it under this cell before committing rather than leaving the write unowned — something else had to be fixed first"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-28T08:15:22.285Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T07:53:22.264Z",
+    "report": {
+      "outcome": "dispatch prepare --kind advisor --brief-file carries a trimmed LaneBrief into the advisor prompt body and stamps brief_sha256 on the dispatch record and envelope; every other kind, an over-cap brief, an unreadable path and non-UTF-8 bytes each earn a typed refusal",
+      "commit": "2f1d57ae6126114df3c868f459b619bf9f89144b",
+      "files": [
+        "packages/bee/prompts/advisor.md",
+        ".bee/bin/prompts/advisor.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "cargo test --release verbs::drivers + devtools::prompts + catalog + --test registry_dispatch --test registry_contracts, then bee onboard --repo-root . --json and bee dev release-manifest --check — green — the cells own verify chain, scoped to the dispatch door, the prompt renderer, the flag ledger and the registry contract this change touches; the declared full suite is a known red base (p-624e2d7d, opencode tool-id pin) unrelated to this cell",
+      "deviations": [
+        "Added a brief_not_utf8 refusal arm the cell did not name, instead of the sibling read_file_text lossy decode — a lossy decode silently rewrites the very bytes brief_sha256 exists to pin, so every lane would agree on corrupted text — found a better route",
+        "Threaded the brief through a new prepare_dispatch_with_brief arity adapter instead of widening prepare_dispatch_with_role, so no existing call site changed — the file already documents that adapter shape for --role — found a better route",
+        "Could not replace the worktree .bee/bin/bee: it is a symlink into the main checkout and the write guard correctly refuses to write through it, so the vendored binary in this checkout is still one build behind — hit an unforeseen obstacle",
+        "Could not run dispatch prepare live: the command refuses inside a granted feature worktree, so the CLI end of the flag is proven by a source-plus-registry contract test (brief_file_is_both_accepted_by_the_handler_and_declared_in_the_registry) instead of an invocation — hit an unforeseen obstacle",
+        "bee dev regen also rewrote .bee/onboarding.json, a file the cell did not list; reserved it under this cell before committing rather than leaving the write unowned — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "advisor.md adds {{#if brief}}/{{brief}}; prompt_body_for renders non-cell kinds with [(\"brief\", brief.unwrap_or(\"\"))]; test a_carried_brief_renders_into_the_advisor_body_exactly_once ... ok, asserts count==1, no {{ residue, standing prose intact, on both runtimes",
+            "id": "brief renders into advisor body"
+          },
+          {
+            "status": "PASS",
+            "evidence": "test no_brief_leaves_every_runtime_and_kind_pair_exactly_as_it_was ... ok - walks DISPATCH_RUNTIMES x DISPATCH_KINDS, asserts no brief_sha256 and body == pinned literal ADVISOR_BODY_WITHOUT_A_BRIEF. Pinned literal independently verified against pre-change bytes: git show 2f1d57ae^:packages/bee/prompts/advisor.md ends '.\\n' and normalize_template (prompt.rs:55-58) strips exactly one trailing newline, so the literal IS the old render output, not the change's own assumption",
+            "id": "briefless payloads byte-identical on every runtime x kind"
+          },
+          {
+            "status": "PASS",
+            "evidence": "resolve_brief_file returns Ok(None) on trimmed-empty; test a_whitespace_only_brief_is_no_brief_at_all ... ok - covers empty, spaces, newlines and mixed whitespace, asserts body == pinned pre-change bytes and no digest",
+            "id": "whitespace-only brief equals no brief"
+          },
+          {
+            "status": "PASS",
+            "evidence": "brief_sha256 = brief.map(sha256_hex), inserted into record AND envelope only under if let Some; test one_brief_file_digests_the_same_on_every_lane_and_an_edit_moves_it ... ok - same digest on claude+codex lanes, digest == sha256_hex(carried bytes), logged .bee/logs/dispatch.jsonl line carries it, an edit moves it; the no-brief walk asserts the key is absent",
+            "id": "brief_sha256 present iff brief carried"
+          },
+          {
+            "status": "PASS",
+            "evidence": "BRIEF_MAX_BYTES=8192; test a_brief_over_the_cap_is_refused_by_a_typed_refusal_naming_the_cap ... ok - exactly-at-cap carried, over-cap refused with {ok:false,type:refused,reason:brief_too_large,bytes,max_bytes,fix naming 8192}",
+            "id": "over-cap brief typed refusal naming the cap"
+          },
+          {
+            "status": "PASS",
+            "evidence": "test the_advisor_template_still_matches_disk_after_the_brief_block ... ok against the real repo root; both packages/bee/prompts/advisor.md and .bee/bin/prompts/advisor.md changed identically in the commit; devtools::prompts 4 passed 0 failed",
+            "id": "prompts_match_disk(root,advisor) true"
+          },
+          {
+            "status": "PASS",
+            "evidence": "resolve_brief_file refuses kind != advisor BEFORE reading the file; test a_brief_is_refused_for_every_kind_but_advisor ... ok - walks DISPATCH_KINDS, asserts reason brief_kind_not_advisor, type refused, fix names --kind advisor",
+            "id": "--brief-file refused on cell, gather and reviewer"
+          },
+          {
+            "status": "PASS",
+            "evidence": "Diff contains no leaning or stem scan and no lint over --purpose/--expertise; DISPATCH_KINDS untouched; no new store or command namespace - only the declared files plus .bee/onboarding.json, a regen output reserved under the cell per its trace",
+            "id": "prohibitions honored"
+          },
+          {
+            "status": "PASS",
+            "evidence": "All 8 new tests executed by name in the worktree: each printed 'test verbs::drivers::tests::<name> ... ok' (28 passed including the 8 new). None vacuous: each asserts concrete targets (pinned literal bytes, digest equality vs sha256_hex, refusal reason strings, count==1), and the source-parse test guards its own vacuity by asserting the 7 pre-existing keys_known entries were parsed",
+            "id": "new tests really run and really assert"
+          },
+          {
+            "status": "PASS",
+            "evidence": "load_prompt returns the real embedded advisor template; the baseline is a hand-pinned literal of the PRE-change file, verified equal to normalize_template(git show 2f1d57ae^:packages/bee/prompts/advisor.md) - old file 0x402 bytes ending '.\\n', normalize strips one trailing newline",
+            "id": "byte-identity proven over the real template"
+          },
+          {
+            "status": "PASS",
+            "evidence": "Right call, not scope creep: a lossy decode would rewrite the bytes brief_sha256 pins, defeating D2(b). It is an input-validity refusal in the same typed shape, tested (reason brief_not_utf8) and declared in the registry description - not a lint arm, so bl-2's scope is untouched",
+            "id": "brief_not_utf8 deviation judged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "brief_file_is_both_accepted_by_the_handler_and_declared_in_the_registry pins both drift-prone ends (the keys_known list in run_dispatch_prepare source, and the registry_payload.json declaration with type/cap/kind); registry_dispatch (10 passed) still executes examples[0]. RESIDUAL: about 40 lines of argv glue in run_dispatch_prepare are read-verified only, with no end-to-end invocation; acceptable under the worktree constraint, and worth one live smoke from main after merge and rebuild",
+            "id": "no-live-CLI substitute adequate"
+          },
+          {
+            "status": "PASS",
+            "evidence": "Builder's claim verified and the cell instruction was wrong: the regen chain is render-skill-trees + onboard --apply + release-manifest --write (devtools/mod.rs chain()); onboard/plan.rs emits only copy_helper/copy_lib/copy_expertise/copy_prompt/copy_statusline/copy_opencode_plugin/copy_repo_hook, none of which writes the binary; apply.rs remove_helper_admissible explicitly shields .bee/bin/bee; git check-ignore points at .gitignore:51",
+            "id": "regen does not re-vendor .bee/bin/bee"
+          },
+          {
+            "status": "PASS",
+            "evidence": "Run in the worktree at 2f1d57ae: verbs::drivers 268 passed 0 failed; devtools::prompts 4 passed; catalog 11 passed; registry_dispatch 10 passed; registry_contracts 9 passed; bee onboard --repo-root . --json -> status up_to_date, plan [], exit 0; dev release-manifest --check -> 273 files match stored manifest, exit 0",
+            "id": "cell verify chain green, re-run by the judge"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T08:23:09.114Z"
+      }
+    ]
   }
 }

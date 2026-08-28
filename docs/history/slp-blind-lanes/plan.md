@@ -255,7 +255,7 @@ would drop D2(a)'s door refusal and D4's mechanical check, both locked.
 
 **Feature outcome.** One hard question goes in; 2–3 blind proposals, a
 cross-critique round, and one dossier + decision + trigger come out — with the
-brief's neutrality enforced by a refusal and every dossier citation checked
+brief's leaning language refused at the door and every dossier citation checked
 against real proposal bytes.
 
 **Repo-reality basis.** Advisor dispatches are already isolated by construction

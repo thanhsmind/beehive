@@ -4,7 +4,7 @@
   "title": "Refuse a leaning LaneBrief at the dispatch door",
   "lane": "high-risk",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "bln-1"
   ],
@@ -60,16 +60,220 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "bln2-writer",
+    "outcome": "The dispatch door refuses a leaning LaneBrief on two arms — the frozen 17 verdict stems and the four-section shape — through one shared guard the brief bytes alone reach",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Ran the seven new probes by exact name instead of the cell verify second half — its \"brief_lint\" filter matches zero tests, the probes living in verbs::drivers::tests, and a zero-test filter proves nothing — the plan was wrong about a fact",
+      "Dropped a \"does not certify neutrality\" disclaimer from the refusal text — the probe forbids that word in any form, and a disclaimer beside a refusal trains the reader to expect the claim it denies — found a better route"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-28T08:26:45.796Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T08:16:17.784Z",
+    "report": {
+      "outcome": "The dispatch door refuses a leaning LaneBrief on two arms — the frozen 17 verdict stems and the four-section shape — through one shared guard the brief bytes alone reach",
+      "commit": "5f16ef6f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers — green — 275 tests over the touched dispatch-door module, red-first per arm before it existed; plus an exact-name run of the seven new guard probes (7 passed) because the cell verify half filtered on \"brief_lint\" matches 0 tests",
+      "deviations": [
+        "Ran the seven new probes by exact name instead of the cell verify second half — its \"brief_lint\" filter matches zero tests, the probes living in verbs::drivers::tests, and a zero-test filter proves nothing — the plan was wrong about a fact",
+        "Dropped a \"does not certify neutrality\" disclaimer from the refusal text — the probe forbids that word in any form, and a disclaimer beside a refusal trains the reader to expect the claim it denies — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-17-stems-refused-by-name",
+            "status": "PASS",
+            "evidence": "brief_lint.rs:56-74 ships the 17 stems character-for-character in the cell's order (diffed against .bee/cells/bln-2.json); test every_frozen_verdict_stem_is_refused_by_name asserts len()==17, loops all 17, checks type:refused, reason:brief_leaning_language, phrase naming the stem; green in the 7-probe run"
+          },
+          {
+            "id": "truth-2-question-enumeration-refused",
+            "status": "PASS",
+            "evidence": "lint_brief_shape scopes is_enumerated to the Question section and refuses reason:brief_question_enumerates_answers with section:Question; test covers -, *, 1., '  2.' and asserts a Read-diet list still passes"
+          },
+          {
+            "id": "truth-3-shape-refused-by-section-name",
+            "status": "PASS",
+            "evidence": "brief_lint.rs:196-250: extra/repeated -> brief_section_unexpected naming the found heading, missing -> brief_section_missing, misorder -> brief_section_out_of_order naming both; test asserts all four cases plus no-headings and case-fold/level-3 controls"
+          },
+          {
+            "id": "truth-4-stems-in-purpose-expertise-prepare-cleanly",
+            "status": "PASS",
+            "evidence": "test joins all 17 stems into --purpose and 17 well-formed '<path> :: <purpose> :: <read-to>' expertise entries (parse_expertise validated first, entries.len()==17), asserts first_leaning_stem fires on both fixtures so the test is non-vacuous, then prepares over both runtimes asserting payload present and no brief_sha256. Caveat: it calls prepare_dispatch_with_brief, not the argv door - but the guard's ONE call site (prepare.rs:1920) takes only the Ok(Some(brief)) bytes, so purpose and expertise structurally cannot reach it, and the out-of-process children cover the argv door"
+          },
+          {
+            "id": "truth-5-corpus-zero-fires",
+            "status": "PASS",
+            "evidence": "test the_verdict_stem_arm_fires_zero_times_over_every_shipped_prompt walks the real packages/bee/prompts dir from CARGO_MANIFEST_DIR, runs first_leaning_stem ONLY, asserts None per file and checked>=4; the dir holds exactly 4 .md files; an independent rg over all 17 stems exits 1; an injected stem would fail the assert"
+          },
+          {
+            "id": "truth-6-leaning-refused-never-neutrality-enforced",
+            "status": "PASS",
+            "evidence": "stem-arm fix text reads 'the brief carries leaning language - the phrase ... states a verdict' (brief_lint.rs:184-189); rg 'neutral' over brief_lint.rs matches only comment lines, zero string literals; the test asserts fix contains 'leaning language' and not 'neutral' for all 17 stems"
+          },
+          {
+            "id": "prohibition-guard-reads-brief-only",
+            "status": "PASS",
+            "evidence": "lint_brief signature is fn(brief:&str)->Result<(),Value> (brief_lint.rs:181); sole production call site prepare.rs:1920 passes only the resolved brief; rg shows no other caller outside tests"
+          },
+          {
+            "id": "prohibition-no-unguarded-brief-path",
+            "status": "PASS",
+            "evidence": "resolve_brief_file called once (prepare.rs:1919); every other prepare_dispatch_with_brief caller passes brief=None; on refusal brief_text is None and run_dispatch_prepare short-circuits at prepare.rs:2037 before any payload emit; herding 'brief' files are a different concept, not LaneBrief"
+          },
+          {
+            "id": "prohibition-no-new-kind-store-namespace",
+            "status": "PASS",
+            "evidence": "git show 5f16ef6f --stat: only brief_lint.rs (new module), mod.rs (+2 wiring lines), prepare.rs (+15 at the existing door), tests.rs; no catalog change, no DISPATCH_KINDS change, no store"
+          },
+          {
+            "id": "prohibition-corpus-excludes-shape-arm",
+            "status": "PASS",
+            "evidence": "the corpus test calls first_leaning_stem (arm 1, exposed separately at brief_lint.rs:118), never lint_brief or lint_brief_shape"
+          },
+          {
+            "id": "ignored-children-really-spawned",
+            "status": "PASS",
+            "evidence": "the_dispatch_door_refuses_a_leaning_brief_and_carries_a_shaped_one spawns both children via child_payload (current_exe + --exact <name> --ignored), asserts the refusal JSON (reason brief_leaning_language, phrase 'i recommend', no payload) and the carried payload with matching brief_sha256; the parent is one of the 7 exact-name probes that passed, and it also scans include_str!(prepare.rs) for stem copies"
+          },
+          {
+            "id": "verify-deviation-adequate",
+            "status": "PASS",
+            "evidence": "cargo test ... brief_lint -> 'running 0 tests ... 2966 filtered out', confirmed live; the exact-name run of the 7 probes -> 7 passed 0 failed; the probes also match the verbs::drivers filter, so CI's full run covers them"
+          },
+          {
+            "id": "disclaimer-drop-vs-plan",
+            "status": "PASS",
+            "evidence": "plan.md locks only 'leaning language refused, never neutrality enforced'; it never locked a does-not-certify disclaimer inside refusal text. The honesty statement lives in the module banner (brief_lint.rs:13-17) and the commit message, so dropping the in-refusal disclaimer satisfies both the plan and the cell prohibition"
+          },
+          {
+            "id": "false-fire-cost-named",
+            "status": "PASS",
+            "evidence": "The guard behaves exactly as locked, but these realistic NEUTRAL briefs it refuses: bulleted sub-questions under ## Question ('- Where is X written?') refuse as enumerated answers, because the rule cannot tell a sub-question from a candidate; 'We prefer digests with file:line anchors' in Constraints fires the we-prefer stem; any brief carrying a fifth section such as ## Context refuses. Locked by D2a and the cell, so this is cost, not defect - recorded here as the previously unmeasured cost"
+          },
+          {
+            "id": "suite-run",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers run by the judge in the worktree: 275 passed; 0 failed; 6 ignored; 2685 filtered out"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T08:32:03.426Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "stem-list-frozen-17-programmatic",
+            "status": "PASS",
+            "evidence": "Extracted the shipped array (brief_lint.rs:54-72) and the cell's action list and compared programmatically: declared len 17, actual 17, cell list 17, equal True - character for character, same order. tests.rs:7003 pins LEANING_VERDICT_STEMS.len()==17 and tests.rs:7042-7047 pins the two CUT stems ('the right answer', 'the right approach') as NOT firing"
+          },
+          {
+            "id": "truth1-stem-refusal",
+            "status": "PASS",
+            "evidence": "brief_lint.rs:181-191 refuses with reason brief_leaning_language and a phrase field; tests.rs:7002-7029 loops all 17 asserting ok=false, type=refused, phrase==stem, fix contains the stem. Door level: tests.rs:7297-7303 spawns the real CLI child and asserts reason=brief_leaning_language, phrase='i recommend', no payload"
+          },
+          {
+            "id": "truth2-question-enumeration",
+            "status": "PASS",
+            "evidence": "brief_lint.rs:246-268 scans lines while inside the Question section and refuses brief_question_enumerates_answers with section=Question; tests.rs:7121-7134 covers -, *, 1., '  2.  ' plus the control that a Read diet list stays ok"
+          },
+          {
+            "id": "truth3-section-arms",
+            "status": "PASS",
+            "evidence": "brief_lint.rs:196-244 names the found heading on unexpected/repeated, the wanted section on missing, and both on out-of-order; tests.rs:7069-7116 asserts each reason and section plus case-fold and level-3 controls"
+          },
+          {
+            "id": "truth4-scope-no-false-fire",
+            "status": "PASS",
+            "evidence": "tests.rs:7145-7186 builds a purpose carrying all 17 stems and 17 expertise lines, runs them through the door's real parse_expertise (asserts 17 entries), renders with the door's exact format string identical to prepare.rs:1934-1938, asserts first_leaning_stem fires on BOTH fixtures so the test cannot pass vacuously, then prepares on both runtimes asserting a payload with no brief_sha256. Limitation stated plainly: it calls prepare_dispatch_with_brief (prepare.rs:903), one layer below run_dispatch_prepare, so it does not execute the guard's call site itself; the property holds by construction because lint_brief has exactly one non-test call site reachable only on the Ok(Some(brief)) arm"
+          },
+          {
+            "id": "truth5-corpus-zero-fires",
+            "status": "PASS",
+            "evidence": "tests.rs:7199-7228 reads the real prompts dir from CARGO_MANIFEST_DIR, asserts first_leaning_stem==None per file and checked>=4 so an empty walk FAILS. Nearest near-miss in the corpus: worker-cell.md:25 'prefer it over re-deriving' survives because the scan is word-bounded on 'i prefer'/'we prefer'"
+          },
+          {
+            "id": "truth6-named-honestly",
+            "status": "PASS",
+            "evidence": "brief_lint.rs:186-188 fix text says 'the brief carries leaning language'; tests.rs:7019-7028 asserts fix contains 'leaning language' and does NOT contain 'neutral' in any case; rg -ni neutral over brief_lint.rs returns only comment lines, zero string literals"
+          },
+          {
+            "id": "prohibition-guard-scope",
+            "status": "PASS",
+            "evidence": "Signature is pub(crate) fn lint_brief(brief: &str) (brief_lint.rs:181); the only non-test call is at prepare.rs:1920 on the resolved brief bytes. rg '\"brief-file\"' shows only prepare.rs:1832 (registry declaration) and prepare.rs:1901 (flag read)"
+          },
+          {
+            "id": "no-unguarded-brief-path",
+            "status": "PASS",
+            "evidence": "brief_text is bound only at prepare.rs:1919 and is Some only through the linted arm; its two uses are prepare.rs:2011 and 2087. prepare_dispatch_with_brief has 3 non-test callers: prepare.rs:877 passes None, 1999 and 2075 pass the linted brief_text. No path carries a brief to a payload around the guard"
+          },
+          {
+            "id": "ignored-children-are-really-spawned",
+            "status": "PASS",
+            "evidence": "tests.rs:7238-7239 constants match the runtime names exactly (cargo test --bin bee -- --list prints both); child_payload (tests.rs:7274-7291) spawns current_exe with --exact <name> --ignored, asserts child exit success, and panics if stdout carries no JSON - a name typo or a skipped child fails loudly, so this is not dead coverage"
+          },
+          {
+            "id": "one-rule-one-implementation",
+            "status": "PASS",
+            "evidence": "tests.rs:7315-7326 include_str!s prepare.rs, asserts it contains 'lint_brief(' and asserts none of the 17 stems appear in it - a second copy of the list in the door would fail"
+          },
+          {
+            "id": "probes-can-fail",
+            "status": "PASS",
+            "evidence": "Each probe carries its own failure lever: the stem probe uses expect_err per stem so deleting arm 1 panics on the first; the shape probe holds a green control lint_brief(&good).is_ok() plus expect_err per variant so an always-refusing or never-refusing arm fails one side; the enumeration probe has both the refusal loop and the Read-diet is_ok control; the corpus probe fails if any prompt fires or fewer than 4 files are walked; the door probe fails if the child emits no JSON or if prepare.rs grows its own stem copy"
+          },
+          {
+            "id": "cell-verify-half-and-substitute",
+            "status": "PASS",
+            "evidence": "cargo test ... brief_lint summed 0 passed across every binary while cargo still exits 0 - the builder's deviation is factually right, no test name contains brief_lint. Substitute adequate: the 7 probes re-run by exact name gave 7 passed 0 failed, and the cell's first verify half verbs::drivers is green at 275 passed"
+          },
+          {
+            "id": "dropped-neutrality-disclaimer",
+            "status": "PASS",
+            "evidence": "Right call, not drift: the locked wording rule requires only that refusal text say 'leaning language refused' and never 'neutrality enforced'; no doc locks a disclaimer sentence into the refusal. FINDING for the orchestrator, outside this cell's file scope: two PRE-EXISTING doc lines contradict that rule - plan.md:258 'the brief's neutrality enforced by a refusal' and CONTEXT.md:100 'refusal attaches so neutrality is enforced at the chokepoint'. Neither file is touched by 5f16ef6f"
+          },
+          {
+            "id": "suite-run",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers in the worktree at 5f16ef6f with a clean git status: 275 passed; 0 failed; 6 ignored; 2685 filtered out"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T08:33:00.334Z"
+      }
+    ]
   }
 }

@@ -97,7 +97,10 @@ before planning.
 ### Integration Points
 
 - `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` — where the lint
-  refusal attaches so neutrality is enforced at the chokepoint, not by discipline
+  refusal attaches, so leaning language is refused at the chokepoint rather than
+  left to discipline. Corrected 2026-08-28: the earlier wording here claimed
+  neutrality was ENFORCED, which the advisor consult showed a word list cannot
+  do. The pinned term "neutrality lint" stays; the claim does not
 - `packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs` — Gate 3 already
   requires a recorded advisor consult for high-risk work
   (`high_risk_advisor_refusal`, `bee state advisor-ref record`): one mandatory

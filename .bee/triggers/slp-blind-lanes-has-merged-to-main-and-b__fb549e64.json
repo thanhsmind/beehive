@@ -1,0 +1,11 @@
+{
+  "id": "slp-blind-lanes-has-merged-to-main-and-b__fb549e64",
+  "decision": "fb549e64",
+  "condition": "slp-blind-lanes has merged to main and .bee/bin/bee has been rebuilt and reinstalled: run one live smoke of dispatch prepare --kind advisor --brief-file <path> from main. The flag's ~40 lines of argv glue in run_dispatch_prepare are read-verified only — no end-to-end invocation exists, because dispatch prepare refuses inside a granted worktree. The judge passed bln-1 with that residual named.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-28T08:23:27.410Z",
+  "updated_at": "2026-08-28T08:23:27.410Z",
+  "outcome": null
+}
