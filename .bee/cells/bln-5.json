@@ -1,0 +1,85 @@
+{
+  "id": "bln-5",
+  "feature": "slp-blind-lanes",
+  "title": "Stop an abbreviation's dot from faking a sentence boundary in the citation check",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes/plan.md",
+    "docs/history/slp-blind-lanes/advisor-consult.md",
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind",
+  "action": "FIX-FIRST. An independent judge returned NEEDS_REVISION on bln-4 with a working counterexample against the citation check — the one check D4 exists for. Close it, red first.\n\nTHE DEFECT. `starts_sentence` (blind/mod.rs:685-691) treats ANY '.' followed by whitespace as a sentence boundary, so an abbreviation's dot manufactures a false boundary and a citation can begin just after it, dropping the negation that governs the clause.\n\nThe judge's verbatim counterexample, which passes today and must refuse after this cell:\n  proposal: \"We should not follow lane-b here, i.e. cache the token on the worker side.\"\n  citation: \"cache the token on the worker side\"\n  It resolves, clears both floors (34 chars, 7 words), and inverts the lane's meaning.\nThe judge confirmed the same hole for `e.g.` and for ASCII `...`, and found one more case that also passes: cross-sentence framing, \"Never do the following. Cache the token on the worker side.\" cited as the second sentence alone. That one lies OUTSIDE the within-sentence contract the plan scoped — decide it explicitly rather than by accident, and say which way you went in the deviations.\n\nWHAT TO DO.\n1. Write the failing probes FIRST, one per case: `i.e.`, `e.g.`, ASCII `...`, and the cross-sentence framing case. Run them and see them red before touching the boundary rule. A probe that is green before your fix is not a probe for this defect.\n2. Then harden the boundary rule. A dot is a sentence boundary only when the token ending at it is not an abbreviation. Carry a small CLOSED, commented abbreviation set (at least i.e., e.g., etc., cf., vs., no., fig., approx.) and treat a run of two or more dots as never a boundary. If you also require the character after the boundary whitespace to be uppercase in the ORIGINAL proposal text, say so and prove it does not break the existing green whitespace/case-fold probe — `normalize` case-folds, so the boundary test may need the un-normalized text.\n3. Keep all 42 existing `verbs::blind` tests green. If any goes red, that is information about your fix, not permission to edit the test.\n\nHONESTY REQUIREMENT — this is a must_have, not a nicety. A mechanical string check CANNOT catch every semantic inversion; the judge broke the first attempt in one pass, and a closed abbreviation set is still a heuristic. Write one comment block above the boundary rule naming exactly what class this check catches and what it cannot, and do NOT let any refusal text or doc line claim the citation check proves a citation is faithful. It proves the quoted span is a whole sentence of the named lane's own bytes. That is the true claim; make the code say only that.\n\nDo NOT weaken the floors, the per-lane scoping, or any other check to make a probe pass.",
+  "must_haves": {
+    "truths": [
+      "The judge's i.e. counterexample is refused, and a probe pins it verbatim",
+      "The same hole via e.g. and via an ASCII ellipsis is refused, each with its own probe",
+      "The cross-sentence framing case is decided explicitly — refused, or carried with a recorded reason naming it as outside the within-sentence contract",
+      "All 42 pre-existing verbs::blind tests stay green, none edited to accommodate the fix",
+      "A comment block above the boundary rule names what class of inversion this check catches and what it cannot",
+      "No refusal text or doc line claims the citation check proves a citation is faithful"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs",
+        "substantive": "the hardened boundary rule, its closed abbreviation set, and one red-first probe per counterexample"
+      }
+    ],
+    "key_links": [
+      "the boundary rule consults the abbreviation set before treating a dot as a sentence end"
+    ],
+    "prohibitions": [
+      "No loosening of MIN_CITATION_CHARS, MIN_CITATION_WORDS, the per-lane scoping, or any other check",
+      "No existing test edited to make the fix pass",
+      "No claim that the citation check proves faithfulness rather than whole-sentence provenance"
+    ]
+  },
+  "trace": {
+    "worker": "bln5-writer",
+    "outcome": "A dot only ends a sentence outside a closed abbreviation set and outside a dot run, so the judge's i.e. counterexample now refuses",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "The cross-sentence framing case is CARRIED, not refused, and its probe pins the green as a recorded limit instead of being red-first — refusing it needs the meaning of the sentence before the quote, which lies outside the within-sentence contract the plan scoped, and a mechanical guess there would refuse honest citations wholesale — found a better route",
+      "No uppercase-after-boundary requirement was added — the optional rule needs the un-normalized proposal text threaded through the checker, and the closed abbreviation set plus the dot-run rule already refuse all three counterexamples without touching the case-fold probe — found a better route",
+      "The ends_sentence side of the span test now consults the same abbreviation rule as the start side, which the cell did not name — an asymmetric rule would let a citation END on an abbreviation dot and still read as a whole sentence — something else had to be fixed first",
+      "One line was added to the evidence-checks preamble stating a resolved citation proves provenance and never faithfulness — the honesty must_have covers every doc line about this check, and that block is where the check advertises its strength — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T10:08:17.685Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T10:01:31.552Z",
+    "report": {
+      "outcome": "A dot only ends a sentence outside a closed abbreviation set and outside a dot run, so the judge i.e. counterexample now refuses",
+      "commit": "6eaf4955",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green (46 passed, 0 failed; the 3 new abbreviation probes were red before the fix) — the cell changes only the citation boundary rule inside verbs::blind, and that module owns every test of it",
+      "deviations": [
+        "The cross-sentence framing case is CARRIED, not refused, and its probe pins the green as a recorded limit instead of being red-first — refusing it needs the meaning of the sentence before the quote, which lies outside the within-sentence contract the plan scoped, and a mechanical guess there would refuse honest citations wholesale — found a better route",
+        "No uppercase-after-boundary requirement was added — the optional rule needs the un-normalized proposal text threaded through the checker, and the closed abbreviation set plus the dot-run rule already refuse all three counterexamples without touching the case-fold probe — found a better route",
+        "The ends_sentence side of the span test now consults the same abbreviation rule as the start side, which the cell did not name — an asymmetric rule would let a citation END on an abbreviation dot and still read as a whole sentence — something else had to be fixed first",
+        "One line was added to the evidence-checks preamble stating a resolved citation proves provenance and never faithfulness — the honesty must_have covers every doc line about this check, and that block is where the check advertises its strength — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

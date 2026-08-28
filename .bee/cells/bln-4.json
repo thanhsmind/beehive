@@ -4,7 +4,7 @@
   "title": "Make bee blind check catch a fabricated citation, a divergent brief and a diet breach",
   "lane": "high-risk",
   "role": "code",
-  "status": "capped",
+  "status": "open",
   "deps": [
     "bln-3"
   ],
@@ -55,7 +55,7 @@
     ]
   },
   "trace": {
-    "worker": "bln4-writer",
+    "worker": null,
     "outcome": "bee blind check now runs the citation, digest-equality and read-diet evidence checks, each red-first",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
@@ -69,8 +69,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
-    "claimed_at": "2026-08-28T09:39:10.577Z",
+    "claim_session": null,
+    "claimed_at": null,
     "report": {
       "outcome": "bee blind check now runs the citation, digest-equality and read-diet evidence checks, each red-first",
       "commit": "c47fd241a1f66e783276ebb1f4ae2a18c4c4da70",
@@ -85,6 +85,112 @@
     "warnings": [
       "advisory: this cap's commit changes 998 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "short-generic-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:733-743 enforces MIN_CITATION_CHARS=24 and MIN_CITATION_WORDS=5 (:585-586); probe :1570-1582 asserts dossier_citation_too_short on 'the dispatch door' even though it IS contained in lane-a"
+          },
+          {
+            "id": "fabricated-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:777-783 dossier_citation_unresolved; probe :1585-1592 cites a quote in no proposal and asserts that reason"
+          },
+          {
+            "id": "negation-strip-refused",
+            "status": "FAIL",
+            "evidence": "The plan's canonical case DOES refuse (probe :1598-1612). Counterexample found by construction: proposal 'We should not follow lane-b here, i.e. cache the token on the worker side.' cited as 'cache the token on the worker side' gives quote_resolves=True and clears both floors (34 chars, 7 words), so check_citations passes it - because starts_sentence (mod.rs:685-691) accepts the '.' of 'i.e.' as a sentence terminator. Same for 'e.g.' and ASCII '...'. Verified against a line-faithful transcription of normalize/citation_quote/quote_resolves (mod.rs:644-705); that same transcription reproduces the green whitespace test and the red plain-strip test, so the transcription is sound. Cross-sentence framing ('Never do the following. Cache the token...') also passes, though that lies outside the within-sentence contract the plan scoped"
+          },
+          {
+            "id": "cross-lane-misattribution-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:744-776 resolves against the named lane only, then names found_in on dossier_citation_misattributed; probe :1617-1627 asserts lane-b with found_in lane-a"
+          },
+          {
+            "id": "whitespace-only-diff-passes",
+            "status": "PASS",
+            "evidence": "normalize (mod.rs:644-659) collapses runs and ASCII-folds both sides; probe :1647-1654 passes a re-wrapped, re-cased real quote with counts.citations==1"
+          },
+          {
+            "id": "digest-mismatch-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:832-847 compares the dossier's brief_sha256 to the LOGGED digest and refuses dossier_brief_digest_mismatch naming both; probe :1685-1698"
+          },
+          {
+            "id": "unlogged-dispatch-refused-by-name",
+            "status": "PASS",
+            "evidence": "mod.rs:804-817 dossier_dispatch_unlogged names lane, dispatch_id and log path; DispatchLog::read (:634-638) maps a missing file to an empty log via unwrap_or_default, and probe :1704-1718 asserts an empty log refuses - the fail-CLOSED mirror of the fail-open append_prepare_record"
+          },
+          {
+            "id": "divergent-logged-digests-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:851-868 compares LOGGED digests across lanes, collected only from log entries at :848, and refuses dossier_brief_digest_divergent naming lane, other_lane and both digests; probe :1736-1753"
+          },
+          {
+            "id": "diet-breach-and-bee-path-refused",
+            "status": "PASS",
+            "evidence": "mod.rs:958-989 dossier_read_diet_breach for anything outside the declared diet; names_bee_store (:930-932) is segment-wise and refuses even when the diet itself declares .bee/ (probe :1781-1801)"
+          },
+          {
+            "id": "zero-count-refuses",
+            "status": "PASS",
+            "evidence": "zero lanes at mod.rs:1001-1008 with probe :1852-1859; zero citations at :786-793 with probe :1675-1681; zero paths per-lane at :948-957 with probe :1826-1837, and an undeclared diet at :936-944 with probe :1839-1845"
+          },
+          {
+            "id": "never-concatenated-set",
+            "status": "PASS",
+            "evidence": "check_citations resolves per-lane only (mod.rs:709-711, 744, 754); probe :1632-1643 proves a cross-lane-boundary quote WOULD match the join and is still refused dossier_citation_unresolved"
+          },
+          {
+            "id": "no-same-trust-claim",
+            "status": "PASS",
+            "evidence": "DIET_TRUST (mod.rs:877) is written once and says 'weaker than the citation check'; every diet refusal carries trust:self_reported; probe :1806-1824 asserts both 'self-report' and 'weaker' appear in the fix text; no contrary claim in the comments"
+          },
+          {
+            "id": "no-new-store-no-new-kind",
+            "status": "PASS",
+            "evidence": "the verb reads only the caller's --dossier and .bee/logs/dispatch.jsonl; no write besides the existing record_timing; no new dispatch kind string in the diff"
+          },
+          {
+            "id": "checks-run-pinning-test-extended",
+            "status": "PASS",
+            "evidence": "the parent commit's test asserted the three names ABSENT; the same commit replaces it with the_pass_result_names_every_check_this_door_ran (mod.rs:1528-1546) asserting the exact six-name list plus nonzero counts - extended together with CHECKS_RUN, never deleted or weakened"
+          },
+          {
+            "id": "probes-assert-not-vacuous",
+            "status": "PASS",
+            "evidence": "every evidence probe goes through evidence_refusal (mod.rs:1253-1255), which panics on Ok, and pins an exact reason string plus its fields; the concatenation probe pre-asserts its own premise; red-first history is unverifiable from outside, but no probe can pass vacuously against a stub returning Ok"
+          },
+          {
+            "id": "citation-floors-defensible",
+            "status": "PASS",
+            "evidence": "A real short verdict such as 'No new store is needed.' normalizes to 22 chars and IS refused, but the refusal is actionable and the trade is the design's own choice, not a defect"
+          },
+          {
+            "id": "verify-command-green",
+            "status": "PASS",
+            "evidence": "worktree HEAD c47fd241; cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind -> 42 passed, 0 failed, matching the cap's claim"
+          }
+        ],
+        "failure_signature": "quote_resolves (blind/mod.rs:685-691) treats any mid-sentence '.', as in 'i.e.', 'e.g.' or '...', as a sentence boundary, so a citation that drops the negation before it - 'We should not follow lane-b here, i.e. cache the token on the worker side.' cited as 'cache the token on the worker side' - passes the citation check and inverts the lane's meaning",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:00:57.224Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-28T10:00:57.224Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }
