@@ -107,6 +107,86 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "close-refuses-naming-cell-and-remedy",
+            "status": "PASS",
+            "evidence": "close.rs:2125-2160 refusal block reading the door's own verdict; test close_refuses_dissent_debt_in_a_tiny_lane ... ok — code 1, headline starts with CLOSE_DISSENT_DEBT_PREFIX, contains demo-1, remedy: line names bee cells dissent-verdict and dissent-deferral"
+          },
+          {
+            "id": "verdict-clears-the-door",
+            "status": "PASS",
+            "evidence": "test dissent_debt_door_clears_once_a_verdict_is_recorded ... ok — door.detail == \"clear\", command None"
+          },
+          {
+            "id": "door-blocks-tiny-lane-like-high-risk",
+            "status": "PASS",
+            "evidence": "close.rs:1556 the arm sits OUTSIDE the if matches!(feature_route ...) block that wraps judge-debt at close.rs:1466; test dissent_debt_door_blocks_a_tiny_lane_feature_exactly_like_a_high_risk_one ... ok (asserts judge-debt door is absent while dissent-debt blocks)"
+          },
+          {
+            "id": "archived-offender-blocks-and-names-unarchive-first",
+            "status": "PASS",
+            "evidence": "close.rs:1563-1571 and 1584-1590; test dissent_debt_door_names_unarchive_first_for_an_archived_offender ... ok — asserts index of 'bee cells unarchive' < index of 'bee cells dissent-verdict'"
+          },
+          {
+            "id": "blocked-status-cell-counts-as-debt",
+            "status": "PASS",
+            "evidence": "dissent.rs:507-527 feature_dissent_debt passes None status; guard.rs:480-513 list_cells now takes Option<&str>; test dissent_debt_door_blocks_a_cell_a_blocker_dissent_parked_as_blocked ... ok"
+          },
+          {
+            "id": "dissent-deferral-escape-is-feature-exact",
+            "status": "PASS",
+            "evidence": "dissent.rs:536-553 has_dissent_deferral_decision; test dissent_debt_door_clears_with_a_logged_dissent_deferral_decision ... ok — asserts has_dissent_deferral_decision(root,\"demo\") true and (root,\"elsewhere\") false"
+          },
+          {
+            "id": "door-names-every-offender",
+            "status": "PASS",
+            "evidence": "test dissent_debt_door_names_every_unanswered_cell_never_just_the_first ... ok — count 2, detail contains demo-1 and demo-2, not demo-3"
+          },
+          {
+            "id": "no-dissent-reports-clear",
+            "status": "PASS",
+            "evidence": "test dissent_debt_door_is_clear_with_no_dissent_and_with_a_corrupt_row ... ok; drivers/tests.rs gained the line \"door dissent-debt: clear\" in the existing full-door listing at tests.rs:3352"
+          },
+          {
+            "id": "prohibition-no-lane-gate-wrapper",
+            "status": "PASS",
+            "evidence": "close.rs:1556 sits after the judge-debt if-block closes at close.rs:1519 and before the uat match — read directly from the file"
+          },
+          {
+            "id": "prohibition-no-cutoff-no-behavior-change-filter",
+            "status": "PASS",
+            "evidence": "dissent.rs:507-527: the loop has no date_parse cutoff and no behavior_change check, unlike judge_debt at close.rs:387-400"
+          },
+          {
+            "id": "prohibition-phases-rs-untouched",
+            "status": "PASS",
+            "evidence": "git show --numstat 6966d85c lists only cells/dissent.rs, cells/proof.rs, cells/tests.rs, drivers/close.rs, drivers/guard.rs, drivers/tests.rs"
+          },
+          {
+            "id": "prohibition-no-existing-door-assertion-weakened",
+            "status": "PASS",
+            "evidence": "git show --numstat 6966d85c: cells/tests.rs 240/0, drivers/tests.rs 4/0 (zero deletions); close.rs 118/4 and guard.rs 16/6 deletions are the list_cells signature change to Option<&str>; full unit suite 2931 passed, 0 failed"
+          },
+          {
+            "id": "prohibition-dissent-is-answered-semantics-unchanged",
+            "status": "PASS",
+            "evidence": "git show 6966d85c -- cells/dissent.rs adds only feature_dissent_debt and has_dissent_deferral_decision (83/0); dissent_is_answered at dissent.rs:293-301 is untouched, and its corrupt-row rule is re-asserted by dissent_debt_door_is_clear_with_no_dissent_and_with_a_corrupt_row ... ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T05:19:33.173Z"
+      }
+    ]
   }
 }

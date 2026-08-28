@@ -84,6 +84,76 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "merge-refuses-with-pinned-code-naming-every-cell",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:206 refuse_merge(\"WORKTREE_MERGE_DISSENT_DEBT\", ...) with js_join of dissent.ids; test an_unanswered_dissent_refuses_the_merge_naming_every_cell ... ok — asserts the message starts with \"[WORKTREE_MERGE_DISSENT_DEBT] \" and names dissenting-1 and dissenting-2"
+          },
+          {
+            "id": "verdict-lets-the-same-merge-proceed",
+            "status": "PASS",
+            "evidence": "test a_recorded_dissent_verdict_lets_the_same_merge_proceed ... ok — asserts answer.ok and result[\"merged\"] == true"
+          },
+          {
+            "id": "deferral-escape-feature-exact-at-merge",
+            "status": "PASS",
+            "evidence": "phases.rs:200-201 calls has_dissent_deferral_decision; test a_logged_dissent_deferral_naming_this_feature_lets_the_merge_through ... ok — the same tag naming another feature still refuses"
+          },
+          {
+            "id": "featureless-worktree-never-calls-the-helper",
+            "status": "PASS",
+            "evidence": "phases.rs:196 `if let Some(feature) = identity.feature.as_deref()`; test a_worktree_with_no_resolvable_feature_merges_past_the_dissent_door ... ok"
+          },
+          {
+            "id": "refusal-is-zero-mutation",
+            "status": "PASS",
+            "evidence": "tests assert head_after == pre_merge_head and the worktree still exists; test a_dissent_debt_refusal_leaves_the_lane_record_byte_identical ... ok — asserts before == after on the lane record bytes"
+          },
+          {
+            "id": "non-capped-cell-still-refuses-merge",
+            "status": "PASS",
+            "evidence": "worktree/tests.rs fixture comment \"// NOT capped: the helper counts every status on purpose.\" inside an_unanswered_dissent_refuses_the_merge_naming_every_cell ... ok, which asserts \"the uncapped offender is named\""
+          },
+          {
+            "id": "one-deferral-clears-both-doors",
+            "status": "PASS",
+            "evidence": "test one_dissent_deferral_clears_both_the_close_door_and_the_merge_precondition ... ok — close door blocking before, non-blocking after, and the merge proceeds on the same state"
+          },
+          {
+            "id": "prohibition-dissent-rs-and-close-rs-untouched",
+            "status": "PASS",
+            "evidence": "git show --numstat 18aa0e09 -> only worktree/phases.rs (42/0) and worktree/tests.rs (246/0)"
+          },
+          {
+            "id": "prohibition-no-staged-field-added",
+            "status": "PASS",
+            "evidence": "the whole phases.rs diff is one inserted block at phases.rs:175-216; no struct definition appears in it"
+          },
+          {
+            "id": "prohibition-refusal-before-the-bookkeeping-auto-commit",
+            "status": "PASS",
+            "evidence": "the inserted block ends at phases.rs:216 and the next context line is the trun-4 main-dirty auto-commit comment; the proof-debt block above it ends at phases.rs:173"
+          },
+          {
+            "id": "prohibition-no-existing-refusal-assertion-weakened",
+            "status": "PASS",
+            "evidence": "git show --numstat 18aa0e09: 288 insertions, 0 deletions across both files; full unit suite 2931 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T05:19:33.176Z"
+      }
+    ]
   }
 }

@@ -98,6 +98,71 @@
     "warnings": [
       "advisory: this cap's commit changes 630 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verdict-stamps-record-and-decision-log",
+            "status": "PASS",
+            "evidence": "dissent.rs:414-432 log_decision then stamp of verdict/verdict_reason/answered_at; test each_verdict_stamps_the_record_and_reaches_the_decision_log ... ok (loops accept/reject/escalate, asserts tags [\"cells\",\"slp\"] and rationale citing 4b7aa303)"
+          },
+          {
+            "id": "closed-verdict-set-and-required-reason",
+            "status": "PASS",
+            "evidence": "dissent.rs:279 DISSENT_VERDICTS=[\"accept\",\"reject\",\"escalate\"]; refusals at dissent.rs:358-370; test every_verdict_refusal_names_itself_and_writes_nothing_anywhere ... ok — cell file byte-identical and decisions log empty"
+          },
+          {
+            "id": "any-verdict-releases-the-parked-cell",
+            "status": "PASS",
+            "evidence": "dissent.rs:441-455 released = blocked && !blocker_debt -> apply_release_mutation; test each_verdict_releases_the_cell_a_blocker_dissent_parked ... ok — asserts compute_schedule().unsatisfiable is empty after each of the three"
+          },
+          {
+            "id": "verdict-with-no-dissent-refuses-by-name",
+            "status": "PASS",
+            "evidence": "dissent.rs:389-393; test a_verdict_with_no_dissent_to_answer_refuses_by_name ... ok"
+          },
+          {
+            "id": "second-verdict-on-answered-dissent-refuses",
+            "status": "PASS",
+            "evidence": "dissent.rs:394-398 (oldest unanswered position, else refuse); test a_second_verdict_on_an_answered_dissent_refuses_by_name ... ok"
+          },
+          {
+            "id": "failed-decision-log-leaves-dissent-unanswered",
+            "status": "PASS",
+            "evidence": "log_decision runs inside mutate_cell before write_cell (dissent.rs:414); test a_failed_decision_log_write_leaves_the_dissent_unanswered ... ok — no verdict key, status still \"blocked\""
+          },
+          {
+            "id": "orchestrator-answers-without-ownership-override",
+            "status": "PASS",
+            "evidence": "dissent.rs:383 comment 'NO guard_claim_ownership here'; test the_orchestrator_answers_without_an_ownership_override ... ok — a foreign live claim file is present and the verdict still succeeds, and the claim file survives"
+          },
+          {
+            "id": "prohibition-run-reopen-untouched",
+            "status": "PASS",
+            "evidence": "git show --stat d7726926 lists catalog.rs, registry_payload.json, router.rs, cells/dissent.rs, cells/util.rs only — handlers_close.rs (home of run_reopen) is absent; release goes through util.rs:398 apply_release_mutation"
+          },
+          {
+            "id": "prohibition-no-versioned-schema-module",
+            "status": "PASS",
+            "evidence": "run_dissent_verdict takes flags id/verdict/reason (dissent.rs:333-343); no new module and no schema string added — mod.rs is not in the sd-2 diff"
+          },
+          {
+            "id": "prohibition-no-stamped-trace-on-failed-log",
+            "status": "PASS",
+            "evidence": "same test as failed-log check: rows[0].get(\"verdict\") == None, blocked_reason still a string"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T05:19:33.170Z"
+      }
+    ]
   }
 }

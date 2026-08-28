@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-dissent-stop-and-ask",
   "mode": "high-risk",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at ac21b3f; reload the product and test \"slp-dissent-stop-and-ask\", then either approve uat (\"bee gate --name uat --approved true --lane slp-dissent-stop-and-ask\") or fix it in the worktree and merge again.",
+  "next_action": "User accepts on main (uat gate), then bee close --feature slp-dissent-stop-and-ask",
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: slp-dissent-stop-and-ask",
-    "asked_at": "2026-08-28T05:11:29.180Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -41,5 +36,16 @@
     "plan_sha256": "absent",
     "advisor": "fable",
     "digest_head": "# Advisor consult — slp-dissent-stop-and-ask plan shape\n\n**Advisor tier:** fable (configured advisor slot), 2026-08-28\n**Scope:** the high-risk plan shape at `docs/history/slp-dissent-stop-and-ask/plan.md`,\nread against CONTEXT.md's locked decisions and the named source anchors.\n\n## P1 — the plan is wrong here\n\n**P1.1 — The merge precondition as described drops the deferral escape.**\nThe proof-debt style has no escape: `verbs/worktree/phases.rs:154-178` refuses\nunconditionally. The judge-debt sh"
+  },
+  "last_scribing_run": {
+    "feature": "slp-dissent-stop-and-ask",
+    "date": "2026-08-28",
+    "at": "2026-08-28T05:20:04.331Z",
+    "areas_synced": [
+      "workflow-state",
+      "worktree-parallelism",
+      "bee-herding"
+    ],
+    "next_action": "User accepts on main (uat gate), then bee close --feature slp-dissent-stop-and-ask"
   }
 }

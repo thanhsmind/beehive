@@ -101,6 +101,71 @@
     "warnings": [
       "advisory: this cap's commit changes 574 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "four-fields-read-back-unchanged",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs:193-207 writes target/claim/alternative/severity; test a_recorded_dissent_reads_back_its_four_fields_unchanged ... ok"
+          },
+          {
+            "id": "closed-severity-set-refuses-by-name-byte-identical",
+            "status": "PASS",
+            "evidence": "dissent.rs:72 DISSENT_SEVERITIES=[\"blocker\",\"consider\"]; refusal at dissent.rs:143-147; test every_refusal_names_itself_and_leaves_the_cell_file_byte_identical ... ok (asserts fs::read equality before/after all refusals)"
+          },
+          {
+            "id": "blocker-blocks-target-and-unschedules-dependents",
+            "status": "PASS",
+            "evidence": "dissent.rs:216-219 calls apply_block_mutation; test a_blocker_dissent_blocks_the_target_and_unschedules_its_dependents ... ok — asserts compute_schedule().unsatisfiable == [(\"d-4\",\"d-3\",\"blocked\")]"
+          },
+          {
+            "id": "consider-leaves-status-untouched",
+            "status": "PASS",
+            "evidence": "dissent.rs:220-222 else-branch inserts trace only; test a_consider_dissent_leaves_the_status_untouched ... ok"
+          },
+          {
+            "id": "secret-and-control-token-text-refuses-before-write",
+            "status": "PASS",
+            "evidence": "dissent.rs:163-166 assert_safe_decision_fields on (reason, alternative) runs before mutate_cell; test asserts \"secret pattern\" and \"instruction-like content\" refusals with the cell file byte-identical"
+          },
+          {
+            "id": "writer-claim-released-after-record",
+            "status": "PASS",
+            "evidence": "dissent.rs:178-182 mutate_cell(..., clear_claim_after=true); test recording_releases_the_writers_claim_at_both_severities ... ok — asserts the claim file is gone and a different session passes guard_claim_ownership"
+          },
+          {
+            "id": "prohibition-escalate-unchanged",
+            "status": "PASS",
+            "evidence": "git show 156b9566 -- router.rs: the line \"cells add|update|claim|unclaim|cap|finish|block|drop|reopen|escalate\" is context, unchanged; a new line \"cells dissent\" is added beside it. catalog.rs diff touches only PINNED_FLAG_COUNT 195->196 with its recorded reason"
+          },
+          {
+            "id": "prohibition-no-second-block-mutation",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs:360 apply_block_mutation is the one writer; handlers_close.rs run_block was rewritten to call it (git show 156b9566 -- handlers_close.rs, -11/+4)"
+          },
+          {
+            "id": "prohibition-trace-key-never-overwritten",
+            "status": "PASS",
+            "evidence": "dissent.rs:208-215 reads the existing array, pushes, writes back; test a_second_dissent_appends_and_never_overwrites_the_first ... ok"
+          },
+          {
+            "id": "verb-served-and-declared",
+            "status": "PASS",
+            "evidence": "util.rs:89-93 dispatch arm; generated/registry_payload.json declares \"cells.dissent\"; cargo test --test registry_dispatch --test registry_contracts --test front_door --test installer_invocations -> 5/2/10/9 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T05:19:33.167Z"
+      }
+    ]
   }
 }

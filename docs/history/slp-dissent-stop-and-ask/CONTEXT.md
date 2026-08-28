@@ -122,19 +122,24 @@ From the quick scout only. Downstream agents read these before planning.
 
 (none — every product decision is a locked D-ID above)
 
-### Deferred To Planning
+<!-- bee:not-a-deferral: planning-phase questions, all six answered by the approved plan and shipped in cells sd-1..sd-6. Nothing here promises later work; the answer is recorded beside each item. -->
+### Deferred To Planning — all answered, none outstanding
 
-- [ ] Where the dissent record lives and its full schema beyond `{target, claim, alternative, severity}` — read the cell trace store and the supervisor stores, pick one pattern.
-- [ ] How "the related part" is resolved from one dissent to the work it pauses — by cell, by declared file overlap, or by an explicit field on the record.
-- [ ] The new verb's name and flag surface, given that `bee cells escalate` is taken and means model tier.
-- [ ] The verdict payload's validation shape — whether it mirrors `judge-verdict/1` or takes a smaller form.
-- [ ] Where `options[]` and `leaning` attach to the `[BLOCKED]` worker form, and which prompt templates must carry the boundary signals.
-- [ ] Which declaration surfaces a new verb group must be added to so no contract test passes on an absent row.
+- [x] Where the dissent record lives and its full schema beyond `{target, claim, alternative, severity}` — **answered (sd-1):** the record rides the cell's own trace store, with a closed severity set.
+- [x] How "the related part" is resolved from one dissent to the work it pauses — **answered (sd-1):** by cell; the dissent names its target cell and parks it through the blocker tooth.
+- [x] The new verb's name and flag surface, given that `bee cells escalate` is taken and means model tier — **answered (sd-1, sd-2):** `bee cells dissent` and `bee cells dissent-verdict`; the claim is spelled `--reason` because `claim` is a CLI-wide flag-alone boolean.
+- [x] The verdict payload's validation shape — **answered (sd-2):** a smaller form, three closed verdicts, written to the decision log fail-closed; it does not mirror `judge-verdict/1`.
+- [x] Where `options[]` and `leaning` attach to the `[BLOCKED]` worker form, and which prompt templates must carry the boundary signals — **answered (sd-6):** the swarming `[BLOCKED]` form plus all three herding code surfaces; the three boundary signals live in `skills/bee-swarming/`.
+- [x] Which declaration surfaces a new verb group must be added to so no contract test passes on an absent row — **answered (sd-3):** the cells dispatch table folded into the served-but-undeclared law, proven red-first.
+<!-- /bee:not-a-deferral -->
 
-## Deferred Ideas
+<!-- bee:not-a-deferral: each line records a locked decision NOT to build a thing, with its decision id. Neither promises later action by this feature. The one real follow-on gap — herding-lane dissent — is registered as backlog item p-05d2a4f4, not as prose here. -->
+## Deferred Ideas — decided against, not owed
 
 - A live mid-flight question-and-answer channel between orchestrator and worker — explicitly not built (a2affcba); it needs a transport bee does not have, and returns only as a fresh effort.
 - Clusters 3 and 4 — blind lanes, and contract status with the verbatim original request — separate features by a020319d.
+- Herding-lane dissent is out of this feature's boundary (6a6b9975); the gap is carried as backlog item `p-05d2a4f4`, not as a promise in this document.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 

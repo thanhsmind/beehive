@@ -119,6 +119,76 @@
     "warnings": [
       "advisory: this cap's commit changes 542 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "options-and-leaning-parse-and-reach-the-json",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/mailbox.rs:382,386 fields; mailbox.rs:515-526 parse; run.rs:2632 result_envelope re-emit at run.rs:2648-2662; tests parse_result_text_reads_options_and_leaning_off_a_blocked_result ... ok and the run.rs envelope test asserting options/leaning present"
+          },
+          {
+            "id": "envelope-byte-identical-without-the-fields",
+            "status": "PASS",
+            "evidence": "test a_result_without_options_emits_the_same_envelope_keys_as_before ... ok — asserts the sorted key set == [closed_pane, dry_run, files_changed, job_id, outcome, pane_id, proof, summary]"
+          },
+          {
+            "id": "leaning-membership-not-enforced",
+            "status": "PASS",
+            "evidence": "mailbox.rs:524 plain as_str map, no membership check; tests parse_result_text_accepts_a_leaning_that_matches_no_option ... ok and parse_result_text_ignores_wrong_typed_options_and_leaning ... ok"
+          },
+          {
+            "id": "brief-teaches-the-fields-and-byte-exact-test-agrees",
+            "status": "PASS",
+            "evidence": "mailbox.rs:334-340 schema lines plus the 'leave both out when there is no choice' sentence; the byte-exact Result-form assertion in mailbox.rs tests was updated to the new block and passes (herding:: 394 passed, 0 failed)"
+          },
+          {
+            "id": "worker-contract-names-dissent-and-verdict-duty",
+            "status": "PASS",
+            "evidence": "skills/bee-swarming/SKILL.md step 3 adds `bee cells dissent --id <cell> --reason \"<claim>\" --alternative \"<instead>\" --severity blocker|consider`; skills/bee-swarming/references/swarming-reference.md 'On each result:' paragraph adds the `.bee/bin/bee cells dissent-verdict --id <cell> --verdict accept|reject|escalate --reason \"<why>\"` obligation citing 4b7aa303"
+          },
+          {
+            "id": "three-boundary-signals-one-rule-each",
+            "status": "PASS",
+            "evidence": "skills/bee-swarming/SKILL.md step 2: the package-install clause is EXTENDED in place to 'Package installs, any new dependency (vendored or declared), and architectural changes'; the contract/API signal and the quality-for-technical-target signal are one sentence each beside it"
+          },
+          {
+            "id": "herding-brief-still-names-no-bee-verb",
+            "status": "PASS",
+            "evidence": "mailbox.rs tests add assert!(!text.contains(\"bee cells\")) and assert!(!text.contains(\"dissent\")) beside the existing 'Never run any `bee` command' assertion; herding:: suite 394 passed, 0 failed"
+          },
+          {
+            "id": "prohibition-no-status-key-in-envelope",
+            "status": "PASS",
+            "evidence": "run.rs:2632-2639 builds job_id/outcome/pane_id/closed_pane/dry_run only; the envelope test asserts obj.get(\"status\").is_none()"
+          },
+          {
+            "id": "prohibition-plain-text-path-not-extended",
+            "status": "PASS",
+            "evidence": "git show ecdb89ea -- herding/run.rs: the else-branch println!(\"bee herding run {}: {}{}\", ...) is unchanged context; the 58 deletions are the emit_result body moved verbatim into result_envelope"
+          },
+          {
+            "id": "prohibition-projected-copies-not-hand-edited",
+            "status": "PASS",
+            "evidence": "diff skills/bee-swarming/references/{swarming-reference,worker-details}.md against .claude/.agents/.claude-plugin/.codex-plugin/.opencode copies shows ONLY bee:only/bee:end conditional-render blocks as the difference; rg 'repeated word for word' and 'cells dissent-verdict' returns exactly 1 hit per file in all five projections, and the .bee-render.json fingerprints plus docs/history/codex-harness-hardening/release-manifest.json were regenerated in the same commit"
+          },
+          {
+            "id": "prohibition-no-existing-mailbox-assertion-weakened",
+            "status": "PASS",
+            "evidence": "git show --numstat ecdb89ea: herding/mailbox.rs 96/3 — the 3 deletions are the schema line and the old byte-exact string, both replaced by a stricter superset that still pins the four original fields; full unit suite 2931 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-28T05:19:33.179Z"
+      }
+    ]
   }
 }
