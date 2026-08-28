@@ -3,8 +3,8 @@
   "feature": "merge-door-precision",
   "role": "code",
   "title": "Stop refusing a merge for untracked files it can never touch",
-  "action": "bee worktree merge auto-commits bookkeeping in its allowed roots and then refuses on ANY remaining dirt in main. That includes UNTRACKED files under another feature's docs/history/, which this merge will never write — so with several live sessions nobody can merge until everybody commits. Narrow the refusal: an untracked path that is NOT in the merging branch's own changed-file set cannot collide and must not block. Tracked modifications keep refusing exactly as today, and git's own refusal to overwrite an untracked file stays the backstop for anything the branch does touch. Name the narrowing in the refusal text so a reader knows what still blocks.",
-  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "action": "bee worktree merge auto-commits bookkeeping in its allowed roots and then refuses on ANY remaining dirt in main. That includes UNTRACKED files under another feature's docs/history/, which this merge will never write — so with several live sessions nobody can merge until everybody commits. Narrow the refusal: an untracked path that is NOT in the merging branch's own changed-file set cannot collide and must not block. Tracked modifications keep refusing exactly as today, and git's own refusal to overwrite an untracked file stays the backstop for anything the branch does touch. Name the narrowing in the refusal text so a reader knows what still blocks.\n\nROUND 1 ENDED BLOCKED ON A WRITE GUARD, NOT ON THE PROBLEM. The session was not bound to this lane, so the intake gate read a default record at phase idle and denied every write under packages/. That is fixed (bee state session bind, session -> lane merge-door-precision). Zero edits were made and the worktree is clean. Nothing about the cell was wrong. What round 1 DID produce is the reconnaissance below — it is verified, so do not re-derive it.\n\nWHERE IT LIVES, verified against main at 5f5b2b14:\n  - The whole dirty-MAIN precondition is packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:229-254. It calls `main_bookkeeping_roots(main_root, identity.feature.as_deref())`, then `is_tree_dirty_excluding(main_root, &roots)`, then builds the offending list with `git_status_porcelain_excluding_untracked_all(main_root, &roots)`.\n  - `main_bookkeeping_roots` is packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs:204-216. The exempt set is exactly: `.bee`, `docs/decisions`, this feature's recorded `docs/knowledge/` paths, and `docs/history/<merging feature>`. Nothing else is exempt, tracked or untracked.\n  - The refusal text is phases.rs:250 and today reads: \"…has uncommitted changes outside {scope} that \\\"bee worktree merge\\\" will not auto-commit — commit or stash them before merging\". It names the AUTO-COMMIT SCOPE, not the collision rule. Reword it so a reader learns the new rule: tracked dirt still blocks anywhere outside the bookkeeping roots, and untracked dirt blocks only where the merging branch actually touches it.\n  - NO changed-file set exists anywhere in the merge path today. You are adding this read, not reusing one.\n  - docs/history/merge-door-precision/ does NOT exist — no CONTEXT.md, no plan.md. This cell text is the whole spec. Do not hunt for them.\n\nTHE DESIGN IS SETTLED — round 1 worked it out and it needs no further exploration. Implement it:\n  - In merge.rs, a `-z` porcelain reader that splits TRACKED dirt from UNTRACKED dirt (the existing helper collapses them).\n  - In merge.rs, the changed-file set: `git merge-base HEAD <branch>` then `git diff --no-renames --name-only -z <base> <branch>`.\n  - Consume both at phases.rs:240-254: tracked dirt outside the bookkeeping roots refuses as today; untracked dirt refuses only when its path is in the changed-file set.\n\nTHE MERGE-BASE TRAP is the sharp one, and round 1 found the fixture that pins it: seed `stale.txt` on main, fork the worktree branch, then have main DELETE and commit `stale.txt`, then leave an untracked `stale.txt` in main. The `HEAD` spelling names it as a collision; the merge-base spelling does not. Without a fixture where main has moved on since the fork, both spellings agree and the test proves nothing.\n\nSIX EXISTING TESTS GO RED, NOT ONE. The cell used to say one. Round 1 read the suite and counted six — every one of them uses an UNTRACKED file to pin the old refusal, and the branch touches none of them, so each stops refusing:\n  1. packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs `another_features_docs_history_dirt_still_refuses_and_is_named` (~tests.rs:2248) — untracked `docs/history/<other>/plan.md`\n  2. `dirt_outside_bee_still_refuses_and_names_the_offending_path` — untracked `unrelated.txt`\n  3. `refusal_scope_string_names_the_widened_roots` — untracked `unrelated.txt`\n  4. `another_features_docs_knowledge_dirt_still_refuses_and_is_named` — untracked `docs/knowledge/areas/gates.md`\n  5. `docs_knowledge_dirt_unrecorded_by_any_of_this_features_cells_stays_uncommitted` — untracked `unrecorded.md`\n  6. `feature_less_merge_docs_knowledge_dirt_stays_uncommitted_and_is_named` — untracked `unrecorded.md` / `docs/knowledge/areas/example.md`\nTHE REPAIR, and it is a repair rather than a weakening: make each fixture TRACKED-AND-MODIFIED instead of untracked. Every assertion those tests make survives unchanged, and the fixture matches the real incident better — a capture sync dirties an existing tracked doc, it does not conjure a new untracked one. The prohibition on this cell has been widened to permit exactly this: fixtures may move, assertions may not.\n  Test 1 is the exception: REPLACE it with a sharper pair —\n    a. an untracked peer path the branch never touches -> the merge PROCEEDS, and the path is still on disk afterwards, still untracked, still uncommitted (assert all three — the do-not-commit safety half must be PROVEN, not assumed);\n    b. an untracked path the branch DOES touch -> still refuses, named.\n  Its doc comment argues the refusal is a safety property because sweeping a peer's docs/history/<other>/ into a commit would land their work without their say-so. That argument is about the AUTO-COMMIT, not the REFUSAL, and the two are separable. Keep do-not-commit; drop do-not-refuse. Also merge.rs:123-127 carries a comment explaining the message deliberately surfaces `?? docs/history/<theirs>/plan.md` — it now describes the old rule and must move with the code.\n\nRED FIRST. Author the new tests (the pair, and the merge-base pin) before the behaviour change and watch them fail for the right reason, then make them pass. Judge the existing worktree suite before adding anything else: it is large and already covers the tracked-dirt and bookkeeping-root paths, so add only the gap.\n\nWHY THIS CELL EXISTS: the route rationale records the refusal being hit four times in two days. With several live sessions the steady state is that nobody can merge until everybody commits — a coordination cost paid daily for a collision that cannot happen.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bins worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bins merge",
   "slice": 1,
   "lane": "standard",
   "behavior_change": true,
@@ -16,32 +16,54 @@
       "An untracked path outside the merging branch's changed-file set no longer refuses the merge.",
       "An untracked path that the branch DOES touch still refuses, so nothing the merge would overwrite is silently clobbered.",
       "A TRACKED modified file outside the bookkeeping roots still refuses, byte-identical to today — this narrowing never reaches tracked dirt.",
-      "The existing bookkeeping auto-commit of the allowed roots is unchanged.",
+      "The existing bookkeeping auto-commit of the allowed roots is unchanged: a non-colliding untracked path is EXEMPTED FROM THE REFUSAL but never swept into a commit.",
       "The refusal text names which dirt still blocks, so the remedy stays reachable.",
-      "A test proves the untracked-and-touched case still refuses — the narrowing must not become a way to clobber."
+      "A test proves the untracked-and-touched case still refuses — the narrowing must not become a way to clobber.",
+      "The changed-file set is computed against the branch's MERGE BASE with main, never against main's HEAD, and a test proves the two spellings disagree.",
+      "Every one of the six existing tests that used an untracked fixture to pin the old refusal still states its own truth after the change — each keeps its assertions and only its fixture moves from untracked to tracked-and-modified."
+    ],
+    "prohibitions": [
+      "No untracked path is ever added to the bookkeeping auto-commit by this change.",
+      "The tracked-modification refusal is not touched.",
+      "No assertion in any existing test is weakened or deleted. The six tests named in the action may have their FIXTURE changed (untracked file becomes tracked-and-modified) and one of them is replaced by a sharper pair; every assertion those tests make must survive, in that test or its replacement."
     ]
   },
   "files": [
-    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
   ],
   "acceptance": "Untracked files the branch never touches stop blocking; untracked files it does touch still refuse; tracked dirt is unchanged; the worktree suite is green and a new test pins the clobber case.",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [],
-  "read_first": [],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "mdp-w2",
+    "outcome": "The merge door now refuses only for dirt it can collide with: tracked dirt unchanged, untracked dirt blocks only inside the branch's merge-base changed-file set",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "Deleted git_status_porcelain_excluding_untracked_all instead of keeping it beside the new -z splitter — it had exactly four callers, all in the code this cell rewrites, and leaving it would have been dead code in a non-test build; its `?? docs/history/<theirs>/plan.md` rationale moved verbatim onto the new reader — found a better route",
+      "Wrote the two new refusal tests against plain git commands rather than the new helpers, so the red run failed on behaviour instead of on a missing symbol — found a better route",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md lines 197-201 still state the old rule (\"any dirty path outside those two roots still refuses exactly as before\") and I left it untouched — it is not in the cell's files, so the sync is the orchestrator's scope call — hit an unforeseen obstacle"
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-28T05:59:17.957Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
+    "claim_session": "be014001-263f-451f-b775-5f601ff73817",
+    "claimed_at": "2026-08-28T05:46:29.020Z",
     "swept_at": "2026-08-26T09:50:19.811Z",
     "swept_from_session": "e79d1e09-87fb-491a-9e3a-7ade73f3bd0c",
     "blocked_reason": null,
@@ -49,6 +71,23 @@
     "verified_at": null,
     "dropped_reason": null,
     "reopened_at": "2026-08-28T05:32:04.640Z",
-    "reopened_reason": "Stale claim from a dead session was swept to blocked. An independent read of main confirms none of the work landed: phases.rs still refuses on any dirt and never computes the merging branch's changed-file set. Returning it to open for a fresh worker."
+    "reopened_reason": "Stale claim from a dead session was swept to blocked. An independent read of main confirms none of the work landed: phases.rs still refuses on any dirt and never computes the merging branch's changed-file set. Returning it to open for a fresh worker.",
+    "report": {
+      "outcome": "The merge door now refuses only for dirt it can collide with: tracked dirt unchanged, untracked dirt blocks only inside the branch's merge-base changed-file set",
+      "commit": "c68b02b7a50e511e7f261c6a35e44fb05d11b08f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release -p bee --bins worktree (235 passed) then --bins merge (129 passed) — green — the cell's own verify; both filters cover every test in the three touched files",
+      "deviations": [
+        "Deleted git_status_porcelain_excluding_untracked_all instead of keeping it beside the new -z splitter — it had exactly four callers, all in the code this cell rewrites, and leaving it would have been dead code in a non-test build; its `?? docs/history/<theirs>/plan.md` rationale moved verbatim onto the new reader — found a better route",
+        "Wrote the two new refusal tests against plain git commands rather than the new helpers, so the red run failed on behaviour instead of on a missing symbol — found a better route",
+        "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md lines 197-201 still state the old rule (\"any dirty path outside those two roots still refuses exactly as before\") and I left it untouched — it is not in the cell's files, so the sync is the orchestrator's scope call — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

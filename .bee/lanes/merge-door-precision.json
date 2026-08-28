@@ -23,5 +23,12 @@
     "rationale": "bee worktree merge refuses on any dirt outside its bookkeeping allowlist, including UNTRACKED files in another feature's docs/history that this merge can never touch. With several live sessions the steady state is that nobody merges until everybody commits — hit four times in two days.",
     "updated_at": "2026-08-26T06:16:12.177Z",
     "feature": "merge-door-precision"
+  },
+  "merge_ready": {
+    "since": "2026-08-28T05:59:17.980Z",
+    "branch": "wt/merge-door-precision",
+    "worktree_id": "beehive--wt--merge-door-precision",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
