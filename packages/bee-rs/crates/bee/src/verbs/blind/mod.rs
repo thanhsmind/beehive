@@ -670,6 +670,11 @@ fn is_terminator(b: u8) -> bool {
 /// dot the boundary rule reads as a sentence end — the safe direction is to
 /// list the marks that actually appear in design prose. Lowercase, dot
 /// included, because both sides of the scan are `normalize`d.
+///
+/// One entry per abbreviation, never one per spelling: the lookup strips the
+/// leading punctuation off the token first, so `(i.e.`, `"e.g.` and `-cf.`
+/// all land on the row already here. Spelling punctuated variants out would
+/// be the same miss with more rows.
 const NON_TERMINAL_ABBREVIATIONS: [&str; 8] =
     ["i.e.", "e.g.", "etc.", "cf.", "vs.", "no.", "fig.", "approx."];
 
@@ -680,28 +685,40 @@ const NON_TERMINAL_ABBREVIATIONS: [&str; 8] =
 /// The rule exists for ONE class: a citation that starts mid-sentence and
 /// drops the words that reverse it — "we should not cache the token" cited as
 /// "cache the token". Requiring the span to sit between two sentence
-/// boundaries makes that strip impossible WITHIN a sentence, because the
-/// dropped negation is exactly the text between the boundary and the quote.
+/// boundaries RAISES THE COST of that strip and refuses the written forms
+/// enumerated below. It does NOT make a within-sentence strip impossible: the
+/// dropped negation is the text between the boundary and the quote, so the
+/// strip survives wherever a dot this rule reads as a boundary stands between
+/// them. Read this list as the whole of what is caught, never as a class
+/// closed by it.
 ///
 /// A dot alone is not a boundary. "we should not follow lane-b here, i.e.
 /// cache the token" has a dot before the clause, and reading it as a sentence
 /// end hands back the whole hole this rule closes. So a dot ends a sentence
-/// only when it is not part of a run (an ellipsis is one mark, not three
-/// ends) and the token it closes is not a listed abbreviation.
+/// only when three things hold: it is not part of a run (an ellipsis is one
+/// mark, not three ends); the WORD it closes — the token with its leading
+/// brackets, quotes and dashes stripped, because "(i.e." is the commonest
+/// spelling of the abbreviation — is not a listed abbreviation; and that word
+/// is not a list marker ("1.", "a.", "ii."), because a numbered list under a
+/// negated stem is ordinary design prose and every item is governed by it.
 ///
 /// WHAT IT CANNOT DO. This is a mechanical string check over ONE sentence,
 /// and it cannot decide whether a citation is faithful to what the lane
-/// meant. Three limits, named rather than papered over:
+/// meant. Four limits, named rather than papered over:
 ///   * framing one sentence back — "Never do the following. Cache the token
 ///     on the worker side." cited as the second sentence alone is a whole
 ///     sentence of the lane's own bytes and PASSES. That is decided, not
 ///     missed: refusing it needs the meaning of the previous sentence, and a
 ///     rule that guessed there would refuse honest citations wholesale;
 ///   * the abbreviation set is closed, so an unlisted abbreviation ("resp.",
-///     a name's initial) still reads as a sentence end;
-///   * a real sentence that genuinely ends in a listed abbreviation is
-///     refused. Both misses land on the strict side except the first, which
-///     is why the first is stated everywhere this check is described.
+///     "ibid.") still reads as a sentence end;
+///   * the list-marker shape is narrow — digits, one letter, or a run of the
+///     numeral letters i/v/x — so a marker outside it ("A1.", "step.") still
+///     reads as a sentence end;
+///   * a real sentence that genuinely ends in a listed abbreviation, in a
+///     number, or in a one-letter word is refused. Every miss but the first
+///     lands on the strict side, which is why the first is stated everywhere
+///     this check is described.
 ///
 /// The true claim, and the only one any refusal or doc may make: a resolved
 /// citation is a WHOLE SENTENCE of the named lane's own bytes. Provenance,
@@ -718,8 +735,43 @@ fn is_sentence_end(h: &[u8], at: usize) -> bool {
     while k > 0 && h[k - 1] != b' ' {
         k -= 1;
     }
+    // Match on the WORD, not the raw token: an opening bracket, quote or dash
+    // rides on the front of "(i.e." and "\"e.g.", and a lookup by whole-token
+    // equality is defeated by that one character.
     let token = &h[k..=at];
-    !NON_TERMINAL_ABBREVIATIONS.iter().any(|a| a.as_bytes() == token)
+    let word = match token.iter().position(u8::is_ascii_alphanumeric) {
+        Some(i) => &token[i..],
+        None => token,
+    };
+    if NON_TERMINAL_ABBREVIATIONS.iter().any(|a| a.as_bytes() == word) {
+        return false;
+    }
+    !is_enumerator(word)
+}
+
+/// Is `word` (dot included) a LIST MARKER rather than a word that ends a
+/// sentence? "1.", "a." and "ii." open an item under a stem that governs it —
+/// "we must not do any of the following:" — so reading that dot as a sentence
+/// end lets a citation start at the item and leave the stem behind.
+///
+/// The shape is deliberately narrow: all digits, ONE letter, or a run of the
+/// numeral letters i/v/x. English has no ordinary word of that shape, so a
+/// sentence-final short word ("one.", "it.", "all.") is not mistaken for a
+/// marker. Case is not a signal here — both sides of the scan are
+/// `normalize`d, so every letter arrives lowercase.
+fn is_enumerator(word: &[u8]) -> bool {
+    let Some((last, body)) = word.split_last() else { return false };
+    if *last != b'.' || body.is_empty() {
+        return false;
+    }
+    if body.iter().all(u8::is_ascii_digit) {
+        return true;
+    }
+    if !body.iter().all(u8::is_ascii_alphabetic) {
+        return false;
+    }
+    body.len() == 1
+        || (body.len() <= 3 && body.iter().all(|b| matches!(b, b'i' | b'v' | b'x')))
 }
 
 /// Does `needle` stand in `hay` as a WHOLE-SENTENCE span — starting where a
@@ -728,11 +780,13 @@ fn is_sentence_end(h: &[u8], at: usize) -> bool {
 /// Plain containment is what makes the negation strip work: a proposal that
 /// says "we should not cache the token" contains "cache the token", and a
 /// dossier citing the second reports the lane as saying the opposite of what
-/// it said. Requiring the span to begin at a sentence boundary means a
-/// citation cannot silently drop the clause that reverses it — the dropped
-/// "we should not" is exactly the text between the sentence start and the
-/// quote. Both `hay` and `needle` arrive normalized, so the scan is over
-/// ASCII bytes and a byte equal to `.` or ` ` can only be that character.
+/// it said. Requiring the span to begin at a sentence boundary makes that
+/// drop cost a boundary the citation has to find — the dropped "we should
+/// not" is the text between the sentence start and the quote, so the strip
+/// works only where `is_sentence_end` reads a boundary, and that function
+/// states exactly which marks it reads and which it does not. Both `hay` and
+/// `needle` arrive normalized, so the scan is over ASCII bytes and a byte
+/// equal to `.` or ` ` can only be that character.
 fn quote_resolves(hay: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return false;
@@ -1760,6 +1814,73 @@ mod tests {
     #[test]
     fn a_citation_starting_after_an_ascii_ellipsis_is_refused() {
         let doc = governed_clause_case("...");
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// HOLE e, THE BRACKETED FORM. "(i.e." is the single most common way the
+    /// abbreviation is actually written, and a set matched by byte equality on
+    /// the whole space-delimited token never sees it — the leading bracket
+    /// alone defeats the lookup. Same strip, same inversion.
+    #[test]
+    fn a_citation_starting_after_a_bracketed_abbreviation_is_refused() {
+        let doc = governed_clause_case(" (i.e.");
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// The same defeat through a leading quote mark. One adjacent character is
+    /// the whole attack, so the lookup must read the WORD, not the token.
+    #[test]
+    fn a_citation_starting_after_a_quoted_abbreviation_is_refused() {
+        let doc = governed_clause_case(" \"e.g.");
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// HOLE f — the enumerator dot. A markdown numbered list under a negated
+    /// stem is ordinary design prose: the "must not" governs every item, and
+    /// the dot after "1" is a list marker, never a sentence end. Reading it as
+    /// one lets the citation start at item 1 and report the lane as
+    /// recommending what it forbade.
+    #[test]
+    fn a_citation_starting_after_a_numeric_enumerator_is_refused() {
+        let proposal = format!(
+            "We must not do any of the following:\n\n1. {GOVERNED_CLAUSE}.\n2. Skip the lease check."
+        );
+        let lanes = [lane("lane-a", &proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc = dossier_of(&lanes, &[format!("lane-a :: {GOVERNED_CLAUSE}")]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// The lettered spelling of the same list. "a." is an enumerator wherever
+    /// "1." is one, and a fix that reads only digits leaves the hole open.
+    #[test]
+    fn a_citation_starting_after_an_alpha_enumerator_is_refused() {
+        let proposal = format!(
+            "We must not do any of the following:\n\na. {GOVERNED_CLAUSE}.\nb. Skip the lease check."
+        );
+        let lanes = [lane("lane-a", &proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc = dossier_of(&lanes, &[format!("lane-a :: {GOVERNED_CLAUSE}")]);
+        let v = evidence_refusal(&doc, &control_log());
+        assert_refusal_shape(&v);
+        assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
+    }
+
+    /// The END side of the same hole, mirrored. Here the enumerator dot sits
+    /// where the quote STOPS, so a citation can drop the clause that qualifies
+    /// it — "only when the lease is dead" — and still look whole.
+    #[test]
+    fn a_citation_ending_on_an_enumerator_dot_is_refused() {
+        let proposal =
+            format!("{GOVERNED_CLAUSE} 1. only when the lease is dead and gone.");
+        let lanes = [lane("lane-a", &proposal), lane("lane-b", LANE_B_PROPOSAL)];
+        let doc = dossier_of(&lanes, &[format!("lane-a :: {GOVERNED_CLAUSE} 1.")]);
         let v = evidence_refusal(&doc, &control_log());
         assert_refusal_shape(&v);
         assert_eq!(reason(&v), "dossier_citation_unresolved", "{v}");
