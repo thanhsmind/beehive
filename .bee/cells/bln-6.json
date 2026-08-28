@@ -4,7 +4,7 @@
   "title": "Fix the abbreviation lookup and stop an enumerator dot ending a sentence",
   "lane": "high-risk",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D4"
@@ -47,16 +47,15 @@
   },
   "trace": {
     "worker": null,
-    "outcome": "The abbreviation lookup reads the word not the token, a list-marker dot no longer ends a sentence, and the boundary comment drops its impossibility claim",
+    "outcome": "Bracketed and quoted abbreviations and list-marker dots no longer end a sentence on either side, and the boundary comment states it raises the cost of a strip rather than preventing one",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
     ],
     "deviations": [
-      "The enumerator shape is digits, ONE letter, or a run of the numeral letters i/v/x — not the cell's literal 'one to three ASCII letters, all lowercase or all uppercase' — because normalize() folds case before the scan, so the all-uppercase half can never fire and the all-lowercase half swallows ordinary sentence-final words; applying the literal shape turned 14 pre-existing tests red (the control proposal ends 'a live one.'), and the narrow shape keeps all 5 probes green with zero pre-existing regressions — the plan was wrong about a fact",
-      "Softened the same over-claim in the quote_resolves doc comment ('a citation cannot silently drop the clause that reverses it'), which repeats defect 3 verbatim eight lines below the block the cell named — something else had to be fixed first"
+      "Capped by the orchestrator rather than its builder — the round-3 judge reopened it over a panic in the same function, bln-7 closed that, and the round-4 judge verified its truths at HEAD — something else had to be fixed first"
     ],
     "friction": null,
-    "capped_at": "2026-08-28T10:26:59.810Z",
+    "capped_at": "2026-08-28T10:49:28.066Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -64,20 +63,17 @@
     "claim_session": null,
     "claimed_at": null,
     "report": {
-      "outcome": "The abbreviation lookup reads the word not the token, a list-marker dot no longer ends a sentence, and the boundary comment drops its impossibility claim",
-      "commit": "417fff74232efeb3729e7b198eed4de9cc39c41f",
+      "outcome": "Bracketed abbreviations and list markers no longer end a sentence, and the comment drops its impossibility claim",
+      "commit": "417fff74",
       "files": [
         "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
       ],
-      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green, 51 passed 0 failed (46 pre-existing plus 5 new probes; the same 5 probes ran red before the fix) — the cell changes only the citation boundary rule in verbs::blind, so its own suite is the proof; CI runs the full declared command",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green — 55 passed 0 failed at a5ad7864, run by the round-4 judge; this cell caps only now that a fourth independent round confirms its truths hold",
       "deviations": [
-        "The enumerator shape is digits, ONE letter, or a run of the numeral letters i/v/x — not the cell's literal 'one to three ASCII letters, all lowercase or all uppercase' — because normalize() folds case before the scan, so the all-uppercase half can never fire and the all-lowercase half swallows ordinary sentence-final words; applying the literal shape turned 14 pre-existing tests red (the control proposal ends 'a live one.'), and the narrow shape keeps all 5 probes green with zero pre-existing regressions — the plan was wrong about a fact",
-        "Softened the same over-claim in the quote_resolves doc comment ('a citation cannot silently drop the clause that reverses it'), which repeats defect 3 verbatim eight lines below the block the cell named — something else had to be fixed first"
+        "Capped by the orchestrator rather than its builder — the round-3 judge reopened it over a panic in the same function, bln-7 closed that, and the round-4 judge verified its truths at HEAD — something else had to be fixed first"
       ]
     },
-    "warnings": [
-      "advisory: this cap's commit changes 151 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
-    ],
+    "warnings": [],
     "tests": "boundary",
     "semantic_judge": [
       {
@@ -157,6 +153,34 @@
         "judge_model": "fable",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-28T10:35:31.848Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "bln6-truths-hold",
+            "status": "PASS",
+            "evidence": "Round-4 judge at HEAD a5ad7864: bracketed and quoted abbreviation probes at mod.rs:1842 and 1852, numeric and alpha enumerator start probes at 1865 and 1879, and the end-side enumerator probe at 1894 are all green. The comment states 'It does NOT make a within-sentence strip impossible' (698). The framing probe is unmodified by bln-7 - the diff touches no line of it, and it moved only by insertions elsewhere. No pre-existing test edited"
+          },
+          {
+            "id": "defect-from-round-three-closed",
+            "status": "PASS",
+            "evidence": "The NEEDS_REVISION signature recorded against this cell (a byte-stepped retry cursor panicking on a multibyte citation) was closed by bln-7 and re-verified against 4 reported plus 17 further attack inputs, all answered with no panic"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "55 passed, 0 failed at a5ad7864"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:48:55.142Z"
       }
     ],
     "reopened_for_rework": {
@@ -164,6 +188,7 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "inline_reason": "No new execution. Executed and committed by bln6-writer at 417fff74, then reopened when the round-3 judge found a panic in the same function. bln-7 closed it, and the round-4 judge verified this cell's truths at HEAD a5ad7864. The orchestrator is recording that verdict, not writing code."
   }
 }

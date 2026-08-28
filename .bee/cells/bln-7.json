@@ -72,6 +72,94 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "panic-dead-four-probes",
+            "status": "PASS",
+            "evidence": "Scratch harness with the functions copied byte-for-byte from mod.rs:643-836 and compiled: the curly-quote probe resolves=false, the em-dash probe resolves=false, multibyte-middle resolves=true, all-non-ASCII resolves=true - all typed answers, ZERO panics under catch_unwind. The matching in-tree tests at mod.rs:1936, 1950, 1966, 1982 use the reported strings verbatim"
+          },
+          {
+            "id": "no-remaining-panic",
+            "status": "PASS",
+            "evidence": "17 further attack inputs all answered without panic: empty citation, ellipsis-only citation, citation equal to the whole proposal, a punctuation-only proposal, a lone combining mark U+0301, a multibyte first char matching at position 0, a citation ending in a multibyte char, a 23-dot run, CRLF, a BOM-prefixed proposal, a needle longer than the haystack, and double-occurrence proposals. Index audit of mod.rs:220, 292-293, 727-743, 808-825, 981, 1053, 1171: each is a byte slice, guarded by a length check, or boundary-safe because the index sits on an ASCII byte. The continuation-byte argument VERIFIED: ASCII is 0x00-0x7F and continuation bytes are 0x80-0xBF, so a byte equal to '.', '!', '?' or space can only be that character. Unpaired surrogates cannot be constructed in a Rust &str, so that class does not exist at this layer"
+          },
+          {
+            "id": "boundary-rule-regressions",
+            "status": "PASS",
+            "evidence": "On HEAD's exact functions: the plain-dot strip, ', i.e.', '...', '(i.e.', '\"e.g.', '1.', 'a.', 'ii.' start-side and the end-side enumerator ALL still resolve=false; the honest whole-sentence control and the whitespace/case-variant control still resolve=true. Occurrence order is unchanged for ASCII quotes because len_utf8 equals the old one-byte step, and multibyte first chars previously PANICKED, so there was no prior occurrence choice to change"
+          },
+          {
+            "id": "bln7-must-haves",
+            "status": "PASS",
+            "evidence": "Four probes at mod.rs:1936-1989 with the reported strings verbatim; the false ASCII-scan comment is replaced at :788-801 ('NORMALIZED IS NOT ASCII... the scan runs over UTF-8 bytes'); 51 pre-existing tests at the parent and 55 at HEAD, with the diff adding 4 and editing none; normalize (:646-661) has NO diff hunk and leaves non-ASCII unchanged - the fix is only the cursor line at :825"
+          },
+          {
+            "id": "clippy-never-loop-triaged",
+            "status": "PASS",
+            "evidence": "cargo clippy -p bee errors at mod.rs:366 on never_loop, deny-by-default, and it is pre-existing - bln-7's diff does not touch parse_dossier. COSMETIC: the loop refuses on the first extra level-1 heading by design, the if-let rewrite clippy suggests is behaviour-identical, and the level-2 section walk below runs only when no extra title exists, as intended. A useless_conversion warning also sits at :369"
+          },
+          {
+            "id": "test-suite-counts",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind in the worktree: 55 passed, 0 failed, 0 ignored"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:48:31.901Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "panic-dead-four-probes",
+            "status": "PASS",
+            "evidence": "Scratch harness with the functions copied byte-for-byte from mod.rs:643-836 and compiled: the curly-quote probe resolves=false, the em-dash probe resolves=false, multibyte-middle resolves=true, all-non-ASCII resolves=true - all typed answers, ZERO panics under catch_unwind. The matching in-tree tests at mod.rs:1936, 1950, 1966, 1982 use the reported strings verbatim"
+          },
+          {
+            "id": "no-remaining-panic",
+            "status": "PASS",
+            "evidence": "17 further attack inputs all answered without panic: empty citation, ellipsis-only citation, citation equal to the whole proposal, a punctuation-only proposal, a lone combining mark U+0301, a multibyte first char matching at position 0, a citation ending in a multibyte char, a 23-dot run, CRLF, a BOM-prefixed proposal, a needle longer than the haystack, and double-occurrence proposals. Index audit of mod.rs:220, 292-293, 727-743, 808-825, 981, 1053, 1171: each is a byte slice, guarded by a length check, or boundary-safe because the index sits on an ASCII byte. The continuation-byte argument VERIFIED: ASCII is 0x00-0x7F and continuation bytes are 0x80-0xBF, so a byte equal to '.', '!', '?' or space can only be that character. Unpaired surrogates cannot be constructed in a Rust &str, so that class does not exist at this layer"
+          },
+          {
+            "id": "boundary-rule-regressions",
+            "status": "PASS",
+            "evidence": "On HEAD's exact functions: the plain-dot strip, ', i.e.', '...', '(i.e.', '\"e.g.', '1.', 'a.', 'ii.' start-side and the end-side enumerator ALL still resolve=false; the honest whole-sentence control and the whitespace/case-variant control still resolve=true. Occurrence order is unchanged for ASCII quotes because len_utf8 equals the old one-byte step, and multibyte first chars previously PANICKED, so there was no prior occurrence choice to change"
+          },
+          {
+            "id": "bln7-must-haves",
+            "status": "PASS",
+            "evidence": "Four probes at mod.rs:1936-1989 with the reported strings verbatim; the false ASCII-scan comment is replaced at :788-801 ('NORMALIZED IS NOT ASCII... the scan runs over UTF-8 bytes'); 51 pre-existing tests at the parent and 55 at HEAD, with the diff adding 4 and editing none; normalize (:646-661) has NO diff hunk and leaves non-ASCII unchanged - the fix is only the cursor line at :825"
+          },
+          {
+            "id": "clippy-never-loop-triaged",
+            "status": "PASS",
+            "evidence": "cargo clippy -p bee errors at mod.rs:366 on never_loop, deny-by-default, and it is pre-existing - bln-7's diff does not touch parse_dossier. COSMETIC: the loop refuses on the first extra level-1 heading by design, the if-let rewrite clippy suggests is behaviour-identical, and the level-2 section walk below runs only when no extra title exists, as intended. A useless_conversion warning also sits at :369"
+          },
+          {
+            "id": "test-suite-counts",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind in the worktree: 55 passed, 0 failed, 0 ignored"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:48:34.575Z"
+      }
+    ]
   }
 }

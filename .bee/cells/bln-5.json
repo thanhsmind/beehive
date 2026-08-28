@@ -4,7 +4,7 @@
   "title": "Stop an abbreviation's dot from faking a sentence boundary in the citation check",
   "lane": "high-risk",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D4"
@@ -47,18 +47,15 @@
   },
   "trace": {
     "worker": null,
-    "outcome": "A dot only ends a sentence outside a closed abbreviation set and outside a dot run, so the judge's i.e. counterexample now refuses",
+    "outcome": "The abbreviation and ellipsis forms refuse, the framing case is a carried limit pinned green, and no line in the module claims the citation check proves faithfulness",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
     ],
     "deviations": [
-      "The cross-sentence framing case is CARRIED, not refused, and its probe pins the green as a recorded limit instead of being red-first — refusing it needs the meaning of the sentence before the quote, which lies outside the within-sentence contract the plan scoped, and a mechanical guess there would refuse honest citations wholesale — found a better route",
-      "No uppercase-after-boundary requirement was added — the optional rule needs the un-normalized proposal text threaded through the checker, and the closed abbreviation set plus the dot-run rule already refuse all three counterexamples without touching the case-fold probe — found a better route",
-      "The ends_sentence side of the span test now consults the same abbreviation rule as the start side, which the cell did not name — an asymmetric rule would let a citation END on an abbreviation dot and still read as a whole sentence — something else had to be fixed first",
-      "One line was added to the evidence-checks preamble stating a resolved citation proves provenance and never faithfulness — the honesty must_have covers every doc line about this check, and that block is where the check advertises its strength — something else had to be fixed first"
+      "Capped by the orchestrator rather than its builder — the round-2 judge reopened it, bln-6 and bln-7 closed the residue, and the round-4 judge verified its truths at HEAD — something else had to be fixed first"
     ],
     "friction": null,
-    "capped_at": "2026-08-28T10:08:17.685Z",
+    "capped_at": "2026-08-28T10:49:28.032Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -66,17 +63,14 @@
     "claim_session": null,
     "claimed_at": null,
     "report": {
-      "outcome": "A dot only ends a sentence outside a closed abbreviation set and outside a dot run, so the judge i.e. counterexample now refuses",
+      "outcome": "Abbreviation and ellipsis forms refuse; the framing case is a carried limit; no faithfulness claim survives",
       "commit": "6eaf4955",
       "files": [
         "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
       ],
-      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green (46 passed, 0 failed; the 3 new abbreviation probes were red before the fix) — the cell changes only the citation boundary rule inside verbs::blind, and that module owns every test of it",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green — 55 passed 0 failed at a5ad7864, run by the round-4 judge; this cell caps only now that a fourth independent round confirms its truths hold",
       "deviations": [
-        "The cross-sentence framing case is CARRIED, not refused, and its probe pins the green as a recorded limit instead of being red-first — refusing it needs the meaning of the sentence before the quote, which lies outside the within-sentence contract the plan scoped, and a mechanical guess there would refuse honest citations wholesale — found a better route",
-        "No uppercase-after-boundary requirement was added — the optional rule needs the un-normalized proposal text threaded through the checker, and the closed abbreviation set plus the dot-run rule already refuse all three counterexamples without touching the case-fold probe — found a better route",
-        "The ends_sentence side of the span test now consults the same abbreviation rule as the start side, which the cell did not name — an asymmetric rule would let a citation END on an abbreviation dot and still read as a whole sentence — something else had to be fixed first",
-        "One line was added to the evidence-checks preamble stating a resolved citation proves provenance and never faithfulness — the honesty must_have covers every doc line about this check, and that block is where the check advertises its strength — something else had to be fixed first"
+        "Capped by the orchestrator rather than its builder — the round-2 judge reopened it, bln-6 and bln-7 closed the residue, and the round-4 judge verified its truths at HEAD — something else had to be fixed first"
       ]
     },
     "warnings": [],
@@ -149,6 +143,34 @@
         "judge_model": "opus",
         "model_independence": "same-model",
         "recorded_at": "2026-08-28T10:16:06.728Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "bln5-truths-hold",
+            "status": "PASS",
+            "evidence": "Round-4 judge at HEAD a5ad7864: the i.e., e.g. and ASCII-ellipsis probes at mod.rs:1807, 1820, 1830 are green; the framing case is pinned green at 1912 as a carried limit per decision 79b5437b; the comment block names the caught class and the four limits (686-725) and ends 'Provenance, not faithfulness' (724-725); every occurrence of 'faithful' in the module (563, 706, 725, 1910) is a NEGATION of the claim"
+          },
+          {
+            "id": "defect-from-round-two-closed",
+            "status": "PASS",
+            "evidence": "The NEEDS_REVISION signature recorded against this cell (exact-token abbreviation lookup defeated by '(i.e.', and an enumerator dot ending a sentence) was closed by bln-6 and re-verified on a standalone compile"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "55 passed, 0 failed at a5ad7864"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:48:55.139Z"
       }
     ],
     "reopened_for_rework": {
@@ -156,6 +178,7 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "inline_reason": "No new execution. Executed and committed by bln5-writer at 6eaf4955, then reopened when the round-2 judge broke its fix. bln-6 and bln-7 closed the residue, and the round-4 judge verified this cell's truths at HEAD a5ad7864. The orchestrator is recording that verdict, not writing code."
   }
 }

@@ -4,7 +4,7 @@
   "title": "Make bee blind check catch a fabricated citation, a divergent brief and a diet breach",
   "lane": "high-risk",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "bln-3"
   ],
@@ -55,36 +55,34 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": "bee blind check now runs the citation, digest-equality and read-diet evidence checks, each red-first",
+    "worker": "main-orchestrator",
+    "outcome": "The three evidence checks stand green after three fix rounds: citations resolve per lane under two floors and a whole-sentence rule, digests are checked against the dispatch log, and a diet breach refuses while naming itself self-reported",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
     ],
     "deviations": [
-      "followed the plan"
+      "Capped by the orchestrator rather than its builder — a failed judge reopened it, bln-5, bln-6 and bln-7 closed the defect, and the round-4 judge verified every truth at HEAD; the code is unchanged since c47fd241 — something else had to be fixed first"
     ],
     "friction": null,
-    "capped_at": "2026-08-28T09:54:57.985Z",
+    "capped_at": "2026-08-28T10:49:15.676Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
+    "claim_session": "311024fe-729d-4bd8-8165-39fbb8f5fba2",
+    "claimed_at": "2026-08-28T10:48:58.161Z",
     "report": {
-      "outcome": "bee blind check now runs the citation, digest-equality and read-diet evidence checks, each red-first",
-      "commit": "c47fd241a1f66e783276ebb1f4ae2a18c4c4da70",
+      "outcome": "The three evidence checks stand green after three fix rounds",
+      "commit": "c47fd241",
       "files": [
         "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
       ],
-      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green (42 passed, 0 failed; 21 new probes went red against a stub first) — the cell touches one module, and its inline tests plus registry_dispatch/registry_contracts (19 passed) are everything that reads this verb",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind — green — 55 passed 0 failed at a5ad7864, run by the round-4 judge in the worktree; the cell was reopened by its own round-1 judge and caps only now that a fourth independent round confirms every truth holds",
       "deviations": [
-        "followed the plan"
+        "Capped by the orchestrator rather than its builder — a failed judge reopened it, bln-5, bln-6 and bln-7 closed the defect, and the round-4 judge verified every truth at HEAD; the code is unchanged since c47fd241 — something else had to be fixed first"
       ]
     },
-    "warnings": [
-      "advisory: this cap's commit changes 998 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
-    ],
+    "warnings": [],
     "tests": "boundary",
     "semantic_judge": [
       {
@@ -184,6 +182,34 @@
         "judge_model": "fable",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-28T10:00:57.224Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "bln4-truths-hold",
+            "status": "PASS",
+            "evidence": "Round-4 judge at HEAD a5ad7864: all ten truths pinned green - too-short (mod.rs:1700), fabricated (1715), negation strip in every enumerated form (1728, 1807-1894) with the comment naming raises-cost-not-impossible and the four limits (698-725), misattribution (1747), whitespace variant (1777), digest mismatch (2022), unlogged dispatch_id (2041), unequal logged digests (2073), diet violation and .bee path (2094, 2118) with the weaker-trust wording pinned (2143), and the zero-lane, zero-citation and zero-path refusals (2012, 2163, 2176, 2189). DispatchLog reads .bee/logs/dispatch.jsonl (636-641), never the dossier against itself"
+          },
+          {
+            "id": "defect-from-round-one-closed",
+            "status": "PASS",
+            "evidence": "The NEEDS_REVISION signature recorded against this cell (an abbreviation dot faking a sentence boundary) was closed by bln-5 and bln-6, and re-verified by two later judge rounds on standalone compiles of the shipped functions"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind in the worktree at a5ad7864: 55 passed, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T10:48:55.137Z"
       }
     ],
     "reopened_for_rework": {
@@ -191,6 +217,7 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "inline_reason": "No new execution happened here. The cell was executed and committed by bln4-writer at c47fd241, then REOPENED when its own round-1 judge failed it. The defect was closed by bln-5, bln-6 and bln-7, and the round-4 independent judge verified all ten of this cell's truths at HEAD a5ad7864. The orchestrator is recording that verdict, not writing code."
   }
 }
