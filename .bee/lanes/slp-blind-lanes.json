@@ -4,7 +4,7 @@
   "mode": "high-risk",
   "phase": "exploring",
   "approved_gates": {
-    "context": false,
+    "context": true,
     "shape": false,
     "execution": false,
     "review": false,
@@ -14,7 +14,12 @@
   "next_action": "Continue bee-exploring for \"slp-blind-lanes\" (lane).",
   "created_at": "2026-08-28T07:11:26.254Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The three plan reviews are still running. I will report them with the Gate 2 question.",
+    "asked_at": "2026-08-28T07:28:27.443Z",
+    "session": "311024fe-729d-4bd8-8165-39fbb8f5fba2"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -28,5 +33,13 @@
     "rationale": "Blind lanes attach a neutrality lint at the dispatch door (a covered public contract), may add a structured rejected set to the decisions record (data-model), and land across the Rust runtime plus skill prose (multi-domain).",
     "updated_at": "2026-08-28T07:13:01.733Z",
     "feature": "slp-blind-lanes"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-28T07:26:58.050Z",
+    "feature": "slp-blind-lanes",
+    "newest_decision_id": "a8327ac3-4fdc-402e-971e-0aa3579808fd",
+    "plan_sha256": "61d1faeaa7545e1735c429e63a489589970084fd20a5d38d9ed8a6cf4bb5cdcc",
+    "advisor": "fable (advisor slot)",
+    "digest_head": "# Advisor consult — blind-lanes shape gate\n\n- Date: 2026-08-28 · Tier: advisor (fable) · Repo HEAD at consult: `95d1273e`\n- Question: is the blind-lanes plan safe to approve at the shape gate?\n- Verdict: **SAFE WITH NAMED CHANGES**\n\n## 1. The lint is the wrong instrument for the claim it makes\n\nThe two guards D2(a) copies work because their vocabulary is CLOSED and\nnear-mechanical: `matches_supersession_prose` scans one stem plus four fixed\nphrases (`verbs_read.rs:313-353`), `matches_deferral_pr"
   }
 }
