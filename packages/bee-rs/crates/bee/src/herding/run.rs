@@ -2622,66 +2622,86 @@ fn transport_for_run(main_root: &Path) -> Result<Box<dyn PaneTransport>, String>
     Ok(select_transport(kind, &read_main_config(main_root)))
 }
 
+/// The exact JSON object `emit_result` prints under `--json`, built as a
+/// value so the orchestrator's envelope can be asserted without capturing
+/// stdout. Pure over `(opts, result, transport)`; `emit_result` only prints
+/// what this returns.
+///
+/// Note there is NO `status` key here and never was — done/blocked rides
+/// `outcome`, built by `outcome_label`.
+fn result_envelope(opts: &Options, result: &ExecResult, transport: &str) -> Value {
+    let mut m = Map::new();
+    m.insert("job_id".into(), Value::String(opts.job_id.clone()));
+    m.insert("outcome".into(), Value::String(outcome_label(&result.outcome).to_string()));
+    m.insert("pane_id".into(), result.pane_id.clone().map(Value::String).unwrap_or(Value::Null));
+    m.insert("closed_pane".into(), Value::Bool(result.closed_pane));
+    m.insert("dry_run".into(), Value::Bool(opts.dry_run));
+    match &result.outcome {
+        RunOutcome::Result(r) => {
+            m.insert("summary".into(), Value::String(r.summary.clone()));
+            m.insert(
+                "files_changed".into(),
+                Value::Array(r.files_changed.iter().cloned().map(Value::String).collect()),
+            );
+            m.insert("proof".into(), Value::String(r.proof.clone()));
+            // StopAndAsk (a2affcba): carried to the orchestrator ONLY when the
+            // worker offered them, so a plain done-result envelope keeps the
+            // exact keys it had before this pair existed.
+            if !r.options.is_empty() {
+                m.insert(
+                    "options".into(),
+                    Value::Array(r.options.iter().cloned().map(Value::String).collect()),
+                );
+            }
+            if let Some(leaning) = &r.leaning {
+                m.insert("leaning".into(), Value::String(leaning.clone()));
+            }
+        }
+        RunOutcome::SpawnFailed(msg) => {
+            m.insert("error".into(), Value::String(msg.clone()));
+            m.insert(
+                "remedy".into(),
+                Value::String(spawn_failed_remedy(
+                    opts.cell_id.as_deref(),
+                    opts.agent.as_deref(),
+                    result.pane_id.as_deref(),
+                )),
+            );
+        }
+        RunOutcome::Malformed(msg) | RunOutcome::PaneBlocked(msg) => {
+            m.insert("error".into(), Value::String(msg.clone()));
+        }
+        RunOutcome::ContinueRefused(refusal) => {
+            m.insert("error".into(), Value::String(refusal.to_string()));
+        }
+        RunOutcome::DryRun(brief) => {
+            m.insert("brief".into(), Value::String(brief.clone()));
+            // tmux-herding-transport D1: additive, dry-run only — which
+            // multiplexer the real run would have reached for.
+            m.insert("transport".into(), Value::String(transport.to_string()));
+            m.insert(
+                "job_path".into(),
+                Value::String(
+                    mailbox::job_path(&opts.main_root.join(".bee"), &opts.job_id).display().to_string(),
+                ),
+            );
+        }
+        RunOutcome::Died { pid } => {
+            if let Some(p) = pid {
+                m.insert("pid".into(), Value::from(*p));
+            }
+        }
+        RunOutcome::TimedOutIdle(msg) => {
+            m.insert("error".into(), Value::String(msg.clone()));
+        }
+        RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
+    }
+    Value::Object(m)
+}
+
 fn emit_result(opts: &Options, result: &ExecResult, transport: &str) {
     if opts.json {
-        let mut m = Map::new();
-        m.insert("job_id".into(), Value::String(opts.job_id.clone()));
-        m.insert("outcome".into(), Value::String(outcome_label(&result.outcome).to_string()));
-        m.insert(
-            "pane_id".into(),
-            result.pane_id.clone().map(Value::String).unwrap_or(Value::Null),
-        );
-        m.insert("closed_pane".into(), Value::Bool(result.closed_pane));
-        m.insert("dry_run".into(), Value::Bool(opts.dry_run));
-        match &result.outcome {
-            RunOutcome::Result(r) => {
-                m.insert("summary".into(), Value::String(r.summary.clone()));
-                m.insert(
-                    "files_changed".into(),
-                    Value::Array(r.files_changed.iter().cloned().map(Value::String).collect()),
-                );
-                m.insert("proof".into(), Value::String(r.proof.clone()));
-            }
-            RunOutcome::SpawnFailed(msg) => {
-                m.insert("error".into(), Value::String(msg.clone()));
-                m.insert(
-                    "remedy".into(),
-                    Value::String(spawn_failed_remedy(
-                        opts.cell_id.as_deref(),
-                        opts.agent.as_deref(),
-                        result.pane_id.as_deref(),
-                    )),
-                );
-            }
-            RunOutcome::Malformed(msg) | RunOutcome::PaneBlocked(msg) => {
-                m.insert("error".into(), Value::String(msg.clone()));
-            }
-            RunOutcome::ContinueRefused(refusal) => {
-                m.insert("error".into(), Value::String(refusal.to_string()));
-            }
-            RunOutcome::DryRun(brief) => {
-                m.insert("brief".into(), Value::String(brief.clone()));
-                // tmux-herding-transport D1: additive, dry-run only — which
-                // multiplexer the real run would have reached for.
-                m.insert("transport".into(), Value::String(transport.to_string()));
-                m.insert(
-                    "job_path".into(),
-                    Value::String(
-                        mailbox::job_path(&opts.main_root.join(".bee"), &opts.job_id).display().to_string(),
-                    ),
-                );
-            }
-            RunOutcome::Died { pid } => {
-                if let Some(p) = pid {
-                    m.insert("pid".into(), Value::from(*p));
-                }
-            }
-            RunOutcome::TimedOutIdle(msg) => {
-                m.insert("error".into(), Value::String(msg.clone()));
-            }
-            RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
-        }
-        println!("{}", Value::Object(m));
+        println!("{}", result_envelope(opts, result, transport));
     } else {
         println!(
             "bee herding run {}: {}{}",
@@ -4806,6 +4826,75 @@ mod tests {
             other => panic!("expected Result(blocked), got {other:?}"),
         }
         assert!(result.closed_pane, "a blocked-but-well-formed result is still a valid result (D6)");
+    }
+
+    // ─── StopAndAsk: options[] and leaning reach the orchestrator ────────
+
+    /// The whole round trip in one probe: the worker's file is parsed and the
+    /// values land in the JSON `--json` prints. Without this the orchestrator
+    /// never receives the choice a worker offered (a2affcba).
+    #[test]
+    fn a_blocked_result_carries_its_options_and_leaning_into_the_emitted_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"blocked","summary":"two ways to do this","files_changed":[],"proof":"n/a","options":["Widen the cell to cover the parser too.","Split the parser into its own cell."],"leaning":"Split the parser into its own cell."}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+
+        let envelope = result_envelope(&opts, &result, "herdr");
+        let obj = envelope.as_object().expect("envelope is an object");
+        assert_eq!(obj.get("outcome").and_then(Value::as_str), Some("blocked"));
+        assert_eq!(
+            obj.get("options"),
+            Some(&serde_json::json!([
+                "Widen the cell to cover the parser too.",
+                "Split the parser into its own cell."
+            ])),
+            "options never reached the orchestrator: {envelope}"
+        );
+        assert_eq!(
+            obj.get("leaning").and_then(Value::as_str),
+            Some("Split the parser into its own cell."),
+            "leaning never reached the orchestrator: {envelope}"
+        );
+        // done/blocked rides `outcome`; no `status` key was ever in this
+        // envelope and StopAndAsk does not add one.
+        assert!(obj.get("status").is_none(), "envelope grew a status key: {envelope}");
+    }
+
+    /// The negative half: a result carrying neither field emits the exact key
+    /// set it emitted before StopAndAsk existed.
+    #[test]
+    fn a_result_without_options_emits_the_same_envelope_keys_as_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+
+        let envelope = result_envelope(&opts, &result, "herdr");
+        let obj = envelope.as_object().expect("envelope is an object");
+        let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            vec!["closed_pane", "dry_run", "files_changed", "job_id", "outcome", "pane_id", "proof", "summary"],
+            "envelope keys drifted for a result carrying neither field: {envelope}"
+        );
     }
 
     #[test]

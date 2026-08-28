@@ -196,7 +196,7 @@ Do not describe a branch name, worktree id, base, or commit as integration
 authority, and do not ask the orchestrator to trust a worker-supplied value.
 
 - `[DONE]` — cell finished (a proof line `<command> — <result> — <scope reason>` recorded on the cap, checked — not re-run — at close/merge), one commit made, reservations released.
-- `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.
+- `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state, plus `options[]` (one self-contained sentence per way forward) and `leaning` (the one you would pick, repeated word for word) whenever the block leaves a decision to make. Both are omitted when there is no choice to offer; `leaning` never names an option that is not in the list.
 - `[HANDOFF]` — `.bee/HANDOFF.json` written (rule: agents-context-handoff-65); include progress, active reservations, and the resume point.
 - `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
 

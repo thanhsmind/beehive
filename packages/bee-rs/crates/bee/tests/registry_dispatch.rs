@@ -356,16 +356,49 @@ fn match_arm_verbs(src: &str, marker: &str, floor: usize) -> BTreeSet<String> {
     found
 }
 
-#[test]
-fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
-    let p = payload();
-    let invocations: BTreeSet<String> = p["commands"]
+/// Every invocation the registry declares, as the exact string an agent would
+/// type. The served set is compared against this and nothing else.
+fn declared_invocations() -> BTreeSet<String> {
+    payload()["commands"]
         .as_array()
         .unwrap()
         .iter()
         .filter_map(|c| c["invoke"].as_str())
         .map(str::to_string)
-        .collect();
+        .collect()
+}
+
+/// The law itself, as a function of its two inputs: which served shapes have
+/// no declaration behind them. Extracted so the assertion can be shown to BITE
+/// against the real registry — `the_served_but_undeclared_law_names_the_verb_
+/// whose_declaration_is_missing` feeds it the real cells dispatch table with
+/// one real declaration taken away, which is the failure this whole section
+/// exists to catch and the one a green run can never demonstrate on its own.
+fn undeclared(served: &[String], invocations: &BTreeSet<String>) -> Vec<String> {
+    let excluded: BTreeSet<&str> = NOT_A_COMMAND_SURFACE.iter().map(|(ns, _)| *ns).collect();
+    served
+        .iter()
+        .filter(|inv| {
+            let ns = inv.split_whitespace().nth(1).unwrap_or("");
+            !excluded.contains(ns) && !invocations.contains(*inv)
+        })
+        .cloned()
+        .collect()
+}
+
+/// `bee cells <verb>`, read out of the dispatch table in `verbs/cells/util.rs`
+/// rather than listed here. The floor is the vacuity guard: the table holds 19
+/// arms today, so a scan that finds fewer than 15 has lost its subject.
+fn served_cells_verbs() -> Vec<String> {
+    match_arm_verbs(&crate_src("verbs/cells/util.rs"), "pub(crate) fn try_mutating", 15)
+        .into_iter()
+        .map(|verb| format!("bee cells {verb}"))
+        .collect()
+}
+
+#[test]
+fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
+    let invocations = declared_invocations();
 
     let mut served: Vec<String> = Vec::new();
     for verb in match_arm_verbs(&crate_src("devtools/mod.rs"), "pub fn try_native", 5) {
@@ -374,21 +407,18 @@ fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
     for verb in match_arm_verbs(&crate_src("herding.rs"), "pub fn try_native", 5) {
         served.push(format!("bee herding {verb}"));
     }
+    // `bee cells …` — the namespace the swarm runs on, and the one this sweep
+    // used to skip. A cells sub-verb served here and never declared ships a
+    // verb no agent can find: `bee --help --all` calls it unknown.
+    served.extend(served_cells_verbs());
     // Two single-word probes the router answers before the verb tree; both are
     // spelled in `router::dispatch` and have no match arm to scan.
     for bare in ["bee onboard", "bee rs-info"] {
         served.push(bare.to_string());
     }
-    assert!(served.len() >= 12, "the served set collapsed to {served:?}");
+    assert!(served.len() >= 30, "the served set collapsed to {served:?}");
 
-    let excluded: BTreeSet<&str> = NOT_A_COMMAND_SURFACE.iter().map(|(ns, _)| *ns).collect();
-    let missing: Vec<&String> = served
-        .iter()
-        .filter(|inv| {
-            let ns = inv.split_whitespace().nth(1).unwrap_or("");
-            !excluded.contains(ns) && !invocations.contains(*inv)
-        })
-        .collect();
+    let missing = undeclared(&served, &invocations);
 
     assert!(
         missing.is_empty(),
@@ -430,6 +460,45 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     let thin = "pub fn try_native() {\n    match *name {\n        _ => None,\n    }\n}\n";
     let panicked = std::panic::catch_unwind(|| match_arm_verbs(thin, "pub fn try_native", 2));
     assert!(panicked.is_err(), "a scan that finds nothing must fail, not pass vacuously");
+}
+
+/// The law bites, against the REAL cells dispatch table and the REAL registry.
+///
+/// The sweep above is green, and a green sweep proves only that the two sides
+/// currently agree — it cannot show that the assertion would notice if they
+/// stopped. So take one real declaration away and check the law reports THAT
+/// verb, by name. `dissent` is the newest arm and therefore the one whose
+/// declaration is most likely to be forgotten by the next change; any served
+/// arm would do.
+#[test]
+fn the_served_but_undeclared_law_names_the_verb_whose_declaration_is_missing() {
+    let served = served_cells_verbs();
+    assert!(
+        served.contains(&"bee cells dissent".to_string()),
+        "`verbs/cells/util.rs` no longer serves `dissent` — this fixture is stale: {served:?}"
+    );
+
+    // Whole tree as it stands: nothing served is undeclared.
+    let full = declared_invocations();
+    assert_eq!(
+        undeclared(&served, &full),
+        Vec::<String>::new(),
+        "a cells sub-verb is served by `verbs/cells/util.rs` and missing from the registry payload"
+    );
+
+    // Same tree with one declaration removed: the law must fail, and must say
+    // which verb — a count would leave the next reader diffing 187 entries.
+    let mut gapped = full.clone();
+    assert!(gapped.remove("bee cells dissent"), "the registry stopped declaring `bee cells dissent`");
+    assert_eq!(
+        undeclared(&served, &gapped),
+        vec!["bee cells dissent".to_string()],
+        "a served cells verb with no registry declaration slipped past the law"
+    );
+
+    // …and the report an author reads names the verb, not just a number.
+    let message = undeclared(&served, &gapped).join("\n  ");
+    assert!(message.contains("bee cells dissent"), "the failure text hides the offender: {message}");
 }
 
 /// The registry payload is the agent-facing map. After the Node runtime was

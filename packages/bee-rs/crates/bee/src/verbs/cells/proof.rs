@@ -52,7 +52,7 @@ pub(crate) fn feature_proof_check(
     let mut bad_ids: Vec<String> = Vec::new();
     let mut proven_count = 0usize;
     let mut legacy_count = 0usize;
-    for cell in crate::verbs::drivers::list_cells_including_archive(root, feature, "capped")? {
+    for cell in crate::verbs::drivers::list_cells_including_archive(root, feature, Some("capped"))? {
         let report = cell.get("trace").and_then(|t| t.get("report"));
         let Some(report) = report else {
             legacy_count += 1;

@@ -2373,6 +2373,246 @@ use std::time::Instant;
         assert_eq!(judge_door.command, Some("bee cells unarchive"));
     }
 
+    // sd-4: the dissent close door (slp-dissent-stop-and-ask, a2affcba and
+    // 4b7aa303). `bee close` refuses while any dissent on this feature's
+    // cells lacks a verdict. The door lives in verbs/drivers/close.rs and its
+    // two helpers in verbs/cells/dissent.rs; the cases sit HERE, beside the
+    // rest of the dissent surface, exactly as the judge door cases above sit
+    // beside the judge surface.
+    //
+    // Two of them invert their judge twins on purpose: the judge door is
+    // gated to standard/high-risk and counts only capped behavior_change
+    // cells, while this one exists in EVERY lane and counts a cell in ANY
+    // status, because a blocker dissent parks its cell as `blocked`.
+
+    fn dissent_entry(claim: &str, verdict: Option<&str>) -> Value {
+        let mut e = json!({
+            "target": "demo-1",
+            "claim": claim,
+            "alternative": "do it the other way",
+            "severity": "blocker",
+            "recorded_at": "2026-08-28T00:00:00.000Z",
+        });
+        if let Some(v) = verdict {
+            let m = e.as_object_mut().unwrap();
+            m.insert("verdict".into(), json!(v));
+            m.insert("verdict_reason".into(), json!("because"));
+            m.insert("answered_at".into(), json!("2026-08-28T01:00:00.000Z"));
+        }
+        e
+    }
+
+    fn cell_carrying_dissents(feature: &str, id: &str, status: &str, rows: Value) -> Value {
+        json!({"id": id, "feature": feature, "status": status, "trace": {"dissent": rows}})
+    }
+
+    #[test]
+    fn dissent_debt_door_blocks_a_cell_a_blocker_dissent_parked_as_blocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("high-risk"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "blocked", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").expect("the door must exist");
+        assert!(door.blocking, "an unanswered dissent must block: {}", door.detail);
+        assert!(door.detail.contains("demo-1"), "{}", door.detail);
+        assert_eq!(door.command, Some("bee cells dissent-verdict"));
+        assert_eq!(feature_dissent_debt(root, "demo").unwrap().count, 1);
+    }
+
+    #[test]
+    fn dissent_debt_door_clears_once_a_verdict_is_recorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("high-risk"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents(
+                "demo",
+                "demo-1",
+                "open",
+                json!([dissent_entry("wrong shape", Some("reject"))]),
+            ),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+        assert_eq!(door.command, None);
+    }
+
+    #[test]
+    fn dissent_debt_door_blocks_a_tiny_lane_feature_exactly_like_a_high_risk_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "claimed", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(
+            doors.iter().find(|d| d.door == "judge-debt").is_none(),
+            "the judge door is lane-gated; the contrast is the point of this test"
+        );
+        let door = doors.iter().find(|d| d.door == "dissent-debt").expect("every lane grows this door");
+        assert!(door.blocking, "a tiny lane blocks exactly like a high-risk one: {}", door.detail);
+        assert!(door.detail.contains("demo-1"), "{}", door.detail);
+    }
+
+    #[test]
+    fn dissent_debt_door_names_unarchive_first_for_an_archived_offender() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_archived_cell_fixture(
+            root,
+            "demo",
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "capped", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(door.blocking, "an archived cell still owes its verdict: {}", door.detail);
+        let unarchive_at = door.detail.find("bee cells unarchive").expect(&door.detail);
+        let verdict_at = door.detail.find("bee cells dissent-verdict").expect(&door.detail);
+        assert!(unarchive_at < verdict_at, "unarchive must come first: {}", door.detail);
+        assert_eq!(door.command, Some("bee cells unarchive"));
+    }
+
+    #[test]
+    fn dissent_debt_door_clears_with_a_logged_dissent_deferral_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "blocked", json!([dissent_entry("wrong shape", None)])),
+        );
+        std::fs::write(
+            root.join(".bee").join("decisions.jsonl"),
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-28T00:00:00.000Z\",\"decision\":\"defer the dissent for demo\",\"rationale\":\"r\",\"tags\":[\"dissent-deferral\"],\"scope\":\"repo\"}\n",
+        )
+        .unwrap();
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking, "a logged deferral clears the door: {}", door.detail);
+        assert!(door.detail.contains("deferred"), "{}", door.detail);
+        assert!(door.detail.contains("demo-1"), "the count is untouched: {}", door.detail);
+        assert_eq!(door.command, None);
+
+        assert!(has_dissent_deferral_decision(root, "demo").unwrap());
+        assert!(
+            !has_dissent_deferral_decision(root, "elsewhere").unwrap(),
+            "the same tag naming a different feature never lifts this block"
+        );
+    }
+
+    #[test]
+    fn dissent_debt_door_names_every_unanswered_cell_never_just_the_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "open", json!([dissent_entry("first", None)])),
+        );
+        write_cell_fixture(
+            root,
+            "demo-2",
+            &cell_carrying_dissents(
+                "demo",
+                "demo-2",
+                "claimed",
+                json!([dissent_entry("answered", Some("accept")), dissent_entry("still open", None)]),
+            ),
+        );
+        write_cell_fixture(
+            root,
+            "demo-3",
+            &cell_carrying_dissents("demo", "demo-3", "capped", json!([dissent_entry("done", Some("escalate"))])),
+        );
+
+        let debt = feature_dissent_debt(root, "demo").unwrap();
+        assert_eq!(debt.count, 2, "one answered cell is not debt");
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(door.blocking);
+        assert!(door.detail.contains("demo-1"), "{}", door.detail);
+        assert!(door.detail.contains("demo-2"), "{}", door.detail);
+        assert!(!door.detail.contains("demo-3"), "{}", door.detail);
+    }
+
+    #[test]
+    fn dissent_debt_door_is_clear_with_no_dissent_and_with_a_corrupt_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(root, "demo-1", &json!({"id": "demo-1", "feature": "demo", "status": "open"}));
+        write_cell_fixture(
+            root,
+            "demo-2",
+            &cell_carrying_dissents("demo", "demo-2", "open", json!(["a corrupt row"])),
+        );
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "dissent-debt").unwrap();
+        assert!(!door.blocking);
+        assert_eq!(door.detail, "clear");
+        assert_eq!(
+            feature_dissent_debt(root, "demo").unwrap().count,
+            0,
+            "a non-object row reads as ANSWERED, so a garbled entry never blocks forever"
+        );
+    }
+
+    #[test]
+    fn close_refuses_dissent_debt_in_a_tiny_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(
+            root,
+            "demo-1",
+            &cell_carrying_dissents("demo", "demo-1", "blocked", json!([dissent_entry("wrong shape", None)])),
+        );
+
+        let Out::Emit(result, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new())
+                .unwrap()
+        else {
+            panic!("close must emit its refusal")
+        };
+        assert_eq!(code, 1, "an unanswered dissent refuses close in every lane");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(
+            lines[0].starts_with(crate::verbs::drivers::CLOSE_DISSENT_DEBT_PREFIX),
+            "headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("demo-1"), "{}", lines[0]);
+        assert!(lines[1].starts_with("remedy:"), "{}", lines[1]);
+        assert!(lines[1].contains("bee cells dissent-verdict"), "{}", lines[1]);
+        assert!(lines[1].contains("dissent-deferral"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"), "{}", lines[2]);
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors.iter().find(|d| d["door"] == "dissent-debt").unwrap()["blocking"], json!(true));
+    }
+
     // ── schedule ──────────────────────────────────────────────────────────
     #[test]
     fn compute_schedule_waves_and_diagnostics() {

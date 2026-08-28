@@ -41,6 +41,11 @@ pub(crate) const CLOSE_CAPTURE_DEBT_PREFIX: &str = "Capture debt for";
 /// surface). docs/history/workflow-lessons/plan.md wl-3.
 pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
 
+/// slp-dissent-stop-and-ask sd-4: pinned prefix of the dissent-debt refusal
+/// headline (message-contract tests live in verbs/cells/tests.rs, beside the
+/// rest of the dissent surface). Cite: a2affcba and 4b7aa303.
+pub(crate) const CLOSE_DISSENT_DEBT_PREFIX: &str = "Dissent debt for";
+
 /// D1: pinned prefix of the knowledge-freshness refusal headline (message-
 /// contract tests live in verbs/drivers/tests.rs). CONTEXT.md D1.
 pub(crate) const CLOSE_KNOWLEDGE_FRESHNESS_PREFIX: &str = "Knowledge freshness debt for";
@@ -251,7 +256,7 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     // (cell id, that cell's own declared `files`) — only cells no existing
     // record names yet; materialized into one new record below, once.
     let mut to_materialize: Vec<(String, Vec<String>)> = Vec::new();
-    for cell in list_cells_including_archive(root, feature, "capped")? {
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
             continue;
@@ -382,7 +387,7 @@ pub(crate) const JUDGE_DOOR_INTRODUCED_AT: &str = "2026-08-11T00:00:00.000Z";
 pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     let cutoff = date_parse(Some(&Value::String(JUDGE_DOOR_INTRODUCED_AT.to_string())));
     let mut ids = Vec::new();
-    for cell in list_cells_including_archive(root, feature, "capped")? {
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
             continue;
@@ -1527,6 +1532,77 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
     // detail naming both keys and their legal values — the two-key read
     // order is ambiguous on a typo, and guessing either way is worse than
     // refusing.
+    // slp-dissent-stop-and-ask sd-4: the dissent-debt door (a2affcba,
+    // 4b7aa303). It copies the judge-debt arm above for SHAPE only, and
+    // deliberately drops three of its parts:
+    //
+    //   1. NO LANE GATE. The judge arm exists only for a standard/high-risk
+    //      route. a2affcba is unconditional, so this door exists in EVERY
+    //      lane, `tiny` included. A dissent record only exists because a
+    //      worker wrote one, so its existence is the gate.
+    //   2. NO GRANDFATHER CUTOFF. A dissent record cannot predate the feature
+    //      that created it.
+    //   3. NO `behavior_change` FILTER. A worker dissents against any cell it
+    //      was handed.
+    //
+    // The count and the escape are read from verbs/cells/dissent.rs, never
+    // recomputed here, because the merge door reads the SAME two functions:
+    // one obligation, two doors.
+    //
+    // `cells dissent-verdict` writes through `mutate_cell`, which refuses an
+    // archived cell outright, so an offender that only resolves under the
+    // archive owes the unarchive step FIRST or the remedy sends the reader
+    // straight into that refusal. Same reasoning the judge arm records.
+    let dissent = crate::verbs::cells::feature_dissent_debt(root, feature)?;
+    let dissent_deferred = if dissent.count > 0 {
+        crate::verbs::cells::has_dissent_deferral_decision(root, feature)?
+    } else {
+        false
+    };
+    let dissent_blocking = dissent.count > 0 && !dissent_deferred;
+    let dissent_archived: Vec<&str> = dissent
+        .ids
+        .iter()
+        .filter_map(|id| id.as_str())
+        .filter(|id| {
+            !crate::verbs::cells::cell_file(root, id).exists()
+                && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+        })
+        .collect();
+    doors.push(Door {
+        door: "dissent-debt",
+        blocking: dissent_blocking,
+        detail: if dissent.count == 0 {
+            "clear".to_string()
+        } else if dissent_deferred {
+            format!(
+                "deferred — {} cell(s) carry a dissent with no verdict ({}); a logged dissent-deferral decision names \"{feature}\"",
+                dissent.count,
+                js_join(&dissent.ids, ", ")
+            )
+        } else if !dissent_archived.is_empty() {
+            format!(
+                "{} cell(s) carry a dissent with no verdict ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it",
+                dissent.count,
+                js_join(&dissent.ids, ", "),
+                dissent_archived.len(),
+            )
+        } else {
+            format!(
+                "{} cell(s) carry a dissent with no verdict ({}); run bee cells dissent-verdict to record a verdict, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it",
+                dissent.count,
+                js_join(&dissent.ids, ", ")
+            )
+        },
+        command: if !dissent_blocking {
+            None
+        } else if dissent_archived.is_empty() {
+            Some("bee cells dissent-verdict")
+        } else {
+            Some("bee cells unarchive")
+        },
+    });
+
     match crate::uat::uat_stop_config(root) {
         None => {
             doors.push(Door {
@@ -1619,7 +1695,7 @@ pub(crate) fn parse_pattern_verdicts(raw: &str) -> HashMap<String, String> {
 /// insertion order.
 pub(crate) fn feature_touched_files(root: &Path, feature: &str) -> D<Vec<String>> {
     let mut files: Vec<String> = Vec::new();
-    for cell in list_cells_including_archive(root, feature, "capped")? {
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if let Some(Value::Array(items)) = vget(&trace, "files_changed") {
             for item in items {
@@ -2042,6 +2118,44 @@ pub(crate) fn close_handler(
             ),
             remedy,
             format!("next: settle the judge debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // slp-dissent-stop-and-ask sd-4: refuse on dissent debt, in EVERY lane.
+    //
+    // The `Door` the builder pushed does not refuse by itself, so this is the
+    // second, separate half: same "read the door's own verdict, never
+    // recompute it" discipline the two refusals above already keep. Unlike
+    // the judge refusal, a `tiny` or `small` lane reaches this one, because
+    // a2affcba puts the obligation everywhere a worker can dissent.
+
+    if doors.iter().any(|d| d.door == "dissent-debt" && d.blocking) {
+        let debt = crate::verbs::cells::feature_dissent_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let archived = debt.ids.iter().any(|id| {
+            id.as_str().is_some_and(|id| {
+                !crate::verbs::cells::cell_file(root, id).exists()
+                    && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+            })
+        });
+        let remedy = if archived {
+            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells dissent-verdict to record a verdict for each dissent, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it.")
+        } else {
+            format!("remedy: run bee cells dissent-verdict to record a verdict for each dissent on the cells above, or log a decision tagged dissent-deferral naming \"{feature}\" to defer it.")
+        };
+        let lines = vec![
+            format!(
+                "{CLOSE_DISSENT_DEBT_PREFIX} \"{feature}\" — close stops at the dissent-debt door: {} cell(s) carry a dissent with no verdict ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            remedy,
+            format!("next: settle the dissent debt above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
@@ -2474,7 +2588,7 @@ fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::Clos
     let architecture = feature_touched_files(root, feature).unwrap_or_default();
     let mut behaviour: Vec<String> = Vec::new();
     let mut usage: Vec<String> = Vec::new();
-    if let Ok(cells) = list_cells_including_archive(root, feature, "capped") {
+    if let Ok(cells) = list_cells_including_archive(root, feature, Some("capped")) {
         for cell in cells {
             if let Some(Value::String(acceptance)) = vget(&cell, "acceptance") {
                 push_unique(&mut behaviour, acceptance);
