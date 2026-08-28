@@ -93,6 +93,10 @@ pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option
         // a served-and-undeclared verb reads as unknown to `bee --help --all`,
         // and a declared-and-unserved one fails tests/registry_dispatch.rs.
         "dissent" => run_dissent(flags, use_json, t0),
+        // slp-dissent-stop-and-ask sd-2 (4b7aa303) — the orchestrator's
+        // OBLIGATED answer to a dissent. Same both-directions declaration
+        // rule as its record verb above.
+        "dissent-verdict" => run_dissent_verdict(flags, use_json, t0),
         "schedule" => run_schedule(flags, use_json, t0),
         "archive" => run_archive(flags, use_json, t0),
         "unarchive" => run_unarchive(flags, use_json, t0),
@@ -372,4 +376,34 @@ pub(crate) fn apply_block_mutation(
     trace.insert("blocked_reason".into(), Value::String(reason.to_string()));
     cell_map.insert("trace".into(), Value::Object(trace));
     Ok(())
+}
+
+/// The counterpart of [`apply_block_mutation`]: take a blocked cell back to
+/// `open`. It lives HERE, beside the block it undoes, for the same reason the
+/// block itself was extracted — a release that drifts from its block leaves a
+/// cell whose status says one thing and whose `blocked_reason` says another,
+/// and the scheduler and `bee cells show` read those two fields separately.
+///
+/// `bee cells dissent-verdict` (dissent.rs) is the caller. `cells reopen` is
+/// NOT refactored onto this: reopen also clears `dropped_reason` and refuses
+/// on `open`/`claimed` first, and folding those in would change a verb this
+/// feature is not allowed to change. What the two share is written once here;
+/// what only reopen does stays in reopen.
+///
+/// The caller owns the trace up to this point; this consumes it, clears the
+/// claim-shaped and verify-shaped keys through `release_trace` (a released
+/// cell must be re-claimed and re-verified, never re-capped on the evidence
+/// of the run that was blocked), drops the blocked reason, and installs both
+/// the status and the trace back onto the cell.
+pub(crate) fn apply_release_mutation(
+    cell_map: &mut Map<String, Value>,
+    trace: Map<String, Value>,
+    reason: &str,
+) {
+    cell_map.insert("status".into(), Value::String("open".into()));
+    let mut trace = release_trace(trace);
+    trace.insert("blocked_reason".into(), Value::Null);
+    trace.insert("reopened_at".into(), Value::String(utc_now()));
+    trace.insert("reopened_reason".into(), Value::String(reason.to_string()));
+    cell_map.insert("trace".into(), Value::Object(trace));
 }

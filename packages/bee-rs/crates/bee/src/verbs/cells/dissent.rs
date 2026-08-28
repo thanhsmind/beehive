@@ -1,6 +1,8 @@
 // bee cells dissent — a dispatched worker's recorded disagreement with the
-// cell it was handed (slp-dissent-stop-and-ask, decisions 4b7aa303 and
-// a2affcba).
+// cell it was handed — and bee cells dissent-verdict, the orchestrator's
+// obligated answer to it (slp-dissent-stop-and-ask, decisions 4b7aa303 and
+// a2affcba). The question and its answer live in ONE module because they
+// share one record: the second half's header sits above `DISSENT_VERDICTS`.
 //
 // WHY A VERB AND NOT PROSE. A worker that disagrees today can only say so in
 // its `[BLOCKED]` report, which is prose the orchestrator may summarize away.
@@ -214,6 +216,256 @@ pub(crate) fn record_dissent(
         }
         Ok(())
     })
+}
+
+// ── cells dissent-verdict ──────────────────────────────────────────────────
+//
+// THE ORCHESTRATOR'S OBLIGATED ANSWER (4b7aa303). A dissent that can be
+// recorded and never answered is the decorative dissent this feature exists
+// to prevent, so 4b7aa303 puts the obligation on the other side: ONE of three
+// answers — accept and log, reject with reasoning, escalate a rung —
+// RECORDED IN THE DECISION LOG before the related work resumes.
+//
+// Four things here are deliberate, each with its reason, because each one
+// departs from a pattern a reader would otherwise expect:
+//
+//   1. PLAIN FLAGS, NOT A `--file` PAYLOAD. `cells judge-record` takes its
+//      verdict as a file validated against a versioned schema string, and it
+//      does so because a judge verdict is FOREIGN-MODEL output: prose can
+//      arrive where JSON was asked for, so the schema is the airlock. A
+//      dissent verdict is session-authored — the orchestrator types it — so a
+//      schema module would buy nothing and add a file to lose. A recorded
+//      deviation from the established pattern, not an oversight.
+//
+//   2. NO CLAIM-OWNERSHIP GUARD. Every neighbouring mutator runs
+//      `guard_claim_ownership`, and this one must not. By 4b7aa303 the
+//      verdict is the ORCHESTRATOR's act on a cell a WORKER dissented
+//      against; a worker-shaped guard here would make `--force-ownership` —
+//      an AUDITED override, meant to be rare and noticed — the routine path
+//      for the ordinary answer, which is how an audit trail stops meaning
+//      anything. `cells dissent` releases the writer's claim for the same
+//      reason, from the other end.
+//
+//   3. FAIL CLOSED ON THE DECISION-LOG WRITE. `log_decision` runs INSIDE the
+//      cell mutation, before `write_cell`. If it throws, the mutation aborts:
+//      no `verdict` key is stamped, the status is untouched, and the dissent
+//      stays UNANSWERED so the debt doors go on refusing. A half-answered
+//      dissent that clears a door is worse than no answer, and a host that
+//      swallowed the throw into a success would be exactly that.
+//
+//   4. THE RELEASE IS WRITTEN HERE. `cells reopen` is the only unblock path
+//      today and it is claim-guarded, so shelling into it would trip on the
+//      very ownership question point 2 settles. The status write goes through
+//      `apply_release_mutation` (util.rs), which sits beside the
+//      `apply_block_mutation` a blocker dissent armed — the block and its
+//      release in one place, never two drifting copies. `cells reopen` is
+//      untouched.
+//
+// WHICH DISSENT AN ANSWER ANSWERS. A cell may carry several. The verdict
+// lands on the OLDEST UNANSWERED one, so several dissents take several
+// answers and none is cleared by someone else's reasoning. When every dissent
+// already carries a verdict the call refuses by name — a recorded answer is
+// never overwritten.
+//
+// THE DEBT SHAPE THE DOORS WILL READ. The answer is stamped ONTO the dissent
+// entry as three flat keys — `verdict`, `verdict_reason`, `answered_at`. An
+// entry with no non-empty `verdict` string is unanswered; that is the whole
+// debt condition, readable by a counter without joining two arrays.
+
+/// The closed, exhaustive verdict set (4b7aa303 names exactly these three).
+/// `escalate` here means ESCALATE A RUNG — raise the question to the next
+/// authority up. It is not `bee cells escalate`, which means model tier and
+/// keeps that meaning (a2affcba).
+pub(crate) const DISSENT_VERDICTS: [&str; 3] = ["accept", "reject", "escalate"];
+
+/// The three keys a verdict stamps onto the dissent entry it answers.
+pub(crate) const DISSENT_VERDICT_KEY: &str = "verdict";
+pub(crate) const DISSENT_VERDICT_REASON_KEY: &str = "verdict_reason";
+pub(crate) const DISSENT_ANSWERED_AT_KEY: &str = "answered_at";
+
+const VERDICT_VERB: &str = "recordDissentVerdict";
+
+/// True when this dissent entry already carries an answer. A non-object entry
+/// is not answerable at all and reads as ANSWERED, so a corrupt row can never
+/// swallow the verdict meant for the record beside it.
+pub(crate) fn dissent_is_answered(entry: &Value) -> bool {
+    match entry {
+        Value::Object(m) => {
+            matches!(m.get(DISSENT_VERDICT_KEY), Some(Value::String(s)) if !js_trim(s).is_empty())
+        }
+        _ => true,
+    }
+}
+
+/// What the verdict did, for the one-line confirmation. Filled inside the
+/// mutation and read after it — the mutation is the only place that knows
+/// which entry it answered and whether the status moved.
+#[derive(Clone, Default)]
+pub(crate) struct VerdictOutcome {
+    pub(crate) severity: String,
+    pub(crate) released: bool,
+}
+
+pub(crate) fn run_dissent_verdict(
+    flags: rsv::Flags,
+    use_json: bool,
+    t0: Instant,
+) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["id", "verdict", "reason"]) {
+        return None;
+    }
+    // All three are `required` in the registry, so a missing one is the
+    // dispatcher's own "missing required argument" refusal, not ours.
+    let id = flags.req_str("id")?.to_string();
+    let verdict = flags.req_str("verdict")?.to_string();
+    let reason = flags.req_str("reason")?.to_string();
+    dispatch("cells dissent-verdict", use_json, t0, move |ctx| {
+        let (cell, outcome) = record_dissent_verdict(&ctx.root, &id, &verdict, &reason)?;
+        let text = verdict_text(&cell, js_trim(&verdict), &outcome);
+        Ok(Out::Emit(cell, text, 0))
+    })
+}
+
+fn verdict_text(cell: &Value, verdict: &str, outcome: &VerdictOutcome) -> String {
+    let id = js_string_or_undefined(cell.get("id"));
+    let head = format!(
+        "Answered the {} dissent on {id}: {verdict} — recorded in the decision log.",
+        outcome.severity
+    );
+    if outcome.released {
+        format!("{head} The cell is open again and its dependents are schedulable.")
+    } else {
+        head
+    }
+}
+
+/// The whole verb, minus flag parsing: validate, find the oldest unanswered
+/// dissent, LOG THE DECISION, stamp the answer, and release the cell a
+/// blocker dissent parked.
+///
+/// Order is load-bearing twice over. Every validation refusal happens BEFORE
+/// `mutate_cell` takes the `cells:<id>` lock, so a rejected verdict leaves the
+/// cell file byte-identical; and `log_decision` runs BEFORE the trace is
+/// stamped and before `write_cell`, so a failed decision-log write leaves the
+/// dissent UNANSWERED rather than half-answered.
+pub(crate) fn record_dissent_verdict(
+    root: &Path,
+    id: &str,
+    verdict: &str,
+    reason: &str,
+) -> MR<(Value, VerdictOutcome)> {
+    let verdict = js_trim(verdict);
+    if !DISSENT_VERDICTS.contains(&verdict) {
+        return Err(Fail::Thrown(format!(
+            "{VERDICT_VERB}: verdict \"{verdict}\" is not one of {} — 4b7aa303 names exactly three answers, so the set is closed and exhaustive. (`escalate` means escalate A RUNG, not `bee cells escalate`, which means model tier.) Nothing was written.",
+            DISSENT_VERDICTS.join(", ")
+        )));
+    }
+    let reason_text = js_trim(reason);
+    if reason_text.is_empty() {
+        return Err(Fail::Thrown(format!(
+            "{VERDICT_VERB}: --reason is required on every verdict, accept included — an answer with no reasoning is the decorative dissent 4b7aa303 exists to prevent. Nothing was written."
+        )));
+    }
+    // The one scanner (audit.rs). The reason is written by this session and
+    // read by another, exactly like the claim it answers.
+    assert_safe_decision_fields(&[("reason", Some(reason_text))])?;
+
+    let root2 = root.to_path_buf();
+    let id2 = id.to_string();
+    let verdict_owned = verdict.to_string();
+    let reason_owned = reason_text.to_string();
+    let sink: std::rc::Rc<std::cell::RefCell<VerdictOutcome>> = Default::default();
+    let sink2 = sink.clone();
+
+    // `clear_claim_after = false` — the verdict answers a question, it never
+    // takes a claim away from whoever holds one now. `cells dissent` already
+    // released the dissenting worker's own claim as it exited.
+    let cell = mutate_cell(root, id, VERDICT_VERB, Some(VERDICT_VERB), false, move |cell_map| {
+        let mut trace = merge_trace(cell_map.get("trace"))?;
+        // NO `guard_claim_ownership` here — see point 2 in the header.
+        let mut rows: Vec<Value> = match trace.get(DISSENT_TRACE_KEY) {
+            Some(Value::Array(a)) => a.clone(),
+            _ => Vec::new(),
+        };
+        if rows.is_empty() {
+            return Err(Fail::Thrown(format!(
+                "{VERDICT_VERB}: cell \"{id2}\" carries no dissent — there is nothing to answer. Record one with bee cells dissent first."
+            )));
+        }
+        let Some(pos) = rows.iter().position(|r| !dissent_is_answered(r)) else {
+            return Err(Fail::Thrown(format!(
+                "{VERDICT_VERB}: every dissent on cell \"{id2}\" already carries a verdict — a recorded answer is never overwritten. Read them with bee cells show --id {id2}."
+            )));
+        };
+        let Value::Object(mut row) = rows[pos].clone() else { return Err(Fail::Delegate) };
+        let field = |row: &Map<String, Value>, key: &str| match row.get(key) {
+            Some(Value::String(s)) => s.clone(),
+            _ => String::new(),
+        };
+        let severity = field(&row, "severity");
+        let claim = field(&row, "claim");
+        let alternative = field(&row, "alternative");
+
+        // ── FAIL CLOSED ───────────────────────────────────────────────────
+        // 4b7aa303 says the answer is RECORDED IN THE DECISION LOG before the
+        // related work resumes; a trace-only verdict does not satisfy it. So
+        // the log write happens FIRST and its failure aborts the whole
+        // mutation: `mutate_cell` never reaches `write_cell`, the trace keeps
+        // no `verdict` key, the status does not move, and the doors go on
+        // refusing. Tagged `cells` + `slp`, both already in the taxonomy, so
+        // answering a dissent never mutates docs/decisions/taxonomy.json.
+        log_decision(
+            &root2,
+            &format!(
+                "«cells dissent-verdict: {verdict_owned} — the {severity} dissent on cell \"{id2}\" is answered: {reason_owned}»"
+            ),
+            &format!(
+                "4b7aa303 obligates the orchestrator to ONE of three answers to a worker's dissent — accept and log, reject with reasoning, or escalate a rung — recorded in the decision log before the related work resumes. The worker claimed: {claim} Its proposed alternative: {alternative}"
+            ),
+            &["cells", "slp"],
+        )?;
+
+        row.insert(DISSENT_VERDICT_KEY.into(), Value::String(verdict_owned.clone()));
+        row.insert(DISSENT_VERDICT_REASON_KEY.into(), Value::String(reason_owned.clone()));
+        row.insert(DISSENT_ANSWERED_AT_KEY.into(), Value::String(utc_now()));
+        rows[pos] = Value::Object(row);
+        trace.insert(DISSENT_TRACE_KEY.into(), Value::Array(rows.clone()));
+
+        // ── THE RELEASE ───────────────────────────────────────────────────
+        // All three verdicts release: 4b7aa303 obligates an ANSWER, and
+        // escalate-a-rung is one of the three answers, so the work stops
+        // waiting the moment any of them is recorded. Two conditions, both
+        // needed: the cell must actually be parked (`blocked`), and no OTHER
+        // blocker dissent may still be unanswered — releasing while a second
+        // blocker question is open would let one worker's answer clear
+        // another worker's stop.
+        let blocked = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "blocked");
+        let blocker_debt = rows.iter().any(|r| {
+            !dissent_is_answered(r)
+                && matches!(r.get("severity"), Some(Value::String(s)) if s == "blocker")
+        });
+        let released = blocked && !blocker_debt;
+        if released {
+            apply_release_mutation(
+                cell_map,
+                trace,
+                &format!("dissent answered: {verdict_owned} — {reason_owned}"),
+            );
+        } else {
+            cell_map.insert("trace".into(), Value::Object(trace));
+        }
+        *sink2.borrow_mut() = VerdictOutcome { severity, released };
+        Ok(())
+    })?;
+
+    let outcome = sink.borrow().clone();
+    if outcome.released {
+        // merge-ready-fact D2 — the feature just grew an open cell again, so
+        // it is no longer finished. The same line every other reopen path runs.
+        clear_merge_ready_for(root, &cell);
+    }
+    Ok((cell, outcome))
 }
 
 #[cfg(test)]
@@ -491,5 +743,329 @@ mod tests {
     #[test]
     fn the_severity_set_has_exactly_two_members() {
         assert_eq!(DISSENT_SEVERITIES, ["blocker", "consider"]);
+    }
+
+    // ── cells dissent-verdict ──────────────────────────────────────────────
+    //
+    // Existing coverage audited before authoring: the eight cases above cover
+    // the RECORD verb only — its four fields, its refusals, its blocker
+    // tooth, its claim release, its append-only history and its foreign-claim
+    // guard. Nothing above reaches an answer, a decision-log line, or a
+    // release. Every case below is new ground.
+
+    /// Every decision-log event, oldest first.
+    fn decisions(root: &Path) -> Vec<Value> {
+        std::fs::read_to_string(decisions_path(root))
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str(l).expect("a decision event is JSON"))
+            .collect()
+    }
+
+    /// Truth 1: each of the three verdicts appends its answer to the dissent
+    /// record AND reaches the decision log. 4b7aa303 requires both — a
+    /// trace-only verdict does not satisfy it — so one case asserts both.
+    #[test]
+    fn each_verdict_stamps_the_record_and_reaches_the_decision_log() {
+        for (id, verdict) in [("v-1", "accept"), ("v-2", "reject"), ("v-3", "escalate")] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_cell_fixture(root, id, &cell(id, "claimed", json!([])));
+            record_dissent(root, id, "the cell needs a schema that does not exist", "land the schema first", "consider", None, false)
+                .unwrap();
+
+            let (_, outcome) =
+                record_dissent_verdict(root, id, verdict, "the worker is right about the ordering")
+                    .unwrap();
+            assert_eq!(outcome.severity, "consider");
+            assert!(!outcome.released, "a consider dissent parked nothing to release");
+
+            let rows = records(&read_cell_fixture(root, id));
+            assert_eq!(rows.len(), 1, "{rows:?}");
+            assert_eq!(rows[0][DISSENT_VERDICT_KEY], json!(verdict));
+            assert_eq!(
+                rows[0][DISSENT_VERDICT_REASON_KEY],
+                json!("the worker is right about the ordering")
+            );
+            assert!(rows[0][DISSENT_ANSWERED_AT_KEY].as_str().is_some_and(|s| s.ends_with('Z')));
+            // The record it answers is untouched beside the answer.
+            assert_eq!(rows[0]["claim"], json!("the cell needs a schema that does not exist"));
+            assert_eq!(rows[0]["severity"], json!("consider"));
+
+            let events = decisions(root);
+            assert_eq!(events.len(), 1, "exactly one decision per verdict: {events:?}");
+            let text = events[0]["decision"].as_str().unwrap_or_default();
+            assert!(text.contains("cells dissent-verdict"), "{text}");
+            assert!(text.contains(verdict), "{text}");
+            assert!(text.contains(id), "{text}");
+            assert!(text.contains("the worker is right about the ordering"), "{text}");
+            let why = events[0]["rationale"].as_str().unwrap_or_default();
+            assert!(why.contains("4b7aa303"), "{why}");
+            assert!(why.contains("the cell needs a schema that does not exist"), "{why}");
+            assert_eq!(events[0]["tags"], json!(["cells", "slp"]));
+        }
+    }
+
+    /// Truth 2: a verdict outside the closed set, and a verdict with no
+    /// reason, each refuse BY NAME and write nothing — not to the cell and
+    /// not to the decision log. Unsafe reason text takes the same path.
+    #[test]
+    fn every_verdict_refusal_names_itself_and_writes_nothing_anywhere() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "v-4", &cell("v-4", "claimed", json!([])));
+        record_dissent(root, "v-4", "the approach is wrong", "invert it", "blocker", None, false)
+            .unwrap();
+        let before = std::fs::read(cells_dir(root).join("v-4.json")).unwrap();
+
+        let unknown = thrown(record_dissent_verdict(root, "v-4", "maybe", "because"));
+        assert!(
+            unknown.starts_with(
+                "recordDissentVerdict: verdict \"maybe\" is not one of accept, reject, escalate"
+            ),
+            "{unknown}"
+        );
+        assert!(unknown.contains("closed and exhaustive"), "{unknown}");
+        // A verdict that is merely mis-cased is still outside the set.
+        assert!(thrown(record_dissent_verdict(root, "v-4", "Accept", "because"))
+            .contains("\"Accept\" is not one of"));
+        // `bee cells escalate` is a different verb; its spelling is not a
+        // verdict either.
+        assert!(thrown(record_dissent_verdict(root, "v-4", "escalate-a-rung", "because"))
+            .contains("is not one of"));
+
+        let no_reason = thrown(record_dissent_verdict(root, "v-4", "accept", "   "));
+        assert!(
+            no_reason.starts_with("recordDissentVerdict: --reason is required on every verdict"),
+            "{no_reason}"
+        );
+
+        let secret = thrown(record_dissent_verdict(
+            root,
+            "v-4",
+            "reject",
+            "the key AKIA0123456789ABCDEF stays where it is",
+        ));
+        assert!(secret.contains("field \"reason\""), "{secret}");
+        assert!(secret.contains("secret pattern"), "{secret}");
+
+        assert_eq!(
+            std::fs::read(cells_dir(root).join("v-4.json")).unwrap(),
+            before,
+            "a refused verdict must leave the cell file byte-identical"
+        );
+        assert!(
+            decisions(root).is_empty(),
+            "a refused verdict must not reach the decision log: {:?}",
+            decisions(root)
+        );
+        // And the cell is still parked, because it is still unanswered.
+        assert_eq!(read_cell_fixture(root, "v-4")["status"], json!("blocked"));
+    }
+
+    /// Truth 4: an answer with no question refuses by name.
+    #[test]
+    fn a_verdict_with_no_dissent_to_answer_refuses_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "v-5", &cell("v-5", "claimed", json!([])));
+        let before = std::fs::read(cells_dir(root).join("v-5.json")).unwrap();
+
+        let refusal = thrown(record_dissent_verdict(root, "v-5", "accept", "sure"));
+        assert!(
+            refusal.starts_with("recordDissentVerdict: cell \"v-5\" carries no dissent"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("bee cells dissent"), "the refusal names its remedy: {refusal}");
+        assert_eq!(std::fs::read(cells_dir(root).join("v-5.json")).unwrap(), before);
+        assert!(decisions(root).is_empty());
+    }
+
+    /// Truth 5: a recorded answer is never overwritten.
+    #[test]
+    fn a_second_verdict_on_an_answered_dissent_refuses_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "v-6", &cell("v-6", "claimed", json!([])));
+        record_dissent(root, "v-6", "too wide", "cut it in half", "consider", None, false).unwrap();
+        record_dissent_verdict(root, "v-6", "accept", "agreed, cut it").unwrap();
+
+        let refusal = thrown(record_dissent_verdict(root, "v-6", "reject", "changed my mind"));
+        assert!(
+            refusal.starts_with(
+                "recordDissentVerdict: every dissent on cell \"v-6\" already carries a verdict"
+            ),
+            "{refusal}"
+        );
+        let rows = records(&read_cell_fixture(root, "v-6"));
+        assert_eq!(rows[0][DISSENT_VERDICT_KEY], json!("accept"), "the first answer stands");
+        assert_eq!(rows[0][DISSENT_VERDICT_REASON_KEY], json!("agreed, cut it"));
+        assert_eq!(decisions(root).len(), 1, "the refused second answer logged nothing");
+    }
+
+    /// Truth 3: after ANY of the three verdicts the parked cell is released
+    /// and its dependents are schedulable again. The probe asks the SCHEDULER
+    /// rather than re-reading the status this code just wrote — the tooth is
+    /// `compute_schedule`'s dependency check, not the string.
+    #[test]
+    fn each_verdict_releases_the_cell_a_blocker_dissent_parked() {
+        for (id, dep, verdict) in
+            [("v-7", "v-7d", "accept"), ("v-8", "v-8d", "reject"), ("v-9", "v-9d", "escalate")]
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_cell_fixture(root, id, &cell(id, "claimed", json!([])));
+            let dependent = cell(dep, "open", json!([id]));
+            write_cell_fixture(root, dep, &dependent);
+            record_dissent(root, id, "the dependency points the wrong way", "invert it", "blocker", None, false)
+                .unwrap();
+            let blocked = read_cell_fixture(root, id);
+            assert_eq!(blocked["status"], json!("blocked"));
+            assert_eq!(
+                compute_schedule(&[blocked, dependent.clone()]).unsatisfiable,
+                vec![(dep.to_string(), id.to_string(), "blocked")],
+                "{verdict}: the dependent is parked while the question is open"
+            );
+
+            let (_, outcome) =
+                record_dissent_verdict(root, id, verdict, "answered, the work can go on").unwrap();
+            assert!(outcome.released, "{verdict} must release the block");
+            assert_eq!(outcome.severity, "blocker");
+
+            let released = read_cell_fixture(root, id);
+            assert_eq!(released["status"], json!("open"), "{verdict}");
+            assert_eq!(released["trace"]["blocked_reason"], json!(null), "{verdict}");
+            let why = released["trace"]["reopened_reason"].as_str().unwrap_or_default();
+            assert!(why.starts_with(&format!("dissent answered: {verdict}")), "{why}");
+            // A released cell must be re-claimed and re-verified, never
+            // re-capped on the evidence of the run that was blocked.
+            assert_eq!(released["trace"]["verify_passed"], json!(null), "{verdict}");
+            assert_eq!(released["trace"]["worker"], json!(null), "{verdict}");
+            assert!(
+                compute_schedule(&[released, dependent]).unsatisfiable.is_empty(),
+                "{verdict}: the dependent is schedulable again"
+            );
+        }
+    }
+
+    /// Truth 6, the fail-closed probe. When the decision-log write fails the
+    /// dissent stays UNANSWERED: no verdict key, no released status. A
+    /// half-answered dissent that clears a door is worse than no answer.
+    #[test]
+    fn a_failed_decision_log_write_leaves_the_dissent_unanswered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "v-10", &cell("v-10", "claimed", json!([])));
+        record_dissent(root, "v-10", "the plan skips a step", "add the step", "blocker", None, false)
+            .unwrap();
+        // A DIRECTORY where the decision log's file belongs: the append can
+        // never succeed, and nothing else on this path is disturbed.
+        std::fs::create_dir_all(decisions_path(root)).unwrap();
+
+        let refusal = thrown(record_dissent_verdict(root, "v-10", "accept", "fair point"));
+        assert!(!refusal.is_empty(), "the failure surfaces as a refusal, never as a silent pass");
+
+        let stored = read_cell_fixture(root, "v-10");
+        let rows = records(&stored);
+        assert_eq!(rows[0].get(DISSENT_VERDICT_KEY), None, "the trace must not be stamped");
+        assert_eq!(rows[0].get(DISSENT_VERDICT_REASON_KEY), None);
+        assert_eq!(rows[0].get(DISSENT_ANSWERED_AT_KEY), None);
+        assert_eq!(stored["status"], json!("blocked"), "the doors keep refusing");
+        assert!(stored["trace"]["blocked_reason"].is_string());
+
+        // And once the log can be written, the same call goes through — the
+        // failure was the log, not the verdict.
+        std::fs::remove_dir(decisions_path(root)).unwrap();
+        record_dissent_verdict(root, "v-10", "accept", "fair point").unwrap();
+        assert_eq!(read_cell_fixture(root, "v-10")["status"], json!("open"));
+    }
+
+    /// Truth 7: the orchestrator answers a cell a WORKER dissented against
+    /// with no `--session-id` and no `--force-ownership` — even with a live
+    /// claim file owned by somebody else. The verdict is the orchestrator's
+    /// verb (4b7aa303), so an audited override must never be its routine
+    /// path.
+    #[test]
+    fn the_orchestrator_answers_without_an_ownership_override() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "v-11", &cell("v-11", "claimed", json!([])));
+        std::fs::create_dir_all(claims_dir(root)).unwrap();
+        match claim_cell_file(root, Some("worker-session"), "v-11", None).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("fixture claim must win"),
+        }
+        record_dissent(
+            root,
+            "v-11",
+            "the cell contradicts a locked decision",
+            "re-shape it",
+            "blocker",
+            Some("worker-session"),
+            false,
+        )
+        .unwrap();
+        // A DIFFERENT session takes the claim file back — the hardest case
+        // for a verb with no ownership guard, and the one `cells block` and
+        // `cells judge-record` would refuse.
+        match claim_cell_file(root, Some("another-worker"), "v-11", None).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("the second claim must win"),
+        }
+
+        record_dissent_verdict(root, "v-11", "reject", "the decision says otherwise; keep the cell")
+            .expect("the orchestrator's verdict needs no override");
+
+        let rows = records(&read_cell_fixture(root, "v-11"));
+        assert_eq!(rows[0][DISSENT_VERDICT_KEY], json!("reject"));
+        assert!(
+            claims_dir(root).join("v-11.json").exists(),
+            "the verdict answers a question; it never takes somebody's claim away"
+        );
+    }
+
+    /// Scale plus a limit worth pinning: several dissents on one cell take
+    /// several answers, oldest first, and the block holds until the LAST
+    /// blocker question is answered. One worker's answer never clears another
+    /// worker's stop.
+    #[test]
+    fn several_dissents_take_several_answers_and_the_block_holds_until_the_last() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "v-12", &cell("v-12", "claimed", json!([])));
+        record_dissent(root, "v-12", "first claim", "first alternative", "blocker", None, false)
+            .unwrap();
+        record_dissent(root, "v-12", "second claim", "second alternative", "blocker", None, false)
+            .unwrap();
+
+        let (_, first) = record_dissent_verdict(root, "v-12", "accept", "the first is right").unwrap();
+        assert!(!first.released, "a second blocker question is still open");
+        let rows = records(&read_cell_fixture(root, "v-12"));
+        assert_eq!(rows[0][DISSENT_VERDICT_KEY], json!("accept"), "the OLDEST is answered first");
+        assert_eq!(rows[1].get(DISSENT_VERDICT_KEY), None);
+        assert_eq!(read_cell_fixture(root, "v-12")["status"], json!("blocked"));
+
+        let (_, second) =
+            record_dissent_verdict(root, "v-12", "reject", "the second one no").unwrap();
+        assert!(second.released, "the last blocker answer releases the cell");
+        let rows = records(&read_cell_fixture(root, "v-12"));
+        assert_eq!(rows[0][DISSENT_VERDICT_REASON_KEY], json!("the first is right"));
+        assert_eq!(rows[1][DISSENT_VERDICT_REASON_KEY], json!("the second one no"));
+        assert_eq!(decisions(root).len(), 2, "one decision-log line per answer");
+        assert_eq!(read_cell_fixture(root, "v-12")["status"], json!("open"));
+    }
+
+    /// The verdict set is closed in the CODE, not only in the message, and
+    /// `dissent_is_answered` is the ONE reading of "unanswered" the debt
+    /// doors will share — a corrupt row never swallows the answer meant for
+    /// the record beside it.
+    #[test]
+    fn the_verdict_set_has_exactly_three_members() {
+        assert_eq!(DISSENT_VERDICTS, ["accept", "reject", "escalate"]);
+        assert!(!dissent_is_answered(&json!({"severity": "blocker"})));
+        assert!(!dissent_is_answered(&json!({"verdict": "  "})));
+        assert!(dissent_is_answered(&json!({"verdict": "accept"})));
+        assert!(dissent_is_answered(&json!("a corrupt row")));
     }
 }

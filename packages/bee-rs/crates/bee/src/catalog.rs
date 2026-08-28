@@ -621,6 +621,14 @@ mod tests {
         // here meant "the thing to do instead" — `--reason` explains, and
         // `--alternative` proposes, and collapsing the two would let a
         // worker's proposal be read as an excuse.
+        // 196 -> 196 (slp-dissent-stop-and-ask sd-2): `bee cells
+        // dissent-verdict` adds NO new spelling, so the count holds. `--id`
+        // is the cell acted on; `--reason` already means "why this act" and
+        // is what an obligated answer is made of; `--verdict` already means
+        // "the one-of-a-closed-set answer" on `state plan-conflicts verdict`,
+        // which is the same question this verb asks about a different kind of
+        // conflict. Reusing it is the reuse-first rule working, not a
+        // collision: a caller who knows one verdict flag knows the other.
         const PINNED_FLAG_COUNT: usize = 196;
 
         let names: std::collections::BTreeSet<&str> =
