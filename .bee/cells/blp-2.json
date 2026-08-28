@@ -1,0 +1,52 @@
+{
+  "id": "blp-2",
+  "feature": "slp-blind-lanes-procedure",
+  "title": "Carry the rejected lanes and their reasons as a structured field on the decision",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes-procedure/plan.md",
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/flags.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::decisions && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml catalog",
+  "must_haves": {
+    "truths": [
+      "bee decisions log --rejected accepts a comma-separated list, split by the same rule --tags uses, and stores it on the event",
+      "An empty or whitespace-only entry is dropped rather than stored, matching --tags",
+      "The flag is declared in the generated registry payload, so the argv-shape guard admits it before the handler runs",
+      "PINNED_FLAG_COUNT moves 198 to 199 and carries its own ledger line naming why no existing flag was reused",
+      "A NEW drift net proves every flag decisions log accepts is declared in the registry, and it was RED against the payload before the declaration landed",
+      "A decision logged without --rejected carries no rejected field at all, not an empty one"
+    ]
+  },
+  "action": "Give the convergence decision a structured rejected set (D2(d)): the lanes that were NOT chosen, each with its reason, as a list-typed field rather than free prose.\n\nCOPY --tags EXACTLY. It is the shipped list-flag idiom on this verb: keys_known allowlist, then a match on flags.get(\"tags\") where FlagV::S(s) becomes split_list(s) and a bare FlagV::Present declines the whole shape, then a field on the params carrier, then the write. split_list is comma-split, trim, drop-empties. Do not invent a second parsing rule and do not accept a repeated flag — the CLI keeps last-value-wins on repeats, so a repeated flag would silently discard the earlier one.\n\nTHE FLAG CHAIN IS FOUR PLACES, NOT ONE. The handler allowlist, the parse block, the params struct, and the generated registry payload. The registry entry is not documentation: the argv-shape guard validates argv against the declared properties before the handler ever runs, so a flag missing there is unreachable at the CLI no matter how correct the handler is. Then bump PINNED_FLAG_COUNT from 198 to 199 with its own ledger line in the existing ledger above the constant, stating why no existing flag name carries this idea.\n\nSHIP THE NET THAT DOES NOT EXIST. Today the handler-versus-registry drift nets are hard-wired to two files only, and neither covers decisions log — so a flag added to the allowlist but missing from the registry passes every test in the repo while being unreachable. Write that net for decisions log, modelled on the existing pair, and prove it RED FIRST: it must fail against the payload BEFORE the declaration is added, then pass after. A net authored after the declaration proves only that the code agrees with itself.\n\nEXHAUSTIVE STRUCT LITERALS. The params carrier is built as an exhaustive struct literal at every construction site, including several in tests; the compiler will name them all. Do not silence one with a default-fill.\n\nABSENT MEANS ABSENT. A decision logged with no --rejected carries no field, never an empty array — the same shape the brief digest already takes when no brief travelled.",
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "blp-1",
+  "feature": "slp-blind-lanes-procedure",
+  "title": "Deliver the reading list to the prompt it was passed for, and refuse it beside a brief",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee/prompts/advisor.md",
+    "packages/bee/prompts/gather.md",
+    "packages/bee/prompts/reviewer.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes-procedure/plan.md",
+    "docs/history/slp-blind-lanes-procedure/advisor-consult.md",
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools::prompts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A gather dispatch carrying --expertise renders the reading list into its prompt body; today it is dropped",
+      "A reviewer dispatch carrying --expertise renders the reading list into its prompt body",
+      "A briefless advisor dispatch carrying --expertise renders the reading list into its prompt body",
+      "--expertise combined with --brief-file is a typed zero-mutation refusal whose fix names the brief's own Read diet section as the one carrier",
+      "A dispatch carrying neither a brief nor an expertise list renders byte-identically to today, for every runtime and every kind",
+      "Each of the three edited templates has its own prompts_match_disk probe, so a vendored twin that missed the edit fails loudly instead of silently dropping the block",
+      "bee dev regen ran inside this cell and the release manifest is current"
+    ]
+  },
+  "action": "Make --expertise reach the non-cell prompts, and refuse the one combination that is unsafe.\n\nTHE DEFECT. prompt_body_for (verbs/drivers/prepare.rs) renders non-cell kinds with a one-element vars slice carrying only `brief`; `expertise` is passed at the worker-cell site alone. So --expertise is declared, accepted, parsed by parse_expertise and rendered to a block by the caller — and then thrown away for every kind but cell. Fix it by rendering, not by refusing: callers pass it on gather and reviewer dispatches today, and refusing outright breaks them.\n\nTHE EXCEPTION, and it is the reason this cell is high-risk. A reading list must NOT ride beside a brief. The leaning guard reads brief bytes only, by deliberate design, so a reading list travelling with a brief is an unlinted channel into a blind lane; and check_digests proves the BRIEFS were equal while the payloads would have diverged, which the door's own comment claims cannot happen. So: --expertise together with --brief-file is a typed refusal, in the same {ok:false, type:\"refused\", reason, fix} shape brief_kind_not_advisor already takes, and its fix line names the brief's `## Read diet` section as the one carrier. Refuse before any file is read, exactly as the kind arm does.\n\nRED FIRST, per kind. Write the failing positive case for gather, then reviewer, then briefless advisor, then the combination refusal — four reds before four greens. The absent-case byte-identity test is NOT sufficient proof on its own: an {{#if}} over an undefined variable is silently falsy in this grammar, so a template twin that misses the edit would swallow the list again with every existing test green. That is the exact defect this cell exists to kill, one layer down.\n\nGRAMMAR CONSTRAINTS, from prompt.rs — read them before editing a template. A block must be \\n{{#if NAME}}...\\n{{/if}}; a marker at byte 0 is refused; nesting is refused; and pass 2 refuses any {{NAME}} with no supplied value, so every new placeholder must join the vars slice or EVERY dispatch of that kind dies. Keep the expertise block disjoint from advisor.md's existing brief block.\n\nWHAT MUST NOT CHANGE. The briefless, expertise-less payload for every runtime x kind pair stays byte-identical — extend the existing pinned literal, never weaken its assertion. The brief block, the digest, and the kind refusal are untouched.\n\nTHE VENDORED HALF. Editing packages/bee/prompts/*.md is only half the landing: the vendored twins under .bee/bin/prompts and the release manifest must move in the same commit, and prompts_match_disk compares BOTH disk copies against the binary's compiled-in bytes. Run `bee dev regen` inside this cell. Note for the record: regen does NOT re-vendor .bee/bin/bee itself, so the reinstall is the orchestrator's step at merge, not this cell's.",
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
