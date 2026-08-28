@@ -197,6 +197,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -219,6 +220,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -249,6 +251,7 @@ use std::time::Instant;
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -285,6 +288,7 @@ use std::time::Instant;
             relation: Some("supersedes:bbbb2222".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -303,6 +307,7 @@ use std::time::Instant;
             relation: Some("supersedes:aaaa1111".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), ambiguous, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -324,6 +329,7 @@ use std::time::Instant;
             relation: Some("supersedes:deadbeef".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), unknown, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -355,6 +361,7 @@ use std::time::Instant;
             relation: Some("supersedes:c1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), stale, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -383,6 +390,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, SUPERSESSION_PROSE_GUARD_MESSAGE),
@@ -402,6 +410,7 @@ use std::time::Instant;
             relation: Some("supersedes:a1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_edge, 0) else {
             panic!("expected log emit once --supersedes names the target");
@@ -442,6 +451,7 @@ use std::time::Instant;
             relation: None,
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), missing, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -464,6 +474,7 @@ use std::time::Instant;
             relation: Some("sideways:a1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), malformed, 0) {
             Ok(Out::Thrown(msg)) => assert!(msg.starts_with(RELATION_REQUIRED_MESSAGE), "{msg}"),
@@ -491,6 +502,7 @@ use std::time::Instant;
             relation: Some("touches:f1".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -518,6 +530,7 @@ use std::time::Instant;
             relation: Some("touches:deadbeef".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -558,6 +571,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, DEFERRAL_WITHOUT_TRIGGER_MESSAGE),
@@ -581,6 +595,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: Some("g1__deadbeef".to_string()),
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit once a registered --trigger is named");
@@ -602,6 +617,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: Some("no-such-trigger".to_string()),
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Ok(Out::Thrown(msg)) => assert!(
@@ -643,6 +659,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), p, 0) {
             Err(Err2::Msg(msg)) => {
@@ -678,6 +695,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), zero, 0) {
             Err(Err2::Msg(msg)) => assert_eq!(msg, UNTAGGED_REFUSED_MESSAGE),
@@ -694,6 +712,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         assert!(matches!(do_log(tmp.path(), unknown, 0), Ok(Out::Emit(_, _, 0))));
         let tax_after: Value = serde_json::from_str(&std::fs::read_to_string(&tax).unwrap()).unwrap();
@@ -808,6 +827,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         assert!(matches!(do_log(tmp.path(), p, 0), Ok(Out::Emit(_, _, 0))));
     }
@@ -1340,6 +1360,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1377,6 +1398,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1410,6 +1432,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1437,6 +1460,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1455,6 +1479,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), unrelated, 0) else {
             panic!("expected log emit");
@@ -1481,6 +1506,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -1589,6 +1615,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(..)) = do_log(&ctx.root, p, 0) else {
             panic!("expected decisions log to succeed against the worktree's own store");
@@ -1720,6 +1747,7 @@ use std::time::Instant;
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -1790,6 +1818,7 @@ use std::time::Instant;
             relation: Some(format!("touches:{touched_id}")),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1835,6 +1864,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -2047,6 +2077,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: Some("human-mailbox".to_string()),
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(root, p, 0) else {
             panic!("expected log emit");
@@ -2071,6 +2102,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: Some("   ".to_string()),
+            rejected: None,
         };
         let Ok(Out::Thrown(msg)) = do_log(tmp.path(), p, 0) else {
             panic!("expected a refusal for a blank --feature");
@@ -2127,6 +2159,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -2163,6 +2196,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -2194,6 +2228,7 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), p_scope, 0) else {
             panic!("expected log emit");
@@ -2231,10 +2266,185 @@ use std::time::Instant;
             relation: Some("none".to_string()),
             trigger: None,
             feature: None,
+            rejected: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
         };
         assert_eq!(event["update_obligations"], json!([]));
         assert!(!text.contains("update obligation:"));
+    }
+
+    /// slp-blind-lanes D2(d): the convergence's rejected set is a LIST on the
+    /// record, split by exactly the `--tags` rule, and absent when unasked.
+    #[test]
+    fn log_stores_the_rejected_set_as_a_list_and_omits_it_when_absent() {
+        let tmp = fixture_root();
+        let with_rejected = LogParams {
+            decision: "Take lane A's shape".into(),
+            rationale: "it costs one flag, not a command family".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "agent".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            // A blank middle entry and the padding around the others are the
+            // --tags rule under test: comma-split, JS-trim, drop empties.
+            rejected: Some(split_list(" lane-b: doubles the store , , lane-c: new command family ")),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_rejected, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(
+            event["rejected"],
+            json!(["lane-b: doubles the store", "lane-c: new command family"]),
+            "the emitted event must carry the rejected set verbatim, blanks dropped"
+        );
+
+        let without = LogParams {
+            decision: "Take the obvious route".into(),
+            rationale: "nothing else was on the table".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "agent".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            rejected: None,
+        };
+        let Ok(Out::Emit(..)) = do_log(tmp.path(), without, 0) else {
+            panic!("expected log emit");
+        };
+
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(events.len(), 2);
+        assert_eq!(
+            events[0]["rejected"],
+            json!(["lane-b: doubles the store", "lane-c: new command family"])
+        );
+        // Absent means absent: no field at all, never an empty array — the
+        // same shape `tags` takes when no tag travelled.
+        assert!(
+            events[1].get("rejected").is_none(),
+            "a decision logged without --rejected must carry NO rejected field: {}",
+            events[1]
+        );
+        assert!(events[1].get("tags").is_none(), "control: tags behaves the same way");
+    }
+
+    /// An all-blank `--rejected` is the same as no `--rejected`: it writes no
+    /// field rather than an empty array, so "nothing was rejected" and "a
+    /// rejected set was recorded as empty" never read alike.
+    #[test]
+    fn an_all_blank_rejected_set_writes_no_field_at_all() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "Keep the flat field".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            // The flag path can never build this (split_list drops empties
+            // first); a direct do_log caller can, so the write path drops
+            // them too rather than trusting its caller.
+            rejected: Some(vec!["".into(), "   ".into()]),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert!(event.get("rejected").is_none(), "expected no rejected field: {event}");
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert!(events[0].get("rejected").is_none(), "{}", events[0]);
+    }
+
+    /// The rejected set is free prose reaching an append-only log, so it
+    /// passes the same secret / instruction-like scan `alternatives` does.
+    #[test]
+    fn a_secret_shaped_rejected_entry_is_refused_like_alternatives() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "Take lane A".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            rejected: Some(vec![
+                "lane-b: fine".into(),
+                "lane-c: needed ghp_abcdefghijklmnopqrstuv".into(),
+            ]),
+        };
+        match do_log(tmp.path(), p, 0) {
+            Ok(Out::Thrown(msg)) => assert!(
+                msg.starts_with("Decision rejected: field \"rejected\" matches a secret pattern"),
+                "{msg}"
+            ),
+            _ => panic!("expected a secret-pattern refusal on the rejected set"),
+        }
+        // The refused call never wrote anything.
+        assert!(!decisions_path(tmp.path()).exists());
+    }
+
+    /// `--rejected` takes its VALUE shape from `--tags`, the shipped list-flag
+    /// idiom on this verb: a comma-joined string is the list, and a bare
+    /// flag-alone spelling declines the whole shape (the CLI is
+    /// last-value-wins on a repeat, so a repeated flag would silently discard
+    /// the earlier entries — one flag, one value, or nothing).
+    #[test]
+    fn rejected_parses_by_the_same_flag_shape_as_tags() {
+        let (flags, _) = parse_flags(&["--rejected", "lane-b: a,lane-c: b", "--tags", "x"])
+            .expect("a valued --rejected parses");
+        assert!(
+            matches!(flags.get("rejected"), Some(FlagV::S(s)) if s == "lane-b: a,lane-c: b"),
+            "a valued --rejected must reach the handler as a string, like --tags"
+        );
+        assert_eq!(split_list("lane-b: a,lane-c: b"), vec!["lane-b: a", "lane-c: b"]);
+
+        let (eq_form, _) =
+            parse_flags(&["--rejected=lane-b: a,lane-c: b"]).expect("--rejected=<v> parses");
+        assert!(
+            matches!(eq_form.get("rejected"), Some(FlagV::S(s)) if s == "lane-b: a,lane-c: b"),
+            "the --flag=value spelling must carry the same string"
+        );
+
+        // A value-less `--rejected` never becomes a valued flag: it is not a
+        // flag-alone boolean, so the parser refuses the whole argv rather
+        // than inventing an empty list. `FlagV::Present` can therefore only
+        // reach run_log through a caller that built the Flags by hand, and
+        // run_log declines that shape exactly as it declines it for --tags.
+        assert!(
+            parse_flags(&["--rejected"]).is_none(),
+            "a value-less --rejected must refuse the argv, not parse as an empty rejected set"
+        );
+
+        // The allowlist run_log passes to keys_known admits the flag; without
+        // that entry the handler declines every call carrying it.
+        let known = [
+            "decision",
+            "rationale",
+            "alternatives",
+            "scope",
+            "source",
+            "confidence",
+            "tags",
+            "relation",
+            "trigger",
+            "feature",
+            "rejected",
+        ];
+        assert!(keys_known(&flags, &known), "--rejected must be a known key on decisions log");
     }

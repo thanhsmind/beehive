@@ -450,3 +450,122 @@ fn route_known_flags_parser_would_catch_a_new_handler_flag() {
         );
     }
 }
+
+/// `run_log`'s own source (verbs/decisions/verbs_read.rs) — a THIRD
+/// `include_str!`, unavoidable for the same reason `WORKFLOWS_SOURCE` was:
+/// the two nets above are hard-wired to `set_gate.rs` and `workflows.rs`, so
+/// neither could ever reach `decisions log`. Until blp-2 that command had no
+/// net at all: a flag added to `run_log`'s `keys_known(...)` allowlist but
+/// missing from the registry payload passed every test in the repo while
+/// being UNREACHABLE at the CLI, because `hooks/cli_shape.rs` validates argv
+/// against the declared `properties` before the handler ever runs. The
+/// handler would be perfectly correct and the flag would still refuse.
+const DECISIONS_LOG_SOURCE: &str = include_str!("../src/verbs/decisions/verbs_read.rs");
+
+/// `run_log`'s flag list (blp-2).
+fn parse_known_log_flags_from_source(source: &str) -> Vec<String> {
+    parse_known_flags_at_anchor(source, "pub(crate) fn run_log(", "verbs_read.rs")
+}
+
+#[test]
+fn decisions_log_lists_every_flag_verbs_read_rs_actually_accepts() {
+    let known_flags = parse_known_log_flags_from_source(DECISIONS_LOG_SOURCE);
+    // Defensive floor: a silent empty (or near-empty) parse must fail loudly
+    // rather than pass vacuously.
+    assert!(
+        known_flags.len() >= 8,
+        "verbs_read.rs: parsed only {} known flags from run_log's keys_known(...) — defensive \
+         floor is 8, a silent empty (or near-empty) parse must fail loudly",
+        known_flags.len()
+    );
+    assert!(
+        known_flags.iter().any(|f| f == "rejected"),
+        "verbs_read.rs: run_log no longer accepts --rejected — slp-blind-lanes D2(d) puts the \
+         lanes a convergence did NOT choose on the record as a list, not as free prose"
+    );
+
+    let p = payload();
+    let entry = commands(&p)
+        .iter()
+        .find(|e| e["name"] == "decisions.log")
+        .expect("registry payload has no \"decisions.log\" entry");
+    let props = entry["parameters"]["properties"]
+        .as_object()
+        .expect("decisions.log: parameters.properties must be an object");
+    for flag in &known_flags {
+        assert!(
+            props.contains_key(flag),
+            "decisions.log: verbs_read.rs accepts --{flag} but the registry payload does not \
+             declare it as a parameter — the argv-shape guard validates against these \
+             properties BEFORE run_log is reached, so the flag is unreachable at the CLI"
+        );
+    }
+}
+
+#[test]
+fn log_known_flags_parser_would_catch_a_new_handler_flag() {
+    // Deletion coverage: the parser must still find every flag `run_log`
+    // accepts today.
+    for expected in [
+        "decision",
+        "rationale",
+        "alternatives",
+        "scope",
+        "source",
+        "confidence",
+        "tags",
+        "relation",
+        "trigger",
+        "feature",
+        "rejected",
+    ] {
+        assert!(
+            parse_known_log_flags_from_source(DECISIONS_LOG_SOURCE)
+                .iter()
+                .any(|f| f == expected),
+            "parser missed known real decisions log flag {expected:?} — deletion coverage would \
+             silently pass"
+        );
+    }
+
+    // Addition coverage, proven WITHOUT touching the real verbs_read.rs:
+    // inject a fake flag into a COPY of the source and confirm the parser
+    // (and therefore the drift test above) would pick it up while the real
+    // payload does not declare it — i.e. the net goes red for a flag that
+    // reaches keys_known but never reaches the registry.
+    let injected = DECISIONS_LOG_SOURCE.replacen(
+        "\"decision\", \"rationale\", \"alternatives\"",
+        "\"decision\", \"rationale\", \"alternatives\", \"totally-fake-injected-log-flag\"",
+        1,
+    );
+    assert_ne!(
+        injected, DECISIONS_LOG_SOURCE,
+        "replacen found no anchor in verbs_read.rs to inject a fake flag into — the parse anchor \
+         drifted"
+    );
+    let injected_flags = parse_known_log_flags_from_source(&injected);
+    assert!(
+        injected_flags
+            .iter()
+            .any(|f| f == "totally-fake-injected-log-flag"),
+        "parser did not pick up a flag injected into a copy of run_log's keys_known(...) — it \
+         would silently miss a real addition too"
+    );
+
+    let p = payload();
+    let entry = commands(&p).iter().find(|e| e["name"] == "decisions.log").unwrap();
+    let props = entry["parameters"]["properties"].as_object().unwrap();
+    assert!(
+        !props.contains_key("totally-fake-injected-log-flag"),
+        "sanity check invalid: the real payload unexpectedly declares the injected fake flag"
+    );
+    // The net's own verdict, by construction: the injected flag IS in the
+    // parsed list and is NOT declared, so the loop in the drift test above
+    // would fire its assert.
+    assert!(
+        injected_flags
+            .iter()
+            .any(|f| !props.contains_key(f.as_str())),
+        "decisions.log: an undeclared parsed flag must exist for the drift net to have teeth"
+    );
+}

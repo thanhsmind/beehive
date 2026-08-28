@@ -200,7 +200,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         &flags,
         &[
             "decision", "rationale", "alternatives", "scope", "source", "confidence", "tags",
-            "relation", "trigger", "feature",
+            "relation", "trigger", "feature", "rejected",
         ],
     ) {
         return None;
@@ -223,6 +223,18 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         }
     }
     let tags_flag: Option<Vec<String>> = match flags.get("tags") {
+        None => None,
+        Some(FlagV::S(s)) => Some(split_list(s)),
+        Some(FlagV::Present) => return None,
+    };
+    // slp-blind-lanes D2(d): --rejected <lane>: <reason>[,...] — the lanes a
+    // convergence did NOT choose, each with its reason, as a list rather
+    // than free prose. Parsed by exactly the --tags rule above (split_list:
+    // comma-split, JS-trim, drop empties) so a caller who knows one list
+    // flag knows this one; a bare `--rejected` with no value declines the
+    // whole shape the same way, because last-value-wins on a repeated flag
+    // means a repeat would silently discard the earlier entry.
+    let rejected_flag: Option<Vec<String>> = match flags.get("rejected") {
         None => None,
         Some(FlagV::S(s)) => Some(split_list(s)),
         Some(FlagV::Present) => return None,
@@ -258,6 +270,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             relation: relation_raw,
             trigger: trigger_raw,
             feature: feature_raw,
+            rejected: rejected_flag,
         },
         DECISIONS_LOCK_RETRY_ATTEMPTS,
     );
@@ -300,6 +313,18 @@ pub(crate) struct LogParams {
     /// for no answer. `None` means the flag was not passed; an empty or
     /// whitespace-only value is refused rather than ignored.
     pub(crate) feature: Option<String>,
+    /// slp-blind-lanes D2(d): the convergence's REJECTED set — the lanes
+    /// that were not chosen, one `<lane-id>: <reason>` entry each, carried
+    /// as a list instead of buried in `alternatives`' free prose so a
+    /// reader can name which lane lost and why without parsing a sentence.
+    ///
+    /// `None` means the flag was never passed and the event carries NO
+    /// `rejected` field at all — the same absent-means-absent shape `tags`
+    /// takes. A list whose entries are all empty or whitespace-only
+    /// normalizes back to that same absence in do_log rather than writing
+    /// an empty array, because "no lane was rejected" and "a rejected set
+    /// was recorded as empty" must not read alike.
+    pub(crate) rejected: Option<Vec<String>>,
 }
 
 /// dsh-1's prose-supersession guard: decision text that reads as an inline
@@ -656,6 +681,30 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
         Ok(n) => n,
         Err(msg) => return Ok(Out::Thrown(msg)),
     };
+    // slp-blind-lanes D2(d): absent means absent. Trim every entry, drop the
+    // empties (the same rule split_list already applied at the flag), then
+    // drop the whole field when nothing survives — an all-blank --rejected
+    // writes no `rejected` key, exactly as an all-blank --tags writes no
+    // `tags` key.
+    let rejected: Option<Vec<String>> = p
+        .rejected
+        .as_ref()
+        .map(|items| {
+            items
+                .iter()
+                .map(|s| js_trim(s).to_string())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<String>>()
+        })
+        .filter(|items| !items.is_empty());
+    // Free prose reaches the log here, so it passes the same secret /
+    // instruction-like scan `alternatives` does above — the flag is new,
+    // the verb's "rejects secret-shaped content" promise is not.
+    for entry in rejected.iter().flatten() {
+        if let Err(msg) = assert_safe_content("rejected", Some(entry.as_str())) {
+            return Ok(Out::Thrown(msg));
+        }
+    }
     // classifyDecisionTags(root, normalizedTags || []) — taxonomy-present
     // refusal / unknown-tag candidates append (dp-6, D7b).
     classify_decision_tags(root, &normalized.clone().unwrap_or_default(), lock_retries)?;
@@ -708,6 +757,12 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
         event.insert(
             "tags".into(),
             Value::Array(tags.iter().cloned().map(Value::String).collect()),
+        );
+    }
+    if let Some(entries) = &rejected {
+        event.insert(
+            "rejected".into(),
+            Value::Array(entries.iter().cloned().map(Value::String).collect()),
         );
     }
     if let Some(ids) = &supersedes {
