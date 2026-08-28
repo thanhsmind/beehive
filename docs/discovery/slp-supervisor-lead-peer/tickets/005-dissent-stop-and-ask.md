@@ -32,3 +32,14 @@ NO carrier today (cap report has no concerns key, worker prose is
 read-banned), and `bee cells escalate` already means model-tier — the
 SLP escalate verb must not reuse that name. Findings:
 docs/history/research/slp-dissent-surfaces.md.
+
+Post-close narrowing (feature slp-dissent-stop-and-ask, 2026-08-28).
+6a6b9975: herding-lane dissent is OUT of the feature boundary — the
+dissent record has one writer, the CLI, and a herding worker is
+instructed never to run a bee command; the gap is backlog p-05d2a4f4.
+StopAndAsk (options[] + leaning on the blocked form) still ships for
+herding workers. e29918f7: the merge door carried proof debt only, so
+the merge half of the obligation was written as new code, not copied
+from a judge-debt arm. 9e546b3d: the shipped behavior is scribed into
+three knowledge concepts, with the worker-contract half filed beside
+the dissent record.

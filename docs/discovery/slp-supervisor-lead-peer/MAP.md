@@ -16,8 +16,10 @@ for bee-shaping's Lock, which consumes the decisions below into each
 feature's CONTEXT.md, in build order (a020319d):
 1. slp-supervisor-heartbeat (322695d6, da7cb49b, c80debd7, 9f5cd250;
    post-close: a8f4b8ab, c706053e, 66c4c251, ea02cb68)
-2. slp-dissent-stop-and-ask (4b7aa303, a2affcba)
-3. slp-blind-lanes (9cffdfb5, 5981246b; post-close: 5144314c)
+2. slp-dissent-stop-and-ask (4b7aa303, a2affcba; post-close: e29918f7,
+   6a6b9975, 9e546b3d)
+3. slp-blind-lanes (9cffdfb5, 5981246b; post-close: 5144314c, f0f21142,
+   79b5437b)
 4. slp-contract-original-request (ca9960f5, 3899fa60, 9c0104e0)
 
 ## Notes
@@ -97,11 +99,19 @@ feature's CONTEXT.md, in build order (a020319d):
 - a2affcba: dissent mechanism — a cell-level dissent record, verdict
   enforced at the close/merge doors (judge-debt pattern), StopAndAsk
   via the herding round-mailbox, no live Q&A channel —
-  tickets/005-dissent-stop-and-ask.md.
+  tickets/005-dissent-stop-and-ask.md. Narrowed at build by 6a6b9975:
+  herding-lane DISSENT is out of that feature's boundary, because one
+  writer owns the record and a herding worker never runs a bee command —
+  carried as backlog p-05d2a4f4; StopAndAsk itself still reaches herding
+  workers. e29918f7: the merge half was new code, not a copied
+  judge-debt arm.
 - 5981246b: blind-lane mechanism — a procedure over the dispatch door:
   linted brief, parallel advisor dispatches, second-round
   cross-critique, dossier + decision + trigger —
-  tickets/006-blind-lanes.md.
+  tickets/006-blind-lanes.md. Shipped shape (f0f21142): no new store and
+  no new command family — the brief rides the dispatch door, the
+  lane-opening reason rides the existing decision log, and ONE new verb
+  checks the dossier.
 - 9c0104e0: contract label = `contract:<name>` tag view over active
   decisions with a dispatch-time tripwire; original_request = bee
   intent's verbatim anchor injected at dispatch prepare —
@@ -128,7 +138,10 @@ feature's CONTEXT.md, in build order (a020319d):
   Truth Table + CRUD Lifecycle join the reviewer/judge checklists;
   blind-lane dossiers validate citations against the verbatim
   proposals (anti-fabrication); pushback must name the missing
-  context. Hats = review instrument, distinct from lanes.
+  context. Hats = review instrument, distinct from lanes. Narrowed at
+  build by 79b5437b: the shipped citation check proves PROVENANCE only —
+  a quoted span is a whole sentence of the named lane's own bytes.
+  Cross-sentence framing stays a named limit, not a caught fault.
 - 66c4c251 (post-close, harness full-text tail): supervisor reports
   carry a small health-metric set with two-sided bands; raising
   silence-is-consent is EARNED (zero human-reversed one-way decisions

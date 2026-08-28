@@ -427,6 +427,10 @@
     "merge-door",
     "slp-supervisor",
     "metrics",
-    "dissent"
+    "dissent",
+    "blind-lanes",
+    "capture-queue",
+    "discovery-wayfinding",
+    "impact-sweep"
   ]
 }

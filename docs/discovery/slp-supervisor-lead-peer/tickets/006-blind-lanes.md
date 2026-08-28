@@ -31,3 +31,14 @@ trigger. Blind lanes never run as cell-kind (learned_context leaks).
 Heterogeneous lane models moved to Out of scope (breaks the one-name
 advisor slot, decision 4faf1de9). Findings:
 docs/history/research/slp-blind-lanes-surfaces.md.
+
+Post-close shipped shape (feature slp-blind-lanes, 2026-08-28).
+f0f21142: no new store and no new command family — the LaneBrief rides
+the existing dispatch door, the lane-opening reason rides the existing
+decision log, the dossier document itself holds every lane proposal
+verbatim, and ONE new verb runs the citation, brief-digest and
+read-diet checks over that document. 79b5437b: the citation check
+claims PROVENANCE, never faithfulness — it proves a quoted span is a
+whole sentence of the named lane's own bytes, and cross-sentence
+framing is a recorded limit rather than a caught fault. The brief lint
+is a leaning guard, not a neutrality proof.
