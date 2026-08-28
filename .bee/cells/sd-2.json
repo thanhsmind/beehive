@@ -1,0 +1,103 @@
+{
+  "id": "sd-2",
+  "feature": "slp-dissent-stop-and-ask",
+  "title": "The obligated verdict, written to the decision log, releasing the cell itself",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "sd-1"
+  ],
+  "decisions": [
+    "4b7aa303",
+    "a2affcba"
+  ],
+  "behavior_change": true,
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/slp-dissent-stop-and-ask/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs"
+  ],
+  "action": "Add `bee cells dissent-verdict`, the orchestrator's obligated answer to a dissent (per 4b7aa303). Write it beside the record verb in `verbs/cells/dissent.rs`.\n\nThe verdict set is CLOSED and exhaustive: accept, reject, escalate. The reason is REQUIRED on all three — an answer with no reasoning is the decorative dissent this feature exists to prevent. Take them as plain flags, `--verdict accept|reject|escalate --reason \"...\"`, NOT as a `--file` payload: the `--file` plus versioned-schema pattern at `run_judge_record` exists because a judge verdict is foreign-model output, while a dissent verdict is session-authored. This is a deliberate, recorded deviation from that established pattern — write it in the cap report's deviations.\n\nThree behaviors carry the locked requirements:\n\n1. WRITE THE DECISION LOG. 4b7aa303 says the answer is recorded in the decision log before the related work resumes; a trace-only verdict does not satisfy it. `run_judge_record` shows the shape — it logs its own decision inside the same call, at packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs:169-311, near the end of the function.\n2. FAIL CLOSED on that write. If the decision-log write fails, the dissent stays UNANSWERED — the trace is not stamped and the doors keep refusing. A half-answered dissent that clears a door is worse than no answer.\n3. RELEASE THE CELL ITSELF. `run_reopen` at packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1241 is the only unblock path today and it is claim-guarded, so shelling into it would trip on the very claim this feature releases elsewhere. Do the release inline, exactly as `run_judge_record` does its own reopen. All three verdict kinds release the block: 4b7aa303 obligates an ANSWER, and escalate-a-rung is one of the three answers.\n\nThe verdict verb takes NO worker-shaped claim-ownership guard. It is the orchestrator's verb by 4b7aa303, and a guard modeled on `guard_claim_ownership` (packages/bee-rs/crates/bee/src/verbs/cells/trace.rs:205) would make `--force-ownership` the routine path for an audited override. Record that reasoning in the module.\n\nDeclare the verb in the same five places sd-1 declared its own: the cells dispatch table at packages/bee-rs/crates/bee/src/verbs/cells/util.rs:68, the router coverage line at packages/bee-rs/crates/bee/src/router.rs:71 (currently `    \"cells judge|judge-record|reset-budget|schedule|archive|unarchive\",`), `src/generated/registry_payload.json` by hand, and the flag ratchet in packages/bee-rs/crates/bee/src/catalog.rs for any genuinely new flag name.",
+  "must_haves": {
+    "truths": [
+      "A verdict of accept, reject, or escalate with a reason appends to the dissent record and appears in the decision log.",
+      "A verdict outside the closed set, or one with no reason, refuses by name and writes nothing.",
+      "After any of the three verdicts, a cell blocked by a blocker dissent is released and its dependents are schedulable again.",
+      "A verdict recorded when no dissent exists refuses by name.",
+      "A second verdict on an already-answered dissent refuses by name.",
+      "When the decision-log write fails, the dissent stays unanswered and the trace is not stamped.",
+      "The orchestrator records a verdict on a cell a worker recorded against without needing an ownership override."
+    ],
+    "artifacts": [
+      "The verdict verb and its tests in packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"
+    ],
+    "key_links": [
+      "The verdict verb is reachable through the cells dispatch table and declared in the registry payload.",
+      "The release is written inline in this verb, not delegated to run_reopen."
+    ],
+    "prohibitions": [
+      "run_reopen is not called from this path and its own behavior is unchanged.",
+      "No versioned JSON schema module is introduced for this payload.",
+      "A failed decision-log write never leaves a stamped trace."
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml dissent && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+  "status": "capped",
+  "trace": {
+    "worker": "w-sd-2",
+    "outcome": "bee cells dissent-verdict answers a dissent with one of three closed verdicts, logs it fail-closed, and releases the cell a blocker dissent parked",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "The router coverage entry joined the cells dissent line that sd-1 added, as `cells dissent|dissent-verdict`, instead of the judge line the cell named — that dedicated line landed after the cell was written and the verdict belongs beside its record, not beside judge — found a better route",
+      "PINNED_FLAG_COUNT stays 196 with a recorded reason instead of a bump — `--verdict` already exists on `state plan-conflicts verdict` and `--id`/`--reason` are cells-wide, so the verb adds no new spelling — the plan was wrong about a fact",
+      "The verify chain ran as `export PATH=...; cargo test ...` instead of the inline `PATH=... cargo test ...` prefix — the worktree write guard refuses an inline env-var prefix as unverifiable — hit an unforeseen obstacle",
+      "sync-ack: the cell file list names no skill: the worker-facing prose for dissent and StopAndAsk is Phase 4 of this same plan, and sd-2 ships only the orchestrator verb plus its declaration surfaces"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T00:22:24.405Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6c826f6d-0970-4902-a994-c87f96d17650",
+    "claimed_at": "2026-08-28T00:09:23.063Z",
+    "sync_ack": "the cell file list names no skill: the worker-facing prose for dissent and StopAndAsk is Phase 4 of this same plan, and sd-2 ships only the orchestrator verb plus its declaration surfaces",
+    "report": {
+      "outcome": "bee cells dissent-verdict answers a dissent with one of three closed verdicts, logs it fail-closed, and releases the cell a blocker dissent parked",
+      "commit": "d7726926cf88dea1eddf8bafa6fa2bf1e12fa678",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml dissent && cargo test --manifest-path packages/bee-rs/Cargo.toml catalog && cargo test --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch — green: 17 dissent, 11 catalog, 10 registry_contracts, 9 registry_dispatch, plus cargo test -p bee --bin bee at 2911 passed and a real-binary smoke of dissent then dissent-verdict then cells ready — the cell verify, widened to the whole bee unit suite because util.rs adds a shared mutation two verb groups reach",
+      "deviations": [
+        "The router coverage entry joined the cells dissent line that sd-1 added, as `cells dissent|dissent-verdict`, instead of the judge line the cell named — that dedicated line landed after the cell was written and the verdict belongs beside its record, not beside judge — found a better route",
+        "PINNED_FLAG_COUNT stays 196 with a recorded reason instead of a bump — `--verdict` already exists on `state plan-conflicts verdict` and `--id`/`--reason` are cells-wide, so the verb adds no new spelling — the plan was wrong about a fact",
+        "The verify chain ran as `export PATH=...; cargo test ...` instead of the inline `PATH=... cargo test ...` prefix — the worktree write guard refuses an inline env-var prefix as unverifiable — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 630 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

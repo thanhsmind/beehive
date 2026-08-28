@@ -1,0 +1,89 @@
+{
+  "id": "sd-5",
+  "feature": "slp-dissent-stop-and-ask",
+  "title": "bee worktree merge refuses while a dissent has no verdict",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "sd-4"
+  ],
+  "decisions": [
+    "4b7aa303",
+    "a2affcba"
+  ],
+  "behavior_change": true,
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-dissent-stop-and-ask/plan.md",
+    "docs/history/slp-dissent-stop-and-ask/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs"
+  ],
+  "action": "Give `bee worktree merge` its own dissent precondition (Phase 3 of docs/history/slp-dissent-stop-and-ask/plan.md, per a2affcba). The branch must not land while a worker's blocker question is unanswered.\n\nPhase 2 (commit 6966d85c) already shipped BOTH shared readers in `packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs`. This cell CALLS them and adds nothing to that file:\n\n```rust\npub(crate) fn feature_dissent_debt(root: &Path, feature: &str)\n    -> Result<crate::verbs::drivers::DebtSummary, crate::verbs::drivers::Delegate>   // dissent.rs:507\npub(crate) fn has_dissent_deferral_decision(root: &Path, feature: &str)\n    -> Result<bool, crate::verbs::drivers::Delegate>                                 // dissent.rs:536\n```\n\n`verbs/cells/mod.rs:472` glob-re-exports dissent.rs, so both resolve from phases.rs as `crate::verbs::cells::<name>` — exactly the way `crate::verbs::cells::feature_proof_check` already does at packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:156.\n\nWHERE THE CHECK GOES. The enclosing function is `merge_stage` at packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:64. Put the dissent block IMMEDIATELY AFTER the proof-debt block that ends at phases.rs:173, and BEFORE the main-dirty auto-commit at phases.rs:187-224. This slot is load-bearing, not cosmetic:\n\n  - Everything above phases.rs:224 is the ZERO-MUTATION zone. The bookkeeping auto-commit at phases.rs:223 is the first write to main. A refusal placed after it breaks the \"refused, never staged\" property the proof door documents at phases.rs:149-151, and `a_proof_debt_refusal_leaves_the_lane_record_byte_identical` (packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs:4832) pins that property today.\n  - `identity` is resolved at phases.rs:141, so nothing earlier is possible.\n  - A proof-debt refusal will therefore mask a dissent refusal on the same feature. That is CORRECT and matches the close door's own ordering (the judge refusal precedes the dissent refusal at close.rs:2110-2160). Do not reorder to \"fix\" it.\n\nCOPY THE PROOF BLOCK'S SHAPE, phases.rs:154-173, which reads:\n\n```rust\n    let proof = match identity.feature.as_deref() {\n        Some(feature) => Some(\n            crate::verbs::cells::feature_proof_check(main_root, feature)\n                .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?,\n        ),\n        None => None,\n    };\n    if let Some(proof) = &proof {\n        if proof.blocking { ... return Err(refuse_merge(\"WORKTREE_MERGE_PROOF_DEBT\", format!(...))); }\n    }\n```\n\nPass `main_root` as `root`, the same argument proof passes — the helper joins `.bee` itself through `list_cells_including_archive` (packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs:531). Map the error the same way: `.map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?`.\n\nBLOCKING IS THE SAME TWO-PART READING THE CLOSE DOOR USES (close.rs:1556-1560): call `has_dissent_deferral_decision` ONLY when `debt.count > 0`, then block when `count > 0 && !deferred`. Never call the escape when there is no debt.\n\nTHE NO-FEATURE CASE IS UNGATED, and \"ungated\" here has one exact meaning. When `identity.feature` is `None` (the identity resolves from `<worktree>/.bee/runtime/worktree-identity.json` then `<worktree>/.bee/state.json`; `WorktreeFeature` is at packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs:437-441, resolver at merge.rs:446), DO NOT CALL the helper at all and fall through — no refusal, no `MErr::Ex`, no message. That is the `None => None` arm proof already writes at phases.rs:159, and the UAT precheck takes the same posture (phases.rs:150-153).\n\nTHE REFUSAL CODE. There is NO enum and NO const list to extend — verified. Codes are inline string literals handed to `refuse_merge` at packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs:39-41:\n\n```rust\npub(crate) fn refuse_merge(code: &str, message: String) -> MErr {\n    MErr::Thrown(format!(\"[{code}] {message}\"))\n}\n```\n\nThe convention is `WORKTREE_MERGE_<SCREAMING_SNAKE>` — siblings are `WORKTREE_MERGE_PROOF_DEBT` (phases.rs:165), `WORKTREE_MERGE_UAT_PENDING` (phases.rs:327), `WORKTREE_MERGE_MAIN_DIRTY` (phases.rs:191). Use `WORKTREE_MERGE_DISSENT_DEBT`. The message carries its own remedy in prose inside the same `format!` — this channel has no separate remedy field, unlike the close door's `Door { detail, command }`. Name `bee cells dissent-verdict` as the remedy and the `dissent-deferral` decision as the escape, the way the proof refusal names `bee cells finish`.\n\nTYPE TRAP — read this before you write the `format!`. `DebtSummary` is at packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:223-226 and its `ids` field is `Vec<serde_json::Value>`, NOT `Vec<String>`. Mirroring the proof refusal's `proof.bad_ids.join(\", \")` WILL NOT COMPILE. Close renders it with `js_join(&debt.ids, \", \")`, and `js_join` is NOT in scope anywhere under `verbs/worktree/` — fully qualify it as `crate::verbs::drivers::js_join` (defined close.rs:1819, re-exported by drivers/mod.rs:220) or map the ids through `as_str` yourself.\n\nDO NOT ADD A FIELD TO `Staged`. `Staged.proof` (phases.rs:44-49) exists only because `merge_finish` reports `verify:` prose out of it. A dissent state has no reporting obligation anywhere in `merge_finish`, so carrying it would be a dead field. Copy the proof block's CONTROL FLOW, not its struct plumbing.\n\nDO NOT TOUCH `verbs/cells/dissent.rs` or `verbs/drivers/close.rs`. Phase 2 finished those. If you believe a helper is wrong, return [BLOCKED] with the diagnosis rather than editing across the phase boundary.\n\nTESTS go in `packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs`. Judge existing coverage first, then author only the gap, RED FIRST. The entry point under test is `merge_feature_worktree` (phases.rs:945), called as `merge_feature_worktree(&main, &created.id, false, None, true, None)`. Precedent cases to mirror:\n  - `a_present_but_empty_proof_refuses_the_merge_naming_the_cell` (tests.rs:891) — the refusal plus the zero-mutation check on main HEAD\n  - `a_legacy_report_less_cap_merges_with_a_named_note` (tests.rs:945) — the pass path through a full merge\n  - `a_proof_debt_refusal_leaves_the_lane_record_byte_identical` (tests.rs:4832) — the zero-write pin on the lane record\nFixtures, all in that same file: `main_repo` (tests.rs:2270), `git_ok` (tests.rs:2252), `worktree_with_a_real_commit` (tests.rs:1596), `write_capped_cell` (tests.rs:817), `write_stranded_lane` (tests.rs:3694), plus the real `create_feature_worktree` (packages/bee-rs/crates/bee/src/verbs/worktree/create.rs:77). Tests assert the code with `starts_with(\"[WORKTREE_MERGE_DISSENT_DEBT] \")` or `contains`, the way tests.rs:928 and tests.rs:4863 assert the proof code.\n\nThe dissent fixture is a cell JSON whose `trace` carries `\"dissent\": [ { ...an entry with no \"verdict\" key... } ]`; the entry shape is `dissent_entry` at packages/bee-rs/crates/bee/src/verbs/cells/tests.rs:2388-2402. THE FIXTURE CELL NEED NOT BE CAPPED — the helper counts every status on purpose, so prove that: make at least one case use a non-capped cell. The `dissent-deferral` decisions.jsonl row is at cells/tests.rs:2504-2507 (`\"tags\":[\"dissent-deferral\"]`), and the different-feature negative is at cells/tests.rs:2516-2519; write the same row into `<main>/.bee/decisions.jsonl`.\n\nMinimum cases: refuse on an unanswered dissent; pass once the entry carries a non-empty `verdict`; pass on a logged `dissent-deferral` naming this feature; and the zero-mutation pin mirroring tests.rs:4832.\n\nTHE SAME-ESCAPE PROOF is the point of the phase. What a test must pin: given ONE fixture state — a cell of feature F carrying an unanswered dissent, plus one decisions.jsonl row tagged `dissent-deferral` whose text names F — `bee close` reports its dissent-debt door NON-BLOCKING and `bee worktree merge` proceeds past its precondition. Both doors, one state, one escape.",
+  "must_haves": {
+    "truths": [
+      "An unanswered dissent on a cell of the merging feature makes bee worktree merge refuse with [WORKTREE_MERGE_DISSENT_DEBT], naming every offending cell id.",
+      "Recording the verdict lets the same merge proceed with no other change.",
+      "A logged decision tagged dissent-deferral naming this feature lets the merge proceed; the same tag naming a different feature does not.",
+      "A worktree whose identity carries no feature merges exactly as it does today — the dissent helper is never called.",
+      "A dissent refusal leaves main HEAD and the lane record byte-identical.",
+      "An unanswered dissent on a cell that is NOT capped still refuses the merge.",
+      "One fixture state — an unanswered dissent plus a dissent-deferral decision naming the feature — clears BOTH the close door and the merge precondition."
+    ],
+    "artifacts": [
+      "The dissent precondition in merge_stage, packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs, between the proof-debt block and the main-dirty auto-commit",
+      "The merge dissent cases in packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs, each proven red first"
+    ],
+    "key_links": [
+      "The precondition calls crate::verbs::cells::feature_dissent_debt and crate::verbs::cells::has_dissent_deferral_decision — the same two readers the close door calls, never a second reading.",
+      "The escape is checked only when the debt count is above zero, exactly as close.rs:1556-1560 checks it."
+    ],
+    "prohibitions": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs is not changed by this cell.",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs is not changed by this cell.",
+      "No field is added to Staged.",
+      "The refusal is never placed after the bookkeeping auto-commit at phases.rs:223.",
+      "No existing proof, uat, or main-dirty refusal assertion is weakened or deleted."
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml verbs::worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml dissent",
+  "status": "capped",
+  "trace": {
+    "worker": "w-sd-5",
+    "outcome": "bee worktree merge refuses WORKTREE_MERGE_DISSENT_DEBT while a dissent has no verdict, reading the close door's own two helpers so one dissent-deferral clears both doors",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T03:43:48.050Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5439fe13-c5ec-4c2b-81c1-47cc74aafdcc",
+    "claimed_at": "2026-08-28T03:36:41.874Z",
+    "report": {
+      "outcome": "bee worktree merge refuses WORKTREE_MERGE_DISSENT_DEBT while a dissent has no verdict, reading the close door's own two helpers so one dissent-deferral clears both doors",
+      "commit": "18aa0e0947040d7dae287f83ed30486a96302afd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml verbs::worktree && cargo test --manifest-path packages/bee-rs/Cargo.toml dissent — green — the cell's own verify: 154 worktree tests (6 new merge dissent cases, 3 proven red first) plus all 31 dissent cases, the two surfaces this cell touches",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "id": "sd-6",
+  "feature": "slp-dissent-stop-and-ask",
+  "title": "StopAndAsk: options and leaning on the blocked result, across three surfaces and the worker contract",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "sd-1",
+    "sd-2"
+  ],
+  "decisions": [
+    "4b7aa303",
+    "a2affcba"
+  ],
+  "behavior_change": true,
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md"
+  ],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-dissent-stop-and-ask/plan.md",
+    "docs/history/slp-dissent-stop-and-ask/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "action": "Put StopAndAsk on the worker's result form (Phase 4 of docs/history/slp-dissent-stop-and-ask/plan.md, the last phase, per a2affcba). A worker that can only say \"blocked, here is prose\" cannot hand the orchestrator a choice. `options[]` and `leaning` join the `[BLOCKED]` contract on all THREE code surfaces, and the swarming worker contract gains the dissent verb, the orchestrator's verdict duty, and the three boundary signals.\n\nTHE SHAPE, decided — do not re-litigate it:\n  - `options`: `Vec<String>`, one self-contained sentence per element, empty means absent. This mirrors `files_changed: Vec<String>` including its lenient element handling (`v.as_str().unwrap_or_default()`, packages/bee-rs/crates/bee/src/herding/mailbox.rs:492).\n  - `leaning`: `Option<String>`, free text the brief tells the worker to write as a verbatim repeat of one option. NOT an index (off-by-one across a foreign-model boundary, and unreadable in the mailbox file) and NOT an option object (nothing consumes extra fields).\n  - Both are OPTIONAL at parse, and membership is NOT enforced. Strict validation of foreign-agent output would turn a useful blocked answer into `Malformed` and cost a whole round.\n  - Re-emit them CONDITIONALLY, only when non-empty / `Some`, so a plain done-result envelope stays byte-identical. The plan's demo line is \"a result with neither parses exactly as before\" — that is the property.\n\nSURFACE 1 — THE BRIEF. `render_brief` at packages/bee-rs/crates/bee/src/herding/mailbox.rs:240; its `format!` starts at mailbox.rs:287; the result-contract block is mailbox.rs:327-335 and today reads:\n\n```\n# Result contract\\n\\n\\\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\\n\\\nthis schema, and nothing else, to the result file:\\n\\n\\\n{{\\n\\\n  \\\"status\\\": \\\"done\\\" | \\\"blocked\\\",\\n\\\n  \\\"summary\\\": \\\"<one line: what happened>\\\",\\n\\\n  \\\"files_changed\\\": [\\\"<path>\\\", \\\"...\\\"],\\n\\\n  \\\"proof\\\": \\\"<command or evidence that backs the status>\\\"\\n\\\n}}\\n\\n\\\n```\n\nTRAP: Rust's backslash-newline continuation STRIPS the two leading spaces you see in the source, so the rendered schema block is UNINDENTED. Two tests pin it and both must move in this same edit or they go red:\n  - `render_brief_keeps_the_result_form_block_byte_identical_apart_from_the_new_ack_block` — mailbox.rs:688, assertion at mailbox.rs:697, a byte-exact literal\n  - `render_brief_includes_the_result_schema_block` — mailbox.rs:563, per-field `contains`, which gains two assertions\nAdd at most ONE sentence to the brief's result contract saying when to use the two new fields.\n\nSURFACE 2 — THE PARSED STRUCT. `MailboxResult` at packages/bee-rs/crates/bee/src/herding/mailbox.rs:365-378:\n\n```rust\npub(crate) struct MailboxResult {\n    pub status: MailboxStatus,\n    pub summary: String,\n    pub files_changed: Vec<String>,\n    pub proof: String,\n}\n```\n\nTRAP: there are NO serde attributes and NO existing optional field to copy. The parser `parse_result_text` (mailbox.rs:464-500) is hand-rolled — `serde_json::from_str` to a `Value`, then `obj.get(\"<field>\")` per field, each one required through `MailboxError::MissingField` (the enum is mailbox.rs:380-397). A new optional field is therefore simply `obj.get(\"options\")` WITHOUT the `.ok_or(MissingField...)` tail. Unknown keys are already ignored, so every existing result parses unchanged for free — assert that, do not assume it.\n\nSURFACE 3 — THE RE-EMIT. `emit_result` at packages/bee-rs/crates/bee/src/herding/run.rs:2625; the Result arm is run.rs:2637-2644:\n\n```rust\nRunOutcome::Result(r) => {\n    m.insert(\"summary\".into(), Value::String(r.summary.clone()));\n    m.insert(\n        \"files_changed\".into(),\n        Value::Array(r.files_changed.iter().cloned().map(Value::String).collect()),\n    );\n    m.insert(\"proof\".into(), Value::String(r.proof.clone()));\n}\n```\n\nTHREE TRAPS HERE, all verified:\n  1. There is NO `status` key in this envelope. done/blocked rides `outcome`, built by `outcome_label` at run.rs:2568-2585. Do not add one.\n  2. The JSON prints only under `--json` (run.rs:2684). The plain-text path (run.rs:2685-2692) prints just `bee herding run <job>: <label>`. Leave it alone: the orchestrator's door always passes `--json` — `dispatch prepare` builds `\".bee/bin/bee herding run --task-file - --json\"` at packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1232. Options being invisible in the text path is correct, not a bug to fix.\n  3. `emit_result` is UNTESTED today — it `println!`s straight to stdout and nothing asserts its keys. This phase is the one that makes three surfaces agree, so author that first assertion: extract the Map-building into a small function returning `Value` and test THAT. This is the smallest honest seam; do not restructure `emit_result` beyond it.\n\nTHE SKILL CONTRACT. `skills/` is SOURCE. The trees under `.claude/`, `.agents/`, `.claude-plugin/`, `.codex-plugin/` are BYTE-COPY PROJECTIONS (stated at packages/bee-rs/crates/bee/tests/pointer_integrity.rs:31-36; renderer at packages/bee-rs/crates/bee/src/devtools/skill_trees.rs). Edit ONLY under `skills/`. Hand-editing a projected copy is wrong and gets overwritten.\n\nRUN THE REGEN CHAIN INSIDE THIS CELL, once, after every skill edit is final and before you commit: `.bee/bin/bee dev regen` — which runs render-skill-trees, then `onboard --repo-root . --apply`, then `release-manifest --write`, in that order. `skills/` is a root the release manifest hashes, so the cell also owns `docs/history/codex-harness-hardening/release-manifest.json` and its verify carries `.bee/bin/bee dev release-manifest --check`. Commit the regenerated projections and the refreshed manifest together with your source edits, in the SAME single commit.\n\nFive edits, each with its anchor:\n  1. `skills/bee-swarming/references/swarming-reference.md:538-544` — the `[BLOCKED]` form, today:\n     ```\n     [BLOCKED] <cell-id> - <summary>\n     Requested files: <paths>\n     Blocker: <conflict | failing verification | ambiguity | locked-decision conflict>\n     What happened: <description + diagnosis>\n     What I need next: <specific parent action>\n     ```\n     Add `options[]` and `leaning` to it.\n  2. `skills/bee-swarming/references/worker-details.md:199` — the sibling bullet, today: \"`[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.\" Extend it with the two fields.\n  3. `skills/bee-swarming/SKILL.md` — ONE line naming `bee cells dissent`, in step 3 of Execute (SKILL.md:129-135), placed after \"Never reinterpret a locked decision to make the cell fit.\"\n  4. `skills/bee-swarming/references/swarming-reference.md:560` — the orchestrator's per-result sentence, today: \"On each result: update the cell if the worker could not (`block` with reason), clear the worker from `.bee/state.json`, and confirm with `.bee/bin/bee reservations list --active-only` that nothing leaked.\" Add ONE line: a `[BLOCKED]` carrying a dissent owes its `bee cells dissent-verdict` before the related work resumes (4b7aa303). If you judge the SKILL.md rescue ladder (SKILL.md:72-75) the better home, put it there instead and cite the other in the cap report — pick ONE, never both.\n  5. THE THREE BOUNDARY SIGNALS — a contract or API change; trading data quality or user experience for a technical target; a new dependency. House voice is a short em-dash clause ending in the token; the nearest precedents are SKILL.md:126-128 (\"Package installs and architectural changes are not yours to make — `[BLOCKED]` with the proposal.\"), SKILL.md:129-135, worker-details.md:64, and worker-details.md:262. TRAP: \"a new dependency\" HALF-DUPLICATES the existing package-install rule in two places. EXTEND that clause; never restate the same rule in a second spelling.\n  Bonus fix while you are in the file: `swarming-reference.md:451` describes the envelope key as `status`. It is `outcome`. Correct it, or the docs stay wrong twice.\n\nTHE HERDING BOUNDARY IS THE TRAP OF THIS PHASE. Decision 6a6b9975 scoped herding-lane DISSENT out of this feature. Cite that id; do NOT quote it — it was logged on main after this branch cut and is not in this worktree's `.bee/decisions.jsonl`. StopAndAsk itself DOES reach herding workers; dissent does not.\n  - Herding gets the THREE RUST SURFACES ONLY — the brief's schema fields, the `MailboxResult` fields, the re-emit keys — plus at most one sentence in the brief saying when to use them.\n  - Swarming gets everything else: the `bee cells dissent` line, the orchestrator's verdict duty, `options`/`leaning` on the `[BLOCKED]` token form, and the three boundary signals.\n  - NEVER put the dissent verb, or any `bee` command, into the herding brief. The brief itself orders \"Never run any `bee` command\" at mailbox.rs:308-315, and `mailbox.rs:602` pins the standalone-executor property. A `bee` command in the brief contradicts both.\n\nTESTS. Judge existing coverage first, then author only the gap, RED FIRST. There is NO file called \"prompt-projection tests\" — the plan's risk map means the `render_brief_*` suite (the brief IS the projected prompt) plus `packages/bee-rs/crates/bee/tests/pointer_integrity.rs`, which scans `skills/` only and never the rendered projections. Do not hunt for a phantom file.\n  - Mailbox parsing, inline `mod tests` at mailbox.rs:505+: mirror `parse_result_text_accepts_a_valid_done_result` (mailbox.rs:850), `parse_result_text_accepts_a_valid_blocked_result` (mailbox.rs:860), `parse_result_text_refuses_a_missing_field` (mailbox.rs:874). Fixtures are `sample_files()` (mailbox.rs:507) and `sample_spec()` (mailbox.rs:511).\n  - Run side: `a_blocked_result_is_still_valid_and_closes_the_pane` (run.rs:4791) shows the inline `r#\"{\"status\":\"blocked\",...}\"#` result fixture at run.rs:4799.\n  - Pin the round trip: a blocked result carrying two options and a leaning parses, and those values reach the re-emitted JSON. Pin the negative too: a result with neither field parses exactly as before and its envelope is unchanged.",
+  "must_haves": {
+    "truths": [
+      "A blocked result carrying options[] and leaning parses, and both values reach the JSON the run verb re-emits.",
+      "A result carrying neither field parses exactly as before and its re-emitted envelope is byte-identical to today's.",
+      "A result whose leaning does not match any option still parses — membership is never enforced.",
+      "The brief tells a worker how to write options[] and leaning, and its byte-exact test agrees with the new text.",
+      "The swarming worker contract names bee cells dissent, and the orchestrator's per-result duty names bee cells dissent-verdict.",
+      "The three boundary signals read as one rule each, with the new-dependency signal extending the existing package-install clause rather than restating it.",
+      "The herding brief still orders 'never run any bee command' and names no bee verb."
+    ],
+    "artifacts": [
+      "options and leaning on MailboxResult and its parser, plus the brief's schema block, in packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "The conditional re-emit and its first envelope assertion in packages/bee-rs/crates/bee/src/herding/run.rs",
+      "The [BLOCKED] form, the dissent verb line, the orchestrator verdict duty, and the three boundary signals across skills/bee-swarming/"
+    ],
+    "key_links": [
+      "All three code surfaces spell the two fields identically — brief schema, parsed struct, re-emitted JSON.",
+      "Only skills/ is hand-edited; the .claude/, .agents/, .claude-plugin/ and .codex-plugin/ projections are refreshed by bee dev regen."
+    ],
+    "prohibitions": [
+      "No bee command and no dissent verb enters the herding brief.",
+      "No status key is added to the re-emitted envelope.",
+      "The plain-text output path of the run verb is not extended.",
+      "Option membership is never enforced in the parser.",
+      "No projected skill copy under .claude/, .agents/, .claude-plugin/ or .codex-plugin/ is hand-edited.",
+      "No existing mailbox parse or brief assertion is weakened or deleted."
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+  "status": "capped",
+  "trace": {
+    "worker": "sd-w6",
+    "outcome": "options[] and leaning ride the worker result on all three code surfaces, and the swarming contract gains the dissent verb, the verdict duty, and the three boundary signals",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Put the orchestrator verdict duty in swarming-reference.md beside the per-result sentence, not the SKILL.md rescue ladder — the cell offered either; the per-result list is where the orchestrator already reads one result at a time — found a better route",
+      "Added options[]/leaning to the herding-loop envelope description at swarming-reference.md:451 while fixing its status->outcome error — a field list that names three of five keys is the leak the boundary-list pattern warns about — something else had to be fixed first",
+      "Extracted result_envelope out of emit_result and asserted the value it returns — emit_result printlns straight to stdout, so there was no seam to assert without it; the cell named this as the smallest honest seam — followed the plan",
+      "sync-ack: The bee-herding skills never enumerate the mailbox result schema (checked: no files_changed/proof/status field list under skills/bee-herding/), so nothing there went stale. 6a6b9975 scoped herding-lane dissent out of this feature: herding gets the three Rust surfaces plus one brief sentence, and the whole worker-contract half of StopAndAsk belongs to skills/bee-swarming/, which this cell updates."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T05:10:16.611Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "be014001-263f-451f-b775-5f601ff73817",
+    "claimed_at": "2026-08-28T05:00:21.020Z",
+    "swept_at": "2026-08-28T04:59:16.204Z",
+    "swept_from_session": "5439fe13-c5ec-4c2b-81c1-47cc74aafdcc",
+    "blocked_reason": null,
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-28T05:00:09.505Z",
+    "reopened_reason": "Stale claim from a dead session was swept to blocked; deps sd-1/sd-2 are capped and Phase 4 is the last slice — returning it to open for a fresh worker.",
+    "sync_ack": "The bee-herding skills never enumerate the mailbox result schema (checked: no files_changed/proof/status field list under skills/bee-herding/), so nothing there went stale. 6a6b9975 scoped herding-lane dissent out of this feature: herding gets the three Rust surfaces plus one brief sentence, and the whole worker-contract half of StopAndAsk belongs to skills/bee-swarming/, which this cell updates.",
+    "report": {
+      "outcome": "options[] and leaning ride the worker result on all three code surfaces, and the swarming contract gains the dissent verb, the verdict duty, and the three boundary signals",
+      "commit": "ecdb89ea",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml herding && cargo test --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check — green — the cell verify: 433 herding tests (mailbox parse + brief + run envelope), 9 pointer_integrity + 10 instruction_laws over skills/, and the manifest check for the regenerated projections",
+      "deviations": [
+        "Put the orchestrator verdict duty in swarming-reference.md beside the per-result sentence, not the SKILL.md rescue ladder — the cell offered either; the per-result list is where the orchestrator already reads one result at a time — found a better route",
+        "Added options[]/leaning to the herding-loop envelope description at swarming-reference.md:451 while fixing its status->outcome error — a field list that names three of five keys is the leak the boundary-list pattern warns about — something else had to be fixed first",
+        "Extracted result_envelope out of emit_result and asserted the value it returns — emit_result printlns straight to stdout, so there was no seam to assert without it; the cell named this as the smallest honest seam — followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 542 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

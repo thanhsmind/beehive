@@ -1,0 +1,77 @@
+{
+  "id": "sd-3",
+  "feature": "slp-dissent-stop-and-ask",
+  "title": "Close the served-but-undeclared hole in the cells namespace",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [
+    "sd-1"
+  ],
+  "decisions": [
+    "a2affcba"
+  ],
+  "behavior_change": false,
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-dissent-stop-and-ask/plan.md",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+  ],
+  "action": "bee's stated law is that a verb the dispatcher serves and the registry does not declare must fail, and so must the inverse. For the cells namespace only the second half is guarded. The existing sweep `every_namespace_the_dispatcher_serves_is_declared_in_the_registry` in packages/bee-rs/crates/bee/tests/registry_dispatch.rs scans only the devtools and herding modules — search that test for the paths it reads and you will find `verbs/cells/util.rs` is not among them. So a cells sub-verb that is served but never declared passes green today, which is exactly how this feature could ship a verb nobody can reach through the registry.\n\nWrite the missing half: a test that reads the cells dispatch table in packages/bee-rs/crates/bee/src/verbs/cells/util.rs (the `match verb {` at util.rs:68, whose arms look like `\"block\" => run_block(flags, use_json, t0),` at :74) and asserts every arm it serves has a matching declaration in the registry payload.\n\nProve it the honest way, red first: confirm the new test FAILS when a served arm's declaration is removed, before you make it pass. A test that has never been red against the thing it guards is a test that agrees with itself.\n\nExtend the existing sweep if that is the smaller change; write a sibling test if the existing one's shape does not take a third source. Say which you chose and why in the cap report.",
+  "must_haves": {
+    "truths": [
+      "A cells sub-verb served by the dispatch table but absent from the registry payload fails this test by name.",
+      "The test names the offending verb, not just a count.",
+      "The test passes on the tree as it stands after sd-1."
+    ],
+    "artifacts": [
+      "The served-but-undeclared assertion for the cells namespace in packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+    ],
+    "key_links": [
+      "The test reads the real dispatch table in verbs/cells/util.rs, never a hand-kept list of verb names."
+    ],
+    "prohibitions": [
+      "No existing assertion in registry_dispatch.rs is weakened or deleted.",
+      "No source file outside tests/ is changed by this cell."
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch",
+  "status": "capped",
+  "trace": {
+    "worker": "w-sd-3",
+    "outcome": "Fold the cells dispatch table into the served-but-undeclared law, proven red-first",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+    ],
+    "deviations": [
+      "Extended the existing sweep instead of writing a sibling law, and added one sibling BITE test — the sweep took a third source in three lines, but a green sweep cannot show it would notice a gap, so the bite belongs in its own named test — found a better route",
+      "Proved the red by removing a declaration from the test-side declared set rather than from the registry payload — packages/bee-rs/crates/bee/src/generated/registry_payload.json is reserved by sd-2 and live, so writing it even temporarily would have clobbered a sibling worker — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T00:13:20.726Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6c826f6d-0970-4902-a994-c87f96d17650",
+    "claimed_at": "2026-08-28T00:09:26.028Z",
+    "report": {
+      "outcome": "Fold the cells dispatch table into the served-but-undeclared law, proven red-first",
+      "commit": "79f05db3",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch — green (9/9, including every_namespace_the_dispatcher_serves_is_declared_in_the_registry and the new the_served_but_undeclared_law_names_the_verb_whose_declaration_is_missing); red first with bee cells dissent removed from the declared set, failing by name — the cell touches only this test file, so the registry-dispatch contract suite is the whole blast radius",
+      "deviations": [
+        "Extended the existing sweep instead of writing a sibling law, and added one sibling BITE test — the sweep took a third source in three lines, but a green sweep cannot show it would notice a gap, so the bite belongs in its own named test — found a better route",
+        "Proved the red by removing a declaration from the test-side declared set rather than from the registry payload — packages/bee-rs/crates/bee/src/generated/registry_payload.json is reserved by sd-2 and live, so writing it even temporarily would have clobbered a sibling worker — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

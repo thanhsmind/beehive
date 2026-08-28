@@ -1,0 +1,106 @@
+{
+  "id": "sd-1",
+  "feature": "slp-dissent-stop-and-ask",
+  "title": "The dissent record, its closed severity set, and its blocker tooth",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "4b7aa303",
+    "a2affcba"
+  ],
+  "behavior_change": true,
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/slp-dissent-stop-and-ask/CONTEXT.md",
+    "docs/history/slp-dissent-stop-and-ask/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs"
+  ],
+  "action": "Add `bee cells dissent`, the verb a dispatched worker uses to disagree with the cell it was handed (per 4b7aa303, a2affcba). Write it in a NEW module `verbs/cells/dissent.rs`, declared from `verbs/cells/mod.rs`.\n\nThe record carries exactly four author-supplied fields — target, claim, alternative, severity — and appends to the target cell's trace under its own key, never overwriting an existing one. Severity is a CLOSED set: `blocker` and `consider`. Any other value refuses by name and writes nothing, the way every other closed set in this crate refuses.\n\nThree behaviors beyond the plain write, each one a locked requirement:\n\n1. SECRET SCAN the free text. The claim and alternative reach another session's reader, and cell-trace text is unscanned today — verified: `find_secret_pattern` at packages/bee-rs/crates/bee/src/verbs/cells/audit.rs:60 has one caller, `assert_safe_decision_fields` at audit.rs:278, which the trace path never reaches, and `run_block` writes its reason straight through. Route the two text fields through the same refusal.\n2. RELEASE the writer's claim. A worker that dissents is exiting. `run_block` (packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:1102) does NOT release, which would leave the claim sitting and force the orchestrator's verdict onto an audited override as its routine path. Release here instead.\n3. At `blocker` severity ONLY, block the target cell so its dependents stop being schedulable. Reuse the existing block mutation rather than writing a second one; `run_block` at handlers_close.rs:1102 shows the status write, the reason field, and the `append_attempt` call (packages/bee-rs/crates/bee/src/verbs/cells/trace.rs:88). A `consider` dissent changes no status at all.\n\nDeclare the verb everywhere it must be declared, or a contract test passes on an absent row: the module and `verbs/cells/mod.rs`; the cells dispatch table at packages/bee-rs/crates/bee/src/verbs/cells/util.rs — the `match verb {` is at util.rs:68, with siblings `\"block\" => run_block(flags, use_json, t0),` at :74 and `\"judge-record\" => run_judge_record(flags, use_json, t0),` at :88; the router coverage line at packages/bee-rs/crates/bee/src/router.rs:70, currently `    \"cells add|update|claim|unclaim|cap|finish|block|drop|reopen|escalate\",`; `src/generated/registry_payload.json`, which is HAND-EDITED — `bee dev regen` never touches it; and the flag ratchet at packages/bee-rs/crates/bee/src/catalog.rs:611, currently `        const PINNED_FLAG_COUNT: usize = 195;`, bumped on purpose with the reason recorded beside it for whichever of target/claim/alternative/severity are genuinely new flag names.\n\nDo NOT touch `bee cells escalate` — a2affcba bans reusing that name, which means model tier.",
+  "must_haves": {
+    "truths": [
+      "A worker records a dissent against a cell and the four fields read back off that cell's trace, unchanged.",
+      "A severity outside {blocker, consider} refuses by name and leaves the cell file byte-identical.",
+      "A blocker dissent leaves the target cell blocked, and a cell that depends on it is no longer schedulable.",
+      "A consider dissent leaves the target cell's status untouched.",
+      "Claim or alternative text carrying a secret-shaped or control-token string refuses before anything is written.",
+      "After a successful record, the writing worker no longer holds the claim on the target cell."
+    ],
+    "artifacts": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs — the verb, its closed severity set, its validation, and its inline test module"
+    ],
+    "key_links": [
+      "The verb is reachable through the cells dispatch table in verbs/cells/util.rs, not merely defined.",
+      "The verb is declared in src/generated/registry_payload.json with a schema-valid parameters object and a spelled example."
+    ],
+    "prohibitions": [
+      "bee cells escalate keeps its meaning and its flags unchanged.",
+      "No second block mutation is written; the existing one is reused.",
+      "An existing cell-trace key is never overwritten."
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml dissent && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+  "status": "capped",
+  "trace": {
+    "worker": "w-sd-1",
+    "outcome": "bee cells dissent records {target, claim, alternative, severity} with a closed severity set, a secret scan, a claim release, and the blocker tooth",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "Spelled the claim flag --reason instead of --claim — `claim` is in the CLI-wide FLAG_ALONE_BOOLEANS set (dispatch prepare --claim), so --claim <text> swallows its own value token and the whole argv declines; the record field is still `claim` — the plan was wrong about a fact",
+      "Extracted the blocked-status write from run_block into apply_block_mutation in util.rs and reserved handlers_close.rs to repoint it, rather than writing a second copy in dissent.rs — the cell prohibits a second block mutation and its file list did not name handlers_close.rs — found a better route",
+      "Did not add a verdict placeholder key to the dissent record — the verdict verb and the two debt doors are later cells and own that shape — something else had to be fixed first",
+      "sync-ack: Phase 1 is the record and its teeth only; the worker-facing contract in skills/bee-swarming is Phase 4 of this same plan (plan.md Shape), and this cell's declared files deliberately hold no skill path."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T00:08:48.251Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6c826f6d-0970-4902-a994-c87f96d17650",
+    "claimed_at": "2026-08-27T23:51:55.232Z",
+    "sync_ack": "Phase 1 is the record and its teeth only; the worker-facing contract in skills/bee-swarming is Phase 4 of this same plan (plan.md Shape), and this cell's declared files deliberately hold no skill path.",
+    "report": {
+      "outcome": "bee cells dissent records {target, claim, alternative, severity} with a closed severity set, a secret scan, a claim release, and the blocker tooth",
+      "commit": "156b9566",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test dissent && cargo test catalog && cargo test --test registry_contracts --test registry_dispatch && cargo test verbs::cells && cargo test --test front_door --test installer_invocations --test cells_archive_sweep --test instruction_laws --test pointer_integrity && cargo test router:: — green (8 + 11 + 18 + 263 + 25 + 17 passed, 0 failed) — the cell verify plus every suite that walks the declared verb set, the cells module that covers the run_block refactor, and the router coverage list",
+      "deviations": [
+        "Spelled the claim flag --reason instead of --claim — `claim` is in the CLI-wide FLAG_ALONE_BOOLEANS set (dispatch prepare --claim), so --claim <text> swallows its own value token and the whole argv declines; the record field is still `claim` — the plan was wrong about a fact",
+        "Extracted the blocked-status write from run_block into apply_block_mutation in util.rs and reserved handlers_close.rs to repoint it, rather than writing a second copy in dissent.rs — the cell prohibits a second block mutation and its file list did not name handlers_close.rs — found a better route",
+        "Did not add a verdict placeholder key to the dissent record — the verdict verb and the two debt doors are later cells and own that shape — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 574 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

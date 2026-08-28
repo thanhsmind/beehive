@@ -1,18 +1,47 @@
 {
   "schema_version": "1.0",
   "feature": "slp-dissent-stop-and-ask",
-  "mode": "standard",
-  "phase": "exploring",
+  "mode": "high-risk",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"slp-dissent-stop-and-ask\" (lane).",
+  "next_action": "Prepare and run Phase 2 cells: the dissent-debt close door.",
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 12,
+    "rationale": null,
+    "updated_at": "2026-08-27T22:55:09.278Z",
+    "feature": "slp-dissent-stop-and-ask"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-27T23:05:27.157Z",
+    "feature": "slp-dissent-stop-and-ask",
+    "newest_decision_id": "e29918f7-49fe-45f6-911e-d696b954d20d",
+    "plan_sha256": "absent",
+    "advisor": "fable",
+    "digest_head": "# Advisor consult — slp-dissent-stop-and-ask plan shape\n\n**Advisor tier:** fable (configured advisor slot), 2026-08-28\n**Scope:** the high-risk plan shape at `docs/history/slp-dissent-stop-and-ask/plan.md`,\nread against CONTEXT.md's locked decisions and the named source anchors.\n\n## P1 — the plan is wrong here\n\n**P1.1 — The merge precondition as described drops the deferral escape.**\nThe proof-debt style has no escape: `verbs/worktree/phases.rs:154-178` refuses\nunconditionally. The judge-debt sh"
+  },
+  "merge_ready": {
+    "since": "2026-08-28T05:10:16.621Z",
+    "branch": "wt/slp-dissent-stop-and-ask",
+    "worktree_id": "beehive--wt--slp-dissent-stop-and-ask",
+    "uat": "pending",
+    "blocked_by": []
+  }
 }

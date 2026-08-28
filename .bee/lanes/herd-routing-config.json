@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Cluster 1 is closed and committed. Starting part 2 now.",
-    "asked_at": "2026-08-27T20:59:46.860Z",
+    "subject": "Scan is back — with one important correction to record: `bee worktree merge` has no judge-debt door today, so that half is new code, not a c",
+    "asked_at": "2026-08-27T21:04:01.934Z",
     "session": "6c826f6d-0970-4902-a994-c87f96d17650"
   }
 }

@@ -1,0 +1,112 @@
+{
+  "id": "sd-4",
+  "feature": "slp-dissent-stop-and-ask",
+  "title": "bee close refuses while a dissent has no verdict, in every lane",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "sd-1",
+    "sd-2"
+  ],
+  "decisions": [
+    "4b7aa303",
+    "a2affcba"
+  ],
+  "behavior_change": true,
+  "affects_skills": [],
+  "affects_specs": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-dissent-stop-and-ask/plan.md",
+    "docs/history/slp-dissent-stop-and-ask/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs"
+  ],
+  "action": "Add the dissent-debt door to `bee close` (Phase 2 of docs/history/slp-dissent-stop-and-ask/plan.md, per a2affcba and 4b7aa303). `bee close` must REFUSE while any dissent on this feature's cells lacks a verdict.\n\nThe plan's Phase 2 row says \"one more arm in an existing builder\". That is INCOMPLETE, and the shape below is the corrected one — a recorded deviation, verified against the source. Three things beyond the arm are real work:\n\nA. THE SHARED DEBT HELPERS go in `packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs`, NOT in close.rs. Phase 3 gives `bee worktree merge` the same door and must read the SAME helper and the SAME escape. Precedent for the placement: `feature_proof_check` at packages/bee-rs/crates/bee/src/verbs/cells/proof.rs:48 is `pub(crate)` in the cells module, called by close.rs:1865 AND by packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:156, both as `crate::verbs::cells::feature_proof_check(...)`. `verbs/cells/mod.rs:472` already glob-re-exports dissent.rs (`pub(crate) use self::dissent::*;`), so no mod.rs edit is needed.\n\n  - `feature_dissent_debt(root, feature)` — count plus the offending cell ids, mirroring the `DebtSummary` shape at packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:218. An offender is a cell of this feature carrying a `dissent` trace entry for which `dissent_is_answered` is false. That reader already exists — `dissent_is_answered` at dissent.rs:291, `pub(crate)`, and its own doc comment at dissent.rs:1060 calls itself \"the ONE reading of 'unanswered' the debt doors will share\". USE IT. Do not write a second reading. Keep its corrupt-row semantics exactly as they are (a non-object row counts as ANSWERED, so a corrupt row never blocks forever) — a test pins that.\n  - `has_dissent_deferral_decision(root, feature)` — a fourth copy of the 12-line escape at close.rs:405-418 (`has_judge_deferral_decision`), with the tag `dissent-deferral`. Its siblings are `has_capture_deferral_decision` (close.rs:566), `has_uat_deferral_decision`, and `has_knowledge_freshness_deferral_decision` (close.rs:581). Same `DecisionFilters { tag, feature }` whole-token feature match, no new matching rule.\n\nB. THE ARCHIVE-INCLUSIVE LISTER DOES NOT EXIST IN THE SHAPE THIS NEEDS. `list_cells_including_archive` at packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs:523 IS archive-inclusive (live store first, then `.bee/cells/archive/<feature>/*.json`, live copy wins on a duplicate id) — but it filters by ONE exact status string, and every caller today passes `\"capped\"`. A dissent lives on a cell in ANY status: a `blocker` dissent leaves the cell `blocked`, a `consider` dissent leaves it `open` or `claimed`. Copying `\"capped\"` ships a door blind to exactly the cells a blocker dissent parks.\n\n  Generalize the parameter to `Option<&str>` where `None` means every status, mirroring the shape `list_cells` already uses at packages/bee-rs/crates/bee/src/verbs/cells/read.rs:123, and update the existing call sites to pass `Some(\"capped\")`. A sibling function that skips the filter is acceptable if the generalization ripples further than the call sites; say which you chose and why in the cap report.\n\nC. THE REFUSAL IS A SECOND, SEPARATE BLOCK. The `Door` pushed by the builder does not refuse on its own. `build_close_report_doors` at close.rs:1420 returns `Vec<Door>` (the struct is at close.rs:683-688: `door`, `blocking`, `detail`, `command`), and `close_handler` at close.rs:1826 carries one hand-written refusal block per blocking door. The judge one is close.rs:2017-2047: it tests `doors.iter().any(|d| d.door == \"judge-debt\" && d.blocking)`, re-reads the debt for its ids, and prints three lines — a headline behind a pinned prefix const, then `remedy: ...`, then `next: ...` — exiting 1. Write the matching block for `dissent-debt`, and add a pinned `CLOSE_DISSENT_DEBT_PREFIX` const beside `CLOSE_JUDGE_DEBT_PREFIX` at close.rs:42.\n\nTHE ARM ITSELF. Copy the judge-debt arm at close.rs:1457-1517 for its structure — the deferred/archived/plain three-way `detail`, and `command` set to `Some(\"bee cells unarchive\")` when any offender is archived, else the record verb. THREE THINGS MUST NOT BE COPIED:\n\n  1. The lane gate. close.rs:1462 reads `if matches!(feature_route(root, feature)?.as_deref(), Some(\"standard\") | Some(\"high-risk\")) {`. a2affcba is UNCONDITIONAL — the dissent door exists in EVERY lane, `tiny` included. Do not wrap the arm in that `if`.\n  2. The grandfather cutoff `JUDGE_DOOR_INTRODUCED_AT` (close.rs:382-390). A dissent record cannot predate the feature that created it.\n  3. The `behavior_change`-only filter. A dissent is recorded against any cell.\n\nDetect archived offenders the way the judge arm does (close.rs:1466-1474): `!crate::verbs::cells::cell_file(root, id).exists() && crate::verbs::cells::resolve_cell_file(root, id).is_some()`. Unarchive-first is correct here for the same reason it is correct for judge — `dissent-verdict` writes through `mutate_cell`, and that funnel refuses an archived cell outright (packages/bee-rs/crates/bee/src/verbs/cells/util.rs:273). The verb spellings are `bee cells unarchive --feature <feature>` (util.rs:102, util.rs:273) and `bee cells dissent-verdict` (util.rs:99).\n\nREMEDY WORDING follows house style. Match these, which are the live strings:\n  - close.rs:2036 — \"remedy: run bee cells judge to check, then bee cells judge-record to record a verdict for each cell above.\"\n  - close.rs:2033-2034 — \"remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then ...\"\n  - close.rs:2001 — \"remedy: run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \\\"{feature}\\\" to defer it.\"\n  - close.rs:2044 — \"next: settle the judge debt above, then re-run bee close --feature {feature}\"\nThe dissent remedy must name the `dissent-deferral` escape the same way close.rs:2001 names `capture-deferral`.\n\nTESTS go in `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` — the judge close-door tests live there, not in drivers/tests.rs, and the comment at tests.rs:2036-2041 says so. Judge existing coverage first, then author only the gap, RED FIRST. Mirror these cases, which are the precedent:\n  - `judge_debt_door_blocks_a_standard_lane_feature_with_an_unjudged_cell` (tests.rs:2069)\n  - `judge_debt_door_clears_once_a_judge_verdict_is_recorded` (tests.rs:2088)\n  - `close_refuses_judge_debt_for_a_standard_lane_feature` (tests.rs:2147) — end-to-end through `close_handler`, asserting the three-line refusal\n  - `judge_debt_door_clears_with_a_logged_judge_deferral_decision` (tests.rs:2328) — shows the decisions.jsonl seeding AND the different-feature negative\n  - `judge_debt_door_names_unarchive_first_for_an_archived_offender` (tests.rs:2355) — asserts unarchive is named BEFORE the record verb and `command == Some(\"bee cells unarchive\")`\nThe lane case INVERTS: where `judge_debt_door_is_absent_for_a_tiny_lane_feature` (tests.rs:2103) asserts absence, the dissent twin asserts the door IS present and blocking on a `tiny` lane. Fixtures are `tempfile::tempdir()` roots with `write_lane_record_routed`, `write_cell_fixture`, and `write_archived_cell_fixture` (tests.rs:8001).\n\nDo not touch `verbs/worktree/phases.rs` — the merge door is Phase 3 and reads these same helpers. Finish the helpers COMPLETELY here so Phase 3 needs no edit in dissent.rs.",
+  "must_haves": {
+    "truths": [
+      "A feature with one unanswered dissent makes bee close refuse, naming the offending cell id and the remedy.",
+      "Recording the verdict makes bee close go green with no other change.",
+      "The door blocks a tiny-lane feature exactly as it blocks a high-risk one.",
+      "An unanswered dissent on an ARCHIVED cell still blocks, and the remedy names bee cells unarchive --feature <feature> first.",
+      "An unanswered dissent on a BLOCKED cell blocks the door — the debt count is not limited to capped cells.",
+      "A logged decision tagged dissent-deferral naming this feature clears the door; the same tag naming a different feature does not.",
+      "Several unanswered dissents make the door name every one of them, never just the first.",
+      "A feature with no dissent at all reports the door clear and closes exactly as it does today."
+    ],
+    "artifacts": [
+      "feature_dissent_debt and has_dissent_deferral_decision in packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+      "The dissent-debt arm in build_close_report_doors plus its refusal block and pinned prefix const in packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "A status-agnostic archive-inclusive cell lister in packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "The dissent close-door cases in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, each proven red first"
+    ],
+    "key_links": [
+      "The door reads dissent_is_answered (dissent.rs:291), never a second reading of unanswered.",
+      "The debt helper and the deferral escape live in verbs/cells/dissent.rs so Phase 3's merge door reaches them through crate::verbs::cells:: with no further edit.",
+      "The refusal reaches the user through close_handler, not only through the doors array."
+    ],
+    "prohibitions": [
+      "The arm is NOT wrapped in the standard/high-risk lane gate at close.rs:1462.",
+      "No grandfather cutoff and no behavior_change filter is copied onto the dissent arm.",
+      "verbs/worktree/phases.rs is not changed by this cell.",
+      "No existing judge, capture, uat, or proof door assertion is weakened or deleted.",
+      "The corrupt-row semantics of dissent_is_answered are unchanged."
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml dissent && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml verbs::cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "status": "capped",
+  "trace": {
+    "worker": "w-sd-4",
+    "outcome": "bee close refuses while any dissent lacks a verdict, in every lane",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Generalized both guard.rs listers to Option<&str> and passed Some(capped) at the 5 existing call sites, instead of adding a skip-the-filter sibling — the ripple stopped at one internal caller plus those 5 lines, so one function beats two — found a better route",
+      "Edited packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs, which the cell does not name, because two byte-exact door-listing assertions there break the moment ANY new door joins build_close_report_doors; reserved the path under w-sd-4 before writing and added only the new door clear line — something else had to be fixed first",
+      "Could not author the tests red-first in order, since the arm had to compile before its cases could be written; reproduced the pre-change state instead by renaming the door key, ran the 8 new cases (all 8 FAILED), restored the key and re-ran green — hit an unforeseen obstacle",
+      "The commit was refused mid-cell by the intake gate, which read the default store record a concurrent lane had left at phase idle while this lane own record said swarming; stopped and reported rather than working around the guard, and committed once the orchestrator reset that record — hit an unforeseen obstacle",
+      "sync-ack: The worker-contract skill lines are Phase 4 of the approved plan (docs/history/slp-dissent-stop-and-ask/plan.md): Phase 4 gives skills/bee-swarming the dissent verb line, the boundary signals, and the options/leaning form. Phase 2 is the close door only, and editing that skill here would collide with the Phase 4 cell."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T03:31:26.580Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5439fe13-c5ec-4c2b-81c1-47cc74aafdcc",
+    "claimed_at": "2026-08-28T03:14:02.808Z",
+    "sync_ack": "The worker-contract skill lines are Phase 4 of the approved plan (docs/history/slp-dissent-stop-and-ask/plan.md): Phase 4 gives skills/bee-swarming the dissent verb line, the boundary signals, and the options/leaning form. Phase 2 is the close door only, and editing that skill here would collide with the Phase 4 cell.",
+    "report": {
+      "outcome": "bee close refuses while any dissent lacks a verdict, in every lane",
+      "commit": "6966d85c8d47ab575562ed773d02c2e1ac469cc3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --manifest-path packages/bee-rs/Cargo.toml dissent && cargo test --manifest-path packages/bee-rs/Cargo.toml verbs::cells && cargo test --manifest-path packages/bee-rs/Cargo.toml drivers — green — the cell own verify triple, re-run at commit 6966d85c: 25 dissent, 280 verbs::cells, 260 drivers, 0 failed",
+      "deviations": [
+        "Generalized both guard.rs listers to Option<&str> and passed Some(capped) at the 5 existing call sites, instead of adding a skip-the-filter sibling — the ripple stopped at one internal caller plus those 5 lines, so one function beats two — found a better route",
+        "Edited packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs, which the cell does not name, because two byte-exact door-listing assertions there break the moment ANY new door joins build_close_report_doors; reserved the path under w-sd-4 before writing and added only the new door clear line — something else had to be fixed first",
+        "Could not author the tests red-first in order, since the arm had to compile before its cases could be written; reproduced the pre-change state instead by renaming the door key, ran the 8 new cases (all 8 FAILED), restored the key and re-ran green — hit an unforeseen obstacle",
+        "The commit was refused mid-cell by the intake gate, which read the default store record a concurrent lane had left at phase idle while this lane own record said swarming; stopped and reported rather than working around the guard, and committed once the orchestrator reset that record — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
