@@ -92,19 +92,26 @@ against whatever it happened to say.
 ## Open Gaps
 
 - **Shipped today:** the brief on the dispatch door with its leaning guard and
-  its stamped digest, and the dossier-checking verb with its section contract
-  and three evidence checks.
-- **Decided but not yet built:** the second-round cross-critique payloads and
-  the enforced read diet; the deadlock hand-off as a question wait or a mailbox
-  letter, and the structured rejected set on the decision record
-  (slp-blind-lanes D2); the procedure prose that tells an agent when to open
-  lanes at all (slp-blind-lanes D1); and the 5-Layer rubric, Truth Table Test
-  and CRUD Lifecycle check as reviewer/judge checklist material
-  (slp-blind-lanes D6). Until that prose ships, lane-opening is a judgment the
-  agent makes without a written rule to follow.
+  its stamped digest; the dispatch reading list rendered into every non-cell
+  prompt, and refused beside a brief; the tagged fence that lets a round-2
+  brief quote a rival proposal verbatim without disarming the guard; the
+  dossier-checking verb with its section contract and its three evidence
+  checks; the rejected set as a structured list on the decision record; the
+  deadlock hand-off as a question mark or, unattended, a blocker letter that
+  asks the human something; the reviewer/judge checklist material
+  (slp-blind-lanes D6); and the procedure prose itself, whose single home is
+  `skills/bee-hive/references/gates-and-delegation.md` ("Blind lanes and
+  convergence") — lane-opening now has a written rule to follow.
+- **Round two sits outside the evidence chain.** Round-2 briefs differ per lane
+  by construction, so the brief-digest check, the recorded-brief re-lint and
+  the citation check cover round ONE only. The dossier carries the round-2
+  dispatch ids in its cross-critique section as text; nothing mechanically
+  resolves them, and closing that gap is unbuilt work, not a hidden defect.
 - **The framing limit is open work, not a defect to hide:** a citation whose
   preceding sentence negates or forward-references it resolves and passes. The
   acceptance for closing it is recorded as a backlog item.
+- **Still deferred, not pending:** heterogeneous lane models, which break the
+  one-name advisor slot (decision `4faf1de9`).
 
 ## Pointers (implementation)
 
@@ -119,3 +126,8 @@ against whatever it happened to say.
 - The worked dossier shape, pinned green by the door's own test:
   `docs/history/slp-blind-lanes/blind/example-run.md`.
 - The open framing limit: backlog item `p-e09a0b7e`.
+- The procedure — when lanes open, the four moves, the rule that convergence
+  runs the checker green before it logs, and the three named limits — has ONE
+  home: `skills/bee-hive/references/gates-and-delegation.md` ("Blind lanes and
+  convergence"). This concept describes what shipped; it never restates that
+  procedure.
