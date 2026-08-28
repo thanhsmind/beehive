@@ -11,7 +11,7 @@ bee:
   sources: ["slp-blind-lanes cells bln-5, bln-6, bln-7 — three independent judge rounds over one sentence-boundary rule, each broken by a new written form; traces in .bee/cells/, 2026-08-28", "slp-blind-lanes decision 79b5437b (the citation check claims provenance, never faithfulness)"]
   polarity: pitfall
   critical: false
-  evidence: prose
+  evidence: present
 ---
 
 # Bound the Fix Ladder When a Lexical Rule Stands In for a Semantic Claim

@@ -11,7 +11,7 @@ bee:
   sources: [".bee/cells/archive/merge-door-precision/mdp-1.json", ".bee/cells/archive/slp-dissent-stop-and-ask/sd-4.json"]
   polarity: pitfall
   critical: false
-  evidence: prose
+  evidence: present
 ---
 
 # A Red That Cannot Compile Proves Nothing

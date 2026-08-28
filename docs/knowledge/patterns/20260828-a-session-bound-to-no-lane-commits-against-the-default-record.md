@@ -11,7 +11,7 @@ bee:
   sources: [".bee/cells/archive/slp-supervisor-heartbeat/sup-5.json", ".bee/cells/archive/slp-dissent-stop-and-ask/sd-4.json"]
   polarity: pitfall
   critical: false
-  evidence: prose
+  evidence: present
 ---
 
 # A Session Bound to No Lane Commits Against the Default Record

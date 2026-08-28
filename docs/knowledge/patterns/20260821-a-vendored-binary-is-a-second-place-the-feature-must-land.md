@@ -72,3 +72,16 @@ For an argument parser: an unknown flag is a refusal, never a
 shrug. A fail-open parser turns "you are running the wrong binary"
 into "the feature did nothing", which is the same shape as a bug in
 the feature and sends the next hour to the wrong place.
+
+## The same rule runs backwards
+
+A generated or spliced file is the copy, and editing it alone is worse
+than useless: the next regeneration reverts the edit, silently and with
+every check green. One delivery hit this on the always-loaded operating
+document, whose body is spliced from a template between two markers —
+the cell required a regeneration, so an edit made only to the spliced
+file would have been thrown away by the very step the cell owed.
+
+Before editing any file, ask which direction it flows. If something
+generates it, edit the source and let the generator place the copy; if
+you edit the copy, prove the generator agrees, in the same commit.

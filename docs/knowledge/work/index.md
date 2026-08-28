@@ -29,6 +29,7 @@ never a generation timestamp or any other wall-clock value.
 - [role-slot-description/](role-slot-description/index.md) — 1 concept(s)
 - [sample-role-description/](sample-role-description/index.md) — 1 concept(s)
 - [slp-blind-lanes/](slp-blind-lanes/index.md) — 1 concept(s)
+- [slp-blind-lanes-procedure/](slp-blind-lanes-procedure/index.md) — 1 concept(s)
 - [slp-dissent-stop-and-ask/](slp-dissent-stop-and-ask/index.md) — 1 concept(s)
 - [slp-supervisor-heartbeat/](slp-supervisor-heartbeat/index.md) — 1 concept(s)
 - [stale-worktree-lock/](stale-worktree-lock/index.md) — 1 concept(s)
