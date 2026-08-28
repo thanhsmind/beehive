@@ -68,7 +68,7 @@ Proposed by `bee knowledge promote --work slp-dissent-stop-and-ask` from 6 cappe
 
 (b) AREA UPDATES — candidate spec-sync bullets, each citing its cell
 
-areas: from the scribing stamp for "slp-dissent-stop-and-ask" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-08-28T05:20:04.331Z), the work item declares no bee.areas.
+areas: from the scribing stamp for "slp-dissent-stop-and-ask" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-08-28T13:06:04.911Z), the work item declares no bee.areas.
 
 area workflow-state:
   - [sd-1] bee cells dissent records {target, claim, alternative, severity} with a closed severity set, a secret scan, a claim release, and the blocker tooth — feature-wide sync per the scribing stamp, 7 file(s) changed (trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-1.json)
