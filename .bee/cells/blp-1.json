@@ -38,18 +38,54 @@
     ]
   },
   "action": "Make --expertise reach the non-cell prompts, and refuse the one combination that is unsafe.\n\nTHE DEFECT. prompt_body_for (verbs/drivers/prepare.rs) renders non-cell kinds with a one-element vars slice carrying only `brief`; `expertise` is passed at the worker-cell site alone. So --expertise is declared, accepted, parsed by parse_expertise and rendered to a block by the caller — and then thrown away for every kind but cell. Fix it by rendering, not by refusing: callers pass it on gather and reviewer dispatches today, and refusing outright breaks them.\n\nTHE EXCEPTION, and it is the reason this cell is high-risk. A reading list must NOT ride beside a brief. The leaning guard reads brief bytes only, by deliberate design, so a reading list travelling with a brief is an unlinted channel into a blind lane; and check_digests proves the BRIEFS were equal while the payloads would have diverged, which the door's own comment claims cannot happen. So: --expertise together with --brief-file is a typed refusal, in the same {ok:false, type:\"refused\", reason, fix} shape brief_kind_not_advisor already takes, and its fix line names the brief's `## Read diet` section as the one carrier. Refuse before any file is read, exactly as the kind arm does.\n\nRED FIRST, per kind. Write the failing positive case for gather, then reviewer, then briefless advisor, then the combination refusal — four reds before four greens. The absent-case byte-identity test is NOT sufficient proof on its own: an {{#if}} over an undefined variable is silently falsy in this grammar, so a template twin that misses the edit would swallow the list again with every existing test green. That is the exact defect this cell exists to kill, one layer down.\n\nGRAMMAR CONSTRAINTS, from prompt.rs — read them before editing a template. A block must be \\n{{#if NAME}}...\\n{{/if}}; a marker at byte 0 is refused; nesting is refused; and pass 2 refuses any {{NAME}} with no supplied value, so every new placeholder must join the vars slice or EVERY dispatch of that kind dies. Keep the expertise block disjoint from advisor.md's existing brief block.\n\nWHAT MUST NOT CHANGE. The briefless, expertise-less payload for every runtime x kind pair stays byte-identical — extend the existing pinned literal, never weaken its assertion. The brief block, the digest, and the kind refusal are untouched.\n\nTHE VENDORED HALF. Editing packages/bee/prompts/*.md is only half the landing: the vendored twins under .bee/bin/prompts and the release manifest must move in the same commit, and prompts_match_disk compares BOTH disk copies against the binary's compiled-in bytes. Run `bee dev regen` inside this cell. Note for the record: regen does NOT re-vendor .bee/bin/bee itself, so the reinstall is the orchestrator's step at merge, not this cell's.",
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "blp-1-builder",
+    "outcome": "--expertise now renders into gather, reviewer and briefless advisor prompts, and is a typed refusal beside a brief",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee/prompts/advisor.md",
+      "packages/bee/prompts/gather.md",
+      "packages/bee/prompts/reviewer.md",
+      ".bee/bin/prompts/advisor.md",
+      ".bee/bin/prompts/gather.md",
+      ".bee/bin/prompts/reviewer.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Also committed .bee/onboarding.json, which the cell did not name — bee dev regen rewrites its three prompt hashes, and leaving it out would report prompt drift on the next onboard — something else had to be fixed first"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-28T14:05:19.020Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "b97c221a-fd60-40c2-bd86-9681b9f547bf",
+    "claimed_at": "2026-08-28T13:53:39.172Z",
+    "report": {
+      "outcome": "--expertise now renders into gather, reviewer and briefless advisor prompts, and is a typed refusal beside a brief",
+      "commit": "5aa92b2aa6c43ef9092b40495fc0d1e2660e4d4d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee/prompts/advisor.md",
+        "packages/bee/prompts/gather.md",
+        "packages/bee/prompts/reviewer.md",
+        ".bee/bin/prompts/advisor.md",
+        ".bee/bin/prompts/gather.md",
+        ".bee/bin/prompts/reviewer.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers && cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools::prompts && .bee/bin/bee dev release-manifest --check — green — the cell verify: 281 drivers tests (6 new, red first), 4 prompt-port tests, manifest 273/273",
+      "deviations": [
+        "Also committed .bee/onboarding.json, which the cell did not name — bee dev regen rewrites its three prompt hashes, and leaving it out would report prompt drift on the next onboard — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

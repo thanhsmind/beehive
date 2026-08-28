@@ -36,5 +36,12 @@
     "plan_sha256": "4d2f6bb3bfcc7f68d21b9a1ee13e5ff7c8dc39a9ae7c75500859c70a56f64852",
     "advisor": "fable (advisor slot) — shape gate",
     "digest_head": "# Advisor consult — slp-blind-lanes-procedure shape gate\n\n- Date: 2026-08-28 · Tier: advisor (fable) · Repo HEAD at consult: `099cfef3`\n- Question: is the plan safe to approve at the shape gate?\n- Verdict: **SAFE WITH NAMED CHANGES**\n\n## 1. Phase 2's bet is unsound as written\n\nA blanket fence-skip is a one-keystroke bypass of the leaning guard, in every\nround — not only round two. After the change as drafted, a round-ONE brief can\ncarry a fenced \"I recommend option A\" and pass the guard while ev"
+  },
+  "merge_ready": {
+    "since": "2026-08-28T14:06:19.288Z",
+    "branch": "wt/slp-blind-lanes-procedure",
+    "worktree_id": "beehive--wt--slp-blind-lanes-procedure",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

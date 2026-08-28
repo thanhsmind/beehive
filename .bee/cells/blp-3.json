@@ -1,0 +1,127 @@
+{
+  "id": "blp-3",
+  "feature": "slp-blind-lanes-procedure",
+  "title": "Let a tagged fence carry a rival proposal past the leaning guard, and nothing wider",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes-procedure/plan.md",
+    "docs/history/slp-blind-lanes-procedure/advisor-consult.md",
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "docs/knowledge/patterns/20260828-bound-the-fix-ladder-when-a-lexical-rule-stands-in-for-a-semantic-claim.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::blind",
+  "must_haves": {
+    "truths": [
+      "A leaning sentence inside a fence whose opening info string carries the designated tag no longer refuses the brief",
+      "The same leaning sentence inside an UNTAGGED fence still refuses, exactly as today",
+      "The same leaning sentence outside any fence still refuses, exactly as today",
+      "A heading inside a tagged fence no longer trips the four-section shape arm",
+      "A bullet list inside a tagged fence under the Question section no longer trips the answer-enumeration arm",
+      "A fence still open at the end of the brief is a typed refusal, never a silent skip of the remaining lines",
+      "The 17 frozen verdict stems are unchanged, asserted by count as well as by content",
+      "The zero-fire corpus run over every checked-in brief-shaped document still fires zero times",
+      "One fence implementation serves both the guard and the dossier parser; no second copy exists"
+    ]
+  },
+  "action": "Teach the leaning guard exactly one new rule, and bound it.\n\nWHY THIS IS BOUNDED. The cross-critique round needs a brief that quotes a rival lane proposal verbatim, and a real proposal contains sentences like 'I recommend X'. The obvious fix — skip all fenced text — was consulted at the shape gate and REFUSED: it is a bypass in EVERY round, because a round-one brief could fence its own verdict and still reach all three lanes. That is the frozen stem list shrunk by scope instead of by deletion. So: the guard skips a fenced block ONLY when its opening info string carries the one designated tag. Every other fence scans exactly as it does today.\n\nTHIS IS THE LAST RUNG. If an independent judge breaks this rule with a new written form, the answer is NOT a fourth spelling of the fence test: it is to reduce the claim. Read docs/knowledge/patterns/20260828-bound-the-fix-ladder-... before you start; that pattern was written from this exact function's history.\n\nTHREE SCANS, ONE MASK. The rule reaches all three arms, not just the stem scan: the stem scan, the four-section heading scan, and the Question-enumeration scan. A quoted proposal carries its own headings and its own bullets, so the other two arms fire on it just as loudly. Hoist the fence mask out of verbs/blind/mod.rs into one shared home and call it from both places — do not copy it. The guard's own banner already argues that a rule living in two places drifts, and this cell must not create the drift it warns about.\n\nAN UNCLOSED FENCE REFUSES. The dossier's mask marks everything after an unmatched opener as fenced. Inherited as-is, one stray opener would hide every following line from every scan with no refusal at all. So an unclosed fence in a brief is its own typed refusal, in the same shape the other brief refusals take.\n\nWHAT MUST NOT MOVE. The 17 stems are frozen in both directions — never add one here, and NEVER remove one to make a case pass. The four-section shape arm keeps its meaning. Assert the stem count as well as its content, so a later shrink is loud.\n\nRED FIRST, PER SCAN. Not per guard: a failing case for the tagged-fenced stem, the tagged-fenced heading, the tagged-fenced enumeration, the untagged fence that must still refuse, and the unclosed fence refusal — each red before its green. Then re-run the zero-fire corpus and prove it still fires zero times.\n\nNAME THE LIMIT IN THE CODE. The tag is a claim, not a proof: anyone can type it. Say so in the module comment, in the same shape decision 79b5437b's provenance limit is stated. Do not write a comment claiming this prevents leaning.",
+  "status": "capped",
+  "trace": {
+    "worker": "blp-3-builder",
+    "outcome": "The leaning guard skips a tagged fence in all three scans, refuses an unclosed one, and shares one fence scanner with the dossier parser",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+    ],
+    "deviations": [
+      "Ran the verify without its PATH= prefix — the worktree write guard refuses a command with that shell expansion, and cargo is already on PATH — hit an unforeseen obstacle",
+      "Left the pre-existing clippy never_loop error in verbs/blind/mod.rs:366 untouched — it is at HEAD, already recorded, and outside this cell — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T14:20:58.849Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b97c221a-fd60-40c2-bd86-9681b9f547bf",
+    "claimed_at": "2026-08-28T14:09:43.397Z",
+    "report": {
+      "outcome": "The leaning guard skips a tagged fence in all three scans, refuses an unclosed one, and shares one fence scanner with the dossier parser",
+      "commit": "cc0daa0b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/brief_lint.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/blind/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers && ... verbs::blind (the cell verify), plus --bin bee — green — the guard, its three scans and the dossier parser that shares the fence scanner; the whole bin suite ran because the hoist touches a second module (3022 passed)",
+      "deviations": [
+        "Ran the verify without its PATH= prefix — the worktree write guard refuses a command with that shell expansion, and cargo is already on PATH — hit an unforeseen obstacle",
+        "Left the pre-existing clippy never_loop error in verbs/blind/mod.rs:366 untouched — it is at HEAD, already recorded, and outside this cell — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "no-tagfree-bypass",
+            "status": "PASS",
+            "evidence": "Compiled scan_fences/fence_mask/lint_brief verbatim from cc0daa0b into a scratch binary and probed. Every attempt to earn the skip without the exact tag refused: info 'lane-proposal;x', 'lane-proposal rust', 'lane-proposals', 'lane-proposal' with a U+2010 hyphen, a backtick inside the info string, zero-width characters inside the tag (U+200B, U+FEFF), and CR-only line endings — all scanned and refused brief_leaning_language or brief_fence_unclosed. tagged=true requires info.trim() to ASCII-case-fold-equal the one literal."
+          },
+          {
+            "id": "three-scans-each-honor-only-tagged",
+            "status": "PASS",
+            "evidence": "Stem arm: identical bytes pass tagged, refuse untagged and bare. Shape arm: a heading inside a tagged fence is not a section, and a tagged fence hiding a required section still refuses brief_section_missing — the tag cannot fake structure. Enumeration arm: quoted bullets under Question pass; a quoted heading does not close Question, so the brief's own bullet after the quote still refuses brief_question_enumerates_answers."
+          },
+          {
+            "id": "unclosed-fence-typed-refusal",
+            "status": "PASS",
+            "evidence": "Every breakage mode lands on a typed refusal, never a silent skip: unclosed tagged and untagged openers, a closer carrying an info string, CR-only separators, and the misuse case of a three-backtick outer quoting a proposal that carries its own fenced block. The documented four-backtick outer form passes."
+          },
+          {
+            "id": "stems-frozen-17",
+            "status": "PASS",
+            "evidence": "git show cc0daa0b~1 against the worktree: the frozen verdict-stem list is byte-identical, 17 entries, none removed."
+          },
+          {
+            "id": "one-scanner-two-doors",
+            "status": "PASS",
+            "evidence": "verbs/blind/mod.rs deletes its local fence_mask and imports the brief_lint one; fence_mask is a view of scan_fences. Old-versus-new fenced bits probed identical over nine adversarial documents (nested, tilde, indented, unclosed, longer closer); the open and close conditions are verbatim the pre-image's."
+          },
+          {
+            "id": "comments-claim-bounded",
+            "status": "PASS",
+            "evidence": "The module banner states that the tag is a claim and not a proof, that the guard refuses leaning language and does not certify neutrality, and that this is the last rung — a future escape reduces the claim rather than adding a fourth fence rule. No refusal string contains 'neutral' in any form, pinned by a probe in tests.rs."
+          },
+          {
+            "id": "repo-tests-green",
+            "status": "PASS",
+            "evidence": "cargo test -p bee --bin bee fence — 25 passed, 0 failed; cargo test -p bee --bin bee brief — 38 passed, 0 failed, in the worktree at cc0daa0b."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-28T14:33:03.939Z"
+      }
+    ]
+  }
+}

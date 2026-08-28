@@ -35,18 +35,52 @@
     ]
   },
   "action": "Give the convergence decision a structured rejected set (D2(d)): the lanes that were NOT chosen, each with its reason, as a list-typed field rather than free prose.\n\nCOPY --tags EXACTLY. It is the shipped list-flag idiom on this verb: keys_known allowlist, then a match on flags.get(\"tags\") where FlagV::S(s) becomes split_list(s) and a bare FlagV::Present declines the whole shape, then a field on the params carrier, then the write. split_list is comma-split, trim, drop-empties. Do not invent a second parsing rule and do not accept a repeated flag — the CLI keeps last-value-wins on repeats, so a repeated flag would silently discard the earlier one.\n\nTHE FLAG CHAIN IS FOUR PLACES, NOT ONE. The handler allowlist, the parse block, the params struct, and the generated registry payload. The registry entry is not documentation: the argv-shape guard validates argv against the declared properties before the handler ever runs, so a flag missing there is unreachable at the CLI no matter how correct the handler is. Then bump PINNED_FLAG_COUNT from 198 to 199 with its own ledger line in the existing ledger above the constant, stating why no existing flag name carries this idea.\n\nSHIP THE NET THAT DOES NOT EXIST. Today the handler-versus-registry drift nets are hard-wired to two files only, and neither covers decisions log — so a flag added to the allowlist but missing from the registry passes every test in the repo while being unreachable. Write that net for decisions log, modelled on the existing pair, and prove it RED FIRST: it must fail against the payload BEFORE the declaration is added, then pass after. A net authored after the declaration proves only that the code agrees with itself.\n\nEXHAUSTIVE STRUCT LITERALS. The params carrier is built as an exhaustive struct literal at every construction site, including several in tests; the compiler will name them all. Do not silence one with a default-fill.\n\nABSENT MEANS ABSENT. A decision logged with no --rejected carries no field, never an empty array — the same shape the brief digest already takes when no brief travelled.",
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "blp-2-builder",
+    "outcome": "decisions log --rejected records the options not taken as a list, declared in the registry, with a new handler-versus-registry drift net proven red first",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [
+      "Filled the new struct field in packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs, a file the cell did not list — three exhaustive LogParams literals live there and the crate does not compile without them; reserved the path under blp-2-builder before writing — the plan was wrong about a fact",
+      "Each --rejected entry now passes assert_safe_content like --alternatives does — free prose reaching the append-only log must not walk past the verb's own stated secret / instruction-like refusal — something else had to be fixed first",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs was listed by the cell but needed no edit — decisions log's whole write path (do_log) lives in verbs_read.rs; verbs_write.rs holds decisions tag — the plan was wrong about a fact",
+      "sync-ack: CLI surface only: no skill instruction changes because the prose telling an agent when to record a rejected set is slice 4's own cell (D2(d) procedure text), and this cell adds the flag the CLI refused to accept before it"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-28T14:06:19.281Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "b97c221a-fd60-40c2-bd86-9681b9f547bf",
+    "claimed_at": "2026-08-28T13:53:56.835Z",
+    "sync_ack": "CLI surface only: no skill instruction changes because the prose telling an agent when to record a rejected set is slice 4's own cell (D2(d) procedure text), and this cell adds the flag the CLI refused to accept before it",
+    "report": {
+      "outcome": "decisions log --rejected records the options not taken as a list, declared in the registry, with a new handler-versus-registry drift net proven red first",
+      "commit": "7e415be2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::decisions && --test registry_contracts && catalog — green — the cell verify chain: 67 decisions tests, 12 registry contracts (incl. the new decisions-log drift net), 11 catalog tests over the bumped flag pin",
+      "deviations": [
+        "Filled the new struct field in packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs, a file the cell did not list — three exhaustive LogParams literals live there and the crate does not compile without them; reserved the path under blp-2-builder before writing — the plan was wrong about a fact",
+        "Each --rejected entry now passes assert_safe_content like --alternatives does — free prose reaching the append-only log must not walk past the verb's own stated secret / instruction-like refusal — something else had to be fixed first",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs was listed by the cell but needed no edit — decisions log's whole write path (do_log) lives in verbs_read.rs; verbs_write.rs holds decisions tag — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

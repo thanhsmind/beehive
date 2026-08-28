@@ -1,0 +1,97 @@
+{
+  "id": "blp-6",
+  "feature": "slp-blind-lanes-procedure",
+  "title": "Write the blind-lane procedure and correct the three surfaces that now contradict it",
+  "lane": "high-risk",
+  "role": "docs",
+  "deps": [
+    "blp-1",
+    "blp-3",
+    "blp-4"
+  ],
+  "decisions": [
+    "D1",
+    "D5",
+    "D7"
+  ],
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "AGENTS.md",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/knowledge/areas/advisor-protocol/blind-lanes-and-the-convergence-dossier.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-blind-lanes-procedure/plan.md",
+    "docs/history/slp-blind-lanes-procedure/advisor-consult.md",
+    "docs/history/slp-blind-lanes/CONTEXT.md",
+    "skills/bee-reviewing/SKILL.md",
+    "docs/knowledge/areas/advisor-protocol/blind-lanes-and-the-convergence-dossier.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/advisor-protocol/blind-lanes-and-the-convergence-dossier.md"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge index --check",
+  "must_haves": {
+    "truths": [
+      "One new section in gates-and-delegation.md, between the delegation contract and the judgment contract, states when an agent opens lanes, that it logs the reason at open time, that pushback counts only when it names the missing context, and that hats and lanes are different instruments",
+      "It states the rule that gives the checker teeth: convergence RUNS bee blind check green before it logs the decision, and it names the constraint that makes that runnable — the check resolves dispatch ids against the log of the root the lanes actually ran in",
+      "It carries a single-home clause, so this rule is never restated on another surface; AGENTS.md gains one pointer clause and no copy of the rule",
+      "It names round two's evidence limit: round-2 briefs differ per lane by construction, so the digest check, the recorded-brief re-lint and the citation check cover round ONE only, and the cross-critique section must carry the round-2 dispatch ids",
+      "It names the tagged-fence limit: the tag is a claim, not a proof, and it matches the literal trimmed and case-folded",
+      "The generated registry help for bee blind check no longer says the citation, digest and read-diet checks are not part of the door yet — all six ship",
+      "The knowledge concept's Open Gaps section no longer lists this slice as unbuilt, and its shipped-today list names what now ships",
+      "Every pointer naming a new heading quotes it exactly, and bee dev regen ran inside this cell"
+    ]
+  },
+  "action": "Write the procedure that makes the shipped door usable, then correct every surface that now contradicts it.\n\nWHERE, AND WHY THERE. gates-and-delegation.md is the only file in skills/ that names the dispatch door and its kinds, and it already owns the worker-class taxonomy that D3 and D7 speak in. Put the new section between the delegation contract and the judgment contract. Copy the four-move shape bee-reviewing's wave uses — who fans out, what each one gets and is denied, when synthesis is allowed, what the synthesis must run — because that is the nearest shipped procedure of the same kind. Copy the single-home clause from the goal-check judge tier section verbatim in spirit: name this section as the one home, and give every other surface a pointer, never a copy. AGENTS.md's Deep contracts list gains one clause naming the section; that is the whole AGENTS.md cost.\n\nWHAT THE PROSE MUST CARRY. D1: the agent opens two or three lanes on its own judgment when a decision is both high-stakes AND ambiguous, and logs the reason at open time; the user may order lanes directly; a deadlocked convergence hands the human the dossier and never resolves itself. D5: pushback counts only when it names the specific missing context. D7: lanes GENERATE designs from one brief, hats CRITIQUE one request from fixed perspectives; neither replaces the other. And the rule that gives the checker its teeth: convergence RUNS bee blind check green BEFORE it logs the decision — no door forces that, so the prose is what forces it.\n\nTHREE LIMITS, STATED PLAINLY, NOT BURIED. The check proves provenance, never faithfulness (decision 79b5437b). Round two is outside the evidence chain: round-2 briefs differ per lane by construction, so the digest check, the recorded-brief re-lint and the citation check all cover round ONE only — the prose therefore requires the round-2 dispatch ids in the dossier's cross-critique section and says plainly what is not mechanically checked. And the tagged fence is a claim, not a proof: it matches the literal trimmed and ASCII-case-folded, and anyone can type it.\n\nTHE RUNNABILITY CONSTRAINT. bee blind check resolves each lane's dispatch id against .bee/logs/dispatch.jsonl. The shipped example dossier refuses in the main checkout because its ids are placeholders that never ran here. Say so: the check runs at the root whose log holds the run. A rule with no runnable example is a rule nobody follows.\n\nTWO FALSE SURFACES TO FIX. The generated registry help for bee blind check still says the citation, brief-digest and read-diet checks 'are not part of this door yet'; all six checks ship. Correct that sentence — it is the only place it appears. And the knowledge concept at docs/knowledge/areas/advisor-protocol/blind-lanes-and-the-convergence-dossier.md still lists this slice under Open Gaps as decided-but-unbuilt; move what now ships into its shipped list, and leave in Open Gaps only what is still genuinely unbuilt.\n\nNO SIZE CEILING. This repo forbids one, and none may be introduced. Match the surrounding sections: they run five to thirty-five lines, median about seventeen.",
+  "status": "capped",
+  "trace": {
+    "worker": "blp-6-builder",
+    "outcome": "The blind-lane procedure now has one written home, and the two surfaces that contradicted it are corrected",
+    "files_changed": [
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "AGENTS.md",
+      "packages/bee/AGENTS.block.md",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/advisor-protocol/blind-lanes-and-the-convergence-dossier.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Edited packages/bee/AGENTS.block.md as well as AGENTS.md — AGENTS.md holds the template body verbatim between BEE:START/BEE:END and bee dev regen splices it back from the template, so editing only AGENTS.md would be reverted by the regen this cell requires — hit an unforeseen obstacle",
+      "sync-ack: The AGENTS.md edit is one pointer clause added to the Deep contracts list; it does not touch the agents-capture-line-at-close rule block, so its applied_at files carry nothing to sync."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-28T14:42:46.731Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b97c221a-fd60-40c2-bd86-9681b9f547bf",
+    "claimed_at": "2026-08-28T14:35:07.377Z",
+    "sync_ack": "The AGENTS.md edit is one pointer clause added to the Deep contracts list; it does not touch the agents-capture-line-at-close rule block, so its applied_at files carry nothing to sync.",
+    "report": {
+      "outcome": "The blind-lane procedure now has one written home, and the two surfaces that contradicted it are corrected",
+      "commit": "ee7bcfad",
+      "files": [
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "AGENTS.md",
+        "packages/bee/AGENTS.block.md",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/advisor-protocol/blind-lanes-and-the-convergence-dossier.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws --test registry_contracts && cargo test --release -p bee --bins && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge index --check — green — the cell verify chain plus the crate unit tests, because the edited registry payload is include_str! into the binary",
+      "deviations": [
+        "Edited packages/bee/AGENTS.block.md as well as AGENTS.md — AGENTS.md holds the template body verbatim between BEE:START/BEE:END and bee dev regen splices it back from the template, so editing only AGENTS.md would be reverted by the regen this cell requires — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 214 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
