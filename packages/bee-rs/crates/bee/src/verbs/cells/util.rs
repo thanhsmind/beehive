@@ -86,6 +86,13 @@ pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option
         "judge" => run_judge(flags, use_json, t0),
         "reset-budget" => run_reset_budget(flags, use_json, t0),
         "judge-record" => run_judge_record(flags, use_json, t0),
+        // slp-dissent-stop-and-ask sd-1 (decisions 4b7aa303, a2affcba) — a
+        // worker's recorded disagreement with the cell it was handed. Served
+        // here and DECLARED in generated/registry_payload.json in the same
+        // change, the same both-directions rule `escalate` records above:
+        // a served-and-undeclared verb reads as unknown to `bee --help --all`,
+        // and a declared-and-unserved one fails tests/registry_dispatch.rs.
+        "dissent" => run_dissent(flags, use_json, t0),
         "schedule" => run_schedule(flags, use_json, t0),
         "archive" => run_archive(flags, use_json, t0),
         "unarchive" => run_unarchive(flags, use_json, t0),
@@ -332,4 +339,37 @@ pub(crate) fn write_cell(root: &Path, cell: &Value) -> MR<()> {
 /// a LockBusyError's message surfaces via emitError.
 pub(crate) fn acquire_named_lock(root: &Path, name: &str) -> MR<lock::LockGuard> {
     lock::acquire_store_lock(root, name, lock::MAX_ATTEMPTS).map_err(|busy| Fail::Thrown(busy.message()))
+}
+
+// ─── the one blocked-status mutation ───────────────────────────────────────
+
+/// The blocked-status write, in ONE place with two callers: `cells block`
+/// (handlers_close.rs) and `cells dissent` at `blocker` severity
+/// (dissent.rs). Extracted rather than copied — two blocked-status mutations
+/// would be two chances for the attempts ledger, the status string or the
+/// reason field to drift apart, and the scheduler's dependency check reads
+/// only the status while `bee cells show` reads only the reason.
+///
+/// The caller owns the trace up to this point (its own ownership guard, its
+/// own trace keys); this consumes the trace, appends the "blocked" attempt
+/// row, and installs both the status and the trace back onto the cell.
+pub(crate) fn apply_block_mutation(
+    root: &Path,
+    id: &str,
+    cell_map: &mut Map<String, Value>,
+    trace: Map<String, Value>,
+    reason: &str,
+) -> MR<()> {
+    let mut trace = append_attempt(
+        root,
+        id,
+        trace,
+        "blocked",
+        Some(normalize_failure_signature(reason)),
+        Some(reason),
+    )?;
+    cell_map.insert("status".into(), Value::String("blocked".into()));
+    trace.insert("blocked_reason".into(), Value::String(reason.to_string()));
+    cell_map.insert("trace".into(), Value::Object(trace));
+    Ok(())
 }

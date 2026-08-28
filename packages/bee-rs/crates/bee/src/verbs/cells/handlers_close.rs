@@ -1124,18 +1124,11 @@ pub(crate) fn run_block(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
                 session_flag.as_deref(),
                 force,
             )?;
-            let mut trace = append_attempt(
-                &root2,
-                &id2,
-                trace,
-                "blocked",
-                Some(normalize_failure_signature(&reason2)),
-                Some(&reason2),
-            )?;
-            cell_map.insert("status".into(), Value::String("blocked".into()));
-            trace.insert("blocked_reason".into(), Value::String(reason2.clone()));
-            cell_map.insert("trace".into(), Value::Object(trace));
-            Ok(())
+            // The blocked-status write itself lives in `apply_block_mutation`
+            // (util.rs) — `cells dissent` at blocker severity arms the same
+            // tooth, and one mutation with two callers is the only way the
+            // status, the attempts row and the reason field cannot drift apart.
+            apply_block_mutation(&root2, &id2, cell_map, trace, &reason2)
         })?;
         let text = format!("Blocked {}.", js_string_or_undefined(cell.get("id")));
         Ok(Out::Emit(cell, text, 0))

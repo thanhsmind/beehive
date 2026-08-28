@@ -608,7 +608,20 @@ mod tests {
         // this surface that could raise a consent level or flip any switch —
         // 66c4c251 keeps that in the human's hands, and a verb that only ever
         // reads must not carry the vocabulary of one that writes.
-        const PINNED_FLAG_COUNT: usize = 195;
+        // 195 -> 196 (slp-dissent-stop-and-ask sd-1): `bee cells dissent`
+        // adds exactly ONE new spelling, `--alternative`. Its other three
+        // fields reuse names this vocabulary already carries with the same
+        // meaning: `--id` is the cell acted on, on every one of the fifteen
+        // other cells verbs; `--reason` already means "why this act" on
+        // block, drop, reopen, escalate and gate, and a dissent's claim is
+        // exactly that (the record's field is `claim`, but `--claim` is a
+        // CLI-WIDE flag-alone boolean for `dispatch prepare --claim`, so it
+        // can never carry a value); `--severity` already grades a finding on
+        // `backlog add`, which is the same question this verb asks. Nothing
+        // here meant "the thing to do instead" — `--reason` explains, and
+        // `--alternative` proposes, and collapsing the two would let a
+        // worker's proposal be read as an excuse.
+        const PINNED_FLAG_COUNT: usize = 196;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

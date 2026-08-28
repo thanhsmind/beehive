@@ -68,6 +68,9 @@ pub const PORTED: &[&str] = &[
     // model-role-split D4 — `cells tier` retired with the selector it wrote;
     // `cells escalate` is the escalation half of it, under its own name.
     "cells add|update|claim|unclaim|cap|finish|block|drop|reopen|escalate",
+    // slp-dissent-stop-and-ask — a worker's recorded disagreement with the
+    // cell it was handed. `escalate` above keeps its model-tier meaning.
+    "cells dissent",
     "cells judge|judge-record|reset-budget|schedule|archive|unarchive",
     // model-role-split D9 — the one-time role backfill over the stored cells.
     "cells backfill-roles [--dry-run]",
