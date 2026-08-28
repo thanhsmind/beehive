@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
   "next_action": "User accepts on main (uat gate), then bee close --feature slp-dissent-stop-and-ask",
   "created_at": "2026-08-27T20:58:29.709Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",
