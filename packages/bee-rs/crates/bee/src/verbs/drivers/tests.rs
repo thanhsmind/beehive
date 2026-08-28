@@ -6975,3 +6975,354 @@ advance_on — falling to another model there hides the defect (D11)"
     fn at_open(from_keys_known: &str) -> usize {
         from_keys_known.find('[').expect("keys_known(...) opens an array literal") + 1
     }
+
+    // ── slp-blind-lanes: the LaneBrief leaning guard (E1, D2a) ─────────────
+
+    /// A brief with the four required sections, so a probe can vary ONE thing
+    /// (the Question body, or one added line) and know the shape arm is not
+    /// what fired.
+    fn shaped_brief(question: &str) -> String {
+        format!(
+            "## Question\n\n{question}\n\n\
+             ## Constraints\n\nThe answer stays inside the existing dispatch door.\n\n\
+             ## Read diet\n\npackages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs\n\n\
+             ## Digest contract\n\nReturn the paths read and the facts with file:line anchors.\n"
+        )
+    }
+
+    fn refusal_of(brief: &str) -> Value {
+        lint_brief(brief).expect_err("this brief must be refused")
+    }
+
+    /// ARM 1. Every one of the seventeen FROZEN verdict stems is refused, the
+    /// refusal names the phrase that fired, and the fix says LEANING LANGUAGE
+    /// was refused — never that neutrality was certified, which a word list
+    /// cannot do.
+    #[test]
+    fn every_frozen_verdict_stem_is_refused_by_name() {
+        assert_eq!(LEANING_VERDICT_STEMS.len(), 17, "the frozen list is seventeen stems");
+        for stem in LEANING_VERDICT_STEMS {
+            // In the CONSTRAINTS section, so only the stem arm can fire.
+            let brief = shaped_brief("Where does the dossier live?")
+                .replace("The answer stays inside the existing dispatch door.", &format!("Note: {stem} the second option."));
+            let refusal = refusal_of(&brief);
+            assert_eq!(refusal.get("ok"), Some(&json!(false)), "{stem}: {refusal}");
+            assert_eq!(refusal.get("type"), Some(&json!("refused")), "{stem}: {refusal}");
+            assert_eq!(
+                refusal.get("reason"),
+                Some(&json!("brief_leaning_language")),
+                "{stem}: {refusal}"
+            );
+            assert_eq!(refusal.get("phrase"), Some(&json!(stem)), "the refusal names the phrase that fired: {refusal}");
+            let fix = refusal.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains(stem), "the fix quotes the phrase to cut: {fix}");
+            assert!(
+                fix.to_ascii_lowercase().contains("leaning language"),
+                "the refusal says leaning language was refused: {fix}"
+            );
+            assert!(
+                !fix.to_ascii_lowercase().contains("neutral"),
+                "no refusal text may use the word at all — a word list cannot certify neutrality, \
+                 and even a disclaimer beside it trains the reader to expect the claim: {fix}"
+            );
+        }
+
+        // Case-folded and word-bounded, both directions.
+        assert!(lint_brief(&shaped_brief("What is the plan? WE RECOMMEND nothing.")).is_err());
+        assert!(
+            lint_brief(&shaped_brief("Which reader wins when the preference set is empty?")).is_ok(),
+            "\"preference\" is not \"i prefer\" — the scan is word-bounded"
+        );
+        // "leaning toward" must not swallow "leaning towards": both are on the
+        // list, and the longer one reports ITSELF.
+        let towards = refusal_of(&shaped_brief("The draft was leaning towards the cache."));
+        assert_eq!(towards.get("phrase"), Some(&json!("leaning towards")), "{towards}");
+
+        // The two stems cut at the re-consult stay cut: neutral interrogative
+        // phrasing must survive the door.
+        for kept in [
+            "What is the right approach for the dossier?",
+            "What is the right answer when two lanes disagree?",
+        ] {
+            assert!(lint_brief(&shaped_brief(kept)).is_ok(), "{kept} must not fire");
+        }
+    }
+
+    /// ARM 1, honestly: the guard is lexical and does not parse markdown, so a
+    /// stem inside a fenced code sample refuses too. Asserted as the real
+    /// behaviour rather than special-cased away.
+    #[test]
+    fn a_verdict_stem_inside_a_fenced_code_sample_still_refuses() {
+        let brief = shaped_brief("Where does the dossier live?").replace(
+            "The answer stays inside the existing dispatch door.",
+            "```text\n// we should use the second reader\n```",
+        );
+        let refusal = refusal_of(&brief);
+        assert_eq!(refusal.get("reason"), Some(&json!("brief_leaning_language")), "{refusal}");
+        assert_eq!(refusal.get("phrase"), Some(&json!("we should use")), "{refusal}");
+    }
+
+    /// ARM 2, the arm that carries the real load: leaning is mostly
+    /// structural. A missing, extra or misordered section refuses BY NAME of
+    /// the offending section.
+    #[test]
+    fn a_brief_missing_adding_or_misordering_a_section_is_refused_by_that_sections_name() {
+        let good = shaped_brief("Where does the dossier live?");
+        assert!(lint_brief(&good).is_ok(), "the shaped brief is the control: {good}");
+
+        // MISSING — the name of the section that is not there.
+        let missing = good.replace("## Read diet\n\npackages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs\n\n", "");
+        let r = refusal_of(&missing);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_missing")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Read diet")), "{r}");
+        assert!(r.get("fix").and_then(Value::as_str).unwrap_or_default().contains("Read diet"));
+
+        // EXTRA — a section the contract does not name.
+        let extra = format!("{good}\n## Recommendation\n\nUse the second reader.\n");
+        let r = refusal_of(&extra);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Recommendation")), "{r}");
+
+        // REPEATED — a second copy of a required section is also extra.
+        let repeated = format!("{good}\n## Constraints\n\nAnd one more.\n");
+        let r = refusal_of(&repeated);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_unexpected")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Constraints")), "{r}");
+
+        // MISORDERED — all four present, wrong order, named by the heading
+        // found where another was due.
+        let misordered = "## Question\n\nWhere does the dossier live?\n\n\
+                          ## Read diet\n\nprepare.rs\n\n\
+                          ## Constraints\n\nOne door.\n\n\
+                          ## Digest contract\n\nPaths read.\n";
+        let r = refusal_of(misordered);
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_out_of_order")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Read diet")), "{r}");
+        assert!(
+            r.get("fix").and_then(Value::as_str).unwrap_or_default().contains("Constraints"),
+            "the fix names the section that was due: {r}"
+        );
+
+        // A brief with no headings at all is missing the FIRST section.
+        let r = refusal_of("Where does the dossier live?");
+        assert_eq!(r.get("reason"), Some(&json!("brief_section_missing")), "{r}");
+        assert_eq!(r.get("section"), Some(&json!("Question")), "{r}");
+
+        // Headings match case-insensitively on the trimmed text, and a level-3
+        // heading inside a section is not a section.
+        let folded = "##  QUESTION \n\nWhere?\n\n### A sub-heading\n\nprose\n\n\
+                      ## constraints\n\nOne door.\n\n## READ DIET\n\nprepare.rs\n\n\
+                      ## Digest Contract\n\nPaths read.\n";
+        assert!(lint_brief(folded).is_ok(), "sections fold case and ignore level-3 headings");
+    }
+
+    /// ARM 2, the enumeration rule: a brief that LISTS candidate answers has
+    /// already led the witness — lanes exist to generate the options.
+    #[test]
+    fn an_enumerated_list_under_question_is_refused_naming_that_section() {
+        for line in ["- keep it in docs/", "* keep it in docs/", "1. keep it in docs/", "  2.  keep it in docs/"] {
+            let brief = shaped_brief(&format!("Where does the dossier live?\n\n{line}\n- or beside the plan"));
+            let r = refusal_of(&brief);
+            assert_eq!(r.get("reason"), Some(&json!("brief_question_enumerates_answers")), "{line}: {r}");
+            assert_eq!(r.get("section"), Some(&json!("Question")), "{line}: {r}");
+            let fix = r.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("Question"), "the fix names the offending section: {fix}");
+        }
+        // The rule is scoped to Question: the other sections may enumerate.
+        let diet = shaped_brief("Where does the dossier live?")
+            .replace("packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "- prepare.rs\n- prompt.rs");
+        assert!(lint_brief(&diet).is_ok(), "a read diet is a list by nature: {diet}");
+    }
+
+    /// THE SCOPE PROPERTY, and the highest-risk property of this feature: the
+    /// guard reads the BRIEF and nothing else. A false fire on `--purpose` or
+    /// `--expertise` would refuse the advisor consult Gate 3 itself requires
+    /// (`high_risk_advisor_refusal`), deadlocking the very workflow that
+    /// approves guards. So: every frozen stem, in both of those fields, with
+    /// no `--brief-file` at all, must prepare cleanly.
+    #[test]
+    fn a_dispatch_carrying_every_stem_in_purpose_and_expertise_prepares_cleanly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+
+        let purpose = format!("Judge the shape — {}.", LEANING_VERDICT_STEMS.join(", "));
+        // `--expertise` MUST be newline-delimited `<path> :: <purpose> :: <read-to>`
+        // or parse_expertise refuses on PARSE before any guard is reached.
+        let expertise_raw: String = LEANING_VERDICT_STEMS
+            .iter()
+            .enumerate()
+            .map(|(i, stem)| format!("docs/note-{i}.md :: {stem} the first option :: see why {stem}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let entries = parse_expertise(&expertise_raw).expect("the fixture is well-formed expertise");
+        assert_eq!(entries.len(), LEANING_VERDICT_STEMS.len());
+        let block = entries
+            .iter()
+            .map(|e| format!("- {} — {}. Read it to {}.", e.path, e.purpose, e.read_to))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // NOT VACUOUS: this text WOULD fire, if the guard were ever handed it.
+        assert!(first_leaning_stem(&purpose).is_some(), "the purpose fixture carries real stems");
+        assert!(first_leaning_stem(&block).is_some(), "the expertise fixture carries real stems");
+
+        // No `--brief-file`: the brief door resolves to nothing at all.
+        assert_eq!(resolve_brief_file("advisor", None).unwrap(), None);
+
+        for runtime in DISPATCH_RUNTIMES {
+            let Prepared::Value(v) = prepare_dispatch_with_brief(
+                &root,
+                runtime,
+                "advisor",
+                None,
+                None,
+                None,
+                false,
+                None,
+                Some(&purpose),
+                false,
+                Some(&block),
+                None,
+            )
+            .unwrap() else {
+                panic!("{runtime}: a stem-carrying purpose/expertise must still prepare")
+            };
+            assert!(v.get("payload").is_some(), "{runtime}: {v}");
+            assert_eq!(v.get("brief_sha256"), None, "{runtime}: no brief travelled");
+        }
+    }
+
+    /// The corpus, scoped to the VERDICT-STEM ARM ONLY. The shape arm is
+    /// excluded ON PURPOSE: no prompt file carries the four required sections,
+    /// so a whole-guard corpus would fire on every one of them and force a
+    /// quiet re-scoping of the guard. That exclusion is what stops the corpus
+    /// and the stem list being co-tuned into agreement. A real fire here is
+    /// EVIDENCE about the list — the fix is a recorded reason, never a silent
+    /// trim.
+    #[test]
+    fn the_verdict_stem_arm_fires_zero_times_over_every_shipped_prompt() {
+        let prompts = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("packages")
+            .join("bee")
+            .join("prompts");
+        let mut checked = 0usize;
+        for entry in std::fs::read_dir(&prompts).expect("packages/bee/prompts exists") {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(
+                first_leaning_stem(&text),
+                None,
+                "{}: a shipped prompt fires the verdict-stem arm — that is evidence about the \
+                 list, and the fix is a recorded reason, never a silent trim",
+                path.display()
+            );
+            checked += 1;
+        }
+        assert!(checked >= 4, "the corpus walk found only {checked} prompt files — it went vacuous");
+    }
+
+    // ── the door calls the guard (one rule, two places, one test) ──────────
+
+    const LEANING_BRIEF_CHILD: &str = "verbs::drivers::tests::dispatch_prepare_leaning_brief_child";
+    const SHAPED_BRIEF_CHILD: &str = "verbs::drivers::tests::dispatch_prepare_shaped_brief_child";
+
+    /// Runs ONLY as a child of the test below: `run_dispatch_prepare` reads
+    /// the root off `std::env::current_dir()` and prints to the process's own
+    /// stdout, both process-global — the same isolation the `--claim` children
+    /// above use.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_leaning_brief_and_carries_a_shaped_one"]
+    fn dispatch_prepare_leaning_brief_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "advisor", "--brief-file", "leaning.md", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// Runs ONLY as a child of the test below.
+    #[test]
+    #[ignore = "spawned by the_dispatch_door_refuses_a_leaning_brief_and_carries_a_shaped_one"]
+    fn dispatch_prepare_shaped_brief_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "advisor", "--brief-file", "shaped.md", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    fn child_payload(root: &Path, name: &str) -> Value {
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = Command::new(&exe);
+        cmd.args(["--exact", name, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"))
+    }
+
+    /// The rule lives in TWO places — the guard itself and the dispatch door
+    /// that must run it — so ONE test reads both: the REAL CLI entry refuses a
+    /// leaning brief with the guard's own typed refusal, and carries a shaped
+    /// one through to a payload. Without the second half a door that refused
+    /// everything would pass the first half.
+    #[test]
+    fn the_dispatch_door_refuses_a_leaning_brief_and_carries_a_shaped_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let shaped = shaped_brief("Where does the dossier live?");
+        std::fs::write(root.join("shaped.md"), &shaped).unwrap();
+        std::fs::write(
+            root.join("leaning.md"),
+            shaped.replace(
+                "The answer stays inside the existing dispatch door.",
+                "I recommend the second reader.",
+            ),
+        )
+        .unwrap();
+
+        let refused = child_payload(&root, LEANING_BRIEF_CHILD);
+        assert_eq!(refused.get("ok"), Some(&json!(false)), "{refused}");
+        assert_eq!(refused.get("type"), Some(&json!("refused")), "{refused}");
+        assert_eq!(refused.get("reason"), Some(&json!("brief_leaning_language")), "{refused}");
+        assert_eq!(refused.get("phrase"), Some(&json!("i recommend")), "{refused}");
+        assert!(refused.get("payload").is_none(), "a refused brief never reaches a payload: {refused}");
+
+        let carried = child_payload(&root, SHAPED_BRIEF_CHILD);
+        assert!(carried.get("payload").is_some(), "a shaped brief reaches a payload: {carried}");
+        assert!(carried.get("ok").is_none(), "a prepared envelope carries no ok flag: {carried}");
+        assert_eq!(
+            carried.get("brief_sha256").and_then(Value::as_str),
+            Some(crate::verbs::reservations::sha256_hex(shaped.trim_end()).as_str()),
+            "the shaped brief travelled and stamped its digest: {carried}"
+        );
+
+        // And the door owns no second copy of the list: the stems live in
+        // brief_lint.rs alone, so the two places cannot drift apart.
+        const PREPARE_SOURCE: &str = include_str!("prepare.rs");
+        assert!(
+            PREPARE_SOURCE.contains("lint_brief("),
+            "the dispatch door must call the shared guard"
+        );
+        for stem in LEANING_VERDICT_STEMS {
+            assert!(
+                !PREPARE_SOURCE.to_ascii_lowercase().contains(stem),
+                "prepare.rs carries its own copy of {stem:?} — the list lives in brief_lint.rs alone"
+            );
+        }
+    }

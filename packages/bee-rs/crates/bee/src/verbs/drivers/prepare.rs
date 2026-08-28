@@ -1907,8 +1907,21 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // reaches the payload build at all. A typed refusal, never a Thrown: the
     // caller of this door is an orchestrator firing 2–3 lanes, and it reads
     // `{ok:false, reason}` off every other refusal this command returns.
+    //
+    // The LEANING GUARD runs here too, on the resolved brief bytes and NOTHING
+    // else — never `--purpose`, never `--expertise`, never the cell record. A
+    // false fire on those would refuse the advisor consult Gate 3 itself
+    // requires (`high_risk_advisor_refusal`) and deadlock the high-risk
+    // workflow that approves guards, so the guard is handed one `&str` and the
+    // door hands it nothing more. Its list and its arms live in
+    // `brief_lint.rs` alone, so `bee blind check` can re-run the SAME rule
+    // over a dossier's recorded brief without a second copy to drift.
     let (brief_text, brief_arg_refusal) = match resolve_brief_file(&kind, brief_flag.as_deref()) {
-        Ok(brief) => (brief, None),
+        Ok(Some(brief)) => match lint_brief(&brief) {
+            Ok(()) => (Some(brief), None),
+            Err(refusal) => (None, Some(refusal)),
+        },
+        Ok(None) => (None, None),
         Err(refusal) => (None, Some(refusal)),
     };
     let (expertise_arg_error, expertise_block) = match expertise_entries {
