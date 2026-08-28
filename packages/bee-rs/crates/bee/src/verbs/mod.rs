@@ -16,6 +16,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 pub mod backlog;
+pub mod blind;
 pub mod capture;
 pub mod cells;
 pub mod decisions;
@@ -119,6 +120,12 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = triggers::try_native(args, t0) {
+        return Some(code);
+    }
+    // slp-blind-lanes D2(d) — the convergence door. `bee blind check` reads a
+    // dossier the caller names and refuses a malformed one by the name of the
+    // offending section; it owns no store of its own.
+    if let Some(code) = blind::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = supervisor::try_native(args, t0) {

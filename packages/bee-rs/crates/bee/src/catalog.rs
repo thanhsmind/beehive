@@ -646,7 +646,23 @@ mod tests {
         // exists on `status` as a BOOLEAN meaning "short output"; reusing
         // that spelling for a path would be the collision this ratchet
         // exists to catch.
-        const PINNED_FLAG_COUNT: usize = 197;
+        // 197 -> 198 (slp-blind-lanes bln-3): `bee blind check` adds exactly
+        // ONE new spelling, `--dossier`, the path of the convergence document
+        // this verb reads. Checked first, the nearest FILE-shaped spellings
+        // this vocabulary already carries: `--file` (six commands),
+        // `--task-file`, `--digest-file` and bln-1's own `--brief-file`. Every
+        // one of them names a payload path whose CONTENTS the command consumes
+        // as input to a write — the brief that becomes a prompt body, the task
+        // that becomes a cell, the digest that becomes a record. `blind check`
+        // writes nothing at all: it reads a document as EVIDENCE and reports a
+        // verdict on it, so reusing `--file` would put "the thing I am about to
+        // write from" and "the thing I am about to judge" behind one name, and
+        // a caller who learned the first meaning would read the second one
+        // wrong. Checked next: `--path` (reservations) names a repo path a hold
+        // is taken on, not a document to read, and `--dossier` is the word the
+        // feature's own vocabulary already uses for this artifact
+        // (docs/history/slp-blind-lanes/CONTEXT.md, "Convergence dossier").
+        const PINNED_FLAG_COUNT: usize = 198;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

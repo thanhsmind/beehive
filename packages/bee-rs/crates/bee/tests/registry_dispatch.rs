@@ -407,6 +407,15 @@ fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
     for verb in match_arm_verbs(&crate_src("herding.rs"), "pub fn try_native", 5) {
         served.push(format!("bee herding {verb}"));
     }
+    // `bee blind …` — a whole TOP-LEVEL namespace, which is invisible to more
+    // of this file's checks than a new sub-verb is: without an arm here the
+    // scan would not look at `verbs/blind/mod.rs` at all, and a served,
+    // undeclared `blind` sub-verb would ship reading as an unknown command to
+    // `bee --help --all`. The floor is 1: the namespace serves one verb today,
+    // and a scan that finds none has lost its subject.
+    for verb in match_arm_verbs(&crate_src("verbs/blind/mod.rs"), "pub fn try_native", 1) {
+        served.push(format!("bee blind {verb}"));
+    }
     // `bee cells …` — the namespace the swarm runs on, and the one this sweep
     // used to skip. A cells sub-verb served here and never declared ships a
     // verb no agent can find: `bee --help --all` calls it unknown.
