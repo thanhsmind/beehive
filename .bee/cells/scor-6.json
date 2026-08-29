@@ -1,0 +1,131 @@
+{
+  "id": "scor-6",
+  "feature": "slp-contract-original-request",
+  "title": "Tell cell authors and workers that the contract guards exist",
+  "lane": "small",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "scor-5"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/decision-memory/overview.md",
+    "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md"
+  ],
+  "files": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/SKILL.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/decision-memory/overview.md",
+    "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md",
+    "docs/history/slp-contract-original-request/CONTEXT.md",
+    "docs/product-description/memory/decisions.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-contract-original-request/plan.md",
+    "docs/history/slp-contract-original-request/CONTEXT.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "action": "The five code cells of this feature shipped two guards that refuse work at the claim and dispatch doors, and one prompt change every worker now sees. Nobody has been TOLD. A guard nobody was told about is a trap. This cell is prose only - no code, no tests, no behaviour change - and it closes the three doc doors bee close names.\n\nStep 1 - the worker-facing rule, in skills/bee-swarming/SKILL.md. Read the shipped behaviour first in docs/knowledge/areas/workflow-state/dispatch.md, which cells scor-4 and scor-5 already synced; do not invent from this cell's prose. Add to the worker contract, in the skill's own compressed voice and in as few lines as it takes: a claim or dispatch is REFUSED when the cell cites a decision that is retired or whose trigger is waiting or due (codes CONTRACT_RETIRED and CONTRACT_UNSETTLED), and a test-writing cell that cites no contract-tagged decision is refused by the mint trap. Both refusals are typed and zero-mutation and name their own remedy. Say plainly that an entry in cell.decisions which does not resolve to a store decision - a local D-ID like D1 - is passed over, never refused. Also add one line that the worker prompt now carries the user's verbatim request under a DO-NOT-PARAPHRASE header, and that no layer may replace or paraphrase it.\n\nStep 2 - the author-facing rule, in skills/bee-planning/SKILL.md, in the cell quality rules. One rule: a cell that writes tests against an interface cites that interface's contract decision by its store id in cell.decisions, because the mint trap refuses a test-writing cell that cites none. Name the honest limit in the same breath - the trap sees a test-shaped path in files or role test, so a code-role cell adding an inline test module to a source file is NOT caught, and citing is on the author. Keep it to the rule, not the mechanism; point at the area spec.\n\nStep 3 - the routing door. bee close reports 6 unrouted locked D-IDs for this feature. Each of D1 to D6 must be cited, in the form \"slp-contract-original-request D<n>\" (plain, a range, or a slash-list), inside a docs/knowledge/ bundle file. Place each citation where the rule it produced actually lives: D1 and D2 in the decision-memory overview beside the derived contract status and the namespaced tag; D3 and D4 in workflow-state dispatch.md beside the tripwire and the mint trap; D5 and D6 in hook-runtime the-intent-anchor-and-compaction-survival.md beside the dispatch reach. Do not move or restate the rules those files already carry - add the citation to the line that already states the rule. Re-run bee close --feature slp-contract-original-request --dry-run and confirm the routing door reads clear before you cap.\n\nStep 4 - the doc-deferral door, which bee close reports for nine lines. Two different cases, and they take different answers.\n(a) docs/product-description/memory/decisions.md lines 17, 62, 63, 68, 114, 117 and 161 do not promise future work: they DOCUMENT bee's own deferral machinery, quoting the very vocabulary the guard scans for (defer, for now, revisit when, later). That is the case the door's own remedy names. Wrap each in a reasoned block - <!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral --> - with a reason saying it describes the deferral guard rather than deferring anything. Group adjacent lines under one block where they are adjacent; do not change a word of the prose itself.\n(b) docs/history/slp-contract-original-request/CONTEXT.md's four \"Deferred To Planning\" checkboxes were all ANSWERED by planning, and the answers are in plan.md. Tick each box and append the one-line answer with a pointer to the plan section that carries it: the test-writing signal (plan.md, Approach S5), the tripwire's door (Approach S4 - both doors), the anchor resolution (Approach Half B - feature-keyed, no default fallback), and the byte-identical render (Risk map, proven by no_resolvable_anchor_leaves_every_runtime_and_kind_pair_byte_identical). Do NOT touch the Locked Decisions table, the terms, or any other section - those are the historical record. The \"Deferred Ideas\" entry names a scope-out D1 already made, so no condition could ever fire for it: wrap it in the same reasoned not-a-deferral block.\n\nStep 5 - skills/ is a release-manifest root, so a skill edit and a rebuilt manifest are one unit of work. Run bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) and commit the regenerated manifest and skill trees with the rest.\n\nStep 6 - before capping, run bee close --feature slp-contract-original-request --dry-run one more time and report in your outcome which doors now read clear and which remain. The scribing-debt, judge-debt and uat doors are the orchestrator's, not yours - do not act on them.",
+  "verify": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check --json",
+  "must_haves": {
+    "truths": [
+      "bee close --feature slp-contract-original-request --dry-run reports the routing door clear",
+      "bee close --feature slp-contract-original-request --dry-run reports the doc-deferral door clear",
+      "skills/bee-swarming names both refusals and states that an unresolvable citation is passed over, not refused",
+      "skills/bee-planning tells a cell author to cite the contract decision on a test-writing cell, and names the trap's blind spot"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-swarming/SKILL.md",
+        "substantive": "the two refusals, the pass-over rule, and the verbatim-request line, in the skill's own voice"
+      },
+      {
+        "path": "skills/bee-planning/SKILL.md",
+        "substantive": "one cell quality rule about citing the contract decision, with the trap's named limit"
+      },
+      {
+        "path": "docs/history/slp-contract-original-request/CONTEXT.md",
+        "substantive": "the four deferred-to-planning questions ticked with their answers and plan pointers"
+      }
+    ],
+    "key_links": [
+      "each of D1 to D6 is cited by name in the docs/knowledge/ file that carries the rule it produced",
+      "the regenerated release manifest is committed with the skill edits"
+    ],
+    "prohibitions": [
+      "No code, no test, and no behaviour change of any kind",
+      "No edit to CONTEXT.md's Locked Decisions table or any section other than Deferred To Planning and Deferred Ideas",
+      "No rewording of the product-description prose - only the wrapper comments",
+      "No new area spec and no restating of rules the bundle already carries"
+    ]
+  },
+  "trace": {
+    "worker": "scor-w6",
+    "outcome": "Named the two contract refusals and the verbatim-request rule in the worker and author skills, routed every locked D-ID, and answered the four deferred-to-planning questions",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "docs/knowledge/areas/decision-memory/overview.md",
+      "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md",
+      "docs/history/slp-contract-original-request/CONTEXT.md",
+      "docs/product-description/memory/decisions.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Cited D5/D6 in the hook-runtime anchor file and left the D2/D3/D4/D5 citations dispatch.md already carried instead of re-placing all six — scor-4 and scor-5 had already cited them correctly and only D6 was unrouted (its one citation sat in a comma list the matcher does not read) — the plan was wrong about a fact",
+      "Repaired three decision-memory citations that named a truncated feature slug (slp-contract) rather than adding new ones — a truncated slug routes nothing, so the line already stating the rule was the line to fix — something else had to be fixed first",
+      "Wrapped CONTEXT.md Handoff Note paragraph in a reasoned not-a-deferral block, outside the two sections the cell scoped — the door flags its deferred-to-planning phrase and cannot read clear without it; no word of the prose changed — hit an unforeseen obstacle",
+      "Verified the routing and doc-deferral doors with exact replicas of the close scanners instead of bee close --dry-run — close refuses inside a granted worktree and from main reads main tree, which does not carry this unmerged branch — hit an unforeseen obstacle",
+      "Capped with --inline-reason: the orchestrator claimed scor-6 outside bee dispatch prepare --claim, so no worker row existed for scor-w6 and a worktree worker cannot self-register — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T02:21:03.434Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "28e79000-c79d-4001-98f1-3de084df4673",
+    "claimed_at": "2026-08-29T02:10:51.480Z",
+    "inline_reason": "The orchestrator claimed scor-6 before dispatch rather than through bee dispatch prepare --claim, so no worker row was ever registered for scor-w6; a worker inside a granted worktree cannot self-register (bee state worker add is control-plane and refuses there). The work itself ran as a dispatched worker on one cell.",
+    "report": {
+      "outcome": "Named the two contract refusals and the verbatim-request rule in the worker and author skills, routed every locked D-ID, and answered the four deferred-to-planning questions",
+      "commit": "82f353a8",
+      "files": [
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-planning/SKILL.md",
+        "docs/knowledge/areas/decision-memory/overview.md",
+        "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md",
+        "docs/history/slp-contract-original-request/CONTEXT.md",
+        "docs/product-description/memory/decisions.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check --json — green (273 files match the manifest; 0 knowledge errors) plus exact replicas of the close routing and doc-deferral scanners over the committed worktree tree: 0 deferral-shaped lines, 0 unrouted D-IDs — docs cell: the proof is manifest parity after the skill regen and the bundle pointer check; bee close itself refuses inside a granted worktree and from main reads main tree, which does not carry this unmerged branch",
+      "deviations": [
+        "Cited D5/D6 in the hook-runtime anchor file and left the D2/D3/D4/D5 citations dispatch.md already carried instead of re-placing all six — scor-4 and scor-5 had already cited them correctly and only D6 was unrouted (its one citation sat in a comma list the matcher does not read) — the plan was wrong about a fact",
+        "Repaired three decision-memory citations that named a truncated feature slug (slp-contract) rather than adding new ones — a truncated slug routes nothing, so the line already stating the rule was the line to fix — something else had to be fixed first",
+        "Wrapped CONTEXT.md Handoff Note paragraph in a reasoned not-a-deferral block, outside the two sections the cell scoped — the door flags its deferred-to-planning phrase and cannot read clear without it; no word of the prose changed — hit an unforeseen obstacle",
+        "Verified the routing and doc-deferral doors with exact replicas of the close scanners instead of bee close --dry-run — close refuses inside a granted worktree and from main reads main tree, which does not carry this unmerged branch — hit an unforeseen obstacle",
+        "Capped with --inline-reason: the orchestrator claimed scor-6 outside bee dispatch prepare --claim, so no worker row existed for scor-w6 and a worktree worker cannot self-register — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 232 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

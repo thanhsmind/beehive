@@ -1,0 +1,158 @@
+{
+  "id": "scor-2",
+  "feature": "slp-contract-original-request",
+  "title": "Admit one interior colon in a decision tag so contract:<name> is writable",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/decision-memory/overview.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "docs/knowledge/areas/decision-memory/overview.md"
+  ],
+  "read_first": [
+    "docs/history/slp-contract-original-request/plan.md",
+    "docs/history/slp-contract-original-request/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs"
+  ],
+  "action": "Per D2 (plan.md, Approach, S2): the locked label is the tag convention contract:<name> over the active decision set. That tag cannot be written today - tag_pattern_test (verbs/decisions/scanners.rs:476-483) enforces /^[a-z0-9][a-z0-9-]*$/ and normalize_tags (:498) refuses anything else. This cell makes the locked spelling writable and nothing more; it adds no contract semantics, no query, no guard. Those are later slices.\n\nStep 1 - widen the predicate. tag_pattern_test must accept AT MOST ONE interior colon: the segment before it and the segment after it each still match the current rule (start with [a-z0-9], continue with [a-z0-9-]). Accept 'cells' and 'contract:cells'. Refuse ':cells', 'cells:', 'contract::cells', 'contract:cells:extra', and anything the current predicate already refuses (uppercase, underscore, dot, space, empty). Keep the change inside tag_pattern_test - do not restructure normalize_tags or normalize_tag_event_tags_value; both call the predicate and both must inherit the widening for free. There are exactly three call sites repo-wide: scanners.rs:498, verbs_write.rs:271, and the test at tests.rs:1528.\n\nStep 2 - TAG_PATTERN_DISPLAY (scanners.rs:474) is the string every refusal message prints. Change it in the same commit so it describes the predicate you just wrote. A refusal that quotes the old pattern while the code accepts a colon is a lie to the user, and it is the single most likely defect in this cell.\n\nStep 3 - tests, beside the existing tag tests in verbs/decisions/tests.rs (start from the call site at tests.rs:1528 and the tests around it; judge existing coverage first and author only the gap). From plan.md's risk map, cover: one interior colon accepted; a plain no-colon slug still accepted (the regression that matters); two colons refused; a leading colon refused; a trailing colon refused; and a table of tags that already exist in this repo's decision store - at minimum cells, contract, slp, orchestration, advisor, cli, ci - still validating. Do NOT read the live .bee/decisions.jsonl from a test; carry the representative tags as a literal table. Add one test asserting TAG_PATTERN_DISPLAY and the predicate agree: every string the display pattern describes as legal is accepted, and the sample illegal ones are refused.\n\nStep 4 - the taxonomy is not a second obstacle and must not become one. classify_decision_tags (scanners.rs:581) appends any unknown tag to docs/decisions/taxonomy.json candidates and only refuses an EMPTY tag list, so a contract:<name> tag will be recorded as a candidate rather than refused. Verify that by reading the function; change nothing there. Note in the spec sync (step 5) that the checked-in taxonomy will grow one candidate per contract name.\n\nStep 5 - sync docs/knowledge/areas/decision-memory/overview.md: state the tag slug rule as it now stands, including the single-interior-colon namespace form and what it is for (contract:<name>, the derived contract-status label of D1/D2), plus the taxonomy-candidate side effect from step 4. Keep it to a short paragraph; do not restate the whole decision store.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee decisions",
+  "must_haves": {
+    "truths": [
+      "bee decisions log --tags \"contract:dispatch-door\" is accepted and the tag is stored verbatim",
+      "A tag with no colon is still accepted exactly as before",
+      "A leading colon, a trailing colon, and two colons are each refused by name",
+      "The refusal message's pattern text describes the predicate that is actually enforced"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+        "substantive": "the widened tag_pattern_test and a TAG_PATTERN_DISPLAY that matches it"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "substantive": "accept/refuse cases for the colon forms plus the existing-tags regression table"
+      }
+    ],
+    "key_links": [
+      "normalize_tags and normalize_tag_event_tags_value inherit the widening through the shared predicate, with no edit of their own",
+      "the decision-memory overview spec states the namespace form and the taxonomy-candidate side effect"
+    ],
+    "prohibitions": [
+      "No change to classify_decision_tags or to docs/decisions/taxonomy.json",
+      "No contract-status semantics, query surface, or guard in this cell",
+      "No test that reads the live .bee/decisions.jsonl",
+      "No second colon, and no colon at either end of a tag"
+    ]
+  },
+  "trace": {
+    "worker": "scor-w2",
+    "outcome": "Tag slugs now admit one interior colon, so contract:<name> is writable; refusal text matches the predicate",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "docs/knowledge/areas/decision-memory/overview.md",
+      "docs/product-description/memory/decisions.md"
+    ],
+    "deviations": [
+      "Updated docs/product-description/memory/decisions.md, a file the cell did not name — it quotes the tag pattern verbatim and became false the moment the predicate widened; path reserved before writing — something else had to be fixed first",
+      "Also updated the hardcoded old pattern text in the existing test log_appends_event_under_lock_and_validates_tags (tests.rs:228), which asserted the pre-change TAG_PATTERN_DISPLAY — hit an unforeseen obstacle",
+      "Added a_namespaced_tag_is_stored_verbatim, a do_log round trip, beyond the predicate-level cases the cell listed — the must-have says the tag is STORED verbatim, which no predicate test can prove — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T01:25:04.206Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "28e79000-c79d-4001-98f1-3de084df4673",
+    "claimed_at": "2026-08-29T01:17:55.977Z",
+    "report": {
+      "outcome": "Tag slugs now admit one interior colon, so contract:<name> is writable; refusal text matches the predicate",
+      "commit": "f3ad2264",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "docs/knowledge/areas/decision-memory/overview.md",
+        "docs/product-description/memory/decisions.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee decisions — green — 80 passed, 0 failed; the decisions module is the only code this cell touched",
+      "deviations": [
+        "Updated docs/product-description/memory/decisions.md, a file the cell did not name — it quotes the tag pattern verbatim and became false the moment the predicate widened; path reserved before writing — something else had to be fixed first",
+        "Also updated the hardcoded old pattern text in the existing test log_appends_event_under_lock_and_validates_tags (tests.rs:228), which asserted the pre-change TAG_PATTERN_DISPLAY — hit an unforeseen obstacle",
+        "Added a_namespaced_tag_is_stored_verbatim, a do_log round trip, beyond the predicate-level cases the cell listed — the must-have says the tag is STORED verbatim, which no predicate test can prove — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "namespaced-tag-accepted",
+            "status": "PASS",
+            "evidence": "scanners.rs:497 predicate; tests tag_pattern_admits_one_interior_colon and a_namespaced_tag_is_stored_verbatim (asserts events[0] tags == [contract:dispatch-door, cells]) both ok in cargo test run"
+          },
+          {
+            "id": "plain-slug-regression",
+            "status": "PASS",
+            "evidence": "tag_pattern_still_accepts_the_tags_this_repo_already_uses ... ok - literal table cells, contract, slp, orchestration, advisor, cli, ci, nightly-job, p2; digit-leading covered by 0, 0:9, 9contract:cells in tag_pattern_display_describes_the_predicate and tag_pattern_admits_one_interior_colon, both ok"
+          },
+          {
+            "id": "malformed-colons-refused",
+            "status": "PASS",
+            "evidence": "tag_pattern_admits_one_interior_colon ... ok refuses :cells, cells:, contract::cells, contract:cells:extra, colon, double-colon, contract:Cells, cell_s, cell.s, space; tag_pattern_display_describes_the_predicate ... ok refuses empty, -a, A, a_b, a-space-b; predicate code at scanners.rs:497-510 refuses each by empty-segment or segment-rule failure"
+          },
+          {
+            "id": "display-matches-predicate",
+            "status": "PASS",
+            "evidence": "scanners.rs:474-475 TAG_PATTERN_DISPLAY is slug(:slug)? ; code at :497-510 is exactly that via split - edge cases a:, :a, a::b, a:b:c, a-:b all agree; pinned by tag_pattern_display_describes_the_predicate ... ok"
+          },
+          {
+            "id": "shared-predicate-inherited",
+            "status": "PASS",
+            "evidence": "commit diff touches only the predicate block in scanners.rs; normalize_tags calls tag_pattern_test at scanners.rs:524, normalize_tag_event_tags_value at verbs_write.rs:271 - verbs_write.rs absent from the commit stat; both_tag_normalizers_inherit_the_namespaced_slug ... ok"
+          },
+          {
+            "id": "taxonomy-untouched",
+            "status": "PASS",
+            "evidence": "git show f3ad2264 --stat lists only overview.md, decisions.md, scanners.rs, tests.rs; classify_decision_tags at scanners.rs:607-644 unchanged, appends unknown tags to candidates and never refuses them"
+          },
+          {
+            "id": "no-scope-creep",
+            "status": "PASS",
+            "evidence": "full diffs of all four changed files reviewed: predicate widening, tests, and two doc paragraphs only - no status semantics, no query surface, no guard"
+          },
+          {
+            "id": "no-live-store-read-in-tests",
+            "status": "PASS",
+            "evidence": "tests.rs diff hunk at 1532: new tests use fixture_root()/decisions_path(tmp.path()); the live store path appears only in a comment"
+          },
+          {
+            "id": "tests-actually-ran",
+            "status": "PASS",
+            "evidence": "cargo test --manifest-path packages/bee-rs/crates/bee/Cargo.toml tag (run in the worktree at HEAD f3ad2264): all five new tests printed ok; test result: ok. 51 passed; 0 failed; 3006 filtered out"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-29T01:33:36.531Z"
+      }
+    ]
+  }
+}

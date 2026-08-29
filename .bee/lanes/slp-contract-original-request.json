@@ -2,16 +2,16 @@
   "schema_version": "1.0",
   "feature": "slp-contract-original-request",
   "mode": "high-risk",
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
-    "context": false,
-    "shape": false,
-    "execution": false,
+    "context": true,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
   "summary": "Feature \"slp-contract-original-request\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"slp-contract-original-request\" (lane).",
+  "next_action": "Merge the branch, then hand the user main for uat.",
   "created_at": "2026-08-28T15:12:05.550Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
@@ -26,7 +26,36 @@
     ],
     "product_files": 9,
     "rationale": null,
-    "updated_at": "2026-08-28T15:13:17.344Z",
+    "updated_at": "2026-08-29T00:35:19.634Z",
     "feature": "slp-contract-original-request"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-29T01:02:04.274Z",
+    "feature": "slp-contract-original-request",
+    "newest_decision_id": "d853e4c6-43b7-45bb-8542-74a0ec3ba5b0",
+    "plan_sha256": "absent",
+    "advisor": "fable (models.claude.advisor)",
+    "digest_head": "# Advisor consult — high-risk execution gate, slice 1\n\n- Date: 2026-08-29 · Advisor: fable (configured `models.claude.advisor`)\n- Evidence bundle: `docs/history/slp-contract-original-request/plan.md` (rev 2),\n  `docs/history/slp-contract-original-request/CONTEXT.md`, base `37f6ae3a`.\n- Verdict: **GO — approve execution for slice 1 only.**\n\n## 1. Faithfulness of D1-D6\n\n**D1 — FAITHFUL.** Plan: \"A pure read, no store, no registry\" (plan.md\nApproach/S3) and Out of scope \"Any new store, registry, or"
+  },
+  "merge_ready": {
+    "since": "2026-08-29T01:15:40.546Z",
+    "branch": "wt/slp-contract-original-request",
+    "worktree_id": "beehive--wt--slp-contract-original-request",
+    "uat": "pending",
+    "blocked_by": [
+      "routing",
+      "doc-deferral"
+    ]
+  },
+  "last_scribing_run": {
+    "feature": "slp-contract-original-request",
+    "date": "2026-08-29",
+    "at": "2026-08-29T02:22:38.905Z",
+    "areas_synced": [
+      "workflow-state",
+      "decision-memory",
+      "hook-runtime"
+    ],
+    "next_action": "Merge the branch, then hand the user main for uat."
   }
 }

@@ -15,10 +15,10 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "CI started (Linux + Windows). I am watching it and will tell you the result.",
-    "asked_at": "2026-08-28T13:17:45.246Z",
-    "session": "b97c221a-fd60-40c2-bd86-9681b9f547bf"
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-08-28T22:24:49.087Z",
+    "session": "28e79000-c79d-4001-98f1-3de084df4673"
   },
   "route": {
     "class": "feature",

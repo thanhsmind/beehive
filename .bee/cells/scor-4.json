@@ -1,0 +1,178 @@
+{
+  "id": "scor-4",
+  "feature": "slp-contract-original-request",
+  "title": "Refuse a claim or dispatch that cites an unknown or unsettled contract decision",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "scor-3"
+  ],
+  "decisions": [
+    "D3"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "docs/knowledge/areas/workflow-state/dispatch.md"
+  ],
+  "read_first": [
+    "docs/history/slp-contract-original-request/plan.md",
+    "docs/history/slp-contract-original-request/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs"
+  ],
+  "action": "Per D3 (plan.md, Approach, S4): a cell cites contract decisions in the EXISTING cell.decisions field, and a tripwire refuses the dispatch when a cited decision is retired or trigger-waiting. The previous cell built the read this consumes: the settled/unsettled/unknown derivation and the citation resolver, both in verbs/decisions/read.rs. Use them; do not re-derive.\n\nStep 1 - the tripwire's SUBJECT, exactly as the plan defines it. Walk cell.decisions. For each entry, call the citation resolver. An entry that resolves to None is a local D-ID pointing into a CONTEXT.md table, not a store citation: pass over it silently, refuse nothing, warn nothing. For each entry that DOES resolve, read its derived status. Refuse when the status is unknown (the id is not in the active decision set - superseded, redacted, or archived: the plan's resolution of D3's word 'retired') or unsettled (a trigger keyed to it is waiting or due). Refusing on unresolvable entries would refuse 87% of citing cells today and is the single worst thing this cell could do; there is a prohibition for it below.\n\nStep 2 - the claim door. Put the check inside claim_cell_cross_session_ex (verbs/cells/handlers_write.rs, declared :1400), immediately beside the RED_BASE check (:1478-1486). Read that block first and copy its shape exactly: it is pre-store-lock, it calls release_claim before returning, and its own comment states that a refusal there never touches cell status. Yours must be the same - typed, named, and zero-mutation. The cell data at that point is the caller-supplied cell_for_budget (:1407), which is Some on all three doors; reuse that pre-scan rather than re-reading the cell. This one placement covers cells claim, cells claim-next and dispatch prepare --claim, because all three funnel here (:1302, :1385).\n\nStep 3 - the dispatch door. A cell claimed BEFORE its cited decision changed state slips a claim-only tripwire, and D3's letter names the dispatch. Add the same check to prepare's kind == 'cell' arm in verbs/drivers/prepare.rs, where the cell is already loaded, following the existing typed refusal shape there - unmapped_kind_refusal (:56-70) and the claim_ownership refusal (:1016-1030) are the two models; match their {ok:false, type:'refused', reason:..., fix:...} grammar. Both doors must call ONE shared checking function, not two copies of the walk: a rule checked at two points needs one shared read, or the two will disagree.\n\nStep 4 - close the hole that makes the claim door bypassable. normalize_new_cell (verbs/cells/validate.rs:468) preserves any truthy status a caller passes, and validate_new_cell_problems never checks it, so 'bee cells add' with \"status\":\"claimed\" produces a cell that never passes the claim door at all. Refuse a new cell whose status is anything but 'open' (absent still defaults to 'open'), with a refusal that names the field and the allowed value. Keep it to cells add; do not touch the claim/verify/cap/block/drop transitions, which handlers_write.rs:435 already guards.\n\nStep 5 - tests. Cell-door cases in verbs/cells/tests.rs, dispatch-door cases in verbs/drivers/tests.rs; judge existing coverage first and author only the gap. From plan.md's test matrix and risk map, the REFUSE cases: a citation resolving to a superseded decision; one whose trigger is waiting; one whose trigger is due; one valid citation alongside an invalid one still refuses. The ALLOW cases matter just as much, because a false refusal stalls every worker: an active decision with no trigger; an active decision whose trigger is resolved; a citation that is a local D-ID like 'D1'; an empty decisions list; a decision carrying no contract tag at all. Plus: every refusal leaves the cell status and the claim store exactly as they were (assert the record, not just the exit code); the same cell refused at the claim door is refused at the dispatch door with the same reason; and 'cells add' with an injected claimed status is refused while an absent status still defaults to open.\n\nStep 6 - sync docs/knowledge/areas/workflow-state/dispatch.md: the tripwire, both doors, the three statuses it refuses on, and - stated plainly - that an entry which does not resolve to a store decision is passed over rather than refused, with the measured reason.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers",
+  "must_haves": {
+    "truths": [
+      "Claiming a cell that cites a superseded decision is refused by name, and the cell is left open and unclaimed",
+      "Claiming a cell that cites a decision with a waiting or due trigger is refused the same way",
+      "A cell citing only local D-IDs, or citing nothing, claims exactly as it does today",
+      "bee cells add refuses a new cell whose status is anything but open, while an absent status still defaults to open"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "substantive": "the tripwire beside RED_BASE, pre-store-lock, releasing the claim before it returns"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "the same shared check in the kind == cell arm, in the existing typed-refusal grammar"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "substantive": "a new cell's status must be open or absent"
+      }
+    ],
+    "key_links": [
+      "both doors call ONE shared checking function, not two copies",
+      "the check calls the citation resolver and the derived status read from verbs/decisions/read.rs"
+    ],
+    "prohibitions": [
+      "Never refuse on a cell.decisions entry that does not resolve to a store decision",
+      "No mint trap and no test-writing-cell rule in this cell - that is the next one",
+      "No mutation of any kind on a refusal path",
+      "No change to the claim/verify/cap/block/drop status transitions"
+    ]
+  },
+  "trace": {
+    "worker": "scor-w4",
+    "outcome": "Contract-citation tripwire refuses retired/unsettled citations at the claim and dispatch doors from one shared check; cells add now refuses an authored status",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+      "docs/knowledge/areas/workflow-state/dispatch.md"
+    ],
+    "deviations": [
+      "Edited verbs/decisions/read.rs, which the cell's files list does not name — the action explicitly directs removing the S3 dead-code markers there, and the citation resolver's docstring said \"active decision\" while the tripwire must pass the active+archive union or a superseded citation resolves to None and is never refused — reserved the path first — something else had to be fixed first",
+      "The refusal's FIX line names `bee cells update --id <id> --stdin` rather than a `--decisions` flag: that flag does not exist, and a refusal that names an unreachable remedy is a lie — the plan was wrong about a fact",
+      "sync-ack: No skill text changes: the tripwire is a CLI door behavior, and the refusal teaches itself at the moment it fires (both refusals name the decision, the status and a runnable FIX). The cell declares affects_skills [] and affects_specs docs/knowledge/areas/workflow-state/dispatch.md, which this commit syncs with R16-R18 plus a Behaviors block and a pointer row. The worker-facing instruction that would belong in bee-swarming is S5's mint trap (cite a contract decision on a test-writing cell), not S4's refusal of a citation that already exists."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T01:54:24.795Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "28e79000-c79d-4001-98f1-3de084df4673",
+    "claimed_at": "2026-08-29T01:37:51.813Z",
+    "sync_ack": "No skill text changes: the tripwire is a CLI door behavior, and the refusal teaches itself at the moment it fires (both refusals name the decision, the status and a runnable FIX). The cell declares affects_skills [] and affects_specs docs/knowledge/areas/workflow-state/dispatch.md, which this commit syncs with R16-R18 plus a Behaviors block and a pointer row. The worker-facing instruction that would belong in bee-swarming is S5's mint trap (cite a contract decision on a test-writing cell), not S4's refusal of a citation that already exists.",
+    "report": {
+      "outcome": "Contract-citation tripwire refuses retired/unsettled citations at the claim and dispatch doors from one shared check; cells add now refuses an authored status",
+      "commit": "fece0e1d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+        "docs/knowledge/areas/workflow-state/dispatch.md"
+      ],
+      "tests": "cargo test --release -p bee --bin bee cells && cargo test --release -p bee --bin bee drivers — green (335 + 300 passed, 15 new) — the cell's declared verify; also ran the whole -p bee suite --no-fail-fast, all targets green except the pre-existing opencode_plugin_contracts red the plan's Base state names (local opencode install, PBI p-45481f13, touches no file this cell touches)",
+      "deviations": [
+        "Edited verbs/decisions/read.rs, which the cell's files list does not name — the action explicitly directs removing the S3 dead-code markers there, and the citation resolver's docstring said \"active decision\" while the tripwire must pass the active+archive union or a superseded citation resolves to None and is never refused — reserved the path first — something else had to be fixed first",
+        "The refusal's FIX line names `bee cells update --id <id> --stdin` rather than a `--decisions` flag: that flag does not exist, and a refusal that names an unreachable remedy is a lie — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "refuses-retired",
+            "status": "PASS",
+            "evidence": "claiming_a_cell_citing_a_retired_decision_is_refused_and_leaves_it_open (ok) - assert_untouched_by_refusal re-reads the cell record: status open, no trace.worker, claim file released; redact/archive shapes verified at verbs_write.rs:195 (union keeps the decide event as a candidate) and read.rs:340 (not active)"
+          },
+          {
+            "id": "refuses-unsettled",
+            "status": "PASS",
+            "evidence": "claiming_a_cell_citing_a_decision_with_a_waiting_trigger_is_refused (ok) and claiming_a_cell_citing_a_decision_with_a_due_trigger_is_refused (ok); dispatch door: dispatching_a_cell_citing_an_unsettled_contract_is_refused (ok)"
+          },
+          {
+            "id": "never-refuses-unresolvable",
+            "status": "PASS",
+            "evidence": "a_cell_citing_only_local_d_ids_claims (ok, with a retired decision in the store), a_cell_with_no_citations_claims_exactly_as_before (ok), a_cell_citing_an_id_this_store_never_logged_claims (ok), a_settled_or_local_citation_dispatches_normally (ok); read.rs:460 returns None under 8 chars, handlers_write.rs:1154 continues on None"
+          },
+          {
+            "id": "allows-settled",
+            "status": "PASS",
+            "evidence": "a_cell_citing_a_settled_decision_claims (ok) and a_cell_citing_a_decision_whose_trigger_is_resolved_claims (ok)"
+          },
+          {
+            "id": "zero-mutation-on-refusal",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:1631-1637 - deny before the store lock at 1641, release_claim before return; waiting-trigger test asserts trigger file byte-identical; dispatch test asserts status still claimed and no dispatch log entry"
+          },
+          {
+            "id": "one-shared-check",
+            "status": "PASS",
+            "evidence": "contract_citation_refusal defined once (handlers_write.rs:1126), called only at handlers_write.rs:1631 and prepare.rs:1107; the_claim_door_and_the_dispatch_door_refuse_with_the_same_sentence (ok)"
+          },
+          {
+            "id": "resolver-union-correction",
+            "status": "PASS",
+            "evidence": "read.rs:340 active set excludes superseded ids, so active-only resolution returns None for the exact citation D3 refuses; union (verbs_write.rs:195) adds refusals only for exact/unique-prefix matches to retired decisions - new ambiguity resolves None and allows (read.rs:463-469)"
+          },
+          {
+            "id": "cells-add-status-hole",
+            "status": "PASS",
+            "evidence": "validate.rs:294-301 scoped to validate_new_cell_problems only; add_cell_refuses_an_authored_status_and_still_defaults_an_absent_one_to_open (ok); commit diff touches no claim/verify/cap/block/drop transition"
+          },
+          {
+            "id": "no-mint-trap-yet",
+            "status": "PASS",
+            "evidence": "rg over commit-touched code files: no test-writing-cell rule; mint appears only in the CONTRACT_UNSETTLED message prose (handlers_write.rs:1180)"
+          },
+          {
+            "id": "tests-actually-ran",
+            "status": "PASS",
+            "evidence": "cargo test --manifest-path packages/bee-rs/Cargo.toml --bin bee cit - test result: ok. 66 passed; 0 failed, naming all 13 citation-door tests; exact-name run of the other two - test result: ok. 2 passed; 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-29T01:59:16.302Z"
+      }
+    ]
+  }
+}

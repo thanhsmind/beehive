@@ -1,0 +1,202 @@
+{
+  "id": "scor-1",
+  "feature": "slp-contract-original-request",
+  "title": "Render the intent anchor's verbatim request into every dispatch prompt",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D5",
+    "D6"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/intent_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee/prompts/advisor.md",
+    "packages/bee/prompts/gather.md",
+    "packages/bee/prompts/reviewer.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md"
+  ],
+  "read_first": [
+    "docs/history/slp-contract-original-request/plan.md",
+    "docs/history/slp-contract-original-request/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/intent_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+  ],
+  "action": "Per D5 and D6 (plan.md, Approach, Half B): the user's verbatim request must ride every dispatch, and bee intent's existing anchor is the store it comes from. Today dispatch prepare reads no intent at all.\n\nStep 1 - a feature-keyed, read-only anchor reader in intent_group.rs. The pieces already exist: intent_key_candidates (fn at intent_group.rs:107, pushes resolved-feature then session then DEFAULT_INTENT_KEY at :113-131), read_anchor_at (:216), read_intent (:229), and PRECOMPACT_HEADER (:250). Add ONE pub(crate) function that returns the verbatim request string for a dispatch: it tries the caller-supplied feature key first, then the active feature resolved from state, and returns None when neither yields a non-blank request. It MUST NOT fall through to DEFAULT_INTENT_KEY and MUST NOT consult the session key. That is the plan's answer to CONTEXT.md's deferred question 'how does a dispatch resolve WHICH intent anchor to read' - the evidence is in plan.md (Approach, Half B): read_anchor_at applies no TTL and no staleness check, and the live .bee/intent/default.json holds a four-day-stale request about unrelated work, so rendering it under a DO-NOT-PARAPHRASE header would be the exact drift D5 exists to prevent. Do not change intent set/show/advance/clear behaviour, and do not touch the compaction hook's own copy in hooks/compaction.rs.\n\nStep 2 - call it from prepare.rs and add the var to BOTH arms. prompt_body_for is at drivers/prepare.rs:727. The non-cell arm builds a two-var slice at prepare.rs:758-761; the cell arm builds a nine-var slice at prepare.rs:779-789. Pass 2 of render (drivers/prompt.rs:103, second pass from :165) refuses any template var missing from its arm's slice, so original_request MUST be added to BOTH slices or every dispatch of the untouched kind dies at the door. For kind cell, pass the loaded cell's feature; for gather, reviewer and advisor, pass None and let the reader fall back to the active feature only. Render the value as the verbatim request wrapped in the existing PRECOMPACT_HEADER framing (intent_group.rs:250) - reuse that constant, never retype the header text.\n\nStep 3 - the template block, in all four templates. Follow the two established conditional-block precedents exactly: the lane brief block at packages/bee/prompts/advisor.md:11-16 and the expertise block at gather.md:6-10, reviewer.md:6-10, advisor.md:6-10, worker-cell.md:28-32. Add the conditional original_request block to worker-cell.md, advisor.md, gather.md and reviewer.md, using the same if-block grammar those precedents use. The absent case must render byte-identically to today - the render engine consumes the block with its leading newline when the var is empty (prompt.rs:93, :118).\n\nStep 4 - tests, in drivers/tests.rs beside the precedents. Judge existing coverage first, then author only the gap. Mirror no_brief_leaves_every_runtime_and_kind_pair_exactly_as_it_was (tests.rs:6641) and dispatch_prepare_without_expertise_renders_no_expertise_section (tests.rs:5431). Cover, from plan.md's test matrix: an absent anchor renders byte-identically for every runtime x kind pair; a present anchor appears verbatim in all four rendered prompts; a featureless gather/advisor dispatch renders NO block even when a non-empty .bee/intent/default.json exists (this is the load-bearing one); a request containing brace-brace and an if-block opener is not interpreted as template syntax; non-ASCII and Vietnamese text survives byte for byte; a whitespace-only request is treated as absent; corrupt or unreadable intent JSON degrades to no block and never fails the dispatch; and a template var absent from its arm's slice still fails loudly.\n\nStep 5 - sync the two area specs named in affects_specs: dispatch.md gains the new prompt var and the feature-keyed-only resolution rule; the-intent-anchor-and-compaction-survival.md gains one line that the anchor now also reaches every dispatch, with the no-default-fallback reason. Prose only; keep each addition short and point at the other rather than repeating it.\n\nStep 6 - packages/bee/prompts is a release-manifest root, so a prompt edit and a rebuilt manifest are one unit of work. Run the regen chain inside this cell, in this order: bee dev render-skill-trees, then bee dev install-support onboarding via bee onboard --repo-root . --apply, then bee dev release-manifest --write - or simply bee dev regen, which runs all three in that order. Commit the regenerated docs/history/codex-harness-hardening/release-manifest.json with the rest of the cell.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --lib drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --lib intent && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A dispatch whose cell names a feature with an intent anchor renders that anchor's request verbatim, under the existing DO-NOT-PARAPHRASE header, in the worker prompt",
+      "A gather, reviewer or advisor dispatch with no active feature renders no original-request block at all, even when .bee/intent/default.json exists and is non-empty",
+      "With no anchor resolvable, every runtime x kind prompt is byte-identical to before this change",
+      "A request containing template syntax is carried as text, never interpreted"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/intent_group.rs",
+        "substantive": "one pub(crate) feature-keyed reader that never falls back to the default or session key"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "the reader call plus original_request added to both the two-var and nine-var slices"
+      },
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "a conditional original_request block following the brief-block precedent"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "byte-identical-absent coverage per runtime x kind, the no-default-fallback case, and the template-injection case"
+      }
+    ],
+    "key_links": [
+      "prompt_body_for calls the new intent_group reader",
+      "all four templates in packages/bee/prompts carry the original_request block",
+      "the rendered header is the PRECOMPACT_HEADER constant, not a retyped string"
+    ],
+    "prohibitions": [
+      "No fallback to DEFAULT_INTENT_KEY or the session key from the dispatch door",
+      "No change to intent set/show/advance/clear behaviour",
+      "No change to hooks/compaction.rs",
+      "No new field on the cell record",
+      "No paraphrase, summary, or truncation of the request text"
+    ]
+  },
+  "trace": {
+    "worker": "scor-w1",
+    "outcome": "The intent anchor's verbatim request now rides every dispatch prompt, feature-keyed only and never from the default key",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/intent_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee/prompts/advisor.md",
+      "packages/bee/prompts/gather.md",
+      "packages/bee/prompts/reviewer.md",
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/bin/prompts/advisor.md",
+      ".bee/bin/prompts/gather.md",
+      ".bee/bin/prompts/reviewer.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/workflow-state/dispatch.md",
+      "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md"
+    ],
+    "deviations": [
+      "Ran the cell verify against --bin bee instead of --lib — the bee crate has no library target, so the recorded command dies with \"no library targets found in package bee\"; same filters, same tests, on the only target that exists — the plan was wrong about a fact",
+      "Reserved and committed the four vendored prompt twins under .bee/bin/prompts and .bee/onboarding.json — bee dev regen rewrites them with the release manifest, and prompts_match_disk fails if the twins drift, so the prompt edit and its regen output are one commit — the plan was wrong about a fact",
+      "The reader refuses the default intent key by derivation as well as by fallback — sanitize_intent_key collapses an odd slug (e.g. \"***\") onto \"default\", so skipping only the fallback push would still let a weird feature reach the stale default anchor — found a better route",
+      "sync-ack: The cell declares affects_skills: [] and the change adds a rendered block to the dispatch payload itself — no skill enumerates the prompt templates' blocks, and the two area specs the cell names (workflow-state/dispatch.md, hook-runtime/the-intent-anchor-and-compaction-survival.md) were synced in this commit instead."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T01:15:40.536Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "28e79000-c79d-4001-98f1-3de084df4673",
+    "claimed_at": "2026-08-29T01:02:24.262Z",
+    "sync_ack": "The cell declares affects_skills: [] and the change adds a rendered block to the dispatch payload itself — no skill enumerates the prompt templates' blocks, and the two area specs the cell names (workflow-state/dispatch.md, hook-runtime/the-intent-anchor-and-compaction-survival.md) were synced in this commit instead.",
+    "report": {
+      "outcome": "The intent anchor's verbatim request now rides every dispatch prompt, feature-keyed only and never from the default key",
+      "commit": "afd65de3f5c463ca247f61184a80690497d57800",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/intent_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee/prompts/advisor.md",
+        "packages/bee/prompts/gather.md",
+        "packages/bee/prompts/reviewer.md",
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/bin/prompts/advisor.md",
+        ".bee/bin/prompts/gather.md",
+        ".bee/bin/prompts/reviewer.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/workflow-state/dispatch.md",
+        "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee && .bee/bin/bee dev release-manifest --check — green — 3032 unit tests pass incl. the 10 new drivers cases and the intent group; manifest 273/273 match",
+      "deviations": [
+        "Ran the cell verify against --bin bee instead of --lib — the bee crate has no library target, so the recorded command dies with \"no library targets found in package bee\"; same filters, same tests, on the only target that exists — the plan was wrong about a fact",
+        "Reserved and committed the four vendored prompt twins under .bee/bin/prompts and .bee/onboarding.json — bee dev regen rewrites them with the release manifest, and prompts_match_disk fails if the twins drift, so the prompt edit and its regen output are one commit — the plan was wrong about a fact",
+        "The reader refuses the default intent key by derivation as well as by fallback — sanitize_intent_key collapses an odd slug (e.g. \"***\") onto \"default\", so skipping only the fallback push would still let a weird feature reach the stale default anchor — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verbatim-rides-a-featured-dispatch",
+            "status": "PASS",
+            "evidence": "prepare.rs:733-743 original_request_block + test a_resolvable_anchor_rides_every_dispatch_kind_verbatim ... ok"
+          },
+          {
+            "id": "no-default-anchor-ever",
+            "status": "PASS",
+            "evidence": "intent_group.rs:268-289 push refuses DEFAULT_INTENT_KEY after sanitize_intent_key on every route; test a_featureless_dispatch_reads_no_default_anchor_even_when_one_exists ... ok (covers explicit 'default', '***' derivation, and no-key)"
+          },
+          {
+            "id": "byte-identical-when-absent",
+            "status": "PASS",
+            "evidence": "test no_resolvable_anchor_leaves_every_runtime_and_kind_pair_byte_identical ... ok (walks DISPATCH_RUNTIMES x DISPATCH_KINDS)"
+          },
+          {
+            "id": "template-syntax-is-text",
+            "status": "PASS",
+            "evidence": "verbs/drivers/prompt.rs:103 render pass 2 walks pre-substitution text only; test a_request_carrying_template_syntax_is_carried_as_text ... ok"
+          },
+          {
+            "id": "both-var-slices",
+            "status": "PASS",
+            "evidence": "prepare.rs:786-791 non-cell slice and prepare.rs:826 cell slice both carry (\"original_request\", ...)"
+          },
+          {
+            "id": "header-constant-reused",
+            "status": "PASS",
+            "evidence": "prepare.rs:737-741 formats with crate::verbs::intent_group::PRECOMPACT_HEADER/PRECOMPACT_FOOTER, made pub(crate) at intent_group.rs:300-303"
+          },
+          {
+            "id": "all-four-templates",
+            "status": "PASS",
+            "evidence": "git show afd65de3 adds the if-block to all 4 packages/bee/prompts/*.md and all 4 .bee/bin/prompts/*.md; diff -q pairs identical; test every_template_carries_the_original_request_block_and_matches_disk ... ok"
+          },
+          {
+            "id": "prohibitions-held",
+            "status": "PASS",
+            "evidence": "git show afd65de3 --stat: no cells schema file touched, hooks/compaction.rs absent from the diff; intent_group.rs diff adds only dispatch_original_request and const visibility"
+          },
+          {
+            "id": "tests-actually-ran",
+            "status": "PASS",
+            "evidence": "cargo test -p bee --bin bee -- verbs::drivers::tests -> test result: ok. 232 passed; 0 failed; all ten new names printed ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-29T01:27:12.595Z"
+      }
+    ]
+  }
+}

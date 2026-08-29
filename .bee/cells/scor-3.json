@@ -1,0 +1,162 @@
+{
+  "id": "scor-3",
+  "feature": "slp-contract-original-request",
+  "title": "Derive a contract decision's settled status without writing to the trigger store",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "scor-2"
+  ],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/decision-memory/overview.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+    "docs/knowledge/areas/decision-memory/overview.md"
+  ],
+  "read_first": [
+    "docs/history/slp-contract-original-request/plan.md",
+    "docs/history/slp-contract-original-request/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs"
+  ],
+  "action": "Per D1 and D2 (plan.md, Approach, S3): a contract's settled status is a DERIVED view over the decision log - no new store, no registry, no reverse index. This cell builds the read only. It adds no guard and refuses nothing; the tripwire that consumes it is the next cell.\n\nStep 1 - a read-only trigger reader. read_and_evaluate (verbs/triggers/mod.rs:223) is the only reader and it WRITES: for a predicate-tier trigger still waiting whose predicate is true, it flips status to due and calls write_json_atomic (mod.rs:249-251). A refusal path that promises zero mutation cannot call it. Refactor rather than copy: extract the directory walk and record parse into ONE shared body that takes a flag for whether the predicate flip is performed, then express read_and_evaluate as that body with the flip ON and a new pub(crate) read-only entry point as the same body with the flip OFF. Two copies of this walk would be two things that can disagree; the learned pattern 'A rule checked at two points needs one shared read' is exactly this case. Keep the existing fail-open behaviour in both: a missing directory is empty, a raced-away file is skipped, a corrupt or shape-invalid file becomes Unreadable rather than a crash.\n\nStep 2 - the status read, in verbs/decisions/read.rs beside active_decisions (:146). Add a pub(crate) function that answers, for one decision id: settled when the id is in the active decision set AND no trigger keyed to it has status waiting or due; unsettled when it is in the active set AND such a trigger exists; unknown when it is not in the active set at all. 'Unknown' is the plan's resolution of D3's word 'retired': the store has no retired state, only supersession (read.rs:156), redaction (:162) and archiving, and all three drop the id out of active_decisions, which is exactly the condition to refuse on later. Use the read-only reader from step 1, never read_and_evaluate.\n\nStep 3 - the join is on SHORT8, not on the full id. TriggerRecord.decision holds the first 8 characters of the decision id (verbs/triggers/mod.rs:75-85, written at :402). Match by comparing the record's decision against the first 8 chars of the id being asked about. Two live facts to honour: 4 of the 14 trigger records in this repo carry a decision key that is not a short8 at all ('herding-', 'P72', 'p-c6e61d', 'wayfindi'), so a junk key must simply match nothing rather than error; and a manual-tier trigger never reaches due (mod.rs:262-266), so a contract decision with a waiting manual trigger stays unsettled until a human resolves it - that is correct under D2, and the function's own doc comment must say so plainly.\n\nStep 4 - a citation resolver, also a pure read, in the same place. cell.decisions does NOT hold store decision ids: measured over the 92 live cells, 81 citations, only 11 resolve, and the entry-length histogram is {2: 61, 3: 5, 8: 11, 24: 1, 25: 3} - the field is dominated by local D-IDs like 'D1' from a CONTEXT.md table (plan.md, Discovery 5). Add a pub(crate) function that maps one cell.decisions entry to Some(store decision id) or None: an exact id match resolves; a prefix of at least 8 characters that matches EXACTLY ONE active decision resolves; anything shorter than 8 characters, and any prefix matching two or more decisions, resolves to None. None means 'not a store citation' and is not an error - the next cell passes over it silently.\n\nStep 5 - tests in verbs/decisions/tests.rs, over fixture stores built in a tempdir; judge existing coverage first and author only the gap. From plan.md's test matrix: settled, unsettled-waiting, unsettled-due, and unknown-because-superseded each derived correctly; a resolved trigger leaves the decision settled; a manual waiting trigger leaves it unsettled; a trigger file with a junk decision key matches nothing; two decision ids sharing a short8 do not borrow each other's trigger; a corrupt trigger file degrades rather than panics; the trigger files are BYTE-IDENTICAL before and after the read-only reader runs over a predicate-tier waiting trigger whose predicate is true (this is the load-bearing one - assert file bytes, not status); the resolver returns None for 'D1', Some for a full id, Some for a unique 8-char prefix, and None for an ambiguous prefix.\n\nStep 6 - extend docs/knowledge/areas/decision-memory/overview.md with the derived status rule: the three values, the short8 join, the manual-trigger consequence, and the fact that nothing is stored. Do not restate the tag rule the previous cell already added there; point at it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee decisions && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee triggers",
+  "must_haves": {
+    "truths": [
+      "A decision tagged for a contract with no waiting or due trigger reads as settled; one with a waiting or due trigger reads as unsettled; a superseded, redacted or archived one reads as unknown",
+      "Running the read-only trigger reader leaves every file under .bee/triggers byte-identical, even when a predicate-tier waiting trigger's predicate is true",
+      "A trigger record whose decision key is not a short8 of any decision matches nothing and raises no error",
+      "A cell.decisions entry shorter than 8 characters resolves to no store decision, and that is not an error"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+        "substantive": "one shared walk with the predicate flip as a flag, and a pub(crate) read-only entry point"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+        "substantive": "the settled/unsettled/unknown derivation and the citation resolver, both pure reads"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "substantive": "fixture-store cases incl. the byte-identity assertion and the short8 collision case"
+      }
+    ],
+    "key_links": [
+      "the status read calls the read-only trigger reader, never read_and_evaluate",
+      "read_and_evaluate and the read-only reader are the same body with one flag, not two copies"
+    ],
+    "prohibitions": [
+      "No new store, file, index, or cache",
+      "No guard, refusal, or CLI verb in this cell",
+      "No change to read_and_evaluate's observable behaviour for its existing callers",
+      "No reverse index from contract name to trigger"
+    ]
+  },
+  "trace": {
+    "worker": "scor-w3",
+    "outcome": "Derived contract status (settled/unsettled/unknown) and a cell.decisions citation resolver, both pure reads over a new zero-mutation trigger reader",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "docs/knowledge/areas/decision-memory/overview.md"
+    ],
+    "deviations": [
+      "Kept the plan test line 'two decision ids sharing a short8 do not borrow each other's trigger' but asserted the opposite, true behaviour: both read unsettled — the plan was wrong about a fact — a trigger record stores only the short8, so it physically cannot say which of two colliding ids it meant; unsettled is the fail-safe direction for a refusal path, live collisions are 0, and the limit is documented in the code and in the knowledge doc"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T01:37:09.714Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "28e79000-c79d-4001-98f1-3de084df4673",
+    "claimed_at": "2026-08-29T01:27:37.521Z",
+    "report": {
+      "outcome": "Derived contract status (settled/unsettled/unknown) and a cell.decisions citation resolver, both pure reads over a new zero-mutation trigger reader",
+      "commit": "35409f3d1696468683e9f1c8a79f74c7440873da",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "docs/knowledge/areas/decision-memory/overview.md"
+      ],
+      "tests": "cargo test --release -p bee --bin bee decisions (97 passed, 17 of them new) && cargo test --release -p bee --bin bee triggers (9 passed) — green — the cell's own verify: the two suites over the only two modules it edits; the trigger suite proves read_and_evaluate is unchanged for its existing callers",
+      "deviations": [
+        "Kept the plan test line 'two decision ids sharing a short8 do not borrow each other's trigger' but asserted the opposite, true behaviour: both read unsettled — the plan was wrong about a fact — a trigger record stores only the short8, so it physically cannot say which of two colliding ids it meant; unsettled is the fail-safe direction for a refusal path, live collisions are 0, and the limit is documented in the code and in the knowledge doc"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "zero-mutation-read",
+            "status": "PASS",
+            "evidence": "the_derived_read_leaves_a_ready_to_fire_trigger_file_byte_identical - asserts std::fs::read bytes equal after derived read, then due_and_manual_counts on the same file flips it (due==1, bytes differ), proving non-vacuity; passed in the judge's own run"
+          },
+          {
+            "id": "one-shared-walk",
+            "status": "PASS",
+            "evidence": "triggers/mod.rs:233 read_entries(control, evaluate); :274 read_and_evaluate=read_entries(control,true); :290 read_without_evaluating=read_entries(control_root_path(root),false); diff is a rename plus one evaluate guard"
+          },
+          {
+            "id": "existing-callers-unchanged",
+            "status": "PASS",
+            "evidence": "callers due_and_manual_counts (triggers/mod.rs:325) and run_list/triggers list (mod.rs:459) get evaluate=true, identical to old body; cargo test verbs::triggers - 9 passed 0 failed incl. predicate_flip_persists_across_reads"
+          },
+          {
+            "id": "status-three-values",
+            "status": "PASS",
+            "evidence": "read.rs:394-409 + active_decisions(root,false) read.rs:146 (excludes superseded/redacted; archive separate file); open keys waiting|due only read.rs:363; tests a_superseded_decision_reads_as_unknown, a_resolved_trigger_leaves_its_decision_settled ... ok"
+          },
+          {
+            "id": "short8-join",
+            "status": "PASS",
+            "evidence": "read.rs:403 truncate_chars_head(id,8); a_trigger_key_that_is_not_a_short8_matches_no_decision ... ok; join has no error path"
+          },
+          {
+            "id": "short8-collision-honest",
+            "status": "PASS",
+            "evidence": "TriggerRecord.decision holds only short8 (triggers/mod.rs:47-52, written at add) so the record cannot disambiguate - claim is TRUE; two_decision_ids_sharing_a_short8_both_inherit_the_one_trigger ... ok; both-Unsettled over-refuses, the safe direction for a refusal path"
+          },
+          {
+            "id": "resolver-contract",
+            "status": "PASS",
+            "evidence": "read.rs:440-458 returns Option not Err; a_local_d_id_resolves_to_no_store_decision, a_full_decision_id_resolves_to_itself, a_unique_eight_character_prefix_resolves, an_eight_character_prefix_matching_two_decisions_resolves_to_nothing, a_prefix_shorter_than_eight_characters_never_resolves ... ok"
+          },
+          {
+            "id": "no-new-store",
+            "status": "PASS",
+            "evidence": "git show --name-status 35409f3d: 4 files all M, none added; no cli or verb registration touched; new fns pub(crate) with allow(dead_code) awaiting S4"
+          },
+          {
+            "id": "tests-actually-ran",
+            "status": "PASS",
+            "evidence": "cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bins verbs::decisions::tests - test result: ok. 89 passed; 0 failed, every new test name listed ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-29T01:42:11.557Z"
+      }
+    ]
+  }
+}
