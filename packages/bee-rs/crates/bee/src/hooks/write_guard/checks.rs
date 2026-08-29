@@ -96,29 +96,31 @@ pub(crate) fn lane_record_from(feature: &str, record: &Map<String, Value>) -> Ma
 /// refusals belong to a session that DECLARED a lane and got it wrong. A
 /// session whose lane was merely inferred is owed no refusal at all, so this
 /// path can never be MORE restrictive than today either.
-fn claim_derived_lane_record(
-    control_root: &str,
-    session_id: &str,
-) -> R<Option<Map<String, Value>>> {
-    let features = session_claimed_features(control_root, session_id)?;
+///
+/// sfg-3: infallible by signature, like the claim readers it calls. An error
+/// escaping here would leave `resolve_write_record` undecidable, and an
+/// undecidable write guard fails OPEN on every path — the store data this
+/// arm reads must never be able to switch the guard off.
+fn claim_derived_lane_record(control_root: &str, session_id: &str) -> Option<Map<String, Value>> {
+    let features = session_claimed_features(control_root, session_id);
     let feature = match features.as_slice() {
         [only] => only.clone(),
-        _ => return Ok(None), // no claim at all, or two features = ambiguous
+        _ => return None, // no claim at all, or two features = ambiguous
     };
     // Same lane-name validity requireLaneFeature enforces on the bound path —
     // here it simply disqualifies the derivation instead of refusing.
     if !plain_id_ok(&feature) {
-        return Ok(None);
+        return None;
     }
     let file = Path::new(control_root)
         .join(".bee")
         .join("lanes")
         .join(format!("{}.json", feature));
-    match read_json_g(&file)? {
+    match read_json_g(&file).unwrap_or(None) {
         Some(Value::Object(m)) if m.get("feature") == Some(&Value::String(feature.clone())) => {
-            Ok(Some(lane_record_from(&feature, &m)))
+            Some(lane_record_from(&feature, &m))
         }
-        _ => Ok(None), // missing, corrupt, or naming a different feature
+        _ => None, // missing, corrupt, or naming a different feature
     }
 }
 
@@ -163,7 +165,7 @@ pub(crate) fn resolve_write_record(
             // `bee cells claim` under this same session id — never a guess.
             // Anything short of exactly one usable feature is no opinion, and
             // the default record answers byte-identically to before.
-            if let Some(record) = claim_derived_lane_record(&control2, sid)? {
+            if let Some(record) = claim_derived_lane_record(&control2, sid) {
                 return Ok(RecordResolution::Ok {
                     record,
                     source: "claim",
@@ -531,11 +533,22 @@ between the two checkouts at merge time.",
 
     // Workspace-ownership deny (msn-21, class (c)).
     if let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) {
-        // sfg-1: `"claim"` is grouped with `"default"` on purpose. The claim
-        // arm derives WHICH LANE this session works under; it says nothing
-        // about who owns this checkout, so the ownership guard must keep
-        // firing for exactly the sessions it fired for before this cell —
-        // those sessions read `"default"` then and read `"claim"` now.
+        // sfg-1/sfg-3: `"claim"` is grouped with `"default"` because neither
+        // source says anything about who OWNS this checkout — only a
+        // DECLARED lane carries that, so a claim-derived session stays
+        // subject to this guard exactly as an unbound one always was.
+        //
+        // What the claim arm DID change is the phase this guard reads:
+        // `phase` above comes from the ACTING record, so a claim-derived
+        // session is judged on its claimed lane's phase, never on
+        // `.bee/state.json`'s. That is the honest reading — the claimed lane
+        // IS the phase this session works in — and it moves the trigger set
+        // BOTH ways: an unbound session whose claimed lane is `swarming`
+        // now skips this deny where an `idle` default record used to reach
+        // it, and one whose claimed lane is not `swarming` now reaches it
+        // where a `swarming` default record used to skip it. Both
+        // directions are pinned by
+        // `sfg3_the_ownership_guard_reads_the_claim_derived_phase_not_the_default_one`.
         if matches!(source, "default" | "claim") && phase != Value::String("swarming".into()) {
             let config = read_config(Path::new(&control_root))?;
             if resolve_write_policy_mode(&config) == "isolated" {

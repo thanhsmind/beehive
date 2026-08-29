@@ -444,6 +444,16 @@ pub(crate) fn active_worker_session_ids(control_root: &str, exclude: Option<&str
 // cell-less claim contributes nothing and NEVER produces a refusal. The
 // loud, typed lane refusals belong to a session that DECLARED a lane; a
 // derived one gets silence and the default record.
+//
+// sfg-3 makes that fail-quiet STRUCTURAL: every function below is
+// infallible — no `?`, no `R<..>`, nothing to propagate. These readers sit
+// under `resolve_write_record`, and an error escaping one of them reached
+// `hooks/mod.rs`'s `emit_undecidable`: exit 0, "the guard did NOT run on
+// it", for every path including `.bee` mutations. So ONE unreadable byte in
+// this session's own claim would have switched the WHOLE write guard off —
+// a guard failing OPEN on malformed store data. A claim the reader cannot
+// understand contributes nothing, or reads as active; it never decides the
+// guard's fate.
 
 pub(crate) fn claims_dir_g(control_root: &str) -> PathBuf {
     Path::new(control_root).join(".bee").join("claims")
@@ -451,14 +461,23 @@ pub(crate) fn claims_dir_g(control_root: &str) -> PathBuf {
 
 /// provenance: claims.mjs isClaimExpired/isClaimActive — a claim carrying no
 /// usable ttl or no parseable timestamp reads as ACTIVE, never as expired.
-pub(crate) fn claim_active(claim: &Map<String, Value>, now: f64) -> R<bool> {
+///
+/// sfg-3: "no parseable timestamp" means EVERY shape `date_parse_ms` cannot
+/// turn into milliseconds, its `Err(Nd)` arms included — a non-RFC3339
+/// string, a numeric epoch, an object, a bool. That error used to escape
+/// through `?` and take the whole guard down with it (see the module note
+/// above); it is swallowed here instead, which is exactly what this
+/// function's own contract already promised.
+pub(crate) fn claim_active(claim: &Map<String, Value>, now: f64) -> bool {
     let ttl = match claim.get("ttl_seconds").and_then(|v| v.as_f64()) {
         Some(t) if t.is_finite() && t > 0.0 => t,
-        _ => return Ok(true),
+        _ => return true,
     };
-    match date_parse_ms(claim.get("claimed_at"))? {
-        Some(ms) => Ok(ms + ttl * 1000.0 > now),
-        None => Ok(true),
+    match date_parse_ms(claim.get("claimed_at")) {
+        Ok(Some(ms)) => ms + ttl * 1000.0 > now,
+        // Ok(None) = absent/null/blank; Err(Nd) = present but unreadable.
+        // Both are "no parseable timestamp", and both read as ACTIVE.
+        _ => true,
     }
 }
 
@@ -466,15 +485,15 @@ pub(crate) fn claim_active(claim: &Map<String, Value>, now: f64) -> R<bool> {
 /// sorted claim-file order. A claim owned by another session is never read;
 /// an expired one, a corrupt one, one whose cell record is missing, and one
 /// whose cell names no feature each contribute nothing.
-pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> R<Vec<String>> {
+pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> Vec<String> {
     let sid = js_trim(session_id);
     if !plain_id_ok(sid) {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let dir = claims_dir_g(control_root);
     let entries = match std::fs::read_dir(&dir) {
         Ok(e) => e,
-        Err(_) => return Ok(Vec::new()), // no claims directory at all
+        Err(_) => return Vec::new(), // no claims directory at all
     };
     let mut names: Vec<String> = Vec::new();
     for entry in entries.flatten() {
@@ -491,14 +510,19 @@ pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> 
         if !plain_id_ok(stem) {
             continue; // requireId throw → skipped, exactly like activeWorkers
         }
-        let claim = match read_json_g(&dir.join(&name))? {
+        // sfg-3: `unwrap_or(None)` rather than `?`. `read_json_g` answers
+        // `Ok(None)` for missing and corrupt today, but this reader must not
+        // depend on a distant function staying infallible — an unreadable
+        // claim contributes nothing, and can never reach the caller as an
+        // error.
+        let claim = match read_json_g(&dir.join(&name)).unwrap_or(None) {
             Some(Value::Object(m)) => m,
             _ => continue, // missing, corrupt, or not an object
         };
         if claim.get("session") != Some(&Value::String(sid.to_string())) {
             continue; // another session's claim is never this session's lane
         }
-        if !claim_active(&claim, now)? {
+        if !claim_active(&claim, now) {
             continue;
         }
         // The record's own `cell` field is the authority; the filename stem is
@@ -511,18 +535,18 @@ pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> 
             .join(".bee")
             .join("cells")
             .join(format!("{}.json", cell_id));
-        let feature = match read_json_g(&cell_file)? {
+        let feature = match read_json_g(&cell_file).unwrap_or(None) {
             Some(Value::Object(m)) => match m.get("feature") {
                 Some(Value::String(f)) if !js_trim(f).is_empty() => js_trim(f).to_string(),
                 _ => continue,
             },
-            _ => continue,
+            _ => continue, // sfg-3: an unreadable cell record names no feature
         };
         if !features.contains(&feature) {
             features.push(feature);
         }
     }
-    Ok(features)
+    features
 }
 
 // ─── reservations.mjs + lease-store.mjs read ports ─────────────────────────

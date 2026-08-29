@@ -2284,6 +2284,214 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("\"ghost\""), "{}", e.stderr);
     }
 
+    // ── sfg-3 (slp-followup-gaps): the claim reader never decides the
+    // guard's fate, and the ownership guard's trigger set is pinned ────────
+
+    /// A claim carrying an arbitrary `claimed_at` value — the shapes
+    /// `date_parse_ms` cannot turn into milliseconds.
+    fn write_claim_stamp(root: &Path, cell: &str, session: &str, claimed_at: Value) {
+        let dir = root.join(".bee").join("claims");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{cell}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "cell": cell,
+                    "session": session,
+                    "workspace_id": "main",
+                    "ttl_seconds": 3600.0,
+                    "claimed_at": claimed_at,
+                    "acquired_at": claimed_at,
+                    "fence_epoch": 1
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// Every `claimed_at` shape `date_parse_ms` refuses: a non-RFC3339
+    /// string, a numeric epoch, an object, a bool — `Some(_) => Err(Nd)`.
+    fn unparseable_stamps() -> Vec<Value> {
+        vec![
+            json!("yesterday"),
+            json!("2026-08-29 10:56:37"),
+            json!(1_756_400_000_000_i64),
+            json!({ "iso": "2026-08-29T10:56:37.000Z" }),
+            json!(true),
+        ]
+    }
+
+    /// The fail-OPEN hole. `claim_active` promises in its own comment that a
+    /// claim with no parseable timestamp reads as ACTIVE, but it read the
+    /// stamp through `date_parse_ms(..)?`, and that `Err(Nd)` escaped
+    /// `resolve_write_record` all the way to `emit_undecidable` — "the guard
+    /// did NOT run on it", every path, `.bee` mutations included. ONE
+    /// malformed byte in this session's OWN claim switched the whole write
+    /// guard off. The reader must swallow it and read the claim as active.
+    #[test]
+    fn sfg3_an_unparseable_claim_stamp_reads_as_active_and_never_stops_the_guard() {
+        for stamp in unparseable_stamps() {
+            let fx = build_git_fixture("idle");
+            add_live_session(&fx.root, "sess-1");
+            write_claim_stamp(&fx.root, "cell-1", "sess-1", stamp.clone());
+            write_cell_record(&fx.root, "cell-1", "demo-feat");
+            write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+            stage_file(&fx.root, "src/feature.js");
+            // expect_done panics on Delegate — the undecidable fail-open.
+            let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+            assert_eq!(e.code, 0, "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The same claim, and the guard still REFUSES what it should: reading a
+    /// claim as active is not reading it as permission. Its lane is
+    /// terminal, so the intake gate holds — proof the guard decided rather
+    /// than fell open.
+    #[test]
+    fn sfg3_an_unparseable_claim_stamp_still_lets_the_guard_refuse() {
+        for stamp in unparseable_stamps() {
+            let fx = build_git_fixture("swarming");
+            add_live_session(&fx.root, "sess-1");
+            write_claim_stamp(&fx.root, "cell-1", "sess-1", stamp.clone());
+            write_cell_record(&fx.root, "cell-1", "demo-feat");
+            write_lane_record(&fx.root, "demo-feat", "idle", "docs");
+            stage_file(&fx.root, "src/feature.js");
+            let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(e.stderr.contains("intake gate"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The write check reaches the same reader, so it fell open the same
+    /// way. A source write judged against a claim-derived SWARMING lane is
+    /// allowed, and the guard decided it.
+    #[test]
+    fn sfg3_an_unparseable_claim_stamp_never_stops_the_write_check_either() {
+        let fx = build_fixture("idle", false);
+        add_live_session(&fx.root, "sess-1");
+        write_claim_stamp(&fx.root, "cell-1", "sess-1", json!("yesterday"));
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        let allowed = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(allowed.code, 0, "{}", allowed.stderr);
+    }
+
+    /// A claim the reader cannot understand contributes NOTHING — it never
+    /// takes the guard down with it. A garbage `ttl_seconds` beside a
+    /// garbage stamp still reads as active; a claim file that is not an
+    /// object is skipped and the default record answers. Neither is ever an
+    /// undecidable guard.
+    #[test]
+    fn sfg3_a_claim_the_reader_cannot_understand_never_decides_the_guards_fate() {
+        let fx = build_git_fixture("idle");
+        add_live_session(&fx.root, "sess-1");
+        std::fs::create_dir_all(fx.root.join(".bee").join("claims")).unwrap();
+        std::fs::write(
+            fx.root.join(".bee").join("claims").join("cell-1.json"),
+            "{\"cell\":\"cell-1\",\"session\":\"sess-1\",\"ttl_seconds\":\"soon\",\"claimed_at\":42}\n",
+        )
+        .unwrap();
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+
+        let arr = build_git_fixture("idle");
+        add_live_session(&arr.root, "sess-1");
+        std::fs::create_dir_all(arr.root.join(".bee").join("claims")).unwrap();
+        std::fs::write(arr.root.join(".bee").join("claims").join("cell-1.json"), "[1,2,3]\n")
+            .unwrap();
+        write_cell_record(&arr.root, "cell-1", "demo-feat");
+        write_lane_record(&arr.root, "demo-feat", "swarming", "docs");
+        stage_file(&arr.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &arr.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+    }
+
+    /// A workspace whose write ownership is held by another LIVE session —
+    /// the state msn-21's ownership deny fires on.
+    fn write_owned_workspace(root: &Path, workspace_id: &str, owner: &str) {
+        let dir = root.join(".bee").join("runtime").join("workspaces");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{workspace_id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": workspace_id,
+                    "write_owner_session": owner,
+                    "fence_epoch": 1,
+                    "attached_sessions": [owner]
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// msn-21's workspace-ownership guard at write_policy `isolated` (the
+    /// default), against a CLAIM-DERIVED record. The claim arm DID move this
+    /// guard's trigger set, and this pins which way: the derived lane phase
+    /// is the acting phase, read as such in both directions.
+    #[test]
+    fn sfg3_the_ownership_guard_reads_the_claim_derived_phase_not_the_default_one() {
+        // `.bee/state.json` says idle, so before the claim arm this session
+        // read `idle` and hit the deny. Its claimed lane is swarming — the
+        // phase it is really working in — and a swarming session is never
+        // told to isolate.
+        let swarming = build_fixture("idle", false);
+        add_live_session(&swarming.root, "sess-1");
+        add_live_session(&swarming.root, "sess-owner");
+        write_owned_workspace(&swarming.root, "main", "sess-owner");
+        write_claim(&swarming.root, "cell-1", "sess-1");
+        write_cell_record(&swarming.root, "cell-1", "demo-feat");
+        write_lane_record(&swarming.root, "demo-feat", "swarming", "docs");
+        let e = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &swarming.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        assert!(!e.stderr.contains("bee write-policy"), "{}", e.stderr);
+
+        // The other direction, same guard: `.bee/state.json` says swarming,
+        // the claimed lane says executing. The DERIVED phase wins, so the
+        // ownership deny fires where the default record would have skipped
+        // it — the claim arm resolves a lane, never an ownership exemption.
+        let executing = build_fixture("swarming", true);
+        add_live_session(&executing.root, "sess-1");
+        add_live_session(&executing.root, "sess-owner");
+        write_owned_workspace(&executing.root, "main", "sess-owner");
+        write_claim(&executing.root, "cell-1", "sess-1");
+        write_cell_record(&executing.root, "cell-1", "demo-feat");
+        write_lane_record(&executing.root, "demo-feat", "executing", "docs");
+        let e = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &executing.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee write-policy"), "{}", e.stderr);
+        assert!(e.stderr.contains("sess-owner"), "{}", e.stderr);
+    }
+
     // ── staging-lane D0 teeth #2: a direct `git commit` inside the
     // REGISTERED staging worktree is refused unless BEE_STAGING_MACHINERY=1
     // is set — phase-independent, like gc-2, so `build_linked`'s "swarming"
