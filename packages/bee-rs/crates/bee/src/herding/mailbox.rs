@@ -100,6 +100,22 @@ fn result_filename(round: u32) -> String {
     format!("result-{round}.json")
 }
 
+/// `.bee/mailbox/<job-id>/report-N.md` for a given round (pi-result-mailbox
+/// D1): the worker's FULL deliverable — the digest body `summary` (one line)
+/// can never carry. Round-numbered exactly like `result_path` and `ack_path`,
+/// so a re-briefed worker on round 2 never overwrites round 1's report, and
+/// written FIRST, before the result file whose appearance ends the round.
+pub(crate) fn report_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join(report_filename(round))
+}
+
+/// The bare filename for a round's report — `report-N.md`. The single source
+/// both `report_path` above and the reader's convention probe key off, so the
+/// writer's rename target and the reader's guess can never drift apart.
+pub(crate) fn report_filename(round: u32) -> String {
+    format!("report-{round}.md")
+}
+
 /// `.bee/mailbox/<job-id>/ack-N.json` for a given round — herding-prompt-stall
 /// D4's delivery receipt: unlike `result_path`, this file is written by the
 /// worker as its FIRST step, before it has done any of the task, so its
@@ -243,6 +259,8 @@ pub(crate) fn render_brief(spec: &BriefSpec) -> String {
     let tmp_name = format!("{}.tmp", result_filename(spec.round));
     let ack_file = ack_path(spec.bee_dir, spec.job_id, spec.round);
     let ack_tmp_name = format!("{}.tmp", ack_filename(spec.round));
+    let report_file = report_path(spec.bee_dir, spec.job_id, spec.round);
+    let report_tmp_name = format!("{}.tmp", report_filename(spec.round));
     let cell_id_line = match spec.cell_id {
         Some(id) => format!("  \"cell_id\": \"{id}\",\n"),
         None => String::new(),
@@ -311,8 +329,8 @@ instructions (gates, cells, claims, state) this repo's AGENTS.md or CLAUDE.md \
 may have loaded into your context — you are not part of that workflow, and \
 files listed under the Expertise section are yours to read. Never run any `bee` \
 command. Never claim, cap, or write workflow state under .bee/ - writing your \
-mailbox result file (described below) is the ONE exception. The result file is \
-your only contract.\n\n\
+mailbox report and result files (described below) is the ONE exception. Those \
+two files are your only contract.\n\n\
 # Task\n\n\
 {task}\n\n\
 {expertise_block}\
@@ -324,6 +342,23 @@ A file not listed above is out of scope for this round; do not touch it.\n\n\
 # Round\n\n\
 This is round {round} of job \"{job_id}\". Write your result to round {round}'s\n\
 result file below — never a different round's file.\n\n\
+# Report — write it FIRST, the result file LAST\n\n\
+Write your FULL deliverable — the whole digest, findings, or write-up the task \
+asks for, at whatever length it needs — to the report file below, BEFORE you \
+write the result file. The result file's \"summary\" is one line and can never \
+carry it, and nothing else survives this session. Write the report the SAME \
+atomic way: a temp file in the SAME directory, then RENAME the temp file onto \
+the report file's exact final name.\n\n\
+The order is the rule: report first, result last. The result file's appearance \
+ends the round, and whatever is not on disk by then is lost.\n\n\
+If you are taking round {round} up again after an interruption — a resumed or \
+retried attempt at the same round — REWRITE the report file with your current \
+work before you write the result file. A report left behind by the earlier \
+attempt is stale, and a stale report is not read.\n\n\
+  temp file (write your report here):  {mailbox}/{report_tmp_name}\n\
+  report file (round {round}, rename to this exact final name): {report_file}\n\n\
+When you have written the report, name its path in the result file's \
+\"report_path\" field, exactly as it is written above.\n\n\
 # Result contract\n\n\
 When you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\n\
 this schema, and nothing else, to the result file:\n\n\
@@ -332,10 +367,14 @@ this schema, and nothing else, to the result file:\n\n\
   \"summary\": \"<one line: what happened>\",\n\
   \"files_changed\": [\"<path>\", \"...\"],\n\
   \"proof\": \"<command or evidence that backs the status>\",\n\
+  \"report_path\": \"<the report file's path, exactly as named above>\",\n\
   \"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\
   \"leaning\": \"<the one option you would pick, repeated word for word>\",\n\
   \"dissent\": {{ \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }}\n\
 }}\n\n\
+Fill \"report_path\" with the report file's path whenever you wrote one — that \
+is the only pointer anyone gets to your deliverable; leave it out only when the \
+round genuinely produced no report.\n\
 When \"blocked\" leaves a choice to make, fill \"options\" with one \
 self-contained sentence per way forward and \"leaning\" with the one you would \
 pick, repeated word for word; leave both out when there is no choice.\n\
@@ -366,6 +405,8 @@ signal; nothing else is read to decide whether you finished.\n\n\
         cell_id_line = cell_id_line,
         ack_tmp_name = ack_tmp_name,
         ack_file = ack_file.display(),
+        report_tmp_name = report_tmp_name,
+        report_file = report_file.display(),
     )
 }
 
@@ -376,6 +417,12 @@ signal; nothing else is read to decide whether you finished.\n\n\
 /// One validated result, matching the schema `render_brief` asks for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MailboxResult {
+    /// The round this result was read for — the same number
+    /// `parse_result_text` was called with. Carried on the struct (rather
+    /// than dropped at the parse site) because the report's convention
+    /// probe and its freshness check both need it, and the envelope builder
+    /// downstream is pure and has no directory listing to re-derive it from.
+    pub round: u32,
     pub status: MailboxStatus,
     pub summary: String,
     pub files_changed: Vec<String>,
@@ -397,6 +444,18 @@ pub(crate) struct MailboxResult {
     /// same reason `options`/`leaning` are: a partial or wrong-typed object
     /// reads as absent and never costs the round its result.
     pub dissent: Option<MailboxDissent>,
+    /// pi-result-mailbox D1: where the worker's full report lives. At parse
+    /// time this is exactly what the worker DECLARED (absent when it declared
+    /// nothing — a result with no report stays legal, never a parse error);
+    /// the reader that owns filesystem access resolves it to a real path, or
+    /// clears it and says why in `report_note`.
+    pub report_path: Option<String>,
+    /// Why an expected report is NOT attached — a stale leftover from an
+    /// earlier attempt at the same round, or a declared path that is not
+    /// there. Always `None` out of the pure parse: a note is a filesystem
+    /// FACT, so only the resolving reader can write one. Never a silent
+    /// drop and never a silent attach.
+    pub report_note: Option<String>,
 }
 
 /// One carried dissent — the three fields `record_dissent` needs, and
@@ -568,7 +627,29 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
     // passed through unchecked (D4): `record_dissent` owns that closed set.
     let dissent = parse_dissent(obj.get("dissent"));
 
-    Ok(MailboxResult { status, summary, files_changed, proof, options, leaning, dissent })
+    // pi-result-mailbox D1: read exactly as leniently as the three above.
+    // Absent, empty, or wrong-typed all read as NO declared report — a
+    // legacy result that predates the report contract parses byte-for-byte
+    // as it always did, and never becomes a `Malformed` round.
+    let report_path = obj
+        .get("report_path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    Ok(MailboxResult {
+        round,
+        status,
+        summary,
+        files_changed,
+        proof,
+        options,
+        leaning,
+        dissent,
+        report_path,
+        report_note: None,
+    })
 }
 
 #[cfg(test)]
@@ -633,6 +714,7 @@ mod tests {
         assert_eq!(log_path(bee_dir, "job-1"), PathBuf::from("/repo/.bee/mailbox/job-1/log.txt"));
         assert_eq!(result_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/result-5.json"));
         assert_eq!(ack_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/ack-5.json"));
+        assert_eq!(report_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/report-5.md"));
     }
 
     // ─── brief renderer ─────────────────────────────────────────────────
@@ -754,7 +836,10 @@ mod tests {
             text.contains("\"dissent\""),
             "the dissent field name belongs in the result schema now:\n{text}"
         );
-        assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox result file (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
+        // pi-result-mailbox D1: the exception now names BOTH mailbox files —
+        // a brief that banned every .bee/ write but the result file would
+        // contradict the report instruction it also carries.
+        assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox report and result files (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
     }
 
     // ─── first-step ack block (herding-prompt-stall D4) ─────────────────
@@ -839,7 +924,7 @@ mod tests {
         // OPTIONAL `dissent` object and one sentence saying when to fill it.
         // Every other byte of this block — heading, lead-in, and the four
         // original fields — is unchanged.
-        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\n"), "Result-form block drifted:\n{text}");
+        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"report_path\": \"<the report file's path, exactly as named above>\",\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nFill \"report_path\" with the report file's path whenever you wrote one — that is the only pointer anyone gets to your deliverable; leave it out only when the round genuinely produced no report.\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\n"), "Result-form block drifted:\n{text}");
         assert!(
             text.contains(&format!(
                 "temp file (write your JSON here):   {}/result-1.json.tmp\n",
@@ -847,6 +932,73 @@ mod tests {
             )),
             "result temp-file line drifted:\n{text}"
         );
+    }
+
+    // ─── report contract (pi-result-mailbox D1, D3) ─────────────────────
+
+    #[test]
+    fn render_brief_names_the_round_report_file_and_its_atomic_write() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 2);
+        let text = render_brief(&spec);
+
+        assert!(
+            text.contains(&report_path(bee_dir, "job-42", 2).display().to_string()),
+            "no absolute report file path:\n{text}"
+        );
+        assert!(text.contains("report-2.md.tmp"), "no named report temp file:\n{text}");
+        assert!(
+            text.contains("RENAME the temp file onto \
+the report file's exact final name"),
+            "no atomic write gesture for the report:\n{text}"
+        );
+        assert!(text.contains("\"report_path\""), "the result schema never names report_path:\n{text}");
+    }
+
+    #[test]
+    fn render_brief_puts_the_report_instruction_before_the_result_contract() {
+        // D1's order rule, in the brief's own layout: a worker reading top to
+        // bottom meets the report before the file whose appearance ends the
+        // round.
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        let report_pos = text
+            .find("# Report — write it FIRST, the result file LAST")
+            .expect("missing the report heading");
+        let result_pos = text.find("# Result contract").expect("missing the result-contract heading");
+        assert!(report_pos < result_pos, "the report block must precede the result contract:\n{text}");
+        assert!(
+            text.contains("The order is the rule: report first, result last."),
+            "the brief never states the order rule:\n{text}"
+        );
+    }
+
+    #[test]
+    fn render_brief_tells_a_resumed_attempt_to_rewrite_the_report_first() {
+        // The stale-report guard's worker-side half: the reader refuses a
+        // report older than the round's own delivery, so the brief must tell
+        // a resumed attempt to rewrite it rather than leave the old one.
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 3);
+        let text = render_brief(&spec);
+
+        assert!(
+            text.contains("If you are taking round 3 up again after an interruption"),
+            "the brief never names the resumed attempt:\n{text}"
+        );
+        assert!(
+            text.contains("REWRITE the report file with your current work before you write the result file."),
+            "the brief never demands the rewrite:\n{text}"
+        );
+        assert!(text.contains("a stale report is not read"), "the brief never names the consequence:\n{text}");
     }
 
     #[test]
@@ -1113,6 +1265,39 @@ mod tests {
         let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","dissent":{"claim":"c","alternative":"a","severity":"catastrophic"}}"#;
         let result = parse_result_text(1, text).expect("an unknown severity still parses");
         assert_eq!(result.dissent.expect("dissent present").severity, "catastrophic");
+    }
+
+    // ─── report_path on the result (pi-result-mailbox D1) ────────────────
+
+    #[test]
+    fn parse_result_text_reads_a_declared_report_path_and_carries_the_round() {
+        let text = r#"{"status":"done","summary":"wrote it up","files_changed":[],"proof":"n/a","report_path":"/repo/.bee/mailbox/job-42/report-2.md"}"#;
+        let result = parse_result_text(2, text).expect("a declared report path parses");
+        assert_eq!(result.report_path.as_deref(), Some("/repo/.bee/mailbox/job-42/report-2.md"));
+        assert_eq!(result.round, 2, "the round must ride the result for the reader's probe");
+        assert!(result.report_note.is_none(), "the pure parse never writes a filesystem note");
+    }
+
+    #[test]
+    fn parse_result_text_reads_a_legacy_result_with_no_report_path_as_absent() {
+        // D1: a result written before the report contract existed stays legal.
+        let text = r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#;
+        let result = parse_result_text(1, text).expect("a legacy result still parses");
+        assert!(result.report_path.is_none());
+        assert!(result.report_note.is_none());
+    }
+
+    #[test]
+    fn parse_result_text_reads_an_empty_or_wrong_typed_report_path_as_absent() {
+        for raw in [
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":""}"#,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":"   "}"#,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":7}"#,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":null}"#,
+        ] {
+            let result = parse_result_text(1, raw).expect("a malformed report_path never fails the round");
+            assert!(result.report_path.is_none(), "kept a useless report path from: {raw}");
+        }
     }
 
     #[test]
