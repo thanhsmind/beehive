@@ -958,5 +958,10 @@
     "capped": 6,
     "dropped": 0,
     "archived_at": "2026-08-28T14:50:03.184Z"
+  },
+  "slp-contract-original-request": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-08-29T02:35:59.631Z"
   }
 }
