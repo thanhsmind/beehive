@@ -28,7 +28,7 @@ bee picks a worker model by **the job the work is**, never by how expensive the 
 
 **The strongest model is still never configured.** It is always the model you run the session on (decision `0015`). Work that needs it is *escalated*, which is a flag and a budget, not a role — see [Escalation](#escalation--the-cost-lever-not-a-role) below.
 
-`models` is keyed by runtime first (Claude Code, Codex, and OpenCode name models differently), then by role name:
+`models` is keyed by runtime first (Claude Code, Codex, and OpenCode name models differently; Pi names no model at all — it names a herding agent, see [Pi](#pi--modelspi-is-herding-only-preview)), then by role name:
 
 ```jsonc
 {
@@ -133,9 +133,9 @@ Every role slot — a seeded one, `review`, `advisor`, or a name you invented �
   You **cannot pin an exact sub-version** for a Claude Code subagent — the model param is family-alias only, and it tracks the latest of each family as Anthropic ships new ones. (For **Codex**, the `codex` roles take the runtime's real model ids, e.g. `"gpt-5"`, because that runtime addresses models by id.)
 - `bee status` prints the active map — every role the runtime configures, bee's own dispatch roles first and the rest in config order, e.g. `Models (claude): generation=… review=… extraction=… test=…` — plus the `role_mix` and its escalated share, and warns when too many cells run escalated — the cost lever erodes when the strongest model touches most dispatches.
 
-### Runtimes: Claude Code, Codex, and OpenCode — and everything else (agy, …)
+### Runtimes: Claude Code, Codex, OpenCode, and Pi — and everything else (agy, …)
 
-`models` accepts **three runtime keys: `claude`, `codex`, and `opencode`** — the three first-class runtimes bee ships hooks, rendered skills, and worker agents for (opencode-support D1). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
+`models` accepts **four runtime keys: `claude`, `codex`, `opencode`, and `pi`** — the runtimes bee ships hooks or a guard belt, rendered skills, and a dispatch door for (opencode-support D1; pi-support D5 added `pi`). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
 
 - **OpenCode** names models as `provider/model` ids (e.g. `"opencode/big-pickle"` on the zero-config `opencode/*` free provider this machine ships out of the box) — a real catalog id, the same way Codex takes its real model ids, never a Claude-style family alias. There is no per-call model override on OpenCode's dispatch (`task`) tool, so `models.opencode.{code,read,extraction,generation,review}` is consumed **structurally**: each `.opencode/agent/bee-{build,gather,extract,review}.md` worker file pins its role's model directly in that file's own `model:` frontmatter (today hand-authored to match this key, not yet rendered by a `bee dev` generator the way `.claude/agents/*.md` is), so a wrong-role dispatch is unrepresentable rather than caught after the fact. Example:
 
@@ -176,6 +176,54 @@ That does *not* mean other CLIs are unusable — they plug in through the **exte
 ```
 
 Two rules travel with every cli-shaped slot: it is **gather/review/advisor-only** — cell *execution* against a cli slot is refused (`cli_tier_gather_only`), so implementation work never rides an executor bee cannot supervise — and `promptVia` must state how the prompt reaches the process (`"stdin"`, or the `"$(cat)"` wrapper for CLIs that only take argv), never guessed from the command string. A ready-to-run demo with **agy** (generation) and **opencode** (review) lives at [`.bee/config-sample-cli-executors.json`](../.bee/config-sample-cli-executors.json); per-flag reasoning and more presets: [`docs/model-presets.md`](model-presets.md).
+
+### Pi — `models.pi` is herding-only (preview)
+
+> **Preview, not production.** A Pi worker's **result digest does not come back to the session yet** — that transport (mailbox + steer/trigger injection) is the separate **`pi-result-mailbox`** feature, deliberately split out of pi-support (D7). Pi herding is not production-ready until it lands. Configure `models.pi` to try the runtime; keep your production worker path on a runtime whose worker results return.
+
+`pi` is a legal runtime at both dispatch doors — `bee dispatch prepare --runtime pi` and `bee dispatch wave --runtime pi` — and resolves `models.pi` in the **same one config home** every other runtime reads (pi-support D5). Pi's guard belt is not configured here at all: it is the checked-in extension `.pi/extensions/bee-guard.ts`, which `bee onboard` copies into the host repo.
+
+**The law: every slot resolves herding, or the door refuses by name.** Pi ships **no Agent/subagent tool surface** (store `7f9c8518`), so an Agent payload, a `spawn_agent` payload, a bare `model` parameter, or a cli command emitted for `pi` would dispatch **nothing** while the envelope read as a successful dispatch. So on `pi` every slot must be `{ "kind": "herding" }` (optionally `"agent": "<herding.agents name>"`), and every other resolution is a typed refusal carrying the one reason word **`pi_requires_herding`**, plus the `slot`, the `resolution` word, and a `fix`:
+
+| what `models.pi.<slot>` resolved | `resolution` | what happens |
+|---|---|---|
+| `{ "kind": "herding", … }` | — | the herding-exec payload — the one transport Pi can take |
+| `"opus"` (plain string) | `model` | refused: set the slot to `{"kind":"herding","agent":"<name>"}` |
+| `{ "kind": "native", … }` | `native` | refused, same fix |
+| `{ "kind": "cli", … }` | `cli` | refused, same fix |
+| `null` / unset-and-nothing-falls-through | `budget` | refused, same fix — a prompt-budget slot needs a subagent to inherit the session model, and there is none |
+| an escalated cell, or `--role ceiling` | `escalation` | refused with its **own** remedy: *Pi has no subagent surface — run the escalated cell inline in the session* |
+
+The refusals fire at both doors (`prepare` and `wave`), and **seat roles ride along** under the same law: a `lane-*` or `hat-*` slot must be herding too, and an unconfigured seat falls through to `advisor` — so keep `advisor` herding as well.
+
+**The values (the settled table, pi-support D6).** Herding constrains the **transport**, not the model vendor, so the agents named here are ordinary `herding.agents` entries:
+
+```jsonc
+{
+  "models": {
+    "pi": {
+      "code":       { "kind": "herding", "agent": "claude-opus" },   // heavy roles:
+      "test":       { "kind": "herding", "agent": "claude-opus" },   //   claude --model opus
+      "docs":       { "kind": "herding", "agent": "claude-opus" },
+      "review":     { "kind": "herding", "agent": "claude-opus" },
+      "advisor":    { "kind": "herding", "agent": "claude-fable" },  // claude --model fable
+      "read":       { "kind": "herding", "agent": "agy-flash" },     // cheap roles: agy-flash
+      "extraction": { "kind": "herding", "agent": "agy-flash" },
+      "generation": { "kind": "herding", "agent": "agy-flash" },
+      "supervisor": { "kind": "herding", "agent": "agy-flash" }
+    }
+  },
+  "herding": {
+    "agents": {
+      "claude-opus":  ["claude", "--model", "opus",  "--permission-mode", "bypassPermissions"],
+      "claude-fable": ["claude", "--model", "fable", "--permission-mode", "bypassPermissions"],
+      "agy-flash":    { "argv": ["agy", "--dangerously-skip-permissions"] }
+    }
+  }
+}
+```
+
+An `agent` name that is not in `herding.agents` refuses and lists every registry key — the same rule every herding slot follows. The full block, annotated, is in [`.bee/config-sample.json`](../.bee/config-sample.json); the `herding.*` contract is [bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md). Until `pi-result-mailbox` lands, treat every dispatch this table serves as a preview run, not as production work.
 
 ## `retry.fallbackChains` — a chain bee PUBLISHES, never one it runs
 
@@ -396,3 +444,5 @@ A second, ready-to-run demo lives at [`.bee/config-sample-cli-executors.json`](.
 > **`ceiling` has no entry** — it is not a role name and never was configurable. The strongest model is always the one you run the session on, and a cell reaches it through `bee cells escalate`, not through this file.
 >
 > `review` and `advisor` appear in the sample above to show their shapes. A fresh `bee onboard` writes neither on purpose — both already resolve with no key at all.
+>
+> **`models.pi` is not in this copy sample on purpose** — the pi runtime is herding-only and a **preview** until `pi-result-mailbox` lands (pi-support D7). Copy its block out of [`.bee/config-sample.json`](../.bee/config-sample.json) only when you mean to try it: [Pi](#pi--modelspi-is-herding-only-preview).
