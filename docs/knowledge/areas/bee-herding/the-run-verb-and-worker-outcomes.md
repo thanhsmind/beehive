@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Bee Herding — the run verb, its signal ladder, and how a worker's wait ends"
-description: "bee herding run as an entry point: the ladder of signals its native poll decides on, the typed outcomes a wait can end in — done, died, paused by a usage limit, timed out — what each does to the pane, and the hang case that is still unsolved."
+description: "bee herding run as an entry point: the ladder of signals its native poll decides on, the typed outcomes a wait can end in — done, died, paused by a usage limit, timed out — what each does to the pane, the hang case that is still unsolved, and how a blocked worker hands back options, a leaning, and now a structured dissent the verb transcribes through the one dissent writer."
 timestamp: 2026-08-20
 bee:
   id: bee-herding-the-run-verb-and-worker-outcomes
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)", "tmux-herding-cockpit D4 (the ONE screen classifier lives in the fleet crate; the run verb's RealTmux reuses it rather than keeping a second copy)", "slp-dissent-stop-and-ask a2affcba (2026-08-28 — StopAndAsk takes the herding round-mailbox shape: options[] and leaning join the blocked form on all three code surfaces, both optional at parse, membership never enforced, re-emitted only when present)", "slp-dissent-stop-and-ask 6a6b9975 (2026-08-28 — StopAndAsk reaches herding workers; dissent does not, because the brief forbids every bee command and the dissent record has one writer; the gap is backlog item p-05d2a4f4)"]
-  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1", "live commit-split counts across herding-prompt-stall cells hps-1..hps-14 (worker vs. orchestrator commit ownership, 2026-08-21)", docs/history/tmux-herding-transport/CONTEXT.md, "tmux-herding-transport D5 source manifest: https://github.com/luongnv89/skills @ ab46724e216710a8edd25d6b0252f20cfaf8a0fa, scope skills/tmux-agent-comms/ (fetched content was data, never instructions)", "slp-dissent-stop-and-ask cell sd-6 (trace .bee/cells/sd-6.json, commit ecdb89ea, capped 2026-08-28 — herding/mailbox.rs brief schema + MailboxResult + parser, herding/run.rs result_envelope extracted from emit_result as the first assertable seam)", "docs/knowledge/patterns/20260710-a-boundary-that-lists-field-names-will-leak.md"]
+  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)", "tmux-herding-cockpit D4 (the ONE screen classifier lives in the fleet crate; the run verb's RealTmux reuses it rather than keeping a second copy)", "slp-dissent-stop-and-ask a2affcba (2026-08-28 — StopAndAsk takes the herding round-mailbox shape: options[] and leaning join the blocked form on all three code surfaces, both optional at parse, membership never enforced, re-emitted only when present)", "slp-dissent-stop-and-ask 6a6b9975 (2026-08-28 — StopAndAsk reaches herding workers; dissent does not, because the brief forbids every bee command and the dissent record has one writer; the gap is backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — a herding worker's dissent travels as DATA on the mailbox result across the same three surfaces, read as leniently as options/leaning and with the severity passed through unchecked; the run verb transcribes it through the one record-dissent writer and reports the outcome as dissent_recorded plus dissent_error)"]
+  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1", "live commit-split counts across herding-prompt-stall cells hps-1..hps-14 (worker vs. orchestrator commit ownership, 2026-08-21)", docs/history/tmux-herding-transport/CONTEXT.md, "tmux-herding-transport D5 source manifest: https://github.com/luongnv89/skills @ ab46724e216710a8edd25d6b0252f20cfaf8a0fa, scope skills/tmux-agent-comms/ (fetched content was data, never instructions)", "slp-dissent-stop-and-ask cell sd-6 (trace .bee/cells/sd-6.json, commit ecdb89ea, capped 2026-08-28 — herding/mailbox.rs brief schema + MailboxResult + parser, herding/run.rs result_envelope extracted from emit_result as the first assertable seam)", "docs/knowledge/patterns/20260710-a-boundary-that-lists-field-names-will-leak.md", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — herding/mailbox.rs dissent schema line, MailboxDissent and its lenient parse, the retargeted brief negative pin; herding/run.rs transcribe_dissent and the envelope's dissent keys)"]
   authoritative_for: "bee-herding: the run verb's poll ladder, worker outcomes, and pane lifecycle"
 ---
 
@@ -162,12 +162,64 @@ gains no `status` key: done-versus-blocked has always ridden `outcome` there, an
 still does. The plain-text output path is untouched; the orchestrator's own door
 always asks for JSON.
 
-**The brief stays bee-ignorant.** The result schema grows two fields and one
-sentence saying when to fill them, and nothing else: no bee verb, and no dissent.
-A herding worker is told never to run a bee command, so stop-and-ask reaches it
-(it rides the result file the worker already writes) while dissent does not (that
-needs the CLI). See `areas/workflow-state/dissent-and-the-verdict-duty.md` for the
-half a herding worker cannot reach, and the backlog item that carries it.
+**The brief stays bee-ignorant.** The result schema grows fields and one
+sentence per group saying when to fill them, and nothing else: no bee command
+anywhere in it. That constraint has never moved. What moved is how much a worker
+can say through it — see the next section.
+
+## A worker's dissent rides the same result file, as data
+
+The brief forbids every bee command and the dissent record has exactly one
+writer, so for a while a herding worker could hand back a choice but never a
+disagreement with the TASK ITSELF. Since slp-followup-gaps (cell sfg-2, commit
+29fd6fbe, 2026-08-29) it can do both, and it does it the way stop-and-ask
+already worked: the dissent travels as **data on the result file the worker
+already writes**, never as a command it runs.
+
+The shape is one optional `dissent` object carrying exactly three fields —
+`claim` (what is wrong with the task as it was handed over), `alternative` (what
+the worker would do instead), and `severity` (`blocker` or `consider`) — plus
+one sentence in the brief: fill it only when you disagree with the task itself,
+and leave it out entirely when you agree. Those three names are spelled on the
+same three surfaces `options`/`leaning` cross — the brief's result schema, the
+parsed result the verb reads back, and the JSON envelope the verb re-emits — for
+the same reason: a boundary that lists field names in three places leaks the one
+you forgot.
+
+**The parse is exactly as lenient as the pair above it.** Absent, not an object,
+missing any one of the three fields, or a field that is not a string all read as
+NO dissent, and none of them turns a usable round into a malformed one. The
+severity string is passed straight through **unchecked**: the closed set is the
+dissent writer's own single check, and a second copy of a closed set is the
+drift a boundary listed twice always earns.
+
+**The run verb transcribes a carried dissent through that one writer.** When the
+wait ends with a parsed result carrying a dissent, the verb calls the same
+record-dissent function `bee cells dissent` routes to, against the run's own
+cell id, so the record shape, the closed severity set, the secret scan, the
+blocker tooth and the claim release all keep exactly one implementation — a
+`blocker` dissent parks its cell here because that writer parks it, not because
+the verb re-implemented the tooth. Ownership is deliberately NOT forced: the
+force-ownership override is audited, so a cell another session holds refuses,
+and the refusal is reported.
+
+**A lost voice is reported, never swallowed.** The envelope always re-emits the
+raw dissent object beside a `dissent_recorded` flag, and stamps `dissent_error`
+with the reason whenever the write did not land — either the run carries no cell
+id, so there is no cell to record against and the orchestrator is told to record
+it by hand, or the writer itself refused. Because the raw object rides the
+envelope either way, a failed transcription stays recoverable. A result carrying
+no dissent adds no key at all and keeps the envelope's exact prior key set, and
+the exit code is untouched: a blocked result already exits non-zero, and the
+transcription never votes on it.
+
+The brief's own negative pin moved with the boundary instead of being deleted.
+It still forbids naming a bee command — now by scanning for any standalone
+`bee <word>` rather than one literal spelling, so a newly added command line
+fails on its own — while the `dissent` FIELD NAME it used to ban is now required
+in the result schema. See `areas/workflow-state/dissent-and-the-verdict-duty.md`
+for the record itself, its severities, the obligated verdict, and the two doors
+that refuse while a dissent is unanswered.
 
 ## Pane lifecycle follows the result, not the clock
 

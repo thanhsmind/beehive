@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Hook Runtime — governed paths, the always-writable set, and the intake gate"
-description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, how a value left by a retired phase is translated rather than left to trip that refusal, why an approved plan document stops accepting direct edits until a revision is stamped, and why the always-writable set is now two lists — a gated-phase list without blanket docs/, and an unchanged intake list — instead of one shared constant."
+description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, how a value left by a retired phase is translated rather than left to trip that refusal, why an approved plan document stops accepting direct edits until a revision is stamped, and why the always-writable set is now two lists — a gated-phase list without blanket docs/, and an unchanged intake list — instead of one shared constant, why a session bound to no lane is now judged against the lane record its own live claim names instead of the control-root default, and why an intake refusal aimed at such a session names binding it as the remedy."
 timestamp: 2026-08-14
 bee:
   id: hook-runtime-governed-paths-and-the-intake-gate
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)"]
-  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)"]
+  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)", "edd92ac9 (slp-followup-gaps D1/D2, 2026-08-29 — an unbound session's acting write record is resolved from its own live claim before the control-root default answers, and the intake refusal aimed at such a session names binding it as the remedy)"]
+  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)", "slp-followup-gaps cell sfg-1 (commit 9809d34e, 2026-08-29 — write_guard/checks.rs claim-derived record plus the shared lane_record_from helper, store.rs session_claimed_features, paths.rs session_bind_remedy_line, write_guard/tests.rs)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
   applied_at: [skills/bee-hive/references/routing-and-contracts.md]
 ---
@@ -152,6 +152,60 @@ named: the docs lane escaped the gate boundary by accident (the constant
 was shared, not by any considered exemption for docs work specifically),
 not by design.
 
+**B34 — An unbound session's acting record is resolved from its own live
+claim before the control-root default record answers (slp-followup-gaps D1,
+cell sfg-1, 2026-08-29).** Trigger: any governed write, or any git command the
+guard evaluates, from a session that HAS a record of its own and carries no
+non-empty lane binding. What changed: before the default record answers, the
+guard asks that session's own live claims which feature it is working under — a
+claim names a cell, the cell names a feature, and that feature's lane record
+becomes the acting record, carried under a third provenance value (`claim`)
+beside `default` and `lane`. The merge that builds a lane record out of the
+lane file now lives in one helper both arms call, so a record resolved by
+declaration and a record resolved by claim are byte-identical. Why this is not
+a guess: a claim is a fact the store already holds, written by the claim verb
+under this same session id. Why it was needed: a dispatched worker that was
+never bound was judged against a record about some other feature, and at a
+terminal phase it lost every source write and every commit it legitimately
+owed its own lane. What is deliberately narrow — every one of these conditions
+only ever removes the derivation, never widens it: it fires only for a session
+that has a record and no lane (a call with no session id, and a session the
+store has no record of, both fall straight to the default, the latter because
+the bind verb itself refuses such a session); it reads only claims THIS session
+owns; it needs exactly ONE distinct claimed feature, so two or more are
+ambiguous and resolve to nothing; an expired claim, an unreadable or non-object
+claim, a claim whose cell record is missing, and a cell naming no feature each
+contribute nothing (a claim carrying no usable ttl or no parseable timestamp
+reads as active, never as expired); the feature name must be a plain id, and its
+`.bee/lanes/<feature>.json` must exist, parse as an object, and carry a matching
+`feature` key — missing, corrupt, or naming a different feature resolves to
+nothing. Every one of those failures is SILENT: the derived path never raises
+the declared-lane path's typed lane refusals, because those belong to a session
+that declared a lane and got it wrong. What actors observe: a worker holding
+exactly one claim writes and commits under the lane it was actually handed; a
+lane-bound session, a sessionless call, and a session holding no claim behave
+byte-identically to before. One consumer groups `claim` with `default` on
+purpose — the workspace-ownership check: the derivation says WHICH LANE the
+session works under, never who owns the checkout, so that check keeps firing for
+exactly the sessions it fired for before.
+
+**B35 — An intake refusal aimed at an unbound session names binding it, beside
+the standing FIX line (slp-followup-gaps D2, cell sfg-1, 2026-08-29).**
+Trigger: an intake-gate refusal — a governed write, `git push`, a bookkeeping
+git verb reaching outside its allowed paths, or an unrecognised git
+subcommand — where the acting record came from the DEFAULT record AND the
+refusing session has a record of its own carrying no lane. What changed: the
+refusal keeps everything it said (the phase, the blocked action, the
+per-call-site extra sentence, the standing FIX line) and adds one more remedy
+line: this session is bound to no lane, so the gate judged it against the
+control-root default record rather than the lane it is working under — bind it
+to that lane, or claim its cell, and retry. Why the standing line was the wrong
+remedy for this caller: it tells them to route the request through the
+workflow, but the work IS routed; only the session is unattached to it. Who
+never sees the line: a lane-bound session, a claim-derived one (B34), a call
+with no session id, and a session the store has no record of — each already has
+its own correct answer, and the last could not act on the advice anyway.
+
 ## Business Rules
 
 <!-- rule: hook-runtime-docs-lane-allowlist -->
@@ -215,6 +269,31 @@ not by design.
   root — never a prefix match that would sweep in a neighbour's — and a
   per-user temporary area needs no identifier at all (cell hsa-1, measured
   2026-08-06).
+
+- R34 — A session that has its own record but no non-empty `lane` resolves its
+  acting write record from its OWN live claims before the control-root default
+  record: exactly one distinct claimed feature, whose `.bee/lanes/<feature>.json`
+  exists, parses as an object, and carries a matching `feature` key, yields that
+  lane record under provenance `claim`. Another session's claim, an expired
+  claim, an unreadable or non-object claim, a claim whose cell record is missing
+  or names no feature, two or more distinct features, a feature name that is not
+  a plain id, and a missing, corrupt or mismatched lane record each resolve to
+  nothing, and the default record answers exactly as before. The derived path is
+  silent by construction — it never raises the declared-lane path's typed lane
+  refusals — so it is neither more permissive nor more restrictive than the lane
+  the worker was legitimately handed; a lane-bound session, a sessionless call,
+  and a session holding no claim are unchanged to the byte. The
+  workspace-ownership check reads `claim` exactly as it reads `default`: the
+  derivation names a lane, never a checkout owner (slp-followup-gaps D1, cell
+  sfg-1, 2026-08-29).
+
+- R35 — The intake refusal names binding the session as a remedy exactly when
+  the acting record came from the default record AND the refusing session has a
+  record carrying no lane. A lane-bound session, a claim-derived one, a call
+  with no session id, and a session the store has no record of never see that
+  line — the last because the bind verb refuses a session it has no record of,
+  which would make the advice a dead end (slp-followup-gaps D2, cell sfg-1,
+  2026-08-29).
 
 ## Pointers (implementation)
 
