@@ -333,11 +333,17 @@ this schema, and nothing else, to the result file:\n\n\
   \"files_changed\": [\"<path>\", \"...\"],\n\
   \"proof\": \"<command or evidence that backs the status>\",\n\
   \"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\
-  \"leaning\": \"<the one option you would pick, repeated word for word>\"\n\
+  \"leaning\": \"<the one option you would pick, repeated word for word>\",\n\
+  \"dissent\": {{ \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }}\n\
 }}\n\n\
 When \"blocked\" leaves a choice to make, fill \"options\" with one \
 self-contained sentence per way forward and \"leaning\" with the one you would \
-pick, repeated word for word; leave both out when there is no choice.\n\n\
+pick, repeated word for word; leave both out when there is no choice.\n\
+Fill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what \
+is wrong with it, \"alternative\" says what you would do instead, and \
+\"severity\" is \"blocker\" when the work should stop until someone answers or \
+\"consider\" when it should not; leave \"dissent\" out entirely when you agree \
+with the task.\n\n\
 # How to write it — write to a temp file, then rename (do not skip this)\n\n\
 Write the JSON above to a temp file in the SAME directory as the result file,\n\
 then RENAME the temp file onto the result file's exact final name. Never write\n\
@@ -384,6 +390,25 @@ pub(crate) struct MailboxResult {
     /// verbatim repeat of one `options` entry. Free text, never an index —
     /// membership is NOT enforced, for the same reason `options` is optional.
     pub leaning: Option<String>,
+    /// slp-followup-gaps D3: the worker's structured disagreement with the
+    /// TASK it was handed, carried as DATA — a herding worker is
+    /// bee-ignorant and never runs a command, so this object on the result
+    /// file is its only voice. OPTIONAL at parse and read leniently for the
+    /// same reason `options`/`leaning` are: a partial or wrong-typed object
+    /// reads as absent and never costs the round its result.
+    pub dissent: Option<MailboxDissent>,
+}
+
+/// One carried dissent — the three fields `record_dissent` needs, and
+/// nothing else. `severity` is a PLAIN STRING here on purpose (D4): the
+/// closed set (`blocker` / `consider`) is checked by `record_dissent` alone,
+/// and a second copy of a closed set is the drift a boundary listed twice
+/// always earns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MailboxDissent {
+    pub claim: String,
+    pub alternative: String,
+    pub severity: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -471,6 +496,20 @@ fn parse_result_filename(name: &str) -> Option<u32> {
     digits.parse::<u32>().ok()
 }
 
+/// The `dissent` value off a result object, read leniently: `None` unless
+/// the value is an object carrying all three of `claim`, `alternative` and
+/// `severity` as strings. Nothing here validates the severity — that is
+/// `record_dissent`'s single check (D4).
+fn parse_dissent(value: Option<&Value>) -> Option<MailboxDissent> {
+    let obj = value?.as_object()?;
+    let field = |k: &str| obj.get(k).and_then(Value::as_str).map(str::to_string);
+    Some(MailboxDissent {
+        claim: field("claim")?,
+        alternative: field("alternative")?,
+        severity: field("severity")?,
+    })
+}
+
 /// Parse and schema-validate one round's result text (already read by the
 /// caller) into a `MailboxResult`, or a typed `MailboxError` — invalid
 /// JSON, a non-object body, a missing field, or a `status` outside the
@@ -523,7 +562,13 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
 
     let leaning = obj.get("leaning").and_then(Value::as_str).map(str::to_string);
 
-    Ok(MailboxResult { status, summary, files_changed, proof, options, leaning })
+    // slp-followup-gaps D3: read exactly as leniently as the pair above.
+    // Absent, not an object, or missing any one of the three fields all read
+    // as NO dissent — never a `Malformed` round. The severity string is
+    // passed through unchecked (D4): `record_dissent` owns that closed set.
+    let dissent = parse_dissent(obj.get("dissent"));
+
+    Ok(MailboxResult { status, summary, files_changed, proof, options, leaning, dissent })
 }
 
 #[cfg(test)]
@@ -546,6 +591,36 @@ mod tests {
             nickname: "w-job-42",
             cell_id: None,
         }
+    }
+
+    /// Every `bee <word>` COMMAND the brief names, for D6's negative pin.
+    /// A list of bee's command groups would leak the group nobody thought
+    /// of, so this works the other way round: it finds every standalone
+    /// `bee` token followed by a space and reports the word after it,
+    /// unless that word is one of the brief's two prose neighbours. A new
+    /// `bee anything` line therefore fails on its own, with no list to keep.
+    fn bee_command_mentions(text: &str) -> Vec<String> {
+        const PROSE_NEIGHBOURS: [&str; 1] = ["or"];
+        let bytes = text.as_bytes();
+        let mut found = Vec::new();
+        let mut idx = 0usize;
+        while let Some(pos) = text[idx..].find("bee") {
+            let at = idx + pos;
+            idx = at + 3;
+            // A `bee` glued to a word or path segment (`.bee/`, `beehive`)
+            // is never a command.
+            if at > 0 && !matches!(bytes[at - 1], b' ' | b'\n' | b'`' | b'(') {
+                continue;
+            }
+            let rest = &text[at + 3..];
+            let Some(tail) = rest.strip_prefix(' ') else { continue };
+            let word = tail.split_whitespace().next().unwrap_or("");
+            if word.is_empty() || PROSE_NEIGHBOURS.contains(&word) {
+                continue;
+            }
+            found.push(word.to_string());
+        }
+        found
     }
 
     // ─── path layout ─────────────────────────────────────────────────────
@@ -605,6 +680,20 @@ mod tests {
             text.contains("leave both out when there is no choice"),
             "brief never says the two fields are optional:\n{text}"
         );
+        // slp-followup-gaps D3: a bee-ignorant worker can fill the dissent
+        // fields off the brief alone, without running anything.
+        assert!(text.contains("\"dissent\""), "missing dissent field:\n{text}");
+        assert!(text.contains("\"claim\""), "missing dissent claim field:\n{text}");
+        assert!(text.contains("\"alternative\""), "missing dissent alternative field:\n{text}");
+        assert!(text.contains("\"severity\""), "missing dissent severity field:\n{text}");
+        assert!(
+            text.contains("\"blocker\" | \"consider\""),
+            "the brief never names the two severities:\n{text}"
+        );
+        assert!(
+            text.contains("leave \"dissent\" out entirely when you agree with the task"),
+            "brief never says the dissent object is optional:\n{text}"
+        );
     }
 
     #[test]
@@ -648,11 +737,23 @@ mod tests {
         assert!(text.contains("Ignore any bee or agent-workflow instructions (gates, cells, claims, state)"), "missing ignore-workflow wording:\n{text}");
         assert!(text.contains("files listed under the Expertise section are yours to read"), "missing expertise-reading wording:\n{text}");
         assert!(text.contains("Never run any `bee` command"), "missing never-run-bee wording:\n{text}");
-        // The brief must never name a bee verb, StopAndAsk included: dissent
-        // is a swarming-worker verb (6a6b9975 scoped herding-lane dissent
-        // out), and a `bee` command here would contradict the line above it.
+        // slp-followup-gaps D6: the brief must still never name a bee
+        // COMMAND — that half of the old pin is unchanged, and the general
+        // scan below makes it stronger than the one literal it used to be.
+        // The other half banned the bare substring "dissent", which pinned
+        // 6a6b9975's OLD boundary (herding-lane dissent was out of scope).
+        // This feature IS that boundary moving, so the FIELD NAME is now
+        // expected in the result schema, and only the command form is banned.
         assert!(!text.contains("bee cells"), "the brief names a bee verb:\n{text}");
-        assert!(!text.contains("dissent"), "the brief names the dissent verb:\n{text}");
+        assert_eq!(
+            bee_command_mentions(&text),
+            Vec::<String>::new(),
+            "the brief names a bee command:\n{text}"
+        );
+        assert!(
+            text.contains("\"dissent\""),
+            "the dissent field name belongs in the result schema now:\n{text}"
+        );
         assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox result file (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
     }
 
@@ -734,9 +835,11 @@ mod tests {
         let text = render_brief(&spec);
 
         // StopAndAsk (a2affcba) added two OPTIONAL schema lines and one
-        // sentence saying when to fill them; every other byte of this block —
-        // heading, lead-in, and the four original fields — is unchanged.
-        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\"\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\n\n"), "Result-form block drifted:\n{text}");
+        // sentence saying when to fill them; slp-followup-gaps D3 added the
+        // OPTIONAL `dissent` object and one sentence saying when to fill it.
+        // Every other byte of this block — heading, lead-in, and the four
+        // original fields — is unchanged.
+        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\n"), "Result-form block drifted:\n{text}");
         assert!(
             text.contains(&format!(
                 "temp file (write your JSON here):   {}/result-1.json.tmp\n",
@@ -955,6 +1058,61 @@ mod tests {
         let mixed = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":["Do A.",7]}"#;
         let result = parse_result_text(1, mixed).expect("a non-string option must not refuse");
         assert_eq!(result.options, vec!["Do A.".to_string(), String::new()]);
+    }
+
+    // ─── the carried dissent (slp-followup-gaps D3/D4) ───────────────────
+
+    #[test]
+    fn parse_result_text_reads_a_full_dissent_object_off_a_result() {
+        let text = r#"{"status":"blocked","summary":"the cell is wrong","files_changed":[],"proof":"n/a","dissent":{"claim":"The paginator is not the bug.","alternative":"Fix the cursor encoder instead.","severity":"blocker"}}"#;
+        let result = parse_result_text(1, text).expect("a result carrying a dissent parses");
+        assert_eq!(
+            result.dissent,
+            Some(MailboxDissent {
+                claim: "The paginator is not the bug.".to_string(),
+                alternative: "Fix the cursor encoder instead.".to_string(),
+                severity: "blocker".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_result_text_leaves_dissent_absent_when_a_result_carries_none() {
+        let text = r#"{"status":"done","summary":"did it","files_changed":["a.rs"],"proof":"cargo test"}"#;
+        let result = parse_result_text(1, text).expect("a result with no dissent still parses");
+        assert_eq!(result.dissent, None);
+    }
+
+    #[test]
+    fn parse_result_text_reads_a_partial_or_wrong_typed_dissent_as_absent() {
+        // Missing `alternative`, missing `severity`, missing `claim`, and a
+        // non-object body: every one of them reads as NO dissent and the
+        // round still comes back green.
+        for body in [
+            r#""dissent":{"claim":"c","severity":"blocker"}"#,
+            r#""dissent":{"claim":"c","alternative":"a"}"#,
+            r#""dissent":{"alternative":"a","severity":"blocker"}"#,
+            r#""dissent":"just a sentence""#,
+            r#""dissent":["c","a","blocker"]"#,
+            r#""dissent":{"claim":7,"alternative":"a","severity":"blocker"}"#,
+            r#""dissent":null"#,
+        ] {
+            let text = format!(
+                r#"{{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a",{body}}}"#
+            );
+            let result = parse_result_text(1, &text).expect("a malformed dissent never fails the round");
+            assert_eq!(result.dissent, None, "malformed dissent must read as absent: {text}");
+        }
+    }
+
+    #[test]
+    fn parse_result_text_passes_an_unknown_severity_straight_through() {
+        // D4: the closed set is `record_dissent`'s single check. A second
+        // copy here would be the drift a boundary listed twice always earns,
+        // so the parser never looks at the value.
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","dissent":{"claim":"c","alternative":"a","severity":"catastrophic"}}"#;
+        let result = parse_result_text(1, text).expect("an unknown severity still parses");
+        assert_eq!(result.dissent.expect("dissent present").severity, "catastrophic");
     }
 
     #[test]
