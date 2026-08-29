@@ -38,9 +38,9 @@
     "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
     "docs/knowledge/patterns/20260828-a-session-bound-to-no-lane-commits-against-the-default-record.md"
   ],
-  "status": "capped",
+  "status": "open",
   "trace": {
-    "worker": "wk-sfg-1",
+    "worker": null,
     "outcome": "An unbound session's own live claim now resolves the acting write record before the control-root default, and the intake refusal names the session binding as a remedy",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
@@ -57,8 +57,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "04c27e63-6543-47f5-a0e6-08bbc1cc2b72",
-    "claimed_at": "2026-08-29T03:45:12.721Z",
+    "claim_session": null,
+    "claimed_at": null,
     "report": {
       "outcome": "An unbound session holding exactly one live claim is judged against that cell's feature lane record at both the write check and the git intake gate; every other input resolves as before, and the intake refusal names the session binding as a remedy when the default record answered an unbound session",
       "commit": "9809d34e15c2e670ce46134fb73f5b683433475f",
@@ -74,6 +74,82 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "bound-untouched",
+            "status": "PASS",
+            "evidence": "checks.rs:167-227 keeps the whole bound path byte-for-byte; the new arm sits only in the non-lane branch at checks.rs:157, and sfg1_a_bound_session_holding_a_claim_keeps_its_typed_lane_refusal passes with a live claim present."
+          },
+          {
+            "id": "no-claim-identical",
+            "status": "PASS",
+            "evidence": "checks.rs:143-146 defaults() still returns read_state(control_root) with source default; session_claimed_features returns an empty Vec when .bee/claims is absent (store.rs:479-482), so a claimless session never enters the new arm."
+          },
+          {
+            "id": "one-claim-resolves",
+            "status": "PASS",
+            "evidence": "sfg1_an_unbound_session_with_one_live_claim_commits_against_its_claimed_lane passes: fixture state.json is idle, add_live_session writes no lane key, and git commit exits 0 via checks.rs:158-165 returning source claim; the same fixture minus the claim exits 2."
+          },
+          {
+            "id": "two-features-ambiguous",
+            "status": "PASS",
+            "evidence": "checks.rs:104-107 matches [only] and returns Ok(None) for every other slice; the two case in sfg1_ambiguous_or_unusable_claims_fall_back_to_the_default_record asserts exit 2 with intake gate and no bee lane guard line."
+          },
+          {
+            "id": "bad-lane-record-falls-back",
+            "status": "PASS",
+            "evidence": "checks.rs:117-121 only accepts an Object whose feature equals the claimed feature, else Ok(None); the missing / corrupt / mismatched / cell-less sub-cases each assert the intake refusal and the absence of the bound path's typed refusal."
+          },
+          {
+            "id": "foreign-claim-ignored",
+            "status": "PASS",
+            "evidence": "store.rs:504-506 skips any claim whose session field is not this session id before the record is used; sfg1_a_foreign_or_expired_claim_is_never_read passes with a sess-other claim on a swarming lane still yielding exit 2."
+          },
+          {
+            "id": "one-merge-helper",
+            "status": "PASS",
+            "evidence": "lane_record_from has one definition at checks.rs:58 and exactly two call sites, checks.rs:119 (claim arm) and checks.rs:224 (bound arm); the old inline merge block is deleted in the diff."
+          },
+          {
+            "id": "remedy-conditional",
+            "status": "PASS",
+            "evidence": "checks.rs:441 and checks.rs:716 both compute bind_remedy = source == default && session_unbound; session_unbound is false for the sessionless call and for a session with no record, and the claim arm sets source claim. Pinned by three tests."
+          },
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "3 of the 8 new tests assert post-change behavior and must have been red before; the other 5 are regression pins that were green. cargo test --release write_guard = 209 passed, 0 failed, all 8 sfg1 tests ok."
+          },
+          {
+            "id": "hunt-fail-open-on-malformed-claim-timestamp",
+            "status": "FAIL",
+            "evidence": "store.rs:454-463 claim_active documents that no parseable timestamp reads as ACTIVE, but date_parse_ms(claim.get(\"claimed_at\"))? returns Err(Nd) for a non-RFC3339 or numeric timestamp (jspath.rs:448-466), and Nd propagates out of resolve_write_record to hooks/mod.rs:184 emit_undecidable — exit 0, the guard did NOT run. One malformed claimed_at therefore turns the whole write guard OFF instead of reading the claim as active; nothing pins it."
+          },
+          {
+            "id": "hunt-ownership-guard-trigger-set-shift",
+            "status": "FAIL",
+            "evidence": "checks.rs:534-539 asserts in comment that the ownership guard must keep firing for exactly the sessions it fired for before this cell, but phase (checks.rs:527) now comes from the DERIVED lane record: an unbound session whose state.json phase is idle while its claimed lane phase is swarming previously entered the isolated-workspace ownership deny and now skips it. No test combines a claim-derived record with write_policy isolated, so the comment's invariance claim is unpinned and false."
+          }
+        ],
+        "failure_signature": "A malformed claimed_at on the session's own claim makes the guard fail OPEN (Nd -> emit_undecidable) instead of reading the claim as active, and the claim-derived phase silently shifts which sessions the isolated-workspace ownership deny fires for — both unpinned, both contradicted by their own comments.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-29T04:28:46.306Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-29T04:28:46.306Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

@@ -1,0 +1,148 @@
+{
+  "id": "sfg-5",
+  "feature": "slp-followup-gaps",
+  "role": "code",
+  "title": "Close the lease, hold and strict-session fail-opens and repair the two comments sfg-4 falsified",
+  "action": "The sfg-4 judge returned NEEDS_REVISION: the same store-data fail-open is still live on two paths, and sfg-4 itself falsified two comments and left one silent lockout. Four jobs, all in hooks/write_guard/ plus hook_local.rs. (1) LEASE AND HOLD READERS. check_write reaches date_parse_ms through checks.rs:466 find_session_conflicts -> store.rs:836 list_active_reservations -> store.rs:823 lease_record_expired -> store.rs:811, and again at store.rs:824 lease_to_reservation (expires_at AND acquired_at, store.rs:774-775), checks.rs:500 find_foreign_holds -> store.rs:932 (mirrored_at), checks.rs:484 hold_expiry -> store.rs:960-962, checks.rs:518/530 foreign_hold_expiry -> store.rs:969, checks.rs:637 find_conflicts, and paths.rs:452 inside resolve_live_worker_count. list_path_lease_records (store.rs:723-751) validates no timestamp at all, so one lease carrying \"expires_at\": \"tomorrow\" turns the whole guard off. Make every one of these readers infallible by signature, exactly as sfg-3 and sfg-4 did, and pick the RESTRICTIVE read at each site: a lease or hold whose expiry cannot be parsed is NOT expired, so it still conflicts and still denies. (2) THE STRICT-SESSION ESCAPE. main.rs:427 is_shared_nested_checkout_target? sits on the hook's own R<..> path and runs for every Edit/Write with a resolvable target (shared_candidates is pushed on both branches, main.rs:397-405), so one truncated .bee/sessions/<id>.json makes store.rs:346 return Err and the guard falls open on a real write. The recorded decision for this cell: a guard NEVER falls open on data it merely read, and Node-parity wording is not worth a hole — so close it with a DENY in bee's own clear wording, naming the unreadable session file and its remedy. Say in the comment that this deliberately departs from the Node V8-worded crash log. (3) TWO FALSE COMMENTS sfg-4 left. hook_local.rs:763-767 and hook_local.rs:836-841 still assert that an unparseable heartbeat reads as false and fails OPEN so an unreadable session store never turns a permitted solo write into a refusal. After sfg-4 it reads as a LIVE peer and does exactly that. Correct both to state what the code now does and why the restrictive read is right there. (4) THE SILENT LOCKOUT. An unparseable last_heartbeat now reads live forever with no self-heal, so a bad owner record can lock every other session out of a checkout with no visible reason. Do not reopen the door: keep the restrictive read, and emit a stderr warning naming the unreadable session file and the remedy, so a human sees WHY they are refused instead of guessing. Prove red-first throughout: a test per fixed reader that the guard still DECIDES on malformed data, plus a test that the strict-session path DENIES rather than falling open, each failing before the fix.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "slice": 5,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A lease or hold record carrying a malformed, numeric or missing timestamp NEVER makes the write guard report undecidable, on any of the enumerated paths.",
+      "An unparseable lease or hold expiry reads as NOT expired, so it still conflicts and still denies — the restrictive read at every site.",
+      "A truncated or unreadable session file on the strict path makes the guard DENY, naming the file and the remedy — it never falls open on an Edit, a Write or a Bash command.",
+      "The departure from Node-parity wording on that deny is stated in the code with its reason.",
+      "The two hook_local.rs comments state what the code actually does with an unparseable heartbeat; no comment in the module asserts a fail-open the code no longer performs.",
+      "An unparseable last_heartbeat that locks other sessions out emits a warning naming the file and the remedy — the lockout is never silent.",
+      "Every truth sfg-1, sfg-3 and sfg-4 proved still holds; all seventeen sfg1_*/sfg3_*/sfg4_* tests still pass untouched.",
+      "Each fix was proven red-first."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "acceptance": "No malformed session, claim, cell, lane, lease, hold or config record can switch the write guard off on any path; the strict-session path denies instead of falling open; no comment contradicts the code; the write_guard suite is green.",
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "docs/history/slp-followup-gaps/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": "Closed the lease, hold and strict-session fail-opens; repaired two false comments and made the heartbeat lockout visible",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs"
+    ],
+    "deviations": [
+      "Reserved and edited two files the cell did not list, jspath.rs and mod.rs — the warning queue the lockout line needs lives in jspath.rs and had no push helper, and mod.rs header still listed the strict session read as a delegated branch, which the cell requires to stop being true — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T05:19:07.206Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "report": {
+      "outcome": "Closed the lease, hold and strict-session fail-opens; repaired two false comments and made the heartbeat lockout visible",
+      "commit": "77fbdfd5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green (222 passed, 0 failed) — the whole write_guard suite is the blast radius of this change; the 6 new sfg5_* tests were red first (5 on Delegate, 1 on a silent deny)",
+      "deviations": [
+        "Reserved and edited two files the cell did not list, jspath.rs and mod.rs — the warning queue the lockout line needs lives in jspath.rs and had no push helper, and mod.rs header still listed the strict session read as a delegated branch, which the cell requires to stop being true — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "lease-hold-readers-infallible",
+            "status": "PASS",
+            "evidence": "All eight are infallible by signature and no caller ?s them: store.rs:869 lease_to_reservation -> Resv, store.rs:923 lease_record_expired -> bool, store.rs:936 list_active_reservations -> Vec<Resv>, store.rs:948 find_conflicts -> Vec<Resv>, store.rs:963 find_session_conflicts -> Vec<Resv>, store.rs:1025 find_foreign_holds -> Vec<Map>, store.rs:1097 hold_expiry -> String, store.rs:1114 foreign_hold_expiry -> String; the ? is gone at checks.rs:471/489/507/525/537/644 and paths.rs:428/452, and a module-wide scan shows zero remaining ? on date_parse_ms or ms_to_iso."
+          },
+          {
+            "id": "unparseable-expiry-is-restrictive",
+            "status": "PASS",
+            "evidence": "Every site takes the not-expired arm: store.rs:926-929, store.rs:1059-1062, store.rs:876-880 (display-only ttl), store.rs:1102-1108 and 1119-1125 fall to UNREADABLE_EXPIRY rather than no-expiry; no site releases a conflict. HUNT (follow-up, not a FAIL): a lease with an unparseable expires_at never expires, so it holds its path forever and keeps counting toward resolve_live_worker_count (paths.rs:452-460); the cross-session deny at checks.rs:482-490 still says Wait for the hold to expire, which is now false, and names no lease file — the heartbeat lockout got a warning, the identical lease/hold lockout did not."
+          },
+          {
+            "id": "strict-session-denies",
+            "status": "PASS",
+            "evidence": "store.rs:416-427 list_session_records_strict -> Result<_, PathBuf> turns read_session_strict's Err(Nd) into the file path; hook_local.rs:1140-1143 maps it to SharedNested::UnreadableSession; main.rs:445-449 turns that into unreadable_session_refusal. read_session_strict has exactly one caller, so no Nd survives. Pinned by sfg5_an_unreadable_session_file_denies_instead_of_falling_open (tests.rs:2829). Bash reachability is structural (main.rs:287-292 pushes shared_candidates on the Bash branch, and the deny loop at main.rs:426 sits outside the split) but no test exercises the Bash surface for this deny."
+          },
+          {
+            "id": "no-remaining-escape",
+            "status": "FAIL",
+            "evidence": "Re-enumerated module-wide. Cleared: read_json_g never Errs, so read_state/read_session/plan_freeze_shape_approved/session_workspace_id/active_worker_session_ids/claim readers are Err-free; read_config is Ok(read_config_raw); control_root_for_state is infallible; read_session_strict is contained; no ? remains on date_parse_ms/ms_to_iso. SURVIVING ESCAPE: hook_local.rs:1015 serde_json::from_str(&raw).map_err(|_| Nd)? (and :1013 for a non-ENOENT read error) in resolve_verified_companion_mount_real — a present-but-CORRUPT .bee/companion-session.json — propagates through hook_local.rs:1044 -> hook_local.rs:1149 target_inside_verified_companion_mount? -> main.rs:438 ? -> Outcome::Delegate -> emit_undecidable -> exit 0. Preconditions are the ones sfg-5 just closed one line above: a resolvable Edit/Write target plus one other live session. tests.rs:3284-3286 holds only because that fixture has no live peer."
+          },
+          {
+            "id": "comments-match-code",
+            "status": "FAIL",
+            "evidence": "hook_local.rs:763-781 and 848-860, store.rs:463-502, store.rs:332-348, store.rs:851-868/1015-1024/1090-1096 and checks.rs:466-470/505-506 all check out. mod.rs:40-41 does not: this commit narrowed the shared-nested bullet to non-ENOENT fs errors while walking the target's ancestry, which now omits the corrupt companion-session.json JSON-parse delegate at hook_local.rs:1015; mod.rs:24-27's CORRUPT JSON IS NATIVE also does not hold for that marker, which is read with bare std::fs::read plus serde_json::from_str rather than read_json_g."
+          },
+          {
+            "id": "lockout-is-visible",
+            "status": "PASS",
+            "evidence": "store.rs:479-489 calls warn_unreadable_heartbeat (store.rs:492-508), naming the session file, the last_heartbeat cause and bee state session release, via queue_guard_warning_once (jspath.rs:523-530) onto the same thread_local read_json_g uses, so a Delegate emits zero bytes by the mechanism tests.rs:3432 already pins. Pinned by sfg5_an_unparseable_heartbeat_lockout_is_never_silent (tests.rs:2860). HUNT (clean): main.rs:49 clears the queue once per evaluation, so the dedupe cannot leak across evaluations and its size is bounded by the number of bad files on disk."
+          },
+          {
+            "id": "prior-truths-hold",
+            "status": "PASS",
+            "evidence": "Exactly 8 sfg1_* + 5 sfg3_* + 4 sfg4_* = 17 prior tests remain (tests.rs:2107-2609) plus the 6 new sfg5_*; the diff's only two test deletions are outside those tests (an arity change at tests.rs:1616 and a helper at tests.rs:3893). cargo test --release sfg printed 23 passed, 0 failed."
+          },
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "Each new test fails without the production change: the three lease tests assert code 2 where the pre-change ? on lease_record_expired/lease_to_reservation yielded Nd -> Delegate -> exit 0; the hold test likewise via checks.rs:507 and additionally asserts the new expiry-unknown string where pre-change was no-expiry; the unreadable-session test asserts exit 2 where Err(Nd) delegated at exit 0; the lockout test asserts the warning names the file where the pre-change heartbeat_stale had a bare Err(_) => false and no warning."
+          }
+        ],
+        "failure_signature": "A corrupt .bee/companion-session.json still switches the whole write guard off: hook_local.rs:1015 map_err(|_| Nd)? -> hook_local.rs:1149 -> main.rs:438 -> emit_undecidable -> exit 0, on any Edit/Write with a resolvable target once one other session is live — the same class and the same function sfg-5 closed at hook_local.rs:1140 — and mod.rs:40-41's rewritten delegated-branch bullet now excludes it.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-29T05:26:31.001Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-29T05:26:31.001Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  }
+}

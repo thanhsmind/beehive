@@ -75,6 +75,66 @@
     "warnings": [
       "advisory: this cap's commit changes 454 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "brief-names-no-bee-command",
+            "status": "PASS",
+            "evidence": "herding/mailbox.rs:748 asserts bee_command_mentions(&text) == [] using the general scanner at mailbox.rs:601, so an inserted `bee cells dissent` is caught by the word after `bee`, not by one literal; the old literal check is kept beside it at mailbox.rs:747."
+          },
+          {
+            "id": "brief-teaches-fields",
+            "status": "PASS",
+            "evidence": "mailbox.rs:337 renders the schema line naming dissent/claim/alternative/severity plus the two severities; test render_brief_includes_the_result_schema_block (mailbox.rs:683-696) pins all four field names and the usage sentence."
+          },
+          {
+            "id": "no-dissent-same-keys",
+            "status": "PASS",
+            "evidence": "Test a_result_without_a_dissent_adds_no_dissent_key_at_all (run.rs:5106) asserts no dissent/dissent_recorded/dissent_error key appears, and the pre-existing exact-key-set test at run.rs:5147 still passes unchanged."
+          },
+          {
+            "id": "lenient-parse",
+            "status": "PASS",
+            "evidence": "parse_dissent (mailbox.rs:503) returns None on a non-object or any missing/non-string field; test parse_result_text_reads_a_partial_or_wrong_typed_dissent_as_absent (mailbox.rs:1085) drives seven malformed bodies through and each is still Ok with dissent == None."
+          },
+          {
+            "id": "severity-unchecked-at-parse",
+            "status": "PASS",
+            "evidence": "parse_dissent takes severity as a plain String with no membership test (mailbox.rs:509), pinned by parse_result_text_passes_an_unknown_severity_straight_through (mailbox.rs:1108); the closed set lives only at verbs/cells/dissent.rs:140 inside record_dissent."
+          },
+          {
+            "id": "one-writer",
+            "status": "PASS",
+            "evidence": "run.rs:2656 calls crate::verbs::cells::record_dissent directly, and a scan of herding/run.rs finds no second copy of DISSENT_SEVERITIES, the secret scan, the block mutation or the claim release."
+          },
+          {
+            "id": "recorded-true",
+            "status": "PASS",
+            "evidence": "Test a_carried_dissent_is_written_through_the_one_dissent_writer (run.rs:5010) asserts dissent_recorded == true, no dissent_error, the raw dissent on the envelope, and the real cell file carrying trace.dissent[0] with status blocked."
+          },
+          {
+            "id": "failure-is-loud",
+            "status": "PASS",
+            "evidence": "Tests a_dissent_with_no_cell_id_is_reported_and_never_swallowed (run.rs:5052) and a_writer_refusal_rides_back_as_dissent_error_with_the_raw_dissent (run.rs:5086) both assert dissent_recorded == false, a dissent_error naming the reason, and the raw dissent still on the envelope."
+          },
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "The pre-change test asserted !text.contains(\"dissent\") and was green, so the retargeted assertion at mailbox.rs:750 is provably red against the old render_brief; cargo test --release herding ran green at 442 passed / 0 failed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-29T04:28:15.061Z"
+      }
+    ]
   }
 }

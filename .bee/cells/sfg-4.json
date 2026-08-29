@@ -1,0 +1,131 @@
+{
+  "id": "sfg-4",
+  "feature": "slp-followup-gaps",
+  "role": "code",
+  "title": "Close the remaining store-data fail-opens that switch the whole write guard off",
+  "action": "The sfg-3 judge passed the fix and then found the SAME defect class still live, one call frame from the code just hardened. This cell closes the rest of it. (1) heartbeat_stale (hooks/write_guard/store.rs:374-375) does `date_parse_ms(session.get(\"last_heartbeat\"))?`. It is reached from checks.rs:354 inside check_workspace_ownership, which checks.rs:555 propagates, so a malformed last_heartbeat in the WORKSPACE OWNER's session record (not the acting session's) yields Err(Nd) -> check_write Err -> Outcome::Delegate -> hooks/mod.rs emit_undecidable -> exit 0, \"The guard did NOT run on it\". The same reader is `?`d again at store.rs:391 inside is_concurrent_mode. (2) checks.rs:145 does `control_root_for_state(control_root)?`, which returns Err(Nd) on CtxOutcome::Threw (store.rs:270), and check_product_root_silent (store.rs:105/107) returns Err(Nd) for a non-string product_root or a configured product_root directory that does not exist — so config store data can switch the whole guard off the same way. Decide the honest read for each — a stamp the reader cannot parse should read the SAFE way for that call site (a heartbeat it cannot parse is not evidence of staleness; a product_root it cannot resolve is not evidence of containment) — and make each reader infallible by signature, exactly as sfg-3 did for the claim readers, so no store-data parse failure can ever reach emit_undecidable. Where a genuinely undecidable input must still stop the guard, it must REFUSE (deny), never fall open. Sweep the whole write_guard module for any remaining `?` on a store or config READ that can reach resolve_write_record or check_write, and close each one; name in the commit body any you deliberately left and why. Prove red-first: a test per fixed reader that the guard still DECIDES (never Delegate/undecidable) on malformed data, failing before the fix.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "slice": 4,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A malformed last_heartbeat in the workspace owner's session record NEVER makes the write guard report undecidable — the guard still runs and still decides.",
+      "A malformed last_heartbeat is read the SAFE way for its call site, and the code says which way that is and why.",
+      "A non-string or non-existent product_root NEVER makes the write guard report undecidable.",
+      "No `?` on a store or config READ inside the write_guard module can still reach emit_undecidable; any deliberately left is named in the commit body with its reason.",
+      "Where an input is genuinely undecidable, the guard REFUSES rather than falling open.",
+      "Every truth sfg-1 and sfg-3 proved still holds; all thirteen sfg1_*/sfg3_* tests still pass untouched.",
+      "Each fixed reader has a test proving the guard still decides on malformed data, and each was red before the fix."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "acceptance": "No malformed session, claim, cell, lane or config record can switch the write guard off; every remaining escape is either closed or named with a reason; the write_guard suite is green.",
+  "deps": [
+    "sfg-3"
+  ],
+  "decisions": [],
+  "read_first": [
+    "docs/history/slp-followup-gaps/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": "Closed the remaining store-data and config fail-opens: heartbeat_stale, control_root_for_state and the product_root check are infallible by signature, so no unparseable store or config byte can switch the write guard off",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T04:55:01.897Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "report": {
+      "outcome": "Closed the remaining store-data and config fail-opens: heartbeat_stale, control_root_for_state and the product_root check are infallible by signature, so no unparseable store or config byte can switch the write guard off",
+      "commit": "b98f03ab81600776631db25e2ef47ece9535bbbe",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green (216 passed, 0 failed; the 4 new sfg4_* tests were red on Delegate before the fix; the 13 sfg1_*/sfg3_* tests still pass) — the whole write_guard suite is the module this cell changed, and it is the cell's declared verify command",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "heartbeat-infallible-and-safe",
+            "status": "PASS",
+            "evidence": "store.rs:429 heartbeat_stale(&Map, f64) -> bool has no error path. All three in-module call sites close doors: checks.rs:361 sets live=true -> Ownership::Blocked -> the write-policy Deny; store.rs:446 in is_concurrent_mode, whose consumers gate on !other_live_session so true REMOVES exemptions; store.rs:469 in active_worker_session_ids, where more live workers means more denial. HUNT (fail-CLOSED hazard, not a FAIL): an unparseable last_heartbeat reads live FOREVER with no time-based self-heal, so a bad owner record can lock every other session out of a checkout until status is closed/dead or the file is repaired. HUNT (documentation defect introduced by this diff): hook_local.rs:763-767 and 836-841 still assert an unparseable heartbeat reads as false and fails OPEN, which is now the opposite of the code."
+          },
+          {
+            "id": "control-root-infallible-and-not-more-permissive",
+            "status": "PASS",
+            "evidence": "store.rs:293 control_root_for_state(&str) -> String covers Threw with root.to_string(); the fallback is the caller's own control_root, so it can never pick up another project's lane record. The worst degraded resolution is source \"default\", which keeps the intake gate and the workspace-ownership deny in front of the session. Before the diff the same inputs produced emit_undecidable, so any decided answer is strictly less permissive."
+          },
+          {
+            "id": "product-root-deletion-safe",
+            "status": "PASS",
+            "evidence": "No live caller of check_product_root_silent remains; both former call sites keep read_config(...)? and discarded only the verdict. The corrupt-config warning still comes from read_config -> state.rs:168-170 warn_corrupt_json. No write_guard test asserted a product_root warning."
+          },
+          {
+            "id": "no-remaining-escape-through-checkwrite",
+            "status": "FAIL",
+            "evidence": "The sweep missed the lease and hold readers, same defect class, still live: check_write -> checks.rs:466 find_session_conflicts? -> store.rs:836 list_active_reservations? -> store.rs:823 lease_record_expired? -> store.rs:811 date_parse_ms? -> Err(Nd). list_path_lease_records (store.rs:723-751) does not validate expires_at/acquired_at, so a lease carrying a non-RFC3339 or numeric stamp escapes to emit_undecidable. Same class at store.rs:824 lease_to_reservation, checks.rs:500 find_foreign_holds -> store.rs:932, checks.rs:484 hold_expiry -> store.rs:960-962, checks.rs:518/530 foreign_hold_expiry -> store.rs:969, checks.rs:637 find_conflicts, and paths.rs:452 inside resolve_live_worker_count. reservation_store_corrupt and holds_store_corrupt do not gate these."
+          },
+          {
+            "id": "left-escape-is-genuinely-unreachable",
+            "status": "FAIL",
+            "evidence": "is_concurrent_mode(strict=true) is indeed only reached from main.rs:427, not through check_write. But main.rs:427 sits in the hook's own R<..> path, so Err(Nd) still reaches emit_undecidable, and shared_candidates is pushed on the Edit/Write branch too (main.rs:397-405), so every Edit/Write with a resolvable target enters that loop. One zero-byte or truncated .bee/sessions/<id>.json makes store.rs:346 return Err via read_session_strict and the whole guard falls open on a real write. Mitigating: the branch is named at store.rs:332-334, and its honest close is a DENY whose Node-parity wording this port cannot reproduce, so the remedy needs a wording decision."
+          },
+          {
+            "id": "prior-truths-hold",
+            "status": "PASS",
+            "evidence": "git show b98f03ab --numstat reports 138 additions and 0 deletions in tests.rs, so no prior test was touched; all 8 sfg1_* and 5 sfg3_* tests ran green. cargo test --release write_guard = 218 passed, 0 failed, including the 4 new sfg4_* tests."
+          },
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "Each new test drives an input that pre-diff produced Err(Nd) -> Delegate, which expect_done panics on: the five unparseable heartbeat values through the old !heartbeat_stale(..)? at checks.rs and store.rs:469, the non-string and non-existent product_root through the deleted check_product_root_silent, and a .git file pointing nowhere through the old Threw -> Err(Nd) arm. All four also assert a decided verdict, so they pin that the fix decides rather than merely stops erroring."
+          }
+        ],
+        "failure_signature": "The same store-data fail-open is still live on two paths the sweep missed: malformed lease/hold timestamps escape check_write via find_session_conflicts/find_conflicts/find_foreign_holds/hold_expiry to emit_undecidable, and the deliberately-left read_session_strict escape does fail open on a real Edit/Write because main.rs:427 runs is_shared_nested_checkout_target for every resolvable target, not only for Bash.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-29T05:01:35.818Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-29T05:01:35.818Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  }
+}

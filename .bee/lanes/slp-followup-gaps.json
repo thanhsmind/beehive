@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"slp-followup-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c95aac2; reload the product and test \"slp-followup-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane slp-followup-gaps\") or fix it in the worktree and merge again.",
+  "next_action": "Test the merged work in main, then approve the uat gate",
   "created_at": "2026-08-29T03:41:16.254Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: slp-followup-gaps",
-    "asked_at": "2026-08-29T04:08:01.912Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "running",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -28,5 +23,16 @@
     "rationale": "two SLP follow-up gaps: the write-guard record resolver gains a claim-derived fallback, and the herding mailbox result grows dissent fields the control loop transcribes through the one existing verb",
     "updated_at": "2026-08-29T03:41:52.399Z",
     "feature": "slp-followup-gaps"
+  },
+  "last_scribing_run": {
+    "feature": "slp-followup-gaps",
+    "date": "2026-08-29",
+    "at": "2026-08-29T04:08:43.666Z",
+    "areas_synced": [
+      "hook-runtime",
+      "bee-herding",
+      "workflow-state"
+    ],
+    "next_action": "Test the merged work in main, then approve the uat gate"
   }
 }

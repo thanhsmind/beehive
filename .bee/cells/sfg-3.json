@@ -1,0 +1,123 @@
+{
+  "id": "sfg-3",
+  "feature": "slp-followup-gaps",
+  "role": "code",
+  "title": "Stop the claim reader from failing the whole write guard open, and pin the ownership guard's trigger set",
+  "action": "The sfg-1 judge returned NEEDS_REVISION on two hunt checks. Both are in the claim-derived resolution shipped by commit 9809d34e. FIX 1 (the serious one): store.rs claim_active documents that a claim with no parseable timestamp reads as ACTIVE, never as expired — but it uses `date_parse_ms(claim.get(\"claimed_at\"))?`, and date_parse_ms returns Err(Nd) for a non-RFC3339 string or a numeric timestamp (jspath.rs:448-466). That Nd propagates out of resolve_write_record all the way to hooks/mod.rs:184 emit_undecidable, which exits 0 saying the guard did NOT run. So ONE malformed claimed_at in this session's own claim turns the ENTIRE write guard off, for every path including .bee mutations — a guard that fails OPEN on malformed store data, which is the exact opposite of what its own comment promises. Make claim_active swallow an unparseable claimed_at and read the claim as active, exactly as the comment says, so no Nd can ever escape the claim reader. Audit every other `?` inside claims_dir_g / claim_active / session_claimed_features for the same escape and close each one the same way: a claim the reader cannot understand contributes nothing OR reads as active, but it never decides the guard's fate. FIX 2: checks.rs:534-539 claims in a comment that the msn-21 workspace-ownership check keeps firing for exactly the sessions it fired for before this cell. That is now false and unpinned: `phase` at checks.rs:527 comes from the DERIVED record, so an unbound session whose state.json says idle while its claimed lane says swarming used to reach the isolated-workspace ownership deny and now skips it. Decide the honest answer (the derived phase IS this session's real phase, so the guard SHOULD read it — but then the comment must say so), correct the comment to state what the code does, and pin the behavior with a test that combines a claim-derived record with write_policy isolated. Both fixes are proven red-first: write the failing test, watch it fail, then fix.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "slice": 3,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A claim carrying a malformed, numeric, or missing claimed_at NEVER makes the write guard report undecidable — the guard still runs and still decides.",
+      "Such a claim reads as ACTIVE, exactly as claim_active's own comment promises.",
+      "No `?` inside the claim readers can propagate a parse error out of resolve_write_record; a claim the reader cannot understand either contributes nothing or reads as active, and a test proves the whole guard still decides.",
+      "The msn-21 ownership-check comment states what the code actually does with a claim-derived phase — no comment asserts an invariance the code does not hold.",
+      "A test combines a claim-derived record with write_policy isolated and pins which way the ownership deny goes.",
+      "Every truth sfg-1 already proved still holds: bound sessions untouched, no-claim byte-identical, one claim resolves, two features ambiguous, bad lane record falls back, foreign claims ignored, the bind remedy stays conditional.",
+      "Both fixes were proven red-first."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "acceptance": "A malformed claim timestamp can no longer switch the write guard off, the ownership-check comment matches the code, both are pinned by tests, and the write_guard suite is green.",
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "docs/history/slp-followup-gaps/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "wk-sfg-3",
+    "outcome": "The claim readers are infallible so no malformed claim can fail the write guard open, and the ownership guard's claim-derived trigger set is stated honestly and pinned both ways",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T04:38:32.395Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "04c27e63-6543-47f5-a0e6-08bbc1cc2b72",
+    "claimed_at": "2026-08-29T04:29:22.624Z",
+    "report": {
+      "outcome": "The claim readers are infallible so no malformed claim can fail the write guard open, and the ownership guard's claim-derived trigger set is stated honestly and pinned both ways",
+      "commit": "113093a1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green (212 passed, 0 failed) — the cell's own verify; store.rs claim readers and checks.rs record resolution are reached only by the write_guard hook, so this filter covers every caller of what changed",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "no-error-escapes-claim-readers",
+            "status": "PASS",
+            "evidence": "All four readers are infallible by signature and contain zero ?: store.rs:458 claims_dir_g -> PathBuf, store.rs:471 claim_active -> bool, store.rs:488 session_claimed_features -> Vec<String>, checks.rs:104 claim_derived_lane_record -> Option<Map>; the call site at checks.rs:168 no longer carries a ?."
+          },
+          {
+            "id": "malformed-stamp-reads-active",
+            "status": "PASS",
+            "evidence": "store.rs:476-481 collapses Ok(None) and Err(Nd) into one _ => true arm; sfg3_an_unparseable_claim_stamp_reads_as_active_and_never_stops_the_guard (tests.rs:2334) drives all five shapes to exit 0 and sfg3_an_unparseable_claim_stamp_still_lets_the_guard_refuse (tests.rs:2353) proves the guard still decided with exit 2."
+          },
+          {
+            "id": "unreadable-records-contribute-nothing",
+            "status": "PASS",
+            "evidence": "store.rs:518, store.rs:535 and checks.rs:119 all read via read_json_g(..).unwrap_or(None) and fall to continue/None; sfg3_a_claim_the_reader_cannot_understand_never_decides_the_guards_fate (tests.rs:2394) passes for both a garbage-ttl claim and a non-object claim file."
+          },
+          {
+            "id": "ownership-comment-honest",
+            "status": "PASS",
+            "evidence": "checks.rs:534-551 now says phase comes from the ACTING record and names the trigger-set shift in both directions, matching checks.rs:528-531 and checks.rs:552; the old invariance sentence is gone."
+          },
+          {
+            "id": "ownership-pinned-both-ways",
+            "status": "PASS",
+            "evidence": "sfg3_the_ownership_guard_reads_the_claim_derived_phase_not_the_default_one (tests.rs:2448) pins both directions at write_policy isolated: idle default + swarming claimed lane exits 0 with no write-policy deny, and swarming default + executing claimed lane exits 2 with the deny."
+          },
+          {
+            "id": "sfg1-truths-still-hold",
+            "status": "PASS",
+            "evidence": "cargo test --release sfg prints 13 passed, 0 failed and lists all eight sfg1_* tests; the tests.rs hunk in 113093a1 is a pure append at tests.rs:2287, so none were edited."
+          },
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "The three timestamp tests are diff-red: the old date_parse_ms(..)? propagated Err(Nd) through store.rs:525 -> checks.rs:105 -> resolve_write_record -> Outcome::Delegate, which expect_done (tests.rs:80) panics on with the reported message. Recorded honestly: defect B's production change is comment-only, so its pin is a characterization/mutation pin rather than a diff-red test; the builder's reported left:2 right:0 under the described mutation is arithmetically consistent and the test does pin real behavior."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-29T04:43:54.388Z"
+      }
+    ]
+  }
+}
