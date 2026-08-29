@@ -68,6 +68,11 @@
 //   - a declared guards.memory_root (non-empty string) when a target failed
 //     containment;
 //   - drive-relative (C:foo) / UNC (\\srv\...) target spellings on Windows;
+//   - a bash command whose tokenizer walk hit the nesting cap and truncated
+//     (checks.rs `check_git_bash_command`, reached from main.rs) — the
+//     delegate is on the COMMAND's shape, not on anything read from disk;
+//   - a non-ASCII AskUserQuestion header (detectors.rs), likewise a shape of
+//     the tool payload;
 //   - a small set of typed-refusal edges inside the shared-nested-checkout
 //     primitive: non-ENOENT realpath/stat errors on the target, on its
 //     ancestry, on the checkout root, or on the two paths a READABLE
