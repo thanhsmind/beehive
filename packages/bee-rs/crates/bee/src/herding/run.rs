@@ -56,7 +56,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 
-use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
+use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxDissent, MailboxResult, MailboxStatus};
 use super::split_lock;
 use super::tmux::{RealTmux, TmuxSettings};
 use super::wave::{resolve_agent_command, WorkspaceTrust};
@@ -2622,14 +2622,73 @@ fn transport_for_run(main_root: &Path) -> Result<Box<dyn PaneTransport>, String>
     Ok(select_transport(kind, &read_main_config(main_root)))
 }
 
+/// slp-followup-gaps D5: what happened when a carried dissent was written.
+/// `recorded` is the only success signal; `error` names the reason on every
+/// failure, and a failure NEVER swallows the dissent — the raw object still
+/// rides the envelope beside this.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DissentTranscript {
+    recorded: bool,
+    error: Option<String>,
+}
+
+/// Write one carried dissent through `record_dissent` — the SAME function
+/// `bee cells dissent` routes to (verbs/cells/dissent.rs), never a second
+/// copy of its rules. Two things are deliberately NOT done here:
+///
+/// * the severity is not checked — the closed set is `record_dissent`'s own
+///   single check (D4), and its refusal message names the set;
+/// * ownership is not forced — `--force-ownership` is an AUDITED override,
+///   so a cell another session holds refuses and the refusal is REPORTED,
+///   which is exactly D5's loud failure.
+///
+/// No `--cell-id` means there is no cell to record against: that is a
+/// failure with a named reason, never a silent drop.
+fn transcribe_dissent(root: &Path, cell_id: Option<&str>, dissent: &MailboxDissent) -> DissentTranscript {
+    let Some(cell_id) = cell_id else {
+        return DissentTranscript {
+            recorded: false,
+            error: Some(
+                "this run carries no --cell-id, so there is no cell to record the dissent against — record it by hand with `bee cells dissent` against the cell this job was dispatched for".to_string(),
+            ),
+        };
+    };
+    match crate::verbs::cells::record_dissent(
+        root,
+        cell_id,
+        &dissent.claim,
+        &dissent.alternative,
+        &dissent.severity,
+        None,
+        false,
+    ) {
+        Ok(_) => DissentTranscript { recorded: true, error: None },
+        Err(crate::verbs::cells::Fail::Thrown(msg)) => {
+            DissentTranscript { recorded: false, error: Some(msg) }
+        }
+        Err(crate::verbs::cells::Fail::Delegate) => DissentTranscript {
+            recorded: false,
+            error: Some(format!(
+                "the dissent writer declined to record against cell \"{cell_id}\""
+            )),
+        },
+    }
+}
+
 /// The exact JSON object `emit_result` prints under `--json`, built as a
 /// value so the orchestrator's envelope can be asserted without capturing
-/// stdout. Pure over `(opts, result, transport)`; `emit_result` only prints
-/// what this returns.
+/// stdout. Pure over `(opts, result, transport, dissent)`; `emit_result` only
+/// prints what this returns — the dissent WRITE already happened in `run`,
+/// and its outcome arrives here as data so this stays a pure builder.
 ///
 /// Note there is NO `status` key here and never was — done/blocked rides
 /// `outcome`, built by `outcome_label`.
-fn result_envelope(opts: &Options, result: &ExecResult, transport: &str) -> Value {
+fn result_envelope(
+    opts: &Options,
+    result: &ExecResult,
+    transport: &str,
+    dissent: Option<&DissentTranscript>,
+) -> Value {
     let mut m = Map::new();
     m.insert("job_id".into(), Value::String(opts.job_id.clone()));
     m.insert("outcome".into(), Value::String(outcome_label(&result.outcome).to_string()));
@@ -2655,6 +2714,23 @@ fn result_envelope(opts: &Options, result: &ExecResult, transport: &str) -> Valu
             }
             if let Some(leaning) = &r.leaning {
                 m.insert("leaning".into(), Value::String(leaning.clone()));
+            }
+            // slp-followup-gaps D5: a carried dissent ALWAYS rides the
+            // envelope — on the happy path so the orchestrator sees what was
+            // recorded, and on a failure so a lost voice can still be
+            // recorded by hand. A result carrying none adds no key at all.
+            if let Some(d) = &r.dissent {
+                let mut dm = Map::new();
+                dm.insert("claim".into(), Value::String(d.claim.clone()));
+                dm.insert("alternative".into(), Value::String(d.alternative.clone()));
+                dm.insert("severity".into(), Value::String(d.severity.clone()));
+                m.insert("dissent".into(), Value::Object(dm));
+                if let Some(t) = dissent {
+                    m.insert("dissent_recorded".into(), Value::Bool(t.recorded));
+                    if let Some(err) = &t.error {
+                        m.insert("dissent_error".into(), Value::String(err.clone()));
+                    }
+                }
             }
         }
         RunOutcome::SpawnFailed(msg) => {
@@ -2699,9 +2775,9 @@ fn result_envelope(opts: &Options, result: &ExecResult, transport: &str) -> Valu
     Value::Object(m)
 }
 
-fn emit_result(opts: &Options, result: &ExecResult, transport: &str) {
+fn emit_result(opts: &Options, result: &ExecResult, transport: &str, dissent: Option<&DissentTranscript>) {
     if opts.json {
-        println!("{}", result_envelope(opts, result, transport));
+        println!("{}", result_envelope(opts, result, transport, dissent));
     } else {
         println!(
             "bee herding run {}: {}{}",
@@ -2731,8 +2807,21 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
         }
     };
     let result = execute(&opts, transport.as_ref());
+    // slp-followup-gaps D4: a dissent the worker handed back as DATA is
+    // transcribed here, through the one writer `bee cells dissent` calls, so
+    // the record shape, the closed severity set, the secret scan, the blocker
+    // tooth and the claim release all have exactly one implementation.
+    let transcript = match &result.outcome {
+        RunOutcome::Result(r) => r
+            .dissent
+            .as_ref()
+            .map(|d| transcribe_dissent(&opts.main_root, opts.cell_id.as_deref(), d)),
+        _ => None,
+    };
+    // D5: the exit code is unchanged by the transcription — a blocked result
+    // already exits non-zero, and a failed write is reported, never voted on.
     let exit = exit_code_for(&result.outcome);
-    emit_result(&opts, &result, transport.name());
+    emit_result(&opts, &result, transport.name(), transcript.as_ref());
     exit
 }
 
@@ -4848,7 +4937,7 @@ mod tests {
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
 
-        let envelope = result_envelope(&opts, &result, "herdr");
+        let envelope = result_envelope(&opts, &result, "herdr", None);
         let obj = envelope.as_object().expect("envelope is an object");
         assert_eq!(obj.get("outcome").and_then(Value::as_str), Some("blocked"));
         assert_eq!(
@@ -4869,6 +4958,175 @@ mod tests {
         assert!(obj.get("status").is_none(), "envelope grew a status key: {envelope}");
     }
 
+    // ─── the carried dissent (slp-followup-gaps D3/D4/D5) ────────────────
+
+    /// Seed one plain, unclaimed cell in the store the run resolves against.
+    /// No claim file: `check_claim_ownership` reads "nobody owns it", which
+    /// is the ordinary shape for a herded job whose cell the orchestrator
+    /// already released.
+    fn seed_cell(main_root: &Path, id: &str) {
+        let dir = main_root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            serde_json::json!({
+                "id": id,
+                "feature": "demo",
+                "role": "code",
+                "title": "t",
+                "status": "claimed",
+                "trace": {"worker": "w-job-1"}
+            })
+            .to_string(),
+        )
+        .unwrap();
+    }
+
+    fn seeded_dissent_run(main_root: &Path, severity: &str, cell_id: Option<&str>) -> (Options, ExecResult) {
+        let mut opts = test_options(main_root, false);
+        opts.cell_id = cell_id.map(str::to_string);
+        let dir = mailbox::mailbox_dir(&main_root.join(".bee"), &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            format!(
+                r#"{{"status":"blocked","summary":"the cell is wrong","files_changed":[],"proof":"n/a","dissent":{{"claim":"The paginator is not the bug.","alternative":"Fix the cursor encoder instead.","severity":"{severity}"}}}}"#
+            ),
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        (opts, result)
+    }
+
+    fn carried_dissent(result: &ExecResult) -> &MailboxDissent {
+        match &result.outcome {
+            RunOutcome::Result(r) => r.dissent.as_ref().expect("the result carries a dissent"),
+            other => panic!("expected a parsed result, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_carried_dissent_is_written_through_the_one_dissent_writer() {
+        // D4: the control loop calls `record_dissent` itself, so the record
+        // shape and the blocker tooth have exactly one implementation. The
+        // proof is the cell file: a `blocker` dissent parks the cell.
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_cell(main_root, "demo-1");
+        let (opts, result) = seeded_dissent_run(main_root, "blocker", Some("demo-1"));
+
+        let transcript = transcribe_dissent(&opts.main_root, opts.cell_id.as_deref(), carried_dissent(&result));
+        assert_eq!(transcript, DissentTranscript { recorded: true, error: None });
+
+        let cell: Value = serde_json::from_str(
+            &std::fs::read_to_string(main_root.join(".bee/cells/demo-1.json")).unwrap(),
+        )
+        .unwrap();
+        let entry = cell.pointer("/trace/dissent/0").expect("the one writer appended the record");
+        assert_eq!(entry.get("target").and_then(Value::as_str), Some("demo-1"));
+        assert_eq!(entry.get("claim").and_then(Value::as_str), Some("The paginator is not the bug."));
+        assert_eq!(
+            entry.get("alternative").and_then(Value::as_str),
+            Some("Fix the cursor encoder instead.")
+        );
+        assert_eq!(entry.get("severity").and_then(Value::as_str), Some("blocker"));
+        assert_eq!(
+            cell.get("status").and_then(Value::as_str),
+            Some("blocked"),
+            "the blocker tooth is the writer's, and it bit: {cell}"
+        );
+
+        let envelope = result_envelope(&opts, &result, "herdr", Some(&transcript));
+        let obj = envelope.as_object().unwrap();
+        assert_eq!(obj.get("dissent_recorded").and_then(Value::as_bool), Some(true), "{envelope}");
+        assert!(obj.get("dissent_error").is_none(), "a green transcription names no error: {envelope}");
+        assert_eq!(
+            obj.get("dissent").and_then(|d| d.get("severity")).and_then(Value::as_str),
+            Some("blocker"),
+            "the raw dissent rides the envelope: {envelope}"
+        );
+    }
+
+    #[test]
+    fn a_dissent_with_no_cell_id_is_reported_and_never_swallowed() {
+        // D5: no cell to record against is a LOUD failure — false plus a
+        // reason — and the raw dissent still rides so it can be recorded by
+        // hand.
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let (opts, result) = seeded_dissent_run(main_root, "consider", None);
+
+        let transcript = transcribe_dissent(&opts.main_root, opts.cell_id.as_deref(), carried_dissent(&result));
+        assert!(!transcript.recorded);
+        let err = transcript.error.clone().expect("a failure always names its reason");
+        assert!(err.contains("--cell-id"), "the reason must name the missing input: {err}");
+
+        let envelope = result_envelope(&opts, &result, "herdr", Some(&transcript));
+        let obj = envelope.as_object().unwrap();
+        assert_eq!(obj.get("dissent_recorded").and_then(Value::as_bool), Some(false), "{envelope}");
+        assert_eq!(obj.get("dissent_error").and_then(Value::as_str), Some(err.as_str()), "{envelope}");
+        assert_eq!(
+            obj.get("dissent"),
+            Some(&serde_json::json!({
+                "claim": "The paginator is not the bug.",
+                "alternative": "Fix the cursor encoder instead.",
+                "severity": "consider"
+            })),
+            "the raw dissent must survive a failed transcription: {envelope}"
+        );
+    }
+
+    #[test]
+    fn a_writer_refusal_rides_back_as_dissent_error_with_the_raw_dissent() {
+        // D4: the parser passed `catastrophic` straight through, and the ONE
+        // writer refused it by name. The refusal is reported, never hidden.
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_cell(main_root, "demo-1");
+        let (opts, result) = seeded_dissent_run(main_root, "catastrophic", Some("demo-1"));
+
+        let transcript = transcribe_dissent(&opts.main_root, opts.cell_id.as_deref(), carried_dissent(&result));
+        assert!(!transcript.recorded);
+        let err = transcript.error.clone().expect("a refusal always names its reason");
+        assert!(err.contains("catastrophic"), "the writer's own refusal must ride back: {err}");
+
+        let cell: Value = serde_json::from_str(
+            &std::fs::read_to_string(main_root.join(".bee/cells/demo-1.json")).unwrap(),
+        )
+        .unwrap();
+        assert!(cell.pointer("/trace/dissent").is_none(), "a refused dissent writes nothing: {cell}");
+        assert_eq!(cell.get("status").and_then(Value::as_str), Some("claimed"));
+
+        let envelope = result_envelope(&opts, &result, "herdr", Some(&transcript));
+        let obj = envelope.as_object().unwrap();
+        assert_eq!(obj.get("dissent_recorded").and_then(Value::as_bool), Some(false), "{envelope}");
+        assert_eq!(obj.get("dissent_error").and_then(Value::as_str), Some(err.as_str()), "{envelope}");
+        assert!(obj.get("dissent").is_some(), "the raw dissent must survive a refusal: {envelope}");
+    }
+
+    #[test]
+    fn a_result_without_a_dissent_adds_no_dissent_key_at_all() {
+        // The negative half of D3: today's exact key set, unchanged.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let dir = mailbox::mailbox_dir(&tmp.path().join(".bee"), &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","options":["Do A."],"leaning":"Do A."}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        let obj = envelope.as_object().unwrap();
+        for key in ["dissent", "dissent_recorded", "dissent_error"] {
+            assert!(obj.get(key).is_none(), "envelope grew {key} with no dissent carried: {envelope}");
+        }
+    }
+
     /// The negative half: a result carrying neither field emits the exact key
     /// set it emitted before StopAndAsk existed.
     #[test]
@@ -4886,7 +5144,7 @@ mod tests {
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
 
-        let envelope = result_envelope(&opts, &result, "herdr");
+        let envelope = result_envelope(&opts, &result, "herdr", None);
         let obj = envelope.as_object().expect("envelope is an object");
         let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
         keys.sort_unstable();

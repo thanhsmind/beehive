@@ -529,13 +529,34 @@ set guards.idle_gate to false in .bee/config.json (plain JSON; delete the key to
     )
 }
 
-pub(crate) fn intake_refusal(phase: &Value, blocked: &str, extra: &str) -> String {
+/// sfg-1 / slp-followup-gaps D2. The intake FIX line tells the caller to
+/// route the request through the workflow. For a session that is bound to no
+/// lane, that is the wrong remedy: the work IS routed — this session just is
+/// not attached to it, so the gate read the control-root default record
+/// instead of the lane the session is actually working under. Named only when
+/// the default record answered AND this session carries no lane binding; a
+/// lane-bound session, a claim-derived one, and a sessionless call never see
+/// this line.
+pub(crate) fn session_bind_remedy_line() -> String {
+    " ALSO: this session is bound to no lane, so the gate judged it against the default record \
+(.bee/state.json), not the lane it is working under — bind it to that lane \
+(`bee state session bind --lane <feature>`), or claim its cell, and retry."
+        .to_string()
+}
+
+pub(crate) fn intake_refusal(
+    phase: &Value,
+    blocked: &str,
+    extra: &str,
+    session_bind_remedy: bool,
+) -> String {
     format!(
-        "bee intake gate: no bee work is active (phase: {}) — {} is blocked. {}{}",
+        "bee intake gate: no bee work is active (phase: {}) — {} is blocked. {}{}{}",
         js_disp(phase),
         blocked,
         extra,
-        intake_fix_line()
+        intake_fix_line(),
+        if session_bind_remedy { session_bind_remedy_line() } else { String::new() }
     )
 }
 

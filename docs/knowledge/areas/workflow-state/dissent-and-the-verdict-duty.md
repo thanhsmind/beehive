@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/cells-completion-judge-and-archive.md]
-  decisions: ["slp-dissent-stop-and-ask 4b7aa303 (dissent has FULL TEETH: a blocker-severity dissent pauses the RELATED part of the work while other parts continue, and the orchestrator is OBLIGATED to answer one of three — accept and log / reject with reasoning / escalate a rung — recorded in the decision log before the related work resumes)", "slp-dissent-stop-and-ask a2affcba (mechanism: a cells-level dissent record {target, claim, alternative, severity} written through the CLI; bee close and bee worktree merge REFUSE while any dissent lacks a recorded verdict, the same enforcement shape as judge-debt; blocker severity rides the existing blocked-status machinery so the related work stays unclaimable; the SLP escalate verb NEVER reuses bee cells escalate, which means model tier)", "slp-dissent-stop-and-ask 787a9eb0 (dissent adds an obligation on the orchestrator, never a relaxation of a gate)", "slp-dissent-stop-and-ask a020319d (this is the SECOND of four slp clusters; blind lanes and contract/original-request are separate features and out of this boundary)", "slp-dissent-stop-and-ask e29918f7 (the merge half of the obligation is NEW code, not a copied arm — merge carried no judge-debt door, only proof debt, so the door had to be built rather than mirrored)", "slp-dissent-stop-and-ask 6a6b9975 (herding-lane dissent is OUT of this boundary: one writer owns the dissent record, and a herding worker is instructed never to run a bee command, so it cannot reach that writer; carried as backlog item p-05d2a4f4)"]
-  sources: ["docs/history/slp-dissent-stop-and-ask/CONTEXT.md (locked decisions, terms, boundary)", "docs/history/slp-dissent-stop-and-ask/plan.md (the four phases)", "slp-dissent-stop-and-ask cell sd-1 (the dissent record, its closed severity set, the secret scan, the claim release, and the blocker tooth; trace .bee/cells/sd-1.json, commit 156b9566, 2026-08-28)", "slp-dissent-stop-and-ask cell sd-2 (the obligated verdict written to the decision log fail-closed, releasing the cell the blocker dissent parked; trace .bee/cells/sd-2.json, commit d7726926)", "slp-dissent-stop-and-ask cell sd-3 (the cells dispatch table folded into the served-but-undeclared law, proven red-first; trace .bee/cells/sd-3.json, commit 79f05db3)", "slp-dissent-stop-and-ask cell sd-4 (bee close refuses while any dissent lacks a verdict, in every lane; trace .bee/cells/sd-4.json, commit 6966d85c)", "slp-dissent-stop-and-ask cell sd-5 (bee worktree merge refuses WORKTREE_MERGE_DISSENT_DEBT, reading the close door's own two helpers so one deferral clears both doors; trace .bee/cells/sd-5.json, commit 18aa0e09)", "slp-dissent-stop-and-ask cell sd-6 (options[] and leaning on the worker result across three code surfaces, plus the swarming worker contract; trace .bee/cells/sd-6.json, commit ecdb89ea)"]
+  decisions: ["slp-dissent-stop-and-ask 4b7aa303 (dissent has FULL TEETH: a blocker-severity dissent pauses the RELATED part of the work while other parts continue, and the orchestrator is OBLIGATED to answer one of three — accept and log / reject with reasoning / escalate a rung — recorded in the decision log before the related work resumes)", "slp-dissent-stop-and-ask a2affcba (mechanism: a cells-level dissent record {target, claim, alternative, severity} written through the CLI; bee close and bee worktree merge REFUSE while any dissent lacks a recorded verdict, the same enforcement shape as judge-debt; blocker severity rides the existing blocked-status machinery so the related work stays unclaimable; the SLP escalate verb NEVER reuses bee cells escalate, which means model tier)", "slp-dissent-stop-and-ask 787a9eb0 (dissent adds an obligation on the orchestrator, never a relaxation of a gate)", "slp-dissent-stop-and-ask a020319d (this is the SECOND of four slp clusters; blind lanes and contract/original-request are separate features and out of this boundary)", "slp-dissent-stop-and-ask e29918f7 (the merge half of the obligation is NEW code, not a copied arm — merge carried no judge-debt door, only proof debt, so the door had to be built rather than mirrored)", "slp-dissent-stop-and-ask 6a6b9975 (herding-lane dissent is OUT of this boundary: one writer owns the dissent record, and a herding worker is instructed never to run a bee command, so it cannot reach that writer; carried as backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — the herding half of 6a6b9975 is closed, and closed without a second writer: the dissent rides the herding mailbox result as data and the control loop transcribes it through the same record-dissent function; touches 6a6b9975)"]
+  sources: ["docs/history/slp-dissent-stop-and-ask/CONTEXT.md (locked decisions, terms, boundary)", "docs/history/slp-dissent-stop-and-ask/plan.md (the four phases)", "slp-dissent-stop-and-ask cell sd-1 (the dissent record, its closed severity set, the secret scan, the claim release, and the blocker tooth; trace .bee/cells/sd-1.json, commit 156b9566, 2026-08-28)", "slp-dissent-stop-and-ask cell sd-2 (the obligated verdict written to the decision log fail-closed, releasing the cell the blocker dissent parked; trace .bee/cells/sd-2.json, commit d7726926)", "slp-dissent-stop-and-ask cell sd-3 (the cells dispatch table folded into the served-but-undeclared law, proven red-first; trace .bee/cells/sd-3.json, commit 79f05db3)", "slp-dissent-stop-and-ask cell sd-4 (bee close refuses while any dissent lacks a verdict, in every lane; trace .bee/cells/sd-4.json, commit 6966d85c)", "slp-dissent-stop-and-ask cell sd-5 (bee worktree merge refuses WORKTREE_MERGE_DISSENT_DEBT, reading the close door's own two helpers so one deferral clears both doors; trace .bee/cells/sd-5.json, commit 18aa0e09)", "slp-dissent-stop-and-ask cell sd-6 (options[] and leaning on the worker result across three code surfaces, plus the swarming worker contract; trace .bee/cells/sd-6.json, commit ecdb89ea)", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — the carried dissent on the herding mailbox result, and its transcription through the one record-dissent writer)"]
   authoritative_for: "workflow-state: the dissent record, the obligated verdict, the close and merge dissent-debt doors, and the three boundary signals that oblige a worker to stop and ask"
 ---
 
@@ -129,20 +129,39 @@ already reads one result at a time — not in the rescue ladder, and not in both
   construction: the worker records and stops; the orchestrator answers at a door.
 - It is not a gate relaxation. Dissent only ever ADDS an obligation on the
   orchestrator. No gate becomes skippable because a worker objected.
-- **It does not reach herding-lane workers.** One writer owns the dissent record —
-  the CLI — and a herding worker is instructed never to run a bee command, so it
-  cannot reach that writer at all. Stop-and-ask (see
-  `areas/bee-herding/the-run-verb-and-worker-outcomes.md`) DOES reach them, because
-  it rides the result file they already write. Closing the dissent half for
-  herding is registered work, not a silent gap.
+- **It is not a second writer for herding-lane workers.** The original boundary
+  (6a6b9975) held that dissent could not reach a herding worker at all: one
+  writer owns the record, and a herding worker is instructed never to run a bee
+  command. That half is now closed, and closed WITHOUT a second writer — see the
+  section below.
+
+## A herding-lane worker reaches it too, as data
+
+Decision `6a6b9975` scoped herding-lane dissent out of the original feature: one
+writer owns the dissent record, and a herding worker is told never to run a bee
+command, so it could not reach that writer. Decision `7db30738`
+(slp-followup-gaps, cell sfg-2, 2026-08-29) moved that boundary without moving
+the writer.
+
+A herding worker's dissent now travels as **data on the mailbox result file it
+already writes** — the same carrier stop-and-ask uses — carrying the three
+fields the record needs: claim, alternative, severity. The control loop reads it
+back and writes it through the SAME function `bee cells dissent` routes to, so
+the record shape, the closed severity set, the secret scan, the blocker tooth
+and the claim release still have exactly one implementation. Nothing about the
+record, the verdict duty, or the two debt doors changes: a transcribed dissent
+is an ordinary dissent and owes its verdict like any other. The mechanism — the
+three surfaces, the lenient parse, the severity left for the writer to check,
+and how a transcription that fails is reported rather than swallowed — is in
+`areas/bee-herding/the-run-verb-and-worker-outcomes.md`.
 
 ## Open Gaps
 
-- **Herding-lane dissent has no carrier.** A herding worker can hand back options
-  and a leaning, but cannot record a dissent. The intended fix — carry the dissent
-  fields on the herding mailbox result and have the control loop transcribe them
-  through the same one verb, so one record type keeps one writer — is filed as
-  backlog item `p-05d2a4f4`, not built.
+- ~~**Herding-lane dissent has no carrier.**~~ Closed 2026-08-29 by decision
+  `7db30738` (cell sfg-2), along exactly the line the gap named: the dissent
+  fields ride the herding mailbox result and the control loop transcribes them
+  through the same one verb, so one record type still keeps one writer. Backlog
+  item `p-05d2a4f4` is done.
 - **Consider-grade dissent has no dedicated reader.** It is recorded and it owes a
   verdict like any other, but nothing surfaces it separately from blocker dissent.
 
