@@ -1484,7 +1484,83 @@ fn resolve_opencode_binary() -> Result<PathBuf, String> {
     if raw.is_empty() {
         return Err("`command -v opencode` produced no path".to_string());
     }
-    std::fs::canonicalize(&raw).map_err(|e| format!("could not canonicalize \"{raw}\": {e}"))
+    let path = std::fs::canonicalize(&raw)
+        .map_err(|e| format!("could not canonicalize \"{raw}\": {e}"))?;
+    if !is_wrapper_script(&path) {
+        return path_ok(path);
+    }
+    // The PATH entry is a wrapper, not the payload. Ask each version manager
+    // that ships one to name the executable it actually execs.
+    for manager in VERSION_MANAGER_RESOLVERS {
+        let Some(candidate) = ask_resolver(manager) else { continue };
+        if !is_wrapper_script(&candidate) {
+            return path_ok(candidate);
+        }
+    }
+    Err(format!(
+        "the PATH entry {} is a WRAPPER SCRIPT, not the bundled executable this derivation greps, \
+         and no version-manager resolver ({}) could name the real binary — install opencode-ai so \
+         `command -v opencode` lands on the payload, or make the owning manager resolvable on PATH",
+        path.display(),
+        VERSION_MANAGER_RESOLVERS.join(", ")
+    ))
+}
+
+/// Managers that install a shebang shim on PATH and answer `<manager> which
+/// <tool>` with the executable it execs. Ordered, first usable answer wins;
+/// an absent manager is skipped, never an error.
+const VERSION_MANAGER_RESOLVERS: &[&str] = &["mise", "asdf", "volta"];
+
+fn ask_resolver(manager: &str) -> Option<PathBuf> {
+    let out = Command::new(manager).arg("which").arg("opencode").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if raw.is_empty() {
+        return None;
+    }
+    std::fs::canonicalize(&raw).ok()
+}
+
+/// A wrapper is a text script standing in for the executable — a shebang
+/// script (mise/asdf/volta shims, npm bin stubs) or a Windows `.cmd` batch
+/// stub. Either way its bytes carry no bundled payload, so a derivation that
+/// greps them reports zero tools and calls it a shape change. Named here
+/// rather than papered over: the resolver above walks past it or says why it
+/// could not.
+fn is_wrapper_script(path: &Path) -> bool {
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat")) {
+        return true;
+    }
+    let Ok(bytes) = std::fs::read(path) else { return false };
+    bytes.starts_with(b"#!")
+}
+
+fn path_ok(path: PathBuf) -> Result<PathBuf, String> {
+    Ok(path)
+}
+
+/// The resolver's own contract, pinned without needing an opencode install:
+/// a shebang script and a `.cmd` stub are wrappers; an ELF payload is not.
+#[test]
+fn a_wrapper_script_is_never_mistaken_for_the_bundled_payload() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let shim = tmp.path().join("opencode");
+    std::fs::write(&shim, b"#!/bin/bash\nexec mise x opencode -- opencode \"$@\"\n").expect("write shim");
+    assert!(is_wrapper_script(&shim), "a shebang shim must read as a wrapper");
+
+    let cmd = tmp.path().join("opencode.cmd");
+    std::fs::write(&cmd, b"@echo off\r\n").expect("write cmd");
+    assert!(is_wrapper_script(&cmd), "a .cmd stub must read as a wrapper");
+
+    let elf = tmp.path().join("opencode-real");
+    std::fs::write(&elf, b"\x7fELF\x02\x01\x01\x00payload").expect("write elf");
+    assert!(!is_wrapper_script(&elf), "an ELF payload must NOT read as a wrapper");
+
+    let missing = tmp.path().join("absent");
+    assert!(!is_wrapper_script(&missing), "an unreadable path is not a wrapper claim");
 }
 
 /// Reads the resolved opencode binary's own bytes as text. The installed
