@@ -2872,4 +2872,241 @@ mod tests {
             assert_eq!(a, b, "{bare} vs {described}");
         }
     }
+
+    // ═══ lane-model-diversity D4 — the SEAT roles at the marker guard ══════
+    //
+    // Two doors, one answer (store `3c9d6262`): `bee dispatch prepare` STAMPS
+    // the `[bee-tier: …]` marker and this hook READS it back. The seats add a
+    // resolution rule at the first door only — an unconfigured seat rebinds to
+    // `advisor` under `--kind advisor` (D2) — and the rebind happens BEFORE the
+    // marker is written. So the guard learns nothing about seats: it asks the
+    // one question it has always asked, is this role configured for this
+    // runtime, and the parity claim is that the answer never disagrees with
+    // what the other door just stamped.
+    //
+    // Existing coverage these rows deliberately do not repeat:
+    // `a_marker_naming_any_configured_role_is_accepted` and
+    // `a_marker_naming_an_unconfigured_role_refuses_with_a_fix` pin the open
+    // role set with operator-invented names (`test`, `tset`);
+    // `an_unconfigured_advisor_marker_is_refused_like_any_other_role` and
+    // `a_null_advisor_marker_is_refused_exactly_as_an_absent_one_is` pin the
+    // advisor's floor-less rule; `prepare.rs`'s
+    // `an_unconfigured_seat_resolves_the_advisor_at_the_advisor_door` and
+    // `a_configured_seat_resolves_its_own_model_and_names_itself` pin what the
+    // FIRST door stamps. The gap is the CROSSING: no row had ever taken a
+    // marker the dispatch door actually emitted for a seat and handed it to
+    // this hook, and no seat name had ever reached this file at all.
+    //
+    // Every row derives its names from `SEAT_ROLES` rather than listing them,
+    // so a seat added to the constant is covered here the day it is added.
+
+    use crate::verbs::drivers::{cell_role_list, prepare_dispatch_with_role, Prepared, SEAT_ROLES};
+
+    /// One distinct model per seat, so a marker admitted under the WRONG seat's
+    /// name carries the wrong model and is caught by name rather than passing
+    /// as "some configured model".
+    fn seat_model(seat: &str) -> String {
+        format!("model-for-{seat}")
+    }
+
+    /// A host that configures all eight seats — two lanes on two models is the
+    /// whole point of the feature.
+    fn every_seat_configured() -> Value {
+        let mut claude = Map::new();
+        claude.insert("generation".into(), json!("sonnet"));
+        claude.insert("review".into(), json!("opus"));
+        claude.insert("advisor".into(), json!("fable"));
+        for seat in SEAT_ROLES {
+            claude.insert(seat.to_string(), json!(seat_model(seat)));
+        }
+        json!({ "models": { "claude": Value::Object(claude) } })
+    }
+
+    /// A host with an advisor and no seat at all — the state every existing
+    /// host is in the moment the seats ship.
+    fn advisor_only() -> Value {
+        json!({"models": {"claude": {
+            "generation": "sonnet", "review": "opus", "advisor": "fable"
+        }}})
+    }
+
+    /// What `bee dispatch prepare --kind advisor --role <role>` actually hands
+    /// a caller. The REAL door, never a hand-written payload: a marker typed
+    /// into this file would prove only that the guard agrees with the test
+    /// author about what the other door emits.
+    fn advisor_envelope(root: &Path, role: &str) -> Value {
+        let out = prepare_dispatch_with_role(
+            root, "claude", "advisor", Some(role), None, None, false, None, None,
+            // record_it: false — the dispatch log must carry the GUARD's line
+            // as its last entry, not the door's.
+            false, None,
+        )
+        .expect("the advisor door resolves natively");
+        let Prepared::Value(v) = out else { panic!("{role}: expected an envelope") };
+        v
+    }
+
+    /// D4, the configured arm: a seat marker the dispatch door stamped is
+    /// admitted here, under the seat's own name and on the seat's own model.
+    ///
+    /// The guard's member set is derived from what the host configures, so this
+    /// needs no seat-awareness to pass — which is exactly the property being
+    /// pinned. Were anything to key legality on a closed list again (the two
+    /// retired `CLAUDE_TIERS`/`CODEX_TIERS` alternations did), all eight seats
+    /// would deny here while the door that stamped them resolved them fine.
+    #[test]
+    fn a_configured_seat_marker_the_dispatch_door_stamped_is_admitted() {
+        let fx = fixture(&every_seat_configured());
+        for seat in SEAT_ROLES {
+            let v = advisor_envelope(fx.path(), seat);
+            let payload =
+                v.get("payload").unwrap_or_else(|| panic!("{seat}: no payload in {v}")).clone();
+            let prompt = payload.get("prompt").and_then(Value::as_str).unwrap_or_default();
+            assert!(
+                prompt.starts_with(&format!("[bee-tier: {seat}]")),
+                "{seat}: the door must stamp the seat it resolved: {prompt}"
+            );
+            let (code, stderr) =
+                run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": payload}));
+            assert_eq!(code, 0, "{seat}: the door stamped it, so this guard must admit it: {stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["tier"], json!(seat), "{seat}: the audit line names the seat");
+            assert_eq!(
+                d["model"],
+                json!(seat_model(seat)),
+                "{seat}: its OWN model, never a sibling seat's and never the advisor's"
+            );
+        }
+    }
+
+    /// D4, the fall-through arm: the marker names the RESOLVED role, so a seat
+    /// that fell through arrives here as `advisor` and is admitted as one.
+    ///
+    /// This is the row that makes the fall-through safe. The guard has no
+    /// fall-through of its own and must not grow one; what keeps an
+    /// unconfigured lane from being refused at the second door is that the
+    /// first door rebound the role BEFORE writing the marker. The seat itself
+    /// never travels in the marker — it rides `economics.requested_role`, which
+    /// this hook never reads.
+    #[test]
+    fn a_fallen_through_seat_reaches_the_guard_as_the_advisor() {
+        let fx = fixture(&advisor_only());
+        for seat in SEAT_ROLES {
+            let v = advisor_envelope(fx.path(), seat);
+            assert_eq!(
+                v.get("economics").and_then(|e| e.get("requested_role")),
+                Some(&json!(seat)),
+                "{seat}: this host configures no seat, so the door fell through: {v}"
+            );
+            let payload = v.get("payload").unwrap().clone();
+            let prompt = payload.get("prompt").and_then(Value::as_str).unwrap_or_default();
+            assert!(
+                !prompt.starts_with(&format!("[bee-tier: {seat}]")),
+                "{seat}: a seat this host cannot resolve must never reach the marker: {prompt}"
+            );
+            let (code, stderr) =
+                run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": payload}));
+            assert_eq!(code, 0, "{seat}: {stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["tier"], json!("advisor"), "{seat}: the marker names the resolved role");
+            assert_eq!(
+                d["model"],
+                json!("fable"),
+                "{seat}: the advisor's model — the session model is what the rebind exists to avoid"
+            );
+        }
+    }
+
+    /// An unconfigured seat marker is refused here, on a host whose advisor is
+    /// configured — the guard does NOT re-derive D2's fall-through.
+    ///
+    /// The one dangerous reading of D2 is "a seat name may borrow the advisor",
+    /// which at this door would mean admitting `[bee-tier: lane-3]` on a host
+    /// with no `lane-3` and letting the subagent run on the SESSION model while
+    /// dispatch.jsonl recorded a role that selects no model — verbatim the
+    /// outcome `unconfigured_role_reason` exists to prevent. The fall-through
+    /// is the advisor DOOR's, bounded by `--kind advisor` (D2's own scope), and
+    /// a seat marker arriving here unresolvable is a defect, never a hint.
+    #[test]
+    fn an_unconfigured_seat_marker_is_refused_even_where_the_advisor_is_configured() {
+        let fx = fixture(&advisor_only());
+        for seat in SEAT_ROLES {
+            let (code, stderr) = run_payload(
+                fx.path(),
+                json!({"tool_name": "Agent", "tool_input": {
+                    "prompt": format!("[bee-tier: {seat}] brainstorm")
+                }}),
+            );
+            assert_eq!(code, 2, "{seat}: an unconfigured seat must not ride the session model: {stderr}");
+            assert!(
+                stderr.contains(&format!("[bee-tier: {seat}] names a role nothing configures")),
+                "{seat}: {stderr}"
+            );
+            assert!(stderr.contains("models.claude in .bee/config.json"), "{seat}: {stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["transport"], "role-not-configured", "{seat}");
+            assert_eq!(d["tier"], json!(seat), "{seat}: refused in the name that was written");
+            assert_eq!(d["model"], Value::Null, "{seat}: nothing was allowed onto the session model");
+        }
+    }
+
+    /// A seat is an ORDINARY role here, and a null slot keeps the ordinary
+    /// meaning: prompt-budget, the marker alone carrying the role.
+    ///
+    /// The advisor is the one name with no floor (decision `4faf1de9`), which
+    /// is why `"advisor": null` refuses and this does not. Pinning the
+    /// difference is the point: the seats must not acquire the advisor's
+    /// null-rule by association, and they must not acquire a rule of their own
+    /// either. A host that spells a seat off with `null` has declared the key,
+    /// and the only door where "declared but resolving nothing" means anything
+    /// special is `--kind advisor`, where the rebind already handled it.
+    #[test]
+    fn a_null_seat_slot_keeps_the_ordinary_prompt_budget_meaning() {
+        let seat = SEAT_ROLES[2];
+        let fx = fixture(&json!({"models": {"claude": {
+            "generation": "sonnet", "advisor": "fable", seat.to_string(): Value::Null
+        }}}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {
+                "prompt": format!("[bee-tier: {seat}] brainstorm")
+            }}),
+        );
+        assert_eq!(code, 0, "{seat}: a null ordinary slot is prompt-budget, not a refusal: {stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["tier"], json!(seat));
+        assert_eq!(d["model"], Value::Null, "prompt-budget names no model");
+        // The advisor on the same host, spelled off the same way, still
+        // refuses — one config, two rules, both unchanged by the seats.
+        let advisor_off = fixture(&json!({"models": {"claude": {
+            "generation": "sonnet", "advisor": Value::Null, seat.to_string(): Value::Null
+        }}}));
+        let (code, _) = run_payload(
+            advisor_off.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: advisor] consult"}}),
+        );
+        assert_eq!(code, 2, "the advisor's floor-less rule is untouched by the seats");
+    }
+
+    /// A cell that declares a seat role walks the SAME ordered list every other
+    /// cell role walks — head, `code`, `generation` — with no seat arm and no
+    /// advisor appended.
+    ///
+    /// It lives beside the guard rows because it is the same claim from the
+    /// other side: D2 bought the fall-through by REBINDING at one door, never
+    /// by putting `advisor` on an ordered list. Were it ever bought with a list
+    /// instead, this list is where it would land, and the tail's
+    /// `Resolved::Budget` floor would hand an unconfigured advisor the session
+    /// model. The expected list is the one `cell_role_list`'s own contract
+    /// states, not a value read back from the function.
+    #[test]
+    fn a_cell_declaring_a_seat_role_walks_the_unchanged_ordered_list() {
+        for seat in SEAT_ROLES {
+            assert_eq!(
+                cell_role_list(seat),
+                vec![seat, "code", "generation"],
+                "{seat}: the cell path is byte-identical to every other role's"
+            );
+        }
+    }
 }
