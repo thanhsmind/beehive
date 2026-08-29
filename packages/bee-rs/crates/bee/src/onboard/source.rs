@@ -43,6 +43,14 @@ pub struct Engine {
     /// onboard copies it from here rather than from a `packages/bee/`
     /// template directory.
     pub opencode_plugin_dir: PathBuf,
+    /// pi-support D1: the Pi guard belt is a checked-in TypeScript EXTENSION
+    /// (Pi has no hook-config surface at all), auto-discovered from the
+    /// workspace cwd at `<cwd>/.pi/extensions/`. Exactly like
+    /// `opencode_plugin_dir` above, this checkout's OWN installed
+    /// `.pi/extensions/` tree IS the vendoring source, so a host project's
+    /// onboard copies it from here rather than from a `packages/bee/`
+    /// template directory. No global install, no user config.
+    pub pi_extension_dir: PathBuf,
 }
 
 impl Engine {
@@ -59,6 +67,7 @@ impl Engine {
             agents_block_template: templates_dir.join("AGENTS.block.md"),
             agents_windows_template: templates_dir.join("AGENTS.windows.md"),
             opencode_plugin_dir: plugin_root.join(".opencode").join("plugins"),
+            pi_extension_dir: plugin_root.join(".pi").join("extensions"),
             templates_dir,
             plugin_root,
         }

@@ -41,8 +41,17 @@
 //      `model-guard`) can actually put on the wire by scanning that rule's
 //      own emit-path source, so a whole SHAPE — not only a whole rule — now
 //      fails this suite by name if it goes missing on a belt. For every
-//      such (rule, shape) pair, the test asserts FOUR independent signals
-//      exist, failing by name (rule + shape + belt) if any is missing:
+//      such (rule, shape) pair, the test asserts FIVE independent signals
+//      exist, failing by name (rule + shape + belt) if any is missing.
+//
+//      FIVE, not four: pi-support's cell pis-3 added the PI belt
+//      (`.pi/extensions/bee-guard.ts`) as the fourth belt, derived from its
+//      own source the same way the opencode belt already was. The test's
+//      NAME still says "three_belt" and stays that way on purpose — two
+//      documents cite it by name (docs/knowledge/areas/hook-runtime/
+//      catalog-projections-and-activation.md, docs/history/opencode-support/
+//      discovery.md), and renaming it would dangle both pointers to buy
+//      nothing but an accurate numeral. The signals:
 //        - HELPER level  — `bee hook <rule>` itself emits this shape for its
 //          known-triggering payload (the shared FIRST belt every runtime's
 //          translation layer calls into — plan.md's Approach section:
@@ -72,6 +81,14 @@
 //          emits invalid JSON of its own) and is checked once, globally, at
 //          the end of the test — see the doc comment above
 //          `emittable_shapes`.
+//        - PI belt      — the same routing+implementation cross-check
+//          against `.pi/extensions/bee-guard.ts`, whose live fixture proof
+//          is the sibling file `tests/pi_plugin_contracts.rs`. This belt is
+//          the one that may legally route NOTHING to a rule — but only as a
+//          NAMED EXCLUSION written on that rule's own line in the belt
+//          source. `model-guard` is today's instance (Pi has no Agent/Task
+//          surface at all, store decision 7f9c8518), asserted BY NAME after
+//          the loop rather than left to the derived predicate alone.
 //
 // The design and any environment-skip behavior are recorded in
 // `docs/history/opencode-support/discovery.md`.
@@ -106,6 +123,19 @@ fn bee_bin() -> PathBuf {
 /// `docs/history/opencode-support/discovery.md` documents and this test
 /// exercises live via `node`. Never copied or re-derived by hand.
 const PLUGIN_SOURCE: &str = include_str!("../../../../../.opencode/plugins/bee-guard.ts");
+
+/// The real PI belt source, embedded the same way (pi-support pis-3). The
+/// parity test below derives the FOURTH belt's rows from this file, never
+/// from a hand list — the belt's own live deny/allow/crash/absent/ask/
+/// unparseable/passivity proof lives in `tests/pi_plugin_contracts.rs`, the
+/// sibling of part 1 above.
+///
+/// The parity test KEEPS ITS NAME (`three_belt_parity_…`) even though it now
+/// covers four belts: two documents cite it by name
+/// (`docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md`
+/// and `docs/history/opencode-support/discovery.md`), and a rename would turn
+/// both pointers into dangling references to buy nothing.
+const PI_PLUGIN_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-guard.ts");
 
 /// `hook_contracts.rs`'s own source, embedded so the parity test can look
 /// for the CLAUDE belt's deny fixtures by what they actually assert, rather
@@ -405,6 +435,84 @@ fn opencode_advisory_hooks() -> BTreeSet<String> {
     }
     assert!(!set.is_empty(), "bee-guard.ts: found zero runAdvisoryHook call sites — advisory derivation broke");
     set
+}
+
+// ─── the pi extension's own routing, derived from its source ──────────────
+
+/// Every `(Pi tool, bee hook)` pair `.pi/extensions/bee-guard.ts`'s own
+/// `mapToolCall` switch routes — same derivation as
+/// `opencode_tool_hook_pairs` above, with one difference that matters: this
+/// parser is FALL-THROUGH aware. Pi's belt shares one body between
+/// `case "bash":` and `case "powershell":`, and a parser that only credits
+/// the case carrying the `hook:` literal would under-report the routed set
+/// and could let a rule look unrouted on this belt when it is not.
+fn pi_tool_hook_pairs() -> Vec<(String, String)> {
+    let fn_start = PI_PLUGIN_SOURCE
+        .find("function mapToolCall")
+        .expect(".pi/extensions/bee-guard.ts: mapToolCall not found — has the routing function been renamed?");
+    let unbounded = &PI_PLUGIN_SOURCE[fn_start..];
+    // Bound the slice at mapToolCall's own closing brace (the first `}` at
+    // column 0 — every brace inside the body is indented). Unbounded, the
+    // scan runs on into `sessionSource`'s `switch (reason)` and reads its
+    // `case "new"` / `case "reload"` labels as routed TOOL names.
+    let body = &unbounded[..unbounded
+        .find("\n}\n")
+        .expect(".pi/extensions/bee-guard.ts: could not find the end of mapToolCall")];
+    let switch_start = body
+        .find("switch (tool)")
+        .expect(".pi/extensions/bee-guard.ts: mapToolCall no longer switches on `tool` — routing derivation needs an update");
+    let switch_body = &body[switch_start..];
+
+    let mut pairs = Vec::new();
+    let mut pending: Vec<String> = Vec::new();
+    for seg in switch_body.split("case \"").skip(1) {
+        let tool_end = seg
+            .find('"')
+            .expect(".pi/extensions/bee-guard.ts: unterminated `case \"...\"` tool literal");
+        pending.push(seg[..tool_end].to_string());
+        if let Some(h) = seg.find("hook: \"") {
+            let rest = &seg[h + "hook: \"".len()..];
+            let hend = rest
+                .find('"')
+                .expect(".pi/extensions/bee-guard.ts: unterminated `hook: \"...\"` literal");
+            let hook = rest[..hend].to_string();
+            for tool in pending.drain(..) {
+                pairs.push((tool, hook.clone()));
+            }
+        }
+    }
+    assert!(
+        pending.is_empty(),
+        ".pi/extensions/bee-guard.ts: case label(s) {pending:?} fall through to no `hook:` literal \
+         — a routed tool with no destination is exactly the silent allow that belt exists to close"
+    );
+    assert!(
+        pairs.len() >= 8,
+        ".pi/extensions/bee-guard.ts: mapToolCall derivation found only {} routed tool cases — \
+         expected at least Pi 0.84.3's eight built-ins; either the switch changed shape or this \
+         parser broke",
+        pairs.len()
+    );
+    pairs
+}
+
+/// The literal marker in `.pi/extensions/bee-guard.ts`'s own
+/// `runBlockingHook` that proves it still implements `shape`. Same three
+/// conditionals as the OpenCode belt's — the Pi belt is that file re-targeted
+/// at Pi's event names, so the verdict-parsing code is deliberately identical
+/// and any divergence here is a defect, not a dialect.
+fn pi_belt_shape_marker(shape: &str) -> &'static str {
+    opencode_belt_shape_marker(shape)
+}
+
+/// True iff `.pi/extensions/bee-guard.ts` names `rule` as a NAMED EXCLUSION
+/// **on the same line** — never merely "both strings appear somewhere in the
+/// file". Same narrowing, for the same reason, as
+/// `discovery_doc_names_as_a_gap` below (F5): a document-global marker search
+/// passes for any name mentioned anywhere, whether or not that mention was
+/// tagged as an exclusion.
+fn pi_belt_names_the_exclusion(rule: &str) -> bool {
+    PI_PLUGIN_SOURCE.lines().any(|line| line.contains(rule) && line.contains("NAMED EXCLUSION"))
 }
 
 // ─── node availability (named, non-fatal skip) ─────────────────────────────
@@ -1277,6 +1385,11 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
     let opencode_pairs = opencode_tool_hook_pairs();
     let opencode_hooks: BTreeSet<&str> = opencode_pairs.iter().map(|(_, h)| h.as_str()).collect();
 
+    // The FOURTH belt (pi-support pis-3), derived from its own source exactly
+    // like the third one above.
+    let pi_pairs = pi_tool_hook_pairs();
+    let pi_hooks: BTreeSet<&str> = pi_pairs.iter().map(|(_, h)| h.as_str()).collect();
+
     let mut gaps: Vec<String> = Vec::new();
 
     for row in &blocking {
@@ -1348,7 +1461,58 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
                     opencode_belt_shape_marker(shape)
                 ));
             }
+
+            // PI belt: the same routing+implementation cross-check against
+            // `.pi/extensions/bee-guard.ts`, whose live deny/allow/crash/
+            // absent/ask/unparseable/passivity PROOF is
+            // `tests/pi_plugin_contracts.rs`. One difference from the three
+            // belts above: a rule this belt routes NOTHING to is allowed —
+            // but ONLY as a NAMED EXCLUSION written on that rule's own line in
+            // the belt source, never as a silent absence. `model-guard` is
+            // today's instance (Pi has no Agent/Task surface at all, store
+            // decision 7f9c8518, so a model-guard row would be a vacuous
+            // name-match that can never fire), and nothing here NAMES it: the
+            // next unrouted rule is judged by the same derived predicate.
+            if !pi_hooks.contains(hook) {
+                if !pi_belt_names_the_exclusion(hook) {
+                    gaps.push(format!(
+                        "{hook} / {shape} / pi belt: .pi/extensions/bee-guard.ts's mapToolCall routes \
+                         no tool to this hook AND does not name it as a NAMED EXCLUSION on its own \
+                         line (derived pairs: {pi_pairs:?})"
+                    ));
+                }
+            } else if !PI_PLUGIN_SOURCE.contains(pi_belt_shape_marker(shape)) {
+                gaps.push(format!(
+                    "{hook} / {shape} / pi belt: .pi/extensions/bee-guard.ts's runBlockingHook no \
+                     longer implements this shape (marker {:?} not found)",
+                    pi_belt_shape_marker(shape)
+                ));
+            }
         }
+    }
+
+    // The Pi belt's ONE named exclusion, asserted BY NAME rather than left to
+    // the derived loop above (advisor condition 4 / reviewer P1-6). Two halves,
+    // both load-bearing:
+    //   - model-guard really IS a BLOCKING rule in the derived catalog, so the
+    //     exclusion is about a live rule and not about a name that stopped
+    //     existing; and
+    //   - as long as this belt routes nothing to it, the belt source must SAY
+    //     SO by name. Deleting that comment while leaving Pi's guard surface
+    //     unwired is exactly the silent hole this assertion refuses.
+    assert!(
+        catalog.get("model-guard").is_some_and(|r| r.blocking),
+        "model-guard is no longer a BLOCKING rule in the derived catalog — the Pi belt's named \
+         exclusion for it would now be vacuous; re-derive the exclusion before trusting it"
+    );
+    if !pi_hooks.contains("model-guard") {
+        assert!(
+            pi_belt_names_the_exclusion("model-guard"),
+            "pi belt: model-guard is wired to no Pi tool, so `.pi/extensions/bee-guard.ts` must name \
+             it as a NAMED EXCLUSION on its own line, stating why (Pi has no Agent/Task/subagent \
+             surface — store decision 7f9c8518). A missing rule with no written reason is \
+             indistinguishable from a rule someone forgot."
+        );
     }
 
     // UNPARSEABLE_SHAPE: see the doc comment above `emittable_shapes` — not
@@ -1363,12 +1527,21 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
          belt in this repo actually parses bee's own stdout: the opencode belt \
          (bee-guard.ts's runBlockingHook, live-proven by \
          every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary's \
-         StubBehavior::UnparseableVerdict scenario)."
+         StubBehavior::UnparseableVerdict scenario) and the pi belt \
+         (.pi/extensions/bee-guard.ts's runBlockingHook, live-proven by \
+         pi_plugin_contracts.rs's own UnparseableVerdict scenario)."
     );
     if !PLUGIN_SOURCE.contains("could not parse") {
         gaps.push(
             "unparseable exit-0 verdict / opencode belt: bee-guard.ts's runBlockingHook no longer \
              throws a \"could not parse\" Error on invalid exit-0 verdict JSON"
+                .to_string(),
+        );
+    }
+    if !PI_PLUGIN_SOURCE.contains("could not parse") {
+        gaps.push(
+            "unparseable exit-0 verdict / pi belt: .pi/extensions/bee-guard.ts's runBlockingHook no \
+             longer blocks with a \"could not parse\" reason on invalid exit-0 verdict JSON"
                 .to_string(),
         );
     }

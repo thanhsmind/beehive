@@ -356,7 +356,9 @@ mod tests {
             .iter()
             .map(|r| r["runtime"].as_str().unwrap())
             .collect();
-        assert_eq!(names, vec!["claude", "codex", "opencode", "acme"]);
+        // The four names bee itself knows (drivers::RUNTIMES — `pi` joined
+        // them with pi-support D5), in that order, then the operator's own.
+        assert_eq!(names, vec!["claude", "codex", "opencode", "pi", "acme"]);
         // An operator's own runtime key gets its table and no invented rows.
         assert_eq!(roles_of(&result, "acme").len(), 1);
         assert_eq!(role(&result, "acme", "code")["source"], json!(SOURCE_CONFIGURED));

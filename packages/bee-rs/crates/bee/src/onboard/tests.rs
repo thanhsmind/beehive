@@ -433,6 +433,55 @@ fn a_source_checkout_with_no_opencode_plugin_plans_nothing_for_it() {
     assert!(!fx.repo.join(".opencode").join("plugins").exists());
 }
 
+// ── Pi guard extension vendoring (pi-support D1) ──────────────────────────
+
+#[test]
+fn pi_guard_extension_installs_idempotently_and_repairs_drift() {
+    let fx = fixture();
+    write(&fx.root.join(".pi").join("extensions").join("bee-guard.ts"), "// pi guard v1\n");
+
+    let p = plan(&fx, &[]);
+    assert_eq!(paths_for(&p, "plan", "copy_pi_extension"), vec![".pi/extensions/bee-guard.ts"]);
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert_eq!(
+        std::fs::read_to_string(fx.repo.join(".pi").join("extensions").join("bee-guard.ts"))
+            .unwrap(),
+        "// pi guard v1\n"
+    );
+
+    // IDEMPOTENT: a settled repo plans and applies nothing further.
+    let p2 = plan(&fx, &[]);
+    assert!(!actions(&p2, "plan").contains(&"copy_pi_extension".to_string()));
+    let a2 = apply(&fx, &[]);
+    assert!(!actions(&a2, "applied").contains(&"copy_pi_extension".to_string()));
+
+    // DRIFT: a hand-edited extension file is repaired on the next apply — the
+    // belt is an ENFORCEMENT surface, so a tampered copy is never left in
+    // place, exactly as the OpenCode plugin above.
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard.ts"), "tampered\n");
+    let p3 = plan(&fx, &[]);
+    assert_eq!(paths_for(&p3, "plan", "copy_pi_extension"), vec![".pi/extensions/bee-guard.ts"]);
+    apply(&fx, &[]);
+    assert_eq!(
+        std::fs::read_to_string(fx.repo.join(".pi").join("extensions").join("bee-guard.ts"))
+            .unwrap(),
+        "// pi guard v1\n"
+    );
+}
+
+#[test]
+fn a_source_checkout_with_no_pi_extension_plans_nothing_for_it() {
+    // The ordinary fixture() never writes .pi/extensions/ under fx.root —
+    // this is the "not every source checkout carries it yet" case, and it
+    // must stay silent rather than erroring or fabricating a directory.
+    let fx = fixture();
+    let p = plan(&fx, &[]);
+    assert!(!actions(&p, "plan").contains(&"copy_pi_extension".to_string()));
+    assert!(!fx.repo.join(".pi").join("extensions").exists());
+}
+
 /// (relative path, content) for every file under a repo, sorted.
 fn tree_snapshot(root: &Path) -> Vec<(String, String)> {
     let mut out = Vec::new();

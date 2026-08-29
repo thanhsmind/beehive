@@ -31,7 +31,14 @@ pub(crate) const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "
 // it used to be — every function below is already keyed generically off this
 // list (`models.get(rt)`, no struct field per runtime), so widening it is the
 // whole fix for this reader.
-pub(crate) const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
+// pi-support D5/D6: `pi` joins them for the same reason and with the same one
+// line of change — `models.pi` is a real role table in the ONE config home,
+// read generically like every other key. What is pi-specific lives at the
+// dispatch door (`prepare::pi_requires_herding_refusal`), never here: this
+// reader's job is "does the operator's config name this runtime", and a
+// runtime absent from this list would silently resolve the CLAUDE table
+// instead (see the `RUNTIMES.contains` fallbacks below).
+pub(crate) const RUNTIMES: [&str; 4] = ["claude", "codex", "opencode", "pi"];
 
 /// The names bee itself ships a built-in default for.
 ///

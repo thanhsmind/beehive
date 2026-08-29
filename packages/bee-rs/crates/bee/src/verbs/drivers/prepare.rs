@@ -26,7 +26,18 @@ use std::time::Instant;
 
 // ═══ dispatch prepare ══════════════════════════════════════════════════════
 
-pub(crate) const DISPATCH_RUNTIMES: [&str; 2] = ["codex", "claude"];
+/// pi-support D5 (store: the pi belt's dispatch door): `pi` joins codex and
+/// claude as a legal `--runtime`, resolving `models.pi` in the ONE config home
+/// every other runtime reads. It is a HERDING-ONLY door — see
+/// `pi_requires_herding_refusal` — because Pi ships no Agent/subagent tool
+/// surface for a payload to name.
+///
+/// This constant is one of THREE gates a runtime name passes: the shape guard
+/// reads the `runtime` enum in `generated/registry_payload.json` (declared for
+/// `dispatch.prepare` AND `dispatch.wave`) BEFORE the handler runs, this list
+/// gates the handlers themselves, and `devtools::render_projection_text_for`
+/// carries the label arm. All three move together or the door half-opens.
+pub(crate) const DISPATCH_RUNTIMES: [&str; 3] = ["codex", "claude", "pi"];
 
 pub(crate) const DISPATCH_KINDS: [&str; 4] = ["cell", "gather", "reviewer", "advisor"];
 
@@ -65,6 +76,64 @@ pub(crate) fn unmapped_kind_refusal(kind: &str) -> Value {
             "dispatch kind \"{kind}\" has no slot mapping — add an explicit arm for it to slot_for_kind (verbs/drivers/prepare.rs) beside its DISPATCH_KINDS entry. An unmapped kind is refused, never resolved onto the advisor slot."
         )),
     );
+    Value::Object(refusal)
+}
+
+/// The `reason` every pi-runtime refusal carries — ONE reason word, so a
+/// caller at this door branches on one string rather than five.
+pub(crate) const PI_HERDING_ONLY_REASON: &str = "pi_requires_herding";
+
+/// What a slot resolved to, in the words the refusal reports it under.
+/// `Herding` never reaches here (it is the one resolution the pi door
+/// serves); `Refused` arrives from the cli purpose gate, which on pi is a
+/// cli slot either way.
+pub(crate) fn pi_resolution_word(resolved: &Resolved, escalated: bool) -> &'static str {
+    if escalated {
+        return "escalation";
+    }
+    match resolved {
+        Resolved::Inherit => "escalation",
+        Resolved::Model { .. } => "model",
+        Resolved::Native { .. } => "native",
+        Resolved::Cli { .. } | Resolved::Refused { .. } => "cli",
+        Resolved::Budget => "budget",
+        Resolved::Herding { .. } => "herding",
+    }
+}
+
+/// pi-support D5, at FULL width: on runtime `pi`, EVERY slot resolution that
+/// is not `Resolved::Herding` is refused BY NAME.
+///
+/// Pi has no Agent tool and no `spawn_agent` (store `7f9c8518`: no native
+/// subagents), so an Agent payload, a codex `spawn_agent` payload, a plain
+/// `model` parameter or a bare cli command emitted for the pi runtime would
+/// dispatch NOTHING while the envelope read as a successful dispatch. The
+/// herding pane is the one transport Pi can actually take, so the door emits
+/// the herding-exec payload or it refuses.
+///
+/// The escalation arm (`Resolved::Inherit` — an escalated cell, or an explicit
+/// `--role ceiling`) carries its own remedy: there is no subagent to run on
+/// the session model, so the escalated cell runs INLINE in the session. Every
+/// other arm names the slot and the herding shape to configure.
+pub(crate) fn pi_requires_herding_refusal(slot: &str, resolved: &Resolved, escalated: bool) -> Value {
+    let resolution = pi_resolution_word(resolved, escalated);
+    let mut refusal = Map::new();
+    refusal.insert("ok".into(), Value::Bool(false));
+    refusal.insert("type".into(), Value::String("refused".into()));
+    refusal.insert("reason".into(), Value::String(PI_HERDING_ONLY_REASON.into()));
+    refusal.insert("runtime".into(), Value::String("pi".into()));
+    refusal.insert("slot".into(), Value::String(slot.to_string()));
+    refusal.insert("resolution".into(), Value::String(resolution.to_string()));
+    let fix = if resolution == "escalation" {
+        format!(
+            "the \"{slot}\" dispatch asked for the session model (escalation), and the pi runtime has no session subagent to hand it to — Pi ships no Agent tool surface, so the payload would dispatch nothing. FIX: Pi has no subagent surface, run the escalated cell inline in the session. Every other cell on pi resolves a {{\"kind\":\"herding\"}} slot under models.pi."
+        )
+    } else {
+        format!(
+            "models.pi.{slot} resolved a \"{resolution}\" slot, and the pi runtime dispatches ONLY through herding — Pi ships no Agent tool surface, so any other payload would dispatch nothing. FIX: set models.pi.{slot} in .bee/config.json to {{\"kind\":\"herding\",\"agent\":\"<herding.agents name>\"}}."
+        )
+    };
+    refusal.insert("fix".into(), Value::String(fix));
     Value::Object(refusal)
 }
 
@@ -1380,6 +1449,13 @@ pub(crate) fn prepare_dispatch_with_brief(
             resolved_role = winner;
         }
         if let Resolved::Refused { slot } = &r {
+            // pi-support D5: on pi a cli slot is refused for its RUNTIME, not
+            // for its purpose — `{kind:"cli"}` has no herding pane behind it
+            // on any kind, so the refusal that names the herding requirement
+            // is the useful one for a gather as much as for a cell.
+            if runtime == "pi" {
+                return Ok(Prepared::Value(pi_requires_herding_refusal(slot, &r, false)));
+            }
             let mut refusal = Map::new();
             refusal.insert("ok".into(), Value::Bool(false));
             refusal.insert("type".into(), Value::String("refused".into()));
@@ -1408,6 +1484,21 @@ pub(crate) fn prepare_dispatch_with_brief(
     // audit line resolves one name while the marker carries another.
     let marker_role: &str =
         if is_escalated { ESCALATION_WORD } else { resolved_role.unwrap_or(tier_token) };
+
+    // pi-support D5 — THE HERDING-ONLY DOOR, at full width. Placed here, after
+    // the slot resolved and before a single byte of prompt is rendered:
+    // resolution is what the refusal reports, and a refused dispatch has no
+    // business paying for a prompt build. Every non-herding exit is covered by
+    // construction — `Model`, `Native`, `Cli`, `Budget` and the escalation
+    // path's `Inherit` all arrive here as `resolved`, so a transport arm added
+    // to the payload match below cannot open a new hole in this rule.
+    if runtime == "pi" && !matches!(resolved, Resolved::Herding { .. }) {
+        return Ok(Prepared::Value(pi_requires_herding_refusal(
+            marker_role,
+            &resolved,
+            is_escalated,
+        )));
+    }
 
     let prompt_body = match prompt_body_for(
         root,
@@ -2710,6 +2801,27 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                     true,
                     None,
                 ) {
+                    // pi-support D5 in the WAVE door: the same refusal
+                    // `dispatch prepare` emits, and the claim this loop just
+                    // took is unwound rather than left standing on a cell
+                    // nothing can dispatch. Every cell of a pi wave resolves
+                    // the same `models.pi` table, so this fires for the whole
+                    // wave or for none of it — the operator gets a `skipped`
+                    // row per cell naming the slot and the herding shape,
+                    // instead of a `wave` array of refusals holding claims.
+                    Ok(Prepared::Value(result))
+                        if result.get("reason").and_then(Value::as_str)
+                            == Some(PI_HERDING_ONLY_REASON) =>
+                    {
+                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
+                        let fix =
+                            result.get("fix").and_then(Value::as_str).unwrap_or_default();
+                        skipped.push(wave_skip(
+                            id,
+                            PI_HERDING_ONLY_REASON,
+                            format!("cell \"{id}\": {fix} — {note}"),
+                        ));
+                    }
                     Ok(Prepared::Value(result)) => {
                         let mut m = match result {
                             Value::Object(m) => m,
