@@ -221,6 +221,28 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
     };
 
+    // slp-advisor-nudge an-3 (9e5eda5b): the advisor-nudge response debt, at
+    // the CAP. `bee close` and `bee worktree merge` carry the same arm, but
+    // this one is the cell-level tooth — the obligation bites when the work
+    // it is about tries to finish, not days later at the boundary.
+    //
+    // Every lane, exactly like the dissent door and unlike the judge one: the
+    // nudge only exists because a supervisor wrote a record about this work,
+    // so its existence is the gate. `cells cap` and `cells finish` share this
+    // one function, so both refuse — a debt one of them could walk past would
+    // be no debt at all.
+    //
+    // Placed with the cheap pre-checks, BEFORE the per-cell lock and before
+    // any write: a refused cap leaves the cell exactly as it found it, the
+    // same posture `--report` and `--deviation` above already keep.
+    let cap_feature = match existing_map.get("feature") {
+        Some(Value::String(s)) => s.clone(),
+        _ => String::new(),
+    };
+    if let Some(refusal) = advisor_nudge_cap_refusal(root, id, &cap_feature)? {
+        return Err(Fail::Thrown(refusal));
+    }
+
     // D5 + D10 (docs/history/human-mailbox/CONTEXT.md): the departure door.
     // ARMED-ONLY, and read ONCE here so every branch below agrees about it —
     // a run that files no letter keeps the byte-identical flagless behaviour

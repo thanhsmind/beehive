@@ -3555,6 +3555,9 @@ use std::time::Instant;
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
                 "door dissent-debt: clear\n",
+                // an-3: the advisor-nudge door joined the builder beside the
+                // dissent one; this feature carries no nudge, so it is clear.
+                "door advisor-nudge-debt: clear\n",
                 "door pattern-check: clear\n",
                 "door knowledge-freshness: clear\n",
                 "door impact: clear\n",
@@ -3974,6 +3977,8 @@ use std::time::Instant;
                 // sd-4: the dissent-debt door joined the builder; this
                 // feature carries no dissent, so it reports clear.
                 "door dissent-debt: clear",
+                // an-3: and the advisor-nudge door beside it, same posture.
+                "door advisor-nudge-debt: clear",
             ]
         );
 

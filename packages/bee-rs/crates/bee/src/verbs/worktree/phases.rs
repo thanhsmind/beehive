@@ -214,6 +214,41 @@ pub(crate) fn merge_stage(
         }
     }
 
+    // slp-advisor-nudge an-3 (9e5eda5b): the merge door's advisor-nudge
+    // precondition — a branch must not land while the supervisor's advisor
+    // recommendation about that work is unanswered.
+    //
+    // Copied from the dissent precondition right above, including its two
+    // structural choices: the SAME function the close door and the cap path
+    // both call (verbs/supervisor.rs `feature_advisor_nudge_debt`) — one
+    // obligation, three doors, never a second reading of the rule — and the
+    // placement in the zero-mutation zone above the bookkeeping auto-commit,
+    // so a nudged merge is refused, never staged. A dissent-debt refusal
+    // therefore MASKS this one on the same feature, matching the close
+    // door's own ordering.
+    //
+    // Two differences from the dissent arm, both because 9e5eda5b puts the
+    // obligation on each nudge rather than on the feature: there is no
+    // feature-level escape to consult (a cleared row simply stops being
+    // counted), and the ids named are MAILBOX ROW ids, not cell ids.
+    //
+    // A worktree whose feature cannot be resolved has no row to check, so the
+    // helper is never called — the same `None` posture every door here takes.
+    if let Some(feature) = identity.feature.as_deref() {
+        let nudge = crate::verbs::supervisor::feature_advisor_nudge_debt(main_root, feature)
+            .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+        if nudge.count > 0 {
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_ADVISOR_NUDGE_DEBT",
+                format!(
+                    "worktree {id}'s feature \"{feature}\" has {} advisor nudge(s) with no consult and no recorded decline ({}) — \"bee worktree merge\" refuses until each one is answered: run the consult, then record what came of it with bee decisions log --tags advisor-nudge, naming that row id in the text. A reasoned decline is the same record. One decision answers ONE row — the same per-row escape \"bee close\"'s advisor-nudge door reads.",
+                    nudge.count,
+                    crate::verbs::drivers::js_join(&nudge.ids, ", "),
+                ),
+            ));
+        }
+    }
+
     // trun-4: `bee worktree merge` used to refuse on ANY dirty path in main,
     // but the dirt is routinely bee's OWN bookkeeping (cell traces,
     // decisions, backlog under .bee/, and this feature's own

@@ -46,6 +46,11 @@ pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
 /// rest of the dissent surface). Cite: a2affcba and 4b7aa303.
 pub(crate) const CLOSE_DISSENT_DEBT_PREFIX: &str = "Dissent debt for";
 
+/// slp-advisor-nudge an-3: pinned prefix of the advisor-nudge refusal
+/// headline (message-contract tests live in verbs/cells/tests.rs, beside the
+/// dissent door's own). Cite: 9e5eda5b.
+pub(crate) const CLOSE_ADVISOR_NUDGE_DEBT_PREFIX: &str = "Advisor nudge debt for";
+
 /// D1: pinned prefix of the knowledge-freshness refusal headline (message-
 /// contract tests live in verbs/drivers/tests.rs). CONTEXT.md D1.
 pub(crate) const CLOSE_KNOWLEDGE_FRESHNESS_PREFIX: &str = "Knowledge freshness debt for";
@@ -1603,6 +1608,42 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         },
     });
 
+    // slp-advisor-nudge an-3: the advisor-nudge response debt (9e5eda5b). It
+    // copies the dissent arm right above — NOT the judge arm's standard-up
+    // lane gate — and for the same reason a2affcba gave the dissent one: the
+    // nudge only exists because a supervisor wrote a record about THIS work,
+    // so its existence is the gate and a lane gate would double-filter it.
+    //
+    // Three parts of the dissent arm are deliberately absent here:
+    //
+    //   1. NO ARCHIVE ARM. The offenders are MAILBOX ROW ids, never cell ids
+    //      — nothing about them can be under `.bee/cells/archive`, so there
+    //      is no unarchive step to name first.
+    //   2. NO FEATURE-LEVEL ESCAPE. The dissent door's `dissent-deferral`
+    //      decision lifts every dissent in the feature at once; 9e5eda5b puts
+    //      the obligation on each nudge, so the escape is per ROW and lives
+    //      inside the count itself (a cleared row is simply not counted).
+    //      That is why there is no `deferred` detail branch below.
+    //   3. NO SECOND READING. The count comes from
+    //      `feature_advisor_nudge_debt` (verbs/supervisor.rs), the SAME
+    //      function the cap path and the merge door call: one obligation,
+    //      three doors.
+    let nudge = crate::verbs::supervisor::feature_advisor_nudge_debt(root, feature)?;
+    doors.push(Door {
+        door: "advisor-nudge-debt",
+        blocking: nudge.count > 0,
+        detail: if nudge.count == 0 {
+            "clear".to_string()
+        } else {
+            format!(
+                "{} advisor nudge(s) unanswered ({}); run the consult, then log a decision tagged advisor-nudge whose text NAMES that row id — or record a reasoned decline the same way",
+                nudge.count,
+                js_join(&nudge.ids, ", ")
+            )
+        },
+        command: if nudge.count == 0 { None } else { Some("bee decisions log") },
+    });
+
     match crate::uat::uat_stop_config(root) {
         None => {
             doors.push(Door {
@@ -2156,6 +2197,32 @@ pub(crate) fn close_handler(
             ),
             remedy,
             format!("next: settle the dissent debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // slp-advisor-nudge an-3: refuse on advisor-nudge debt, in EVERY lane.
+    //
+    // Same second half the dissent refusal above is: the `Door` the builder
+    // pushed does not refuse by itself, and this reads the door's own verdict
+    // rather than recomputing it. Placed AFTER the dissent arm, so a feature
+    // owing both is told about the dissent first — the same masking order the
+    // judge arm already has over the dissent one, and deliberate.
+    if doors.iter().any(|d| d.door == "advisor-nudge-debt" && d.blocking) {
+        let debt = crate::verbs::supervisor::feature_advisor_nudge_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!(
+                "{CLOSE_ADVISOR_NUDGE_DEBT_PREFIX} \"{feature}\" — close stops at the advisor-nudge door: {} advisor nudge(s) with no consult and no recorded decline ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            "remedy: run the advisor consult for each row above, then record what came of it with bee decisions log --tags advisor-nudge — or record a reasoned decline the same way. The decision text must NAME the row id; one decision answers one row, and a decision naming no row clears nothing.".to_string(),
+            format!("next: settle the advisor-nudge debt above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
