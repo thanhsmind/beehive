@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"opencode-shim-resolution\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"opencode-shim-resolution\" (lane).",
+  "next_action": "Merged into main at d714902; capture what settled, then bee close --feature opencode-shim-resolution.",
   "created_at": "2026-08-29T02:53:50.958Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
