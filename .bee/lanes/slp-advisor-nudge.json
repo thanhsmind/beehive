@@ -25,5 +25,12 @@
     "rationale": null,
     "updated_at": "2026-08-29T09:50:34.238Z",
     "feature": "slp-advisor-nudge"
+  },
+  "merge_ready": {
+    "since": "2026-08-29T10:41:48.228Z",
+    "branch": "wt/slp-advisor-nudge",
+    "worktree_id": "beehive--wt--slp-advisor-nudge",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

@@ -27,20 +27,47 @@
   "affects_skills": [],
   "affects_specs": [],
   "depends_on": [],
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "trace": {
     "worker": "slp-advisor-nudge-w1",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "advisor-nudge mailbox kind with frequency cap, two new poor-work signals, record-time feature derivation, and turn-boundary delivery lifted to worktree sessions",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "skills/bee-herding/references/supervisor-prompt.md"
+    ],
+    "deviations": [
+      "Edited skills/bee-herding/references/supervisor-prompt.md, which the cell did not name — widening KNOWN_SIGNALS trips control_loop.rs the_shipped_prompt_pins_the_record_verbs_own_closed_sets, a guard whose whole purpose is to make the prompt learn a new word in the SAME change as the verb; reserved the path first and kept the edit to the two signal names, leaving the advisor-nudge KIND wording for an-5 — something else had to be fixed first",
+      "Ran bee dev regen after that prompt edit — the skill projections (.claude/.opencode/.agents/.claude-plugin/.codex-plugin) and the release manifest are committed artifacts of skills/, so two parity tests went red naming their own remedy — something else had to be fixed first",
+      "sync-ack: The only skills/ path touched is bee-herding's supervisor PROMPT reference, and the edit is two signal words a code guard demanded (control_loop.rs pins prompt and verb to one vocabulary). No doctrine moved, so bee-hive/bee-writing-skills/bee-researching have nothing to learn from it."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-29T10:12:28.802Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "f41a8a9c-99da-4110-9f84-26e014cc3785",
-    "claimed_at": "2026-08-29T09:58:26.837Z"
+    "claimed_at": "2026-08-29T09:58:26.837Z",
+    "sync_ack": "The only skills/ path touched is bee-herding's supervisor PROMPT reference, and the edit is two signal words a code guard demanded (control_loop.rs pins prompt and verb to one vocabulary). No doctrine moved, so bee-hive/bee-writing-skills/bee-researching have nothing to learn from it.",
+    "report": {
+      "outcome": "advisor-nudge mailbox kind with frequency cap, two new poor-work signals, record-time feature derivation, and turn-boundary delivery lifted to worktree sessions",
+      "commit": "d8e338e9855c5a3ca53c778bb63888a29df40f19",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "skills/bee-herding/references/supervisor-prompt.md"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — 3116 unit + every integration target, 0 failed; the cell verify filter (supervisor) misses the cross-file prompt-pin guard and the skill-projection parity tests my prompt edit reached, so the full crate suite was the honest scope",
+      "deviations": [
+        "Edited skills/bee-herding/references/supervisor-prompt.md, which the cell did not name — widening KNOWN_SIGNALS trips control_loop.rs the_shipped_prompt_pins_the_record_verbs_own_closed_sets, a guard whose whole purpose is to make the prompt learn a new word in the SAME change as the verb; reserved the path first and kept the edit to the two signal names, leaving the advisor-nudge KIND wording for an-5 — something else had to be fixed first",
+        "Ran bee dev regen after that prompt edit — the skill projections (.claude/.opencode/.agents/.claude-plugin/.codex-plugin) and the release manifest are committed artifacts of skills/, so two parity tests went red naming their own remedy — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 568 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }

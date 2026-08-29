@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Let me check one thing before I answer — whether it is really in use, or only on this machine.",
-    "asked_at": "2026-08-29T06:06:19.770Z",
+    "subject": "Tôi chọn **push trước**. Xem CI xanh đã, rồi mới release.",
+    "asked_at": "2026-08-29T06:23:44.409Z",
     "session": "04c27e63-6543-47f5-a0e6-08bbc1cc2b72"
   },
   "route": {

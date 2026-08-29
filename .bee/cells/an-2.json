@@ -15,7 +15,7 @@
   "decisions": [
     "9e5eda5b-01fd-4c91-b663-1190e11142a8"
   ],
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
   "must_haves": {
     "truths": [
       "A decision tagged advisor-nudge naming a row id clears exactly that row's debt",
@@ -28,19 +28,39 @@
   "depends_on": [
     "an-1"
   ],
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "slp-advisor-nudge-w2",
+    "outcome": "per-feature advisor-nudge debt counter with a per-row, id-naming decision escape",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-29T10:20:09.560Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f41a8a9c-99da-4110-9f84-26e014cc3785",
+    "claimed_at": "2026-08-29T10:13:53.161Z",
+    "report": {
+      "outcome": "per-feature advisor-nudge debt counter with a per-row, id-naming decision escape",
+      "commit": "8748f255ed8b5a2f3ad6d63dc161a7a68118327b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — the cell's own verify: full crate suite, 3404 passed / 0 failed, including the two new debt tests",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 213 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }

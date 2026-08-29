@@ -19,7 +19,7 @@
   "decisions": [
     "9e5eda5b-01fd-4c91-b663-1190e11142a8"
   ],
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml close",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
   "must_haves": {
     "truths": [
       "bee cells cap refuses while an unanswered advisor-nudge row targets the cell's feature, printing headline/remedy/next",
@@ -32,19 +32,53 @@
   "depends_on": [
     "an-2"
   ],
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "slp-advisor-nudge-w3",
+    "outcome": "advisor-nudge debt now refuses the cap, bee close, and bee worktree merge at every lane, all three reading one shared count with a per-row decision escape",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "Added the merge-door tests to verbs/worktree/tests.rs and updated two door snapshots in verbs/drivers/tests.rs, both reserved under my nickname first — the merge test needs that file's git harness and the new door breaks the snapshots the plan itself flagged as a risk — hit an unforeseen obstacle",
+      "Merge refusal is ONE line inside [WORKTREE_MERGE_ADVISOR_NUDGE_DEBT] rather than the plan's three-line headline/remedy/next form — every refusal in that function is a single typed line, and mixing two forms in one door reads worse than following the sibling — found a better route",
+      "sync-ack: an-3 is the door wiring only; the plan puts the whole prose half of this feature in an-5 (skills/bee-herding/references/superviser-prompt.md), and this cell names no skill file. The refusals teach themselves — each prints its own remedy naming bee decisions log --tags advisor-nudge. Flagging for the orchestrator: if bee-swarming should also teach the worker what a refused cap on nudge debt means, that is an an-5 scope call, not this cell's."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-29T10:33:00.768Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f41a8a9c-99da-4110-9f84-26e014cc3785",
+    "claimed_at": "2026-08-29T10:20:33.949Z",
+    "sync_ack": "an-3 is the door wiring only; the plan puts the whole prose half of this feature in an-5 (skills/bee-herding/references/superviser-prompt.md), and this cell names no skill file. The refusals teach themselves — each prints its own remedy naming bee decisions log --tags advisor-nudge. Flagging for the orchestrator: if bee-swarming should also teach the worker what a refused cap on nudge debt means, that is an an-5 scope call, not this cell's.",
+    "report": {
+      "outcome": "advisor-nudge debt now refuses the cap, bee close, and bee worktree merge at every lane, all three reading one shared count with a per-row decision escape",
+      "commit": "f2c463f4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test -p bee --bins verbs::cells + verbs::drivers + verbs::worktree — green — 763 tests over the three modules this cell touched (6 new); the full --bins run also carries 2 reds inside verbs::supervisor::tests from sibling worker w4 (cell an-4) mid-edit in the shared tree, untouched by this cell",
+      "deviations": [
+        "Added the merge-door tests to verbs/worktree/tests.rs and updated two door snapshots in verbs/drivers/tests.rs, both reserved under my nickname first — the merge test needs that file's git harness and the new door breaks the snapshots the plan itself flagged as a risk — hit an unforeseen obstacle",
+        "Merge refusal is ONE line inside [WORKTREE_MERGE_ADVISOR_NUDGE_DEBT] rather than the plan's three-line headline/remedy/next form — every refusal in that function is a single typed line, and mixing two forms in one door reads worse than following the sibling — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

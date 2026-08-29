@@ -4,10 +4,11 @@
   "lane": "standard",
   "role": "docs",
   "title": "supervisor prompt gains the advisor-nudge wording",
-  "action": "Per 3cfd9980 (plan S3). In skills/bee-herding/references/supervisor-prompt.md: add the advisor-nudge record to the supervisor's vocabulary — when poor-work evidence supports it (struggling-loop, budget-overrun, same-region-resubmit), the tick records kind advisor-nudge recommending an advisor consult for the target session, worded under the existing intervention rules (open question framing, evidence named, two sentences); the supervisor never summons the advisor itself (704b691c) and the target lead owns the response. Name the response debt in one line so a reader knows silence refuses the cap. Keep the file's four-step tick structure and closed-set style intact; the doc must agree with the code's kind and signal names from an-1 (parity check: rg the literal strings in both). This cell owns the regen: run bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) inside this cell.",
+  "action": "Per 3cfd9980 (plan S3). In skills/bee-herding/references/supervisor-prompt.md: add the advisor-nudge record to the supervisor's vocabulary — when poor-work evidence supports it (struggling-loop, budget-overrun, same-region-resubmit), the tick records kind advisor-nudge recommending an advisor consult for the target session, worded under the existing intervention rules (open question framing, evidence named, two sentences); the supervisor never summons the advisor itself (704b691c) and the target lead owns the response. Name the response debt in one line so a reader knows silence refuses the cap. NOTE: an-1 already added the two SIGNAL names to this prompt (the prompt-pin guard forced it); this cell owns the KIND wording. Keep the file's four-step tick structure and closed-set style intact; the doc must agree with the code's kind and signal names (parity check: rg the literal strings in both). ALSO: refresh the stale help prose in packages/bee-rs/crates/bee/src/catalog.rs — the --signal description still names only big-decision/danger-op/none and --kind still names intervention/escalation/urgent; bring both in line with the widened sets (help prose only, but registry/help parity tests may pin it — run them). This cell owns the regen: run bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) inside this cell.",
   "files": [
     "skills/bee-herding/references/supervisor-prompt.md",
-    "docs/history/codex-harness-hardening/release-manifest.json"
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
   ],
   "read_first": [
     "docs/history/slp-advisor-nudge/plan.md",
@@ -16,7 +17,7 @@
   "decisions": [
     "3cfd9980-c56f-49c4-83f8-816c661df8db"
   ],
-  "verify": "rg -c 'advisor-nudge' skills/bee-herding/references/supervisor-prompt.md packages/bee-rs/crates/bee/src/verbs/supervisor.rs && bee dev release-manifest --check",
+  "verify": "rg -c 'advisor-nudge' skills/bee-herding/references/supervisor-prompt.md packages/bee-rs/crates/bee/src/verbs/supervisor.rs packages/bee-rs/crates/bee/src/catalog.rs && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && bee dev release-manifest --check",
   "must_haves": {
     "truths": [
       "The prompt names the advisor-nudge kind, the three poor-work signals, and the lead-owned response with its debt, matching the code's literal strings"
@@ -30,19 +31,45 @@
     "an-1",
     "an-4"
   ],
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "slp-advisor-nudge-w5",
+    "outcome": "The supervisor prompt teaches the advisor-nudge record — its mailbox form, the three poor-work signals that earn it, the lead-owned response and its cap-refusing debt; supervisor record's --kind/--signal help prose caught up with the widened closed sets",
+    "files_changed": [
+      "skills/bee-herding/references/supervisor-prompt.md",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Put the --kind/--signal help prose fix in packages/bee-rs/crates/bee/src/generated/registry_payload.json instead of catalog.rs, and gave catalog.rs the flag-ratchet entry (199 -> 199, no new flag name) — the cell named catalog.rs, but that help text lives only in the hand-edited registry payload (bln-3 records that bee dev regen does not write that file); catalog.rs holds only the sup-2 ratchet comment, which is self-dated history and stays as written — the plan was wrong about a fact"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-29T10:41:48.201Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f41a8a9c-99da-4110-9f84-26e014cc3785",
+    "claimed_at": "2026-08-29T10:35:32.481Z",
+    "report": {
+      "outcome": "The supervisor prompt teaches the advisor-nudge record — its mailbox form, the three poor-work signals that earn it, the lead-owned response and its cap-refusing debt; supervisor record help prose caught up with the widened closed sets",
+      "commit": "e563b83f",
+      "files": [
+        "skills/bee-herding/references/supervisor-prompt.md",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "rg -c advisor-nudge (prompt/supervisor.rs/catalog.rs) + cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml + bee dev release-manifest --check — green (parity 4/43/2 hits; 3131 unit + every integration suite passed, 0 failed; 273 files match manifest) — the cell edits a prompt the registry/help-parity and prompt-pin tests assert against, so the full crate suite is the honest scope, plus the manifest check the regen chain owes",
+      "deviations": [
+        "Put the --kind/--signal help prose fix in packages/bee-rs/crates/bee/src/generated/registry_payload.json instead of catalog.rs, and gave catalog.rs the flag-ratchet entry (199 -> 199, no new flag name) — the cell named catalog.rs, but that help text lives only in the hand-edited registry payload (bln-3 records that bee dev regen does not write that file); catalog.rs holds only the sup-2 ratchet comment, which is self-dated history and stays as written — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 354 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
