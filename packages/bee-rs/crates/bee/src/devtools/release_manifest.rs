@@ -80,6 +80,7 @@ pub(crate) const INVENTORY_ROOTS: &[&str] = &[
     ".codex-plugin/plugin.json",
     ".codex-plugin/skills",
     ".opencode/plugins",
+    ".pi/extensions",
     "expertise",
     "packages/bee",
     "packages/bee/hooks",
@@ -344,6 +345,9 @@ fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<R
 ///     this root a release that lost the file stayed green on `--check`
 ///     while installing nothing, the exact silent-drop the manifest exists
 ///     to catch for every other shipped artifact
+///   * the fourth belt       .pi/extensions/** (pi-support D1) —
+///     `bee-guard.ts`, vendored into a host by `bee onboard --apply` exactly
+///     as the OpenCode plugin is, and rooted here for the same reason
 ///
 /// DROPPED, with reasons:
 ///   * the vendored Node library under `.bee/bin/lib/` (`runtime_lib`, 38
@@ -404,6 +408,18 @@ fn build_current_records(root: &Path) -> R<Vec<Record>> {
         root,
         &root.join(".opencode").join("plugins"),
         "opencode_plugin",
+        &[],
+    )?);
+    // The Pi guard extension (pi-support D1) — the fourth enforcement belt,
+    // rooted here for the identical reason the OpenCode plugin is: it is
+    // vendored into a host by `bee onboard --apply`, so a release that lost
+    // the file would otherwise stay green on `--check` while installing
+    // nothing. A missing directory REFUSES loudly (enumerate_tree), which is
+    // the whole point: the belt cannot be dropped quietly.
+    records.extend(enumerate_tree(
+        root,
+        &root.join(".pi").join("extensions"),
+        "pi_extension",
         &[],
     )?);
     for abs in [

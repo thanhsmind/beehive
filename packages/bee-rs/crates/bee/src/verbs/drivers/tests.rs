@@ -1074,7 +1074,9 @@ use std::time::Instant;
                     &tmp,
                     r#"{"models":{
                         "claude":{"generation":"sonnet","advisor":"sonnet"},
-                        "codex":{"generation":"gpt-5","advisor":"gpt-5"}
+                        "codex":{"generation":"gpt-5","advisor":"gpt-5"},
+                        "pi":{"generation":{"kind":"herding","agent":"pi-opus"},
+                              "advisor":{"kind":"herding","agent":"pi-fable"}}
                     }}"#,
                 );
                 let model = if runtime == "claude" { "sonnet" } else { "gpt-5" };
@@ -1116,12 +1118,14 @@ use std::time::Instant;
                 };
 
                 // Only a pair whose payload actually carries a label field
-                // owes the assertion below — a transport with none (cli-exec,
-                // the recorded limit) is exempt by construction, never by a
-                // hand-picked skip; under this fixture (plain string models,
-                // no cli/native kind) every (runtime, kind) pair here resolves
-                // to a labelled transport, so `continue` is unreached today
-                // and only guards a future resolution shape.
+                // owes the assertion below — a transport with none (cli-exec
+                // and herding-exec, the recorded limit: an external executor
+                // call is `{command, stdin}`, with no field to carry a
+                // subject) is exempt by construction, never by a hand-picked
+                // skip. pi is the exempt runtime here: D5 makes every pi slot
+                // herding, so its payload is that Bash call and `continue`
+                // fires for it — the claude and codex rows still owe the
+                // label, which is what this device was built to hold.
                 let label = match runtime {
                     "claude" => payload.get("description").and_then(Value::as_str),
                     "codex" => payload.get("task_name").and_then(Value::as_str),
@@ -6788,9 +6792,18 @@ advance_on — falling to another model there hides the defect (D11)"
 
     // ── slp-blind-lanes: the LaneBrief carrier (E1) and its digest (E2) ────
 
-    /// A host that can resolve BOTH runtimes' advisor slot, so the brief
+    /// A host that can resolve EVERY runtime's advisor slot, so the brief
     /// probes below can walk `DISPATCH_RUNTIMES` without a config detour.
-    const BRIEF_HOST: &str = r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet","review":"opus","advisor":"opus"},"codex":{"generation":"gpt-5","code":"gpt-5","review":"gpt-5","advisor":"gpt-5-pro"}}}"#;
+    ///
+    /// pi-support D5/D6: the pi table is herding-shaped throughout, because
+    /// that is the only shape the pi door serves — a plain-string `models.pi`
+    /// slot is refused by `pi_requires_herding_refusal`, so a fixture copying
+    /// the claude table's shape here would prove nothing about the brief and
+    /// only re-prove the refusal. Its payload is the herding-exec Bash call,
+    /// which carries the rendered prompt on `stdin` (`dispatched_body` already
+    /// reads that key), so every body assertion below reads the pi row the
+    /// same way it reads the other two.
+    const BRIEF_HOST: &str = r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet","review":"opus","advisor":"opus"},"codex":{"generation":"gpt-5","code":"gpt-5","review":"gpt-5","advisor":"gpt-5-pro"},"pi":{"generation":{"kind":"herding","agent":"pi-agy-flash"},"code":{"kind":"herding","agent":"pi-opus"},"review":{"kind":"herding","agent":"pi-opus"},"advisor":{"kind":"herding","agent":"pi-fable"}}}}"#;
 
     /// The advisor prompt EXACTLY as it read before the `{{#if brief}}` block
     /// was added, pinned as literal bytes rather than re-derived from the
@@ -8292,4 +8305,308 @@ advance_on — falling to another model there hides the defect (D11)"
                 "{name}: an empty request must leave zero residue bytes"
             );
         }
+    }
+
+    // ── pi-support D5/D6: the herding-only dispatch door ───────────────────
+    //
+    // Existing coverage judged first. The runtime × kind walks above now
+    // include `pi` from `DISPATCH_RUNTIMES` itself, so the HAPPY path (a
+    // herding slot renders and carries its prompt) is already held by them.
+    // What no walk can hold is the REFUSAL surface: D5 says every resolution
+    // that is not `Resolved::Herding` is refused by name, and each of those
+    // shapes needs its own config to reach. That is the gap below — one row
+    // per resolution arm, plus the D6 table's own values, plus the two gates
+    // a runtime name has to pass before the handler is even called.
+
+    /// The D6 table verbatim (settled 2026-08-29): heavy roles on an opus
+    /// herding agent, advisor on fable, cheap roles on agy-flash. Every value
+    /// is herding-SHAPED because D5 admits nothing else on pi — D6 constrains
+    /// the transport, not the model vendor, so the vendor lives inside the
+    /// named `herding.agents` entry rather than in this table.
+    const PI_D6_HOST: &str = r#"{"models":{"pi":{
+        "code":{"kind":"herding","agent":"pi-claude-opus"},
+        "test":{"kind":"herding","agent":"pi-claude-opus"},
+        "docs":{"kind":"herding","agent":"pi-claude-opus"},
+        "review":{"kind":"herding","agent":"pi-claude-opus"},
+        "advisor":{"kind":"herding","agent":"pi-claude-fable"},
+        "read":{"kind":"herding","agent":"pi-agy-flash"},
+        "extraction":{"kind":"herding","agent":"pi-agy-flash"},
+        "generation":{"kind":"herding","agent":"pi-agy-flash"},
+        "supervisor":{"kind":"herding","agent":"pi-agy-flash"}
+    }}}"#;
+
+    /// One `models.pi` table, as a config string.
+    fn pi_host(table: &str) -> String {
+        format!(r#"{{"models":{{"pi":{table}}}}}"#)
+    }
+
+    /// A claimed cell declaring `role`, ready for a `--kind cell` dispatch.
+    fn pi_cell(root: &Path, id: &str, role: &str, extra: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"f","title":"ship the pi belt","role":"{role}",{extra}"status":"claimed","trace":{{"worker":"w"}}}}"#
+            ),
+        );
+    }
+
+    fn pi_envelope(root: &Path, kind: &str, role: Option<&str>, cell: Option<&str>) -> Value {
+        let worker = cell.map(|_| "w");
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            root, "pi", kind, role, cell, worker, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope or a typed refusal on pi/{kind}")
+        };
+        v
+    }
+
+    /// THE SERVED PATH: a herding slot is the one resolution the pi door
+    /// carries, and it carries it as the ordinary herding-exec Bash payload —
+    /// the brief on stdin, the slot's own agent named on the command line.
+    #[test]
+    fn a_herding_slot_on_pi_returns_the_herding_exec_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        pi_cell(&root, "c-1", "code", "");
+        let v = pi_envelope(&root, "cell", None, Some("c-1"));
+
+        assert_eq!(v.get("tool"), Some(&json!("Bash")), "a pi dispatch is a herding pane: {v}");
+        let payload = v.get("payload").unwrap();
+        let command = payload.get("command").unwrap().as_str().unwrap();
+        assert!(
+            command.starts_with(".bee/bin/bee herding run --task-file - --json"),
+            "the herding command drifted: {command}"
+        );
+        assert!(
+            command.contains(r#"--agent "pi-claude-opus""#),
+            "the slot's own agent must ride the command: {command}"
+        );
+        assert!(
+            payload.get("stdin").unwrap().as_str().unwrap().contains("c-1"),
+            "the worker prompt travels on stdin"
+        );
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec")),
+            "{v}"
+        );
+    }
+
+    /// D6's VALUES, not only its shape: every role in the settled table
+    /// resolves to the agent the table names. A refusal-only suite would stay
+    /// green with the whole table mis-keyed.
+    #[test]
+    fn the_d6_table_values_resolve_to_their_named_agents_on_pi() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        let rows = [
+            ("code", "pi-claude-opus"),
+            ("test", "pi-claude-opus"),
+            ("docs", "pi-claude-opus"),
+            ("review", "pi-claude-opus"),
+            ("advisor", "pi-claude-fable"),
+            ("read", "pi-agy-flash"),
+            ("extraction", "pi-agy-flash"),
+            ("generation", "pi-agy-flash"),
+            ("supervisor", "pi-agy-flash"),
+        ];
+        for (role, agent) in rows {
+            // `--role` names the slot outright, so each row reads its OWN
+            // entry rather than whatever a walk fell through to.
+            let kind = if role == "advisor" { "advisor" } else { "gather" };
+            let v = pi_envelope(&root, kind, Some(role), None);
+            let command = v
+                .get("payload")
+                .and_then(|p| p.get("command"))
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("{role}: expected a herding payload, got {v}"));
+            assert!(
+                command.contains(&format!(r#"--agent "{agent}""#)),
+                "{role}: expected agent {agent}, command was {command}"
+            );
+        }
+    }
+
+    /// D5 AT FULL WIDTH. Every non-herding resolution arm — plain-string
+    /// `Model`, `Native`, `Cli` (on both a gather purpose, which resolves it,
+    /// and a non-gather purpose, which hits the cli purpose gate first) and
+    /// the `Budget` floor an empty table lands on — is refused by ONE typed
+    /// refusal that names the slot, the resolution and the herding shape to
+    /// configure. Pi ships no Agent surface, so any of these would have
+    /// dispatched nothing while the envelope read as a success.
+    #[test]
+    fn every_non_herding_slot_shape_on_pi_is_refused_by_name() {
+        let rows: [(&str, &str, &str, &str); 5] = [
+            ("plain string", r#"{"generation":"opus"}"#, "gather", "model"),
+            (
+                "native",
+                r#"{"generation":{"kind":"native","model":"gpt-5"}}"#,
+                "gather",
+                "native",
+            ),
+            (
+                "cli on a gather",
+                r#"{"generation":{"kind":"cli","command":"echo hi"}}"#,
+                "gather",
+                "cli",
+            ),
+            (
+                "cli on a reviewer purpose",
+                r#"{"review":{"kind":"cli","command":"echo hi"}}"#,
+                "reviewer",
+                "cli",
+            ),
+            ("empty table (budget floor)", r#"{}"#, "gather", "budget"),
+        ];
+        for (name, table, kind, resolution) in rows {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, &pi_host(table));
+            let v = pi_envelope(&root, kind, None, None);
+            assert_eq!(v.get("ok"), Some(&json!(false)), "{name}: must refuse — {v}");
+            assert_eq!(v.get("type"), Some(&json!("refused")), "{name}: {v}");
+            assert_eq!(
+                v.get("reason"),
+                Some(&json!(PI_HERDING_ONLY_REASON)),
+                "{name}: one reason word for the whole door — {v}"
+            );
+            assert_eq!(v.get("runtime"), Some(&json!("pi")), "{name}: {v}");
+            assert_eq!(
+                v.get("resolution"),
+                Some(&json!(resolution)),
+                "{name}: the refusal must name what the slot resolved to — {v}"
+            );
+            assert_eq!(v.get("payload"), None, "{name}: a refusal carries no payload — {v}");
+            assert_eq!(v.get("tool"), None, "{name}: a refusal names no tool — {v}");
+            let slot = v.get("slot").and_then(Value::as_str).unwrap_or_default();
+            let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(!slot.is_empty(), "{name}: the refusal must name the slot — {v}");
+            assert!(
+                fix.contains(&format!("models.pi.{slot}")),
+                "{name}: the fix must name the slot to configure: {fix}"
+            );
+            assert!(
+                fix.contains("herding"),
+                "{name}: the fix must name the herding requirement: {fix}"
+            );
+        }
+    }
+
+    /// THE ESCALATION ARM, in both of its spellings — a cell marked
+    /// `escalate: true`, and an explicit `--role ceiling` with no cell behind
+    /// it. On claude this resolves `Resolved::Inherit` and dispatches an
+    /// Agent on the session model; on pi there IS no subagent to hand the
+    /// session model to, so the refusal carries the one remedy that works:
+    /// run the escalated cell inline in the session.
+    #[test]
+    fn an_escalated_dispatch_on_pi_refuses_with_the_inline_session_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        pi_cell(&root, "c-1", "code", r#""escalate":true,"#);
+        // The control: the SAME table, unescalated, really does dispatch —
+        // so the refusal below is the escalation and not a broken fixture.
+        pi_cell(&root, "c-2", "code", "");
+        assert_eq!(
+            pi_envelope(&root, "cell", None, Some("c-2")).get("tool"),
+            Some(&json!("Bash")),
+            "the control must herd"
+        );
+
+        for v in [
+            pi_envelope(&root, "cell", None, Some("c-1")),
+            pi_envelope(&root, "gather", Some(ESCALATION_WORD), None),
+        ] {
+            assert_eq!(v.get("ok"), Some(&json!(false)), "{v}");
+            assert_eq!(v.get("reason"), Some(&json!(PI_HERDING_ONLY_REASON)), "{v}");
+            assert_eq!(v.get("resolution"), Some(&json!("escalation")), "{v}");
+            let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(
+                fix.contains(
+                    "Pi has no subagent surface, run the escalated cell inline in the session"
+                ),
+                "the escalation refusal must carry the inline-session remedy: {fix}"
+            );
+        }
+    }
+
+    /// A role nothing configures still earns the standing `role_not_configured`
+    /// refusal, which names the role and lists what this runtime CAN resolve —
+    /// pi joining the runtime set changes none of that.
+    #[test]
+    fn a_role_nothing_configures_on_pi_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, PI_D6_HOST);
+        let v = pi_envelope(&root, "gather", Some("designer"), None);
+        assert_eq!(v.get("ok"), Some(&json!(false)), "{v}");
+        assert_eq!(v.get("reason"), Some(&json!("role_not_configured")), "{v}");
+        assert_eq!(v.get("role"), Some(&json!("designer")), "{v}");
+        let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains("models.pi"), "the fix must name the pi table: {fix}");
+    }
+
+    /// GATE TWO of the three a runtime name passes. The argv-shape guard
+    /// reads the `runtime` enum out of the embedded registry payload and
+    /// refuses BEFORE the handler runs, so a runtime added to
+    /// `DISPATCH_RUNTIMES` alone would be refused by the front door and never
+    /// reach a line of the code above. Derived from the constant on both
+    /// sides — never a hand-typed list — for `dispatch prepare` AND
+    /// `dispatch wave`, which declare the flag separately.
+    #[test]
+    fn the_registry_enum_and_dispatch_runtimes_name_the_same_runtime_set() {
+        let payload: Value =
+            serde_json::from_str(include_str!("../../generated/registry_payload.json")).unwrap();
+        let commands = payload["commands"].as_array().unwrap();
+        for name in ["dispatch.prepare", "dispatch.wave"] {
+            let entry = commands
+                .iter()
+                .find(|c| c["name"] == json!(name))
+                .unwrap_or_else(|| panic!("the registry declares {name}"));
+            let declared: Vec<&str> = entry["parameters"]["properties"]["runtime"]["enum"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{name} declares a runtime enum"))
+                .iter()
+                .map(|v| v.as_str().unwrap())
+                .collect();
+            let mut expected: Vec<&str> = DISPATCH_RUNTIMES.to_vec();
+            let mut got = declared.clone();
+            expected.sort_unstable();
+            got.sort_unstable();
+            assert_eq!(
+                got, expected,
+                "{name}: the shape guard's enum and DISPATCH_RUNTIMES disagree — a runtime in \
+                 one and not the other is a door that half-opens"
+            );
+            assert!(declared.contains(&"pi"), "{name}: --runtime pi must pass the shape guard");
+        }
+    }
+
+    /// THE WAVE DOOR takes the same two answers: it gates `--runtime` on the
+    /// same constant, and it recognises the pi refusal by its reason word so
+    /// a refused cell's claim is UNWOUND into `skipped` instead of standing
+    /// on a cell nothing can dispatch. Read out of the handler's own source —
+    /// the same derivation the `keys_known` probe above uses — because the
+    /// wave loop needs a claimed store, a worktree topology and a live
+    /// session before it will run one line.
+    #[test]
+    fn the_wave_door_gates_on_the_same_constant_and_unwinds_a_pi_refusal() {
+        const PREPARE_SOURCE: &str = include_str!("prepare.rs");
+        let at = PREPARE_SOURCE
+            .find("pub(crate) fn run_dispatch_wave(")
+            .expect("run_dispatch_wave moved — re-anchor this");
+        let body = &PREPARE_SOURCE[at..];
+        let end = body.find("\n// ═══").unwrap_or(body.len());
+        let body = &body[..end];
+        assert!(
+            body.contains("DISPATCH_RUNTIMES.contains(&runtime.as_str())"),
+            "the wave door must gate --runtime on the one constant"
+        );
+        assert!(
+            body.contains("PI_HERDING_ONLY_REASON"),
+            "the wave loop must recognise the pi refusal by its reason word"
+        );
+        assert!(
+            body.contains("unwind_wave_claim"),
+            "and unwind the claim it took for a cell it cannot dispatch"
+        );
     }

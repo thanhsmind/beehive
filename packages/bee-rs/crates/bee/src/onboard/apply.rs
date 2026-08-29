@@ -369,6 +369,17 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     read_text_if_exists(&engine.opencode_plugin_dir.join(name)).as_bytes(),
                 );
             }
+            "copy_pi_extension" => {
+                // pi-support D1: source is this checkout's OWN
+                // `.pi/extensions/` tree, not a `packages/bee/` template
+                // (see Engine::pi_extension_dir) — the same vendoring the
+                // OpenCode plugin arm above does.
+                let name = posix_basename(rel);
+                let _ = write_file_atomic(
+                    &target,
+                    read_text_if_exists(&engine.pi_extension_dir.join(name)).as_bytes(),
+                );
+            }
             "copy_statusline" => {
                 let name = posix_basename(rel);
                 let _ = write_file_atomic(

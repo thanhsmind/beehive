@@ -50,6 +50,18 @@ use std::process::ExitCode;
 /// rendered JSON manifest sharing this catalog's `Entry`/`Group` rows). Adding
 /// `Runtime::Opencode` here would imply a fourth generated-manifest
 /// projection that does not exist; the plugin file is the projection.
+///
+/// PI TAKES THE SAME EXCLUSION (pi-support D4, named deviation recorded in
+/// docs/history/pi-support/plan.md). Pi is a first-class runtime at the
+/// dispatch door (D5: `models.pi`, herding-only) and ships no hook-config
+/// surface at all — its belt is the checked-in TypeScript extension at
+/// `.pi/extensions/bee-guard.ts`, auto-discovered by Pi from the workspace
+/// cwd, translating Pi's events onto `bee hook <rule>`. So there is NO
+/// `Runtime::Pi` and NO fourth projection here either; D4's purpose (derived
+/// coverage, never a hand list) is served the OpenCode way — the belt joins
+/// the parity test's derived row set, read out of the TS source. Adding a
+/// variant here would make `hook_manifests_match_disk` demand a generated
+/// file that cannot exist.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Runtime {
     Claude,

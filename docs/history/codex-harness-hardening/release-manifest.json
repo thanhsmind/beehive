@@ -1171,6 +1171,13 @@
       "packagePath": ".opencode/plugins/bee-guard.ts"
     },
     {
+      "path": ".pi/extensions/bee-guard.ts",
+      "sha256": "a7b5c27775ca872075e0285c41c304f49cb1cabffad6ba6ead316a5906da12e4",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard.ts"
+    },
+    {
       "path": "expertise/apis.md",
       "sha256": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
       "mode": "644",

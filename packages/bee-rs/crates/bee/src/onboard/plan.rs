@@ -106,6 +106,22 @@ pub fn list_opencode_plugin_files(engine: &Engine) -> Vec<String> {
         .collect()
 }
 
+/// pi-support D1: the Pi guard extension file(s) this checkout ships at
+/// `.pi/extensions/` — every plain `.ts` file, sorted. The exact shape of
+/// `list_opencode_plugin_files` above, for the exact same reason: a
+/// hand-written TypeScript belt is vendored "copy when missing or drifted",
+/// never rendered by the skill-tree pipeline (which has no pi target).
+pub fn list_pi_extension_files(engine: &Engine) -> Vec<String> {
+    if !exists(&engine.pi_extension_dir) {
+        return Vec::new();
+    }
+    read_dir_sorted(&engine.pi_extension_dir)
+        .into_iter()
+        .filter(|e| e.is_file && e.name.ends_with(".ts"))
+        .map(|e| e.name)
+        .collect()
+}
+
 fn list_files_by_suffix(dir: &Path, suffix: &str) -> Vec<String> {
     if !exists(dir) {
         return Vec::new();
@@ -562,6 +578,24 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         let target = repo_root.join(".opencode").join("plugins").join(name);
         if read_text_if_exists(&target) != source {
             plan.push(plan_item("copy_opencode_plugin", &format!(".opencode/plugins/{name}")));
+        }
+    }
+
+    // 3g. Pi guard extension (pi-support D1): the fourth belt, vendored the
+    // same "copy when missing or drifted" way 3f vendors the OpenCode plugin
+    // — this checkout's OWN `.pi/extensions/` tree is the source (see
+    // Engine::pi_extension_dir). Pi auto-discovers `<cwd>/.pi/extensions/`,
+    // so copying the file into the host project IS the whole install: no
+    // global directory, no user config, no hook JSON.
+    let pi_extension_files = list_pi_extension_files(engine);
+    if !pi_extension_files.is_empty() && !exists(&repo_root.join(".pi").join("extensions")) {
+        plan.push(plan_item("create_dir", ".pi/extensions"));
+    }
+    for name in &pi_extension_files {
+        let source = read_text_if_exists(&engine.pi_extension_dir.join(name));
+        let target = repo_root.join(".pi").join("extensions").join(name);
+        if read_text_if_exists(&target) != source {
+            plan.push(plan_item("copy_pi_extension", &format!(".pi/extensions/{name}")));
         }
     }
 
