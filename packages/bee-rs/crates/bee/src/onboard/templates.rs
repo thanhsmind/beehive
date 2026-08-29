@@ -66,6 +66,13 @@ pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[
     // line above: the block's order is hashed into the managed ledger, so a
     // new pattern must not displace an existing one.
     ".bee/human-mailbox/",
+    // pi-result-mailbox D4/D6: the per-orchestrator-session result inbox —
+    // one pending marker per DETACHED herding job (`--inbox-session`), claimed
+    // and consumed by the Pi drain. Runtime data with a lifetime of one job,
+    // never committed; without this line every detached dispatch litters
+    // `git status`. Joined at the tail for the same reason as the two lines
+    // above: the block's order is hashed into the managed ledger.
+    ".bee/result-inbox/",
 ];
 
 /// onboard_bee.mjs HOOK_FILENAMES (l. 225–248) — the vendoring order is the
