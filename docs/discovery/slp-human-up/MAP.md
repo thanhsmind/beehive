@@ -55,6 +55,9 @@ repo's own backlog when its cluster shapes.
 - 4dda03e0: every human ask names its target project explicitly; the named
   repo's lead is A by default; one-vs-many is A's planning discovery —
   tickets/007-triage-owner.md
+- 8fea3561: cross-repo dissent builds nothing new — B records locally, the
+  supervisor's rollup is the only cross-project awareness, replies travel as
+  data over the existing transport — tickets/003-cross-repo-dissent-bookkeeping.md
 - 28a75c87: weekly cross-project review at waggledance layer, report is a
   print, learnings capture back per-repo — shape: tickets/005-weekly-review-shape.md
 - 12deaa34: spec-drop transport = waggledance_dispatch + corr-id-as-PBI-id
