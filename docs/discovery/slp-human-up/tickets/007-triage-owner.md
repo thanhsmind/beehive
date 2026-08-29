@@ -1,6 +1,6 @@
 ---
 type: grilling
-status: open
+status: closed
 claimed-by: none
 blocked-by: none
 ---
@@ -16,4 +16,10 @@ becomes A when the work spans several?
 
 ## Answer
 
-(open)
+Resolved 2026-08-29 by the user (decision 4dda03e0): every human ask names
+its target project explicitly at drop time — no agent triages which repo an
+ask belongs to. The named repo's lead is A by default; the one-vs-many
+question collapses into a discovery A makes while planning (d2701784's
+A-spec path opens only then), and the human may name a different A when
+dropping. The supervisor's only role at intake is its usual one: a question
+if something looks mis-aimed.

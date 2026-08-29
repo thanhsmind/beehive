@@ -51,7 +51,10 @@ repo's own backlog when its cluster shapes.
   rung; unclear → up; repeat offender → human — settled in session, no ticket
 - d2701784: intake triage — one-project work takes existing lanes; only
   multi-project/contract work takes the A-spec path; ceremony scales —
-  owner question: tickets/007-triage-owner.md
+  tickets/007-triage-owner.md
+- 4dda03e0: every human ask names its target project explicitly; the named
+  repo's lead is A by default; one-vs-many is A's planning discovery —
+  tickets/007-triage-owner.md
 - 28a75c87: weekly cross-project review at waggledance layer, report is a
   print, learnings capture back per-repo — shape: tickets/005-weekly-review-shape.md
 - 12deaa34: spec-drop transport = waggledance_dispatch + corr-id-as-PBI-id
