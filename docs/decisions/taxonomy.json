@@ -433,6 +433,10 @@
     "discovery-wayfinding",
     "impact-sweep",
     "slp-blind-lanes",
-    "slp-blind-lanes-procedure"
+    "slp-blind-lanes-procedure",
+    "supervisor",
+    "isolation",
+    "hats",
+    "routing"
   ]
 }
