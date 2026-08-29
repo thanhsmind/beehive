@@ -1,0 +1,46 @@
+{
+  "id": "an-2",
+  "feature": "slp-advisor-nudge",
+  "lane": "standard",
+  "role": "code",
+  "title": "per-feature advisor-nudge debt counter and per-row clearing",
+  "action": "Per 9e5eda5b (plan S2). In packages/bee-rs/crates/bee/src/verbs/supervisor.rs add a debt fn mirroring feature_dissent_debt's shape: count advisor-nudge rows whose derived feature matches AND that have no clearing decision. Clearing DIVERGES from the dissent-deferral tag+feature escape (packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs ~:536-552) on purpose: a clearing decision is tagged advisor-nudge AND carries the row id in its decision text (DecisionFilters.text matching, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs DecisionFilters ~:475-483) so one decision clears exactly one row — feature-level clearing is the rejected alternative, per plan. A decision missing the row id clears nothing. The fn is pure read over the two stores (423871d7: records alone). TDD inline tests: two unanswered rows, clear one, the other still counts; feature-less rows count against nothing.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-advisor-nudge/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"
+  ],
+  "decisions": [
+    "9e5eda5b-01fd-4c91-b663-1190e11142a8"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "A decision tagged advisor-nudge naming a row id clears exactly that row's debt",
+      "Two unanswered rows with one cleared leaves one counting",
+      "A row with no derived feature counts against no feature"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [
+    "an-1"
+  ],
+  "status": "open",
+  "deps": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

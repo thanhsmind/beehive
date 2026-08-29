@@ -1,0 +1,46 @@
+{
+  "id": "an-1",
+  "feature": "slp-advisor-nudge",
+  "lane": "standard",
+  "role": "code",
+  "title": "advisor-nudge mailbox kind, new signals, feature derivation, worktree delivery",
+  "action": "Per 3cfd9980 and c80debd7 (see docs/history/slp-advisor-nudge/plan.md S1). In packages/bee-rs/crates/bee/src/verbs/supervisor.rs: widen the three closed kind arrays and their guard test — anchors: `pub(crate) const MAILBOX_KINDS: [&str; 3] = [\"intervention\", \"escalation\", \"urgent\"];` (~:236), `const CAPPED_KINDS: [&str; 1] = [\"intervention\"];` (~:243), ALL_KINDS (~:247) and the all_kinds_is_the_two_sets test (~:245) — adding \"advisor-nudge\" so the frequency cap counts it (second nudge on same target_session+point_key refuses and names escalation, exactly intervention's behavior). Widen KNOWN_SIGNALS (~:250, enforced at ~:304,:391,:535,:698) with \"budget-overrun\" and \"same-region-resubmit\" per a8f4b8ab. At record time for kind advisor-nudge, derive the target session's feature from its live claim (claim -> cell -> feature) and store it on the row as an optional feature field; no claim means no feature field. In packages/bee-rs/crates/bee/src/hooks/prompt_context.rs: the hook returns Delegate for any linked worktree (anchor `if roots.worktree_resolution != \"ordinary\"` ~:144-147; gap comment ~:275-276) — lift ONLY the supervisor pending-delivery read (anchor `crate::verbs::supervisor::pending_delivery_for_session(root, sid)` ~:277-279 and the render loop ~:349) above that bail so a worktree session receives its delivery lines; every other worktree behavior of the hook stays byte-identical. Red-first: make the closed-set contract tests fail on the missing kind/signals before widening. TDD inline tests in the same modules.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-advisor-nudge/CONTEXT.md",
+    "docs/history/slp-advisor-nudge/plan.md"
+  ],
+  "decisions": [
+    "3cfd9980-c56f-49c4-83f8-816c661df8db"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml supervisor",
+  "must_haves": {
+    "truths": [
+      "A recorded advisor-nudge row lists in pending and renders one delivery line at the target session's next turn boundary, including for a linked-worktree session",
+      "A second advisor-nudge on the same (target_session, point_key) refuses and names escalation",
+      "The row carries the feature derived from the target session's live claim at record time, or none when no claim exists"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [],
+  "status": "claimed",
+  "deps": [],
+  "trace": {
+    "worker": "slp-advisor-nudge-w1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f41a8a9c-99da-4110-9f84-26e014cc3785",
+    "claimed_at": "2026-08-29T09:58:26.837Z"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "an-5",
+  "feature": "slp-advisor-nudge",
+  "lane": "standard",
+  "role": "docs",
+  "title": "supervisor prompt gains the advisor-nudge wording",
+  "action": "Per 3cfd9980 (plan S3). In skills/bee-herding/references/supervisor-prompt.md: add the advisor-nudge record to the supervisor's vocabulary — when poor-work evidence supports it (struggling-loop, budget-overrun, same-region-resubmit), the tick records kind advisor-nudge recommending an advisor consult for the target session, worded under the existing intervention rules (open question framing, evidence named, two sentences); the supervisor never summons the advisor itself (704b691c) and the target lead owns the response. Name the response debt in one line so a reader knows silence refuses the cap. Keep the file's four-step tick structure and closed-set style intact; the doc must agree with the code's kind and signal names from an-1 (parity check: rg the literal strings in both). This cell owns the regen: run bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) inside this cell.",
+  "files": [
+    "skills/bee-herding/references/supervisor-prompt.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-advisor-nudge/plan.md",
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "decisions": [
+    "3cfd9980-c56f-49c4-83f8-816c661df8db"
+  ],
+  "verify": "rg -c 'advisor-nudge' skills/bee-herding/references/supervisor-prompt.md packages/bee-rs/crates/bee/src/verbs/supervisor.rs && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The prompt names the advisor-nudge kind, the three poor-work signals, and the lead-owned response with its debt, matching the code's literal strings"
+    ]
+  },
+  "affects_skills": [
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "affects_specs": [],
+  "depends_on": [
+    "an-1",
+    "an-4"
+  ],
+  "status": "open",
+  "deps": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "id": "an-4",
+  "feature": "slp-advisor-nudge",
+  "lane": "standard",
+  "role": "code",
+  "title": "needs-human-decision flag derived and sorted first in letters and WakeReport",
+  "action": "Per a7e6f237 (plan S3). Derive a needs-human-decision yes/no flag deterministically — yes when a queued item is waiting-on kind gate or question, or a mailbox row of kind escalation, urgent, or advisor-nudge; no otherwise. Render yes-flagged items FIRST, stable order within each group: in the human-mailbox letter renderer (packages/bee-rs/crates/bee/src/verbs/mailbox.rs, letter assembly around letter_filename/letter_path/list_letter_files ~:176-187) and in the WakeReport assembly inside packages/bee-rs/crates/bee/src/verbs/supervisor.rs (the report window region). A malformed queue row derives flag=no and still renders — the renderer never panics on data. TDD inline tests: sort order asserted, derivation per kind, malformed-row fallback.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-advisor-nudge/plan.md"
+  ],
+  "decisions": [
+    "a7e6f237-d5a3-4a8f-bad6-8ab794848046"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox supervisor",
+  "must_haves": {
+    "truths": [
+      "A letter lists yes-flagged items before all others, stable within groups",
+      "The WakeReport applies the same order",
+      "A malformed queue row renders with flag=no instead of panicking"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [
+    "an-1"
+  ],
+  "status": "open",
+  "deps": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

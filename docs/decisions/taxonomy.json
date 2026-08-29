@@ -437,6 +437,14 @@
     "supervisor",
     "isolation",
     "hats",
-    "routing"
+    "routing",
+    "shaping",
+    "human-channel",
+    "intake",
+    "lifecycle",
+    "signals",
+    "doors",
+    "reports",
+    "features"
   ]
 }

@@ -1,0 +1,50 @@
+{
+  "id": "an-3",
+  "feature": "slp-advisor-nudge",
+  "lane": "standard",
+  "role": "code",
+  "title": "advisor-nudge debt arms at cap, close, and worktree merge",
+  "action": "Per 9e5eda5b (plan S2). Copy the dissent-debt arm shape onto the new debt fn from an-2, at THREE doors and at EVERY lane (mirror dissent-debt close.rs ~:2125-2130, NOT judge-debt's standard-up gating): (1) the cap path — run_cap dispatches from packages/bee-rs/crates/bee/src/verbs/cells/util.rs ~:72 into the cap handler in verbs/cells/handlers_close.rs / finish_support.rs; an unanswered nudge row for the cell's feature refuses the cap; (2) the close door — packages/bee-rs/crates/bee/src/verbs/drivers/close.rs: add a CLOSE_ADVISOR_NUDGE_DEBT_PREFIX const beside CLOSE_DISSENT_DEBT_PREFIX (~:47), a door arm beside the dissent arm (~:1556, refusal emit ~:2133-2134) with the three-line headline/remedy/next form naming the clearing command; (3) the merge door — packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs beside the dissent check (~:197). Red-first on all three refusals. TDD inline tests in the touched modules.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-advisor-nudge/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "decisions": [
+    "9e5eda5b-01fd-4c91-b663-1190e11142a8"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml close",
+  "must_haves": {
+    "truths": [
+      "bee cells cap refuses while an unanswered advisor-nudge row targets the cell's feature, printing headline/remedy/next",
+      "bee close and bee worktree merge refuse on the same debt at every lane",
+      "All three go green after the clearing decision lands"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [
+    "an-2"
+  ],
+  "status": "open",
+  "deps": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
