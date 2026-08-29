@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "lane-model-diversity",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"lane-model-diversity\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-29T13:59:31.517Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [],
+    "product_files": 5,
+    "rationale": "Seat-role model resolution for blind lanes and hat wave: models.rs ordered walk + prepare.rs advisor-kind role arm + config validate hat-description rule + model-guard parity + gates-and-delegation.md; standard lane — recorded law changes with tests, no hard-gate territory",
+    "updated_at": "2026-08-29T14:00:41.647Z",
+    "feature": "lane-model-diversity"
+  },
+  "merge_ready": {
+    "since": "2026-08-29T14:32:20.367Z",
+    "branch": "wt/lane-model-diversity",
+    "worktree_id": "beehive--wt--lane-model-diversity",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

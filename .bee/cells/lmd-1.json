@@ -1,0 +1,92 @@
+{
+  "id": "lmd-1",
+  "feature": "lane-model-diversity",
+  "title": "Seat-role fall-through at the advisor door plus doctor hat-description advisory",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "read_first": [
+    "docs/history/lane-model-diversity/CONTEXT.md",
+    "docs/history/lane-model-diversity/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml verbs::drivers",
+  "action": "Add SEAT_ROLES (8 names: lane-1..lane-3, hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact) beside tier_role_list in models.rs with an eq_ignore_ascii_case membership helper (per D1, P2-2). In prepare.rs canonical-role arm: when kind==advisor and the declared role is a seat whose slot resolves nothing (absent, null, or resolve_configured None — P1-2), rebind canonical_role to advisor so the existing advisor arm runs (one-name walk, advisor_not_configured refusal preserved, per D2/4faf1de9); record requested_role (the asked-for seat) on the payload and dispatch-log row (P3-3). Never read description at the door (display-only law). In doctor.rs: advisory finding listing every configured hat-* slot lacking a description, reading RAW config via the role_slot_description pattern (per D3 venue decision). Unit tests in verbs::drivers per the plan test matrix incl. null-slot, mixed-case, string-shaped-hat, gather-kind-refusal, advisor_not_configured rows.",
+  "must_haves": {
+    "truths": [
+      "--kind advisor --role lane-3 with lane-3 absent OR null resolves the advisor slot and stamps marker advisor",
+      "--kind gather --role lane-3 unconfigured still refuses role_not_configured",
+      "configured seat resolves its own model and marker names the seat"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "substantive": "SEAT_ROLES constant with case-folded membership, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "prepare.rs canonical-role arm consults SEAT_ROLES only for kind advisor"
+    ],
+    "prohibitions": [
+      "No dispatch-time model flag",
+      "No description read anywhere in resolution/guard/dispatch",
+      "No change to cell_role_list or non-advisor kinds"
+    ]
+  },
+  "trace": {
+    "worker": "lmd-w1",
+    "outcome": "Seat roles resolve per-seat models; unconfigured seats fall through to the advisor at the advisor door only; doctor advises on undescribed hat slots",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "requested_role rides economics rather than the tool payload — economics is inserted into BOTH the returned envelope and the appended dispatch-log row, while the payload is the literal Agent/Bash/spawn_agent argument map and an unknown key there would be handed to the tool — found a better route",
+      "Added packages/bee-rs/crates/bee/src/doctor/tests.rs (reserved before writing) — doctor.rs declares mod tests; against that separate file, so the advisory has nowhere else to be tested — hit an unforeseen obstacle",
+      "The helper is named role_slot_resolves rather than a seat-only name — it asks a question about any role slot and nothing in it is seat-specific, so a seat-shaped name would have been a lie about its scope — found a better route",
+      "Doctor names undescribed hats in the CONFIG's own order, not sorted; my first test expectation assumed alphabetical and went red — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T14:21:37.691Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T14:11:33.351Z",
+    "report": {
+      "outcome": "Seat roles resolve per-seat models; unconfigured seats fall through to the advisor at the advisor door only; doctor advises on undescribed hat slots",
+      "commit": "47c7d034",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee — green — 3142 passed 0 failed; the cell verify filter verbs::drivers (307 passed) plus doctor:: (21 passed) are the touched scope, widened to the whole bin because prepare/models/doctor are read by many callers",
+      "deviations": [
+        "requested_role rides economics rather than the tool payload — economics is inserted into BOTH the returned envelope and the appended dispatch-log row, while the payload is the literal Agent/Bash/spawn_agent argument map and an unknown key there would be handed to the tool — found a better route",
+        "Added packages/bee-rs/crates/bee/src/doctor/tests.rs (reserved before writing) — doctor.rs declares mod tests; against that separate file, so the advisory has nowhere else to be tested — hit an unforeseen obstacle",
+        "The helper is named role_slot_resolves rather than a seat-only name — it asks a question about any role slot and nothing in it is seat-specific, so a seat-shaped name would have been a lie about its scope — found a better route",
+        "Doctor names undescribed hats in the CONFIG's own order, not sorted; my first test expectation assumed alphabetical and went red — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

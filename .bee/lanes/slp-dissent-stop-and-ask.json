@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces show a quiet system: 0 open/claimed/blocked cells (87 capped, rest archived), 0 active reservations, occupancy reports 0 li",
-    "asked_at": "2026-08-29T11:51:42.268Z",
-    "session": "294ad298-030a-4293-a93f-99149e295a2d"
+    "subject": "(turn ended)",
+    "asked_at": "2026-08-29T14:25:44.600Z",
+    "session": "b8297cb6-8fa5-4fab-9ee9-d6d6c77b5dcb"
   },
   "route": {
     "class": "feature",

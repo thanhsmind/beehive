@@ -445,6 +445,9 @@
     "signals",
     "doors",
     "reports",
-    "features"
+    "features",
+    "pi-support",
+    "models",
+    "hat-wave"
   ]
 }

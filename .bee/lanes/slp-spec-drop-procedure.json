@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Binary trong repo còn `2.23.0` (build trước lúc bump) — build lại từ đúng commit release và thay vào:",
-    "asked_at": "2026-08-29T11:47:56.653Z",
+    "subject": "Loop giám sát đã chạy (pid 1380564). Sửa cú pháp dòng backlog — flag `--note` không tồn tại:",
+    "asked_at": "2026-08-29T11:52:11.145Z",
     "session": "f41a8a9c-99da-4110-9f84-26e014cc3785"
   },
   "route": {
