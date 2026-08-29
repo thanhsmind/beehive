@@ -830,8 +830,11 @@ pub(crate) fn record_intervention_into(
     // + 423871d7): the debt this record creates is owed by the target's own
     // feature, and a cold tick has no memory to look it up in later. Every
     // other kind's row shape is left exactly as it was.
-    let feature =
-        if kind == "advisor-nudge" { feature_of_session(control, &target_session) } else { None };
+    let feature = if kind == ADVISOR_NUDGE_KIND {
+        feature_of_session(control, &target_session)
+    } else {
+        None
+    };
 
     let rec = Intervention {
         id: new_row_id(),
@@ -971,6 +974,110 @@ pub(crate) fn read_interventions(control: &Path) -> MailboxStore {
 /// The undelivered rows addressed to ONE session, oldest first.
 pub(crate) fn pending_for<'a>(store: &'a MailboxStore, target: &str) -> Vec<&'a Intervention> {
     store.rows.iter().filter(|r| r.delivered_at.is_none() && r.target_session == target).collect()
+}
+
+// ─── the advisor-nudge response debt (9e5eda5b) ─────────────────────────
+//
+// The debt both boundary doors and the cap path read (an-3). Same placement
+// rule `feature_dissent_debt` (verbs/cells/dissent.rs) states for the same
+// reason: an obligation read two ways at three doors is three obligations, so
+// the count and its escape live HERE, beside the record and its ONE reading of
+// "unanswered". Each door still writes its own headline, remedy and command —
+// what is shared is a `{count, ids}`-shaped summary in, door prose out.
+
+/// The tag a clearing decision must carry. `advisor-nudge` is also the record
+/// kind: one word for one thing, so the reader who saw the nudge already knows
+/// the tag to type.
+pub(crate) const ADVISOR_NUDGE_KIND: &str = "advisor-nudge";
+
+/// Every unanswered `advisor-nudge` row whose derived feature is `feature`,
+/// oldest first, with the offending row ids named in full — a door that names
+/// one of three sends the reader back twice.
+///
+/// Pure read over two stores, and that is forced by 423871d7: the supervisor is
+/// a cold tick, so the debt exists only in records. The two stores are the
+/// mailbox (`interventions.jsonl`, under the CONTROL root so a worktree session
+/// and a supervisor tick read one store) and the decision log.
+///
+/// The feature is the one DERIVED ONTO the row at record time, never re-derived
+/// here: the target's claim has since moved on, and re-reading it would answer
+/// about today's work instead of the work the nudge was about. A row with no
+/// feature — its target held no claim — therefore counts against NO feature and
+/// blocks no door, which is the honest reading of "we cannot tell what work
+/// this is about", never a licence to block everything.
+///
+/// "Unanswered" is `advisor_nudge_is_cleared` and nothing else: one reading,
+/// shared by every door that arms this debt.
+pub(crate) fn feature_advisor_nudge_debt(
+    root: &Path,
+    feature: &str,
+) -> Result<crate::verbs::drivers::DebtSummary, crate::verbs::drivers::Delegate> {
+    let store = read_interventions(&control_root_path(root));
+    let clearing = advisor_nudge_clearing_decisions(root)?;
+    let mut ids: Vec<Value> = Vec::new();
+    for row in &store.rows {
+        if row.kind != ADVISOR_NUDGE_KIND || row.feature.as_deref() != Some(feature) {
+            continue;
+        }
+        if advisor_nudge_is_cleared(&clearing, &row.id)? {
+            continue;
+        }
+        ids.push(Value::String(row.id.clone()));
+    }
+    Ok(crate::verbs::drivers::DebtSummary { count: ids.len(), ids })
+}
+
+/// Every ACTIVE decision tagged `advisor-nudge` — the candidate clearings, read
+/// once per debt count rather than once per row.
+///
+/// Tag-exact and active-only, exactly as `has_dissent_deferral_decision` reads
+/// its own escape: a superseded or redacted decision has stopped being the
+/// answer, and a row it once cleared is owed again.
+fn advisor_nudge_clearing_decisions(
+    root: &Path,
+) -> Result<Vec<Value>, crate::verbs::drivers::Delegate> {
+    let active = crate::verbs::decisions::active_decisions(root, false)
+        .map_err(|_| crate::verbs::drivers::Delegate)?;
+    crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some(ADVISOR_NUDGE_KIND.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| crate::verbs::drivers::Delegate)
+}
+
+/// Whether one of those tagged decisions NAMES this row — the per-row escape.
+///
+/// This DIVERGES from the dissent-deferral precedent (dissent.rs) on purpose,
+/// and the divergence is the point. That escape matches tag + feature, so one
+/// decision lifts the refusal for every dissent in the feature; here 9e5eda5b
+/// puts the obligation on each nudge ("consult ran, or a reasoned decline
+/// recorded"), so a decision clears exactly the row whose id it carries in its
+/// text and nothing else. A clearing decision that names no row id clears
+/// nothing — feature-level clearing is the rejected alternative, not an
+/// accident of matching. Both halves are covered: "consulted, outcome X" and
+/// "declined because Y" are the same shape of record, tagged the same way.
+///
+/// The match itself invents no rule: it is `DecisionFilters.text`, the same
+/// scorer `bee decisions search --text` already answers with.
+fn advisor_nudge_is_cleared(
+    tagged: &[Value],
+    row_id: &str,
+) -> Result<bool, crate::verbs::drivers::Delegate> {
+    if row_id.is_empty() {
+        return Ok(false);
+    }
+    let named = crate::verbs::decisions::filter_decision_events(
+        tagged.to_vec(),
+        &crate::verbs::decisions::DecisionFilters {
+            text: Some(row_id.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| crate::verbs::drivers::Delegate)?;
+    Ok(!named.is_empty())
 }
 
 /// Stamp one row delivered. An unknown id is a typed refusal that writes
@@ -3825,6 +3932,108 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.contains("--kind must be one of"), "a near-miss kind is still refused: {err}");
+    }
+
+    // ─── the advisor-nudge debt (9e5eda5b) ──────────────────────────────
+
+    /// Append one decision event, the shape `bee decisions log` writes. The
+    /// debt reads the decision log through `active_decisions`, so the fixture
+    /// is the log itself rather than any in-memory stand-in.
+    fn log_decision(root: &Path, id: &str, text: &str, tags: &[&str]) {
+        let event = json!({
+            "id": id,
+            "type": "decide",
+            "date": "2026-08-29T00:00:00.000Z",
+            "decision": text,
+            "rationale": "r",
+            "tags": tags,
+            "scope": "repo",
+        });
+        append_jsonl(&root.join(".bee").join("decisions.jsonl"), &event).unwrap();
+    }
+
+    fn debt_ids(root: &Path, feature: &str) -> Vec<String> {
+        feature_advisor_nudge_debt(root, feature)
+            .expect("the debt is a pure read and never delegates on a healthy store")
+            .ids
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
+    }
+
+    /// TRUTH: "a decision tagged advisor-nudge naming a row id clears exactly
+    /// that row's debt" AND "two unanswered rows with one cleared leaves one
+    /// counting". They are one test because the second is the only proof the
+    /// first is per-ROW and not per-feature — feature-level clearing is the
+    /// rejected alternative, and a single-row fixture cannot tell them apart.
+    #[test]
+    fn a_tagged_decision_naming_one_row_clears_that_row_and_leaves_the_other_counting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        plant_claim(root, "an-1", "sess-1", "demo");
+
+        // Two points, one session, one feature — the cap keys on the pair, so
+        // two DIFFERENT points are two honest rows.
+        let first = ask(root, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor help?").unwrap();
+        let second = ask(root, "advisor-nudge", "sess-1", "budget", "Is the budget read right?").unwrap();
+        assert_eq!(debt_ids(root, "demo"), vec![first.id.clone(), second.id.clone()]);
+
+        // A tagged decision that names NO row clears nothing: the whole point
+        // of the per-row escape is that it cannot be answered in general.
+        log_decision(root, "d0", "the advisor thing for demo is fine", &["advisor-nudge"]);
+        assert_eq!(debt_ids(root, "demo").len(), 2, "a decision naming no row id clears nothing");
+
+        // A decision naming the row, but NOT tagged, is not a clearing either.
+        log_decision(root, "d1", &format!("consulted the advisor for {}", first.id), &["note"]);
+        assert_eq!(debt_ids(root, "demo").len(), 2, "an untagged decision clears nothing");
+
+        // The real thing — and it clears ONE row.
+        log_decision(
+            root,
+            "d2",
+            &format!("consulted the advisor about {}; keeping the current approach", first.id),
+            &["advisor-nudge"],
+        );
+        assert_eq!(
+            debt_ids(root, "demo"),
+            vec![second.id.clone()],
+            "exactly the named row is cleared; the other is still owed"
+        );
+
+        // The decline half of 9e5eda5b is the same shape of record.
+        log_decision(
+            root,
+            "d3",
+            &format!("declined the advisor consult for {}: the budget read was stale", second.id),
+            &["advisor-nudge"],
+        );
+        assert_eq!(feature_advisor_nudge_debt(root, "demo").unwrap().count, 0, "both answered");
+    }
+
+    /// TRUTH: "a row with no derived feature counts against no feature". Its
+    /// target held no claim (423871d7 — records alone), so no door can honestly
+    /// say which work it is about, and it blocks none of them.
+    #[test]
+    fn a_nudge_with_no_derived_feature_counts_against_no_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // No claim planted for sess-nobody: the row carries no feature.
+        let orphan = ask(root, "advisor-nudge", "sess-nobody", "retry-loop", "Would an advisor help?").unwrap();
+        assert_eq!(orphan.feature, None, "the fixture is the no-claim case");
+
+        // A real nudge for `demo`, so the store is not merely empty.
+        plant_claim(root, "an-1", "sess-1", "demo");
+        let owed = ask(root, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor help here?").unwrap();
+
+        assert_eq!(debt_ids(root, "demo"), vec![owed.id], "only the row that named demo counts");
+        assert_eq!(feature_advisor_nudge_debt(root, "").unwrap().count, 0, "and none against no name");
+        assert_eq!(feature_advisor_nudge_debt(root, "other").unwrap().count, 0);
+
+        // Only the nudge kind carries this debt — an ordinary intervention to
+        // the same session is a question, never an obligation on the work.
+        ask(root, "intervention", "sess-1", "other-point", "What ends the retry?").unwrap();
+        assert_eq!(debt_ids(root, "demo").len(), 1, "no other mailbox kind joins the debt");
     }
 
     #[test]
