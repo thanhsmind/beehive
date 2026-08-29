@@ -1,0 +1,79 @@
+{
+  "id": "sfg-1",
+  "feature": "slp-followup-gaps",
+  "role": "code",
+  "title": "Resolve the acting write record from the session's own claim before the default record",
+  "action": "resolve_write_record (hooks/write_guard/checks.rs:45) falls back to the control-root default record on three arms. Two stay exactly as they are: no session id, and no session record file. The THIRD — a session record that exists but carries no non-empty `lane` — gains one step first. Read this session's own live claims from the control root, map them to their cells' features, and when they name EXACTLY ONE feature whose .bee/lanes/<feature>.json exists and parses with a matching `feature` key, return that merged lane record with source \"claim\" instead of the default record. Reuse the SAME merge-over-defaults block the bound path already runs (checks.rs:118-145) rather than writing a second copy of it; factor it into one helper both arms call. Every other input still resolves exactly as today. Then the D2 half: when the resolution came from the default record AND the session carried no lane binding, intake_refusal (hooks/write_guard/paths.rs:532) names binding the session to its lane as the remedy, beside the existing FIX line. Prove it red-first: write the failing test that a claim-holding unbound session is refused today, watch it fail, then make it pass.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "slice": 1,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "A session BOUND to a lane resolves exactly as it does today, every typed refusal included — the new arm is unreachable for it.",
+      "A session with no lane binding and NO live claim resolves to the default record, byte-identical to today.",
+      "A session with no lane binding holding ONE live claim resolves to that cell's feature lane record, source \"claim\"; a git commit of a source path is then allowed when that lane is non-terminal even though .bee/state.json says idle.",
+      "Claims naming two or more DIFFERENT features are ambiguous: the default record answers and no refusal is invented.",
+      "A claimed feature whose lane record is missing, corrupt, or names a different feature resolves to the default record — the derived path never emits the bound path's typed refusals.",
+      "A claim owned by a different session is never read.",
+      "The merge-over-lane-defaults block exists ONCE and both arms call it.",
+      "The intake refusal names the session binding as a remedy only when the record came from the default AND the session is unbound.",
+      "The new behavior was proven red-first: the failing test existed and failed before the fix."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "acceptance": "An unbound session holding one live claim is judged against its own feature's lane record at both the write check and the git intake gate; every other input resolves as before; the write_guard suite is green.",
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "docs/history/slp-followup-gaps/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+    "docs/knowledge/patterns/20260828-a-session-bound-to-no-lane-commits-against-the-default-record.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "wk-sfg-1",
+    "outcome": "An unbound session's own live claim now resolves the acting write record before the control-root default, and the intake refusal names the session binding as a remedy",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "Grouped the new source \"claim\" with \"default\" at the msn-21 workspace-ownership check (checks.rs) instead of letting it skip that guard — the claim arm derives WHICH LANE a session works under and says nothing about who owns the checkout, so the sessions that met that guard before this cell must still meet it — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T03:56:49.733Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "04c27e63-6543-47f5-a0e6-08bbc1cc2b72",
+    "claimed_at": "2026-08-29T03:45:12.721Z",
+    "report": {
+      "outcome": "An unbound session holding exactly one live claim is judged against that cell's feature lane record at both the write check and the git intake gate; every other input resolves as before, and the intake refusal names the session binding as a remedy when the default record answered an unbound session",
+      "commit": "9809d34e15c2e670ce46134fb73f5b683433475f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green — the cell's own verify: 207 write_guard tests, the whole surface the four touched files serve; red-first first (3 new-behavior tests failed before the fix, 5 narrowing tests passed throughout)",
+      "deviations": [
+        "Grouped the new source \"claim\" with \"default\" at the msn-21 workspace-ownership check (checks.rs) instead of letting it skip that guard — the claim arm derives WHICH LANE a session works under and says nothing about who owns the checkout, so the sessions that met that guard before this cell must still meet it — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

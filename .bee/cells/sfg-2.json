@@ -1,0 +1,80 @@
+{
+  "id": "sfg-2",
+  "feature": "slp-followup-gaps",
+  "role": "code",
+  "title": "Carry a dissent on the herding mailbox result and transcribe it through the one dissent writer",
+  "action": "Mirror StopAndAsk's options/leaning trip on the same three surfaces. (1) herding/mailbox.rs render_brief's result-schema block gains a \"dissent\" object with claim, alternative and severity plus ONE sentence saying when to fill it; move the byte-exact brief pin (render_brief_keeps_the_result_form_block_byte_identical...) with it. The negative pin at mailbox.rs:654-655 currently bans BOTH \"bee cells\" and the bare substring \"dissent\" from the rendered brief; the second half pinned decision 6a6b9975's old boundary, which this cell moves. Retarget it red-first: the brief must still never name a bee command, and the dissent FIELD NAME is now expected. (2) MailboxResult gains dissent: Option<MailboxDissent>{claim, alternative, severity}; parse_result_text reads it leniently exactly like options/leaning — absent, wrong-typed, or missing any of the three fields reads as absent, and the severity string is NEVER checked against the closed set here. (3) run.rs result_envelope re-emits `dissent` only when present, so a result carrying none keeps today's exact key set. Then the transcription: where the run verb holds the parsed result and the store root, call the SAME record_dissent that bee cells dissent routes to (verbs/cells/dissent.rs) against opts.cell_id, and stamp dissent_recorded: true on success. A missing cell id or a refusal from the writer stamps dissent_recorded: false plus dissent_error naming the reason, and the raw dissent still rides the envelope. Never swallow it. The run's exit code is unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "slice": 2,
+  "lane": "standard",
+  "behavior_change": true,
+  "regen_obligation_ack": "wave-barrier",
+  "affects_skills": [],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "The rendered brief names no bee command anywhere — the retargeted pin proves it.",
+      "The brief's result schema names the dissent fields, so a bee-ignorant worker can fill them without running anything.",
+      "A result carrying no dissent parses and re-emits with today's exact key set.",
+      "A malformed or partial dissent object parses as absent and never fails the round.",
+      "The severity is passed through unvalidated by the parser; the closed set is checked by record_dissent alone.",
+      "A carried dissent is written through record_dissent — the same function the CLI verb calls — so the record shape, secret scan, blocker tooth and claim release have one implementation.",
+      "A successful transcription stamps dissent_recorded: true in the emitted JSON envelope.",
+      "No cell id, or a writer refusal, stamps dissent_recorded: false plus dissent_error, and the raw dissent still rides the envelope.",
+      "The retarget of the mailbox.rs negative pin was proven red-first."
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"
+  ],
+  "acceptance": "A herding worker can hand back a dissent as data on the result file, the run verb records it through the one dissent writer, and the outcome of that write is visible in the envelope; the herding suite is green.",
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "docs/history/slp-followup-gaps/CONTEXT.md",
+    "docs/knowledge/areas/workflow-state/dissent-and-the-verdict-duty.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "wk-sfg-2",
+    "outcome": "Herding briefs teach a dissent object, the parser reads it leniently, and the run verb transcribes it through record_dissent with the outcome stamped on the envelope",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "verbs/cells/dissent.rs was listed in the cell but needed no edit — record_dissent is already pub(crate) and re-exported through verbs::cells, so herding/run.rs calls it unchanged — the plan was wrong about a fact",
+      "The retargeted negative pin bans any `bee <word>` command by scanning, instead of the literal `bee cells` plus a bare `bee ` substring ban — the brief's own prose already says \"Ignore any bee or agent-workflow instructions\", so a bare `bee ` ban would fail on text that names no command — hit an unforeseen obstacle",
+      "sync-ack: skills/bee-herding documents the mailbox FILE LAYOUT (job.json, result-N.json, ack-N.json), not the result JSON field list — the layout is byte-unchanged here, and the StopAndAsk pair (options/leaning) added the same kind of field with no skill edit either. The cell scopes three source files and declares affects_skills: []."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T03:58:51.759Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "04c27e63-6543-47f5-a0e6-08bbc1cc2b72",
+    "claimed_at": "2026-08-29T03:45:33.235Z",
+    "sync_ack": "skills/bee-herding documents the mailbox FILE LAYOUT (job.json, result-N.json, ack-N.json), not the result JSON field list — the layout is byte-unchanged here, and the StopAndAsk pair (options/leaning) added the same kind of field with no skill edit either. The cell scopes three source files and declares affects_skills: [].",
+    "report": {
+      "outcome": "Herding briefs teach a dissent object, the parser reads it leniently, and the run verb transcribes it through record_dissent with the outcome stamped on the envelope",
+      "commit": "29fd6fbe",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 441 herding tests, the cell's own verify; plus the dissent filter over verbs::cells::dissent and the worktree dissent doors, the one writer this change now calls",
+      "deviations": [
+        "verbs/cells/dissent.rs was listed in the cell but needed no edit — record_dissent is already pub(crate) and re-exported through verbs::cells, so herding/run.rs calls it unchanged — the plan was wrong about a fact",
+        "The retargeted negative pin bans any `bee <word>` command by scanning, instead of the literal `bee cells` plus a bare `bee ` substring ban — the brief's own prose already says \"Ignore any bee or agent-workflow instructions\", so a bare `bee ` ban would fail on text that names no command — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 454 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
