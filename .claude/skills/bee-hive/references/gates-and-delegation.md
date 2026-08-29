@@ -159,10 +159,12 @@ Two or three isolated advisor consults design an answer to ONE hard question, cr
 
 **The four moves** — the shape `bee-reviewing`'s wave already uses, applied to generation instead of critique:
 
-1. **Fan out.** One `bee dispatch prepare --runtime <rt> --kind advisor --brief-file <path>` per lane, in parallel. Each lane gets the SAME brief bytes and the read diet that brief declares; it is denied every sibling proposal, the orchestrator's own leaning, session history, and `--expertise` beside a brief (a second, unlinted reading channel is refused at the door). A lane never runs as `--kind cell` — refused by type, before the file is read (D3).
+1. **Fan out.** One `bee dispatch prepare --runtime <rt> --kind advisor --role lane-N --brief-file <path>` per lane, in parallel — lane one takes `--role lane-1`, lane two `--role lane-2`, lane three `--role lane-3`, so each lane can be pointed at a DIFFERENT model (lane-model-diversity D1). Each lane gets the SAME brief bytes and the read diet that brief declares; it is denied every sibling proposal, the orchestrator's own leaning, session history, and `--expertise` beside a brief (a second, unlinted reading channel is refused at the door). A lane never runs as `--kind cell` — refused by type, before the file is read (D3).
 2. **Cross-critique.** Round two: fresh advisor dispatches, each handed the rival proposal VERBATIM inside a fence whose info string is the one tag `lane-proposal`. A brief over the 8192-byte cap does not paste the proposal: the round-2 brief names its PATH in the read diet and the lane reads it there.
 3. **Converge.** One dossier at `docs/history/<feature>/blind/<run-id>.md`, holding every proposal verbatim, the critiques with their round-2 dispatch ids, the chosen answer, the rejected set with reasons, and the citations.
 4. **Record.** `bee decisions log --rejected "<what>: <why>" --trigger <id>` — the rejected set is a list on the record, and the revisit condition is a registered `bee triggers` id, never a memory.
+
+**The lane seat roles are ordinary `models.<runtime>` roles.** `lane-1`, `lane-2` and `lane-3` sit in the one model table beside `code`, `review` and `advisor` — no separate config file (lane-model-diversity D1). The constant of record is `SEAT_ROLES` in `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`: eight names, three lanes and five hats, closed on purpose. A seat whose slot resolves NOTHING — key absent, `null`, or a shape the resolver reads as nothing — falls through to `advisor` on an advisor-kind dispatch instead of refusing, so lanes run unconfigured exactly as they always did; the `[bee-tier: …]` marker names the RESOLVED role (`advisor` after a fall-through), and the dispatch log keeps the asked-for seat as `requested_role` (D2, D4). A name outside those eight keeps its ordinary refusal, so a typo never quietly borrows the advisor's model. No dispatch-time model flag exists — the model comes only from the table.
 
 **Convergence RUNS `bee blind check --dossier <path>` green BEFORE it logs the decision.** No door forces that — the verb is one a caller must choose to run, so this sentence is the whole enforcement. Its digest check resolves each lane's `dispatch_id` against `.bee/logs/dispatch.jsonl`, so the check runs AT THE ROOT whose log holds the run: a run dispatched from a worktree checks in that worktree. The shipped example (`docs/history/slp-blind-lanes/blind/example-run.md`) refuses in the main checkout for exactly that reason — its dispatch ids never ran there — and that refusal is the rule working, not a broken example.
 
@@ -191,22 +193,36 @@ small spec gets no wave — ceremony capture is the named failure.
 **The five hats, one instrument each, by POINTER to its home — never
 copied:**
 
-| Hat | Asks | Instrument |
-|---|---|---|
-| facts-gaps | what the spec cannot answer | 5-Layer rubric + Truth Table Test (`.bee/expertise/review.md`) |
-| risks | what breaks, and can it be undone | CRUD Lifecycle check — the delete half is the reversibility interrogation (`.bee/expertise/review.md`) |
-| value | is this worth its cost | materiality test (bee-shaping's shaping-reference) |
-| alternatives | is there a cheaper shape | the SMALLER PATH question at spec altitude; finding several viable designs on a high-stakes ambiguous choice hands off to blind lanes (D1) |
-| user-impact | what the user sees and feels | gray-area probes + the SEE mock (bee-shaping references) |
+| Hat | Role | Asks | Instrument |
+|---|---|---|---|
+| facts-gaps | `hat-facts-gaps` | what the spec cannot answer | 5-Layer rubric + Truth Table Test (`.bee/expertise/review.md`) |
+| risks | `hat-risks` | what breaks, and can it be undone | CRUD Lifecycle check — the delete half is the reversibility interrogation (`.bee/expertise/review.md`) |
+| value | `hat-value` | is this worth its cost | materiality test (bee-shaping's shaping-reference) |
+| alternatives | `hat-alternatives` | is there a cheaper shape | the SMALLER PATH question at spec altitude; finding several viable designs on a high-stakes ambiguous choice hands off to blind lanes (D1) |
+| user-impact | `hat-user-impact` | what the user sees and feels | gray-area probes + the SEE mock (bee-shaping references) |
 
-**The moves.** Five parallel `bee dispatch prepare --kind advisor`
-dispatches, one hat each; the perspective rides the PROMPT body — never
+**The moves.** Five parallel `bee dispatch prepare --kind advisor --role <hat-role>`
+dispatches, one hat each, each naming its own role from the table above; the
+perspective rides the PROMPT body — never
 `--brief-file`, whose neutrality lint exists for lane briefs and would fight
 a brief whose leaning IS its job. Hats never see each other. The
 orchestrator is the synthesizing BLUE hat — synthesis is decide-altitude and
 never delegates. Accepted findings route back through the interview as
 questions or Open Questions in the draft; a hat finding never lands in Lock
 directly (Lock renders, it never originates).
+
+**The hat seat roles carry a description.** The five `hat-*` names are
+`models.<runtime>` roles like any other, and the constant of record is the same
+`SEAT_ROLES` in `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs` the
+lanes read from. Two rules differ from a lane seat. First, a CONFIGURED hat slot
+states its purpose in a `description` field, so the config reads back
+self-documenting (lane-model-diversity D3) — `bee doctor` reports a configured
+hat that carries none as an advisory, never as a verdict, because the field is
+planner documentation and never selects a model. A `null` hat is a seat switched
+off, not an undescribed one, and is passed over. Second, everything else matches
+the lanes: an unconfigured hat falls through to `advisor` on an advisor-kind
+dispatch, the marker names the resolved role, and a name outside the eight keeps
+its ordinary refusal (D2, D4).
 
 **No checker verb.** Unlike blind convergence, nothing here autonomously
 logs a decision — the human at Lock is the check, the same checker-less

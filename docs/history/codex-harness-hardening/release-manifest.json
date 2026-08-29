@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "7c313eee4e04442fd042aae080a3935c985ca9fec828b3c554f2d2d3f45d086d",
+      "sha256": "b47a015f7bb211a54e0a9470b23db723176673430f34cd83b8e9cb8e0120b2c0",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -332,7 +332,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "baeb100ad279fa6ec35c181d177ec937e0c8aa4e81a57bd67e6ba59b3d6d1e14",
+      "sha256": "e60a29ffd41427e558219ce15f5098eb538c1c7024b749f4e40ff3d58e04532d",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -654,7 +654,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "ea5f5301b36c68bf9bb18a33249d04d251496692ab894a07e347b5df80c470bd",
+      "sha256": "fdad9d1a19eefc8460afb15c931fb2762e81d93dfc3dce8ef40e797ea11f7f5d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -850,7 +850,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "c61b388db6118e1fa451f746ebfe97278b7e873d3241063761f9be9836d10c1b",
+      "sha256": "90e5f8553df3eaf926d355f390ea57093bd182a27f959a461d9454291f40f9fd",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -1572,7 +1572,7 @@
     },
     {
       "path": "skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "1ca2b442c02fc80df072bacf899f664755507008f7bbb2a01b7dcd1c7a404c25",
+      "sha256": "5a05b354635d362ca1685dd28247e9867bf9b65c90054d0bb2ec13bc9ea3eebc",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/gates-and-delegation.md"
