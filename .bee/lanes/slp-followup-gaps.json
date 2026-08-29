@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"slp-followup-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Test the merged work in main, then approve the uat gate",
+  "next_action": "Merged into main at b89a17f; capture what settled, then bee close --feature slp-followup-gaps.",
   "created_at": "2026-08-29T03:41:16.254Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-08-29T05:27:22.117Z",
-    "session": "04c27e63-6543-47f5-a0e6-08bbc1cc2b72"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -39,12 +34,5 @@
       "workflow-state"
     ],
     "next_action": "Test the merged work in main, then approve the uat gate"
-  },
-  "merge_ready": {
-    "since": "2026-08-29T05:54:48.153Z",
-    "branch": "wt/slp-followup-gaps",
-    "worktree_id": "beehive--wt--slp-followup-gaps",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
