@@ -17,8 +17,8 @@
   "waiting_on": {
     "kind": "turn-end",
     "subject": "(turn ended)",
-    "asked_at": "2026-08-29T14:25:44.600Z",
-    "session": "b8297cb6-8fa5-4fab-9ee9-d6d6c77b5dcb"
+    "asked_at": "2026-08-29T15:11:40.128Z",
+    "session": "6cf92b0c-6663-4473-b3e5-6b5c47b06774"
   },
   "route": {
     "class": "feature",

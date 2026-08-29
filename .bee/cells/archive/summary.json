@@ -973,5 +973,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-08-29T11:16:46.800Z"
+  },
+  "lane-model-diversity": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-29T15:17:55.731Z"
   }
 }

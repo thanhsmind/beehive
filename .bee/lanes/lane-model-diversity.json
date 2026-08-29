@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"lane-model-diversity\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 328edbe; reload the product and test \"lane-model-diversity\", then either approve uat (\"bee gate --name uat --approved true --lane lane-model-diversity\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-29T13:59:31.517Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: lane-model-diversity",
-    "asked_at": "2026-08-29T14:34:02.902Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
