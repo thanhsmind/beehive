@@ -651,6 +651,90 @@ pub(crate) fn tier_role_list(slot: &str) -> Vec<&str> {
     vec![slot]
 }
 
+/// The parallel-advisor SEATS, as role names — lane-model-diversity D1
+/// (store `23de5362`).
+///
+/// A blind-lane run fires 2–3 lanes at once and a hat wave fires five hats at
+/// once; before this they all resolved the ONE `advisor` slot, so every
+/// parallel brainstorm agent ran the same model and the diversity the fan-out
+/// exists for was thrown away at the door. Each seat now has its own name in
+/// the ONE `models.<runtime>` table (D1 keeps the single config home,
+/// `4a6e38be`), so an operator can point lane-2 at a different model from
+/// lane-1 by writing one key.
+///
+/// It lives HERE, beside `tier_role_list`, for the same reason that list does:
+/// the names a consumer asks for belong with the resolver that answers them,
+/// never hand-copied at each door. `skills/bee-hive/references/
+/// gates-and-delegation.md` cites this constant as the list of record (D5).
+///
+/// CLOSED on purpose, and that is the whole safety of D2's fall-through
+/// below: only these eight names may resolve the advisor's model when their
+/// own slot is empty. A typo (`hat-risk`) is not a seat, so it keeps T012a's
+/// refusal rather than silently running on the advisor model.
+pub(crate) const SEAT_ROLES: [&str; 8] = [
+    "lane-1",
+    "lane-2",
+    "lane-3",
+    "hat-facts-gaps",
+    "hat-risks",
+    "hat-value",
+    "hat-alternatives",
+    "hat-user-impact",
+];
+
+/// The prefix that marks a seat as a HAT rather than a lane.
+///
+/// D3 asks a hat slot — and only a hat slot — to carry a `description`: the
+/// five hats have distinct purposes an operator has to be able to read back,
+/// while lanes are interchangeable seats with no per-seat purpose to state.
+/// One home for the prefix so `bee doctor`'s advisory and this list cannot
+/// drift on what counts as a hat.
+pub(crate) const HAT_ROLE_PREFIX: &str = "hat-";
+
+/// The SEAT this name spells, in `SEAT_ROLES`' own spelling — `None` when the
+/// name is no seat at all.
+///
+/// Case-folded, because every other role door in this codebase already is:
+/// `known_role_named` and `role_is_declarable` both match a role name with
+/// `eq_ignore_ascii_case`, so an exact-match test here would make `--role
+/// Lane-2` a seat at one door and a stranger at the next — the one-question-
+/// two-answers shape `3c9d6262` and `role-edge-hardening` D1 each closed once
+/// already.
+pub(crate) fn seat_role_named(name: &str) -> Option<&'static str> {
+    SEAT_ROLES.iter().copied().find(|seat| seat.eq_ignore_ascii_case(name))
+}
+
+/// Does this role's own slot carry ANYTHING a dispatch could resolve?
+///
+/// The exact question D2's fall-through turns on, and it is deliberately not
+/// "is the key present". Three configurations mean the same thing to a
+/// dispatch — the key is absent, the key is explicitly `null`, or the value is
+/// an object matching no documented shape — and all three leave the seat with
+/// no model of its own. `resolve_role_named` would answer the last two with
+/// its `Resolved::Budget` FLOOR (the last entry in a walk always resolves), so
+/// a seat spelled `"lane-3": null` would have inherited the session model
+/// instead of falling through to the advisor: the fall-through would have had
+/// a hole in exactly the spelling `.bee/config-sample.json` teaches for "off".
+///
+/// Asking `resolve_configured` — the one leaf parser — rather than re-testing
+/// the value here is what keeps this door's answer identical to the door that
+/// resolves. The key is found case-insensitively for the reason
+/// `resolve_advisor` finds its own key that way.
+pub(crate) fn role_slot_resolves(
+    models: &Map<String, Value>,
+    runtime: &str,
+    name: &str,
+    kind: &str,
+) -> bool {
+    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
+    models
+        .get(rt)
+        .and_then(Value::as_object)
+        .and_then(|t| t.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)))
+        .and_then(|(k, v)| resolve_configured(v, k, kind))
+        .is_some()
+}
+
 /// provenance: state.mjs resolveAdvisor — NEVER budget, NEVER a tier fallback;
 /// `None` unambiguously means "no advisor".
 ///
