@@ -383,6 +383,15 @@ The orchestrator's loop for one herding cell:
    envelope carries no `status` key — plus `summary`, `files_changed[]`,
    `proof`, and, only when the worker offered them, `options[]` and
    `leaning`) — read that, never re-derive it by screen-scraping the pane.
+   The worker's FULL report rides the same envelope as a PATH, under the
+   same additive-key law (pi-result-mailbox D1/D2): `report_path` appears
+   only when a report is on disk — never the body, at any size, because a
+   long line read back through a tool truncates and a truncated envelope
+   is unparseable — and `report_note` appears only when a report was
+   expected but is missing or stale (a resumed round's leftover). A result
+   with neither keeps the exact key set it had before this pair existed,
+   so a legacy worker stays legal. Read the file at `report_path` yourself
+   when you want the digest; `summary` and `proof` stay one line each.
 4. **Do the bookkeeping the worker never could:** verify per the cell's
    own proof type (re-run the declared test/parity check against the
    `files_changed` diff), then `.bee/bin/bee cells finish --id <id>
