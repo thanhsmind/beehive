@@ -38,7 +38,12 @@
 //     containment;
 //   - drive-relative (C:foo) / UNC (\\srv\...) target spellings on Windows;
 //   - a small set of typed-refusal edges inside the shared-nested-checkout
-//     primitive (strict-mode session reads, non-ENOENT fs errors);
+//     primitive (non-ENOENT fs errors while walking the target's ancestry).
+//     Its STRICT SESSION READ left this list at cell sfg-5: an unreadable
+//     `.bee/sessions/<id>.json` is a native DENY now, in bee's own wording,
+//     because a guard never falls open on data it merely read — see
+//     `unreadable_session_refusal` (hook_local.rs) for the deliberate
+//     departure from Node's V8-worded crash log;
 //   - timestamp strings chrono cannot parse.
 //
 // Output is fully buffered: nothing is written before the native/delegate

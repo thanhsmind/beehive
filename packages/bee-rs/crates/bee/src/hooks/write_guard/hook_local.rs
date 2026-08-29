@@ -762,10 +762,24 @@ pub(crate) fn check_worktree_first(
     // The single liveness fact both the docs gate (immediately below) and
     // the tiny gate (further down, unchanged) share — computed once here,
     // never reimplemented, never called twice. Self-excluding via
-    // `session_id`; any session-store read error fails OPEN (`false`),
-    // matching hook_local.rs:630-639's discipline: an unreadable store must
-    // never turn a permitted solo write into a refusal.
-    let other_live_session = is_concurrent_mode(&main_root, session_id, false).unwrap_or(false);
+    // `session_id`.
+    //
+    // CORRECTED at sfg-5 (this comment claimed a fail-open the code stopped
+    // performing at sfg-4). The non-strict reader answers in two directions,
+    // and they are not the same direction:
+    //
+    // - a MISSING or unreadable sessions DIRECTORY, and a session file whose
+    //   JSON does not parse, both contribute no record — so they read as
+    //   `false`, "no other live session", and the docs/tiny exemptions
+    //   survive. That is the old fail-open, and it still holds.
+    // - a session record that DOES parse but carries a `last_heartbeat` the
+    //   reader cannot parse reads as a LIVE peer (sfg-4), so it removes those
+    //   exemptions and CAN turn a permitted solo write into a refusal. That
+    //   is deliberate: an unreadable byte is evidence about the byte, never
+    //   that the session went away, and a guard never falls open on data it
+    //   merely read. `heartbeat_stale` names the offending file and its
+    //   remedy on stderr, so the refusal is never silent.
+    let other_live_session = is_concurrent_mode(&main_root, session_id);
     // "docs" is exempt on BOTH arms — but only while no other live session
     // is present (cell dll-1, same condition as tiny's below). With a live
     // peer, docs work routes into a worktree like any other feature.
@@ -834,11 +848,16 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
     // `other_live_session` is the same fact computed once, above, for the
     // docs gate (cell dll-1) — reused here, never recomputed: `session_id`
     // excludes the acting session itself, so a lone session never counts
-    // its own heartbeat as "another live session"; any read error
-    // (missing/corrupt sessions dir, an unparseable heartbeat) reads as
-    // `false` — fails OPEN, same discipline as the read-error handling at
-    // this function's other arms: an unreadable session store must never
-    // turn a permitted solo tiny fix into a refusal.
+    // its own heartbeat as "another live session".
+    //
+    // CORRECTED at sfg-5, same correction as the docs gate above: a missing
+    // or corrupt sessions store still reads as `false` and still leaves this
+    // tiny exemption standing, but an UNPARSEABLE HEARTBEAT in a record that
+    // otherwise parses reads as a live peer and takes the exemption away
+    // (sfg-4). The exemption's own source rule is "while no other session is
+    // live", and a session the reader cannot date is not a session the reader
+    // can call dead — so the narrow read is the honest one here too. The
+    // warning `heartbeat_stale` queues names the file that caused it.
     if lane == "tiny" && !other_live_session {
         return Ok(None);
     }
@@ -1092,6 +1111,23 @@ pub(crate) fn is_registered_submodule(root_real: &str, nested_real: &str) -> R<b
     Ok(false)
 }
 
+/// What `is_shared_nested_checkout_target` found.
+///
+/// sfg-5 turned the old `bool` into three answers. The third one is the point:
+/// the strict session scan this primitive opens with can hit a session file
+/// that is present but unreadable, and that used to be `Err(Nd)` — a
+/// DELEGATION, i.e. the whole write guard falling open on a real Edit or
+/// Write. It is a refusal now, and it carries the file so the refusal can
+/// name it.
+pub(crate) enum SharedNested {
+    /// Not a shared nested checkout (or no other live session).
+    No,
+    /// A shared nested checkout another live session can also reach.
+    Yes,
+    /// A session record on the strict concurrency path could not be read.
+    UnreadableSession(PathBuf),
+}
+
 /// provenance: guards.mjs isSharedNestedCheckoutTarget (wcg-1/wcg-2,
 /// Port-D4 controlRoot).
 pub(crate) fn is_shared_nested_checkout_target(
@@ -1099,24 +1135,48 @@ pub(crate) fn is_shared_nested_checkout_target(
     abs_target: &str,
     exclude_session: Option<&str>,
     control_root: Option<&str>,
-) -> R<bool> {
+) -> R<SharedNested> {
     let concurrency_root = control_root.filter(|s| !s.is_empty()).unwrap_or(root);
-    if !is_concurrent_mode(concurrency_root, exclude_session, true)? {
-        return Ok(false);
+    match is_concurrent_mode_strict(concurrency_root, exclude_session) {
+        Ok(false) => return Ok(SharedNested::No),
+        Ok(true) => {}
+        Err(file) => return Ok(SharedNested::UnreadableSession(file)),
     }
     let root_real = match realpath_f2(root)? {
         Some(r) => r,
-        None => return Ok(false),
+        None => return Ok(SharedNested::No),
     };
     if target_inside_verified_companion_mount(root, abs_target)? {
-        return Ok(true);
+        return Ok(SharedNested::Yes);
     }
     if let Some(nested) = find_nested_checkout_dir(&root_real, abs_target)? {
         if !is_registered_submodule(&root_real, &nested)? {
-            return Ok(true);
+            return Ok(SharedNested::Yes);
         }
     }
-    Ok(false)
+    Ok(SharedNested::No)
+}
+
+/// The refusal for a session record the strict scan cannot read (sfg-5).
+///
+/// DELIBERATE DEPARTURE from Node parity, and it is the whole reason this
+/// function exists. Node's `readSession(strict)` throws, and the hook's typed
+/// detection-error deny quotes a V8-worded crash log this port cannot
+/// reproduce byte-for-byte. sfg-4 therefore left the branch DELEGATING rather
+/// than approximate that wording — which meant one truncated
+/// `.bee/sessions/<id>.json` switched the entire write guard off on a real
+/// write. Matching a crash log is not worth a hole: a guard never falls open
+/// on data it merely read. So bee refuses in its own words, and the words
+/// carry what Node's crash log never did — the file, and how to clear it.
+pub(crate) fn unreadable_session_refusal(rel: &str, file: &Path) -> String {
+    format!(
+        "bee shared-checkout guard: the session record \"{}\" is present but could not be read or \
+parsed, so this guard cannot tell whether another live session can also reach \"{rel}\" — and a \
+guard never falls open on data it merely read. Refusing this write instead of guessing. \
+FIX: repair or delete that session file (`bee state session release` writes a clean record for a \
+session that is finished), then retry.",
+        file.display()
+    )
 }
 
 /// provenance: bee-write-guard.mjs sharedNestedCheckoutRefusal (wcg-2 D3/D4).

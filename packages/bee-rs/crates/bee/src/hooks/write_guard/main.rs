@@ -424,15 +424,29 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         let mut shared_denied = false;
         if denial.is_none() {
             for (rel, abs) in &shared_candidates {
-                if is_shared_nested_checkout_target(
+                // sfg-5: three answers, not two. The unreadable-session arm is
+                // the fail-open sfg-4 left here — this loop runs for EVERY
+                // Edit/Write with a resolvable target, so one truncated
+                // `.bee/sessions/<id>.json` used to switch the whole guard off
+                // on a real write. It denies now, in bee's own wording; see
+                // `unreadable_session_refusal` for why that departs from Node.
+                match is_shared_nested_checkout_target(
                     &root,
                     abs,
                     session_id.as_deref(),
                     control_root_s.as_deref(),
                 )? {
-                    denial = Some(shared_nested_checkout_refusal(rel));
-                    shared_denied = true;
-                    break;
+                    SharedNested::No => {}
+                    SharedNested::Yes => {
+                        denial = Some(shared_nested_checkout_refusal(rel));
+                        shared_denied = true;
+                        break;
+                    }
+                    SharedNested::UnreadableSession(file) => {
+                        denial = Some(unreadable_session_refusal(rel, &file));
+                        shared_denied = true;
+                        break;
+                    }
                 }
             }
         }

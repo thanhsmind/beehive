@@ -425,7 +425,7 @@ const ALL_HOLDS_PATH: &str = "*";
 /// guessed at — counting it could push a lone worker to two, and blocking a
 /// solo worker is a worse defect than the blindness being fixed.
 fn worktree_hold_cohort_size(control_root: &str, own_workspace: &str) -> R<usize> {
-    let holds = find_foreign_holds(control_root, ALL_HOLDS_SENTINEL, &[ALL_HOLDS_PATH.to_string()])?;
+    let holds = find_foreign_holds(control_root, ALL_HOLDS_SENTINEL, &[ALL_HOLDS_PATH.to_string()]);
     let mut cells: std::collections::HashSet<String> = std::collections::HashSet::new();
     for hold in &holds {
         match hold.get("holder") {
@@ -449,7 +449,13 @@ pub(crate) fn resolve_live_worker_count(root: &str, control_root: &str, ctx: &Js
     if reservation_store_corrupt(root) {
         return Ok(WorkerCount::Unresolved("the reservation store is present but unparseable"));
     }
-    let reservations = list_active_reservations(root)?;
+    // sfg-5: infallible now. This reader used to `?` a `date_parse_ms` error
+    // out of `check_git_bash_command` to `emit_undecidable`, so one lease with
+    // an unreadable stamp switched the gc-2 whole-tree denial — and the whole
+    // write guard — off. Note the shape beside it: `reservation_store_corrupt`
+    // already answers "more than one worker" for a store it cannot parse, so
+    // failing OPEN on one unreadable LEASE was the odd arm out, not this one.
+    let reservations = list_active_reservations(root);
     let mut worker_keys: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut sessions_with_agents: std::collections::HashSet<String> = std::collections::HashSet::new();
     for resv in &reservations {

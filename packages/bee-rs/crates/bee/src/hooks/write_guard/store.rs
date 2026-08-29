@@ -87,26 +87,29 @@ pub(crate) fn read_config(root: &Path) -> R<Map<String, Value>> {
     Ok(crate::state::read_config_raw(root))
 }
 
-/// provenance: state.mjs resolveProductRoot — consulted (via resolveContext)
-/// only for its WARNING side effects; a configured product_root that would
-/// warn (non-string, or missing directory) is Nd.
-pub(crate) fn check_product_root_silent(root: &Path, config: &Map<String, Value>) -> R<()> {
-    match config.get("product_root") {
-        None | Some(Value::Null) => Ok(()),
-        Some(Value::String(s)) if s.is_empty() => Ok(()),
-        Some(Value::String(s)) => {
-            let resolved = if np_is_absolute(s) {
-                np_check_modelable(s)?;
-                s.clone()
-            } else {
-                np_resolve2(&root.to_string_lossy(), s)?
-            };
-            let is_dir = std::fs::metadata(Path::new(&resolved)).map(|m| m.is_dir()).unwrap_or(false);
-            if is_dir { Ok(()) } else { Err(Nd) } // Node warns here
-        }
-        Some(_) => Err(Nd), // non-string → Node warns
-    }
-}
+// sfg-4: `check_product_root_silent` used to live here. It ported state.mjs
+// resolveProductRoot's WARNING side effect and nothing else: it answered
+// `Err(Nd)` for a non-string `product_root`, or one naming a directory that
+// is not there — the two shapes Node printed a warning for.
+//
+// That error was not a warning here. It left `resolve_context`, then
+// `control_root_for_state`, then `resolve_write_record`, and landed on
+// `hooks/mod.rs`'s `emit_undecidable`: exit 0, "the guard did NOT run on
+// it", for every path and every `.bee` mutation. Two lines of config
+// therefore switched the WHOLE write guard off — the same fail-OPEN sfg-3
+// closed in the claim readers, one call frame away.
+//
+// The honest read is "nothing at all", and it is not a close call.
+// `product_root` names where PRODUCT DOCS live (docs/backlog.md,
+// docs/specs/). This guard never reads it: not for containment, not for the
+// acting record, not for any refusal it can utter. A product_root the reader
+// cannot resolve is not evidence of containment, and it is not evidence of
+// anything else the guard decides — so it decides nothing, and the guard
+// goes on judging the inputs it does read. The warning it stood for is not
+// lost either: the callers still perform the `read_config` beside it, which
+// is what prints bee's own corrupt-config line.
+//
+// Pinned by `sfg4_a_product_root_the_guard_cannot_resolve_never_stops_it`.
 
 /// provenance: worktree-store.mjs readGrants — swallow-all read of
 /// <mainStoreRoot>/runtime/worktree-grants.json.
@@ -237,8 +240,11 @@ pub(crate) fn resolve_context(cwd: &str) -> R<CtxOutcome> {
     let grants = read_grants(&Path::new(&main_root).join(".bee"));
     let granted = grants.get(&id) == Some(&Value::Bool(true));
     // resolveContext tail (linked branch).
-    let config = read_config(Path::new(&work_root))?; // resolveProductRoot(workspaceRoot)
-    check_product_root_silent(Path::new(&work_root), &config)?;
+    // resolveProductRoot(workspaceRoot). sfg-4: the READ stays — it is what
+    // prints bee's own corrupt-config line, and that output is pinned. The
+    // product_root CHECK that followed it is gone; see the note where it used
+    // to live for why a product_root the guard cannot resolve decides nothing.
+    let _config = read_config(Path::new(&work_root))?;
     Ok(CtxOutcome::Ok(JsCtx {
         control_root: Some(main_root),
         workspace_root: Some(work_root),
@@ -251,8 +257,9 @@ pub(crate) fn finish_ordinary(root: &str) -> R<CtxOutcome> {
     // resolveContext tail for an ordinary checkout: gitCommonDir stat can
     // throw only for exotic .git states — statSync inside resolveContext is
     // guarded by existsSync first; a race is Nd-irrelevant here.
-    let config = read_config(Path::new(root))?;
-    check_product_root_silent(Path::new(root), &config)?;
+    // sfg-4: read kept for its corrupt-config warning, product_root check
+    // dropped — same reason as the linked branch above.
+    let _config = read_config(Path::new(root))?;
     Ok(CtxOutcome::Ok(JsCtx {
         control_root: Some(root.to_string()),
         workspace_root: Some(root.to_string()),
@@ -262,12 +269,32 @@ pub(crate) fn finish_ordinary(root: &str) -> R<CtxOutcome> {
 }
 
 /// provenance: state.mjs controlRootFor — resolveContext(root).controlRoot ??
-/// root; a THROW here propagates in Node (no catch until the hook's outer
-/// catch-all) → Nd.
-pub(crate) fn control_root_for_state(root: &str) -> R<String> {
-    match resolve_context(root)? {
-        CtxOutcome::Ok(ctx) => Ok(ctx.control_root.unwrap_or_else(|| root.to_string())),
-        CtxOutcome::Threw => Err(Nd),
+/// root.
+///
+/// sfg-4: infallible by signature. `Err(Nd)` on `CtxOutcome::Threw` (and on
+/// every error `resolve_context` could raise on the way) walked straight out
+/// of `resolve_write_record` into `emit_undecidable` — one broken `.git`
+/// line, or one unreadable config value, and the write guard stopped running
+/// on EVERY path. That is the fail-OPEN sfg-3 closed for the claim readers;
+/// this is the same class, one frame up.
+///
+/// The safe read is the root already in hand — the exact fallback the `??
+/// root` in the Ok arm takes. A context the reader cannot resolve is no
+/// evidence about WHERE the store lives, so it may not be read as "the store
+/// lives somewhere else". The only consumer is `resolve_write_record`, which
+/// uses this answer to LOOK UP the acting session and its claims; a root that
+/// finds neither falls back to the control-root default record, which is the
+/// strictest record on offer (it keeps `source == "default"`, so the intake
+/// gate and the workspace-ownership deny both stay in front of this session).
+/// So this fallback can only ever be as restrictive as the resolved answer,
+/// never more permissive — and it never stops the guard.
+///
+/// Pinned by `sfg4_an_unresolvable_context_never_stops_the_guard`.
+pub(crate) fn control_root_for_state(root: &str) -> String {
+    match resolve_context(root) {
+        Ok(CtxOutcome::Ok(ctx)) => ctx.control_root.unwrap_or_else(|| root.to_string()),
+        // Threw, or a context the reader could not resolve at all.
+        _ => root.to_string(),
     }
 }
 
@@ -303,8 +330,22 @@ pub(crate) fn read_session(root: &str, session_id: &str) -> R<Option<Map<String,
 }
 
 /// provenance: claims.mjs readSession (strict=true): a parse error or a
-/// non-ENOENT read error THROWS in Node (F1) — Nd here (Node's typed
-/// detection-error deny carries a V8-worded crash log we cannot replicate).
+/// non-ENOENT read error THROWS in Node (F1).
+///
+/// It used to be `Nd` here, and `Nd` on this path is a FAIL-OPEN: the only
+/// caller sits on the hook's own `R<..>` path, so the error walked out to
+/// `emit_undecidable` — exit 0, "the guard did NOT run on it" — on a real
+/// Edit or Write. sfg-5 closed that. The `Err(Nd)` is still returned here,
+/// but it is no longer a delegation: `list_session_records_strict` turns it
+/// into the FILE that could not be read, and
+/// `is_shared_nested_checkout_target` turns that into bee's own DENY.
+///
+/// DELIBERATE DEPARTURE from Node parity, recorded at cell sfg-5: Node's
+/// typed detection-error deny carries a V8-worded crash log this port cannot
+/// replicate, so sfg-4 left the branch delegating rather than approximate
+/// that wording. Wording is not worth a hole. bee refuses in its own words
+/// instead — see `unreadable_session_refusal` (hook_local.rs) — because a
+/// guard never falls open on data it merely read.
 pub(crate) fn read_session_strict(root: &str, session_id: &str) -> R<Option<Map<String, Value>>> {
     if !plain_id_ok(session_id) {
         return Ok(None);
@@ -325,16 +366,14 @@ pub(crate) fn read_session_strict(root: &str, session_id: &str) -> R<Option<Map<
     }
 }
 
-/// provenance: claims.mjs listSessionRecords.
-pub(crate) fn list_session_records(root: &str, strict: bool) -> R<Vec<Map<String, Value>>> {
+/// The `.json` file names under `<root>/.bee/sessions`, or `Err` for a
+/// non-ENOENT `readdir` failure (which THROWS in Node, F1). Shared by both
+/// scans below so the directory walk lives in exactly one place.
+fn session_file_names(root: &str) -> Result<Vec<String>, ()> {
     let entries = match std::fs::read_dir(sessions_dir(root)) {
         Ok(e) => e,
-        Err(e) => {
-            if strict && !io_err_is_enoent(&e) {
-                return Err(Nd); // F1 throw in Node
-            }
-            return Ok(Vec::new());
-        }
+        Err(e) if io_err_is_enoent(&e) => return Ok(Vec::new()),
+        Err(_) => return Err(()),
     };
     let mut names: Vec<String> = Vec::new();
     for entry in entries.flatten() {
@@ -346,16 +385,43 @@ pub(crate) fn list_session_records(root: &str, strict: bool) -> R<Vec<Map<String
     // fs.readdirSync returns sorted order on most platforms; Node does not
     // re-sort, but iteration order only affects which record is seen first —
     // all our consumers are order-independent predicates (some/filter).
+    Ok(names)
+}
+
+/// provenance: claims.mjs listSessionRecords (strict=false).
+///
+/// sfg-5: infallible by signature, and it always was in fact — the non-strict
+/// reader answers `Ok` for a missing directory AND for a corrupt record
+/// (`read_json_g` swallows both). Dropping the `strict` flag splits the two
+/// readers apart, so the STRICT one can carry the extra fact its caller needs
+/// (WHICH file failed) instead of a bare error.
+pub(crate) fn list_session_records(root: &str) -> Vec<Map<String, Value>> {
+    let names = session_file_names(root).unwrap_or_default();
     let mut out = Vec::new();
     for name in names {
         let stem = &name[..name.len() - ".json".len()];
-        let rec = if strict {
-            read_session_strict(root, stem)?
-        } else {
-            read_session(root, stem)?
-        };
-        if let Some(r) = rec {
+        if let Ok(Some(r)) = read_session(root, stem) {
             out.push(r);
+        }
+    }
+    out
+}
+
+/// provenance: claims.mjs listSessionRecords (strict=true).
+///
+/// `Err(path)` names the ONE session file that is present but could not be
+/// read or parsed. sfg-5: that used to be `Err(Nd)` — a delegation, i.e. the
+/// whole write guard falling open on a real write. The caller turns this path
+/// into a deny that names the file; see `read_session_strict`.
+pub(crate) fn list_session_records_strict(root: &str) -> Result<Vec<Map<String, Value>>, PathBuf> {
+    let names = session_file_names(root).map_err(|()| sessions_dir(root))?;
+    let mut out = Vec::new();
+    for name in names {
+        let stem = &name[..name.len() - ".json".len()];
+        match read_session_strict(root, stem) {
+            Ok(Some(r)) => out.push(r),
+            Ok(None) => {}
+            Err(Nd) => return Err(sessions_dir(root).join(&name)),
         }
     }
     Ok(out)
@@ -371,28 +437,105 @@ pub(crate) fn now_ms() -> f64 {
 }
 
 /// provenance: claims.mjs heartbeatStale.
-pub(crate) fn heartbeat_stale(session: &Map<String, Value>, now: f64) -> R<bool> {
-    let beat = date_parse_ms(session.get("last_heartbeat"))?;
-    match beat {
-        None => Ok(true),
-        Some(ms) => Ok(ms + HEARTBEAT_STALE_SECONDS * 1000.0 <= now),
+///
+/// sfg-4: infallible by signature, like sfg-3's claim readers. It read the
+/// stamp through `date_parse_ms(..)?`, and `check_workspace_ownership` `?`d
+/// the result, so ONE malformed `last_heartbeat` — in the WORKSPACE OWNER's
+/// session record, a record the acting session neither owns nor can see —
+/// reached `emit_undecidable`: exit 0, "the guard did NOT run on it". The
+/// same reader is read by `is_concurrent_mode` and
+/// `active_worker_session_ids`, so any session file in the store could do it.
+///
+/// Three answers, and the third is the new one:
+///
+/// - a stamp that parses answers the honest arithmetic;
+/// - NO stamp (absent, null, blank) is stale — claims.mjs `heartbeatStale`
+///   says so, and it is right: a session that never beat is not beating;
+/// - a stamp the reader CANNOT PARSE is NOT stale. An unreadable byte is no
+///   evidence the session went away — it is evidence about the byte. Reading
+///   it as staleness would invent a death.
+///
+/// That third answer is also the safe one at every call site, in the same
+/// direction: "not stale" means live, and live is what makes
+/// `check_workspace_ownership` REFUSE the write, what puts
+/// `is_concurrent_mode` into concurrent mode, and what makes
+/// `active_worker_session_ids` count the worker. So an unparseable heartbeat
+/// costs the guard teeth nowhere — it can only ever add them, and it can
+/// never again switch the guard off.
+///
+/// sfg-5 (the cost of that third answer, paid instead of undone): "not stale"
+/// has NO time-based self-heal. A session record carrying
+/// `"last_heartbeat": "just now"` reads live forever, so it can hold a
+/// workspace — and refuse every other session in the checkout — until a human
+/// touches the file. sfg-4's read stands (reopening the door would restore
+/// the fail-open), but the refusal it causes may never be SILENT: the reader
+/// names the file and the remedy, once per file per evaluation, on the same
+/// buffered stderr channel the corrupt-JSON warning already uses. A human who
+/// is refused sees WHY instead of guessing.
+///
+/// Pinned by `sfg4_a_malformed_owner_heartbeat_never_stops_the_guard`,
+/// `sfg4_a_malformed_heartbeat_never_stops_the_live_worker_count` and
+/// `sfg5_an_unparseable_heartbeat_lockout_is_never_silent`.
+pub(crate) fn heartbeat_stale(root: &str, session: &Map<String, Value>, now: f64) -> bool {
+    match date_parse_ms(session.get("last_heartbeat")) {
+        Ok(None) => true, // no beat at all
+        Ok(Some(ms)) => ms + HEARTBEAT_STALE_SECONDS * 1000.0 <= now,
+        Err(_) => {
+            // present but unreadable: not evidence of staleness — but say so.
+            warn_unreadable_heartbeat(root, session);
+            false
+        }
     }
 }
 
-/// provenance: claims.mjs isConcurrentMode.
-pub(crate) fn is_concurrent_mode(root: &str, exclude: Option<&str>, strict: bool) -> R<bool> {
+/// The one line a locked-out human needs: which record reads live, why, and
+/// what clears it.
+fn warn_unreadable_heartbeat(root: &str, session: &Map<String, Value>) {
+    let file = match session.get("id") {
+        Some(Value::String(id)) if plain_id_ok(id) => {
+            sessions_dir(root).join(format!("{}.json", js_trim(id))).display().to_string()
+        }
+        // A record with no usable id cannot be named; the directory still is.
+        _ => sessions_dir(root).display().to_string(),
+    };
+    queue_guard_warning_once(format!(
+        "bee: the session record {} carries a last_heartbeat this reader cannot parse, so that \
+session counts as LIVE and keeps its claim on this checkout — it will not time out on its own. \
+FIX: repair or delete that file (`bee state session release` writes a clean record for a session \
+that is finished), then retry.\n",
+        file
+    ));
+}
+
+/// provenance: claims.mjs isConcurrentMode (strict=false).
+/// sfg-5: infallible — `list_session_records` never errors.
+pub(crate) fn is_concurrent_mode(root: &str, exclude: Option<&str>) -> bool {
+    concurrent_among(list_session_records(root), exclude, root)
+}
+
+/// provenance: claims.mjs isConcurrentMode (strict=true).
+///
+/// `Err(path)` names the session file that is present but unreadable. sfg-5:
+/// this is the fail-open sfg-4 left. The one caller
+/// (`is_shared_nested_checkout_target`) turns this into a deny, never a
+/// delegation — an unreadable record is not permission to stop guarding.
+pub(crate) fn is_concurrent_mode_strict(root: &str, exclude: Option<&str>) -> Result<bool, PathBuf> {
+    Ok(concurrent_among(list_session_records_strict(root)?, exclude, root))
+}
+
+fn concurrent_among(sessions: Vec<Map<String, Value>>, exclude: Option<&str>, root: &str) -> bool {
     let exclude = exclude.map(js_trim).unwrap_or("");
     let now = now_ms();
-    for session in list_session_records(root, strict)? {
+    for session in sessions {
         if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
             continue; // a closed/dead session is never counted toward concurrent mode.
         }
         let id_matches = session.get("id") == Some(&Value::String(exclude.to_string()));
-        if !id_matches && !heartbeat_stale(&session, now)? {
-            return Ok(true);
+        if !id_matches && !heartbeat_stale(root, &session, now) {
+            return true;
         }
     }
-    Ok(false)
+    false
 }
 
 /// provenance: claims.mjs activeWorkers — reduced to the live session-id
@@ -403,7 +546,7 @@ pub(crate) fn active_worker_session_ids(control_root: &str, exclude: Option<&str
     let exclude = exclude.map(js_trim).unwrap_or("");
     let now = now_ms();
     let mut live: Vec<String> = Vec::new();
-    for session in list_session_records(control_root, false)? {
+    for session in list_session_records(control_root) {
         let id = match session.get("id") {
             Some(Value::String(s)) => s.clone(),
             _ => continue,
@@ -411,7 +554,7 @@ pub(crate) fn active_worker_session_ids(control_root: &str, exclude: Option<&str
         if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
             continue; // a closed/dead session never counts as an active worker.
         }
-        if id != exclude && !heartbeat_stale(&session, now)? {
+        if id != exclude && !heartbeat_stale(control_root, &session, now) {
             live.push(id);
         }
     }
@@ -444,6 +587,16 @@ pub(crate) fn active_worker_session_ids(control_root: &str, exclude: Option<&str
 // cell-less claim contributes nothing and NEVER produces a refusal. The
 // loud, typed lane refusals belong to a session that DECLARED a lane; a
 // derived one gets silence and the default record.
+//
+// sfg-3 makes that fail-quiet STRUCTURAL: every function below is
+// infallible — no `?`, no `R<..>`, nothing to propagate. These readers sit
+// under `resolve_write_record`, and an error escaping one of them reached
+// `hooks/mod.rs`'s `emit_undecidable`: exit 0, "the guard did NOT run on
+// it", for every path including `.bee` mutations. So ONE unreadable byte in
+// this session's own claim would have switched the WHOLE write guard off —
+// a guard failing OPEN on malformed store data. A claim the reader cannot
+// understand contributes nothing, or reads as active; it never decides the
+// guard's fate.
 
 pub(crate) fn claims_dir_g(control_root: &str) -> PathBuf {
     Path::new(control_root).join(".bee").join("claims")
@@ -451,14 +604,23 @@ pub(crate) fn claims_dir_g(control_root: &str) -> PathBuf {
 
 /// provenance: claims.mjs isClaimExpired/isClaimActive — a claim carrying no
 /// usable ttl or no parseable timestamp reads as ACTIVE, never as expired.
-pub(crate) fn claim_active(claim: &Map<String, Value>, now: f64) -> R<bool> {
+///
+/// sfg-3: "no parseable timestamp" means EVERY shape `date_parse_ms` cannot
+/// turn into milliseconds, its `Err(Nd)` arms included — a non-RFC3339
+/// string, a numeric epoch, an object, a bool. That error used to escape
+/// through `?` and take the whole guard down with it (see the module note
+/// above); it is swallowed here instead, which is exactly what this
+/// function's own contract already promised.
+pub(crate) fn claim_active(claim: &Map<String, Value>, now: f64) -> bool {
     let ttl = match claim.get("ttl_seconds").and_then(|v| v.as_f64()) {
         Some(t) if t.is_finite() && t > 0.0 => t,
-        _ => return Ok(true),
+        _ => return true,
     };
-    match date_parse_ms(claim.get("claimed_at"))? {
-        Some(ms) => Ok(ms + ttl * 1000.0 > now),
-        None => Ok(true),
+    match date_parse_ms(claim.get("claimed_at")) {
+        Ok(Some(ms)) => ms + ttl * 1000.0 > now,
+        // Ok(None) = absent/null/blank; Err(Nd) = present but unreadable.
+        // Both are "no parseable timestamp", and both read as ACTIVE.
+        _ => true,
     }
 }
 
@@ -466,15 +628,15 @@ pub(crate) fn claim_active(claim: &Map<String, Value>, now: f64) -> R<bool> {
 /// sorted claim-file order. A claim owned by another session is never read;
 /// an expired one, a corrupt one, one whose cell record is missing, and one
 /// whose cell names no feature each contribute nothing.
-pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> R<Vec<String>> {
+pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> Vec<String> {
     let sid = js_trim(session_id);
     if !plain_id_ok(sid) {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let dir = claims_dir_g(control_root);
     let entries = match std::fs::read_dir(&dir) {
         Ok(e) => e,
-        Err(_) => return Ok(Vec::new()), // no claims directory at all
+        Err(_) => return Vec::new(), // no claims directory at all
     };
     let mut names: Vec<String> = Vec::new();
     for entry in entries.flatten() {
@@ -491,14 +653,19 @@ pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> 
         if !plain_id_ok(stem) {
             continue; // requireId throw → skipped, exactly like activeWorkers
         }
-        let claim = match read_json_g(&dir.join(&name))? {
+        // sfg-3: `unwrap_or(None)` rather than `?`. `read_json_g` answers
+        // `Ok(None)` for missing and corrupt today, but this reader must not
+        // depend on a distant function staying infallible — an unreadable
+        // claim contributes nothing, and can never reach the caller as an
+        // error.
+        let claim = match read_json_g(&dir.join(&name)).unwrap_or(None) {
             Some(Value::Object(m)) => m,
             _ => continue, // missing, corrupt, or not an object
         };
         if claim.get("session") != Some(&Value::String(sid.to_string())) {
             continue; // another session's claim is never this session's lane
         }
-        if !claim_active(&claim, now)? {
+        if !claim_active(&claim, now) {
             continue;
         }
         // The record's own `cell` field is the authority; the filename stem is
@@ -511,18 +678,18 @@ pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> 
             .join(".bee")
             .join("cells")
             .join(format!("{}.json", cell_id));
-        let feature = match read_json_g(&cell_file)? {
+        let feature = match read_json_g(&cell_file).unwrap_or(None) {
             Some(Value::Object(m)) => match m.get("feature") {
                 Some(Value::String(f)) if !js_trim(f).is_empty() => js_trim(f).to_string(),
                 _ => continue,
             },
-            _ => continue,
+            _ => continue, // sfg-3: an unreadable cell record names no feature
         };
         if !features.contains(&feature) {
             features.push(feature);
         }
     }
-    Ok(features)
+    features
 }
 
 // ─── reservations.mjs + lease-store.mjs read ports ─────────────────────────
@@ -684,21 +851,33 @@ pub(crate) struct Resv {
     pub(crate) kind: Value,                // kind || 'lease'
 }
 
-pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> R<Resv> {
+/// sfg-5: infallible by signature, like sfg-3's claim readers and sfg-4's
+/// heartbeat reader. It read BOTH `expires_at` and `acquired_at` through
+/// `date_parse_ms(..)?`, and `list_active_reservations` `?`d the result, so
+/// ONE lease file carrying `"expires_at": "tomorrow"` reached
+/// `emit_undecidable` — exit 0, "the guard did NOT run on it" — on every path
+/// `check_write` judges. `list_path_lease_records` validates no timestamp at
+/// all, so any well-formed JSON object under
+/// `.bee/runtime/leases/{cells,paths}/` could do it.
+///
+/// A stamp the reader cannot parse contributes `None` — the same NaN JS
+/// already produced when `Math.round`/`Math.max` were handed a NaN, and the
+/// same value an absent stamp produces. `ttl_seconds` is read in exactly one
+/// place, `hold_expiry`'s DISPLAY clause; it decides no verdict, so an
+/// unreadable stamp costs the guard no teeth here. Whether the lease is live
+/// at all is `lease_record_expired`'s question, and that one IS restrictive.
+pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> Resv {
     let resource = match rec.get("resource") {
         Some(Value::String(s)) => s.clone(),
         _ => unreachable!("filtered to path leases"),
     };
     let ttl = match rec.get("expires_at") {
         None | Some(Value::Null) => Some(0.0),
-        Some(exp) => {
-            let e = date_parse_ms(Some(exp))?;
-            let a = date_parse_ms(rec.get("acquired_at"))?;
-            match (e, a) {
-                (Some(e), Some(a)) => Some(js_round((e - a) / 1000.0).max(0.0)),
-                _ => None, // NaN through Math.max/round
-            }
-        }
+        Some(exp) => match (date_parse_ms(Some(exp)), date_parse_ms(rec.get("acquired_at"))) {
+            (Ok(Some(e)), Ok(Some(a))) => Some(js_round((e - a) / 1000.0).max(0.0)),
+            // NaN through Math.max/round — absent, blank, or unreadable.
+            _ => None,
+        },
     };
     let agent = rec.get("workspace_id").map(|w| match w {
         Value::String(s) if s.starts_with("agent:") => Value::String(s["agent:".len()..].to_string()),
@@ -714,7 +893,7 @@ pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> R<Resv> {
         Some(v) if truthy(v) => v.clone(),
         _ => Value::String("lease".into()),
     };
-    Ok(Resv {
+    Resv {
         agent,
         cell: rec.get("workflow_id").cloned(),
         path: resource["path:".len()..].to_string(),
@@ -722,55 +901,72 @@ pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> R<Resv> {
         reserved_at: rec.get("acquired_at").cloned(),
         session,
         kind,
-    })
+    }
 }
 
 /// provenance: reservations.mjs isLeaseRecordExpired.
-pub(crate) fn lease_record_expired(rec: &Map<String, Value>, now: f64) -> R<bool> {
+///
+/// sfg-5: infallible, and RESTRICTIVE where it now has a choice. The three
+/// answers:
+///
+/// - an expiry that parses answers the honest comparison;
+/// - NO expiry (absent, null, blank) is not expired — the lease is open-ended,
+///   as reservations.mjs always said;
+/// - an expiry the reader CANNOT PARSE is NOT expired either. That is the
+///   deliberate call at this site. An unreadable byte is evidence about the
+///   byte, never that the hold went away, and "expired" is the answer that
+///   REMOVES a reservation from `list_active_reservations` — i.e. the answer
+///   that silently drops another agent's or another session's claim on the
+///   path. Reading it as "still held" keeps the conflict, keeps the deny, and
+///   costs the guard no teeth: the worst case is one refusal a human can
+///   clear by fixing the file the refusal names.
+pub(crate) fn lease_record_expired(rec: &Map<String, Value>, now: f64) -> bool {
     match rec.get("expires_at") {
-        None | Some(Value::Null) => Ok(false),
-        Some(v) => match date_parse_ms(Some(v))? {
-            None => Ok(false),
-            Some(ms) => Ok(ms <= now),
+        None | Some(Value::Null) => false,
+        Some(v) => match date_parse_ms(Some(v)) {
+            Ok(Some(ms)) => ms <= now,
+            Ok(None) => false, // blank/null stamp: no expiry
+            Err(_) => false,   // unreadable: not evidence the hold lapsed
         },
     }
 }
 
 /// provenance: reservations.mjs listReservations({activeOnly:true}).
-pub(crate) fn list_active_reservations(root: &str) -> R<Vec<Resv>> {
+/// sfg-5: infallible — see `lease_record_expired` / `lease_to_reservation`.
+pub(crate) fn list_active_reservations(root: &str) -> Vec<Resv> {
     let now = now_ms();
     let mut out = Vec::new();
     for rec in list_path_lease_records(root) {
-        if !lease_record_expired(&rec, now)? {
-            out.push(lease_to_reservation(&rec)?);
+        if !lease_record_expired(&rec, now) {
+            out.push(lease_to_reservation(&rec));
         }
     }
-    Ok(out)
+    out
 }
 
 /// provenance: reservations.mjs findConflicts.
-pub(crate) fn find_conflicts(root: &str, agent: &str, paths: &[String]) -> R<Vec<Resv>> {
+pub(crate) fn find_conflicts(root: &str, agent: &str, paths: &[String]) -> Vec<Resv> {
     if paths.is_empty() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let mut out = Vec::new();
-    for resv in list_active_reservations(root)? {
+    for resv in list_active_reservations(root) {
         let same_agent = matches!(&resv.agent, Some(Value::String(s)) if s == agent);
         if !same_agent && paths.iter().any(|p| paths_overlap(&resv.path, p)) {
             out.push(resv);
         }
     }
-    Ok(out)
+    out
 }
 
 /// provenance: reservations.mjs findSessionConflicts.
-pub(crate) fn find_session_conflicts(root: &str, session_id: &str, paths: &[String]) -> R<Vec<Resv>> {
+pub(crate) fn find_session_conflicts(root: &str, session_id: &str, paths: &[String]) -> Vec<Resv> {
     if paths.is_empty() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let acting = js_trim(session_id);
     let mut out = Vec::new();
-    for resv in list_active_reservations(root)? {
+    for resv in list_active_reservations(root) {
         let sess_ok = match &resv.session {
             Some(Value::String(s)) if !js_trim(s).is_empty() && s != acting => true,
             _ => false,
@@ -779,7 +975,7 @@ pub(crate) fn find_session_conflicts(root: &str, session_id: &str, paths: &[Stri
             out.push(resv);
         }
     }
-    Ok(out)
+    out
 }
 
 /// provenance: reservations.mjs isHardConflict.
@@ -819,11 +1015,21 @@ pub(crate) fn holds_store_corrupt(main_root: &str) -> bool {
 }
 
 /// provenance: worktree-holds.mjs findForeignHolds (+ isActive/isExpired).
-pub(crate) fn find_foreign_holds(main_root: &str, holder: &str, paths: &[String]) -> R<Vec<Map<String, Value>>> {
+///
+/// sfg-5: infallible. It read `mirrored_at` through `date_parse_ms(..)?`, and
+/// `check_write` `?`d the result, so one mirrored hold row with an unreadable
+/// stamp switched the WHOLE write guard off — the lease defect's twin, in the
+/// cross-worktree ledger. Same restrictive read as `lease_record_expired`: a
+/// `mirrored_at` the reader cannot parse is NOT expired, so the hold stays
+/// active and keeps denying.
+pub(crate) fn find_foreign_holds(main_root: &str, holder: &str, paths: &[String]) -> Vec<Map<String, Value>> {
     if paths.is_empty() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
-    let store = read_json_g(&holds_ledger_path(main_root))?;
+    // `read_json_g` has no Err arm (missing AND corrupt both read as `None`);
+    // flattening it keeps that fact local instead of re-exporting an error
+    // this reader can never produce.
+    let store = read_json_g(&holds_ledger_path(main_root)).ok().flatten();
     let holds = match store {
         Some(Value::Object(m)) => match m.get("holds") {
             Some(Value::Array(a)) => a.clone(),
@@ -850,9 +1056,10 @@ pub(crate) fn find_foreign_holds(main_root: &str, holder: &str, paths: &[String]
         // isExpired
         let ttl = hold.get("ttl_seconds").and_then(Value::as_f64);
         let expired = match ttl {
-            Some(t) if t > 0.0 => match date_parse_ms(hold.get("mirrored_at"))? {
-                Some(m) => m + t * 1000.0 <= now,
-                None => false,
+            Some(t) if t > 0.0 => match date_parse_ms(hold.get("mirrored_at")) {
+                Ok(Some(m)) => m + t * 1000.0 <= now,
+                // Absent OR unreadable: not evidence the hold lapsed.
+                Ok(None) | Err(_) => false,
             },
             _ => false,
         };
@@ -873,25 +1080,49 @@ pub(crate) fn find_foreign_holds(main_root: &str, holder: &str, paths: &[String]
             out.push(hold);
         }
     }
-    Ok(out)
+    out
 }
 
+/// The expiry clause for a record whose timestamp the reader cannot turn into
+/// a date. sfg-5: this clause is DISPLAY, never a verdict, so it decides
+/// nothing — but it must not lie either. "no expiry" is a claim about the
+/// record ("this hold never lapses"); an unreadable stamp supports no claim,
+/// so it says exactly that, and the deny that carries it already names the
+/// path and the holder a human needs to go look at.
+const UNREADABLE_EXPIRY: &str = "expiry unknown — the timestamp on the record could not be read";
+
 /// provenance: guards.mjs holdExpiry (reservation flavor).
-pub(crate) fn hold_expiry(resv: &Resv) -> R<String> {
-    let reserved = date_parse_ms(resv.reserved_at.as_ref())?;
-    match (reserved, resv.ttl_seconds) {
-        (Some(r), Some(t)) if t > 0.0 => Ok(format!("expires {}", ms_to_iso(r + t * 1000.0)?)),
-        _ => Ok("no expiry".to_string()),
+/// sfg-5: infallible — one more `date_parse_ms(..)?` that reached
+/// `emit_undecidable` straight from a deny message's own text.
+pub(crate) fn hold_expiry(resv: &Resv) -> String {
+    let ttl = match resv.ttl_seconds {
+        Some(t) if t > 0.0 => t,
+        _ => return "no expiry".to_string(),
+    };
+    match date_parse_ms(resv.reserved_at.as_ref()) {
+        Ok(Some(r)) => match ms_to_iso(r + ttl * 1000.0) {
+            Ok(iso) => format!("expires {iso}"),
+            Err(_) => UNREADABLE_EXPIRY.to_string(), // beyond the JS Date range
+        },
+        Ok(None) => "no expiry".to_string(), // absent/blank stamp, as before
+        Err(_) => UNREADABLE_EXPIRY.to_string(),
     }
 }
 
 /// provenance: guards.mjs foreignHoldExpiry.
-pub(crate) fn foreign_hold_expiry(hold: &Map<String, Value>) -> R<String> {
-    let mirrored = date_parse_ms(hold.get("mirrored_at"))?;
-    let ttl = hold.get("ttl_seconds").and_then(Value::as_f64);
-    match (mirrored, ttl) {
-        (Some(m), Some(t)) if t > 0.0 => Ok(format!("expires {}", ms_to_iso(m + t * 1000.0)?)),
-        _ => Ok("no expiry".to_string()),
+/// sfg-5: infallible, same shape and same reason as `hold_expiry`.
+pub(crate) fn foreign_hold_expiry(hold: &Map<String, Value>) -> String {
+    let ttl = match hold.get("ttl_seconds").and_then(Value::as_f64) {
+        Some(t) if t > 0.0 => t,
+        _ => return "no expiry".to_string(),
+    };
+    match date_parse_ms(hold.get("mirrored_at")) {
+        Ok(Some(m)) => match ms_to_iso(m + ttl * 1000.0) {
+            Ok(iso) => format!("expires {iso}"),
+            Err(_) => UNREADABLE_EXPIRY.to_string(),
+        },
+        Ok(None) => "no expiry".to_string(),
+        Err(_) => UNREADABLE_EXPIRY.to_string(),
     }
 }
 
