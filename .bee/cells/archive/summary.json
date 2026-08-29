@@ -968,5 +968,10 @@
     "capped": 6,
     "dropped": 0,
     "archived_at": "2026-08-29T06:03:32.368Z"
+  },
+  "slp-advisor-nudge": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-08-29T11:16:46.800Z"
   }
 }

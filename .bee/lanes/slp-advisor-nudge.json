@@ -5,21 +5,16 @@
   "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": true,
-    "execution": true,
+    "shape": false,
+    "execution": false,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"slp-advisor-nudge\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 9690287; reload the product and test \"slp-advisor-nudge\", then either approve uat (\"bee gate --name uat --approved true --lane slp-advisor-nudge\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-29T09:49:40.168Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: slp-advisor-nudge",
-    "asked_at": "2026-08-29T10:42:14.995Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
