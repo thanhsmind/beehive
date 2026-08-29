@@ -2045,6 +2045,245 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
+    // ── sfg-1 (slp-followup-gaps D1/D2): an unbound session's OWN live claim
+    // resolves the acting record before the control-root default record ────
+
+    fn write_claim(root: &Path, cell: &str, session: &str) {
+        write_claim_ttl(root, cell, session, 3600.0, now_ms());
+    }
+
+    fn write_claim_ttl(root: &Path, cell: &str, session: &str, ttl: f64, claimed_ms: f64) {
+        let dir = root.join(".bee").join("claims");
+        std::fs::create_dir_all(&dir).unwrap();
+        let stamp = ms_to_iso(claimed_ms).unwrap();
+        std::fs::write(
+            dir.join(format!("{cell}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "cell": cell,
+                    "session": session,
+                    "workspace_id": "main",
+                    "ttl_seconds": ttl,
+                    "claimed_at": stamp,
+                    "acquired_at": stamp,
+                    "fence_epoch": 1
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_cell_record(root: &Path, cell: &str, feature: &str) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{cell}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": cell, "feature": feature, "role": "code", "status": "claimed"
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    fn session_bash(command: &str, session: &str) -> Value {
+        json!({
+            "tool_name": "Bash",
+            "tool_input": { "command": command },
+            "session_id": session
+        })
+    }
+
+    /// The live incident (pattern 20260828). `.bee/state.json` says idle; the
+    /// dispatched worker was never bound to a lane; its own claim names the
+    /// cell, the cell names the feature, and that feature's lane record is
+    /// swarming. The mid-cell commit is legitimate and must not be refused.
+    #[test]
+    fn sfg1_an_unbound_session_with_one_live_claim_commits_against_its_claimed_lane() {
+        let fx = build_git_fixture("idle");
+        add_live_session(&fx.root, "sess-1");
+        write_claim(&fx.root, "cell-1", "sess-1");
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    /// The same resolution at the write check, not only at the git gate.
+    #[test]
+    fn sfg1_the_write_check_judges_the_claimed_lane_record_too() {
+        let fx = build_fixture("idle", false);
+        add_live_session(&fx.root, "sess-1");
+        write_claim(&fx.root, "cell-1", "sess-1");
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        let e = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    /// D2: no claim to derive from, so the default record answers — and the
+    /// refusal names binding the session as the remedy, beside the FIX line.
+    #[test]
+    fn sfg1_an_unbound_session_with_no_claim_is_refused_and_told_to_bind() {
+        let fx = build_git_fixture("idle");
+        add_live_session(&fx.root, "sess-1");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state session bind --lane"), "{}", e.stderr);
+        // The existing FIX line still leads; the binding remedy sits beside it.
+        let fix = e.stderr.find("FIX: commit or write bookkeeping").unwrap();
+        let bind = e.stderr.find("bee state session bind --lane").unwrap();
+        assert!(fix < bind, "{}", e.stderr);
+    }
+
+    /// The remedy is scoped: with no session at all there is nothing to bind,
+    /// so the refusal is byte-identical to today's.
+    #[test]
+    fn sfg1_the_bind_remedy_is_absent_when_there_is_no_session_to_bind() {
+        let fx = build_git_fixture("idle");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(bash("git commit -m \"mid-cell\""), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(!e.stderr.contains("bee state session bind"), "{}", e.stderr);
+    }
+
+    /// ...and a BOUND session never sees it either: its record came from its
+    /// own lane, not from the default.
+    #[test]
+    fn sfg1_the_bind_remedy_is_absent_for_a_lane_bound_session() {
+        let fx = build_git_fixture("idle");
+        write_session_lane(&fx.root, "sess-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "idle", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+        assert!(!e.stderr.contains("bee state session bind"), "{}", e.stderr);
+    }
+
+    /// Every narrowing condition of D1, each one falling back to the default
+    /// record without inventing the bound path's typed lane refusals.
+    #[test]
+    fn sfg1_ambiguous_or_unusable_claims_fall_back_to_the_default_record() {
+        let refused = |fx: &Fx| {
+            let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+            assert_eq!(e.code, 2, "{}", e.stderr);
+            assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+            assert!(!e.stderr.contains("bee lane guard"), "{}", e.stderr);
+        };
+
+        // Two claims naming two DIFFERENT features — ambiguous.
+        let two = build_git_fixture("idle");
+        add_live_session(&two.root, "sess-1");
+        write_claim(&two.root, "cell-1", "sess-1");
+        write_cell_record(&two.root, "cell-1", "feat-a");
+        write_claim(&two.root, "cell-2", "sess-1");
+        write_cell_record(&two.root, "cell-2", "feat-b");
+        write_lane_record(&two.root, "feat-a", "swarming", "docs");
+        write_lane_record(&two.root, "feat-b", "swarming", "docs");
+        stage_file(&two.root, "src/feature.js");
+        refused(&two);
+
+        // One claim, but the feature has no lane record at all.
+        let missing = build_git_fixture("idle");
+        add_live_session(&missing.root, "sess-1");
+        write_claim(&missing.root, "cell-1", "sess-1");
+        write_cell_record(&missing.root, "cell-1", "ghost-feat");
+        stage_file(&missing.root, "src/feature.js");
+        refused(&missing);
+
+        // One claim, lane record present but corrupt.
+        let corrupt = build_git_fixture("idle");
+        add_live_session(&corrupt.root, "sess-1");
+        write_claim(&corrupt.root, "cell-1", "sess-1");
+        write_cell_record(&corrupt.root, "cell-1", "feat-a");
+        std::fs::create_dir_all(corrupt.root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            corrupt.root.join(".bee").join("lanes").join("feat-a.json"),
+            "{ not json\n",
+        )
+        .unwrap();
+        stage_file(&corrupt.root, "src/feature.js");
+        refused(&corrupt);
+
+        // One claim, lane record present but naming a DIFFERENT feature.
+        let mismatched = build_git_fixture("idle");
+        add_live_session(&mismatched.root, "sess-1");
+        write_claim(&mismatched.root, "cell-1", "sess-1");
+        write_cell_record(&mismatched.root, "cell-1", "feat-a");
+        std::fs::create_dir_all(mismatched.root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            mismatched.root.join(".bee").join("lanes").join("feat-a.json"),
+            "{\"schema_version\":\"1.0\",\"feature\":\"someone-else\",\"phase\":\"swarming\"}\n",
+        )
+        .unwrap();
+        stage_file(&mismatched.root, "src/feature.js");
+        refused(&mismatched);
+
+        // One claim whose cell record does not exist — nothing names a feature.
+        let cellless = build_git_fixture("idle");
+        add_live_session(&cellless.root, "sess-1");
+        write_claim(&cellless.root, "cell-1", "sess-1");
+        write_lane_record(&cellless.root, "demo-feat", "swarming", "docs");
+        stage_file(&cellless.root, "src/feature.js");
+        refused(&cellless);
+    }
+
+    /// A claim owned by a different session is never read — and neither is an
+    /// expired one of our own.
+    #[test]
+    fn sfg1_a_foreign_or_expired_claim_is_never_read() {
+        let foreign = build_git_fixture("idle");
+        add_live_session(&foreign.root, "sess-1");
+        write_claim(&foreign.root, "cell-1", "sess-other");
+        write_cell_record(&foreign.root, "cell-1", "demo-feat");
+        write_lane_record(&foreign.root, "demo-feat", "swarming", "docs");
+        stage_file(&foreign.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &foreign.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("intake gate"), "{}", e.stderr);
+
+        let expired = build_git_fixture("idle");
+        add_live_session(&expired.root, "sess-1");
+        write_claim_ttl(&expired.root, "cell-1", "sess-1", 1.0, now_ms() - 3_600_000.0);
+        write_cell_record(&expired.root, "cell-1", "demo-feat");
+        write_lane_record(&expired.root, "demo-feat", "swarming", "docs");
+        stage_file(&expired.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &expired.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+    }
+
+    /// A BOUND session is untouched by the new arm: its broken binding still
+    /// earns the typed lane refusal, claim or no claim.
+    #[test]
+    fn sfg1_a_bound_session_holding_a_claim_keeps_its_typed_lane_refusal() {
+        let fx = build_git_fixture("idle");
+        write_session_lane(&fx.root, "sess-1", "ghost");
+        write_claim(&fx.root, "cell-1", "sess-1");
+        write_cell_record(&fx.root, "cell-1", "demo-feat");
+        write_lane_record(&fx.root, "demo-feat", "swarming", "docs");
+        stage_file(&fx.root, "src/feature.js");
+        let e = expect_done(session_bash("git commit -m \"mid-cell\"", "sess-1"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee lane guard"), "{}", e.stderr);
+        assert!(e.stderr.contains("\"ghost\""), "{}", e.stderr);
+    }
+
     // ── staging-lane D0 teeth #2: a direct `git commit` inside the
     // REGISTERED staging worktree is refused unless BEE_STAGING_MACHINERY=1
     // is set — phase-independent, like gc-2, so `build_linked`'s "swarming"

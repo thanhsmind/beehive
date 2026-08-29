@@ -436,6 +436,95 @@ pub(crate) fn active_worker_session_ids(control_root: &str, exclude: Option<&str
     Ok(live)
 }
 
+// ─── sfg-1 (slp-followup-gaps D1): this session's OWN live claims ──────────
+//
+// claims.mjs readClaim/isClaimActive, reduced to the single question the
+// write guard asks — "which feature is this session actually working under?"
+// Every read here is fail-quiet: an unreadable, foreign, expired or
+// cell-less claim contributes nothing and NEVER produces a refusal. The
+// loud, typed lane refusals belong to a session that DECLARED a lane; a
+// derived one gets silence and the default record.
+
+pub(crate) fn claims_dir_g(control_root: &str) -> PathBuf {
+    Path::new(control_root).join(".bee").join("claims")
+}
+
+/// provenance: claims.mjs isClaimExpired/isClaimActive — a claim carrying no
+/// usable ttl or no parseable timestamp reads as ACTIVE, never as expired.
+pub(crate) fn claim_active(claim: &Map<String, Value>, now: f64) -> R<bool> {
+    let ttl = match claim.get("ttl_seconds").and_then(|v| v.as_f64()) {
+        Some(t) if t.is_finite() && t > 0.0 => t,
+        _ => return Ok(true),
+    };
+    match date_parse_ms(claim.get("claimed_at"))? {
+        Some(ms) => Ok(ms + ttl * 1000.0 > now),
+        None => Ok(true),
+    }
+}
+
+/// The DISTINCT features named by the live claims THIS session owns, in
+/// sorted claim-file order. A claim owned by another session is never read;
+/// an expired one, a corrupt one, one whose cell record is missing, and one
+/// whose cell names no feature each contribute nothing.
+pub(crate) fn session_claimed_features(control_root: &str, session_id: &str) -> R<Vec<String>> {
+    let sid = js_trim(session_id);
+    if !plain_id_ok(sid) {
+        return Ok(Vec::new());
+    }
+    let dir = claims_dir_g(control_root);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(Vec::new()), // no claims directory at all
+    };
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.ends_with(".json") {
+            names.push(name);
+        }
+    }
+    names.sort(); // read_dir order is platform-dependent; the answer must not be
+    let now = now_ms();
+    let mut features: Vec<String> = Vec::new();
+    for name in names {
+        let stem = &name[..name.len() - ".json".len()];
+        if !plain_id_ok(stem) {
+            continue; // requireId throw → skipped, exactly like activeWorkers
+        }
+        let claim = match read_json_g(&dir.join(&name))? {
+            Some(Value::Object(m)) => m,
+            _ => continue, // missing, corrupt, or not an object
+        };
+        if claim.get("session") != Some(&Value::String(sid.to_string())) {
+            continue; // another session's claim is never this session's lane
+        }
+        if !claim_active(&claim, now)? {
+            continue;
+        }
+        // The record's own `cell` field is the authority; the filename stem is
+        // the fallback the store's own writers keep in step with it.
+        let cell_id = match claim.get("cell") {
+            Some(Value::String(c)) if plain_id_ok(c) => js_trim(c).to_string(),
+            _ => stem.to_string(),
+        };
+        let cell_file = Path::new(control_root)
+            .join(".bee")
+            .join("cells")
+            .join(format!("{}.json", cell_id));
+        let feature = match read_json_g(&cell_file)? {
+            Some(Value::Object(m)) => match m.get("feature") {
+                Some(Value::String(f)) if !js_trim(f).is_empty() => js_trim(f).to_string(),
+                _ => continue,
+            },
+            _ => continue,
+        };
+        if !features.contains(&feature) {
+            features.push(feature);
+        }
+    }
+    Ok(features)
+}
+
 // ─── reservations.mjs + lease-store.mjs read ports ─────────────────────────
 
 pub(crate) const SESSIONLESS_SESSION_ID: &str = "\u{0}bee-reservation-sessionless\u{0}";

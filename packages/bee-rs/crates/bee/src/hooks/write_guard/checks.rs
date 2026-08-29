@@ -37,8 +37,89 @@ pub(crate) fn resolve_write_topology(root: &str, control_root_override: Option<&
 }
 
 pub(crate) enum RecordResolution {
-    Ok { record: Map<String, Value>, source: &'static str },
+    Ok {
+        record: Map<String, Value>,
+        /// `"default"` (the control-root state.json), `"lane"` (the session's
+        /// DECLARED lane) or `"claim"` (sfg-1: the lane derived from this
+        /// session's own live claim).
+        source: &'static str,
+        /// sfg-1 (D2): this session HAS a record of its own and that record
+        /// carries no non-empty `lane`. Only such a session can be told to
+        /// bind itself — a sessionless call has nothing to bind, and
+        /// `bee state session bind` itself refuses a session with no record.
+        session_unbound: bool,
+    },
     Fail { reason: String },
+}
+
+/// laneRecordFrom merged over defaultLaneRecord — the ONE copy of that merge.
+/// Both arms below call it: the DECLARED-lane arm and sfg-1's claim-derived
+/// arm, so a lane record resolved either way is byte-identical.
+pub(crate) fn lane_record_from(feature: &str, record: &Map<String, Value>) -> Map<String, Value> {
+    let mut merged = Map::new();
+    merged.insert("schema_version".into(), Value::String("1.0".into()));
+    merged.insert("feature".into(), Value::String(feature.to_string()));
+    merged.insert("mode".into(), Value::Null);
+    merged.insert("phase".into(), Value::String("idle".into()));
+    let mut gates = Map::new();
+    for g in ["context", "shape", "execution", "review"] {
+        gates.insert(g.into(), Value::Bool(false));
+    }
+    merged.insert("approved_gates".into(), Value::Object(gates.clone()));
+    merged.insert("summary".into(), Value::String(String::new()));
+    merged.insert("next_action".into(), Value::String(String::new()));
+    merged.insert("created_at".into(), Value::Null);
+    for (k, v) in record {
+        merged.insert(k.clone(), v.clone());
+    }
+    let mut merged_gates = gates;
+    if let Some(Value::Object(over)) = record.get("approved_gates") {
+        for (k, v) in over {
+            merged_gates.insert(k.clone(), v.clone());
+        }
+    }
+    merged.insert("approved_gates".into(), Value::Object(merged_gates));
+    if merged.get("phase") == Some(&Value::String("validating".into())) {
+        merged.insert("phase".into(), Value::String("planning".into()));
+    }
+    merged
+}
+
+/// sfg-1 / slp-followup-gaps D1. The acting record for an UNBOUND session,
+/// derived from its own live claims: exactly ONE distinct claimed feature
+/// whose `.bee/lanes/<feature>.json` exists and parses with a matching
+/// `feature` key. Every other shape — no claim, two or more features, a
+/// missing, corrupt or mismatched lane record — returns `None`, and the
+/// caller falls back to the default record exactly as it did before.
+///
+/// Deliberately silent, and deliberately never `Fail`: the loud typed lane
+/// refusals belong to a session that DECLARED a lane and got it wrong. A
+/// session whose lane was merely inferred is owed no refusal at all, so this
+/// path can never be MORE restrictive than today either.
+fn claim_derived_lane_record(
+    control_root: &str,
+    session_id: &str,
+) -> R<Option<Map<String, Value>>> {
+    let features = session_claimed_features(control_root, session_id)?;
+    let feature = match features.as_slice() {
+        [only] => only.clone(),
+        _ => return Ok(None), // no claim at all, or two features = ambiguous
+    };
+    // Same lane-name validity requireLaneFeature enforces on the bound path —
+    // here it simply disqualifies the derivation instead of refusing.
+    if !plain_id_ok(&feature) {
+        return Ok(None);
+    }
+    let file = Path::new(control_root)
+        .join(".bee")
+        .join("lanes")
+        .join(format!("{}.json", feature));
+    match read_json_g(&file)? {
+        Some(Value::Object(m)) if m.get("feature") == Some(&Value::String(feature.clone())) => {
+            Ok(Some(lane_record_from(&feature, &m)))
+        }
+        _ => Ok(None), // missing, corrupt, or naming a different feature
+    }
 }
 
 /// provenance: guards.mjs resolveWriteRecord + state.mjs resolvePipeline.
@@ -51,24 +132,46 @@ pub(crate) fn resolve_write_record(
     let sid = match session_id.map(js_trim).filter(|s| !s.is_empty()) {
         Some(s) => s,
         None => {
-            return Ok(RecordResolution::Ok { record: state.clone(), source: "default" });
+            return Ok(RecordResolution::Ok {
+                record: state.clone(),
+                source: "default",
+                session_unbound: false, // there is no session to bind
+            });
         }
     };
     // resolvePipeline(controlRoot, { sessionId }).
     let control2 = control_root_for_state(control_root)?;
-    let defaults = |_: &mut Emit| -> R<RecordResolution> {
+    let defaults = |session_unbound: bool| -> R<RecordResolution> {
         Ok(RecordResolution::Ok {
             record: read_state(Path::new(control_root))?,
             source: "default",
+            session_unbound,
         })
     };
     let session = match read_session(&control2, sid)? {
         Some(s) => s,
-        None => return defaults(emit),
+        // No record of its own: `bee state session bind` refuses such a
+        // session, so naming the binding as a remedy would be a dead end.
+        None => return defaults(false),
     };
     let bound = match session.get("lane") {
         Some(Value::String(s)) if !js_trim(s).is_empty() => js_trim(s).to_string(),
-        _ => return defaults(emit),
+        _ => {
+            // sfg-1 (D1): before the default record answers, ask this
+            // session's OWN live claims which feature it is working under.
+            // A claim is a fact the store already holds, written by
+            // `bee cells claim` under this same session id — never a guess.
+            // Anything short of exactly one usable feature is no opinion, and
+            // the default record answers byte-identically to before.
+            if let Some(record) = claim_derived_lane_record(&control2, sid)? {
+                return Ok(RecordResolution::Ok {
+                    record,
+                    source: "claim",
+                    session_unbound: true,
+                });
+            }
+            return defaults(true);
+        }
     };
     let session_id_disp = js_disp_opt(session.get("id"));
     // lanePath validity (state.mjs requireLaneFeature).
@@ -115,34 +218,13 @@ pub(crate) fn resolve_write_record(
         }
         Some(m) => m,
     };
-    // laneRecordFrom merge over defaultLaneRecord.
-    let mut merged = Map::new();
-    merged.insert("schema_version".into(), Value::String("1.0".into()));
-    merged.insert("feature".into(), Value::String(bound.clone()));
-    merged.insert("mode".into(), Value::Null);
-    merged.insert("phase".into(), Value::String("idle".into()));
-    let mut gates = Map::new();
-    for g in ["context", "shape", "execution", "review"] {
-        gates.insert(g.into(), Value::Bool(false));
-    }
-    merged.insert("approved_gates".into(), Value::Object(gates.clone()));
-    merged.insert("summary".into(), Value::String(String::new()));
-    merged.insert("next_action".into(), Value::String(String::new()));
-    merged.insert("created_at".into(), Value::Null);
-    for (k, v) in &record {
-        merged.insert(k.clone(), v.clone());
-    }
-    let mut merged_gates = gates;
-    if let Some(Value::Object(over)) = record.get("approved_gates") {
-        for (k, v) in over {
-            merged_gates.insert(k.clone(), v.clone());
-        }
-    }
-    merged.insert("approved_gates".into(), Value::Object(merged_gates));
-    if merged.get("phase") == Some(&Value::String("validating".into())) {
-        merged.insert("phase".into(), Value::String("planning".into()));
-    }
-    Ok(RecordResolution::Ok { record: merged, source: "lane" })
+    // laneRecordFrom merge over defaultLaneRecord — the shared helper above,
+    // the same one sfg-1's claim-derived arm calls.
+    Ok(RecordResolution::Ok {
+        record: lane_record_from(&bound, &record),
+        source: "lane",
+        session_unbound: false,
+    })
 }
 
 // ─── plan.md freeze (hook-teeth D1) ────────────────────────────────────────
@@ -345,10 +427,18 @@ unapprove the shape gate first to redraft the plan.",
         }
     }
 
-    let (record, source) = match resolve_write_record(&control_root, state, session_id, emit)? {
-        RecordResolution::Fail { reason } => return Ok(WV::Deny(reason)),
-        RecordResolution::Ok { record, source } => (record, source),
-    };
+    let (record, source, session_unbound) =
+        match resolve_write_record(&control_root, state, session_id, emit)? {
+            RecordResolution::Fail { reason } => return Ok(WV::Deny(reason)),
+            RecordResolution::Ok { record, source, session_unbound } => {
+                (record, source, session_unbound)
+            }
+        };
+    // sfg-1 (D2): the binding remedy is named only when the DEFAULT record
+    // answered AND this session has a record carrying no lane. A lane-bound
+    // session, a claim-derived one, and a sessionless call each already have
+    // their own correct answer and are never told to bind.
+    let bind_remedy = source == "default" && session_unbound;
 
     // Cross-session hold deny (fsh-7 D3) — sessionId-gated.
     if let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) {
@@ -441,7 +531,12 @@ between the two checkouts at merge time.",
 
     // Workspace-ownership deny (msn-21, class (c)).
     if let Some(sid) = session_id.map(js_trim).filter(|s| !s.is_empty()) {
-        if source == "default" && phase != Value::String("swarming".into()) {
+        // sfg-1: `"claim"` is grouped with `"default"` on purpose. The claim
+        // arm derives WHICH LANE this session works under; it says nothing
+        // about who owns this checkout, so the ownership guard must keep
+        // firing for exactly the sessions it fired for before this cell —
+        // those sessions read `"default"` then and read `"claim"` now.
+        if matches!(source, "default" | "claim") && phase != Value::String("swarming".into()) {
             let config = read_config(Path::new(&control_root))?;
             if resolve_write_policy_mode(&config) == "isolated" {
                 match check_workspace_ownership(&control_root, ctx, sid)? {
@@ -488,6 +583,7 @@ in a fresh worktree instead.",
                 &phase,
                 &format!("writing \"{}\"", normalized),
                 "",
+                bind_remedy,
             )));
         }
         return Ok(WV::Allow);
@@ -609,10 +705,15 @@ pub(crate) fn check_git_bash_command(
     }
 
     let topo = resolve_write_topology(root, control_root_override)?;
-    let record = match resolve_write_record(&topo.control_root, state, session_id, emit)? {
-        RecordResolution::Fail { reason } => return Ok(Some(WV::Deny(reason))),
-        RecordResolution::Ok { record, .. } => record,
-    };
+    let (record, source, session_unbound) =
+        match resolve_write_record(&topo.control_root, state, session_id, emit)? {
+            RecordResolution::Fail { reason } => return Ok(Some(WV::Deny(reason))),
+            RecordResolution::Ok { record, source, session_unbound } => {
+                (record, source, session_unbound)
+            }
+        };
+    // sfg-1 (D2), same condition as check_write's.
+    let bind_remedy = source == "default" && session_unbound;
     let phase = match record.get("phase") {
         Some(v) if truthy(v) => v.clone(),
         _ => Value::String("idle".into()),
@@ -631,6 +732,7 @@ pub(crate) fn check_git_bash_command(
             command,
             invocation.subcommand.as_deref(),
             &invocation.rest,
+            bind_remedy,
         )? {
             return Ok(Some(wv));
         }
@@ -651,6 +753,7 @@ fn evaluate_git_invocation(
     command: &str,
     subcommand: Option<&str>,
     rest: &[String],
+    bind_remedy: bool,
 ) -> R<Option<WV>> {
     // gc-2: concurrent-worker whole-tree denial — phase-independent.
     if let Some(classified) = classify_concurrent_tree_verb(subcommand, rest) {
@@ -727,6 +830,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
             phase,
             "`git push`",
             "git push is outward-facing and is never exempted from this gate, regardless of what it would push. ",
+            bind_remedy,
         ))));
     }
 
@@ -751,6 +855,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
                             sub
                         ),
                         "",
+                        bind_remedy,
                     ))));
                 }
                 Some(p) => p,
@@ -764,6 +869,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
                     phase,
                     &format!("running `git {}` — it would change \"{}\"", sub, off),
                     "",
+                    bind_remedy,
                 ))));
             }
             return Ok(None); // { allow: true, kind: 'git-bookkeeping' }
@@ -778,6 +884,7 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         phase,
         &format!("running `git {}`", named),
         "This git subcommand is not recognized as read-only or as a modeled bookkeeping-eligible mutation, so it is refused rather than assumed safe. ",
+        bind_remedy,
     ))))
 }
 
