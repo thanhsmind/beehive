@@ -679,6 +679,24 @@ mod tests {
         // `--files` names repo paths, and `--alternative` (cells dissent) is
         // singular and means "the one thing to do INSTEAD" — a proposal, not
         // a discard. None of them meant "the options ruled out, with why".
+        // 199 -> 199 (slp-advisor-nudge an-5): the advisor-nudge record of
+        // 3cfd9980 adds NO flag name, and that is the design working. A nudge
+        // is one more member of the closed `--kind` set and its two new
+        // watch words (`budget-overrun`, `same-region-resubmit`) are two more
+        // members of the closed `--signal` set, so a caller who knows how to
+        // raise an intervention already knows how to raise a nudge: same
+        // --target-session, --point-key, --question, --signal and --tick. The
+        // near miss checked and rejected: spelling the recommendation as its
+        // own flag (`--advisor`, `--recommend-consult`) would be a second way
+        // to say what `--kind` already says, exactly the miss sup-7 recorded
+        // for `--urgent`. The response debt it creates is answered through
+        // `decisions log --tags advisor-nudge`, which is existing vocabulary
+        // in existing use — a debt escape has never earned a flag of its own.
+        // The sup-2 entry above lists the DAY-1 signal members and stays as
+        // written: it is the history of why `--signal` was minted, not a
+        // roster of today's set. The live set is the one `KNOWN_SIGNALS`
+        // holds (verbs/supervisor.rs), and the shipped supervisor prompt is
+        // pinned to it by `the_shipped_prompt_pins_the_record_verbs_own_closed_sets`.
         const PINNED_FLAG_COUNT: usize = 199;
 
         let names: std::collections::BTreeSet<&str> =
