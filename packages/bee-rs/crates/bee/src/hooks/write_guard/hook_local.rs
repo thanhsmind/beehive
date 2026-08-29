@@ -1000,56 +1000,138 @@ pub(crate) fn resolve_existing_realpath_f2(abs: &str) -> R<Option<String>> {
     }
 }
 
+/// What `.bee/companion-session.json` says about this checkout.
+///
+/// sfg-6 turned the old `Option<String>` into three answers. The third one is
+/// the point: this read has always had three outcomes, and the reader used to
+/// fold the third into `Err(Nd)` — a DELEGATION, i.e. the whole write guard
+/// falling open. See `resolve_companion_mount`.
+pub(crate) enum CompanionMount {
+    /// No usable marker: absent, not a JSON object, no non-empty
+    /// `worktreePath` / `mountPath`, or a declared path that does not verify
+    /// against the live mount.
+    None,
+    /// A marker-verified live mount, realpath-resolved.
+    Verified(String),
+    /// The marker file is PRESENT but could not be read or parsed.
+    Unreadable(PathBuf),
+}
+
 /// pub(crate) since the wcg-3 port (`crate::nested_checkout`): guards.mjs's
 /// own comment says this verification "lives in exactly one place", shared by
 /// the point-check (`target_inside_verified_companion_mount`) and the
 /// directory-scan (`hasAnySharedNestedCheckout`). Widening it is what keeps
 /// that true across the two Rust modules.
-pub(crate) fn resolve_verified_companion_mount_real(root: &str) -> R<Option<String>> {
+///
+/// sfg-6: the LAST fail-OPEN of this feature's sweep. The marker was read
+/// with a bare `std::fs::read` plus `serde_json::from_str`, and BOTH error
+/// arms answered `Err(Nd)`. That error walked
+/// `target_inside_verified_companion_mount` ->
+/// `is_shared_nested_checkout_target` -> the hook's own `?` ->
+/// `Outcome::Delegate` -> `emit_undecidable`: exit 0, "the guard did NOT run
+/// on it". Its preconditions are exactly the ones sfg-5 closed one line
+/// above — a resolvable Edit/Write target plus one other live session — so a
+/// present-but-corrupt `.bee/companion-session.json` switched the whole guard
+/// off on ordinary work.
+///
+/// It is a third ANSWER now, never an error, and the answer is deliberately
+/// not `None`. `read_json_g` is this module's usual reader for corrupt JSON,
+/// and it is the WRONG reader here: its contract is "take the same fallback
+/// an absent file would", and the absent-file fallback on this marker is
+/// `None` — a positive claim that no verified companion mount exists, which
+/// is precisely the claim that lets a write through. Bytes the reader could
+/// not parse are evidence about the bytes and about nothing else, so this
+/// reader says exactly that and leaves the verdict to the caller. Same reason
+/// sfg-5 kept `read_session_strict` off `read_json_g`.
+pub(crate) fn resolve_companion_mount(root: &str) -> R<CompanionMount> {
     let marker_file = Path::new(root).join(".bee").join("companion-session.json");
     let raw = match std::fs::read(&marker_file) {
         Ok(b) => String::from_utf8_lossy(&b).into_owned(),
-        Err(e) if io_err_is_enoent(&e) => return Ok(None),
-        Err(_) => return Err(Nd), // F2: propagates in Node
+        Err(e) if io_err_is_enoent(&e) => return Ok(CompanionMount::None),
+        // sfg-6: was `Err(Nd)` ("F2: propagates in Node"). A marker the reader
+        // cannot OPEN is unreadable in exactly the sense one it cannot PARSE
+        // is, so the two arms close the same way and neither escapes.
+        Err(_) => return Ok(CompanionMount::Unreadable(marker_file)),
     };
-    let marker: Value = serde_json::from_str(&raw).map_err(|_| Nd)?; // F2: corrupt marker throws
+    let Ok(marker) = serde_json::from_str::<Value>(&raw) else {
+        // sfg-6: was `Err(Nd)` ("F2: corrupt marker throws").
+        return Ok(CompanionMount::Unreadable(marker_file));
+    };
     let obj = match &marker {
         Value::Object(m) => m,
-        _ => return Ok(None),
+        _ => return Ok(CompanionMount::None),
     };
     let declared = match obj.get("worktreePath") {
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
-        _ => return Ok(None),
+        _ => return Ok(CompanionMount::None),
     };
     let mount = match obj.get("mountPath") {
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
-        _ => return Ok(None),
+        _ => return Ok(CompanionMount::None),
     };
     let declared_real = match realpath_f2(&declared)? {
         Some(d) => d,
-        None => return Ok(None),
+        None => return Ok(CompanionMount::None),
     };
     let live = Path::new(root).join(&mount).to_string_lossy().into_owned();
     let live_mount_real = match realpath_f2(&live)? {
         Some(l) => l,
-        None => return Ok(None),
+        None => return Ok(CompanionMount::None),
     };
     if declared_real != live_mount_real {
-        return Ok(None);
+        return Ok(CompanionMount::None);
     }
-    Ok(Some(live_mount_real))
+    Ok(CompanionMount::Verified(live_mount_real))
 }
 
-pub(crate) fn target_inside_verified_companion_mount(root: &str, abs_target: &str) -> R<bool> {
-    let live = match resolve_verified_companion_mount_real(root)? {
-        Some(l) => l,
-        None => return Ok(false),
+/// The `R<Option<String>>` spelling `crate::nested_checkout` consumes.
+///
+/// sfg-6: an unreadable marker is STILL an error on this side, and that is
+/// the same direction rather than an exception to it. `crate::nested_checkout`
+/// maps `Nd` onto a native fail-CLOSED refusal that already names this exact
+/// marker file (see that module's header); it never delegates. So no read of
+/// this marker can switch a guard off, on either side of the shared
+/// verification.
+pub(crate) fn resolve_verified_companion_mount_real(root: &str) -> R<Option<String>> {
+    match resolve_companion_mount(root)? {
+        CompanionMount::None => Ok(None),
+        CompanionMount::Verified(mount) => Ok(Some(mount)),
+        CompanionMount::Unreadable(_) => Err(Nd),
+    }
+}
+
+/// Where a target sits relative to a marker-verified companion mount.
+pub(crate) enum CompanionContainment {
+    /// Not inside one — "there is no verified mount at all" included.
+    Outside,
+    /// Inside one.
+    Inside,
+    /// `.bee/companion-session.json` is present but unreadable, so the
+    /// question has no honest answer. See `is_shared_nested_checkout_target`
+    /// for why that is REFUSED rather than answered `Outside`.
+    UnreadableMarker(PathBuf),
+}
+
+pub(crate) fn target_inside_verified_companion_mount(
+    root: &str,
+    abs_target: &str,
+) -> R<CompanionContainment> {
+    let live = match resolve_companion_mount(root)? {
+        CompanionMount::Verified(live) => live,
+        CompanionMount::None => return Ok(CompanionContainment::Outside),
+        CompanionMount::Unreadable(file) => {
+            return Ok(CompanionContainment::UnreadableMarker(file))
+        }
     };
     let target_real = match resolve_existing_realpath_f2(abs_target)? {
         Some(t) => t,
-        None => return Ok(false),
+        None => return Ok(CompanionContainment::Outside),
     };
-    is_under_root(&live, &target_real)
+    Ok(if is_under_root(&live, &target_real)? {
+        CompanionContainment::Inside
+    } else {
+        CompanionContainment::Outside
+    })
 }
 
 pub(crate) fn find_nested_checkout_dir(root_real: &str, abs_target: &str) -> R<Option<String>> {
@@ -1113,11 +1195,12 @@ pub(crate) fn is_registered_submodule(root_real: &str, nested_real: &str) -> R<b
 
 /// What `is_shared_nested_checkout_target` found.
 ///
-/// sfg-5 turned the old `bool` into three answers. The third one is the point:
-/// the strict session scan this primitive opens with can hit a session file
-/// that is present but unreadable, and that used to be `Err(Nd)` — a
+/// sfg-5 turned the old `bool` into three answers, and sfg-6 into four. The
+/// last two are the point: this primitive reads two `.bee` records that can be
+/// present but unreadable — a session file on the strict concurrency scan, and
+/// the companion marker on the mount check — and each used to be `Err(Nd)`, a
 /// DELEGATION, i.e. the whole write guard falling open on a real Edit or
-/// Write. It is a refusal now, and it carries the file so the refusal can
+/// Write. Both are refusals now, and each carries its file so the refusal can
 /// name it.
 pub(crate) enum SharedNested {
     /// Not a shared nested checkout (or no other live session).
@@ -1126,6 +1209,8 @@ pub(crate) enum SharedNested {
     Yes,
     /// A session record on the strict concurrency path could not be read.
     UnreadableSession(PathBuf),
+    /// `.bee/companion-session.json` is present but could not be read.
+    UnreadableCompanionMarker(PathBuf),
 }
 
 /// provenance: guards.mjs isSharedNestedCheckoutTarget (wcg-1/wcg-2,
@@ -1146,8 +1231,33 @@ pub(crate) fn is_shared_nested_checkout_target(
         Some(r) => r,
         None => return Ok(SharedNested::No),
     };
-    if target_inside_verified_companion_mount(root, abs_target)? {
-        return Ok(SharedNested::Yes);
+    // sfg-6: three answers here too, and the third one is REFUSED — never
+    // read as `Outside`.
+    //
+    // The choice was between refusing outright and treating the mount as
+    // unverified, and only one of them cannot open a door. "Unverified" is a
+    // positive claim: it says this target is not inside a companion mount, and
+    // the guard spends that claim by dropping the shared-checkout deny and
+    // falling through to the plain nested-`.git` scan below — which cannot
+    // cover a companion mount at all, because the mount is a SYMLINK whose
+    // realpath lands outside `root_real` and `find_nested_checkout_dir` stops
+    // there (pinned by `rows74_77_verified_companion_mount_exclusions`, row
+    // 77). So granting that claim off bytes the reader could not parse would
+    // let a write land inside another live session's checkout — the exact
+    // STR65 overwrite this primitive exists to prevent. It is the same
+    // fail-open, one layer down, spelled `No` instead of `Delegate`.
+    //
+    // Refusing states only what is true — the guard cannot tell — and closes
+    // every door while it is true. Same direction sfg-5 took for an unreadable
+    // session record, on this same primitive, one branch above; the cost is
+    // the same single refusal, cleared by repairing or deleting the file the
+    // refusal names.
+    match target_inside_verified_companion_mount(root, abs_target)? {
+        CompanionContainment::Inside => return Ok(SharedNested::Yes),
+        CompanionContainment::UnreadableMarker(file) => {
+            return Ok(SharedNested::UnreadableCompanionMarker(file))
+        }
+        CompanionContainment::Outside => {}
     }
     if let Some(nested) = find_nested_checkout_dir(&root_real, abs_target)? {
         if !is_registered_submodule(&root_real, &nested)? {
@@ -1175,6 +1285,29 @@ parsed, so this guard cannot tell whether another live session can also reach \"
 guard never falls open on data it merely read. Refusing this write instead of guessing. \
 FIX: repair or delete that session file (`bee state session release` writes a clean record for a \
 session that is finished), then retry.",
+        file.display()
+    )
+}
+
+/// The refusal for a companion marker the mount check cannot read (sfg-6).
+///
+/// Sibling of `unreadable_session_refusal`, same reason and same shape, and
+/// the same DELIBERATE DEPARTURE from Node parity: Node's read of
+/// `.bee/companion-session.json` throws, and the hook's typed detection-error
+/// deny quotes a V8-worded crash log this port cannot reproduce byte for byte.
+/// sfg-4's sweep and sfg-5's both passed over this one read; it was the last
+/// place in the module where a record the guard merely READ could switch the
+/// guard off. Matching a crash log is not worth a hole, so bee refuses in its
+/// own words, and the words carry what the crash log never did — the file, and
+/// how to clear it.
+pub(crate) fn unreadable_companion_marker_refusal(rel: &str, file: &Path) -> String {
+    format!(
+        "bee shared-checkout guard: the companion marker \"{}\" is present but could not be read \
+or parsed, so this guard cannot tell whether \"{rel}\" sits inside a verified companion mount that \
+another live session also writes to — and a guard never falls open on data it merely read. \
+Refusing this write instead of guessing. \
+FIX: repair or delete that marker file (the companion lifecycle writes it; `bee worktree new \
+--with-companion` creates a fresh worktree with a clean one), then retry.",
         file.display()
     )
 }
