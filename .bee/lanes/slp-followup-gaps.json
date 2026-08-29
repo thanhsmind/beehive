@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-followup-gaps",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"slp-followup-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Close the feature",
+  "next_action": "bee close finished \"slp-followup-gaps\" — feature is closed.",
   "created_at": "2026-08-29T03:41:16.254Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
