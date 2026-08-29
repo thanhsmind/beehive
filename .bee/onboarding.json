@@ -35,10 +35,10 @@
       "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
     },
     "prompts": {
-      "advisor.md": "8bbcb1b21c14e862023405f12a39d53bbc53f1705405e07a0fb92f0e17104824",
-      "gather.md": "4071b7a9f0234f98cb286c93392e56e73f32c3cebe79a543dffad26f951056b8",
-      "reviewer.md": "0360a3bae43ae56cad5dfb4df1cfb14d7ccef252c503a9da8b820c5807753d47",
-      "worker-cell.md": "e0ed6bb1c8023926929f6023d7c81dc18246163a85f21676f2ff033ae74d14f9"
+      "advisor.md": "5067a6c0b341ece8f96865418631d7406a75e53e663928581ca9c5af26efa0dc",
+      "gather.md": "1f2821b12577bd0e93002ad1d3207a127bd63c8bf7c0b9870244335b75899c95",
+      "reviewer.md": "7f7611b844cd8e48e5c95a5d22016605c40012b36c64b3d2663c012b64304e2b",
+      "worker-cell.md": "be8726820270b9d862d0578fde0a4c355b0674ec82964bf286b5234c08d7b446"
     },
     "repo_hooks": {
       ".codex/hooks.json": "c23084ec82ea0418547addc8e3fdf74ffc0fb2d65b7692f54ba5b95a94f8e4ae"
@@ -74,5 +74,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-28T14:40:43.211Z"
+  "updated_at": "2026-08-29T01:11:49.795Z"
 }

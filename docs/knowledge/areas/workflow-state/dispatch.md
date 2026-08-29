@@ -71,6 +71,25 @@ validates exactly those five keys (unknown key refused, missing keys named)
 into append-only `trace.report`; the flag absent keeps old finish behavior
 unchanged. Tending reads the form, never parses worker prose.
 
+**The user's verbatim request rides every dispatch
+(slp-contract-original-request, cell scor-1, 2026-08-29).** `dispatch prepare`
+reads the intent anchor and renders its `request` — unchanged, under the
+anchor's own DO-NOT-PARAPHRASE header — into a conditional
+`{{original_request}}` block carried by all four prompt templates
+(`worker-cell`, `gather`, `reviewer`, `advisor`). The var joins BOTH var
+slices of `prompt_body_for`: a template var missing from its arm's slice
+kills every dispatch of that kind at the door, while the same omission inside
+an `{{#if}}` is silent, so each kind owns a positive carrier test. Resolution
+is **feature-keyed only** — the cell's own `feature`, then the active feature
+from state, then nothing. The `default` key is never read from this door by
+any route, derivation included: the anchor carries no TTL and no staleness
+check, so a default anchor left by unrelated work days ago would be printed
+as the user's own words under a verbatim banner, which is exactly the
+meaning drift the rule exists to prevent. Nothing resolvable renders no
+block at all, byte-identically to the pre-anchor payload. The anchor itself
+is owned by
+[`../hook-runtime/the-intent-anchor-and-compaction-survival.md`](../hook-runtime/the-intent-anchor-and-compaction-survival.md).
+
 **B8 — Unified command discovery and dispatch.** Every workflow operation — all
 nine verb groups — is available both through its specialized entry point and
 through one unified entry point, and the unified side owns the single
@@ -132,6 +151,12 @@ decision 80b64c20).
   A gap between a handler's real flag usage and its declared registry schema
   is always closed by declaring the flag, never by loosening the validator
   (packages-engine-move D4; decisions 80b64c20, b0ef4f66).
+- R15 — The dispatch door renders the intent anchor's request verbatim into
+  every prompt kind, resolving the anchor by FEATURE only — the cell's own
+  feature, then the active feature — and never by the `default` or session
+  key. With nothing resolvable, every runtime × kind payload is byte-identical
+  to its pre-anchor bytes (slp-contract-original-request D5, D6; decisions
+  3899fa60, 9c0104e0).
 
 ## Edge Cases Settled
 

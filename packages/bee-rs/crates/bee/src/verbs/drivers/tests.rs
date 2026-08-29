@@ -7720,3 +7720,366 @@ advance_on — falling to another model there hides the defect (D11)"
             );
         }
     }
+
+    // ── slp-contract-original-request S1: the user's own words ride every
+    //    dispatch (D5, D6) ──────────────────────────────────────────────────
+    //
+    // Existing coverage judged first. `no_brief_leaves_every_runtime_and_kind_
+    // pair_exactly_as_it_was` already walks runtime × kind for byte identity,
+    // but it names the BRIEF and never writes an anchor, so it cannot tell an
+    // anchor that resolved to nothing from one that was never read. Nothing
+    // in this file writes `.bee/intent/*` at all. The cases below are that
+    // gap: the anchor resolving, the anchor deliberately NOT resolving, and
+    // what the request's own bytes may never do to the template.
+
+    /// The anchor's own framing, imported rather than retyped — a header edit
+    /// in `intent_group.rs` must move this assertion with it, not slip past.
+    use crate::verbs::intent_group::{
+        dispatch_original_request, PRECOMPACT_FOOTER, PRECOMPACT_HEADER,
+    };
+
+    /// The user's own words: punctuated, em-dashed and multi-line, so
+    /// "verbatim" means more than "a substring survived".
+    const ORIGINAL_REQUEST: &str = "Make the /orders endpoint idempotent under retries — the same Idempotency-Key must never\ncreate a second order, and please do NOT change the existing response shape.";
+
+    /// A repo with one claimed cell on feature `f`, ready for a dispatch of
+    /// any kind.
+    fn anchor_host(tmp: &tempfile::TempDir) -> PathBuf {
+        let root = repo(tmp, BRIEF_HOST);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"carry the request","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        root
+    }
+
+    /// An anchor on disk under `key`, in the shape `intent set` writes.
+    fn write_anchor(root: &Path, key: &str, request: &str) {
+        let body = serde_json::to_string(&json!({
+            "schema_version": "1.0",
+            "key": key,
+            "written_at": "2026-08-29T00:00:00.000Z",
+            "request": request,
+            "acceptance": "the user's words arrive unchanged",
+        }))
+        .unwrap();
+        w(root, &format!(".bee/intent/{key}.json"), &body);
+    }
+
+    /// Active work on `feature` — `active_feature` reads the phase first, so
+    /// an idle phase resolves to no feature no matter what the field says.
+    fn active_feature_is(root: &Path, feature: &str) {
+        w(root, ".bee/state.json", &format!(r#"{{"phase":"executing","feature":"{feature}"}}"#));
+    }
+
+    fn body_of_kind(root: &Path, runtime: &str, kind: &str) -> String {
+        let (cell, worker) = if kind == "cell" { (Some("c-1"), Some("w")) } else { (None, None) };
+        let Prepared::Value(v) =
+            prepare_dispatch(root, runtime, kind, cell, worker, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a {kind} envelope on {runtime}")
+        };
+        dispatched_body(&v)
+    }
+
+    /// The bytes the block adds, built from the anchor's own constants.
+    fn expected_block(request: &str) -> String {
+        format!("{PRECOMPACT_HEADER}\nORIGINAL REQUEST (verbatim):\n{request}\n{PRECOMPACT_FOOTER}")
+    }
+
+    /// The absent case, per runtime × kind. The non-cell kinds are compared
+    /// against `render(template, &[])` — the literal expression this door
+    /// used before any var existed — and the cell kind against a hand-written
+    /// literal of the seam the block lands in, so a stray newline on either
+    /// side of the marker is a red line rather than a silent reflow.
+    #[test]
+    fn no_resolvable_anchor_leaves_every_runtime_and_kind_pair_byte_identical() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = anchor_host(&tmp);
+                let body = body_of_kind(&root, runtime, kind);
+                assert!(
+                    !body.contains(PRECOMPACT_HEADER),
+                    "{runtime}/{kind}: no anchor resolved, so no block may render: {body}"
+                );
+                assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
+                if kind == "cell" {
+                    assert!(
+                        body.starts_with(
+                            "Nickname (reservation identity): w\nAssigned cell id: c-1\nFeature: f\n\nCell (authoritative — do not re-fetch):"
+                        ),
+                        "{runtime}/{kind}: the worker prompt head drifted: {body}"
+                    );
+                } else {
+                    assert_eq!(
+                        body,
+                        render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                        "{runtime}/{kind}: payload bytes drifted"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The carrier, per kind. This is the case a missed var slice fails:
+    /// `{{#if}}` over an absent variable is silently falsy, so the
+    /// byte-identity walk above would stay green with the block swallowed for
+    /// a whole kind.
+    #[test]
+    fn a_resolvable_anchor_rides_every_dispatch_kind_verbatim() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = anchor_host(&tmp);
+                active_feature_is(&root, "f");
+                write_anchor(&root, "f", ORIGINAL_REQUEST);
+                let body = body_of_kind(&root, runtime, kind);
+                assert_eq!(
+                    body.matches(&expected_block(ORIGINAL_REQUEST)).count(),
+                    1,
+                    "{runtime}/{kind}: the request must ride exactly once, under the anchor's own header: {body}"
+                );
+                assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
+            }
+        }
+    }
+
+    /// THE LOAD-BEARING ONE. `read_anchor_at` applies no TTL and no staleness
+    /// check, and the default key is where a session with no feature parks its
+    /// anchor — so a featureless dispatch that walked to `default` would print
+    /// somebody else's days-old request under a DO-NOT-PARAPHRASE banner. It
+    /// renders nothing instead, by every route: no key at all, an active
+    /// feature whose own anchor is missing, and a feature slug that
+    /// `sanitize_intent_key` collapses onto the default key.
+    #[test]
+    fn a_featureless_dispatch_reads_no_default_anchor_even_when_one_exists() {
+        const STALE: &str = "four days ago, about an unrelated and already-shipped bug";
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in ["gather", "reviewer", "advisor"] {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = repo(&tmp, BRIEF_HOST);
+                write_anchor(&root, "default", STALE);
+                let body = body_of_kind(&root, runtime, kind);
+                assert!(!body.contains(STALE), "{runtime}/{kind}: read a stale default anchor");
+                assert_eq!(
+                    body,
+                    render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                    "{runtime}/{kind}: payload bytes drifted"
+                );
+            }
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        write_anchor(&root, "default", STALE);
+        assert_eq!(dispatch_original_request(&root, None), None, "no key resolves to no request");
+        assert_eq!(
+            dispatch_original_request(&root, Some("default")),
+            None,
+            "the default key is refused even when it is asked for by name"
+        );
+        assert_eq!(
+            dispatch_original_request(&root, Some("***")),
+            None,
+            "a slug that sanitizes to \"default\" must not reach the default anchor"
+        );
+        assert_eq!(dispatch_original_request(&root, Some("f")), None, "no anchor at key f");
+        // An idle phase is no active feature, even with the field set.
+        w(&root, ".bee/state.json", r#"{"phase":"idle","feature":"f"}"#);
+        write_anchor(&root, "f", "the feature's own words");
+        assert_eq!(dispatch_original_request(&root, None), None, "idle resolves no feature");
+        active_feature_is(&root, "f");
+        assert_eq!(
+            dispatch_original_request(&root, None).as_deref(),
+            Some("the feature's own words"),
+            "an ACTIVE feature is the one fallback this door takes"
+        );
+    }
+
+    /// The cell's own feature is read first; the active feature is the second
+    /// candidate, not the first.
+    #[test]
+    fn a_cell_dispatch_reads_its_own_features_anchor_before_the_active_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "other");
+        write_anchor(&root, "f", "the cell's own feature asked for this");
+        write_anchor(&root, "other", "a different feature asked for that");
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(body.contains("the cell's own feature asked for this"), "{body}");
+        assert!(!body.contains("a different feature asked for that"), "{body}");
+
+        // …and with no anchor under the cell's feature, the active feature is
+        // the documented second candidate.
+        std::fs::remove_file(root.join(".bee").join("intent").join("f.json")).unwrap();
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(body.contains("a different feature asked for that"), "{body}");
+    }
+
+    /// A request is DATA. It is substituted in pass 2, which walks the
+    /// pre-substitution text, so template syntax inside the user's words is
+    /// carried as characters and never interpreted — and the placeholders it
+    /// names are not re-expanded.
+    #[test]
+    fn a_request_carrying_template_syntax_is_carried_as_text() {
+        const INJECT: &str =
+            "Render {{worker}} and {{#if brief}}this{{/if}} literally — do not expand {{cell_json}}.";
+        for kind in DISPATCH_KINDS {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            write_anchor(&root, "f", INJECT);
+            let body = body_of_kind(&root, "claude", kind);
+            assert_eq!(
+                body.matches(&expected_block(INJECT)).count(),
+                1,
+                "{kind}: the request's own braces must survive verbatim: {body}"
+            );
+        }
+    }
+
+    /// Non-ASCII survives byte for byte — the renderer walks chars, and a
+    /// truncation or a re-encode would show up here first.
+    #[test]
+    fn a_non_ascii_request_survives_byte_for_byte() {
+        const VI: &str =
+            "Hãy giữ nguyên yêu cầu của tôi — đừng tóm tắt, đừng diễn giải lại. 🐝 Ünïcödé ok?";
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "f");
+        write_anchor(&root, "f", VI);
+        for kind in DISPATCH_KINDS {
+            let body = body_of_kind(&root, "claude", kind);
+            assert_eq!(body.matches(&expected_block(VI)).count(), 1, "{kind}: {body}");
+        }
+        assert_eq!(dispatch_original_request(&root, Some("f")).as_deref(), Some(VI));
+    }
+
+    /// A blank request is no anchor at all: `{{#if}}` truthiness is
+    /// `!is_empty()`, so a whitespace request that reached the var would
+    /// splice an EMPTY block where today's bytes are.
+    #[test]
+    fn a_whitespace_only_request_is_no_request_at_all() {
+        for blank in ["   ", "\n\n", " \t \r\n  \n"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            write_anchor(&root, "f", blank);
+            assert_eq!(
+                dispatch_original_request(&root, Some("f")),
+                None,
+                "a request of {blank:?} must read as absent"
+            );
+            for kind in DISPATCH_KINDS {
+                let body = body_of_kind(&root, "claude", kind);
+                assert!(!body.contains(PRECOMPACT_HEADER), "{kind}: {body}");
+                if kind != "cell" {
+                    assert_eq!(body, render(&load_prompt(kind).unwrap(), &[]).unwrap(), "{kind}");
+                }
+            }
+        }
+    }
+
+    /// Error cascade: an unusable anchor degrades to "no anchor" and never
+    /// fails the dispatch. Corrupt bytes, a non-object payload, and a record
+    /// with no `request` field all land in the same place.
+    #[test]
+    fn an_unusable_anchor_degrades_to_no_block_and_never_fails_the_dispatch() {
+        for payload in ["{broken", "[]", r#""just a string""#, r#"{"acceptance":"no request"}"#] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            w(&root, ".bee/intent/f.json", payload);
+            assert_eq!(
+                dispatch_original_request(&root, Some("f")),
+                None,
+                "an anchor of {payload:?} must read as absent"
+            );
+            for kind in DISPATCH_KINDS {
+                let body = body_of_kind(&root, "claude", kind);
+                assert!(!body.contains(PRECOMPACT_HEADER), "{kind}/{payload:?}: {body}");
+                if kind != "cell" {
+                    assert_eq!(
+                        body,
+                        render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                        "{kind}/{payload:?}: payload bytes drifted"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Why the var had to join BOTH slices: pass 2 refuses a bare `{{NAME}}`
+    /// with no supplied value. Inside an `{{#if}}` the same omission is
+    /// SILENT, which is exactly why the per-kind carrier case above exists.
+    #[test]
+    fn a_template_var_missing_from_its_arms_slice_fails_loudly() {
+        let err = render("Head: {{original_request}}\n", &[("brief", "")]).unwrap_err();
+        assert!(
+            err.contains("no value supplied for placeholder {{original_request}}"),
+            "the refusal must name the placeholder: {err}"
+        );
+        assert!(render("Head: {{original_request}}\n", &[("original_request", "")]).is_ok());
+        // The silent half, stated so the asymmetry is on the record.
+        assert_eq!(
+            render("A\n{{#if original_request}}\nB\n{{/if}}\nC", &[]).unwrap(),
+            "A\nC",
+            "an absent var inside an if-block is dropped, not refused"
+        );
+    }
+
+    /// Every template that declares the block declares it the same way, and
+    /// the shipped copies on disk match the compiled-in bytes — a prompt edit
+    /// and a rebuilt vendored twin are one unit of work.
+    #[test]
+    fn every_template_carries_the_original_request_block_and_matches_disk() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        for name in ["worker-cell", "gather", "reviewer", "advisor"] {
+            assert!(
+                prompts_match_disk(&repo_root, name),
+                "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
+                 compiled-in template — run `bee dev regen` and rebuild"
+            );
+            let template = load_prompt(name).unwrap();
+            let at = template
+                .find("{{#if original_request}}")
+                .unwrap_or_else(|| panic!("{name}.md carries no original_request block"));
+            assert!(at > 0, "{name}: a block at byte 0 has no leading newline to consume");
+            assert_eq!(&template[at - 1..at], "\n", "{name}: the marker needs its leading newline");
+            assert!(
+                template.contains("{{original_request}}"),
+                "{name}: the block must hold the placeholder"
+            );
+            // The rest of the arm's slice, so the comparison isolates the one
+            // var under test. `worker-cell` carries bare placeholders that
+            // pass 2 refuses when unsupplied, so they cannot be left out.
+            let without: Vec<(&str, &str)> = if name == "worker-cell" {
+                vec![
+                    ("worker", ""),
+                    ("cell_id", ""),
+                    ("feature", ""),
+                    ("cell_json", ""),
+                    ("learned_context", ""),
+                    ("expertise", ""),
+                    ("prior_rounds", ""),
+                    ("worktree_root", ""),
+                    ("control_root", ""),
+                ]
+            } else {
+                vec![("brief", ""), ("expertise", "")]
+            };
+            let mut with = without.clone();
+            with.push(("original_request", ""));
+            assert_eq!(
+                render(&template, &without).unwrap(),
+                render(&template, &with).unwrap(),
+                "{name}: an empty request must leave zero residue bytes"
+            );
+        }
+    }

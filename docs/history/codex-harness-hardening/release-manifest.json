@@ -1336,28 +1336,28 @@
     },
     {
       "path": "packages/bee/prompts/advisor.md",
-      "sha256": "8bbcb1b21c14e862023405f12a39d53bbc53f1705405e07a0fb92f0e17104824",
+      "sha256": "5067a6c0b341ece8f96865418631d7406a75e53e663928581ca9c5af26efa0dc",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/advisor.md"
     },
     {
       "path": "packages/bee/prompts/gather.md",
-      "sha256": "4071b7a9f0234f98cb286c93392e56e73f32c3cebe79a543dffad26f951056b8",
+      "sha256": "1f2821b12577bd0e93002ad1d3207a127bd63c8bf7c0b9870244335b75899c95",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/gather.md"
     },
     {
       "path": "packages/bee/prompts/reviewer.md",
-      "sha256": "0360a3bae43ae56cad5dfb4df1cfb14d7ccef252c503a9da8b820c5807753d47",
+      "sha256": "7f7611b844cd8e48e5c95a5d22016605c40012b36c64b3d2663c012b64304e2b",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/reviewer.md"
     },
     {
       "path": "packages/bee/prompts/worker-cell.md",
-      "sha256": "e0ed6bb1c8023926929f6023d7c81dc18246163a85f21676f2ff033ae74d14f9",
+      "sha256": "be8726820270b9d862d0578fde0a4c355b0674ec82964bf286b5234c08d7b446",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/worker-cell.md"
