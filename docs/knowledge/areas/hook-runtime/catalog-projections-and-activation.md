@@ -54,9 +54,12 @@ definition.
   repository-local extension the runtime auto-discovers from the workspace
   working directory, shipped out of bee's own checkout by the onboarding copy
   step, translating that runtime's events onto the identical helper commands
-  (pi-support D1, D2). Its blocking checkpoints fail closed and its advisory
-  ones fail open, exactly as the sibling belt's do (pi-support D3). This belt
-  carries one exclusion of its own, described in B9.
+  (pi-support D1/D2). Its blocking checkpoints fail closed and its advisory
+  ones fail open, exactly as the sibling belt's do (pi-support D3). Context
+  rides the belt on Pi's own cadence: the full session preamble injects once
+  per `session_start` (cached, reload-idempotent) and each turn appends only
+  the existing `prompt-context` output as the slim delta (pi-support D8).
+  This belt carries one exclusion of its own, described in B9.
 
 ## Data Dictionary
 

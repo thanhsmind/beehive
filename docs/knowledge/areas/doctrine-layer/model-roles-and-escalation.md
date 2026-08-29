@@ -190,6 +190,18 @@ display-only law of B12 stands (lane-model-diversity D3, venue decision).
 The two procedure homes in `gates-and-delegation.md` name the seats and
 point back at `SEAT_ROLES` as the constant of record (D5).
 
+**B16 — `models.pi` is a herding-only role table with a settled value set**
+(pi-support D5/D6). The pi runtime resolves roles from the same one config
+home, but every slot must resolve `kind: herding` — the dispatch door's
+`pi_requires_herding` refusal covers plain-string, native, cli, budget and
+the escalation path by construction, because Pi has no subagent surface.
+The settled values (pi-support D6): heavy roles (code, test, docs, review)
+ride herding agents running `claude --model opus`, advisor rides
+`claude --model fable`, and the cheap roles (read, extraction, generation,
+supervisor) ride `agy-flash` — herding constrains the transport, never the
+model vendor. Preview status: not production until `pi-result-mailbox`
+lands (see `docs/config-reference.md`, "Pi — models.pi is herding-only").
+
 ## The one deliberate silent case
 
 Every rule above refuses or warns rather than resolving silently, with a single

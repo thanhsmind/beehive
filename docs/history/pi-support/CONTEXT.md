@@ -85,14 +85,18 @@ must feel nothing except D3's blocking rule when bee IS present.
 - [x] D7 split — CONFIRMED by the user at Gate 1 (2026-08-29); recorded in the store.
 - [x] Preamble cost — RESOLVED as D8 (once per session_start + slim per-turn delta); recorded in the store.
 
+<!-- bee:not-a-deferral: both questions were answered in execution (pis-1, commit 9a36fe28): the carrier is before_agent_start per D8, and detection is the candidateBinaries chain — cwd .bee then git-common-dir main root, checked per call. This section records the shaping→planning handoff; it promises no future work -->
 ### Deferred To Planning
 
-- [ ] Whether Pi's `input` event or `before_agent_start` is the right prompt-context carrier (read both docs sections at the version installed).
-- [ ] How the belt detects "bee repo" cheaply (presence of `.bee/bin/bee` at cwd vs git-common-dir walk like the Claude hooks do).
+- [x] Prompt-context carrier — ANSWERED: `before_agent_start` (D8; pis-1).
+- [x] Bee-repo detection — ANSWERED: cwd `.bee` then git-common-dir main-root walk, checked per call (pis-1).
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: template boilerplate describing how planning consumes this record — machinery description, not a promise to act later -->
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads
 locked decisions, code context, canonical references, and
 deferred-to-planning questions. Planning's Gate 2 shape stage and reviewing
 use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->
