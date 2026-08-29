@@ -358,7 +358,7 @@ pub(crate) fn check_workspace_ownership(control_root: &str, ctx: &JsCtx, session
         // sfg-4: infallible now. A `last_heartbeat` this reader cannot parse
         // is no evidence the owner went away, so the owner reads LIVE and
         // this guard REFUSES the write — it never falls open.
-        Some(s) => !heartbeat_stale(&s, now_ms()),
+        Some(s) => !heartbeat_stale(control_root, &s, now_ms()),
         None => false,
     };
     if !live {
@@ -463,7 +463,12 @@ FIX: inspect/restore the reservation store, then retry.",
                 res_rel
             )));
         }
-        let hold_conflicts = find_session_conflicts(root, sid, &[normalized.clone()])?;
+        // sfg-5: infallible now. These lease readers used to `?` a
+        // `date_parse_ms` error out of `check_write` to `emit_undecidable`, so
+        // ONE lease file carrying an unreadable `expires_at` switched the whole
+        // guard off. An unreadable expiry is NOT expired — the lease still
+        // conflicts, and this deny still fires.
+        let hold_conflicts = find_session_conflicts(root, sid, &[normalized.clone()]);
         if !hold_conflicts.is_empty() {
             let acting_workspace = ctx.workspace_id.clone().unwrap_or_else(|| "main".to_string());
             let mut same_workspace: Vec<&Resv> = Vec::new();
@@ -481,7 +486,7 @@ Wait for the hold to expire or coordinate with that session — a cross-session 
                     js_disp_opt(holder.session.as_ref()),
                     js_disp_opt(holder.agent.as_ref()),
                     js_disp_opt(holder.cell.as_ref()),
-                    hold_expiry(holder)?
+                    hold_expiry(holder)
                 )));
             }
         }
@@ -497,7 +502,9 @@ treating it as empty. FIX: inspect/restore the ledger in the main checkout, then
                     .to_string(),
             ));
         }
-        let foreign = find_foreign_holds(&main_root, &holder_id, &[normalized.clone()])?;
+        // sfg-5: infallible now, same class as the lease readers above — an
+        // unreadable `mirrored_at` is not evidence the hold lapsed.
+        let foreign = find_foreign_holds(&main_root, &holder_id, &[normalized.clone()]);
         if let Some(hold) = foreign.first() {
             let feature_disp = match hold.get("feature") {
                 Some(v) if truthy(v) => js_disp(v),
@@ -515,7 +522,7 @@ Wait for the hold to expire or coordinate with that checkout — a cross-worktre
                     js_disp_opt(hold.get("holder")),
                     feature_disp,
                     cell_clause,
-                    foreign_hold_expiry(hold)?
+                    foreign_hold_expiry(hold)
                 )));
             }
             return Ok(WV::AllowWarn(format!(
@@ -527,7 +534,7 @@ between the two checkouts at merge time.",
                 js_disp_opt(hold.get("holder")),
                 feature_disp,
                 cell_clause,
-                foreign_hold_expiry(hold)?
+                foreign_hold_expiry(hold)
             )));
         }
     }
@@ -634,7 +641,7 @@ Get execution approval (bee-hive) before touching source files.",
             .map(|s| s.to_string())
             .or(env_agent);
         if let Some(agent) = agent {
-            let conflicts = find_conflicts(root, &agent, &[normalized.clone()])?;
+            let conflicts = find_conflicts(root, &agent, &[normalized.clone()]);
             if !conflicts.is_empty() {
                 let hard: Vec<&Resv> =
                     conflicts.iter().filter(|c| is_hard_conflict(c, &normalized)).collect();

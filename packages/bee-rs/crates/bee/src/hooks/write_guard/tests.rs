@@ -1613,7 +1613,7 @@ use std::process::ExitCode;
         add_released_session(&fx.root, "other-released");
         let root_s = fx.root.to_string_lossy().into_owned();
         assert!(
-            !is_concurrent_mode(&root_s, None, false).unwrap(),
+            !is_concurrent_mode(&root_s, None),
             "a released session must not count toward concurrent mode"
         );
         assert!(
@@ -2630,6 +2630,262 @@ use std::process::ExitCode;
         assert_eq!(deny.code, 2, "{}", deny.stderr);
     }
 
+    // ── sfg-5 (slp-followup-gaps): the LEASE and HOLD readers, the strict
+    // session read, and the lockout warning ────────────────────────────────
+
+    /// A path lease carrying arbitrary `acquired_at` / `expires_at` values —
+    /// `seed_lease` writes only well-formed RFC3339 stamps, and the whole
+    /// point here is the stamps a reader cannot turn into milliseconds.
+    fn seed_lease_with_stamps(
+        root: &Path,
+        path: &str,
+        agent: &str,
+        cell: &str,
+        session: Option<&str>,
+        acquired_at: Value,
+        expires_at: Value,
+    ) {
+        let dir = root.join(".bee").join("runtime").join("leases").join("paths");
+        std::fs::create_dir_all(&dir).unwrap();
+        let record = json!({
+            "resource": format!("path:{}", res_normalize_path(path)),
+            "mode": "write",
+            "workflow_id": cell,
+            "session_id": session.unwrap_or(SESSIONLESS_SESSION_ID),
+            "workspace_id": format!("agent:{}", agent),
+            "epoch": 0,
+            "acquired_at": acquired_at,
+            "expires_at": expires_at,
+            "kind": "lease"
+        });
+        let n = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
+        std::fs::write(
+            dir.join(format!("lease-{n}.json")),
+            format!("{}\n", serde_json::to_string_pretty(&record).unwrap()),
+        )
+        .unwrap();
+    }
+
+    // The stamp table is sfg-3's `unparseable_stamps` — the same
+    // `date_parse_ms` `Err(Nd)` arms, read here off a LEASE or a HOLD instead
+    // of a claim. (The absent / null / blank arms are `Ok(None)` and were
+    // never the bug.)
+
+    /// The escape sfg-4 missed, one call frame further out: the cross-session
+    /// hold guard reads every path lease through `list_active_reservations` →
+    /// `lease_record_expired` / `lease_to_reservation`, both of which read
+    /// their stamps through `date_parse_ms(..)?`. `list_path_lease_records`
+    /// validates NO timestamp, so ONE lease file carrying
+    /// `"expires_at": "tomorrow"` reached `emit_undecidable` — exit 0, "the
+    /// guard did NOT run on it" — and turned the WHOLE write guard off. The
+    /// restrictive read: an expiry the reader cannot parse is NOT expired, so
+    /// the lease still conflicts and still denies.
+    #[test]
+    fn sfg5_a_malformed_lease_stamp_never_stops_the_guard() {
+        for stamp in unparseable_stamps() {
+            for (acquired, expires) in [
+                (json!("2026-01-01T00:00:00.000Z"), stamp.clone()),
+                (stamp.clone(), json!("2999-01-01T00:00:00.000Z")),
+                (stamp.clone(), stamp.clone()),
+            ] {
+                let fx = build_fixture("swarming", true);
+                add_live_session(&fx.root, "other");
+                seed_lease_with_stamps(
+                    &fx.root,
+                    "src/held.txt",
+                    "otto",
+                    "cell-9",
+                    Some("other"),
+                    acquired.clone(),
+                    expires.clone(),
+                );
+                let e = expect_done(
+                    json!({
+                        "tool_name": "Edit",
+                        "tool_input": { "file_path": "src/held.txt" },
+                        "session_id": "mine"
+                    }),
+                    &fx.root,
+                );
+                assert_eq!(e.code, 2, "{acquired}/{expires}: {}", e.stderr);
+                assert!(
+                    e.stderr.contains("bee cross-session hold"),
+                    "{acquired}/{expires}: {}",
+                    e.stderr
+                );
+            }
+        }
+    }
+
+    /// The second lease call site — `find_conflicts`, the agent-scoped
+    /// reservation deny in `swarming`. Same reader, same `Err(Nd)`, same
+    /// fail-OPEN; and the same restrictive answer keeps the refusal.
+    #[test]
+    fn sfg5_a_malformed_lease_stamp_still_lets_the_reservation_guard_refuse() {
+        for stamp in unparseable_stamps() {
+            let fx = build_fixture("swarming", true);
+            seed_lease_with_stamps(
+                &fx.root,
+                "src/held.txt",
+                "otto",
+                "cell-9",
+                None,
+                stamp.clone(),
+                stamp.clone(),
+            );
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "src/held.txt" },
+                    "agent_name": "mel"
+                }),
+                &fx.root,
+            );
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(e.stderr.contains("bee reservation conflict"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The third lease call site — `resolve_live_worker_count` (paths.rs),
+    /// which `check_git_bash_command` reads for the gc-2 whole-tree denial. A
+    /// lease the reader cannot date used to switch that guard off too;
+    /// unparseable-is-not-expired keeps both workers counted and the bare
+    /// `git commit` REFUSED.
+    #[test]
+    fn sfg5_a_malformed_lease_stamp_never_stops_the_live_worker_count() {
+        for stamp in unparseable_stamps() {
+            let fx = build_git_fixture("swarming");
+            for (agent, cell) in [("wk-a", "c-1"), ("wk-b", "c-2")] {
+                seed_lease_with_stamps(
+                    &fx.root,
+                    &format!("src/{cell}.txt"),
+                    agent,
+                    cell,
+                    None,
+                    stamp.clone(),
+                    stamp.clone(),
+                );
+            }
+            let e = expect_done(bash("git commit -m wip"), &fx.root);
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(
+                e.stderr.contains("bee concurrent-worker git guard"),
+                "stamp {stamp}: {}",
+                e.stderr
+            );
+            assert!(e.stderr.contains("2 workers are live"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The HOLD half of the same defect: `find_foreign_holds` read
+    /// `mirrored_at` through `date_parse_ms(..)?`, and `foreign_hold_expiry`
+    /// read it a second time for the refusal text. A mirrored hold row with an
+    /// unreadable stamp switched the cross-worktree guard off. Unparseable is
+    /// NOT expired, so the hold stays active and denies.
+    #[test]
+    fn sfg5_a_malformed_hold_stamp_never_stops_the_guard() {
+        for stamp in unparseable_stamps() {
+            let wtf = build_worktree_first("swarming", "standard", true);
+            let dir = wtf.root.join(".bee").join("runtime");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(
+                dir.join("cross-worktree-holds.json"),
+                format!(
+                    "{}\n",
+                    serde_json::to_string_pretty(&json!({ "holds": [{
+                        "path": "Cargo.lock",
+                        "holder": "some-other-checkout",
+                        "feature": "other",
+                        "session": "s-other",
+                        "cell": "c-1",
+                        "ttl_seconds": 3600,
+                        "mirrored_at": stamp.clone(),
+                        "released_at": Value::Null
+                    }] }))
+                    .unwrap()
+                ),
+            )
+            .unwrap();
+            // An EXCLUSIVE path (DEFAULT_EXCLUSIVE_PATHS), so the foreign hold
+            // is a hard block rather than the advisory arm — the verdict this
+            // reader used to switch off entirely.
+            let e = expect_done(edit("Cargo.lock"), &wtf.wt_root);
+            assert_eq!(e.code, 2, "stamp {stamp}: {}", e.stderr);
+            assert!(e.stderr.contains("bee cross-worktree hold"), "stamp {stamp}: {}", e.stderr);
+            // The expiry clause is a display string, never a verdict: a stamp
+            // it cannot render says so instead of claiming "no expiry".
+            assert!(e.stderr.contains("expiry unknown"), "stamp {stamp}: {}", e.stderr);
+        }
+    }
+
+    /// The escape sfg-4 deliberately LEFT, closed here.
+    /// `is_shared_nested_checkout_target` sits on the hook's own `R<..>` path
+    /// and runs for every Edit/Write with a resolvable target, so one
+    /// truncated `.bee/sessions/<id>.json` made `read_session_strict` answer
+    /// `Err(Nd)` and the whole guard fell open on a real write. A guard never
+    /// falls open on data it merely read: it DENIES, in bee's own words,
+    /// naming the file and the remedy.
+    #[test]
+    fn sfg5_an_unreadable_session_file_denies_instead_of_falling_open() {
+        for bad in ["", "{ not json", "\u{0}\u{1}\u{2}"] {
+            let fx = build_fixture("swarming", true);
+            let nested = fx.root.join("repo");
+            std::fs::create_dir_all(nested.join(".git")).unwrap();
+            std::fs::write(nested.join("foo.js"), "// nested plain\n").unwrap();
+            let sessions = fx.root.join(".bee").join("sessions");
+            std::fs::create_dir_all(&sessions).unwrap();
+            std::fs::write(sessions.join("broken.json"), bad).unwrap();
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "repo/foo.js" },
+                    "session_id": "me"
+                }),
+                &fx.root,
+            );
+            assert_eq!(e.code, 2, "{bad:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee shared-checkout guard"), "{bad:?}: {}", e.stderr);
+            assert!(e.stderr.contains("broken.json"), "{bad:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee state session release"), "{bad:?}: {}", e.stderr);
+        }
+    }
+
+    /// The lockout sfg-4 opened, made visible. An unparseable `last_heartbeat`
+    /// reads as a LIVE session forever with no time-based self-heal, so one
+    /// bad owner record can refuse every other session in the checkout. The
+    /// restrictive read STAYS — reopening the door would restore the
+    /// fail-open — but the refusal is never silent: the reader names the file
+    /// and the remedy on stderr, so a human sees WHY.
+    #[test]
+    fn sfg5_an_unparseable_heartbeat_lockout_is_never_silent() {
+        for beat in unparseable_stamps() {
+            let fx = build_fixture("idle", false);
+            add_live_session(&fx.root, "sess-1");
+            add_session_with_heartbeat(&fx.root, "sess-owner", beat.clone());
+            write_owned_workspace(&fx.root, "main", "sess-owner");
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "src/app.js" },
+                    "session_id": "sess-1"
+                }),
+                &fx.root,
+            );
+            // Queued for flush(), exactly like the corrupt-JSON warning — so
+            // it never leaks on a delegating run, and it DOES reach stderr
+            // ahead of the refusal on every native verdict.
+            let warned = take_corrupt_json_warnings();
+            assert_eq!(e.code, 2, "beat {beat}: {}", e.stderr);
+            // The refusal itself is unchanged (sfg-4 pins it); what is new is
+            // that the unreadable record is NAMED, with its remedy.
+            assert!(warned.contains("sess-owner.json"), "beat {beat}: {warned}");
+            assert!(warned.contains("last_heartbeat"), "beat {beat}: {warned}");
+            assert!(warned.contains("bee state session release"), "beat {beat}: {warned}");
+            // One line per file, not one per read.
+            assert_eq!(warned.matches("sess-owner.json").count(), 1, "beat {beat}: {warned}");
+        }
+    }
+
     // ── staging-lane D0 teeth #2: a direct `git commit` inside the
     // REGISTERED staging worktree is refused unless BEE_STAGING_MACHINERY=1
     // is set — phase-independent, like gc-2, so `build_linked`'s "swarming"
@@ -3637,14 +3893,26 @@ use std::process::ExitCode;
         Fx { _dir: dir, root }
     }
 
+    /// sfg-5: the primitive answers three ways now. These rows all read the
+    /// shared/not-shared verdict; the third answer (an unreadable session
+    /// record) is its own refusal, pinned by
+    /// `sfg5_an_unreadable_session_file_denies_instead_of_falling_open`, and
+    /// none of these fixtures can produce it.
     fn flagged(root: &Path, target: &Path) -> bool {
-        is_shared_nested_checkout_target(
+        match is_shared_nested_checkout_target(
             &root.to_string_lossy(),
             &target.to_string_lossy(),
             None,
             None,
         )
         .expect("primitive must decide natively")
+        {
+            SharedNested::Yes => true,
+            SharedNested::No => false,
+            SharedNested::UnreadableSession(f) => {
+                panic!("fixture wrote no unreadable session record, got {}", f.display())
+            }
+        }
     }
 
     #[test]
