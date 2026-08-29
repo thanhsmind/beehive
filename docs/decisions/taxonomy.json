@@ -449,6 +449,7 @@
     "pi-support",
     "models",
     "hat-wave",
-    "context"
+    "context",
+    "pi-result-mailbox"
   ]
 }

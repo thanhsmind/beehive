@@ -1,0 +1,78 @@
+{
+  "id": "prm-5",
+  "feature": "pi-result-mailbox",
+  "title": "Ignore the result-inbox tree and teach the pi dispatch payload the inbox flag",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "prm-1"
+  ],
+  "decisions": [
+    "D6",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-result-mailbox/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee",
+  "action": "(1) onboard/templates.rs:68 ignore-block list gains .bee/result-inbox/ beside .bee/mailbox/ so detached-run markers never litter git status; extend the template test if it pins the list. (2) prepare.rs: the pi-runtime herding payload (the rendered bee herding run command/instruction) names --inbox-session and instructs passing the orchestrator session token the preamble shows, so a detached pi dispatch is findable by the drain (plan Approach 2). No other payload change.",
+  "must_haves": {
+    "truths": [
+      "the ignore template carries .bee/result-inbox/",
+      "the pi herding payload mentions --inbox-session"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "substantive": "result-inbox ignore entry"
+      }
+    ],
+    "key_links": [
+      "ignore entry rides the generated block, not a hand edit of .gitignore"
+    ],
+    "prohibitions": [
+      "No envelope or marker format change",
+      "No change outside the two named files"
+    ]
+  },
+  "trace": {
+    "worker": "prm-w5",
+    "outcome": "result-inbox joins the generated ignore block; the pi herding payload carries a detached_delivery instruction naming --inbox-session",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "deviations": [
+      "added a local #[cfg(test)] mod detached_delivery_tests inside prepare.rs — the truth \"the pi herding payload mentions --inbox-session\" needed a pinning test and the file already hosts two local test modules; stayed inside the two named files — scope-preserving"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T17:41:12.834Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T17:36:58.597Z",
+    "report": {
+      "outcome": "result-inbox joins the generated ignore block; the pi herding payload carries a detached_delivery instruction naming --inbox-session",
+      "commit": "4159deb1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee — green (3176 passed, 0 failed) — the cell verify: both edited files live in the bee bin crate, and the onboarding template + dispatch payload tests both run in it",
+      "deviations": [
+        "added a local #[cfg(test)] mod detached_delivery_tests inside prepare.rs — the truth \"the pi herding payload mentions --inbox-session\" needed a pinning test and the file already hosts two local test modules; stayed inside the two named files — scope-preserving"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

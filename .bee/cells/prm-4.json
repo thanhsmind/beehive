@@ -1,0 +1,101 @@
+{
+  "id": "prm-4",
+  "feature": "pi-result-mailbox",
+  "title": "Lift the pi non-production caveat with honest replacement text",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "prm-1",
+    "prm-2"
+  ],
+  "decisions": [
+    "D7",
+    "D1"
+  ],
+  "files": [
+    ".bee/config-sample.json",
+    "docs/config-reference.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "read_first": [
+    "docs/history/pi-result-mailbox/CONTEXT.md",
+    "docs/history/pi-result-mailbox/plan.md"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [],
+  "verify": "rg -c \"pi-result-mailbox\" docs/config-reference.md && rg -n \"report_path\" skills/bee-swarming/references/swarming-reference.md docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Replace the not-production-until-pi-result-mailbox caveat at ALL sites: .bee/config-sample.json:28 pi_note (compiled via include_str! — run the onboard template test), docs/config-reference.md:182/226/448, catalog-projections-and-activation.md:250, model-roles-and-escalation.md:202. Replacement text names the delivered contract AND its real limits: async delivery is at-least-once (job-id dedupe), the drain needs a live Pi session, the sync bee herding run path is the primary contract. Update the envelope documentation: swarming-reference.md:450-456 gains report_path/report_note as additive keys; knowledge homes the-run-verb-and-worker-outcomes.md (envelope law section ~211) and handing-a-foreign-agent-its-brief.md (report-first instruction) gain the report contract and the --inbox-session marker fact.",
+  "must_haves": {
+    "truths": [
+      "no site still says not production",
+      "every replacement names at-least-once"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "caveat replaced at all three lines with the limits text"
+      }
+    ],
+    "key_links": [
+      "envelope doc matches the additive-key law"
+    ],
+    "prohibitions": [
+      "No procedure changes beyond the named sites"
+    ]
+  },
+  "trace": {
+    "worker": "prm-w4",
+    "outcome": "Lifted the pi not-production caveat at every site with text naming the delivered result contract and its at-least-once limits",
+    "files_changed": [
+      ".bee/config-sample.json",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+    ],
+    "deviations": [
+      "Renamed the config-reference heading (dropped the (preview) suffix) and updated both in-file anchor links — a heading that still said preview was the same standing lie as the callout under it — form deviation, in-scope file",
+      "Cleared two extra preview mentions the cell action did not enumerate (.bee/config-sample.json herding note, catalog-projections-and-activation.md:144) — both inside cell-named files and both said the same retired thing — scope-completion, must_have no site still says not production",
+      "Committed with an explicit -- pathspec through the shared index guard, excluding prm-w3's in-flight tests/pi_plugin_contracts.rs — concurrency hygiene, not a scope change"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T17:51:19.059Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T17:45:09.719Z",
+    "report": {
+      "outcome": "Lifted the pi not-production caveat at every site with text naming the delivered result contract and its at-least-once limits",
+      "commit": "c4f35bce88eba0e08abe8727ff1dce76385d6a17",
+      "files": [
+        ".bee/config-sample.json",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+      ],
+      "tests": "cargo test -p bee --bin bee onboard::templates (6 passed) + cell verify (rg pi-result-mailbox docs/config-reference.md = 1; report_path present in swarming-reference.md and the-run-verb doc) + caveat/anchor parity scan (zero preview or not-production hits near pi; both #pi--modelspi-is-herding-only links match the edited heading) — green — docs-only change: the compiled sample is include_str!-embedded so its parse test is the code proof, the rest are pointer and parity checks",
+      "deviations": [
+        "Renamed the config-reference heading (dropped the (preview) suffix) and updated both in-file anchor links — a heading that still said preview was the same standing lie as the callout under it — form deviation, in-scope file",
+        "Cleared two extra preview mentions the cell action did not enumerate (.bee/config-sample.json herding note, catalog-projections-and-activation.md:144) — both inside cell-named files and both said the same retired thing — scope-completion, must_have no site still says not production",
+        "Committed with an explicit -- pathspec through the shared index guard, excluding prm-w3's in-flight tests/pi_plugin_contracts.rs — concurrency hygiene, not a scope change"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

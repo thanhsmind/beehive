@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-result-mailbox",
+  "mode": "high-risk",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-result-mailbox\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-29T17:03:34.579Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "Merged shape+execution gate for pi-result-mailbox (high-risk) — plan rev 2 after reviewer FAIL + advisor conditions folded",
+    "asked_at": "2026-08-29T17:18:01.590Z",
+    "session": "a95c772f-e050-490b-98ad-5511130f6b08"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain",
+      "external-systems"
+    ],
+    "product_files": 5,
+    "rationale": "Herding result-envelope contract change (every runtime's worker path), plus the Pi async-injection half — Rust + TS, existing herding tests assert the old envelope",
+    "updated_at": "2026-08-29T17:03:34.594Z",
+    "feature": "pi-result-mailbox"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-29T17:18:01.572Z",
+    "feature": "pi-result-mailbox",
+    "newest_decision_id": "a05636f8-d308-466c-95a6-80ca3490c585",
+    "plan_sha256": "absent",
+    "advisor": "fable (models.claude.advisor), dispatch f7229ea9",
+    "digest_head": "# Advisor consult — pi-result-mailbox high-risk gate (dispatch f7229ea9, fable, 2026-08-30)\n\nCONSULT VERDICT: proceed-with-conditions —\n1. Fence-escape handling for inline reports (or path-only injection) — D5 is not met without it.\n2. Rename the delivery guarantee to at-least-once with job-id dedupe; test replay-after-restart explicitly.\n3. Marker write ordered before pane spawn; grace re-probe (or explicit missing-report marker) after result parse.\n4. D7 caveat replacement text names the resid"
+  },
+  "merge_ready": {
+    "since": "2026-08-29T17:57:28.805Z",
+    "branch": "wt/pi-result-mailbox",
+    "worktree_id": "beehive--wt--pi-result-mailbox",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "id": "prm-2",
+  "feature": "pi-result-mailbox",
+  "title": "Pi drain injects header-only result envelopes with pi-peer discipline",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "prm-1"
+  ],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "read_first": [
+    "docs/history/pi-result-mailbox/plan.md",
+    "docs/history/research/pi-peer-distill.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "node --check .pi/extensions/bee-guard.ts",
+  "action": "Per plan Approach 3 (rev 2). Add the result-inbox drain to .pi/extensions/bee-guard.ts: registered ONLY from session_start (never load-time), poll timer .unref()d, advisory-class (never throws). Per tick: list this session inbox under .bee/result-inbox/<token>/ (token = own session id); for each marker whose job mailbox holds result-N.json: atomic rename marker -> .processing, inject a FENCED HEADER ONLY (fixed shape: job id, cell id, summary, proof, report_path — the report body NEVER rides the injection) via pi.sendUserMessage — deliverAs steer when busy, plain turn when idle with the F1 latch on before_agent_start; claims consumed at agent_settled (F2), requeued on failed injection, orphans reclaimed at session_start. At-least-once; job id is the dedupe key and the header says so. Keep every existing belt behavior untouched.",
+  "must_haves": {
+    "truths": [
+      "no timer exists before session_start and node exits cleanly after the harness run",
+      "the injected fence contains header fields only",
+      "failed injection requeues its own claim; orphans reclaim at session_start"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "drain with claim/requeue/reclaim discipline, header-only injection"
+      }
+    ],
+    "key_links": [
+      "drain reuses the belt binary-resolution chain and advisory wrapper"
+    ],
+    "prohibitions": [
+      "No report body in the injection",
+      "No load-time timer",
+      "No throw from any drain path",
+      "No changes to blocking guard behavior"
+    ]
+  },
+  "trace": {
+    "worker": "prm-w2",
+    "outcome": "The Pi belt drains its result inbox and injects a header-only result envelope with pi-peer claim discipline",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts"
+    ],
+    "deviations": [
+      "added a status row to the fenced header — the plan named five rows (job id, cell id, summary, proof, report_path) and a blocked result read as done is exactly the orchestrator-judgment corruption this feature exists to stop; still a one-line header field, no body — kind: addition",
+      "parked the interval in a globalThis slot as well as a module variable — Pi /reload can hand this file a fresh module scope while the old interval is still armed, and two drains racing one inbox is a double-delivery source the cell did not anticipate — kind: robustness"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T17:44:45.813Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T17:36:58.540Z",
+    "report": {
+      "outcome": "The Pi belt drains its result inbox and injects a header-only result envelope with pi-peer claim discipline",
+      "commit": "6bb887ab",
+      "files": [
+        ".pi/extensions/bee-guard.ts"
+      ],
+      "tests": "cargo test --test pi_plugin_contracts + a throwaway node drain harness (20 assertions: no load-time timer, idle plain turn, busy steer, F1 latch, F2 consume at agent_settled, requeue on failed injection, orphan reclaim, header-only fence, pending marker not injected, passive with no store) — green (8 passed; 0 failed / SMOKE GREEN) — the change is one TS belt file with no Rust caller; the contract suite is the only existing coverage of it and the harness covers the new drain paths prm-3 will make permanent",
+      "deviations": [
+        "added a status row to the fenced header — the plan named five rows (job id, cell id, summary, proof, report_path) and a blocked result read as done is exactly the orchestrator-judgment corruption this feature exists to stop; still a one-line header field, no body — kind: addition",
+        "parked the interval in a globalThis slot as well as a module variable — Pi /reload can hand this file a fresh module scope while the old interval is still armed, and two drains racing one inbox is a double-delivery source the cell did not anticipate — kind: robustness"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 365 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

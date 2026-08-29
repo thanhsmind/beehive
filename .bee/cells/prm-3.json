@@ -1,0 +1,79 @@
+{
+  "id": "prm-3",
+  "feature": "pi-result-mailbox",
+  "title": "Drain fixtures: at-least-once delivery proven and the harness hardened",
+  "lane": "high-risk",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "prm-1",
+    "prm-2"
+  ],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6",
+    "f979d4c5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-result-mailbox/plan.md",
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+  "action": "Extend tests/pi_plugin_contracts.rs: harness gains a hard timeout on run_harness (a hung node is a red test naming the timeout, never a CI hang) and a sendUserMessage-capable stub pi recording calls. Rows: busy->steer, idle->trigger with F1 latch, failed-injection requeue, orphan .processing reclaim at session_start, replay-after-restart injects again with the SAME job id (the documented at-least-once behavior — test name says at-least-once), marker-without-result not injected, no-marker sync job never injected, fence is header-only (a report body containing a fence never appears in the injection), drain never throws on missing dirs/malformed marker/malformed result, every new pi.on event added to the never-throw hand list (pi_plugin_contracts.rs:1202-1210). All existing fixtures still terminate.",
+  "must_haves": {
+    "truths": [
+      "replay-after-restart row is named at-least-once and green",
+      "every fixture terminates under the harness timeout"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "drain rows + hardened harness"
+      }
+    ],
+    "key_links": [
+      "rows derive event names and fence shape from the TS source, never a hand copy"
+    ],
+    "prohibitions": [
+      "No production-code change",
+      "No exactly-once test name"
+    ]
+  },
+  "trace": {
+    "worker": "prm-w3",
+    "outcome": "Drain fixtures prove at-least-once delivery, header-only fences and a never-throw drain; the Pi harness is now timeout-bounded and records injections",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "prm-2 added no NEW pi.on event, so the never-throw hand list needed no new row — instead the list is lifted into never_throw_event_rows() and GATED by every_advisory_event_the_belt_registers_has_a_never_throw_row against the belt-derived pi.on set, so the next event added cannot skip its row — makes the cell request self-enforcing rather than one-time — improvement"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T17:57:28.781Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T17:45:09.659Z",
+    "report": {
+      "outcome": "Drain fixtures prove at-least-once delivery, header-only fences and a never-throw drain; the Pi harness is now timeout-bounded and records injections",
+      "commit": "f2434ac6",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts — green (21 passed, 0 failed, 25.73s) — the cell verify command: the only file changed is this suite, and it is the whole proof surface for the belt it covers; the two negative drain rows were watched RED first with a probe result/marker added, then reverted",
+      "deviations": [
+        "prm-2 added no NEW pi.on event, so the never-throw hand list needed no new row — instead the list is lifted into never_throw_event_rows() and GATED by every_advisory_event_the_belt_registers_has_a_never_throw_row against the belt-derived pi.on set, so the next event added cannot skip its row — makes the cell request self-enforcing rather than one-time — improvement"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
