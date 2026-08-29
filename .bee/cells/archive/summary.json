@@ -978,5 +978,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-29T15:17:55.731Z"
+  },
+  "pi-support": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-29T17:00:27.073Z"
   }
 }
