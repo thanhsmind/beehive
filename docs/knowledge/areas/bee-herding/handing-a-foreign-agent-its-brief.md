@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/the-run-verb-and-worker-outcomes.md]
-  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)", "herding-prompt-stall D6 (narrows D1: a stalled submission is retryable, not an immediate delivery failure)"]
+  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)", "herding-prompt-stall D6 (narrows D1: a stalled submission is retryable, not an immediate delivery failure)", "pi-result-mailbox D1/D3 (the brief names report-<round>.md and its atomic write; report first, result last, and a resumed attempt rewrites its report before its result)"]
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "live smoke smoke-agy-delivery-1/-2/-3", "live case job hws-1-r1"]
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
 ---
@@ -35,6 +35,38 @@ kind silently drops a multi-line injected prompt even when idle.
 
 The pane start retries through a booting shell, and readiness is observed before
 the send.
+
+## The brief asks for the report FIRST and the result LAST
+
+Locked in pi-result-mailbox D1/D3 (2026-08-30). `summary` is one line and
+`proof` is one line; neither can carry the worker's actual deliverable, and
+before this rule the digest existed only in the pane's own scrollback, where it
+died with the pane.
+
+So the rendered brief names a second mailbox file beside the result —
+**`<mailbox>/report-<round>.md`**, the worker's FULL report — with the same
+write gesture the result already uses: write the `.tmp` file, then RENAME it
+onto the exact final name. The ORDER is the contract. The report is written
+first; the result file is written last, because the appearance of
+`result-N.json` under its final name is what ends the round — a result that
+lands before its report names a file the reader may not find yet. The result
+schema the brief shows carries `report_path` so the worker can name what it
+wrote, and a round with nothing worth reporting simply writes no report: the
+result stays legal without one.
+
+A RESUMED attempt gets one extra sentence, because the round number does not
+change on a retry: rewrite the report before writing the result again. Without
+it, round N's earlier attempt leaves a stale `report-N.md` that looks exactly
+like this attempt's. The run verb catches that case from the other side —
+it compares the file against the round's own brief delivery and reports a stale
+report rather than attaching it (`the-run-verb-and-worker-outcomes.md`, "The
+worker's report rides the mailbox as a PATH") — but the brief asks first, and
+the reader's freshness check is the belt underneath.
+
+None of this makes the worker any less bee-ignorant: it is one more file named
+in the brief, written with the gesture the brief already teaches. The worker
+still runs no bee command, and the report is read by the ORCHESTRATOR, from the
+path the envelope hands back.
 
 ## The worker's own hook reports its state into the mailbox
 

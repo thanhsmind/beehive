@@ -33,6 +33,7 @@
 .codex/hooks.json.bak
 .bee/mailbox/
 .bee/human-mailbox/
+.bee/result-inbox/
 # BEE:END
 
 # rust-port (crates/): compiled artifacts only — Rust source is never

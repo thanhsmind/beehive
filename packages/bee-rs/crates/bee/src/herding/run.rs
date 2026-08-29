@@ -178,6 +178,15 @@ struct Options {
     /// caller has one — carried into the ack schema the brief shows, never
     /// invented when absent.
     cell_id: Option<String>,
+    /// `--inbox-session <token>` (pi-result-mailbox D6): the orchestrator
+    /// session this job's result should be delivered INTO, asynchronously,
+    /// because nothing is synchronously waiting on it. Bee has no other way
+    /// to know a run is detached — a shell that backgrounds this verb is
+    /// invisible from in here — so the flag's PRESENCE is the detached fact,
+    /// and it decides the delivery path structurally: a flag writes a pending
+    /// marker for the session's drain, no flag writes none and the caller
+    /// reads the result off this verb's own output. Never both.
+    inbox_session: Option<String>,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -262,6 +271,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut expertise_raw: Option<&str> = None;
     let mut nickname: Option<&str> = None;
     let mut cell_id: Option<&str> = None;
+    let mut inbox_session: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -329,6 +339,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 cell_id = flags.get(i + 1).copied();
                 i += 2;
             }
+            "--inbox-session" => {
+                inbox_session = flags.get(i + 1).copied();
+                i += 2;
+            }
             _ => i += 1,
         }
     }
@@ -375,6 +389,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         has_explicit_expertise,
         nickname,
         cell_id: cell_id.map(str::to_string),
+        inbox_session: inbox_session.map(str::to_string),
     })
 }
 
@@ -1779,8 +1794,11 @@ enum RunOutcome {
     /// result").
     Result(MailboxResult),
     /// A result file appeared but could not be read or did not pass the
-    /// mailbox schema — never a valid result.
-    Malformed(String),
+    /// mailbox schema — never a valid result. `report_path` carries the
+    /// round's report when one is on disk (pi-result-mailbox D1): a good
+    /// report must never die with a broken result JSON, so the error and the
+    /// path ride back together.
+    Malformed { error: String, report_path: Option<String> },
     /// hps-7 (D5): carries the give-up message — `idle_timeout_message`'s
     /// generic text, or `diagnose_giveup`'s upgrade of it when the pane
     /// shows a matching line.
@@ -1807,24 +1825,105 @@ fn idle_timeout_message(idle_timeout_secs: u64) -> String {
     format!("no heartbeat for {idle_timeout_secs}s (idle timeout) — pane kept for inspection")
 }
 
+/// The round's own delivery moment: the LATER of `brief-N.txt` (bee wrote it
+/// just before prompting) and `ack-N.json` (the worker wrote it the moment it
+/// read the brief). `None` when neither file is there — a mailbox with no
+/// delivery evidence at all cannot prove anything stale, so the probe below
+/// accepts on `None` rather than dropping a report nobody can date.
+fn round_delivered_at(bee_dir: &Path, job_id: &str, round: u32) -> Option<std::time::SystemTime> {
+    [mailbox::brief_path(bee_dir, job_id, round), mailbox::ack_path(bee_dir, job_id, round)]
+        .iter()
+        .filter_map(|p| std::fs::metadata(p).ok()?.modified().ok())
+        .max()
+}
+
+/// The convention probe (pi-result-mailbox D1): `report-{round}.md` in the
+/// job's own mailbox, accepted ONLY when it is at least as new as the round's
+/// delivery moment. Returns `(path, note)` — exactly one of them at most:
+///
+/// * the file is missing → neither (a result with no report stays legal, and
+///   nothing is said about a report nobody promised);
+/// * the file is older than the round's own delivery → a NOTE, never a path.
+///   That is the same-round resume case: the worker rewrote its result but
+///   left the earlier attempt's report behind, and attaching it silently
+///   would hand the orchestrator the wrong digest under the right name.
+fn probe_report(bee_dir: &Path, job_id: &str, round: u32) -> (Option<String>, Option<String>) {
+    let path = mailbox::report_path(bee_dir, job_id, round);
+    let Ok(modified) = std::fs::metadata(&path).and_then(|m| m.modified()) else {
+        return (None, None);
+    };
+    match round_delivered_at(bee_dir, job_id, round) {
+        Some(delivered) if modified < delivered => (
+            None,
+            Some(format!(
+                "{} is older than round {round}'s own brief — a stale report from an earlier attempt, not this result's",
+                path.display()
+            )),
+        ),
+        _ => (Some(path.display().to_string()), None),
+    }
+}
+
+/// Resolve the report for a parsed result, at the ONE site that has
+/// filesystem access (the envelope builder downstream stays pure). The
+/// worker's DECLARED path wins — it named the file, and a declared path that
+/// is not on disk becomes an explicit note rather than a silent fall back to
+/// a guess. Nothing declared falls to `probe_report`.
+fn resolve_report(bee_dir: &Path, job_id: &str, result: &mut MailboxResult) {
+    if let Some(declared) = result.report_path.clone() {
+        let raw = Path::new(&declared);
+        let resolved =
+            if raw.is_absolute() { raw.to_path_buf() } else { mailbox::mailbox_dir(bee_dir, job_id).join(raw) };
+        if resolved.exists() {
+            result.report_path = Some(resolved.display().to_string());
+        } else {
+            result.report_path = None;
+            result.report_note =
+                Some(format!("the result declared report_path \"{declared}\" but no file is there"));
+        }
+        return;
+    }
+    let (path, note) = probe_report(bee_dir, job_id, result.round);
+    result.report_path = path;
+    result.report_note = note;
+}
+
 fn read_result(bee_dir: &Path, job_id: &str) -> RunOutcome {
     let dir = mailbox::mailbox_dir(bee_dir, job_id);
     let entries: Vec<String> = match std::fs::read_dir(&dir) {
         Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
-        Err(e) => return RunOutcome::Malformed(format!("could not list {}: {e}", dir.display())),
+        Err(e) => {
+            return RunOutcome::Malformed {
+                error: format!("could not list {}: {e}", dir.display()),
+                report_path: None,
+            }
+        }
     };
     let round = match mailbox::select_latest_round(&entries) {
         Ok(r) => r,
-        Err(e) => return RunOutcome::Malformed(e.to_string()),
+        Err(e) => return RunOutcome::Malformed { error: e.to_string(), report_path: None },
     };
     let path = mailbox::result_path(bee_dir, job_id, round);
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
-        Err(e) => return RunOutcome::Malformed(format!("could not read {}: {e}", path.display())),
+        Err(e) => {
+            return RunOutcome::Malformed {
+                error: format!("could not read {}: {e}", path.display()),
+                report_path: probe_report(bee_dir, job_id, round).0,
+            }
+        }
     };
     match mailbox::parse_result_text(round, &text) {
-        Ok(r) => RunOutcome::Result(r),
-        Err(e) => RunOutcome::Malformed(e.to_string()),
+        Ok(mut r) => {
+            resolve_report(bee_dir, job_id, &mut r);
+            RunOutcome::Result(r)
+        }
+        // D1: the report is found even here — a broken result JSON is exactly
+        // when the worker's own write-up is worth the most.
+        Err(e) => RunOutcome::Malformed {
+            error: e.to_string(),
+            report_path: probe_report(bee_dir, job_id, round).0,
+        },
     }
 }
 
@@ -1872,7 +1971,62 @@ fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) 
 /// round share the poll loop (`wait_for_round`) and pane lifecycle, but
 /// nothing else — a fresh spawn never reuses a pane, and `--continue` never
 /// splits one.
+/// `.bee/result-inbox/<token>/` — one directory per orchestrator session, the
+/// pending markers its own drain reads. A token that cannot BE a directory
+/// name (empty, blank, or carrying a path separator or `..`) resolves to
+/// nothing: the marker is skipped and said out loud, never written somewhere
+/// a token walked it to.
+fn inbox_dir(bee_dir: &Path, token: &str) -> Option<PathBuf> {
+    let token = token.trim();
+    if token.is_empty() || token == "." || token == ".." || token.contains('/') || token.contains('\\') {
+        return None;
+    }
+    Some(bee_dir.join("result-inbox").join(token))
+}
+
+/// pi-result-mailbox D6: write this job's PENDING marker for the session
+/// named by `--inbox-session`, BEFORE the worker is spawned — the drain must
+/// never be able to find a finished mailbox with no marker pointing at it.
+/// The marker holds where to look (the job's mailbox) and what the result
+/// belongs to (job id, cell id); the envelope itself is never copied here, so
+/// there is exactly one copy of the truth.
+///
+/// Advisory: every failure is a stderr note and nothing more. A run that
+/// cannot record its marker still does the work — losing the async delivery
+/// is bad, refusing to dispatch over it is worse.
+fn write_inbox_marker(bee_dir: &Path, opts: &Options) {
+    let Some(token) = opts.inbox_session.as_deref() else { return };
+    let Some(dir) = inbox_dir(bee_dir, token) else {
+        eprintln!(
+            "bee herding run: --inbox-session \"{token}\" is not a usable session token — no result-inbox marker written; this job's result is readable only from this command's own output"
+        );
+        return;
+    };
+    let mut m = Map::new();
+    m.insert("job_id".into(), Value::String(opts.job_id.clone()));
+    m.insert(
+        "mailbox".into(),
+        Value::String(mailbox::mailbox_dir(bee_dir, &opts.job_id).display().to_string()),
+    );
+    if let Some(cell) = &opts.cell_id {
+        m.insert("cell_id".into(), Value::String(cell.clone()));
+    }
+    m.insert("created_at".into(), Value::String(chrono::Utc::now().to_rfc3339()));
+    let marker = dir.join(format!("{}.json", opts.job_id));
+    if let Err(e) = crate::fsutil::write_json_atomic(&marker, &Value::Object(m)) {
+        eprintln!("bee herding run: could not write the result-inbox marker {}: {e}", marker.display());
+    }
+}
+
 fn execute(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
+    // D6, structurally: the marker is written here — before `execute_new`
+    // splits a pane, and before `execute_continue` prompts one — so no
+    // finished result can exist before the marker that claims it. `--dry-run`
+    // spawns nothing and therefore promises nothing: it leaves no marker for
+    // a job that will never run.
+    if !opts.dry_run {
+        write_inbox_marker(&opts.main_root.join(".bee"), opts);
+    }
     if opts.is_continue {
         execute_continue(opts, herdr)
     } else {
@@ -2574,7 +2728,7 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
             MailboxStatus::Done => "done",
             MailboxStatus::Blocked => "blocked",
         },
-        RunOutcome::Malformed(_) => "malformed_result",
+        RunOutcome::Malformed { .. } => "malformed_result",
         RunOutcome::TimedOutIdle(_) => "timed_out_idle",
         RunOutcome::TimedOutCeiling => "timed_out_ceiling",
         RunOutcome::PausedLimit => "paused_limit",
@@ -2703,6 +2857,17 @@ fn result_envelope(
                 Value::Array(r.files_changed.iter().cloned().map(Value::String).collect()),
             );
             m.insert("proof".into(), Value::String(r.proof.clone()));
+            // pi-result-mailbox D1/D2: the report travels as a PATH — never
+            // its body, at any size (a long line read back through a tool
+            // truncates, and a truncated envelope is unparseable). Both keys
+            // obey the envelope's no-new-key law: a result with no report and
+            // nothing to say about one adds neither.
+            if let Some(p) = &r.report_path {
+                m.insert("report_path".into(), Value::String(p.clone()));
+            }
+            if let Some(note) = &r.report_note {
+                m.insert("report_note".into(), Value::String(note.clone()));
+            }
             // StopAndAsk (a2affcba): carried to the orchestrator ONLY when the
             // worker offered them, so a plain done-result envelope keeps the
             // exact keys it had before this pair existed.
@@ -2744,8 +2909,18 @@ fn result_envelope(
                 )),
             );
         }
-        RunOutcome::Malformed(msg) | RunOutcome::PaneBlocked(msg) => {
+        RunOutcome::PaneBlocked(msg) => {
             m.insert("error".into(), Value::String(msg.clone()));
+        }
+        // pi-result-mailbox D1: the error and the report ride back together —
+        // and, exactly like every additive key above, `report_path` appears
+        // ONLY when there is a report. A malformed result with none keeps the
+        // exact key set it had before this feature.
+        RunOutcome::Malformed { error, report_path } => {
+            m.insert("error".into(), Value::String(error.clone()));
+            if let Some(p) = report_path {
+                m.insert("report_path".into(), Value::String(p.clone()));
+            }
         }
         RunOutcome::ContinueRefused(refusal) => {
             m.insert("error".into(), Value::String(refusal.to_string()));
@@ -3449,6 +3624,13 @@ mod tests {
         pane_read_calls: RefCell<Vec<String>>,
         liveness_responses: RefCell<Vec<Liveness>>,
         process_info_calls: RefCell<Vec<String>>,
+        /// pi-result-mailbox D6: a path `pane_split` stats the moment it is
+        /// called, answering into `probe_seen` — the seam the "the marker is
+        /// written BEFORE the pane spawns" test reads. Ordering claimed from
+        /// source order alone is not evidence; this is. `None` (the default)
+        /// stats nothing.
+        probe_path: RefCell<Option<PathBuf>>,
+        probe_seen: RefCell<Option<bool>>,
     }
 
     impl FakeHerdr {
@@ -3481,6 +3663,8 @@ mod tests {
                 pane_read_calls: RefCell::new(Vec::new()),
                 liveness_responses: RefCell::new(Vec::new()),
                 process_info_calls: RefCell::new(Vec::new()),
+                probe_path: RefCell::new(None),
+                probe_seen: RefCell::new(None),
             }
         }
     }
@@ -3494,6 +3678,10 @@ mod tests {
         }
         fn pane_split(&self, pane_id: &str, direction: &str, ratio: f64, _cwd: &Path) -> Result<String, String> {
             self.split_calls.borrow_mut().push((pane_id.to_string(), direction.to_string(), ratio));
+            let probe = self.probe_path.borrow().clone();
+            if let Some(p) = probe {
+                *self.probe_seen.borrow_mut() = Some(p.exists());
+            }
             self.split_result.clone()
         }
         fn tab_create(&self, workspace: &str, cwd: &Path, label: &str) -> Result<String, String> {
@@ -3924,6 +4112,7 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            inbox_session: None,
         }
     }
 
@@ -3999,6 +4188,7 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            inbox_session: None,
         }
     }
 
@@ -5153,6 +5343,290 @@ mod tests {
             vec!["closed_pane", "dry_run", "files_changed", "job_id", "outcome", "pane_id", "proof", "summary"],
             "envelope keys drifted for a result carrying neither field: {envelope}"
         );
+    }
+
+    // ─── the report rides the mailbox (pi-result-mailbox D1, D2) ────────
+    //
+    // The row above is this family's LEGACY row, unchanged and still exact:
+    // a result with no `report_path` and no report file on disk emits the
+    // same eight keys it emitted before this feature. The rows below are the
+    // additive ones — each names the exact key set it expects, so a key
+    // appearing unconditionally fails here rather than in a Pi session.
+
+    /// Writes `report-N.md` into the job's mailbox and stamps its mtime
+    /// `offset_secs` from now — the one knob the freshness rows turn.
+    /// `execute` writes `brief-N.txt` while it runs, so a report seeded
+    /// beforehand is otherwise always older than the round it belongs to.
+    fn seed_report(main_root: &Path, job_id: &str, round: u32, offset_secs: i64) -> PathBuf {
+        let bee_dir = main_root.join(".bee");
+        std::fs::create_dir_all(mailbox::mailbox_dir(&bee_dir, job_id)).unwrap();
+        let path = mailbox::report_path(&bee_dir, job_id, round);
+        std::fs::write(&path, "# Report\n\nthe whole deliverable, far past one line\n").unwrap();
+        let now = std::time::SystemTime::now();
+        let at = if offset_secs >= 0 {
+            now + Duration::from_secs(offset_secs as u64)
+        } else {
+            now - Duration::from_secs(offset_secs.unsigned_abs())
+        };
+        std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_modified(at).unwrap();
+        path
+    }
+
+    fn seed_result(main_root: &Path, job_id: &str, round: u32, body: &str) {
+        let bee_dir = main_root.join(".bee");
+        std::fs::create_dir_all(mailbox::mailbox_dir(&bee_dir, job_id)).unwrap();
+        std::fs::write(mailbox::result_path(&bee_dir, job_id, round), body).unwrap();
+    }
+
+    fn envelope_keys(envelope: &Value) -> Vec<String> {
+        let mut keys: Vec<String> = envelope.as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn a_fresh_convention_report_adds_report_path_and_nothing_else() {
+        // D1's happy path: the worker never declared a path, the file is
+        // where the brief told it to write one, and it is newer than the
+        // round's own brief.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#,
+        );
+        let report = seed_report(tmp.path(), &opts.job_id, 1, 60);
+        let result = execute(&opts, &FakeHerdr::new());
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(
+            envelope.get("report_path").and_then(Value::as_str),
+            Some(report.display().to_string().as_str()),
+            "{envelope}"
+        );
+        assert_eq!(
+            envelope_keys(&envelope),
+            vec![
+                "closed_pane",
+                "dry_run",
+                "files_changed",
+                "job_id",
+                "outcome",
+                "pane_id",
+                "proof",
+                "report_path",
+                "summary"
+            ],
+            "a report adds exactly one key: {envelope}"
+        );
+        assert!(
+            !envelope.to_string().contains("the whole deliverable"),
+            "the report BODY must never ride the envelope, at any size: {envelope}"
+        );
+    }
+
+    #[test]
+    fn a_declared_report_path_wins_over_the_convention_probe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let declared = mailbox::mailbox_dir(&bee_dir, &opts.job_id).join("deliverable.md");
+        seed_report(tmp.path(), &opts.job_id, 1, 60);
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":"deliverable.md"}"#,
+        );
+        std::fs::write(&declared, "# the one the worker named\n").unwrap();
+        let result = execute(&opts, &FakeHerdr::new());
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(
+            envelope.get("report_path").and_then(Value::as_str),
+            Some(declared.display().to_string().as_str()),
+            "the worker's own declaration must win over the convention guess: {envelope}"
+        );
+        assert!(envelope.get("report_note").is_none(), "{envelope}");
+    }
+
+    #[test]
+    fn a_declared_report_path_that_is_not_there_becomes_a_note_never_a_guess() {
+        // Advisor condition 3: expected-but-missing is said out loud. The
+        // convention file sitting right beside it is NOT silently swapped in.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_report(tmp.path(), &opts.job_id, 1, 60);
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","report_path":"gone.md"}"#,
+        );
+        let result = execute(&opts, &FakeHerdr::new());
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert!(envelope.get("report_path").is_none(), "a missing file must not be attached: {envelope}");
+        let note = envelope.get("report_note").and_then(Value::as_str).expect("a note names the gap");
+        assert!(note.contains("gone.md"), "the note must name the declared path: {note}");
+    }
+
+    #[test]
+    fn a_stale_same_round_report_becomes_a_note_never_a_silent_attach() {
+        // The same-round resume case: the worker rewrote its result but left
+        // the earlier attempt's report behind. Attaching it would hand the
+        // orchestrator the wrong digest under the right name.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+        );
+        seed_report(tmp.path(), &opts.job_id, 1, -3_600);
+        let result = execute(&opts, &FakeHerdr::new());
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert!(envelope.get("report_path").is_none(), "a stale report must never attach: {envelope}");
+        let note = envelope.get("report_note").and_then(Value::as_str).expect("a stale report is reported");
+        assert!(note.contains("stale"), "the note must say why: {note}");
+        assert!(note.contains("report-1.md"), "the note must name the file: {note}");
+    }
+
+    #[test]
+    fn a_malformed_result_surfaces_the_error_and_the_report_together() {
+        // A good report must never die with a broken result JSON.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_result(tmp.path(), &opts.job_id, 1, "{ not json at all");
+        let report = seed_report(tmp.path(), &opts.job_id, 1, 60);
+        let result = execute(&opts, &FakeHerdr::new());
+        assert!(matches!(result.outcome, RunOutcome::Malformed { .. }), "got {:?}", result.outcome);
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert!(
+            envelope.get("error").and_then(Value::as_str).is_some_and(|e| e.contains("not valid JSON")),
+            "the error must survive: {envelope}"
+        );
+        assert_eq!(
+            envelope.get("report_path").and_then(Value::as_str),
+            Some(report.display().to_string().as_str()),
+            "the report must survive beside it: {envelope}"
+        );
+    }
+
+    #[test]
+    fn a_malformed_result_with_no_report_keeps_the_error_only_key_set() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_result(tmp.path(), &opts.job_id, 1, "{ not json at all");
+        let result = execute(&opts, &FakeHerdr::new());
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(
+            envelope_keys(&envelope),
+            vec!["closed_pane", "dry_run", "error", "job_id", "outcome", "pane_id"],
+            "a malformed result with no report grew a key: {envelope}"
+        );
+    }
+
+    // ─── the detach fact is a flag (pi-result-mailbox D6) ───────────────
+
+    #[test]
+    fn no_inbox_session_flag_writes_no_marker_at_all() {
+        // D6 structurally: the sync path — this verb's own caller is waiting
+        // on it — leaves nothing for any drain to deliver a second time.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+        );
+        execute(&opts, &FakeHerdr::new());
+        assert!(
+            !tmp.path().join(".bee/result-inbox").exists(),
+            "a run with no --inbox-session must write no marker"
+        );
+    }
+
+    #[test]
+    fn inbox_session_writes_the_marker_before_the_pane_is_split() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.inbox_session = Some("sess-7".to_string());
+        opts.cell_id = Some("prm-1".to_string());
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+        );
+        let marker = tmp.path().join(".bee/result-inbox/sess-7/job-1.json");
+        let fake = FakeHerdr::new();
+        *fake.probe_path.borrow_mut() = Some(marker.clone());
+        execute(&opts, &fake);
+
+        assert_eq!(
+            *fake.probe_seen.borrow(),
+            Some(true),
+            "the marker must already exist when the pane is split — a result cannot beat its own marker"
+        );
+        let m: Value = serde_json::from_str(&std::fs::read_to_string(&marker).unwrap()).unwrap();
+        assert_eq!(m.get("job_id").and_then(Value::as_str), Some("job-1"), "{m}");
+        assert_eq!(m.get("cell_id").and_then(Value::as_str), Some("prm-1"), "{m}");
+        assert_eq!(
+            m.get("mailbox").and_then(Value::as_str),
+            Some(mailbox::mailbox_dir(&tmp.path().join(".bee"), "job-1").display().to_string().as_str()),
+            "{m}"
+        );
+        assert!(m.get("summary").is_none(), "the marker points at the mailbox, it never copies it: {m}");
+    }
+
+    #[test]
+    fn an_unusable_inbox_session_token_writes_no_marker_and_walks_nowhere() {
+        for token in ["", "   ", "..", "../elsewhere", "a/b"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut opts = test_options(tmp.path(), false);
+            opts.inbox_session = Some(token.to_string());
+            seed_result(
+                tmp.path(),
+                &opts.job_id,
+                1,
+                r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+            );
+            execute(&opts, &FakeHerdr::new());
+            assert!(
+                !tmp.path().join(".bee/result-inbox").exists(),
+                "token {token:?} wrote a marker anyway"
+            );
+            assert!(!tmp.path().join("elsewhere").exists(), "token {token:?} escaped the inbox root");
+        }
+    }
+
+    #[test]
+    fn a_dry_run_with_an_inbox_session_promises_no_delivery() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), true);
+        opts.inbox_session = Some("sess-7".to_string());
+        let result = execute(&opts, &PanicHerdr);
+        assert!(matches!(result.outcome, RunOutcome::DryRun(_)), "got {:?}", result.outcome);
+        assert!(
+            !tmp.path().join(".bee/result-inbox").exists(),
+            "a dry run spawns nothing, so it must leave no pending marker"
+        );
+    }
+
+    #[test]
+    fn parse_options_reads_the_inbox_session_flag_and_defaults_to_none() {
+        let with = parse_options(&["--task", "t", "--main-root", ".", "--inbox-session", "sess-7"]).unwrap();
+        assert_eq!(with.inbox_session.as_deref(), Some("sess-7"));
+        let without = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
+        assert_eq!(without.inbox_session, None);
     }
 
     #[test]

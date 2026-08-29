@@ -141,10 +141,14 @@ the write-capable routing already covers, and the dispatch door itself opens
 for that one transport only (pi-support D5 — every model slot for this
 runtime must resolve to the pane-based worker transport, and every other
 resolution is refused by name with its own fix, an escalated unit of work
-being told to run inline in the session instead). That door is a **preview**
-until the worker-result transport ships as its own feature: a Pi worker's
-result digest does not return to the session yet (pi-support D7), so nothing
-riding it is production-ready until that feature lands.
+being told to run inline in the session instead). The worker-result transport
+that door was waiting on has since shipped as its own feature (pi-support D7 →
+pi-result-mailbox): a Pi worker's result comes back through `bee herding run`'s
+own output — the synchronous path every runtime shares, and the one to plan on
+— and the belt additionally drains an OPT-IN async inbox for jobs nothing is
+waiting on. That async half carries named limits rather than a caveat:
+at-least-once delivery with `job_id` as the dedupe key, a drain that runs only
+inside a live Pi session, and header-only injection.
 
 ## Business Rules
 
@@ -246,8 +250,13 @@ riding it is production-ready until that feature lands.
   without a reload. The model-guard exclusion is commented at the top of that
   file and asserted by name in the belt parity test that already covers
   Claude, Codex and OpenCode — the test keeps its name; the Pi rows are
-  derived from the TS source and join its row set. Dispatch door (D5,
-  preview until `pi-result-mailbox`): `pi_requires_herding_refusal` and the
+  derived from the TS source and join its row set. The belt file grew a
+  SECOND job with pi-result-mailbox: beside the guard routing it runs the
+  result-inbox drain (registered from `session_start`, never at load time),
+  so the same projection-shaped file now also carries an advisory delivery
+  path — at-least-once, `job_id` as the dedupe key, live session required,
+  and header-only injection. Dispatch door (D5, no longer preview — the
+  result transport landed): `pi_requires_herding_refusal` and the
   `PI_HERDING_ONLY_REASON` reason word `pi_requires_herding` in
   `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, fired from both
   the prepare and wave paths, beside `DISPATCH_RUNTIMES` there and `RUNTIMES`

@@ -83,6 +83,12 @@ pub(crate) fn unmapped_kind_refusal(kind: &str) -> Value {
 /// caller at this door branches on one string rather than five.
 pub(crate) const PI_HERDING_ONLY_REASON: &str = "pi_requires_herding";
 
+/// pi-result-mailbox D6 — the `detached_delivery` instruction the pi herding
+/// payload carries. It names the flag, the token to pass, and the one case
+/// that must NOT carry it, because a detached pane's result reaches the
+/// session through the drain or not at all.
+pub(crate) const HERDING_DETACHED_DELIVERY_PI: &str = "DETACHED runs only (this command backgrounded, nothing waiting on its output): append --inbox-session \"<orchestrator-session-id>\" — the session id the pi preamble shows you — before you run it. The flag writes a .bee/result-inbox/<session>/<job-id>.json marker before the pane splits, and the bee Pi drain injects the worker's result into this session once the pane closes. Run it SYNCHRONOUSLY (in the foreground, result read from this command's own JSON) and pass NO flag: one delivery path per job, never both.";
+
 /// What a slot resolved to, in the words the refusal reports it under.
 /// `Herding` never reaches here (it is the one resolution the pi door
 /// serves); `Refused` arrives from the cli purpose gate, which on pi is a
@@ -1698,6 +1704,30 @@ pub(crate) fn prepare_dispatch_with_brief(
                 };
                 payload.insert("transport_ready".into(), Value::Bool(transport_ready));
                 payload.insert("transport_reason".into(), Value::String(transport_reason));
+                // pi-result-mailbox D6, Approach 2: on the pi runtime a herding
+                // pane is the ONLY dispatch surface, so a detached one is also
+                // the only way a result can outlive the command that started
+                // it. `--inbox-session <token>` IS the detached fact (there is
+                // no other detach signal in `herding run`): with it, the run
+                // writes a `.bee/result-inbox/<token>/<job-id>.json` marker
+                // before the pane splits and the Pi drain finds the result
+                // after the pane closes; without it, the result is readable
+                // only from this command's own output. The token is the
+                // orchestrator session id the Pi preamble already shows the
+                // model — bee cannot resolve it here (the child never receives
+                // it), so the payload INSTRUCTS rather than appends, and the
+                // orchestrator composes the final command.
+                //
+                // Instruction only, and pi-only: no flag is added to `command`,
+                // so a synchronous run stays one delivery path (D6) and every
+                // non-pi herding payload stays byte-identical to before this
+                // key existed.
+                if runtime == "pi" {
+                    payload.insert(
+                        "detached_delivery".into(),
+                        Value::String(HERDING_DETACHED_DELIVERY_PI.to_string()),
+                    );
+                }
                 // herding-review-slots D3: `fallback:"default"` on the slot
                 // names the runtime's own default model for this slot (the
                 // same table a gather purpose used to fall back to silently,
@@ -3565,5 +3595,103 @@ mod role_flag_tests {
             v.get("economics").and_then(|e| e.get("tier_source")),
             Some(&json!("default"))
         );
+    }
+}
+
+// ═══ tests — the detached-delivery instruction (pi-result-mailbox D6) ══════
+
+#[cfg(test)]
+mod detached_delivery_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// The same two-file root the module above uses; kept local for the same
+    /// reason (the drivers test module's `repo` fixture is private to it).
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn herding_payload(root: &Path, runtime: &str) -> Value {
+        let out = prepare_dispatch_with_role(
+            root,
+            runtime,
+            "gather",
+            Some("generation"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected an envelope on {runtime}") };
+        v.get("payload").cloned().unwrap_or_else(|| panic!("no payload on {runtime}: {v}"))
+    }
+
+    fn host(runtime: &str) -> String {
+        format!(r#"{{"models":{{"{runtime}":{{"generation":{{"kind":"herding","agent":"a-1"}}}}}}}}"#)
+    }
+
+    /// The pi herding payload TELLS the orchestrator how a detached run stays
+    /// findable: the flag by name, the token to pass, the marker path the
+    /// drain reads.
+    #[test]
+    fn the_pi_herding_payload_names_the_inbox_session_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &host("pi"));
+        let payload = herding_payload(&root, "pi");
+        let note = payload
+            .get("detached_delivery")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("pi carries no detached_delivery: {payload}"));
+        assert!(note.contains("--inbox-session"), "the flag must be named: {note}");
+        assert!(note.contains(".bee/result-inbox/"), "the marker path must be named: {note}");
+        assert!(
+            note.contains("session id") && note.contains("preamble"),
+            "the token's source must be named: {note}"
+        );
+        // The command itself is untouched: bee never guesses the token.
+        let command = payload.get("command").and_then(Value::as_str).unwrap_or_default();
+        assert!(!command.contains("--inbox-session"), "{command}");
+    }
+
+    /// D6 as a payload fact: the instruction is pi-only, so every other
+    /// runtime's herding payload is byte-identical to before this key existed.
+    #[test]
+    fn a_non_pi_herding_payload_carries_no_detached_delivery_key() {
+        for runtime in ["claude", "codex", "opencode"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, &host(runtime));
+            let payload = herding_payload(&root, runtime);
+            assert!(
+                payload.get("command").is_some(),
+                "{runtime}: expected a herding payload, got {payload}"
+            );
+            assert_eq!(payload.get("detached_delivery"), None, "{runtime}: {payload}");
+        }
+    }
+
+    /// A pi dispatch that resolves NO herding slot is refused, not decorated —
+    /// the instruction rides the served payload only.
+    #[test]
+    fn a_refused_pi_dispatch_carries_no_instruction() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"pi":{"generation":"opus"}}}"#);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "gather", Some("generation"), None, None, false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected a typed refusal") };
+        assert_eq!(v.get("ok"), Some(&json!(false)), "{v}");
+        assert_eq!(v.get("payload"), None, "{v}");
     }
 }
