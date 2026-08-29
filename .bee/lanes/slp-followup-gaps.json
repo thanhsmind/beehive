@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"slp-followup-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Test the merged work in main, then approve the uat gate",
+  "next_action": "Merged into main at d4b7759; capture what settled, then bee close --feature slp-followup-gaps.",
   "created_at": "2026-08-29T03:41:16.254Z",
   "run_state": "running",
   "waiting_on": null,
