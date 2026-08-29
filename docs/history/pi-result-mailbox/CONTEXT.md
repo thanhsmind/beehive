@@ -82,10 +82,12 @@ fence info-tag; test file placement.
 
 - [x] D4 async half — IN, user-confirmed at Gate 1 (2026-08-30); store `f979d4c5`.
 
+<!-- bee:not-a-deferral: both questions were answered during planning (plan.md Discovery rev 2: the brief renders at run.rs:2161 via write_text_atomic; the run-output shape is pinned by the exact-key test at run.rs:5133, extended additively by prm-1) — this section records the shaping→planning handoff, it promises no future work -->
 ### Deferred To Planning
 
-- [ ] Where the brief file is rendered (find the one renderer before wiring D3).
-- [ ] Whether `bee herding run --json`'s output shape is asserted by existing tests that must be extended rather than replaced (covered-contract-change flag).
+- [x] Where the brief file is rendered — ANSWERED: run.rs:2161, one renderer (plan Discovery).
+- [x] Whether the run output shape is test-asserted — ANSWERED: yes, the exact-key test at run.rs:5133; prm-1 extended it additively (plan Discovery).
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 

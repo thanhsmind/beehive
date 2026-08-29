@@ -88,8 +88,9 @@ treats a present flag key of either value as final. The disarm door writes the
 explicit false only on cells that carry the legacy spelling; every other cell
 keeps absent-means-absent. Before this, `bee cells escalate --off` reported
 success and disarmed nothing on exactly the 20 cells the live backfill
-converted, and a later pass re-armed even a hypothetically effective disarm —
-the red test's own output showed a recorded `false` flipped back to `true`.
+converted, and a follow-on migration pass re-armed even a hypothetically
+effective disarm — the red test's own output showed a recorded `false`
+flipped back to `true`.
 
 **B6 — Accounting follows the split** (model-role-split D6, store `97ce5225`).
 The tier-mix count at close becomes a role mix plus an escalation share, and the

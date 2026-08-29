@@ -209,7 +209,7 @@ A stalled submission is a RETRYABLE outcome, not an immediate delivery
 failure. A stall only means the herd tool observed no state change from that
 one submission; for an agent it already reports as ready but whose interface
 has not finished drawing, that is the expected transient — measured live, the
-identical submission typed by hand seconds later on the same pane returned
+identical submission typed by hand seconds afterward on the same pane returned
 working at once. A stall therefore feeds the same bounded retry the
 ready-with-no-ack path uses, under the same two bounds, and becomes terminal
 only when a bound runs out, with a distinct failure saying the agent never

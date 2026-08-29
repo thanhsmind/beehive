@@ -148,7 +148,14 @@ own output — the synchronous path every runtime shares, and the one to plan on
 — and the belt additionally drains an OPT-IN async inbox for jobs nothing is
 waiting on. That async half carries named limits rather than a caveat:
 at-least-once delivery with `job_id` as the dedupe key, a drain that runs only
-inside a live Pi session, and header-only injection.
+inside a live Pi session (pi-result-mailbox D4 — pi-peer's claim discipline:
+`.processing` rename held through the turn, requeue on failed injection,
+orphan reclaim at session start), and header-only injection whose fenced
+envelope is DATA, never instructions — job id, cell id, status, summary,
+proof and the report PATH, with the report body itself never riding the
+injection (pi-result-mailbox D5). The lift of the old not-production caveat
+and this replacement text are themselves the recorded act
+(pi-result-mailbox D7).
 
 ## Business Rules
 
