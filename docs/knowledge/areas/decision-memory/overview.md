@@ -72,6 +72,20 @@ Three field failures (reported against a host repo, fixed generically):
   pushed to fabricate a value that is not theirs to choose; and the check is
   proven by injection — a tagless call added on purpose must name its own file
   and line.
+- **R1b — A tag slug takes at most ONE interior colon, which namespaces it**
+  (slp-contract D2). The pattern is
+  `/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/`: each side of the colon obeys
+  the plain slug rule, so a colon at either end, an empty segment, and a second
+  colon each refuse by name. One predicate
+  (`verbs/decisions/scanners.rs` `tag_pattern_test`) serves both `decisions log`
+  and `decisions tag`, and the refusal text it prints (`TAG_PATTERN_DISPLAY`)
+  is that same pattern. The namespace exists for `contract:<name>` — the
+  contract-status label, which is DERIVED over the active decision set and is
+  never a registry (slp-contract D1). Every pre-namespace tag still validates;
+  the widening takes nothing away. Side effect under R1: a `contract:<name>`
+  tag is unknown to the taxonomy, so it is accepted and appended to
+  `candidates[]` — the checked-in `docs/decisions/taxonomy.json` grows one
+  candidate per contract name, awaiting curation like any other new tag.
 - **R2 — Reversal is not finished until citing artifacts are reconciled** (D2,
   `b9b9fee3`). A supersede computes a citation sweep over `docs/**` (full id +
   word-boundary short8) BEFORE its single append; the event carries the sweep

@@ -225,7 +225,7 @@ use std::time::Instant;
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
                 msg,
-                "logDecision: tag \"Bad_Tag\" is not a valid lowercase slug (must match /^[a-z0-9][a-z0-9-]*$/)."
+                "logDecision: tag \"Bad_Tag\" is not a valid lowercase slug (must match /^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/)."
             ),
             _ => panic!("expected thrown slug error"),
         }
@@ -1530,6 +1530,174 @@ use std::time::Instant;
         assert!(!tag_pattern_test("-lead"));
         assert!(!tag_pattern_test("Upper"));
         assert!(!tag_pattern_test(""));
+    }
+
+    // ── scor-2: the tag slug admits ONE interior colon, so the locked
+    //    `contract:<name>` label (slp-contract D2) is writable ────────────
+
+    /// Tags a namespaced label needs, and the near-misses that must stay
+    /// refused. One colon, interior only, both sides a plain slug.
+    #[test]
+    fn tag_pattern_admits_one_interior_colon() {
+        // Accepted: the locked spelling, in the shapes it is really used in.
+        assert!(tag_pattern_test("contract:cells"));
+        assert!(tag_pattern_test("contract:dispatch-door"));
+        assert!(tag_pattern_test("a:b"));
+        assert!(tag_pattern_test("contract:0-9"));
+        assert!(tag_pattern_test("9contract:cells"));
+
+        // Refused: a colon at either end, an empty segment, a second colon.
+        assert!(!tag_pattern_test(":cells"), "leading colon");
+        assert!(!tag_pattern_test("cells:"), "trailing colon");
+        assert!(!tag_pattern_test("contract::cells"), "empty middle segment");
+        assert!(!tag_pattern_test("contract:cells:extra"), "two colons");
+        assert!(!tag_pattern_test(":"), "colon alone");
+        assert!(!tag_pattern_test("::"), "colons alone");
+
+        // The pre-colon rule still governs each segment.
+        assert!(!tag_pattern_test("contract:-cells"), "segment starts with -");
+        assert!(!tag_pattern_test("-contract:cells"), "segment starts with -");
+        assert!(!tag_pattern_test("contract:Cells"), "uppercase segment");
+        assert!(!tag_pattern_test("contract:cell_s"), "underscore");
+        assert!(!tag_pattern_test("contract:cell.s"), "dot");
+        assert!(!tag_pattern_test("contract: cells"), "space");
+    }
+
+    /// The regression that matters: widening the predicate must not move any
+    /// tag this repo's decision store already carries. A literal table, not a
+    /// read of the live `.bee/decisions.jsonl` — a test that reads live state
+    /// passes for the wrong reason the day that state changes.
+    #[test]
+    fn tag_pattern_still_accepts_the_tags_this_repo_already_uses() {
+        for tag in [
+            "cells",
+            "contract",
+            "slp",
+            "orchestration",
+            "advisor",
+            "cli",
+            "ci",
+            "billing",
+            "nightly-job",
+            "decision-memory",
+            "workflow-state",
+            "bee-rs",
+            "p2",
+        ] {
+            assert!(
+                tag_pattern_test(tag),
+                "existing tag {tag} must still validate"
+            );
+        }
+    }
+
+    /// The refusal message prints `TAG_PATTERN_DISPLAY`. If the display text
+    /// and the predicate disagree, every refusal lies about the rule. This
+    /// pins them together: the display's own grammar, walked as strings.
+    #[test]
+    fn tag_pattern_display_describes_the_predicate() {
+        assert_eq!(
+            TAG_PATTERN_DISPLAY,
+            "/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/"
+        );
+
+        // Every branch the display describes as legal, spelled out.
+        for legal in [
+            "a",       // [a-z0-9] alone
+            "0",       // digit start, no tail
+            "a-b",     // [a-z0-9-] tail
+            "a0-b9",   // mixed tail
+            "a:b",     // the optional (:...) group, minimal
+            "a-b:c-d", // the optional group, both sides with tails
+            "0:9",     // digit-only on both sides
+        ] {
+            assert!(
+                tag_pattern_test(legal),
+                "{legal} matches {TAG_PATTERN_DISPLAY} but the predicate refused it"
+            );
+        }
+
+        // Everything the display's anchors and its single optional group
+        // exclude.
+        for illegal in [
+            "",      // ^ needs one char
+            "-a",    // first char is not [a-z0-9]
+            "A",     // outside [a-z0-9]
+            "a_b",   // outside [a-z0-9-]
+            "a b",   // outside [a-z0-9-]
+            ":a",    // the group is not optional-at-the-front
+            "a:",    // the group needs its [a-z0-9]
+            "a::b",  // one group, not two
+            "a:b:c", // one group, not two
+        ] {
+            assert!(
+                !tag_pattern_test(illegal),
+                "{illegal} does not match {TAG_PATTERN_DISPLAY} but the predicate accepted it"
+            );
+        }
+    }
+
+    /// End of the write path, not just the predicate: a namespaced tag reaches
+    /// `.bee/decisions.jsonl` with its colon intact — nothing rewrites,
+    /// splits, or slugifies it on the way in.
+    #[test]
+    fn a_namespaced_tag_is_stored_verbatim() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "The dispatch door is settled".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["contract:dispatch-door".into(), "cells".into()]),
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            rejected: None,
+        };
+        let Ok(Out::Emit(_event, _text, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit for a namespaced tag");
+        };
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["tags"], json!(["contract:dispatch-door", "cells"]));
+    }
+
+    /// Both normalizers call the one predicate, so both inherit the widening
+    /// with no edit of their own — and a namespaced tag is stored verbatim,
+    /// colon and all.
+    #[test]
+    fn both_tag_normalizers_inherit_the_namespaced_slug() {
+        // logDecision flavor.
+        assert_eq!(
+            normalize_tags(Some(vec![
+                "contract:dispatch-door".into(),
+                " contract:cells ".into(),
+                "cells".into(),
+            ]))
+            .expect("a namespaced tag is a valid slug"),
+            Some(vec![
+                "contract:dispatch-door".to_string(),
+                "contract:cells".to_string(),
+                "cells".to_string(),
+            ])
+        );
+        let refused = normalize_tags(Some(vec!["contract:cells:extra".into()]))
+            .expect_err("two colons stay refused");
+        assert!(refused.contains("\"contract:cells:extra\""));
+        assert!(refused.contains(TAG_PATTERN_DISPLAY));
+
+        // decisions-tag flavor (the RAW value form).
+        assert_eq!(
+            normalize_tag_event_tags_value(Some(&json!(["contract:cells", "slp"])))
+                .expect("a namespaced tag is a valid slug"),
+            vec!["contract:cells".to_string(), "slp".to_string()]
+        );
+        let refused = normalize_tag_event_tags_value(Some(&json!([":cells"])))
+            .expect_err("a leading colon stays refused");
+        assert!(refused.contains("\":cells\""));
+        assert!(refused.contains(TAG_PATTERN_DISPLAY));
     }
 
     // ── dwd-1: the WIDE door — a granted worktree gets its OWN decisions
