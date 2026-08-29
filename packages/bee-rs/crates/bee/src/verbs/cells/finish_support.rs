@@ -763,3 +763,50 @@ pub(crate) fn prescan_claim(root: &Path, id: &str) -> MR<()> {
     }
     Ok(())
 }
+
+// ─── slp-advisor-nudge an-3: the cap path's advisor-nudge arm (9e5eda5b) ───
+
+/// Pinned prefix of the cap-path advisor-nudge refusal headline
+/// (message-contract test: `cap_refuses_while_an_advisor_nudge_for_the_cells_
+/// feature_is_unanswered`, verbs/cells/tests.rs). It reads `capCell: …` like
+/// every other refusal this door emits, rather than borrowing the close
+/// door's own `CLOSE_ADVISOR_NUDGE_DEBT_PREFIX`: a reader looking at a
+/// refused cap must see WHICH verb refused, in its own voice.
+pub(crate) const CAP_ADVISOR_NUDGE_DEBT_PREFIX: &str = "capCell: advisor nudge debt for";
+
+/// The cap door's advisor-nudge refusal text, or `None` when this cell's
+/// feature owes nothing. 9e5eda5b arms the debt at the CELL level too, and
+/// this is that tooth: the cap is where the obligation bites first, long
+/// before `bee close` or `bee worktree merge` ever run.
+///
+/// The count is `feature_advisor_nudge_debt` (verbs/supervisor.rs) and
+/// nothing else — the SAME function both boundary doors call. One obligation
+/// read three ways would be three obligations; what is shared is the count,
+/// and each door writes its own prose.
+///
+/// An empty feature name owes nothing: a nudge row carries no feature when
+/// its target held no claim (423871d7), so "no name" already means "counts
+/// against nothing" in the store, and asking the debt about `""` must not
+/// invent an answer the record cannot support.
+pub(crate) fn advisor_nudge_cap_refusal(root: &Path, id: &str, feature: &str) -> MR<Option<String>> {
+    if feature.is_empty() {
+        return Ok(None);
+    }
+    let debt = crate::verbs::supervisor::feature_advisor_nudge_debt(root, feature)
+        .map_err(|_: crate::verbs::drivers::Delegate| Fail::Delegate)?;
+    if debt.count == 0 {
+        return Ok(None);
+    }
+    Ok(Some(
+        [
+            format!(
+                "{CAP_ADVISOR_NUDGE_DEBT_PREFIX} \"{feature}\" — cell \"{id}\" cannot cap: {} advisor nudge(s) with no consult and no recorded decline ({}).",
+                debt.count,
+                crate::verbs::drivers::js_join(&debt.ids, ", ")
+            ),
+            "remedy: run the advisor consult for each row above, then record what came of it with bee decisions log --tags advisor-nudge — or record a reasoned decline the same way. The decision text must NAME the row id; one decision answers one row, and a decision naming no row clears nothing.".to_string(),
+            format!("next: settle the advisor-nudge debt above, then re-run the cap for {id}"),
+        ]
+        .join("\n"),
+    ))
+}

@@ -76,6 +76,7 @@ use crate::roots::{resolve_store_root_worktree, RootsWt};
 use crate::verbs::cells::{read_session, sessions_dir, HEARTBEAT_STALE_SECONDS};
 use crate::verbs::knowledge::deviation_text;
 use crate::verbs::reservations::{date_parse_val, now_iso, now_ms};
+use crate::verbs::supervisor::{needs_human_decision, WAITING_ON_QUESTION};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -445,11 +446,31 @@ pub(crate) struct NeedsYou {
     pub id: String,
     pub what: String,
     pub blocks: String,
+    /// WHICH kind of ask this is — the one field a7e6f237's flag derives from.
+    /// Optional because it is the younger field: every item filed before it
+    /// existed, and every caller that cannot honestly name a kind, carries
+    /// `None` and flags NO. A missing kind is never a parse failure.
+    pub kind: Option<String>,
 }
 
 impl NeedsYou {
+    /// a7e6f237's needs-human-decision flag for this item. DERIVED on read,
+    /// never stored: the same [`needs_human_decision`] the WakeReport uses, so
+    /// a letter and a report can never disagree about the same ask, and a
+    /// hand-edited `needs_human_decision:` line in a filed letter cannot claim
+    /// a flag the kind does not give it.
+    pub(crate) fn needs_human_decision(&self) -> bool {
+        self.kind.as_deref().is_some_and(needs_human_decision)
+    }
+
     fn to_value(&self) -> Value {
-        json!({ "id": self.id, "what": self.what, "blocks": self.blocks })
+        json!({
+            "id": self.id,
+            "what": self.what,
+            "blocks": self.blocks,
+            "kind": self.kind,
+            "needs_human_decision": self.needs_human_decision(),
+        })
     }
 
     fn from_value(v: &Value) -> Option<Self> {
@@ -458,8 +479,22 @@ impl NeedsYou {
             id: m.get("id")?.as_str()?.to_string(),
             what: m.get("what")?.as_str()?.to_string(),
             blocks: m.get("blocks")?.as_str()?.to_string(),
+            // Anything that is not a string — absent, null, a number a hand
+            // edit left behind — reads as no kind, which flags NO and still
+            // renders. `needs_human_decision` is not read back at all.
+            kind: opt_string(m, "kind"),
         })
     }
+}
+
+/// a7e6f237's order for a list of asks: the ones only the human can decide
+/// FIRST, everything else after, and the store's own order kept inside each
+/// group. One helper for every surface that lists these items, so the letter's
+/// machine contract and its prose can never print two different orders.
+pub(crate) fn needs_human_first(items: &mut [NeedsYou]) {
+    // Stable by contract: `sort_by_key` keeps equal keys in their input order,
+    // which is what "stable within each group" means here.
+    items.sort_by_key(|n| !n.needs_human_decision());
 }
 
 /// D3's `items[]` element: `{what, files[], commit, proof, departure}`.
@@ -824,10 +859,20 @@ pub(crate) fn block_sentence(reason: &str) -> String {
 ///     answers. A cell carrying no title falls back to its id rather than to
 ///     a sentence composed here, because a composed one would be a fact no
 ///     record carries (D8).
+///   * `kind` — [`WAITING_ON_QUESTION`], which is what a blocker IS: the work
+///     stopped and only the human can say what happens next. That is a
+///     classification of the record, not an invented fact (D8 bans authored
+///     prose, not the kind field), and it is what makes a7e6f237's flag say
+///     YES for this item instead of falling to the `None` default.
 pub(crate) fn block_needs_you(cell_id: &str, title: Option<&str>, reason: &str) -> NeedsYou {
     let id = one_line(cell_id);
     let blocks = title.map(one_line).filter(|t| !t.is_empty()).unwrap_or_else(|| id.clone());
-    NeedsYou { id, what: one_line(reason), blocks }
+    NeedsYou {
+        id,
+        what: one_line(reason),
+        blocks,
+        kind: Some(WAITING_ON_QUESTION.to_string()),
+    }
 }
 
 /// Append at a clean stop, FAIL-OPEN.
@@ -1035,6 +1080,12 @@ fn emit_opt(out: &mut String, indent: usize, key: &str, value: Option<&str>) {
     }
 }
 
+fn emit_bool(out: &mut String, indent: usize, key: &str, value: bool) {
+    out.push_str(&" ".repeat(indent));
+    out.push_str(key);
+    out.push_str(if value { ": true\n" } else { ": false\n" });
+}
+
 fn emit_string_list(out: &mut String, indent: usize, key: &str, values: &[String]) {
     let pad = " ".repeat(indent);
     if values.is_empty() {
@@ -1085,10 +1136,19 @@ pub(crate) fn render_letter(letter: &Letter) -> String {
         out.push_str("needs_you: []\n");
     } else {
         out.push_str("needs_you:\n");
-        for n in &letter.needs_you {
+        // a7e6f237, at the machine contract: the asks only the human can
+        // decide are listed FIRST. Sorted HERE as well as at composition, so a
+        // letter built by hand or read back and re-rendered files in the same
+        // order as one this run composed — the order is a property of the
+        // renderer, never of who assembled the value.
+        let mut asks = letter.needs_you.clone();
+        needs_human_first(&mut asks);
+        for n in &asks {
             emit_scalar(&mut out, 2, "- id", &n.id);
             emit_scalar(&mut out, 4, "what", &n.what);
             emit_scalar(&mut out, 4, "blocks", &n.blocks);
+            emit_opt(&mut out, 4, "kind", n.kind.as_deref());
+            emit_bool(&mut out, 4, "needs_human_decision", n.needs_human_decision());
         }
     }
 
@@ -1545,7 +1605,7 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
     let mut done: Vec<String> = Vec::new();
     let mut departed: Vec<String> = Vec::new();
     let mut broken: Vec<String> = Vec::new();
-    let mut needs_you: Vec<String> = Vec::new();
+    let mut asks: Vec<NeedsYou> = Vec::new();
 
     for entry in entries {
         if entry.kind == KIND_BLOCKER {
@@ -1556,18 +1616,26 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
         if let Some(departure) = &entry.departure {
             departed.push(bullet(&departure_line(departure)));
         }
-        for n in &entry.needs_you {
+        asks.extend(entry.needs_you.iter().cloned());
+    }
+    // a7e6f237 in the prose, through the SAME helper the frontmatter uses:
+    // the human reads the asks only they can decide first, and the section
+    // and the frontmatter above it can never print two different orders.
+    needs_human_first(&mut asks);
+    let needs_you: Vec<String> = asks
+        .iter()
+        .map(|n| {
             // "blocks" is the ONE connective this pass adds of its own; D13
             // requires the item to name what it blocks, and the id leads so a
             // human can quote it back.
-            needs_you.push(bullet(&format!(
+            bullet(&format!(
                 "[{}] {} — blocks: {}",
                 n.id.trim(),
                 one_line(&n.what),
                 one_line(&n.blocks)
-            )));
-        }
-    }
+            ))
+        })
+        .collect();
     let next: Vec<String> = Vec::new();
 
     let mut out = String::new();
@@ -1626,7 +1694,15 @@ pub(crate) fn compose_letter(
         // D8 again, at the machine contract: an item is exactly what one entry
         // already held (`Entry::to_item`), reordered and grouped at most.
         items: entries.iter().map(Entry::to_item).collect(),
-        needs_you: entries.iter().flat_map(|e| e.needs_you.iter().cloned()).collect(),
+        needs_you: {
+            // Reordering is exactly what D8 leaves this pass free to do, and
+            // a7e6f237 is the order: the asks only the human can decide first,
+            // append order kept inside each group.
+            let mut asks: Vec<NeedsYou> =
+                entries.iter().flat_map(|e| e.needs_you.iter().cloned()).collect();
+            needs_human_first(&mut asks);
+            asks
+        },
         body: compose_body(entries),
     })
 }
@@ -2382,6 +2458,7 @@ mod tests {
                 id: "ny-1".to_string(),
                 what: "Should the letters be kept forever?".to_string(),
                 blocks: "the clean-up work".to_string(),
+                kind: Some(WAITING_ON_QUESTION.to_string()),
             }],
             body: "# Done\n\nTwo things.".to_string(),
         }
@@ -2660,6 +2737,7 @@ mod tests {
             id: "ny-7".to_string(),
             what: "Which name do you want?".to_string(),
             blocks: "the rename".to_string(),
+            kind: Some(WAITING_ON_QUESTION.to_string()),
         }];
         append_entry(root, "run-one", &entry).unwrap();
         let read_back = read_entries(root, "run-one");
@@ -2983,6 +3061,108 @@ mod tests {
         assert_eq!(block_needs_you("blp-4", Some("   "), "why").blocks, "blp-4");
     }
 
+    // ── a7e6f237: the needs-human-decision flag on a queued ask ─────────
+
+    fn ask_item(id: &str, kind: Option<&str>) -> NeedsYou {
+        NeedsYou {
+            id: id.to_string(),
+            what: format!("Ask {id}?"),
+            blocks: format!("work {id}"),
+            kind: kind.map(str::to_string),
+        }
+    }
+
+    /// TRUTH: the flag derives from the item's KIND and nothing else, through
+    /// the same one rule the WakeReport reads — a second copy of the kind list
+    /// would let a letter and a report disagree and both stay green.
+    #[test]
+    fn the_flag_on_an_ask_derives_from_its_kind_and_nothing_else() {
+        for yes in ["gate", "question", "escalation", "urgent", "advisor-nudge"] {
+            assert!(ask_item("a", Some(yes)).needs_human_decision(), "{yes} is the human's call");
+            assert!(needs_human_decision(yes), "and the report agrees about {yes}");
+        }
+        for no in ["intervention", "turn-end", "", "   ", "QUESTION", "not-a-kind"] {
+            assert!(!ask_item("a", Some(no)).needs_human_decision(), "{no:?} must not flag yes");
+        }
+        assert!(!ask_item("a", None).needs_human_decision(), "no kind, no claim on the human");
+        // A blocked cell IS a question only the human can answer.
+        assert!(block_needs_you("blp-4", None, "which door wins?").needs_human_decision());
+    }
+
+    /// TRUTH: "a letter lists yes-flagged items before all others, stable
+    /// within groups" — in the machine contract AND in the prose, because both
+    /// go through one helper.
+    #[test]
+    fn a_letter_lists_the_asks_only_you_can_decide_first() {
+        let mut entry = sample_entry("2026-08-25T01:00:00.000Z", "Did the thing");
+        // Recorded worst-first on purpose: append order alone would print the
+        // two the human must decide last.
+        entry.needs_you = vec![
+            ask_item("no-1", Some("intervention")),
+            ask_item("yes-1", Some("advisor-nudge")),
+            ask_item("no-2", None),
+            ask_item("yes-2", Some("urgent")),
+        ];
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[entry]).unwrap();
+
+        let ids: Vec<&str> = letter.needs_you.iter().map(|n| n.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["yes-1", "yes-2", "no-1", "no-2"],
+            "flagged first, append order kept inside each group"
+        );
+
+        let ordered = |text: &str| {
+            let at = |id: &str| {
+                text.find(id).unwrap_or_else(|| panic!("{id} is missing from:\n{text}"))
+            };
+            at("yes-1") < at("yes-2") && at("yes-2") < at("no-1") && at("no-1") < at("no-2")
+        };
+        assert!(ordered(&letter.body), "the prose keeps the same order: {}", letter.body);
+        let text = render_letter(&letter);
+        assert!(ordered(&text), "and so does the frontmatter: {text}");
+        assert!(text.contains("needs_human_decision: true"), "the flag is carried: {text}");
+        assert!(text.contains("needs_human_decision: false"), "both ways: {text}");
+    }
+
+    /// TRUTH: "a malformed queue row derives flag=no and still renders" — a
+    /// kind is DATA, never a control token, and a renderer that panics on one
+    /// bad row loses the human the whole letter (20260711).
+    #[test]
+    fn a_malformed_ask_flags_no_and_still_renders() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut letter = sample_letter();
+        letter.needs_you = vec![
+            ask_item("junk", Some("{\"kind\": \"urgent\"}\nrm -rf /")),
+            ask_item("empty", Some("")),
+            ask_item("nokind", None),
+            ask_item("real", Some("escalation")),
+        ];
+        let path = write_letter(root, &letter).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        for id in ["junk", "empty", "nokind", "real"] {
+            assert!(text.contains(id), "{id} was dropped instead of rendered:\n{text}");
+        }
+        assert!(
+            text.find("real").unwrap() < text.find("junk").unwrap(),
+            "the one honest ask leads, the malformed ones follow:\n{text}"
+        );
+
+        // The flag is DERIVED on every read: a hand-edited `true` in the file
+        // cannot promote a row whose kind does not earn it.
+        let hacked = text.replace("needs_human_decision: false", "needs_human_decision: true");
+        std::fs::write(&path, hacked).unwrap();
+        let back = read_letter(&path).unwrap();
+        assert_eq!(back.needs_you.len(), 4, "every row read back, malformed included");
+        assert_eq!(
+            back.needs_you.iter().filter(|n| n.needs_human_decision()).count(),
+            1,
+            "only the escalation is the human's call"
+        );
+    }
+
     // ── D7/D8/D9/D11: composing and filing the letter at run end ────────
 
     fn full_run() -> Vec<Entry> {
@@ -2999,6 +3179,7 @@ mod tests {
             id: "ny-7".to_string(),
             what: "Which name do you want for the folder?".to_string(),
             blocks: "the rename".to_string(),
+            kind: Some(WAITING_ON_QUESTION.to_string()),
         }];
         vec![first, second, blocked]
     }

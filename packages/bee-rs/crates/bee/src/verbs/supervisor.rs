@@ -233,21 +233,74 @@ pub(crate) const KNOWN_KINDS: [&str; 2] = ["observation", "silence"];
 /// The MAILBOX row kinds (c80debd7) — a question addressed to ONE session.
 /// `urgent` is the danger-class member: same fields, same validation, two
 /// differences only (no frequency cap, one immediate notification).
-pub(crate) const MAILBOX_KINDS: [&str; 3] = ["intervention", "escalation", "urgent"];
+///
+/// `advisor-nudge` (3cfd9980) is one more KIND of this same record, never a
+/// second store: on poor-work evidence the supervisor RECOMMENDS an advisor
+/// consult to the struggling session's own lead, which reads it at its next
+/// turn boundary and decides for itself. The supervisor still only writes
+/// records — 704b691c holds untouched.
+pub(crate) const MAILBOX_KINDS: [&str; 4] =
+    ["intervention", "escalation", "urgent", "advisor-nudge"];
 
 /// The mailbox kinds the frequency cap COUNTS AGAINST. A kind outside this set
 /// is never refused for repeating a point: escalation IS the remedy the cap
 /// names, and `urgent` is danger-class — c80debd7 gives an UrgentAlert an
 /// immediate path, and a danger notice suppressed because the same point was
 /// raised calmly an hour ago is the one failure this store must not have.
-const CAPPED_KINDS: [&str; 1] = ["intervention"];
+///
+/// `advisor-nudge` is counted for the reason 9e5eda5b names: the same nudge
+/// twice is the ignored-twice case, and it must ESCALATE into the human's
+/// report rather than repeat at the lead that already passed on it.
+const CAPPED_KINDS: [&str; 2] = ["intervention", "advisor-nudge"];
 
 /// Every kind `record` accepts, in the order its refusal names them.
 /// `all_kinds_is_the_two_sets` keeps this from drifting out of the two above.
-pub(crate) const ALL_KINDS: [&str; 5] =
-    ["observation", "silence", "intervention", "escalation", "urgent"];
+pub(crate) const ALL_KINDS: [&str; 6] =
+    ["observation", "silence", "intervention", "escalation", "urgent", "advisor-nudge"];
 
-pub(crate) const KNOWN_SIGNALS: [&str; 4] = ["struggling-loop", "big-decision", "danger-op", "none"];
+/// The two waiting-on kinds that mean a HUMAN is being waited on. `turn-end`
+/// is deliberately not one of them: it is the ordinary end of a turn with
+/// nothing owed (see [`live_waiting_on`]).
+pub(crate) const WAITING_ON_GATE: &str = "gate";
+pub(crate) const WAITING_ON_QUESTION: &str = "question";
+
+/// a7e6f237's needs-human-decision flag, as the ONE derivation both reading
+/// surfaces call — the WakeReport here, and the human-mailbox letter in
+/// `verbs/mailbox.rs`. A rule checked at two points needs one shared read: two
+/// copies of this list would let a letter and a report disagree about the same
+/// row and both stay green.
+///
+/// YES is "only the human can answer this": a `gate` or a `question` the
+/// session is waited on for, plus the three mailbox kinds that are an ask on
+/// the human's desk rather than a note to a session — `escalation` (the
+/// frequency cap's own remedy, so the point was already passed over once),
+/// `urgent` (danger class), and `advisor-nudge` (3cfd9980: the lead may
+/// decline it, and 9e5eda5b turns silence on it into the human's call).
+///
+/// Everything else is NO, `intervention` included — that one is addressed to a
+/// SESSION, and the session answers it.
+pub(crate) const HUMAN_DECISION_KINDS: [&str; 5] =
+    [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", ADVISOR_NUDGE_KIND];
+
+/// The flag itself. TOTAL on a `&str` by construction: an unknown, empty or
+/// malformed kind derives `false` and the row still renders. A queue row is
+/// data, never a control token — a renderer that can panic on a hand-edited
+/// kind is a renderer that loses the human's whole report over one bad line.
+pub(crate) fn needs_human_decision(kind: &str) -> bool {
+    HUMAN_DECISION_KINDS.contains(&kind)
+}
+
+/// The poor-work vocabulary. `budget-overrun` and `same-region-resubmit` are
+/// the two 3cfd9980 names beside `struggling-loop`; the telemetry that
+/// produces them landed with a8f4b8ab, so the word is what was missing.
+pub(crate) const KNOWN_SIGNALS: [&str; 6] = [
+    "struggling-loop",
+    "big-decision",
+    "danger-op",
+    "budget-overrun",
+    "same-region-resubmit",
+    "none",
+];
 
 /// The bound on one note. Two sentences fit in a fraction of it; the cap
 /// exists because these rows are rendered back into a ≤10-line WakeReport
@@ -482,13 +535,21 @@ pub(crate) struct Intervention {
     /// stamped ON the row rather than read back out of config, so editing the
     /// config later can never rewrite what the human is told happened.
     pub(crate) consent_timeout_seconds: Option<u64>,
+    /// The feature the target session was working in when this row was
+    /// written, derived once at record time from its live claim (3cfd9980's
+    /// nudge only). 423871d7 makes this the ONLY honest place for it: the
+    /// supervisor is a cold tick, so a later reader that needs to know which
+    /// work a nudge answers must find it ON the record — re-deriving it later
+    /// would read a claim that has since moved. `None` when the target held
+    /// no claim, and then the key is absent from the row entirely.
+    pub(crate) feature: Option<String>,
 }
 
 impl Intervention {
     /// The `record` event as it is appended — the row minus anything a later
     /// event owns.
     fn record_event(&self) -> Value {
-        json!({
+        let mut v = json!({
             "ts": self.ts,
             "event": "record",
             "id": self.id,
@@ -499,12 +560,14 @@ impl Intervention {
             "target_session": self.target_session,
             "tick": self.tick,
             "queued": self.queued,
-        })
+        });
+        with_feature(&mut v, self.feature.as_deref());
+        v
     }
 
     /// The folded row every reader answers with.
     pub(crate) fn to_value(&self) -> Value {
-        json!({
+        let mut v = json!({
             "id": self.id,
             "ts": self.ts,
             "kind": self.kind,
@@ -518,7 +581,22 @@ impl Intervention {
             "released_at": self.released_at,
             "consented_at": self.consented_at,
             "consent_timeout_seconds": self.consent_timeout_seconds,
-        })
+            // a7e6f237: every queued ask CARRIES the flag, derived here rather
+            // than stored, so no reader has to know the kind table and no
+            // hand-edited row can claim a flag its kind does not give it.
+            "needs_human_decision": needs_human_decision(&self.kind),
+        });
+        with_feature(&mut v, self.feature.as_deref());
+        v
+    }
+}
+
+/// Attach the derived feature to a row — ABSENT rather than null when there is
+/// none, so every row shape that existed before this field is byte-identical
+/// to what it was. One owner for that rule, used by both row renderings.
+fn with_feature(v: &mut Value, feature: Option<&str>) {
+    if let (Some(map), Some(feature)) = (v.as_object_mut(), feature) {
+        map.insert("feature".to_string(), Value::String(feature.to_string()));
     }
 }
 
@@ -552,6 +630,11 @@ impl Intervention {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            // Optional by construction: every row written before this field
+            // existed, and every row whose target held no claim, has no key
+            // here — which reads as "counts against no feature", never as a
+            // parse failure.
+            feature: non_empty("feature"),
         })
     }
 
@@ -576,6 +659,49 @@ impl Intervention {
             self.question
         )
     }
+}
+
+/// The feature a session is working in RIGHT NOW, read claim → cell → feature
+/// out of the control root's own stores.
+///
+/// The walk is deliberately total: an unreadable claim, an unparseable cell,
+/// or a cell naming no feature is passed over rather than raised — this runs
+/// inside a write door whose whole contract is that it refuses BEFORE it
+/// writes, and a corrupt neighbouring file is not a reason to refuse a nudge.
+/// The entries are sorted so a session holding two claims derives the same
+/// answer on every run rather than whatever order the filesystem hands back.
+fn feature_of_session(control: &Path, session: &str) -> Option<String> {
+    let mut cells: Vec<String> = std::fs::read_dir(control.join(".bee").join("claims"))
+        .ok()?
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            // The file STEM is the cell id, and it is already a safe path
+            // segment because the store wrote it as one. The claim's own
+            // `cell` field is never joined into a path here — a hand-edited
+            // one could carry `..`, and this read is not worth that door.
+            name.strip_suffix(".json").map(str::to_string)
+        })
+        .collect();
+    cells.sort();
+    for cell in cells {
+        let claim = std::fs::read_to_string(control.join(".bee").join("claims").join(format!("{cell}.json")))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok());
+        let Some(claim) = claim else { continue };
+        if claim.get("session").and_then(Value::as_str) != Some(session) {
+            continue;
+        }
+        let feature = std::fs::read_to_string(control.join(".bee").join("cells").join(format!("{cell}.json")))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|c| c.get("feature").and_then(Value::as_str).map(str::to_string))
+            .filter(|f| !f.is_empty());
+        if feature.is_some() {
+            return feature;
+        }
+    }
+    None
 }
 
 /// A stable row id: 8 hex characters, the same short shape a decision id
@@ -736,6 +862,16 @@ pub(crate) fn record_intervention_into(
     // effect this mark is not allowed to have.
     let queued = kind != "urgent" && current_window(control).is_some();
 
+    // The nudge, and only the nudge, learns which work it is about (3cfd9980
+    // + 423871d7): the debt this record creates is owed by the target's own
+    // feature, and a cold tick has no memory to look it up in later. Every
+    // other kind's row shape is left exactly as it was.
+    let feature = if kind == ADVISOR_NUDGE_KIND {
+        feature_of_session(control, &target_session)
+    } else {
+        None
+    };
+
     let rec = Intervention {
         id: new_row_id(),
         ts: now_iso(),
@@ -750,6 +886,7 @@ pub(crate) fn record_intervention_into(
         released_at: None,
         consented_at: None,
         consent_timeout_seconds: None,
+        feature,
     };
     if append_jsonl(&interventions_path(control), &rec.record_event()).is_err() {
         return Err(format!("bee {cmd}: could not append to the intervention mailbox."));
@@ -873,6 +1010,110 @@ pub(crate) fn read_interventions(control: &Path) -> MailboxStore {
 /// The undelivered rows addressed to ONE session, oldest first.
 pub(crate) fn pending_for<'a>(store: &'a MailboxStore, target: &str) -> Vec<&'a Intervention> {
     store.rows.iter().filter(|r| r.delivered_at.is_none() && r.target_session == target).collect()
+}
+
+// ─── the advisor-nudge response debt (9e5eda5b) ─────────────────────────
+//
+// The debt both boundary doors and the cap path read (an-3). Same placement
+// rule `feature_dissent_debt` (verbs/cells/dissent.rs) states for the same
+// reason: an obligation read two ways at three doors is three obligations, so
+// the count and its escape live HERE, beside the record and its ONE reading of
+// "unanswered". Each door still writes its own headline, remedy and command —
+// what is shared is a `{count, ids}`-shaped summary in, door prose out.
+
+/// The tag a clearing decision must carry. `advisor-nudge` is also the record
+/// kind: one word for one thing, so the reader who saw the nudge already knows
+/// the tag to type.
+pub(crate) const ADVISOR_NUDGE_KIND: &str = "advisor-nudge";
+
+/// Every unanswered `advisor-nudge` row whose derived feature is `feature`,
+/// oldest first, with the offending row ids named in full — a door that names
+/// one of three sends the reader back twice.
+///
+/// Pure read over two stores, and that is forced by 423871d7: the supervisor is
+/// a cold tick, so the debt exists only in records. The two stores are the
+/// mailbox (`interventions.jsonl`, under the CONTROL root so a worktree session
+/// and a supervisor tick read one store) and the decision log.
+///
+/// The feature is the one DERIVED ONTO the row at record time, never re-derived
+/// here: the target's claim has since moved on, and re-reading it would answer
+/// about today's work instead of the work the nudge was about. A row with no
+/// feature — its target held no claim — therefore counts against NO feature and
+/// blocks no door, which is the honest reading of "we cannot tell what work
+/// this is about", never a licence to block everything.
+///
+/// "Unanswered" is `advisor_nudge_is_cleared` and nothing else: one reading,
+/// shared by every door that arms this debt.
+pub(crate) fn feature_advisor_nudge_debt(
+    root: &Path,
+    feature: &str,
+) -> Result<crate::verbs::drivers::DebtSummary, crate::verbs::drivers::Delegate> {
+    let store = read_interventions(&control_root_path(root));
+    let clearing = advisor_nudge_clearing_decisions(root)?;
+    let mut ids: Vec<Value> = Vec::new();
+    for row in &store.rows {
+        if row.kind != ADVISOR_NUDGE_KIND || row.feature.as_deref() != Some(feature) {
+            continue;
+        }
+        if advisor_nudge_is_cleared(&clearing, &row.id)? {
+            continue;
+        }
+        ids.push(Value::String(row.id.clone()));
+    }
+    Ok(crate::verbs::drivers::DebtSummary { count: ids.len(), ids })
+}
+
+/// Every ACTIVE decision tagged `advisor-nudge` — the candidate clearings, read
+/// once per debt count rather than once per row.
+///
+/// Tag-exact and active-only, exactly as `has_dissent_deferral_decision` reads
+/// its own escape: a superseded or redacted decision has stopped being the
+/// answer, and a row it once cleared is owed again.
+fn advisor_nudge_clearing_decisions(
+    root: &Path,
+) -> Result<Vec<Value>, crate::verbs::drivers::Delegate> {
+    let active = crate::verbs::decisions::active_decisions(root, false)
+        .map_err(|_| crate::verbs::drivers::Delegate)?;
+    crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some(ADVISOR_NUDGE_KIND.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| crate::verbs::drivers::Delegate)
+}
+
+/// Whether one of those tagged decisions NAMES this row — the per-row escape.
+///
+/// This DIVERGES from the dissent-deferral precedent (dissent.rs) on purpose,
+/// and the divergence is the point. That escape matches tag + feature, so one
+/// decision lifts the refusal for every dissent in the feature; here 9e5eda5b
+/// puts the obligation on each nudge ("consult ran, or a reasoned decline
+/// recorded"), so a decision clears exactly the row whose id it carries in its
+/// text and nothing else. A clearing decision that names no row id clears
+/// nothing — feature-level clearing is the rejected alternative, not an
+/// accident of matching. Both halves are covered: "consulted, outcome X" and
+/// "declined because Y" are the same shape of record, tagged the same way.
+///
+/// The match itself invents no rule: it is `DecisionFilters.text`, the same
+/// scorer `bee decisions search --text` already answers with.
+fn advisor_nudge_is_cleared(
+    tagged: &[Value],
+    row_id: &str,
+) -> Result<bool, crate::verbs::drivers::Delegate> {
+    if row_id.is_empty() {
+        return Ok(false);
+    }
+    let named = crate::verbs::decisions::filter_decision_events(
+        tagged.to_vec(),
+        &crate::verbs::decisions::DecisionFilters {
+            text: Some(row_id.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| crate::verbs::drivers::Delegate)?;
+    Ok(!named.is_empty())
 }
 
 /// Stamp one row delivered. An unknown id is a typed refusal that writes
@@ -1680,13 +1921,24 @@ fn decisions_log_path(control: &Path) -> PathBuf {
     control.join(".bee").join("decisions.jsonl")
 }
 
-/// One rendered line plus the rank that ORDERS it. `rank` is impact-if-wrong
-/// (66c4c251), sorted DESCENDING; equal ranks keep store order, which a stable
-/// sort gives for free.
+/// One rendered line plus the two keys that ORDER it.
+///
+/// `needs_human` is a7e6f237's flag and is the FIRST key: a line only the
+/// human can answer prints above every line that is merely important. `rank`
+/// is impact-if-wrong (66c4c251) and orders inside each group; equal keys keep
+/// store order, which a stable sort gives for free.
 #[derive(Debug, Clone)]
 struct ReportItem {
+    needs_human: bool,
     rank: u8,
     text: String,
+}
+
+/// The ONE comparison every ordering of report items goes through: flag first
+/// (a7e6f237), then impact-if-wrong (66c4c251), both descending. Written once
+/// so the section order and the truncation's keep-list can never disagree.
+fn report_order(a: &ReportItem, b: &ReportItem) -> std::cmp::Ordering {
+    b.needs_human.cmp(&a.needs_human).then(b.rank.cmp(&a.rank))
 }
 
 /// Impact-if-wrong for one observation row: the day-1 signal set of da7cb49b,
@@ -1747,6 +1999,9 @@ fn collect_happened(control: &Path, win: &PresenceWindow) -> Vec<ReportItem> {
         .iter()
         .filter(|r| in_window(&r.ts, win))
         .map(|r| ReportItem {
+            // An observation is something that HAPPENED, never an open ask —
+            // nothing here is waiting on the human's answer (a7e6f237).
+            needs_human: false,
             rank: observation_rank(&r.signal),
             text: format!("- {}: {}", r.signal, clip(&r.note)),
         })
@@ -1791,6 +2046,8 @@ fn collect_decided(control: &Path, win: &PresenceWindow) -> Vec<ReportItem> {
             continue;
         }
         items.push(ReportItem {
+            // Already decided, so nothing here needs deciding (a7e6f237).
+            needs_human: false,
             rank: if decision_is_one_way(&e) { 2 } else { 1 },
             text: format!("- {text}"),
         });
@@ -1809,7 +2066,7 @@ fn live_waiting_on(control: &Path) -> Option<(String, String)> {
     let m = v.get("waiting_on")?.as_object()?;
     let kind = m.get("kind")?.as_str()?.to_string();
     let subject = js_trim(m.get("subject")?.as_str()?).to_string();
-    if subject.is_empty() || !matches!(kind.as_str(), "gate" | "question") {
+    if subject.is_empty() || !matches!(kind.as_str(), WAITING_ON_GATE | WAITING_ON_QUESTION) {
         return None;
     }
     Some((kind, subject))
@@ -1831,6 +2088,11 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
         }
         let item = if went_ahead {
             ReportItem {
+                // Flagged YES whatever its kind: an ask that went ahead
+                // without the human is the one line on this list they must
+                // not miss (c706053e), so a7e6f237's first sort key must
+                // never push it below a row that is merely waiting.
+                needs_human: true,
                 // Above every rank `needs_you_rank` can return, deliberately.
                 // sup-9 orders this section by impact-if-wrong; an ask that was
                 // already answered by nobody outranks every ask still waiting.
@@ -1845,6 +2107,7 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
             }
         } else {
             ReportItem {
+                needs_human: needs_human_decision(&row.kind),
                 rank: needs_you_rank(&row.kind),
                 text: format!("- {} ({}): {}", row.kind, row.target_session, clip(&row.question)),
             }
@@ -1853,6 +2116,7 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
     }
     if let Some((kind, subject)) = live_waiting_on(control) {
         items.push(ReportItem {
+            needs_human: needs_human_decision(&kind),
             rank: needs_you_rank(&kind),
             text: format!("- waiting on you ({kind}): {}", clip(&subject)),
         });
@@ -1892,17 +2156,34 @@ fn next_action_line(
         );
     }
     let waiting = live_waiting_on(control);
-    if let Some((_, subject)) = waiting.as_ref().filter(|(k, _)| k == "gate") {
+    if let Some((_, subject)) = waiting.as_ref().filter(|(k, _)| k == WAITING_ON_GATE) {
         return format!("- Answer the gate waiting on you: {}", clip(subject));
     }
-    if !released.is_empty() {
-        return format!(
+    let read_the_queue = || {
+        format!(
             "- Read the {} queued question(s): `bee supervisor pending --target-session <id>`",
             released.len()
-        );
+        )
+    };
+    // a7e6f237 splits what was one branch. A released row the HUMAN must
+    // decide (escalation, urgent, advisor-nudge) now sorts above the waiting
+    // `question` in the section above, so it must sit above it here too; a
+    // released `intervention` is a session's own ask and does not, and then
+    // the question waiting on the human is the higher line. Without this
+    // split, the flag would reorder the third section and leave the fourth
+    // pointing at the row it no longer puts first.
+    let released_needs_human = store
+        .rows
+        .iter()
+        .any(|r| released.iter().any(|id| id == &r.id) && needs_human_decision(&r.kind));
+    if released_needs_human {
+        return read_the_queue();
     }
     if let Some((_, subject)) = waiting {
         return format!("- Answer the question waiting on you: {}", clip(&subject));
+    }
+    if !released.is_empty() {
+        return read_the_queue();
     }
     if decided + happened > 0 {
         return "- Nothing needs you — skim the two sections above and carry on.".to_string();
@@ -1937,12 +2218,13 @@ fn render_report_markdown(
     metrics: &str,
 ) -> (String, usize) {
     let empty_text = ["- Nothing happened.", "- Nothing was decided.", "- Nothing needs you."];
-    // Impact-if-wrong descending (66c4c251); `sort_by` is stable, so equal
-    // ranks keep the order the store handed them over in.
+    // Needs-human-decision first (a7e6f237), then impact-if-wrong descending
+    // (66c4c251); `sort_by` is stable, so equal keys keep the order the store
+    // handed them over in — the order inside each group never wobbles.
     let mut sections: Vec<Vec<ReportItem>> =
         vec![happened.to_vec(), decided.to_vec(), needs.to_vec()];
     for section in sections.iter_mut() {
-        section.sort_by(|a, b| b.rank.cmp(&a.rank));
+        section.sort_by(report_order);
     }
 
     let extras: usize = sections.iter().map(|s| s.len().saturating_sub(1)).sum();
@@ -1958,18 +2240,20 @@ fn render_report_markdown(
         (allowance, extras - allowance)
     };
 
-    // Which extra items survive: highest impact first across all three
-    // sections, ties broken by section order and then store order (the order
-    // this vector is built in, kept by a stable sort).
-    let mut candidates: Vec<(u8, usize, usize)> = Vec::new();
+    // Which extra items survive: the same two keys the sections were ordered
+    // by — needs-human-decision first, then highest impact — ties broken by
+    // section order and then store order (the order this vector is built in,
+    // kept by a stable sort). One comparison for both, so truncation can never
+    // drop a line the order above put on top.
+    let mut candidates: Vec<(bool, u8, usize, usize)> = Vec::new();
     for (si, section) in sections.iter().enumerate() {
         for (ii, item) in section.iter().enumerate().skip(1) {
-            candidates.push((item.rank, si, ii));
+            candidates.push((item.needs_human, item.rank, si, ii));
         }
     }
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    candidates.sort_by(|a, b| (b.0, b.1).cmp(&(a.0, a.1)));
     let kept: Vec<(usize, usize)> =
-        candidates.iter().take(allowance).map(|(_, si, ii)| (*si, *ii)).collect();
+        candidates.iter().take(allowance).map(|(_, _, si, ii)| (*si, *ii)).collect();
 
     let mut lines: Vec<String> = Vec::new();
     for (si, section) in sections.iter().enumerate() {
@@ -3605,6 +3889,232 @@ mod tests {
         assert_eq!(mbx(control).len(), 3);
     }
 
+    // ─── advisor-nudge (3cfd9980, one more KIND of the c80debd7 record) ──
+
+    /// Plant the claim + cell pair `bee cells claim` writes, so a target
+    /// session HAS a live claim to derive a feature from. Both files live in
+    /// the control root, which is where the mailbox lives too.
+    fn plant_claim(control: &Path, cell: &str, session: &str, feature: &str) {
+        write(
+            control,
+            &format!(".bee/claims/{cell}.json"),
+            &json!({"cell": cell, "session": session, "workspace_id": "main"}).to_string(),
+        );
+        write(
+            control,
+            &format!(".bee/cells/{cell}.json"),
+            &json!({"id": cell, "feature": feature, "status": "claimed"}).to_string(),
+        );
+    }
+
+    /// TRUTH: "a second advisor-nudge on the same (target_session, point_key)
+    /// refuses and names escalation" — exactly `intervention`'s behavior,
+    /// because 9e5eda5b rides the frequency cap that already exists.
+    #[test]
+    fn advisor_nudge_is_a_mailbox_kind_the_frequency_cap_counts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        assert!(MAILBOX_KINDS.contains(&"advisor-nudge"), "the nudge is a mailbox kind");
+        assert!(CAPPED_KINDS.contains(&"advisor-nudge"), "the cap counts it, like an intervention");
+        assert!(ALL_KINDS.contains(&"advisor-nudge"), "`record` accepts it");
+
+        let first = ask(control, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor read help here?")
+            .expect("a valid advisor-nudge is accepted");
+        assert_eq!(first.kind, "advisor-nudge");
+
+        let err = ask(control, "advisor-nudge", "sess-1", " Retry-Loop ", "Still worth an advisor?").unwrap_err();
+        assert!(err.contains("already raised"), "{err}");
+        assert!(err.contains("--kind escalation"), "the refusal names its one remedy: {err}");
+        assert!(err.contains(&first.id), "the refusal names the row it collided with: {err}");
+        assert_eq!(mbx(control).len(), 1, "a capped point writes nothing");
+
+        // It reads back as a plain (non-urgent) delivery line — the lead is
+        // being handed a recommendation, not an alarm.
+        let store = read_interventions(control);
+        let pending = pending_for(&store, "sess-1");
+        assert_eq!(pending.len(), 1, "the row lists as pending");
+        assert_eq!(delivery_line(pending[0]), "bee supervisor: Would an advisor read help here?");
+    }
+
+    /// TRUTH: "the row carries the feature derived from the target session's
+    /// live claim at record time, or none when no claim exists" (423871d7 —
+    /// derived ONCE, onto the record, because records are the only memory).
+    #[test]
+    fn an_advisor_nudge_carries_the_feature_of_its_targets_live_claim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        plant_claim(control, "an-1", "sess-1", "slp-advisor-nudge");
+
+        let rec = ask(control, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor read help here?")
+            .unwrap();
+        assert_eq!(rec.feature.as_deref(), Some("slp-advisor-nudge"));
+
+        let row: Value = serde_json::from_str(&mbx(control)[0]).unwrap();
+        assert_eq!(row["feature"], "slp-advisor-nudge", "the derivation is ON the row: {row}");
+        assert_eq!(
+            read_interventions(control).rows[0].feature.as_deref(),
+            Some("slp-advisor-nudge"),
+            "and it folds back out of the store"
+        );
+    }
+
+    /// The same truth's other half: no claim ⇒ no feature FIELD at all, and
+    /// every other kind's row shape is untouched by this addition.
+    #[test]
+    fn a_nudge_with_no_live_claim_carries_no_feature_field_at_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        let rec = ask(control, "advisor-nudge", "sess-nobody", "retry-loop", "Would an advisor help?").unwrap();
+        assert_eq!(rec.feature, None);
+        let row: Value = serde_json::from_str(&mbx(control)[0]).unwrap();
+        assert!(row.get("feature").is_none(), "absent, never null: {row}");
+
+        // An ordinary intervention keeps the exact record event it always had.
+        plant_claim(control, "an-9", "sess-2", "some-feature");
+        ask(control, "intervention", "sess-2", "retry-loop", "What ends the retry?").unwrap();
+        let plain: Value = serde_json::from_str(&mbx(control)[1]).unwrap();
+        assert!(
+            plain.get("feature").is_none(),
+            "only the nudge derives a feature — no other kind's row shape moves: {plain}"
+        );
+    }
+
+    /// The poor-work signals 3cfd9980 names must be SPELLABLE (a8f4b8ab's
+    /// telemetry already produces them), and the set must still be closed.
+    #[test]
+    fn the_poor_work_signals_record_and_the_signal_set_stays_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let cmd = "supervisor record";
+        let q = Some("Would an advisor read help here?");
+
+        for signal in ["budget-overrun", "same-region-resubmit"] {
+            assert!(KNOWN_SIGNALS.contains(&signal), "{signal} must be a known signal");
+            record_intervention_into(
+                control, cmd, "advisor-nudge", Some(signal), Some("sess-1"), Some(signal), q, None,
+            )
+            .unwrap_or_else(|e| panic!("{signal} must record: {e}"));
+            // The observation seam takes the same word.
+            record_into(control, cmd, Some("observation"), Some(signal), Some("Seen."), None, None)
+                .unwrap_or_else(|e| panic!("{signal} must record as an observation: {e}"));
+        }
+
+        let err = record_intervention_into(
+            control, cmd, "advisor-nudge", Some("budget-overun"), Some("sess-1"), Some("typo"), q, None,
+        )
+        .unwrap_err();
+        assert!(err.contains("--signal must be one of"), "a near-miss is still refused: {err}");
+        let err = record_intervention_into(
+            control, cmd, "advisor-nudges", None, Some("sess-1"), Some("typo"), q, None,
+        )
+        .unwrap_err();
+        assert!(err.contains("--kind must be one of"), "a near-miss kind is still refused: {err}");
+    }
+
+    // ─── the advisor-nudge debt (9e5eda5b) ──────────────────────────────
+
+    /// Append one decision event, the shape `bee decisions log` writes. The
+    /// debt reads the decision log through `active_decisions`, so the fixture
+    /// is the log itself rather than any in-memory stand-in.
+    fn log_decision(root: &Path, id: &str, text: &str, tags: &[&str]) {
+        let event = json!({
+            "id": id,
+            "type": "decide",
+            "date": "2026-08-29T00:00:00.000Z",
+            "decision": text,
+            "rationale": "r",
+            "tags": tags,
+            "scope": "repo",
+        });
+        append_jsonl(&root.join(".bee").join("decisions.jsonl"), &event).unwrap();
+    }
+
+    fn debt_ids(root: &Path, feature: &str) -> Vec<String> {
+        feature_advisor_nudge_debt(root, feature)
+            .expect("the debt is a pure read and never delegates on a healthy store")
+            .ids
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
+    }
+
+    /// TRUTH: "a decision tagged advisor-nudge naming a row id clears exactly
+    /// that row's debt" AND "two unanswered rows with one cleared leaves one
+    /// counting". They are one test because the second is the only proof the
+    /// first is per-ROW and not per-feature — feature-level clearing is the
+    /// rejected alternative, and a single-row fixture cannot tell them apart.
+    #[test]
+    fn a_tagged_decision_naming_one_row_clears_that_row_and_leaves_the_other_counting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        plant_claim(root, "an-1", "sess-1", "demo");
+
+        // Two points, one session, one feature — the cap keys on the pair, so
+        // two DIFFERENT points are two honest rows.
+        let first = ask(root, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor help?").unwrap();
+        let second = ask(root, "advisor-nudge", "sess-1", "budget", "Is the budget read right?").unwrap();
+        assert_eq!(debt_ids(root, "demo"), vec![first.id.clone(), second.id.clone()]);
+
+        // A tagged decision that names NO row clears nothing: the whole point
+        // of the per-row escape is that it cannot be answered in general.
+        log_decision(root, "d0", "the advisor thing for demo is fine", &["advisor-nudge"]);
+        assert_eq!(debt_ids(root, "demo").len(), 2, "a decision naming no row id clears nothing");
+
+        // A decision naming the row, but NOT tagged, is not a clearing either.
+        log_decision(root, "d1", &format!("consulted the advisor for {}", first.id), &["note"]);
+        assert_eq!(debt_ids(root, "demo").len(), 2, "an untagged decision clears nothing");
+
+        // The real thing — and it clears ONE row.
+        log_decision(
+            root,
+            "d2",
+            &format!("consulted the advisor about {}; keeping the current approach", first.id),
+            &["advisor-nudge"],
+        );
+        assert_eq!(
+            debt_ids(root, "demo"),
+            vec![second.id.clone()],
+            "exactly the named row is cleared; the other is still owed"
+        );
+
+        // The decline half of 9e5eda5b is the same shape of record.
+        log_decision(
+            root,
+            "d3",
+            &format!("declined the advisor consult for {}: the budget read was stale", second.id),
+            &["advisor-nudge"],
+        );
+        assert_eq!(feature_advisor_nudge_debt(root, "demo").unwrap().count, 0, "both answered");
+    }
+
+    /// TRUTH: "a row with no derived feature counts against no feature". Its
+    /// target held no claim (423871d7 — records alone), so no door can honestly
+    /// say which work it is about, and it blocks none of them.
+    #[test]
+    fn a_nudge_with_no_derived_feature_counts_against_no_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // No claim planted for sess-nobody: the row carries no feature.
+        let orphan = ask(root, "advisor-nudge", "sess-nobody", "retry-loop", "Would an advisor help?").unwrap();
+        assert_eq!(orphan.feature, None, "the fixture is the no-claim case");
+
+        // A real nudge for `demo`, so the store is not merely empty.
+        plant_claim(root, "an-1", "sess-1", "demo");
+        let owed = ask(root, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor help here?").unwrap();
+
+        assert_eq!(debt_ids(root, "demo"), vec![owed.id], "only the row that named demo counts");
+        assert_eq!(feature_advisor_nudge_debt(root, "").unwrap().count, 0, "and none against no name");
+        assert_eq!(feature_advisor_nudge_debt(root, "other").unwrap().count, 0);
+
+        // Only the nudge kind carries this debt — an ordinary intervention to
+        // the same session is a question, never an obligation on the work.
+        ask(root, "intervention", "sess-1", "other-point", "What ends the retry?").unwrap();
+        assert_eq!(debt_ids(root, "demo").len(), 1, "no other mailbox kind joins the debt");
+    }
+
     #[test]
     fn every_mailbox_refusal_writes_nothing() {
         let tmp = tempfile::tempdir().unwrap();
@@ -4488,6 +4998,156 @@ mod tests {
         );
     }
 
+    // ─── a7e6f237: the needs-human-decision flag ────────────────────────
+
+    /// TRUTH: the flag derives from the KIND and nothing else, and it is total
+    /// on a `&str` — a missing, empty or garbage kind flags NO rather than
+    /// blowing up the one report the human reads.
+    #[test]
+    fn the_needs_human_decision_flag_derives_per_kind_and_never_panics() {
+        for yes in [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", "advisor-nudge"] {
+            assert!(needs_human_decision(yes), "{yes} is the human's own call");
+        }
+        for no in ["intervention", "observation", "silence", "turn-end"] {
+            assert!(!needs_human_decision(no), "{no} is not the human's to answer");
+        }
+        // A queue row is DATA, never a control token: a near miss, a stray
+        // newline and a line of junk all read as NO (20260711).
+        for junk in ["", "   ", "URGENT", "advisor nudge", "advisor-nudge\n", "{\"kind\":\"urgent\"}"]
+        {
+            assert!(!needs_human_decision(junk), "{junk:?} must not flag yes");
+        }
+        // Every flagged kind is a kind bee already knows — the flag adds an
+        // order, never a fifth vocabulary.
+        for kind in HUMAN_DECISION_KINDS {
+            assert!(
+                MAILBOX_KINDS.contains(&kind)
+                    || kind == WAITING_ON_GATE
+                    || kind == WAITING_ON_QUESTION,
+                "{kind} flags yes but is neither a mailbox kind nor a waiting-on kind"
+            );
+        }
+    }
+
+    /// TRUTH: "the WakeReport applies the same order" — the row only the human
+    /// can decide prints FIRST, even though the store handed the other one
+    /// over first and impact-if-wrong ranks the two the same.
+    #[test]
+    fn the_report_lists_what_only_you_can_decide_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+
+        let plain =
+            ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let nudge =
+            ask(control, "advisor-nudge", "sess-1", "same-region", "Would an advisor help here?")
+                .unwrap();
+        // Both fall to `needs_you_rank`'s floor, so ONLY the flag can move the
+        // nudge above the row recorded before it.
+        assert_eq!(needs_you_rank(&plain.kind), needs_you_rank(&nudge.kind));
+        // Every queued ask CARRIES the flag on its own row, too.
+        assert_eq!(nudge.to_value()["needs_human_decision"], json!(true));
+        assert_eq!(plain.to_value()["needs_human_decision"], json!(false));
+
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert_eq!(released.len(), 2, "both queued rows released");
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert!(
+            position_of(&rep.markdown, "Would an advisor help here?")
+                < position_of(&rep.markdown, "What ends the retry?"),
+            "the nudge the human may have to decide comes first: {}",
+            rep.markdown
+        );
+    }
+
+    /// TRUTH: the flag sorts, and the fourth section never disagrees with the
+    /// third. A waiting-on `question` outranks a released `intervention` (only
+    /// one of them is the human's call); a released `escalation` outranks the
+    /// question again (same flag, higher impact), and the next-action line
+    /// follows the section both times.
+    #[test]
+    fn the_next_action_follows_the_flagged_order_it_prints() {
+        let mark = r#"{"waiting_on": {"kind": "question", "subject": "which name wins?"}}"#;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        write(control, ".bee/state.json", mark);
+        away_into(control, "supervisor away", None).unwrap();
+        ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert_eq!(released.len(), 1);
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert!(
+            position_of(&rep.markdown, "which name wins?")
+                < position_of(&rep.markdown, "What ends the retry?"),
+            "the question waiting on the human beats a session's own ask: {}",
+            rep.markdown
+        );
+        assert!(
+            rep.markdown.lines().last().unwrap().contains("Answer the question waiting on you"),
+            "the next action names what the section above put first: {}",
+            rep.markdown
+        );
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let c2 = tmp2.path();
+        write(c2, ".bee/state.json", mark);
+        away_into(c2, "supervisor away", None).unwrap();
+        ask(c2, "escalation", "sess-1", "retry-loop", "Is this still the plan?").unwrap();
+        let (closed2, _) = back_into(c2, "supervisor back").unwrap();
+        let rep2 = report_for_window(c2, &closed2.id).unwrap();
+        assert_legal_report(&rep2.markdown);
+        assert!(
+            position_of(&rep2.markdown, "Is this still the plan?")
+                < position_of(&rep2.markdown, "which name wins?"),
+            "same flag, higher impact-if-wrong, so the escalation leads: {}",
+            rep2.markdown
+        );
+        assert!(
+            rep2.markdown.lines().last().unwrap().contains("Read the 1 queued question(s)"),
+            "and the next action follows it back: {}",
+            rep2.markdown
+        );
+    }
+
+    /// TRUTH: "a malformed queue row derives flag=no and still renders" — on
+    /// this side that means the report is rendered at all. Three broken rows
+    /// in the store cost the human nothing but those rows.
+    #[test]
+    fn malformed_queue_rows_never_sink_the_report() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+        ask(control, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor help here?")
+            .unwrap();
+
+        // A kind outside the closed set, a row missing every field a reader
+        // needs, and a line that is not JSON at all.
+        append_jsonl(
+            &interventions_path(control),
+            &json!({"event": "record", "id": "bad-1", "ts": now_iso(), "kind": "not-a-kind",
+                    "signal": "none", "point_key": "p", "question": "?",
+                    "target_session": "sess-1"}),
+        )
+        .unwrap();
+        append_jsonl(&interventions_path(control), &json!({"event": "record", "id": "bad-2"}))
+            .unwrap();
+        let mut raw = std::fs::read_to_string(interventions_path(control)).unwrap();
+        raw.push_str("{not json at all\n");
+        std::fs::write(interventions_path(control), raw).unwrap();
+
+        assert_eq!(read_interventions(control).rows.len(), 1, "only the good row survives the fold");
+        assert!(!needs_human_decision("not-a-kind"), "and a kind like that flags no");
+
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+        let rep = report_for_window(control, &closed.id).expect("the report was still written");
+        assert_legal_report(&rep.markdown);
+        assert!(rep.markdown.contains("Would an advisor help here?"), "{}", rep.markdown);
+    }
+
     #[test]
     fn the_report_notification_reuses_the_urgent_seam_and_honors_the_opt_out() {
         let tmp = tempfile::tempdir().unwrap();
@@ -4528,7 +5188,8 @@ mod tests {
 
     #[test]
     fn the_renderer_is_pure_and_keeps_the_shape_whatever_it_is_handed() {
-        let item = |rank: u8, text: &str| ReportItem { rank, text: text.to_string() };
+        let item =
+            |rank: u8, text: &str| ReportItem { needs_human: false, rank, text: text.to_string() };
         // Ten low-impact items in one section, one high-impact item in another.
         let many: Vec<ReportItem> =
             (0..10).map(|i| item(0, &format!("- low {i}"))).collect();
@@ -4638,6 +5299,7 @@ mod tests {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            feature: None,
         };
         append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
     }
@@ -4979,6 +5641,7 @@ mod tests {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            feature: None,
         };
         append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
         row.id
@@ -5084,6 +5747,7 @@ mod tests {
                 released_at: None,
                 consented_at: None,
                 consent_timeout_seconds: None,
+                feature: None,
             };
             assert_eq!(
                 consent_refusal(&ConsentAsk::from_row(&row)),
@@ -5107,6 +5771,7 @@ mod tests {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            feature: None,
         };
         assert_eq!(
             consent_refusal(&ConsentAsk::from_row(&present)),

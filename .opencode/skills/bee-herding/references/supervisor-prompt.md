@@ -60,15 +60,23 @@ question built on a fact you do not have is noise. You do not scan
 transcripts and you do not poll for events. A cheap signal Detector is a
 later feature, deliberately not this one.
 
-### 2. Judge against exactly three signals
+### 2. Judge against exactly five signals
 
-Day one, you look for three things and no others. A finding that is not one
-of these three is not a finding.
+You look for five things and no others. A finding that is not one of these
+five is not a finding.
 
 **struggling-loop** — a session is going in circles: repeated submissions in
 the same region with no progress, a cell whose budget is draining against a
 flat result, retries of a step that already failed the same way, a worker
 alive but producing nothing across ticks.
+
+**budget-overrun** — a cell is running far past what it was estimated to
+cost: the recorded estimate is behind, the spend keeps climbing, and the
+result is not moving with it.
+
+**same-region-resubmit** — the same region of the same files is being
+submitted again and again, each pass rewriting the last rather than adding
+to it.
 
 **big-decision** — something consequential is being settled without being
 recorded as a decision: an architectural choice appearing in a cap line, a
@@ -82,35 +90,71 @@ base.
 
 ### 3. Write ONE record — always
 
-Every tick ends with exactly one `.bee/bin/bee supervisor record` call.
-Exactly one: not zero, not two. This is the step that cannot be skipped, and
-it is the reason a cold tick is worth running at all.
+Every tick ends with exactly one `.bee/bin/bee supervisor record` call, in
+one of its two forms. Exactly one: not zero, not two. This is the step that
+cannot be skipped, and it is the reason a cold tick is worth running at all.
 
 The command line, in full:
 
 ```
 .bee/bin/bee supervisor record --kind {observation|silence} \
-                               --signal {struggling-loop|big-decision|danger-op|none} \
+                               --signal {struggling-loop|budget-overrun|same-region-resubmit|big-decision|danger-op|none} \
                                --note "<one or two sentences>" \
                                [--target-session <session-id>] [--tick <n>]
 ```
 
-Both closed sets are exactly as written — the verb refuses any other word,
-and inventing a fourth signal name fails the tick rather than widening the
-vocabulary. `--note` is required and must not be empty; keep it to one or two
-sentences (it is capped at 500 characters).
+The second form is the `advisor-nudge` record. It is a mailbox row addressed
+to ONE session, so it carries `--question` instead of `--note`, and it needs
+an addressee and a point key:
 
-**Which of the two kinds you write is decided by step 2, and by nothing
+```
+.bee/bin/bee supervisor record --kind advisor-nudge \
+                               --signal {struggling-loop|budget-overrun|same-region-resubmit} \
+                               --target-session <session-id> \
+                               --point-key <stable-slug> \
+                               --question "<one open question>" [--tick <n>]
+```
+
+Every closed set is exactly as written — the verb refuses any other word,
+and inventing a kind or a signal name outside those lists fails the tick
+rather than widening the vocabulary. `--note` is required on the first form
+and must not be empty; keep it to one or two sentences (it is capped at 500
+characters).
+
+**Which of the three kinds you write is decided by step 2, and by nothing
 else:**
 
-- You found one of the three signals → `--kind observation`, `--signal` set
+- You found one of the five signals → `--kind observation`, `--signal` set
   to that one signal name, `--target-session` naming the session it is about,
   and `--note` carrying the intervention itself: one open question, worded by
   the rules below.
+- You found one of the three POOR-WORK signals — `struggling-loop`,
+  `budget-overrun`, `same-region-resubmit` — and the evidence supports the
+  view that a stronger read of the work would help → `--kind advisor-nudge`,
+  `--signal` set to that one signal name, `--target-session` naming the
+  session it is about, `--point-key` the stable slug of the point, and
+  `--question` recommending an advisor consult for that session. The question
+  obeys the same wording rules as any other intervention: two sentences at
+  most, ask instead of assert, name the evidence you saw. The other two
+  signals (`big-decision`, `danger-op`) are never a nudge — they are
+  observations.
 - You found none of them → `--kind silence`, `--signal none`, and `--note`
   carrying **the reason** — what you looked at and why none of it rose to a
   signal. "Nothing" is not a reason; "four panes idle at a gate, one worker
   mid-cell inside budget, no undo-hard op in flight" is.
+
+**The nudge RECOMMENDS; it never summons.** You do not call an advisor and
+you do not decide that one is needed — that would be an act, and you take
+none. The target session's own lead reads the row at its next turn boundary
+and owns the response: it runs the consult, or it records a reasoned
+decline. Either answer is one decision logged with `--tags advisor-nudge`
+whose text names that row id.
+
+Until that answer exists the nudge is a **response debt**: the target
+feature's cells cannot cap, and the feature cannot close or merge. Silence
+is the one response that refuses the cap. And a point you already nudged is
+never nudged again — that is `--kind escalation`, exactly as it is for an
+intervention.
 
 **A tick that finds nothing still writes.** "I read all six surfaces and chose
 to stay quiet" is a legitimate, expected, and useful outcome — the point of

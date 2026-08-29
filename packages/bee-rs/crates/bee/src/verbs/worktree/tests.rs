@@ -1214,6 +1214,174 @@ use std::time::Instant;
         assert_eq!(answer.result["merged"], Value::Bool(true));
     }
 
+    // ── slp-advisor-nudge an-3: the advisor-nudge debt at the merge door ───
+    //
+    // Placed beside the dissent-debt merge tests above for the same reason
+    // they sit beside the proof ones: same slot, same zero-mutation posture.
+
+    /// One `advisor-nudge` mailbox row in the MAIN checkout's live store —
+    /// the record-event shape `bee supervisor record` appends, read by
+    /// `feature_advisor_nudge_debt` (verbs/supervisor.rs). The `feature` is
+    /// the one DERIVED onto the row at record time.
+    fn write_advisor_nudge_row(main: &Path, id: &str, feature: Option<&str>) {
+        let dir = main.join(".bee").join("supervisor");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut row = json!({
+            "event": "record",
+            "id": id,
+            "ts": "2026-08-29T00:00:00.000Z",
+            "kind": "advisor-nudge",
+            "signal": "struggling-loop",
+            "point_key": id,
+            "question": "Would an advisor read help here?",
+            "target_session": "sess-1",
+        });
+        if let Some(feature) = feature {
+            row.as_object_mut().unwrap().insert("feature".into(), json!(feature));
+        }
+        let path = dir.join("interventions.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{row}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// The per-row escape: one decision tagged `advisor-nudge` naming the row.
+    fn write_advisor_nudge_clearing(main: &Path, decision_id: &str, row_id: &str) {
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        let event = json!({
+            "id": decision_id,
+            "type": "decide",
+            "date": "2026-08-29T01:00:00.000Z",
+            "decision": format!("declined the advisor consult for {row_id}: the loop already broke"),
+            "rationale": "r",
+            "tags": ["advisor-nudge"],
+            "scope": "repo",
+        });
+        let path = main.join(".bee").join("decisions.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{event}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// an-3: an unanswered advisor nudge for the merging feature refuses the
+    /// merge, zero-mutation, naming every offending row — and the SAME
+    /// fixture merges once one clearing decision lands. One test, because the
+    /// second half is the only proof the refusal has a working remedy.
+    #[test]
+    fn an_unanswered_advisor_nudge_refuses_the_merge_until_a_decision_clears_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "nudged");
+        let wt = created.worktree_root.clone();
+
+        write_advisor_nudge_row(&main, "nud-1", Some("nudged"));
+        write_advisor_nudge_row(&main, "nud-2", Some("nudged"));
+        // Neither of these is this feature's debt.
+        write_advisor_nudge_row(&main, "nud-3", Some("elsewhere"));
+        write_advisor_nudge_row(&main, "nud-4", None);
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "an unanswered advisor nudge must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_ADVISOR_NUDGE_DEBT] "), "{message}");
+        assert!(message.contains("nud-1"), "every offender is named: {message}");
+        assert!(message.contains("nud-2"), "every offender is named: {message}");
+        assert!(!message.contains("nud-3"), "another feature's nudge is not named: {message}");
+        assert!(!message.contains("nud-4"), "a feature-less nudge is not named: {message}");
+        assert!(
+            message.contains("bee decisions log"),
+            "the refusal carries its own remedy: {message}"
+        );
+        assert!(message.contains("advisor-nudge"), "the refusal names its tag: {message}");
+
+        // Zero mutation: HEAD on main never moved, and the worktree stands.
+        let head_after =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(head_after, pre_merge_head, "a refused merge must never touch main");
+        assert!(wt.exists(), "the worktree stands — nothing was torn down");
+
+        // One row answered is not enough — the escape is PER ROW.
+        write_advisor_nudge_clearing(&main, "d1", "nud-1");
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!("one row of two answered must still refuse: {:?}", answer.result),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.contains("nud-2"), "the row still owed is named: {message}");
+        assert!(!message.contains("nud-1"), "the answered row is gone: {message}");
+
+        // Both answered — the same merge goes through.
+        write_advisor_nudge_clearing(&main, "d2", "nud-2");
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an answered nudge must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// an-3: ONE fixture state — an unanswered nudge for the feature — is
+    /// read the SAME way by `bee close`'s door and the merge precondition,
+    /// and ONE clearing decision opens BOTH. A door that answers differently
+    /// from its twin is the defect this pins.
+    #[test]
+    fn one_advisor_nudge_decision_clears_both_the_close_door_and_the_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "bothnudge");
+        write_advisor_nudge_row(&main, "nud-1", Some("bothnudge"));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothnudge").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(door.blocking, "the close door blocks first: {}", door.detail);
+
+        write_advisor_nudge_clearing(&main, "d1", "nud-1");
+
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "bothnudge").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(!door.blocking, "one escape, close door: {}", door.detail);
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("one escape must clear the merge door too: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// an-3: a worktree whose identity carries NO feature merges ungated —
+    /// the nudge helper is never called at all. The same `None` posture the
+    /// proof and dissent doors above both take.
+    #[test]
+    fn a_worktree_with_no_resolvable_feature_merges_past_the_advisor_nudge_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "nonudgefeat");
+        let wt = created.worktree_root.clone();
+        let _ =
+            std::fs::remove_file(wt.join(".bee").join("runtime").join("worktree-identity.json"));
+        let _ = std::fs::remove_file(wt.join(".bee").join("state.json"));
+
+        write_advisor_nudge_row(&main, "nud-1", Some("nonudgefeat"));
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an unresolved feature must merge ungated: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
     /// performCleanup's refusal shapes carry Node's exact key ORDER — the
     /// bytes `--json` prints and the twin diff pins.
     #[test]

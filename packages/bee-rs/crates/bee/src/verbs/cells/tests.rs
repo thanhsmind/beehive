@@ -3237,6 +3237,226 @@ use std::time::Instant;
         assert_eq!(doors.iter().find(|d| d["door"] == "dissent-debt").unwrap()["blocking"], json!(true));
     }
 
+    // ── slp-advisor-nudge an-3: the advisor-nudge response debt (9e5eda5b) ─
+    //
+    // The debt's ONE reading lives beside the record (verbs/supervisor.rs,
+    // an-2); these are the DOOR tests — the cap path and the close door, kept
+    // here beside the dissent door's own message-contract tests because they
+    // are the same arm at the same two places. The merge door's half lives in
+    // verbs/worktree/tests.rs, where the git harness is.
+
+    /// One `advisor-nudge` mailbox row, appended straight into the store the
+    /// debt reads (`.bee/supervisor/interventions.jsonl` under the control
+    /// root) in the record-event shape `bee supervisor record` writes — not a
+    /// fixture-only shape. `feature` is the value DERIVED onto the row at
+    /// record time; `None` is the honest no-claim row.
+    fn write_advisor_nudge_row(root: &Path, id: &str, feature: Option<&str>) {
+        let dir = root.join(".bee").join("supervisor");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut row = json!({
+            "event": "record",
+            "id": id,
+            "ts": "2026-08-29T00:00:00.000Z",
+            "kind": "advisor-nudge",
+            "signal": "struggling-loop",
+            "point_key": id,
+            "question": "Would an advisor read help here?",
+            "target_session": "sess-1",
+        });
+        if let Some(feature) = feature {
+            row.as_object_mut().unwrap().insert("feature".into(), json!(feature));
+        }
+        let path = dir.join("interventions.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{row}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// The per-row escape: one ACTIVE decision tagged `advisor-nudge` whose
+    /// text NAMES the row id — the shape `bee decisions log` appends.
+    fn write_advisor_nudge_clearing(root: &Path, decision_id: &str, row_id: &str) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let event = json!({
+            "id": decision_id,
+            "type": "decide",
+            "date": "2026-08-29T01:00:00.000Z",
+            "decision": format!("consulted the advisor about {row_id}; keeping the approach"),
+            "rationale": "r",
+            "tags": ["advisor-nudge"],
+            "scope": "repo",
+        });
+        let path = decisions_path(root);
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("{event}\n"));
+        std::fs::write(&path, text).unwrap();
+    }
+
+    /// TRUTH: "bee close grows the advisor-nudge door at EVERY lane" — the
+    /// `tiny` fixture is the point, exactly as the dissent door's own
+    /// lane test above states it, and the judge door's absence is the
+    /// contrast. A nudge derived onto a DIFFERENT feature never counts here.
+    #[test]
+    fn advisor_nudge_debt_door_blocks_a_tiny_lane_and_clears_on_a_tagged_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_advisor_nudge_row(root, "nud-1", Some("demo"));
+        write_advisor_nudge_row(root, "nud-2", Some("elsewhere"));
+        write_advisor_nudge_row(root, "nud-3", None);
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(
+            doors.iter().all(|d| d.door != "judge-debt"),
+            "the judge door is lane-gated; the contrast is the point of this test"
+        );
+        let door = doors
+            .iter()
+            .find(|d| d.door == "advisor-nudge-debt")
+            .expect("every lane grows this door");
+        assert!(door.blocking, "an unanswered nudge must block: {}", door.detail);
+        assert!(door.detail.contains("nud-1"), "{}", door.detail);
+        assert!(
+            !door.detail.contains("nud-2"),
+            "a nudge derived onto another feature is not this feature's debt: {}",
+            door.detail
+        );
+        assert!(
+            !door.detail.contains("nud-3"),
+            "a nudge with no derived feature counts against nothing: {}",
+            door.detail
+        );
+        assert_eq!(door.command, Some("bee decisions log"));
+
+        // The per-row escape lifts exactly this row, and the door goes clear.
+        write_advisor_nudge_clearing(root, "d1", "nud-1");
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(!door.blocking, "the clearing decision opens the door: {}", door.detail);
+        assert_eq!(door.detail, "clear");
+        assert_eq!(door.command, None);
+    }
+
+    /// TRUTH: "bee close refuses on the same debt at every lane, printing
+    /// headline/remedy/next" — the message contract, pinned prefix included.
+    #[test]
+    fn close_refuses_advisor_nudge_debt_in_a_tiny_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_advisor_nudge_row(root, "nud-1", Some("demo"));
+
+        let Out::Emit(result, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new())
+                .unwrap()
+        else {
+            panic!("close must emit its refusal")
+        };
+        assert_eq!(code, 1, "an unanswered advisor nudge refuses close in every lane");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(
+            lines[0].starts_with(crate::verbs::drivers::CLOSE_ADVISOR_NUDGE_DEBT_PREFIX),
+            "headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("nud-1"), "{}", lines[0]);
+        assert!(lines[1].starts_with("remedy:"), "{}", lines[1]);
+        assert!(lines[1].contains("bee decisions log"), "{}", lines[1]);
+        assert!(lines[1].contains("advisor-nudge"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"), "{}", lines[2]);
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(
+            doors.iter().find(|d| d["door"] == "advisor-nudge-debt").unwrap()["blocking"],
+            json!(true)
+        );
+
+        // The clearing decision lands and the SAME close gets past the door.
+        write_advisor_nudge_clearing(root, "d1", "nud-1");
+        let Out::Emit(_, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, None, None, &HashMap::new())
+                .unwrap()
+        else {
+            panic!("close must emit")
+        };
+        assert!(
+            !text.starts_with(crate::verbs::drivers::CLOSE_ADVISOR_NUDGE_DEBT_PREFIX),
+            "the answered nudge stops refusing (code {code}): {text}"
+        );
+    }
+
+    /// TRUTH: "bee cells cap refuses while an unanswered advisor-nudge row
+    /// targets the cell's feature, printing headline/remedy/next" — the
+    /// cell-level tooth, the one that bites before the boundary ever runs.
+    /// The refusal writes NOTHING, and the clearing decision opens the same
+    /// cap unchanged.
+    ///
+    /// ONE fixture state answers the cap AND the close door here, on purpose:
+    /// two doors reading one obligation through two fixtures could drift
+    /// apart and both stay green. They call the same function; this is what
+    /// proves it.
+    #[test]
+    fn cap_refuses_while_an_advisor_nudge_for_the_cells_feature_is_unanswered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(
+            root,
+            "an-x",
+            &json!({
+                "id": "an-x", "feature": "demo", "title": "t", "action": "a",
+                "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+            }),
+        );
+        write_advisor_nudge_row(root, "nud-1", Some("demo"));
+
+        let refusal = thrown(cap_cell_from_flags(root, &wf_boundary_cap_flags("an-x"), false));
+        let lines: Vec<&str> = refusal.split('\n').collect();
+        assert!(
+            lines[0].starts_with(CAP_ADVISOR_NUDGE_DEBT_PREFIX),
+            "headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("nud-1"), "{}", lines[0]);
+        assert!(lines[0].contains("an-x"), "{}", lines[0]);
+        assert!(lines[1].starts_with("remedy:"), "{}", lines[1]);
+        assert!(lines[1].contains("bee decisions log"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"), "{}", lines[2]);
+        assert_eq!(
+            read_cell_fixture(root, "an-x")["status"],
+            json!("claimed"),
+            "a refused cap writes nothing"
+        );
+        // The SAME state, read by the close door: one obligation, two doors.
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(door.blocking, "the close door agrees with the cap: {}", door.detail);
+
+        // A nudge for ANOTHER feature never reaches this cell's cap.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        write_cell_fixture(
+            root2,
+            "an-y",
+            &json!({
+                "id": "an-y", "feature": "demo", "title": "t", "action": "a",
+                "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+            }),
+        );
+        write_advisor_nudge_row(root2, "nud-9", Some("elsewhere"));
+        let capped = cap_cell_from_flags(root2, &wf_boundary_cap_flags("an-y"), false)
+            .expect("another feature's nudge is not this cell's debt");
+        assert_eq!(capped["status"], json!("capped"));
+
+        // Same cap, one clearing decision later — green.
+        write_advisor_nudge_clearing(root, "d1", "nud-1");
+        let capped = cap_cell_from_flags(root, &wf_boundary_cap_flags("an-x"), false)
+            .expect("the answered nudge stops refusing");
+        assert_eq!(capped["status"], json!("capped"));
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "advisor-nudge-debt").unwrap();
+        assert!(!door.blocking, "one decision opens BOTH doors: {}", door.detail);
+    }
+
     // ── schedule ──────────────────────────────────────────────────────────
     #[test]
     fn compute_schedule_waves_and_diagnostics() {

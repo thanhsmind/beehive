@@ -143,7 +143,21 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     }
     if roots.worktree_resolution != "ordinary" {
         // Linked-worktree topology pulls the grants/control-root surface —
-        // delegated wholesale for now.
+        // delegated wholesale for now, with ONE read lifted above the bail.
+        //
+        // c80debd7 delivery is that read. It is self-contained: it resolves
+        // the mailbox's control root itself (the same git walk a worktree
+        // session's reservations use), so it needs nothing this bail cannot
+        // decide. Left below the bail it made the feature hollow — most bee
+        // work runs in a feature worktree, so the sessions a supervisor most
+        // needs to reach were exactly the ones that never heard it. Stamp
+        // first, print second, for execute()'s own reason: a printed-then-
+        // unstamped row would REPEAT a point.
+        let lines = worktree_delivery(&root, &payload);
+        if !lines.is_empty() {
+            use std::io::Write;
+            let _ = std::io::stdout().write_all(lines.join("\n").as_bytes());
+        }
         return Outcome::Delegate;
     }
 
@@ -164,6 +178,41 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     // exactly once, same as the .mjs's readHookContext.
     let ctx = read_hook_context(HOOK_NAME, argv, stdin);
     Outcome::Done(execute(&root, &ctx, plan))
+}
+
+// ─── c80debd7 turn-boundary delivery ────────────────────────────────────────
+
+/// Stamp each pending row delivered and return the lines whose stamp landed.
+///
+/// ONE owner for the rule both delivery sites obey — the ordinary path in
+/// `execute()` and the linked-worktree path in `run()`. Stamp first, print
+/// second: a row whose stamp failed stays pending and is offered again next
+/// turn, while a printed-then-unstamped row would REPEAT a point, which the
+/// frequency cap exists to forbid. Each stamp is isolated and best-effort — a
+/// failure is crash-logged and never takes the turn, or the other rows, down.
+fn deliver(root: &Path, pending: &[(String, String)]) -> Vec<String> {
+    let mut delivered: Vec<String> = Vec::new();
+    for (id, line) in pending {
+        match crate::verbs::supervisor::mark_delivered_for_session(root, id) {
+            Ok(()) => delivered.push(line.clone()),
+            Err(err) => log_crash(Some(root), HOOK_NAME, &err, Some("supervisor-delivery")),
+        }
+    }
+    delivered
+}
+
+/// The linked-worktree half: the mailbox read and its stamps, alone, without
+/// any of the plan a worktree session's topology makes undecidable. Total —
+/// no session id, or nothing addressed to it, delivers nothing and writes
+/// nothing at all.
+fn worktree_delivery(root: &Path, payload: &Map<String, Value>) -> Vec<String> {
+    let sid = payload
+        .get("session_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let Some(sid) = sid else { return Vec::new() };
+    deliver(root, &crate::verbs::supervisor::pending_delivery_for_session(root, sid))
 }
 
 // ─── plan (read-only preflight + full decision computation) ─────────────────
@@ -272,8 +321,10 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
     // can follow a read that already warned, and the delivery stamp itself is
     // a side effect that belongs to execute().
     //
-    // Known gap, inherited not added: a linked worktree returns Delegate far
-    // above, so a worktree session takes no delivery yet.
+    // This is the ORDINARY-checkout path. A linked worktree returns Delegate
+    // far above and takes the same delivery there, through `worktree_delivery`
+    // — the read is lifted above that bail so a worktree session hears the
+    // supervisor too.
     let pending_interventions = match &session_id {
         Some(sid) => crate::verbs::supervisor::pending_delivery_for_session(root, sid),
         None => Vec::new(),
@@ -345,13 +396,7 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
     // takes the turn (or the other rows) down with it. Delivered lines ride
     // one appended block, after every existing part — the preamble content
     // above is untouched.
-    let mut delivered: Vec<String> = Vec::new();
-    for (id, line) in &plan.pending_interventions {
-        match crate::verbs::supervisor::mark_delivered_for_session(root, id) {
-            Ok(()) => delivered.push(line.clone()),
-            Err(err) => log_crash(Some(root), HOOK_NAME, &err, Some("supervisor-delivery")),
-        }
-    }
+    let delivered = deliver(root, &plan.pending_interventions);
     if !delivered.is_empty() {
         parts.push(delivered.join("\n"));
     }
@@ -2738,5 +2783,112 @@ mod tests {
         let line = &p.pending_interventions[0].1;
         assert!(line.starts_with("bee supervisor URGENT: "), "{line}");
         assert!(line.ends_with("What tells you the retry will end?"), "{line}");
+    }
+
+    // ─── delivery reaches a LINKED WORKTREE session too (an-1) ──────────
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixture");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A real main checkout plus one real linked worktree — the same fixture
+    /// `verbs::supervisor`'s own tests use. The worktree is UNGRANTED, so its
+    /// control root is main: one store, two checkouts.
+    fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf) {
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        bee_repo_files(&main);
+        write(&main, "f.txt", "x");
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let wt = tmp.join("wt");
+        git(&main, &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "wt/one"]);
+        bee_repo_files(&wt);
+        (main, wt)
+    }
+
+    /// `bee_repo` minus the `.git` DIRECTORY it fabricates — a real git
+    /// fixture owns that marker itself, and a linked worktree's marker is a
+    /// FILE, which is exactly what makes it linked.
+    fn bee_repo_files(dir: &Path) {
+        std::fs::create_dir_all(dir.join(".bee")).unwrap();
+        std::fs::write(dir.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+    }
+
+    /// TRUTH: "a recorded advisor-nudge row renders one delivery line at the
+    /// target session's next turn boundary, INCLUDING for a linked-worktree
+    /// session." Everything else about a worktree stays undecidable here —
+    /// the outcome is still `Delegate`; only the mailbox read is lifted.
+    #[test]
+    fn a_worktree_session_takes_its_delivery_lines_even_though_the_hook_still_delegates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = worktree_fixture(tmp.path());
+
+        // Recorded against MAIN's store — the one store both checkouts share.
+        let id = ask(&main, "advisor-nudge", "sess-wt", "retry-loop", "Would an advisor read help here?");
+        assert_eq!(
+            pending_ids(&wt, "sess-wt"),
+            vec![id.clone()],
+            "the worktree resolves the same mailbox as main"
+        );
+
+        let payload = parse_payload(&prompt_payload(&wt, "sess-wt"));
+        assert_eq!(
+            worktree_delivery(&wt, &payload),
+            vec!["bee supervisor: Would an advisor read help here?".to_string()],
+            "the worktree turn boundary renders the row's one line"
+        );
+        assert!(
+            pending_ids(&wt, "sess-wt").is_empty(),
+            "and stamps it, so the point is never repeated (c80debd7)"
+        );
+
+        // The hook's other worktree behavior is untouched: still undecidable.
+        let outcome = run(&[], &prompt_payload(&wt, "sess-wt"));
+        assert!(
+            matches!(outcome, Outcome::Delegate),
+            "a linked worktree still delegates everything but the delivery"
+        );
+        assert!(
+            pending_ids(&wt, "sess-wt").is_empty(),
+            "a delivered row never surfaces again, worktree or not"
+        );
+    }
+
+    /// The lift adds NOTHING when there is nothing: no session id, or an empty
+    /// mailbox, writes no event and returns no line.
+    #[test]
+    fn the_worktree_lift_is_silent_when_there_is_nothing_to_deliver() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = worktree_fixture(tmp.path());
+
+        let no_session = parse_payload(&json!({ "cwd": wt.to_string_lossy() }).to_string());
+        assert!(worktree_delivery(&wt, &no_session).is_empty(), "no session id, no delivery");
+
+        let payload = parse_payload(&prompt_payload(&wt, "sess-wt"));
+        assert!(worktree_delivery(&wt, &payload).is_empty(), "an empty mailbox adds nothing");
+        assert!(
+            !crate::verbs::supervisor::interventions_store_path(&main).exists(),
+            "and writes no event at all"
+        );
+
+        // A row for ANOTHER session never leaks into this worktree's turn.
+        let other = ask(&main, "advisor-nudge", "sess-other", "retry-loop", "Would an advisor help?");
+        assert!(worktree_delivery(&wt, &payload).is_empty(), "sess-wt sees nothing addressed elsewhere");
+        assert_eq!(pending_ids(&wt, "sess-other"), vec![other], "and never stamps it either");
     }
 }
