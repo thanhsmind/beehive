@@ -174,6 +174,44 @@ Two or three isolated advisor consults design an answer to ONE hard question, cr
 
 **Pushback counts only when it names the specific missing context.** An objection with no named gap does not stand — in a lane, in a cross-critique, or at convergence (slp-blind-lanes D5).
 
+### Hat wave — fixed perspectives critique one draft
+
+Lanes GENERATE designs; hats CRITIQUE one existing draft from fixed disjoint
+perspectives (slp-blind-lanes D7). **This section is the single home for the
+hat-wave PROCEDURE** (decision `07328333`); bee-shaping carries the one-line
+trigger pointer, never a second copy.
+
+**When hats open.** Inside bee-shaping, AFTER the spec content is drafted
+and BEFORE Lock — the only window where a product-altitude finding still has
+a channel back into the draft (post-Lock it can only become a supersession).
+Discretionary, reserved for big, hard-to-reverse specs; the agent logs the
+open reason with `bee decisions log`, the same D1 posture lanes hold. A
+small spec gets no wave — ceremony capture is the named failure.
+
+**The five hats, one instrument each, by POINTER to its home — never
+copied:**
+
+| Hat | Asks | Instrument |
+|---|---|---|
+| facts-gaps | what the spec cannot answer | 5-Layer rubric + Truth Table Test (`.bee/expertise/review.md`) |
+| risks | what breaks, and can it be undone | CRUD Lifecycle check — the delete half is the reversibility interrogation (`.bee/expertise/review.md`) |
+| value | is this worth its cost | materiality test (bee-shaping's shaping-reference) |
+| alternatives | is there a cheaper shape | the SMALLER PATH question at spec altitude; finding several viable designs on a high-stakes ambiguous choice hands off to blind lanes (D1) |
+| user-impact | what the user sees and feels | gray-area probes + the SEE mock (bee-shaping references) |
+
+**The moves.** Five parallel `bee dispatch prepare --kind advisor`
+dispatches, one hat each; the perspective rides the PROMPT body — never
+`--brief-file`, whose neutrality lint exists for lane briefs and would fight
+a brief whose leaning IS its job. Hats never see each other. The
+orchestrator is the synthesizing BLUE hat — synthesis is decide-altitude and
+never delegates. Accepted findings route back through the interview as
+questions or Open Questions in the draft; a hat finding never lands in Lock
+directly (Lock renders, it never originates).
+
+**No checker verb.** Unlike blind convergence, nothing here autonomously
+logs a decision — the human at Lock is the check, the same checker-less
+posture bee-reviewing's critique wave already holds.
+
 ### Judgment contract — rails for workers, boundaries for the orchestrator
 
 Rules bind differently by rule kind and by role.

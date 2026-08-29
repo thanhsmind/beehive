@@ -53,6 +53,10 @@
       "advisor": {
         "model": "fable",
         "description": "session-class consult for high-risk gates"
+      },
+      "supervisor": {
+        "model": "haiku",
+        "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
       }
     },
     "codex": {

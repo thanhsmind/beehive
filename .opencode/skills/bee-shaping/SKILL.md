@@ -68,6 +68,10 @@ Stop when every locked decision can be written without inventing intent
 and each remaining unknown is a named Open Question; past that,
 questions are stalling — never ask "anything else?", present what's locked.
 
+A big, hard-to-reverse spec earns a **hat wave** before Lock — five fixed
+perspectives critique the draft; procedure single-homed in
+`bee-hive/references/gates-and-delegation.md` ("Hat wave"), decision 07328333.
+
 ## Qualify (headless triage)
 
 The unattended front door for a new backlog item: judge whether it can
@@ -95,6 +99,15 @@ on this path; everything unresolved is written down, never guessed.
    --effort <slug> --from '<item text>'` so the parked fog becomes a
    visible map stub instead of sinking silently (D6.3); risk parks keep
    the Outstanding Questions path unchanged.
+
+A **foreign-origin spec drop** (decision 12deaa34) arrives as an ordinary
+proposed PBI whose id IS the sender's correlation id and whose CoS carries
+the provenance line (`from <repo>@<commit>`), usually with a spec file
+already written into this repo's docs tree. Qualify it like any other item —
+the evidence is the spec file itself; risk content parks at any confidence.
+It is deliberately NOT dispatchable by herding until this triage locks
+CONTEXT.md and flips it in-flight: the proposed-until-shaped hop is the
+safety net for work another repo authored.
 
 ## Lock (single writer)
 
