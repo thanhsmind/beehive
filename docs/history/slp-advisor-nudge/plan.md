@@ -58,10 +58,12 @@ CONTEXT "Agent's Discretion") — one record, two names in prose.
   (prompt_context.rs:144-147) with the gap named at :275-276. S1 lifts ONLY
   the supervisor pending-delivery read above that bail — the rest of the
   hook's worktree behavior is untouched.
+<!-- bee:not-a-deferral: names a CONTEXT question this plan itself answers in the same sentence; shipped in an-1, nothing postponed -->
 - Feature derivation (CONTEXT deferred item): at RECORD time the nudge row
   derives `feature` from target_session's live claim (claim → cell →
   feature) and stores it on the row — derived once, records-only per
   423871d7. No claim ⇒ no feature ⇒ the row counts against nothing.
+<!-- /bee:not-a-deferral -->
 - The debt: unanswered `advisor-nudge` rows for a feature count at BOTH the
   cap path (`run_cap`, verbs/cells/util.rs:72 — the cell-level tooth) and
   the close door, plus the merge-door check (phases.rs:197 shape). Door

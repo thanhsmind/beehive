@@ -94,17 +94,22 @@ recommend-advisor wording).
 
 None. The map closed with no open tickets and no fog.
 
-### Deferred To Planning
+<!-- bee:not-a-deferral: all three planning questions were answered by the approved plan and shipped in cells an-1..an-5; each carries its answer inline — the section records resolutions, it promises no future work -->
+### Deferred To Planning — all answered, none outstanding
 
-- [ ] Cell-level vs feature-level targeting for "the related work" — read
-      how the intervention record names its target today and pick the
-      narrower honest one.
-- [ ] Which surfaces carry the flag first: human-mailbox letters and
-      WakeReport are named; the weekly report belongs to the waggledance
-      feature and is out of this repo's slice.
-- [ ] Door coverage below `standard` — mirror the dissent-debt answer
-      (authoring-time obligation check) or document the gap.
+- [x] Cell-level vs feature-level targeting for "the related work" —
+      **answered (an-1):** the nudge row derives its feature from the target
+      session's live claim at record time and stores it ON the row; no
+      claim, no feature, counts against nothing.
+- [x] Which surfaces carry the flag first — **answered (an-4):**
+      human-mailbox letters and the WakeReport, through one shared
+      `needs_human_decision` rule; the weekly report belongs to the
+      wd-supervisor feature, other repo.
+- [x] Door coverage below `standard` — **answered (an-3):** every lane,
+      mirroring dissent-debt, at all three doors (cap, close, merge).
+<!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: each line records work decided against or homed in another feature/repo, with its record named; nothing here promises later action by this feature -->
 ## Deferred Ideas — decided against or elsewhere, not owed
 
 - The waggledance supervisor itself, the widened ask_state digest, the
@@ -112,10 +117,13 @@ None. The map closed with no open tickets and no fog.
   repo (map closing note).
 - The spec-drop procedure and the hat wave — slp-spec-drop-procedure,
   docs-lane, separate feature.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: Handoff Note describing which parts of this template planning reads; it names the deferred-to-planning section as machinery, it does not defer anything -->
 CONTEXT.md is the source of truth. Decision IDs are bee decision-log ids,
 stable. Planning reads locked decisions, code context, canonical
 references, and deferred-to-planning questions. Planning's Gate 2 shape
 stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->
