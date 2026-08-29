@@ -8,6 +8,12 @@ tier, cross-repo spec handoff with dissent rights, herdr ignition, and a
 weekly cross-project review — each rung of the escalation ladder typed,
 recorded, and door-enforced.
 
+MAP CLOSED 2026-08-29 — no tickets, no fog. Spawned (to shape, in order):
+slp-advisor-nudge (bee: recommend-advisor record kind + response-debt door +
+needs-human-decision flag), slp-spec-drop-procedure (bee, docs-lane: spec-drop
+convention + hat-wave section), wd-supervisor (waggledance repo: cold-tick
+observer + widened ask_state digest + cockpit repo + weekly review).
+
 ## Notes
 
 Session 2026-08-29: user wants the human elevated above day-to-day
@@ -81,13 +87,10 @@ repo's own backlog when its cluster shapes.
 
 ## Not yet specified
 
-- HUMAN_DECISION_REQUIRED bit on every queued ask and report line
-  (agent-suspected — recommended in the pi-team distill, not yet
-  user-confirmed)
-- Whether the per-repo herding supervisor role stays alongside the
-  waggledance-layer supervisor or folds into it (agent-suspected)
-- Integration ownership when a multi-repo feature needs final assembly and a
-  cross-repo contract proof (agent-suspected)
+(none — all fog resolved 2026-08-29: a7e6f237 needs-human-decision flag;
+b590e508 per-repo supervisor stays; a786d07a features never span repos.
+Advisor-nudge enforcement settled as response-debt: 9e5eda5b; supervisor
+lifecycle 423871d7; advisor-nudge flow 3cfd9980.)
 
 ## Out of scope
 
