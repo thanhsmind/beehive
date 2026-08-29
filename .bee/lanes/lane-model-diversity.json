@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"lane-model-diversity\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 328edbe; reload the product and test \"lane-model-diversity\", then either approve uat (\"bee gate --name uat --approved true --lane lane-model-diversity\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-29T13:59:31.517Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: lane-model-diversity",
+    "asked_at": "2026-08-29T14:34:02.902Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -23,12 +28,5 @@
     "rationale": "Seat-role model resolution for blind lanes and hat wave: models.rs ordered walk + prepare.rs advisor-kind role arm + config validate hat-description rule + model-guard parity + gates-and-delegation.md; standard lane — recorded law changes with tests, no hard-gate territory",
     "updated_at": "2026-08-29T14:00:41.647Z",
     "feature": "lane-model-diversity"
-  },
-  "merge_ready": {
-    "since": "2026-08-29T14:32:20.367Z",
-    "branch": "wt/lane-model-diversity",
-    "worktree_id": "beehive--wt--lane-model-diversity",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
