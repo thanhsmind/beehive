@@ -278,6 +278,31 @@ pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<St
             ));
         }
     }
+    // slp-contract S4 (D3, store 9c0104e0): a NEW cell's `status` must be
+    // "open", or absent — `normalize_new_cell` defaults an absent or falsy
+    // status to "open", and that default is the whole allowed shape.
+    //
+    // Why authoring owes this check at all: `normalize_new_cell` PRESERVES
+    // any truthy status the payload carries, and nothing here used to look
+    // at it, so `bee cells add` with `"status":"claimed"` minted a cell
+    // that never passes the claim door at all. Every pre-claim deny — the
+    // contract-citation tripwire, the red base, the no-route escalation,
+    // the uncapped-deps check — was bypassable in one line of JSON. A guard
+    // that tests one state is a law with a hole; this closes the door the
+    // guard is reached through.
+    //
+    // Scoped to AUTHORING only, deliberately: the claim/verify/cap/block/
+    // drop transitions are guarded where each of them happens
+    // (handlers_write.rs), and nothing here touches them.
+    if let Some(status) = map.get("status") {
+        let ok = !js_truthy(status) || matches!(status, Value::String(s) if s == "open");
+        if !ok {
+            problems.push(format!(
+                "addCell: \"status\" must be \"open\" on a new cell (omit it — it defaults to \"open\"), got {}. A cell leaves \"open\" only through the verb that owns the transition — bee cells claim, verify, cap, block, drop — never by being authored there, which would skip every check that verb's door runs.",
+                jsjson::stringify(status)
+            ));
+        }
+    }
     let lane_ok = matches!(map.get("lane"), Some(Value::String(s)) if LANES.contains(&s.as_str()));
     if !lane_ok {
         problems.push(format!(

@@ -72,6 +72,56 @@ Three field failures (reported against a host repo, fixed generically):
   pushed to fabricate a value that is not theirs to choose; and the check is
   proven by injection — a tagless call added on purpose must name its own file
   and line.
+- **R1b — A tag slug takes at most ONE interior colon, which namespaces it**
+  (slp-contract-original-request D2). The pattern is
+  `/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/`: each side of the colon obeys
+  the plain slug rule, so a colon at either end, an empty segment, and a second
+  colon each refuse by name. One predicate
+  (`verbs/decisions/scanners.rs` `tag_pattern_test`) serves both `decisions log`
+  and `decisions tag`, and the refusal text it prints (`TAG_PATTERN_DISPLAY`)
+  is that same pattern. The namespace exists for `contract:<name>` — the
+  contract-status label, which is DERIVED over the active decision set and is
+  never a registry (slp-contract-original-request D1). Every pre-namespace
+  tag still validates; the widening takes nothing away. Side effect under R1:
+  a `contract:<name>` tag is unknown to the taxonomy, so it is accepted and
+  appended to `candidates[]` — the checked-in `docs/decisions/taxonomy.json`
+  grows one candidate per contract name, awaiting curation like any other new
+  tag.
+- **R1c — Contract status is DERIVED, never stored**
+  (slp-contract-original-request D1/D2). R1b gives the label its spelling;
+  this is what reading it means. Nothing is written anywhere — no registry,
+  no reverse index from contract name to trigger, no cache. One decision id
+  has exactly three derived values (`verbs/decisions/read.rs`,
+  `ContractStatus`):
+  - **settled** — the id is in the ACTIVE decision set and no trigger keyed to
+    it is still open;
+  - **unsettled** — it is active and a trigger keyed to it is `waiting` or
+    `due`;
+  - **unknown** — it is not in the active set at all. D3's word "retired" lands
+    here: the store has no `retired` state, only supersession, redaction and
+    archiving, and all three drop the id out of `active_decisions`. A
+    never-logged id reads `unknown` too.
+
+  The join onto triggers is on **SHORT8**, because that is all a trigger record
+  carries: `TriggerRecord.decision` holds the first 8 characters of the
+  deferring decision's id, never the full id. Three consequences to know:
+  a trigger key that is not a short8 of any decision (the live store carries
+  `herding-`, `P72`) matches nothing and is never an error; two decision ids
+  sharing a short8 both inherit the one trigger, because the record cannot say
+  which it meant (live collisions: 0, and "both unsettled" is the fail-safe
+  direction for a path that refuses); and a **`manual`-tier trigger never
+  reaches `due`**, so a decision with a waiting manual trigger stays unsettled
+  until a human runs `triggers resolve` — the revisit condition is attached and
+  unanswered, which is D2 working, not a stuck state.
+
+  The read reaches the trigger store through
+  `triggers::read_without_evaluating`, which is `read_and_evaluate`'s own body
+  with the persisting waiting-to-due predicate flip turned OFF — one shared
+  walk with a flag, never two copies that can disagree. Every file under
+  `.bee/triggers/` is byte-identical after the read: a refusal path that writes
+  is not a refusal path. Fail-open is inherited whole — no trigger directory,
+  a raced-away file, or a corrupt record each contribute nothing rather than
+  failing the read.
 - **R2 — Reversal is not finished until citing artifacts are reconciled** (D2,
   `b9b9fee3`). A supersede computes a citation sweep over `docs/**` (full id +
   word-boundary short8) BEFORE its single append; the event carries the sweep

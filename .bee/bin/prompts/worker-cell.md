@@ -1,6 +1,10 @@
 Nickname (reservation identity): {{worker}}
 Assigned cell id: {{cell_id}}
 Feature: {{feature}}
+{{#if original_request}}
+
+{{original_request}}
+{{/if}}
 {{#if worktree_root}}
 
 Location — work here, the store is in the other checkout:

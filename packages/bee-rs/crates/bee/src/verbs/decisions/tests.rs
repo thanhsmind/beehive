@@ -225,7 +225,7 @@ use std::time::Instant;
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
                 msg,
-                "logDecision: tag \"Bad_Tag\" is not a valid lowercase slug (must match /^[a-z0-9][a-z0-9-]*$/)."
+                "logDecision: tag \"Bad_Tag\" is not a valid lowercase slug (must match /^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/)."
             ),
             _ => panic!("expected thrown slug error"),
         }
@@ -1532,6 +1532,174 @@ use std::time::Instant;
         assert!(!tag_pattern_test(""));
     }
 
+    // ── scor-2: the tag slug admits ONE interior colon, so the locked
+    //    `contract:<name>` label (slp-contract D2) is writable ────────────
+
+    /// Tags a namespaced label needs, and the near-misses that must stay
+    /// refused. One colon, interior only, both sides a plain slug.
+    #[test]
+    fn tag_pattern_admits_one_interior_colon() {
+        // Accepted: the locked spelling, in the shapes it is really used in.
+        assert!(tag_pattern_test("contract:cells"));
+        assert!(tag_pattern_test("contract:dispatch-door"));
+        assert!(tag_pattern_test("a:b"));
+        assert!(tag_pattern_test("contract:0-9"));
+        assert!(tag_pattern_test("9contract:cells"));
+
+        // Refused: a colon at either end, an empty segment, a second colon.
+        assert!(!tag_pattern_test(":cells"), "leading colon");
+        assert!(!tag_pattern_test("cells:"), "trailing colon");
+        assert!(!tag_pattern_test("contract::cells"), "empty middle segment");
+        assert!(!tag_pattern_test("contract:cells:extra"), "two colons");
+        assert!(!tag_pattern_test(":"), "colon alone");
+        assert!(!tag_pattern_test("::"), "colons alone");
+
+        // The pre-colon rule still governs each segment.
+        assert!(!tag_pattern_test("contract:-cells"), "segment starts with -");
+        assert!(!tag_pattern_test("-contract:cells"), "segment starts with -");
+        assert!(!tag_pattern_test("contract:Cells"), "uppercase segment");
+        assert!(!tag_pattern_test("contract:cell_s"), "underscore");
+        assert!(!tag_pattern_test("contract:cell.s"), "dot");
+        assert!(!tag_pattern_test("contract: cells"), "space");
+    }
+
+    /// The regression that matters: widening the predicate must not move any
+    /// tag this repo's decision store already carries. A literal table, not a
+    /// read of the live `.bee/decisions.jsonl` — a test that reads live state
+    /// passes for the wrong reason the day that state changes.
+    #[test]
+    fn tag_pattern_still_accepts_the_tags_this_repo_already_uses() {
+        for tag in [
+            "cells",
+            "contract",
+            "slp",
+            "orchestration",
+            "advisor",
+            "cli",
+            "ci",
+            "billing",
+            "nightly-job",
+            "decision-memory",
+            "workflow-state",
+            "bee-rs",
+            "p2",
+        ] {
+            assert!(
+                tag_pattern_test(tag),
+                "existing tag {tag} must still validate"
+            );
+        }
+    }
+
+    /// The refusal message prints `TAG_PATTERN_DISPLAY`. If the display text
+    /// and the predicate disagree, every refusal lies about the rule. This
+    /// pins them together: the display's own grammar, walked as strings.
+    #[test]
+    fn tag_pattern_display_describes_the_predicate() {
+        assert_eq!(
+            TAG_PATTERN_DISPLAY,
+            "/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/"
+        );
+
+        // Every branch the display describes as legal, spelled out.
+        for legal in [
+            "a",       // [a-z0-9] alone
+            "0",       // digit start, no tail
+            "a-b",     // [a-z0-9-] tail
+            "a0-b9",   // mixed tail
+            "a:b",     // the optional (:...) group, minimal
+            "a-b:c-d", // the optional group, both sides with tails
+            "0:9",     // digit-only on both sides
+        ] {
+            assert!(
+                tag_pattern_test(legal),
+                "{legal} matches {TAG_PATTERN_DISPLAY} but the predicate refused it"
+            );
+        }
+
+        // Everything the display's anchors and its single optional group
+        // exclude.
+        for illegal in [
+            "",      // ^ needs one char
+            "-a",    // first char is not [a-z0-9]
+            "A",     // outside [a-z0-9]
+            "a_b",   // outside [a-z0-9-]
+            "a b",   // outside [a-z0-9-]
+            ":a",    // the group is not optional-at-the-front
+            "a:",    // the group needs its [a-z0-9]
+            "a::b",  // one group, not two
+            "a:b:c", // one group, not two
+        ] {
+            assert!(
+                !tag_pattern_test(illegal),
+                "{illegal} does not match {TAG_PATTERN_DISPLAY} but the predicate accepted it"
+            );
+        }
+    }
+
+    /// End of the write path, not just the predicate: a namespaced tag reaches
+    /// `.bee/decisions.jsonl` with its colon intact — nothing rewrites,
+    /// splits, or slugifies it on the way in.
+    #[test]
+    fn a_namespaced_tag_is_stored_verbatim() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "The dispatch door is settled".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["contract:dispatch-door".into(), "cells".into()]),
+            relation: Some("none".to_string()),
+            trigger: None,
+            feature: None,
+            rejected: None,
+        };
+        let Ok(Out::Emit(_event, _text, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit for a namespaced tag");
+        };
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["tags"], json!(["contract:dispatch-door", "cells"]));
+    }
+
+    /// Both normalizers call the one predicate, so both inherit the widening
+    /// with no edit of their own — and a namespaced tag is stored verbatim,
+    /// colon and all.
+    #[test]
+    fn both_tag_normalizers_inherit_the_namespaced_slug() {
+        // logDecision flavor.
+        assert_eq!(
+            normalize_tags(Some(vec![
+                "contract:dispatch-door".into(),
+                " contract:cells ".into(),
+                "cells".into(),
+            ]))
+            .expect("a namespaced tag is a valid slug"),
+            Some(vec![
+                "contract:dispatch-door".to_string(),
+                "contract:cells".to_string(),
+                "cells".to_string(),
+            ])
+        );
+        let refused = normalize_tags(Some(vec!["contract:cells:extra".into()]))
+            .expect_err("two colons stay refused");
+        assert!(refused.contains("\"contract:cells:extra\""));
+        assert!(refused.contains(TAG_PATTERN_DISPLAY));
+
+        // decisions-tag flavor (the RAW value form).
+        assert_eq!(
+            normalize_tag_event_tags_value(Some(&json!(["contract:cells", "slp"])))
+                .expect("a namespaced tag is a valid slug"),
+            vec!["contract:cells".to_string(), "slp".to_string()]
+        );
+        let refused = normalize_tag_event_tags_value(Some(&json!([":cells"])))
+            .expect_err("a leading colon stays refused");
+        assert!(refused.contains("\":cells\""));
+        assert!(refused.contains(TAG_PATTERN_DISPLAY));
+    }
+
     // ── dwd-1: the WIDE door — a granted worktree gets its OWN decisions
     //    store instead of the narrow door's refusal ──────────────────────────
     //
@@ -2447,4 +2615,256 @@ use std::time::Instant;
             "rejected",
         ];
         assert!(keys_known(&flags, &known), "--rejected must be a known key on decisions log");
+    }
+
+    // ── slp-contract S3 (D1, D2): the DERIVED contract status ─────────────
+    //
+    // Coverage audit before authoring. Existing trigger coverage in this
+    // file is kdt-3's write-path law only — `log_deferral_prose_with_trigger
+    // _persists_and_passes` and `log_trigger_naming_an_unregistered_id_
+    // refuses_even_without_deferral_prose`, both about `decisions log
+    // --trigger` naming a registered record. Nothing anywhere reads a
+    // trigger back to derive a decision's status, and nothing resolves a
+    // `cell.decisions` entry onto the store. The whole surface below is gap.
+
+    const D_A: &str = "aaaaaaaa-0000-0000-0000-000000000001";
+    const D_B: &str = "bbbbbbbb-0000-0000-0000-000000000002";
+    // Two ids the trigger store cannot tell apart: same first 8 characters.
+    const D_C1: &str = "cccccccc-0000-0000-0000-000000000003";
+    const D_C2: &str = "cccccccc-0000-0000-0000-000000000004";
+
+    fn decide_line(id: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"The cell store's shape is fixed","rationale":"r","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    /// One trigger record file, written by hand so each case names the exact
+    /// tier/status/predicate combination it is about.
+    fn put_trigger(
+        root: &Path,
+        id: &str,
+        decision: &str,
+        tier: &str,
+        predicate: Option<&str>,
+        status: &str,
+    ) -> PathBuf {
+        let dir = root.join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        let rec = json!({
+            "id": id,
+            "decision": decision,
+            "condition": "revisit when upstream lands",
+            "tier": tier,
+            "predicate": predicate,
+            "status": status,
+            "created_at": "2026-08-16T00:00:00.000Z",
+            "updated_at": "2026-08-16T00:00:00.000Z",
+            "outcome": null,
+        });
+        let path = dir.join(format!("{id}.json"));
+        std::fs::write(&path, format!("{rec}\n")).unwrap();
+        path
+    }
+
+    fn status_of(root: &Path, id: &str) -> ContractStatus {
+        contract_status(root, id).ok().expect("the derived status read must not go exotic")
+    }
+
+    #[test]
+    fn an_active_decision_with_no_trigger_reads_as_settled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    #[test]
+    fn an_active_decision_with_a_waiting_trigger_reads_as_unsettled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(
+            tmp.path(),
+            "upstream__aaaaaaaa",
+            "aaaaaaaa",
+            "predicate",
+            Some("path-exists:never/lands.txt"),
+            "waiting",
+        );
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+    }
+
+    #[test]
+    fn an_active_decision_with_a_due_trigger_reads_as_unsettled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(
+            tmp.path(),
+            "upstream__aaaaaaaa",
+            "aaaaaaaa",
+            "predicate",
+            Some("path-exists:.bee/onboarding.json"),
+            "due",
+        );
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+    }
+
+    /// A `manual`-tier trigger never reaches `due` — it waits for a human.
+    /// Under D2 that keeps its decision unsettled until someone resolves it,
+    /// which is the locked behaviour, not a stuck state.
+    #[test]
+    fn a_waiting_manual_trigger_keeps_its_decision_unsettled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(tmp.path(), "ask-a-human__aaaaaaaa", "aaaaaaaa", "manual", None, "waiting");
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+    }
+
+    #[test]
+    fn a_resolved_trigger_leaves_its_decision_settled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(tmp.path(), "upstream__aaaaaaaa", "aaaaaaaa", "manual", None, "resolved");
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    /// D3's word "retired" has no state in the store; supersession is one of
+    /// the three ways an id leaves the active set, and leaving it is the
+    /// whole condition.
+    #[test]
+    fn a_superseded_decision_reads_as_unknown() {
+        let tmp = fixture_root();
+        let replacement = format!(
+            r#"{{"id":"{D_B}","type":"decide","date":"2026-02-01T00:00:00.000Z","decision":"The cell store's shape changed","rationale":"r","supersedes":["{D_A}"],"tags":["contract:cell-store"]}}"#
+        );
+        write_events(tmp.path(), &[&decide_line(D_A), &replacement]);
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unknown);
+        assert_eq!(status_of(tmp.path(), D_B), ContractStatus::Settled);
+    }
+
+    #[test]
+    fn an_id_nobody_ever_logged_reads_as_unknown() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        assert_eq!(status_of(tmp.path(), D_B), ContractStatus::Unknown);
+    }
+
+    /// 4 of the 14 live trigger records carry a `decision` key that is not a
+    /// short8 at all. A junk key matches nothing and raises nothing.
+    #[test]
+    fn a_trigger_key_that_is_not_a_short8_matches_no_decision() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        put_trigger(tmp.path(), "junk__herding", "herding-", "manual", None, "waiting");
+        put_trigger(tmp.path(), "junk__p72", "P72", "manual", None, "waiting");
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    /// The honest limit of a short8-keyed store: the record cannot say WHICH
+    /// of two colliding ids it belongs to, so both inherit it. Collisions
+    /// among the live decision ids: 0, and `Unsettled` is the fail-safe
+    /// direction for a path that refuses.
+    #[test]
+    fn two_decision_ids_sharing_a_short8_both_inherit_the_one_trigger() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_C1), &decide_line(D_C2)]);
+        put_trigger(tmp.path(), "upstream__cccccccc", "cccccccc", "manual", None, "waiting");
+        assert_eq!(status_of(tmp.path(), D_C1), ContractStatus::Unsettled);
+        assert_eq!(status_of(tmp.path(), D_C2), ContractStatus::Unsettled);
+    }
+
+    #[test]
+    fn a_corrupt_trigger_file_degrades_rather_than_panicking() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        let dir = tmp.path().join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("broken__aaaaaaaa.json"), "{not json at all").unwrap();
+        // Shape-invalid too: JSON, but an unknown status.
+        std::fs::write(
+            dir.join("shapeless__aaaaaaaa.json"),
+            r#"{"id":"shapeless__aaaaaaaa","decision":"aaaaaaaa","condition":"c","tier":"manual","status":"gone"}"#,
+        )
+        .unwrap();
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    #[test]
+    fn no_trigger_directory_at_all_reads_as_settled() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        assert!(!tmp.path().join(".bee").join("triggers").exists());
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Settled);
+    }
+
+    /// The load-bearing one. A refusal path that writes is not a refusal
+    /// path, so the derived read must leave the trigger store BYTE-identical
+    /// even for the one record the evaluating reader would rewrite: a
+    /// `predicate`-tier trigger still `waiting` whose predicate is true.
+    ///
+    /// The second half is what proves the first half is not vacuous — the
+    /// evaluating reader (`due_and_manual_counts`, the door `bee orient`
+    /// calls) is run over the SAME file and does rewrite it. Without that
+    /// contrast the byte-identity assertion would pass on a fixture that
+    /// could never have changed.
+    #[test]
+    fn the_derived_read_leaves_a_ready_to_fire_trigger_file_byte_identical() {
+        let tmp = fixture_root();
+        write_events(tmp.path(), &[&decide_line(D_A)]);
+        let path = put_trigger(
+            tmp.path(),
+            "onboarding-lands__aaaaaaaa",
+            "aaaaaaaa",
+            "predicate",
+            Some("path-exists:.bee/onboarding.json"), // fixture_root wrote this
+            "waiting",
+        );
+        let before = std::fs::read(&path).unwrap();
+
+        assert_eq!(status_of(tmp.path(), D_A), ContractStatus::Unsettled);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            before,
+            "the derived contract-status read must not write the trigger store"
+        );
+
+        // Contrast: the evaluating reader over the very same file DOES flip
+        // and persist, so the fixture was genuinely flip-ready above.
+        let (due, _) = crate::verbs::triggers::due_and_manual_counts(tmp.path());
+        assert_eq!(due, 1, "the evaluating reader must see this trigger as due");
+        let after = std::fs::read(&path).unwrap();
+        assert_ne!(after, before, "the evaluating reader is expected to rewrite the record");
+        assert!(String::from_utf8_lossy(&after).contains(r#""status": "due""#));
+    }
+
+    // ── the citation resolver: `cell.decisions` entry → store id ──────────
+
+    #[test]
+    fn a_local_d_id_resolves_to_no_store_decision() {
+        let ids = vec![D_A.to_string(), D_B.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "D1"), None);
+        assert_eq!(resolve_store_citation(&ids, ""), None);
+    }
+
+    #[test]
+    fn a_full_decision_id_resolves_to_itself() {
+        let ids = vec![D_A.to_string(), D_B.to_string()];
+        assert_eq!(resolve_store_citation(&ids, D_A), Some(D_A.to_string()));
+    }
+
+    #[test]
+    fn a_unique_eight_character_prefix_resolves() {
+        let ids = vec![D_A.to_string(), D_B.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "aaaaaaaa"), Some(D_A.to_string()));
+    }
+
+    #[test]
+    fn an_eight_character_prefix_matching_two_decisions_resolves_to_nothing() {
+        let ids = vec![D_C1.to_string(), D_C2.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "cccccccc"), None);
+    }
+
+    #[test]
+    fn a_prefix_shorter_than_eight_characters_never_resolves() {
+        let ids = vec![D_A.to_string()];
+        assert_eq!(resolve_store_citation(&ids, "aaaaaaa"), None);
     }

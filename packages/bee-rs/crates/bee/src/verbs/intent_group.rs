@@ -245,11 +245,63 @@ fn locate_intent_key(root: &Path, feature: Option<&str>, session: Option<&str>) 
     Ok(None)
 }
 
+/// The dispatch door's read of the anchor's VERBATIM request (D5/D6).
+///
+/// Deliberately NOT `read_intent`: the candidate walk above ends with an
+/// unconditional `DEFAULT_INTENT_KEY` push, and this door must never take it.
+/// `read_anchor_at` applies no TTL and no staleness check, so a
+/// `.bee/intent/default.json` left behind by unrelated work days ago would be
+/// rendered under a header reading "VERBATIM · DO NOT SUMMARIZE · DO NOT
+/// PARAPHRASE" — the exact meaning-drift D5 exists to prevent. Rendering
+/// nothing is safe; rendering the wrong request is not.
+///
+/// So the resolution is FEATURE-KEYED ONLY: the caller's feature (a cell's
+/// own `feature`), then the active feature from state, then None. The session
+/// key is not consulted either — `prompt_body_for` takes no session, and
+/// `--session-id` is meaningful only with `--claim`, which every non-cell
+/// kind refuses.
+///
+/// Every failure degrades to None and never fails the dispatch: a corrupt
+/// anchor warns once and reads as absent (`read_anchor_at`), a corrupt
+/// state.json reads as no active feature, and `normalize_anchor` already
+/// treats a blank `request` as no anchor at all.
+pub(crate) fn dispatch_original_request(root: &Path, feature: Option<&str>) -> Option<String> {
+    let mut keys: Vec<String> = Vec::new();
+    // `sanitize_intent_key` collapses a key with no safe characters left to
+    // DEFAULT_INTENT_KEY, so an odd feature slug could reach the default
+    // anchor by derivation rather than by fallback. Same drift, same refusal:
+    // this door reads `.bee/intent/default.json` by NO route.
+    let mut push = |raw: &str| {
+        let key = sanitize_intent_key(raw);
+        if key != DEFAULT_INTENT_KEY && !keys.contains(&key) {
+            keys.push(key);
+        }
+    };
+    if let Some(f) = feature.map(js_trim).filter(|f| !f.is_empty()) {
+        push(f);
+    }
+    if let Ok(Some(active)) = active_feature(root) {
+        push(&active);
+    }
+    for key in keys {
+        let Ok(Some(anchor)) = read_anchor_at(root, &key) else { continue };
+        // VERBATIM — never trimmed, never truncated, never re-wrapped. The
+        // trim here only decides present-vs-absent; the returned bytes are
+        // the stored bytes.
+        if let Some(request) = field_str(&anchor, "request") {
+            if !js_trim(request).is_empty() {
+                return Some(request.to_string());
+            }
+        }
+    }
+    None
+}
+
 // ─── renderers ─────────────────────────────────────────────────────────────
 
-const PRECOMPACT_HEADER: &str =
+pub(crate) const PRECOMPACT_HEADER: &str =
     "=== BEE INTENT ANCHOR — VERBATIM · DO NOT SUMMARIZE · DO NOT PARAPHRASE ===";
-const PRECOMPACT_FOOTER: &str = "=== END BEE INTENT ANCHOR ===";
+pub(crate) const PRECOMPACT_FOOTER: &str = "=== END BEE INTENT ANCHOR ===";
 const RESUME_HEADER: &str =
     "## INTENT ANCHOR — read this FIRST (the objective; bee workflow state follows below)";
 

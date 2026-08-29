@@ -471,15 +471,41 @@ pub(crate) fn format_decision(event: &Value) -> String {
 
 // ─── tags / taxonomy (decisions.mjs) ───────────────────────────────────────
 
-pub(crate) const TAG_PATTERN_DISPLAY: &str = "/^[a-z0-9][a-z0-9-]*$/";
+pub(crate) const TAG_PATTERN_DISPLAY: &str =
+    "/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/";
 
-pub(crate) fn tag_pattern_test(s: &str) -> bool {
+/// One slug segment: the pre-namespace rule, unchanged —
+/// `[a-z0-9]` then any run of `[a-z0-9-]`.
+fn tag_segment_test(s: &str) -> bool {
     let mut it = s.chars();
     match it.next() {
         Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit() => {}
         _ => return false,
     }
     it.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// A tag slug, optionally namespaced by AT MOST ONE interior colon
+/// (`contract:<name>` — the derived contract-status label, slp-contract
+/// D2). Both segments obey the plain slug rule, so a colon at either end,
+/// an empty segment, or a second colon is refused. Every pre-namespace tag
+/// still validates: no colon means one segment, tested exactly as before.
+///
+/// The single predicate behind `normalize_tags` and
+/// `normalize_tag_event_tags_value` — both inherit this shape, and
+/// `TAG_PATTERN_DISPLAY` (the text every refusal prints) describes it.
+pub(crate) fn tag_pattern_test(s: &str) -> bool {
+    let mut segments = s.split(':');
+    let Some(first) = segments.next() else {
+        return false;
+    };
+    if !tag_segment_test(first) {
+        return false;
+    }
+    match segments.next() {
+        None => true,
+        Some(second) => tag_segment_test(second) && segments.next().is_none(),
+    }
 }
 
 /// provenance: bee.mjs splitList.

@@ -1,4 +1,8 @@
 Gather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.
+{{#if original_request}}
+
+{{original_request}}
+{{/if}}
 
 Paths: <caller fills in the exact files/paths to read>
 

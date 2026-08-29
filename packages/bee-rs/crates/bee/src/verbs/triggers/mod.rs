@@ -72,13 +72,16 @@ fn control_root_path(root: &Path) -> PathBuf {
 
 // ─── record ─────────────────────────────────────────────────────────────
 
-struct TriggerRecord {
-    id: String,
-    decision: String,
+pub(crate) struct TriggerRecord {
+    pub(crate) id: String,
+    /// The SHORT8 of the deferring decision — the first 8 characters of
+    /// its id, never the full id (written at `add`, below). Every join
+    /// from a decision onto its triggers goes through this one field.
+    pub(crate) decision: String,
     condition: String,
-    tier: String,
+    pub(crate) tier: String,
     predicate: Option<String>,
-    status: String,
+    pub(crate) status: String,
     created_at: String,
     updated_at: String,
     outcome: Option<String>,
@@ -205,7 +208,7 @@ fn trigger_path_new(dir: &Path, slug: &str, short8: &str) -> PathBuf {
 
 // ─── read + evaluate-on-read ────────────────────────────────────────────
 
-enum TriggerEntry {
+pub(crate) enum TriggerEntry {
     Ok(TriggerRecord),
     Unreadable(PathBuf),
 }
@@ -214,13 +217,20 @@ fn unreadable_line(path: &Path) -> String {
     format!("unreadable trigger {} — remedy: delete the file", path.display())
 }
 
-/// Reads every trigger file under `control`'s `.bee/triggers/`, evaluating
-/// every `predicate`-tier trigger still `waiting` and PERSISTING a true
-/// flip to `due`. Fail-open throughout: a missing directory is simply
+/// The ONE walk of the trigger store, shared by both readers. `evaluate`
+/// is the only difference between them: ON, a `predicate`-tier trigger
+/// still `waiting` whose predicate is true is flipped to `due` and that
+/// flip is PERSISTED (the write-on-read `triggers list` has always
+/// performed); OFF, nothing under `.bee/triggers/` is written at all.
+///
+/// One body, never two copies — a rule checked at two points needs one
+/// shared read, or the two points drift and only one of them is right.
+///
+/// Fail-open throughout, in BOTH modes: a missing directory is simply
 /// empty, a file that raced away between listing and reading is skipped,
 /// and a corrupt or shape-invalid file becomes `Unreadable` rather than a
 /// crash — callers surface that as the delete-remedy line.
-fn read_and_evaluate(control: &Path) -> Vec<TriggerEntry> {
+fn read_entries(control: &Path, evaluate: bool) -> Vec<TriggerEntry> {
     let dir = triggers_dir(control);
     let mut names: Vec<String> = match std::fs::read_dir(&dir) {
         Ok(entries) => entries
@@ -242,7 +252,7 @@ fn read_and_evaluate(control: &Path) -> Vec<TriggerEntry> {
             ReadJson::Parsed(v) => match TriggerRecord::from_value(&v) {
                 None => out.push(TriggerEntry::Unreadable(path)),
                 Some(mut rec) => {
-                    if rec.tier == "predicate" && rec.status == "waiting" {
+                    if evaluate && rec.tier == "predicate" && rec.status == "waiting" {
                         if let Some(spec) = rec.predicate.clone() {
                             if predicate_true(control, &spec) {
                                 rec.status = "due".to_string();
@@ -257,6 +267,28 @@ fn read_and_evaluate(control: &Path) -> Vec<TriggerEntry> {
         }
     }
     out
+}
+
+/// The evaluating reader — `triggers list` and `bee orient`'s counts. The
+/// predicate flip is ON, so this call can WRITE the store it reads.
+fn read_and_evaluate(control: &Path) -> Vec<TriggerEntry> {
+    read_entries(control, true)
+}
+
+/// The read-only reader: the same walk with the predicate flip OFF, so it
+/// promises ZERO mutation — every file under `.bee/triggers/` is
+/// byte-identical after the call, including a `predicate`-tier trigger
+/// still `waiting` whose predicate is true. A refusal path that writes is
+/// not a refusal path, so the derived contract-status read
+/// (`verbs/decisions/read.rs`, slp-contract D1/D2) reaches the trigger
+/// store through here and NEVER through `read_and_evaluate`.
+///
+/// `root` is the caller's OWN root (a decisions-store root, possibly a
+/// worktree); this re-roots onto the control root itself, exactly the way
+/// `trigger_registered` and every other trigger-store access in this
+/// module does.
+pub(crate) fn read_without_evaluating(root: &Path) -> Vec<TriggerEntry> {
+    read_entries(&control_root_path(root), false)
 }
 
 /// `bee orient`'s door (status_full/orient.rs): `(due, awaiting

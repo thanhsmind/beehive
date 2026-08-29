@@ -3074,6 +3074,211 @@ use std::time::Instant;
         assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-8", Some("bee-w8")).unwrap());
     }
 
+    // ══ slp-contract S4 — the contract-citation tripwire at the DISPATCH door ══
+    //
+    // Coverage audit before authoring (`.bee/expertise/tests.md`):
+    //   - verbs/cells/tests.rs now pins the CLAIM door over the same rule
+    //     (four refuse cases, six allow cases, zero mutation on each
+    //     refusal).
+    //   - this file already pins prepare's typed refusal grammar for
+    //     `claim_ownership` ("claim_less_prepare_of_cell_owned_by_another…")
+    //     and for an unmapped kind.
+    //   - Gap: the dispatch door over a citation, and — the reason there
+    //     are two doors at all — the claim-then-change window the claim
+    //     door structurally cannot see.
+
+    fn cit_repo(tmp: &tempfile::TempDir) -> PathBuf {
+        let root = repo(tmp, r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/lanes/cit.json",
+            r#"{"feature":"cit","approved_gates":{"execution":true},"route":true}"#,
+        );
+        w(
+            &root,
+            ".bee/test-results.json",
+            r#"{"ran_at":"2026-01-01T00:00:00.000Z","green":true,"commands":[{"command":"cargo test","exit":0,"duration_ms":1,"failure_excerpt":null}]}"#,
+        );
+        root
+    }
+
+    const CIT_SETTLED: &str = "11111111-0000-0000-0000-000000000001";
+    const CIT_RETIRED: &str = "22222222-0000-0000-0000-000000000002";
+    const CIT_WAITING: &str = "33333333-0000-0000-0000-000000000003";
+    const CIT_REPLACEMENT: &str = "77777777-0000-0000-0000-000000000007";
+
+    fn cit_decide(id: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d","rationale":"r","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn cit_supersede(id: &str, target: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"supersede","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r","supersedes":"{target}","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn cit_write_decisions(root: &Path, lines: &[String]) {
+        w(root, ".bee/decisions.jsonl", &format!("{}\n", lines.join("\n")));
+    }
+
+    /// A cell already CLAIMED by `w` — the state every `dispatch prepare
+    /// --kind cell` sees.
+    fn cit_claimed_cell(root: &Path, id: &str, decisions: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"cit","title":"t","status":"claimed","decisions":{decisions},"trace":{{"worker":"w"}}}}"#
+            ),
+        );
+    }
+
+    /// The window that justifies a SECOND door: the cell was claimed while
+    /// its citation was settled, and the decision was superseded
+    /// afterwards. The claim door cannot see that — it already ran — so a
+    /// claim-only tripwire would dispatch this worker against a retired
+    /// contract. D3's letter names the dispatch, and this is why.
+    #[test]
+    fn dispatching_a_cell_whose_citation_went_retired_after_the_claim_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_claimed_cell(&root, "c-cit", &format!(r#"["{CIT_RETIRED}"]"#));
+        // The store as it was at claim time: the citation was ACTIVE, so
+        // the claim door had nothing to refuse on.
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED)]);
+        assert!(
+            crate::verbs::cells::contract_citation_refusal(
+                &root,
+                "c-cit",
+                Some(&read_cell(&root, "c-cit").unwrap().unwrap())
+            )
+            .is_none(),
+            "the fixture must start settled, or this test proves nothing about the window"
+        );
+
+        // Now it is superseded — the change the claim door never saw.
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)]);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-cit"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)), "payload: {v}");
+        assert_eq!(v.get("type"), Some(&json!("refused")), "payload: {v}");
+        assert_eq!(v.get("reason"), Some(&json!("contract_retired")), "payload: {v}");
+        assert_eq!(v.get("code"), Some(&json!("CONTRACT_RETIRED")), "payload: {v}");
+        assert_eq!(v.get("cell"), Some(&json!("c-cit")), "payload: {v}");
+        let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains(CIT_RETIRED), "the fix names the decision: {v}");
+        assert!(fix.contains("bee decisions active"), "payload: {v}");
+        // No envelope leaked out beside the refusal, and nothing was written.
+        assert!(v.get("payload").is_none(), "a refusal carries no dispatch payload: {v}");
+        assert_eq!(read_cell(&root, "c-cit").unwrap().unwrap()["status"], json!("claimed"));
+        assert!(!root.join(".bee/logs/dispatch.jsonl").exists(), "a refusal records no dispatch");
+    }
+
+    /// The unsettled arm at the same door: an ACTIVE decision whose trigger
+    /// is still waiting.
+    #[test]
+    fn dispatching_a_cell_citing_an_unsettled_contract_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_claimed_cell(&root, "c-cit", &format!(r#"["{CIT_WAITING}"]"#));
+        cit_write_decisions(&root, &[cit_decide(CIT_WAITING)]);
+        w(
+            &root,
+            ".bee/triggers/upstream__33333333.json",
+            r#"{"id":"upstream__33333333","decision":"33333333","condition":"revisit when upstream lands","tier":"manual","predicate":null,"status":"waiting","created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","outcome":null}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-cit"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        assert_eq!(v.get("reason"), Some(&json!("contract_unsettled")), "payload: {v}");
+        assert_eq!(v.get("code"), Some(&json!("CONTRACT_UNSETTLED")), "payload: {v}");
+        assert!(
+            v.get("fix").and_then(Value::as_str).unwrap_or_default().contains("bee triggers list"),
+            "payload: {v}"
+        );
+    }
+
+    /// The two doors are ONE rule, not two that happen to agree today: the
+    /// same cell refused at the claim door and at the dispatch door carries
+    /// the IDENTICAL sentence, because there is one producer of it
+    /// (`cells::contract_citation_refusal`). A fixture that cannot diverge
+    /// is the only proof worth having here.
+    #[test]
+    fn the_claim_door_and_the_dispatch_door_refuse_with_the_same_sentence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)]);
+        // OPEN — the claim door's shape.
+        w(
+            &root,
+            ".bee/cells/c-both.json",
+            &format!(
+                r#"{{"id":"c-both","feature":"cit","title":"t","status":"open","decisions":["{CIT_RETIRED}"]}}"#
+            ),
+        );
+        let claim_refusal = match crate::verbs::cells::claim_cell_from_flags(
+            &root, "c-both", "w", Some("sess-1"), None,
+        ) {
+            Err(crate::verbs::cells::Fail::Thrown(m)) => m,
+            Err(crate::verbs::cells::Fail::Delegate) => panic!("unexpected delegate"),
+            Ok(_) => panic!("the claim door must refuse a retired citation"),
+        };
+        // The claim door refused, so the cell is still open — CLAIMED by
+        // hand for the dispatch door, which is the state it always sees.
+        assert_eq!(read_cell(&root, "c-both").unwrap().unwrap()["status"], json!("open"));
+        cit_claimed_cell(&root, "c-both", &format!(r#"["{CIT_RETIRED}"]"#));
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-both"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        let dispatch_sentence = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert_eq!(
+            claim_refusal,
+            format!("claim: CONTRACT_RETIRED — {dispatch_sentence}"),
+            "the two doors must speak one sentence, not two that agree by luck"
+        );
+    }
+
+    /// ALLOW — a settled citation dispatches normally, and a list of local
+    /// D-IDs dispatches normally. The dispatch door repeats the claim
+    /// door's pass-over rule exactly: an entry that resolves to no store
+    /// decision refuses nothing.
+    #[test]
+    fn a_settled_or_local_citation_dispatches_normally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        // A store holding a retired decision, so the allow is proven to be
+        // about resolution rather than about an empty store.
+        cit_write_decisions(
+            &root,
+            &[cit_decide(CIT_SETTLED), cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)],
+        );
+
+        for decisions in [format!(r#"["{CIT_SETTLED}"]"#), r#"["D1","D2"]"#.to_string(), "[]".to_string()] {
+            cit_claimed_cell(&root, "c-ok", &decisions);
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", "cell", Some("c-ok"), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope for {decisions}")
+            };
+            assert_eq!(v.get("tool"), Some(&json!("Agent")), "{decisions} must dispatch: {v}");
+            assert!(v.get("type").is_none(), "{decisions} must not be refused: {v}");
+        }
+    }
+
     #[test]
     fn absent_probe_record_classifies_budget_only_without_a_subprocess() {
         let tmp = tempfile::tempdir().unwrap();
@@ -7717,6 +7922,369 @@ advance_on — falling to another model there hides the defect (D11)"
                 render(&template, &[]).unwrap(),
                 render(&template, &[("expertise", "")]).unwrap(),
                 "{name}: an empty list must leave zero residue bytes"
+            );
+        }
+    }
+
+    // ── slp-contract-original-request S1: the user's own words ride every
+    //    dispatch (D5, D6) ──────────────────────────────────────────────────
+    //
+    // Existing coverage judged first. `no_brief_leaves_every_runtime_and_kind_
+    // pair_exactly_as_it_was` already walks runtime × kind for byte identity,
+    // but it names the BRIEF and never writes an anchor, so it cannot tell an
+    // anchor that resolved to nothing from one that was never read. Nothing
+    // in this file writes `.bee/intent/*` at all. The cases below are that
+    // gap: the anchor resolving, the anchor deliberately NOT resolving, and
+    // what the request's own bytes may never do to the template.
+
+    /// The anchor's own framing, imported rather than retyped — a header edit
+    /// in `intent_group.rs` must move this assertion with it, not slip past.
+    use crate::verbs::intent_group::{
+        dispatch_original_request, PRECOMPACT_FOOTER, PRECOMPACT_HEADER,
+    };
+
+    /// The user's own words: punctuated, em-dashed and multi-line, so
+    /// "verbatim" means more than "a substring survived".
+    const ORIGINAL_REQUEST: &str = "Make the /orders endpoint idempotent under retries — the same Idempotency-Key must never\ncreate a second order, and please do NOT change the existing response shape.";
+
+    /// A repo with one claimed cell on feature `f`, ready for a dispatch of
+    /// any kind.
+    fn anchor_host(tmp: &tempfile::TempDir) -> PathBuf {
+        let root = repo(tmp, BRIEF_HOST);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"carry the request","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        root
+    }
+
+    /// An anchor on disk under `key`, in the shape `intent set` writes.
+    fn write_anchor(root: &Path, key: &str, request: &str) {
+        let body = serde_json::to_string(&json!({
+            "schema_version": "1.0",
+            "key": key,
+            "written_at": "2026-08-29T00:00:00.000Z",
+            "request": request,
+            "acceptance": "the user's words arrive unchanged",
+        }))
+        .unwrap();
+        w(root, &format!(".bee/intent/{key}.json"), &body);
+    }
+
+    /// Active work on `feature` — `active_feature` reads the phase first, so
+    /// an idle phase resolves to no feature no matter what the field says.
+    fn active_feature_is(root: &Path, feature: &str) {
+        w(root, ".bee/state.json", &format!(r#"{{"phase":"executing","feature":"{feature}"}}"#));
+    }
+
+    fn body_of_kind(root: &Path, runtime: &str, kind: &str) -> String {
+        let (cell, worker) = if kind == "cell" { (Some("c-1"), Some("w")) } else { (None, None) };
+        let Prepared::Value(v) =
+            prepare_dispatch(root, runtime, kind, cell, worker, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a {kind} envelope on {runtime}")
+        };
+        dispatched_body(&v)
+    }
+
+    /// The bytes the block adds, built from the anchor's own constants.
+    fn expected_block(request: &str) -> String {
+        format!("{PRECOMPACT_HEADER}\nORIGINAL REQUEST (verbatim):\n{request}\n{PRECOMPACT_FOOTER}")
+    }
+
+    /// The absent case, per runtime × kind. The non-cell kinds are compared
+    /// against `render(template, &[])` — the literal expression this door
+    /// used before any var existed — and the cell kind against a hand-written
+    /// literal of the seam the block lands in, so a stray newline on either
+    /// side of the marker is a red line rather than a silent reflow.
+    #[test]
+    fn no_resolvable_anchor_leaves_every_runtime_and_kind_pair_byte_identical() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = anchor_host(&tmp);
+                let body = body_of_kind(&root, runtime, kind);
+                assert!(
+                    !body.contains(PRECOMPACT_HEADER),
+                    "{runtime}/{kind}: no anchor resolved, so no block may render: {body}"
+                );
+                assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
+                if kind == "cell" {
+                    assert!(
+                        body.starts_with(
+                            "Nickname (reservation identity): w\nAssigned cell id: c-1\nFeature: f\n\nCell (authoritative — do not re-fetch):"
+                        ),
+                        "{runtime}/{kind}: the worker prompt head drifted: {body}"
+                    );
+                } else {
+                    assert_eq!(
+                        body,
+                        render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                        "{runtime}/{kind}: payload bytes drifted"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The carrier, per kind. This is the case a missed var slice fails:
+    /// `{{#if}}` over an absent variable is silently falsy, so the
+    /// byte-identity walk above would stay green with the block swallowed for
+    /// a whole kind.
+    #[test]
+    fn a_resolvable_anchor_rides_every_dispatch_kind_verbatim() {
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in DISPATCH_KINDS {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = anchor_host(&tmp);
+                active_feature_is(&root, "f");
+                write_anchor(&root, "f", ORIGINAL_REQUEST);
+                let body = body_of_kind(&root, runtime, kind);
+                assert_eq!(
+                    body.matches(&expected_block(ORIGINAL_REQUEST)).count(),
+                    1,
+                    "{runtime}/{kind}: the request must ride exactly once, under the anchor's own header: {body}"
+                );
+                assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
+            }
+        }
+    }
+
+    /// THE LOAD-BEARING ONE. `read_anchor_at` applies no TTL and no staleness
+    /// check, and the default key is where a session with no feature parks its
+    /// anchor — so a featureless dispatch that walked to `default` would print
+    /// somebody else's days-old request under a DO-NOT-PARAPHRASE banner. It
+    /// renders nothing instead, by every route: no key at all, an active
+    /// feature whose own anchor is missing, and a feature slug that
+    /// `sanitize_intent_key` collapses onto the default key.
+    #[test]
+    fn a_featureless_dispatch_reads_no_default_anchor_even_when_one_exists() {
+        const STALE: &str = "four days ago, about an unrelated and already-shipped bug";
+        for runtime in DISPATCH_RUNTIMES {
+            for kind in ["gather", "reviewer", "advisor"] {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = repo(&tmp, BRIEF_HOST);
+                write_anchor(&root, "default", STALE);
+                let body = body_of_kind(&root, runtime, kind);
+                assert!(!body.contains(STALE), "{runtime}/{kind}: read a stale default anchor");
+                assert_eq!(
+                    body,
+                    render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                    "{runtime}/{kind}: payload bytes drifted"
+                );
+            }
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        write_anchor(&root, "default", STALE);
+        assert_eq!(dispatch_original_request(&root, None), None, "no key resolves to no request");
+        assert_eq!(
+            dispatch_original_request(&root, Some("default")),
+            None,
+            "the default key is refused even when it is asked for by name"
+        );
+        assert_eq!(
+            dispatch_original_request(&root, Some("***")),
+            None,
+            "a slug that sanitizes to \"default\" must not reach the default anchor"
+        );
+        assert_eq!(dispatch_original_request(&root, Some("f")), None, "no anchor at key f");
+        // An idle phase is no active feature, even with the field set.
+        w(&root, ".bee/state.json", r#"{"phase":"idle","feature":"f"}"#);
+        write_anchor(&root, "f", "the feature's own words");
+        assert_eq!(dispatch_original_request(&root, None), None, "idle resolves no feature");
+        active_feature_is(&root, "f");
+        assert_eq!(
+            dispatch_original_request(&root, None).as_deref(),
+            Some("the feature's own words"),
+            "an ACTIVE feature is the one fallback this door takes"
+        );
+    }
+
+    /// The cell's own feature is read first; the active feature is the second
+    /// candidate, not the first.
+    #[test]
+    fn a_cell_dispatch_reads_its_own_features_anchor_before_the_active_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "other");
+        write_anchor(&root, "f", "the cell's own feature asked for this");
+        write_anchor(&root, "other", "a different feature asked for that");
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(body.contains("the cell's own feature asked for this"), "{body}");
+        assert!(!body.contains("a different feature asked for that"), "{body}");
+
+        // …and with no anchor under the cell's feature, the active feature is
+        // the documented second candidate.
+        std::fs::remove_file(root.join(".bee").join("intent").join("f.json")).unwrap();
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(body.contains("a different feature asked for that"), "{body}");
+    }
+
+    /// A request is DATA. It is substituted in pass 2, which walks the
+    /// pre-substitution text, so template syntax inside the user's words is
+    /// carried as characters and never interpreted — and the placeholders it
+    /// names are not re-expanded.
+    #[test]
+    fn a_request_carrying_template_syntax_is_carried_as_text() {
+        const INJECT: &str =
+            "Render {{worker}} and {{#if brief}}this{{/if}} literally — do not expand {{cell_json}}.";
+        for kind in DISPATCH_KINDS {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            write_anchor(&root, "f", INJECT);
+            let body = body_of_kind(&root, "claude", kind);
+            assert_eq!(
+                body.matches(&expected_block(INJECT)).count(),
+                1,
+                "{kind}: the request's own braces must survive verbatim: {body}"
+            );
+        }
+    }
+
+    /// Non-ASCII survives byte for byte — the renderer walks chars, and a
+    /// truncation or a re-encode would show up here first.
+    #[test]
+    fn a_non_ascii_request_survives_byte_for_byte() {
+        const VI: &str =
+            "Hãy giữ nguyên yêu cầu của tôi — đừng tóm tắt, đừng diễn giải lại. 🐝 Ünïcödé ok?";
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "f");
+        write_anchor(&root, "f", VI);
+        for kind in DISPATCH_KINDS {
+            let body = body_of_kind(&root, "claude", kind);
+            assert_eq!(body.matches(&expected_block(VI)).count(), 1, "{kind}: {body}");
+        }
+        assert_eq!(dispatch_original_request(&root, Some("f")).as_deref(), Some(VI));
+    }
+
+    /// A blank request is no anchor at all: `{{#if}}` truthiness is
+    /// `!is_empty()`, so a whitespace request that reached the var would
+    /// splice an EMPTY block where today's bytes are.
+    #[test]
+    fn a_whitespace_only_request_is_no_request_at_all() {
+        for blank in ["   ", "\n\n", " \t \r\n  \n"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            write_anchor(&root, "f", blank);
+            assert_eq!(
+                dispatch_original_request(&root, Some("f")),
+                None,
+                "a request of {blank:?} must read as absent"
+            );
+            for kind in DISPATCH_KINDS {
+                let body = body_of_kind(&root, "claude", kind);
+                assert!(!body.contains(PRECOMPACT_HEADER), "{kind}: {body}");
+                if kind != "cell" {
+                    assert_eq!(body, render(&load_prompt(kind).unwrap(), &[]).unwrap(), "{kind}");
+                }
+            }
+        }
+    }
+
+    /// Error cascade: an unusable anchor degrades to "no anchor" and never
+    /// fails the dispatch. Corrupt bytes, a non-object payload, and a record
+    /// with no `request` field all land in the same place.
+    #[test]
+    fn an_unusable_anchor_degrades_to_no_block_and_never_fails_the_dispatch() {
+        for payload in ["{broken", "[]", r#""just a string""#, r#"{"acceptance":"no request"}"#] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = anchor_host(&tmp);
+            active_feature_is(&root, "f");
+            w(&root, ".bee/intent/f.json", payload);
+            assert_eq!(
+                dispatch_original_request(&root, Some("f")),
+                None,
+                "an anchor of {payload:?} must read as absent"
+            );
+            for kind in DISPATCH_KINDS {
+                let body = body_of_kind(&root, "claude", kind);
+                assert!(!body.contains(PRECOMPACT_HEADER), "{kind}/{payload:?}: {body}");
+                if kind != "cell" {
+                    assert_eq!(
+                        body,
+                        render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                        "{kind}/{payload:?}: payload bytes drifted"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Why the var had to join BOTH slices: pass 2 refuses a bare `{{NAME}}`
+    /// with no supplied value. Inside an `{{#if}}` the same omission is
+    /// SILENT, which is exactly why the per-kind carrier case above exists.
+    #[test]
+    fn a_template_var_missing_from_its_arms_slice_fails_loudly() {
+        let err = render("Head: {{original_request}}\n", &[("brief", "")]).unwrap_err();
+        assert!(
+            err.contains("no value supplied for placeholder {{original_request}}"),
+            "the refusal must name the placeholder: {err}"
+        );
+        assert!(render("Head: {{original_request}}\n", &[("original_request", "")]).is_ok());
+        // The silent half, stated so the asymmetry is on the record.
+        assert_eq!(
+            render("A\n{{#if original_request}}\nB\n{{/if}}\nC", &[]).unwrap(),
+            "A\nC",
+            "an absent var inside an if-block is dropped, not refused"
+        );
+    }
+
+    /// Every template that declares the block declares it the same way, and
+    /// the shipped copies on disk match the compiled-in bytes — a prompt edit
+    /// and a rebuilt vendored twin are one unit of work.
+    #[test]
+    fn every_template_carries_the_original_request_block_and_matches_disk() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        for name in ["worker-cell", "gather", "reviewer", "advisor"] {
+            assert!(
+                prompts_match_disk(&repo_root, name),
+                "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
+                 compiled-in template — run `bee dev regen` and rebuild"
+            );
+            let template = load_prompt(name).unwrap();
+            let at = template
+                .find("{{#if original_request}}")
+                .unwrap_or_else(|| panic!("{name}.md carries no original_request block"));
+            assert!(at > 0, "{name}: a block at byte 0 has no leading newline to consume");
+            assert_eq!(&template[at - 1..at], "\n", "{name}: the marker needs its leading newline");
+            assert!(
+                template.contains("{{original_request}}"),
+                "{name}: the block must hold the placeholder"
+            );
+            // The rest of the arm's slice, so the comparison isolates the one
+            // var under test. `worker-cell` carries bare placeholders that
+            // pass 2 refuses when unsupplied, so they cannot be left out.
+            let without: Vec<(&str, &str)> = if name == "worker-cell" {
+                vec![
+                    ("worker", ""),
+                    ("cell_id", ""),
+                    ("feature", ""),
+                    ("cell_json", ""),
+                    ("learned_context", ""),
+                    ("expertise", ""),
+                    ("prior_rounds", ""),
+                    ("worktree_root", ""),
+                    ("control_root", ""),
+                ]
+            } else {
+                vec![("brief", ""), ("expertise", "")]
+            };
+            let mut with = without.clone();
+            with.push(("original_request", ""));
+            assert_eq!(
+                render(&template, &without).unwrap(),
+                render(&template, &with).unwrap(),
+                "{name}: an empty request must leave zero residue bytes"
             );
         }
     }

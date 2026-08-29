@@ -1,4 +1,8 @@
 Advisor consult: produce an independent digest/opinion on the given question. Read-only.
+{{#if original_request}}
+
+{{original_request}}
+{{/if}}
 
 Paths: <caller fills in the exact files/paths to read>
 
