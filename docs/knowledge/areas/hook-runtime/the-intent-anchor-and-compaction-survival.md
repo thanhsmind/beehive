@@ -90,7 +90,10 @@ header, so a delegated worker reads the user's words instead of an
 intermediate layer's restatement. That door resolves the anchor by **feature**
 only and never falls back to the `default` key — no staleness check exists,
 and a stale default anchor printed under a verbatim banner would be worse than
-printing nothing. Details in
+printing nothing. The anchor's own DO-NOT-PARAPHRASE framing is what carries
+the rule that no intermediate layer may replace or paraphrase the user's
+words — a layer may only ADD guidance beside them
+(slp-contract-original-request D5/D6). Details in
 [`../workflow-state/dispatch.md`](../workflow-state/dispatch.md).
 
 **Absence changes nothing.** With no anchor the emitted text is byte-identical to

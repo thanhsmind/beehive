@@ -110,29 +110,52 @@ that have since edited the same files.
 
 None. The map records no unresolved item for this cluster.
 
+<!-- bee:not-a-deferral: every question below was answered at planning and carries its answer inline; the section records resolutions, it promises no future work -->
 ### Deferred To Planning
 
-- [ ] What makes a cell "test-writing" for D4's refusal? — the cell record has
+- [x] What makes a cell "test-writing" for D4's refusal? — the cell record has
       no test flag today, so planning must find the honest signal and say
       plainly what it does NOT catch
-- [ ] Does the tripwire live at dispatch prepare or at claim time (D3)? — both
+      **Answered (plan.md, Approach S5):** two unequal arms — an ARMED arm that
+      can refuse (a test-shaped path in `files`, judged by the existing
+      `path_looks_like_test`, or `role: test`), and an ADVISORY arm that only
+      warns (title or action naming test writing). Named as NOT caught: a
+      `role: code` cell adding an inline `#[cfg(test)]` module to a source file
+      it was already touching — the dominant shape here, covered by the
+      advisory arm only.
+- [x] Does the tripwire live at dispatch prepare or at claim time (D3)? — both
       are named; reading the two doors answers which one every dispatch really
       passes
-- [ ] How does a dispatch resolve WHICH intent anchor to read (D6)? — the
+      **Answered (plan.md, Approach S4):** BOTH doors. The claim body is the
+      funnel every claim passes, and `dispatch prepare --kind cell` catches the
+      window where a cited decision changed state after the claim was taken.
+- [x] How does a dispatch resolve WHICH intent anchor to read (D6)? — the
       anchor is stored per feature key, and a gather or advisor dispatch may
       carry no feature
-- [ ] Does an absent anchor render byte-identically, per template? — the
+      **Answered (plan.md, Approach Half B):** feature-keyed only — the cell's
+      own `feature`, then the active feature from state, then nothing. The
+      `default` anchor is never read: it carries no staleness check, so a stale
+      request rendered under a verbatim banner is the drift D5 exists to stop.
+- [x] Does an absent anchor render byte-identically, per template? — the
       pattern exists twice; the proof obligation is the same one both times
+      **Answered (plan.md, Risk map):** yes, and it is pinned across every
+      runtime x kind pair by
+      `no_resolvable_anchor_leaves_every_runtime_and_kind_pair_byte_identical`.
+<!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: names a scope-out D1 already settled, so no condition could ever fire for it; it records a refusal, not a postponement -->
 ## Deferred Ideas
 
 - A reverse index from contract name to trigger — the digest names its absence
   as a gap; nothing in D1 to D6 needs it, and building one would be the second
   registry D1 refuses.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: names the "Deferred To Planning" section by its title as a reading list; it promises no future work -->
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads
 locked decisions, code context, canonical references, and deferred-to-planning
 questions. Planning's Gate 2 shape stage and reviewing use locked decisions for
 coverage and UAT.
+<!-- /bee:not-a-deferral -->

@@ -118,6 +118,20 @@ Your dispatch prompt is the assignment: one cell, claimed for you, its
 listed files reserved under your nickname. Everything else comes from CLI
 outputs — when a verb refuses, its message names the fix.
 
+Two contract guards can refuse the cell before you run it — at the claim
+door and again at `dispatch prepare --kind cell` — both typed, both
+mutating nothing, both naming their own remedy: `CONTRACT_RETIRED` /
+`CONTRACT_UNSETTLED` when a decision the cell cites has left the active set
+or carries a `waiting`/`due` trigger, and `CONTRACT_UNCITED` — the mint
+trap — when a test-writing cell cites no `contract:<name>` decision at all.
+A `cell.decisions` entry that resolves to no store decision (a local `D1`
+pointing into a CONTEXT.md table) is passed over silently, never refused
+(`docs/knowledge/areas/workflow-state/dispatch.md`).
+
+The prompt carries the user's original request VERBATIM under a
+DO-NOT-PARAPHRASE header. No layer may replace or paraphrase it, yours
+included: add guidance beside those words, never over them.
+
 1. Read `AGENTS.md`, then the cell's `CONTEXT.md` and plan (paths in the
    prompt). Conform before you code: scout adjacent patterns, reuse
    existing helpers, match the codebase's idiom. Authoring tests? Judge

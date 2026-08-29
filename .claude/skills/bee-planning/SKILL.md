@@ -98,6 +98,13 @@ later slices keep one-line headlines, not cells
 quality rules")). A user-visible surface makes slice 1 a walking skeleton:
 end-to-end, real behavior, no stubs.
 
+A cell that writes tests against an interface cites that interface's contract
+decision by its STORE id in `cell.decisions` — the mint trap refuses a
+test-writing cell that cites none. Know its limit: the trap only sees a
+test-shaped path in `files` or `role: test`, so a `code`-role cell adding an
+inline test module to a source file it already touches is NOT caught — citing
+is on the author (`docs/knowledge/areas/workflow-state/dispatch.md`).
+
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap
 (`.bee/expertise/tests.md`). The agent owns test scope (rule: agents-proof-at-cap) —

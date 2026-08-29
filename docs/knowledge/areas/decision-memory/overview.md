@@ -73,7 +73,7 @@ Three field failures (reported against a host repo, fixed generically):
   proven by injection — a tagless call added on purpose must name its own file
   and line.
 - **R1b — A tag slug takes at most ONE interior colon, which namespaces it**
-  (slp-contract D2). The pattern is
+  (slp-contract-original-request D2). The pattern is
   `/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/`: each side of the colon obeys
   the plain slug rule, so a colon at either end, an empty segment, and a second
   colon each refuse by name. One predicate
@@ -81,16 +81,18 @@ Three field failures (reported against a host repo, fixed generically):
   and `decisions tag`, and the refusal text it prints (`TAG_PATTERN_DISPLAY`)
   is that same pattern. The namespace exists for `contract:<name>` — the
   contract-status label, which is DERIVED over the active decision set and is
-  never a registry (slp-contract D1). Every pre-namespace tag still validates;
-  the widening takes nothing away. Side effect under R1: a `contract:<name>`
-  tag is unknown to the taxonomy, so it is accepted and appended to
-  `candidates[]` — the checked-in `docs/decisions/taxonomy.json` grows one
-  candidate per contract name, awaiting curation like any other new tag.
-- **R1c — Contract status is DERIVED, never stored** (slp-contract D1/D2).
-  R1b gives the label its spelling; this is what reading it means. Nothing is
-  written anywhere — no registry, no reverse index from contract name to
-  trigger, no cache. One decision id has exactly three derived values
-  (`verbs/decisions/read.rs`, `ContractStatus`):
+  never a registry (slp-contract-original-request D1). Every pre-namespace
+  tag still validates; the widening takes nothing away. Side effect under R1:
+  a `contract:<name>` tag is unknown to the taxonomy, so it is accepted and
+  appended to `candidates[]` — the checked-in `docs/decisions/taxonomy.json`
+  grows one candidate per contract name, awaiting curation like any other new
+  tag.
+- **R1c — Contract status is DERIVED, never stored**
+  (slp-contract-original-request D1/D2). R1b gives the label its spelling;
+  this is what reading it means. Nothing is written anywhere — no registry,
+  no reverse index from contract name to trigger, no cache. One decision id
+  has exactly three derived values (`verbs/decisions/read.rs`,
+  `ContractStatus`):
   - **settled** — the id is in the ACTIVE decision set and no trigger keyed to
     it is still open;
   - **unsettled** — it is active and a trigger keyed to it is `waiting` or

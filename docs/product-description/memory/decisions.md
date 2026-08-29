@@ -14,7 +14,9 @@ bee decisions log --decision "Use the in-repo registry for CLI commands" --ratio
 
 bee answers `Logged decision <id>.` and, under that, up to three lines of the form `possible conflict: <short8> <first 90 characters> — if replaced, run decisions supersede --id <short8>`: active decisions that share a tag or hit two or more of this decision's terms. Those lines are a warning, never a refusal. Under them come any *update obligations* — homed knowledge rules whose area matches a tag or the scope, each naming the files that rule already reaches.
 
+<!-- bee:not-a-deferral: narrates how supersession replaces an agreement; it is a connective, not a promise to act later -->
 Later the agreement changes. The replacement is not logged as new prose; it retires the old one by id:
+<!-- /bee:not-a-deferral -->
 
 ```
 bee decisions supersede --id <old-id> --decision "…" --rationale "…"
@@ -59,13 +61,17 @@ The short paths, none of which write a decision event:
 - A missing **or** malformed `--relation` gets one refusal, because both leave the relation undeclared: `logDecision: --relation is required — pass --relation supersedes:<id>[,...] …, --relation touches:<id>[,...] …, or --relation none …`, followed by the same up-to-three conflict-candidate lines, so the fix command is ready-made.
 - A `supersedes:` or `touches:` id that does not resolve to an **active** decide or supersede event refuses by name; an eight-character prefix matching several ids refuses as ambiguous and asks for the full id.
 - Decision text that *reads* as a supersession — the stem `supersed(e|es|ed)`, `replaces`, `overrides`, `no longer applies`, `instead of the previous` — refuses unless `--relation supersedes:<id>` actually resolves. `--relation none` and `touches:` never silence it. This guard exists because free prose was the one way to hide a supersession from the active set: a store audit found 70 decide events doing exactly that against 29 proper supersede events.
+  <!-- bee:not-a-deferral: quotes the deferral guard's own trigger words to document the guard; it defers nothing -->
 - Decision text that reads as a postponement — `defer…`, `for now`, `revisit when`, `revisit if`, the whole word `later` — refuses unless `--trigger` names an already-registered trigger. No postponed condition may exist outside the trigger registry.
+  <!-- /bee:not-a-deferral -->
 - A tag that is not a lowercase slug (`/^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$/`) refuses by name. One interior colon is allowed, and only one: it namespaces a tag, as in `contract:<name>`. A colon at either end, an empty segment, or a second colon refuses. With `docs/decisions/taxonomy.json` present, *no* tags refuses: `decisions: docs/decisions/taxonomy.json exists — this decision event needs at least one tag. Pass --tags (e.g. "billing,recall").` Without that file, the event is written and the answer carries a warning instead.
 - `--feature ""` refuses rather than falling back to the lane: passing the flag is an act of naming.
 
 ### First side effect
 
+<!-- bee:not-a-deferral: describes the order of the first side effect of `decisions log`; it postpones nothing -->
 Not the decision. Classification runs first: if the taxonomy exists and the tags contain names it does not know, the unknown names are appended to its `candidates[]` array and `docs/decisions/taxonomy.json` is rewritten atomically under the decisions lock. An unknown tag is never refused — it is accepted onto the event and queued for human curation. So an invocation that later refuses (or crashes) can still have widened the taxonomy.
+<!-- /bee:not-a-deferral -->
 
 The decision event itself is the second write: one compact JSON line appended to `.bee/decisions.jsonl` under the `decisions` lock, then the lock is released. The line carries `id` (a fresh UUID-format string), `type: "decide"`, `date`, the text fields, `scope`, `source`, `confidence`, `tags` when given, `supersedes` or `touches` when the relation named ids, `trigger` when given, `relation` (the literal word), and `feature` when one resolved.
 
@@ -109,6 +115,7 @@ Without `--json`: `Logged decision <id>.`, the optional no-taxonomy warning, the
 
 Columns: before and after the event append (the decision's own first side effect; the taxonomy candidates write can precede both).
 
+<!-- bee:not-a-deferral: an interrupt table describing how the decision store behaves; the scanned words are prose about store behavior, not a promise to act later -->
 | Event | Before the append | After the append |
 | --- | --- | --- |
 | The process killed mid-command | No event recorded. A taxonomy `candidates[]` widening may already have landed. A killed lock holder goes stale on the store's normal timeout ([store](../foundations/store.md)); nothing wedges. | The line is on disk and the decision is active. The confirmation, the touches-sweep stubs, and the conflict candidates may never appear. A torn last line is skipped, with a warning, by every later read. |
@@ -118,6 +125,7 @@ Columns: before and after the event append (the decision's own first side effect
 | The session going away (heartbeat, lease expiry, release) | No effect — the decisions store holds no leases and no claims. | No effect; decisions outlive every session. |
 | A sibling changing the target | The `decisions` lock serializes appends; a sibling superseding the same target first makes a `supersedes:` relation refuse, because the target is no longer active. | A sibling can supersede or redact the just-logged decision immediately; the active set is derived, so the change is visible on the next read with no reconciliation. |
 | The channel changing (piped, `--json`, Codex, run from a hook) | Same behavior; `--json` moves the payload to stdout. In a hooked session the CLI-shape guard can deny a malformed invocation before the binary runs. | Same. |
+<!-- /bee:not-a-deferral -->
 
 After any interrupt the store is exactly what its lines say. Nothing needs repair, with one exception: `decisions render` may be stale, which `--check` reports.
 
@@ -158,7 +166,9 @@ After any interrupt the store is exactly what its lines say. Nothing needs repai
 
 - **Suspected bug (post-write refusal).** `decisions log` computes its conflict candidates by re-reading the active set *after* the event is appended. If that read leaves the modeled region — a literal `null` line in the store, or a stored `date` that is neither RFC 3339 nor `YYYY-MM-DD` — the verb answers the generic `bee: unsupported argument shape` refusal with exit 1, even though the decision is already on disk. The same class reaches `active`, `search`, and `render`, where it is only a confusing refusal; here it reports failure for work that succeeded. Worth filing.
 - **Suspected bug (vague date refusals).** `--since` (and, by the same code path, `archive --before`) has a proper message — `--since must be a valid ISO date, got "2026-13-45".` — but it is only reachable for values that already look like a date. Confirmed by hand: `--since 20260826` and `--since notadate` fall through to the generic `bee: unsupported argument shape` refusal instead. Same shape as the `capture add` finding in [capture](capture.md).
+  <!-- bee:not-a-deferral: describes the order of two writes inside `decisions log` (the taxonomy widening lands before a refusal); it postpones nothing -->
 - **The taxonomy widening precedes the decision.** An invocation that is later refused can still have appended unknown tags to `candidates[]`. Read from code; not probed by hand, and arguably intended (classification is bootstrap-safe), but it means "nothing was written" is not strictly true of a refused `log`.
+  <!-- /bee:not-a-deferral -->
 - `decisions.jsonl` is not in the direct-edit guard's deny table, so a hand edit to the durable decision record is not blocked ([store](../foundations/store.md) files this). For the rendered index there is at least `render --check`; for the store itself there is nothing.
 - The git-text-merge hazard on `.bee/decisions.jsonl` is recorded as a P2 in the knowledge bundle, not fixed. Whether any other verb (not only `reattribute`) can silently lose an appended decision at merge time was not determined.
 - `decisions tag --stdin`, the batch refusals, `supersede`'s sweep against a live `docs/` tree, `archive`, `redact`, `reattribute`, and every `log` refusal were read from code and its tests, not run — this description was drafted against a live repository whose decision store must not be written.
