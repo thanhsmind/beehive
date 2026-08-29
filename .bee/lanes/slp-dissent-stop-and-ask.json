@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-08-29T15:11:40.128Z",
-    "session": "6cf92b0c-6663-4473-b3e5-6b5c47b06774"
+    "subject": "All six surfaces read clean. Two cells (pis-3, pis-4) are freshly claimed by the same session that's been steadily working pi-support (cappe",
+    "asked_at": "2026-08-29T16:45:24.774Z",
+    "session": "3f7f3d6e-9a65-4f62-be11-8939ae56ddbf"
   },
   "route": {
     "class": "feature",

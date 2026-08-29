@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-support",
+  "mode": "high-risk",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-support\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-29T15:26:45.474Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "multi-domain",
+      "covered-contract-change"
+    ],
+    "product_files": 8,
+    "rationale": "Fourth harness belt (Pi): guard enforcement translation (write-guard/model-guard), hook catalog public contract, Rust + TS + config multi-domain, three-belt parity test becomes four",
+    "updated_at": "2026-08-29T15:26:55.777Z",
+    "feature": "pi-support"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-29T16:23:17.011Z",
+    "feature": "pi-support",
+    "newest_decision_id": "0a12cc2f-e9bb-45ed-ae27-f6471d49a367",
+    "plan_sha256": "absent",
+    "advisor": "fable (models.claude.advisor), dispatch f4be2431",
+    "digest_head": "# Advisor consult — pi-support high-risk gate (dispatch f4be2431, fable, 2026-08-29)\n\nCONSULT VERDICT: proceed-with-conditions —\n1. pis-1 enumerates Pi 0.84.3's full built-in tool registry and records the unknown-tool default; pis-3 fixtures an unmapped tool name.\n2. Decide and record per-call vs load-time `.bee` passivity; fixture the linked-worktree edge (extension in worktree, binary only at main root).\n3. pis-4 marks pi herding non-production until pi-result-mailbox lands.\n4. Model-guard on "
+  },
+  "merge_ready": {
+    "since": "2026-08-29T16:49:40.847Z",
+    "branch": "wt/pi-support",
+    "worktree_id": "beehive--wt--pi-support",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

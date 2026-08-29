@@ -57,6 +57,38 @@
       "supervisor": {
         "model": "haiku",
         "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
+      },
+      "lane-1": {
+        "model": "fable",
+        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-2": {
+        "model": "opus",
+        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-3": {
+        "model": "sonnet",
+        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "hat-facts-gaps": {
+        "model": "opus",
+        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
+      },
+      "hat-risks": {
+        "model": "fable",
+        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
+      },
+      "hat-value": {
+        "model": "sonnet",
+        "description": "hat: is this worth its cost — materiality test"
+      },
+      "hat-alternatives": {
+        "model": "opus",
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
+      },
+      "hat-user-impact": {
+        "model": "sonnet",
+        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       }
     },
     "codex": {

@@ -1,0 +1,82 @@
+{
+  "id": "pis-3",
+  "feature": "pi-support",
+  "title": "Pi belt fixture suite and four-belt parity derivation",
+  "lane": "high-risk",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "pis-1"
+  ],
+  "decisions": [
+    "D3",
+    "D4",
+    "7f9c8518"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-support/plan.md",
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts",
+  "action": "New tests/pi_plugin_contracts.rs: fixtures over the REAL .pi/extensions/bee-guard.ts under a node subprocess with a stub pi object and a stub .bee/bin/bee binary — rows: deny/allow/crash/absent/ask-verdict/unparseable-stdout on the blocking path (all block), unmapped tool name routes to write-guard, no-.bee-dir passive per call, .bee appears mid-session starts guarding, linked-worktree edge (extension in worktree, binary at main root), double session_start preamble cached once, advisory never throws under any stub behavior. Node absence = named non-fatal skip (node_or_skip pattern). In opencode_plugin_contracts.rs: extend the parity test to derive the Pi belt from the TS source (PLUGIN_SOURCE pattern), KEEP the test name (two docs cite it), and assert the model-guard NAMED EXCLUSION by name for the Pi belt.",
+  "must_haves": {
+    "truths": [
+      "every (rule,shape) pair the catalog derives is proven on the Pi belt or named-excluded",
+      "mutating the belt to skip a rule turns a named row red"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "fixture suite present and green"
+      }
+    ],
+    "key_links": [
+      "parity rows derive from the catalog and the TS source, never a hand list"
+    ],
+    "prohibitions": [
+      "No production-code change",
+      "No parity-test rename"
+    ]
+  },
+  "trace": {
+    "worker": "pis-w3",
+    "outcome": "Pi belt fixture suite lands and the belt parity test derives a fourth belt from the Pi source, with model-guard excluded by name",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "Bounded the mapToolCall switch slice at the function's closing brace in both parsers — unbounded it ran on into sessionSource's switch (reason) and read case \"new\"/\"reload\" as routed tool names — hit an unforeseen obstacle",
+      "Built the linked-worktree fixture with a real git worktree add over an empty root commit instead of hand-writing the .git file and worktrees/<name> pair — the hand-built layout did not resolve through git rev-parse, so the belt found no store — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-29T16:47:53.089Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "a95c772f-e050-490b-98ad-5511130f6b08",
+    "claimed_at": "2026-08-29T16:32:50.056Z",
+    "report": {
+      "outcome": "Pi belt fixture suite lands and the belt parity test derives a fourth belt from the Pi source, with model-guard excluded by name",
+      "commit": "9380e5f045d9418e70b82edbc25516274bd6dee2",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts — green — the cell's own verify: 14 tests over the two belt-contract binaries this cell touched; belt-mutation checks (exclusion removed, routing rewired) each turned a named row red before being reverted",
+      "deviations": [
+        "Bounded the mapToolCall switch slice at the function's closing brace in both parsers — unbounded it ran on into sessionSource's switch (reason) and read case \"new\"/\"reload\" as routed tool names — hit an unforeseen obstacle",
+        "Built the linked-worktree fixture with a real git worktree add over an empty root commit instead of hand-writing the .git file and worktrees/<name> pair — the hand-built layout did not resolve through git rev-parse, so the belt found no store — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
