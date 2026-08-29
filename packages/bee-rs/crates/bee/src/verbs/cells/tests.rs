@@ -2006,6 +2006,253 @@ use std::time::Instant;
         assert_eq!(door.cell["status"], json!("claimed"));
     }
 
+    // ── slp-contract S5 (D4, store 9c0104e0): the MINT TRAP ──────────────
+    //
+    // Coverage judged before authoring (`.bee/expertise/tests.md`): the
+    // block above pins the citation TRIPWIRE at this door — the rule that
+    // asks "did the contract you cited move?". Nothing anywhere pins the
+    // rule that asks "did you cite a contract at all?". These do, and they
+    // only ever drive the DOOR: the tag convention itself, the derived
+    // status and `path_looks_like_test` each already have their own tests,
+    // and re-deriving them here would only prove the model agrees with
+    // itself.
+    //
+    // Every fixture below states its RAMP state explicitly, because the
+    // trap's answer depends on it: with zero `contract:<name>` decisions in
+    // the active set the armed arm warns, and only once one exists does it
+    // refuse.
+
+    /// A decision that ARMS the ramp — active, and tagged in the
+    /// `contract:` namespace.
+    const TRAP_CONTRACT: &str = "88888888-0000-0000-0000-000000000008";
+    /// A source-only path. `path_looks_like_test` says no: no `test`/`tests`
+    /// segment, no `_test.`/`.test.` filename.
+    const TRAP_SOURCE: &str = "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs";
+    /// A test-shaped path by the SAME classifier the door uses — the bare
+    /// filename `tests.rs`.
+    const TRAP_TEST_PATH: &str = "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs";
+
+    /// A claimable open cell on a routed feature with a green recorded
+    /// base, carrying exactly the `files`, `role`, `title` and `decisions`
+    /// the arm under test needs — so the ONLY door that can refuse it is a
+    /// contract rule.
+    fn trap_cell(
+        root: &Path,
+        id: &str,
+        decisions: Value,
+        files: Value,
+        role: Option<&str>,
+        title: Option<&str>,
+    ) {
+        lane_with_route(root, "cit");
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+        let mut c = cell(id, "open", "cit", json!([]));
+        c["decisions"] = decisions;
+        c["files"] = files;
+        if let Some(r) = role {
+            c["role"] = json!(r);
+        }
+        if let Some(t) = title {
+            c["title"] = json!(t);
+        }
+        write_cell_fixture(root, id, &c);
+    }
+
+    /// REFUSE — the armed arm's primary signal: a test-shaped path in
+    /// `files` and not one citation. This is D4 itself — a contract nobody
+    /// logged reads exactly like "there is no contract", and the tests
+    /// would become it.
+    #[test]
+    fn claiming_a_test_path_cell_that_cites_no_contract_decision_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-armed", json!([]), json!([TRAP_TEST_PATH]), None, None);
+
+        let refusal = thrown(claim_cell_from_flags(root, "trap-armed", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-armed\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(TRAP_TEST_PATH), "the refusal names what armed it: {refusal}");
+        assert!(
+            refusal.contains("bee decisions active --tag contract:<name>"),
+            "the FIX names a reachable remedy: {refusal}"
+        );
+        assert_untouched_by_refusal(root, "trap-armed");
+    }
+
+    /// REFUSE — the armed arm's OTHER trigger, on its own: `role: "test"`
+    /// with a source-only file list. No live cell carries this role today,
+    /// so it can never be the signal — but it is the one declaration a cell
+    /// CAN make, and the door honours it.
+    #[test]
+    fn claiming_a_role_test_cell_with_no_test_shaped_path_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-role", json!([]), json!([TRAP_SOURCE]), Some("test"), None);
+
+        let refusal = thrown(claim_cell_from_flags(root, "trap-role", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-role\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("carries role \"test\""), "{refusal}");
+        assert_untouched_by_refusal(root, "trap-role");
+    }
+
+    /// REFUSE — "cites NO CONTRACT decision" is precise, not "cites
+    /// nothing". This cell cites a real, active, trigger-free store
+    /// decision, so the tripwire passes it; the decision carries no
+    /// `contract:` tag, so it settles no contract and the trap still
+    /// refuses. This is where the two rules deliberately differ: the
+    /// tripwire is tag-blind, the trap is tag-aware.
+    #[test]
+    fn claiming_a_test_path_cell_citing_a_decision_with_no_contract_tag_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(TRAP_CONTRACT, r#""contract:cell-store""#),
+                decide_event(CIT_UNTAGGED, r#""process""#),
+            ],
+        );
+        trap_cell(root, "trap-untagged", json!([CIT_UNTAGGED]), json!([TRAP_TEST_PATH]), None, None);
+
+        let refusal =
+            thrown(claim_cell_from_flags(root, "trap-untagged", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-untagged\" refused"),
+            "a citation that settles no contract is not a contract citation: {refusal}"
+        );
+        assert_untouched_by_refusal(root, "trap-untagged");
+    }
+
+    /// ALLOW — the whole point of the rule: a test-writing cell that DOES
+    /// cite the decision settling what it tests claims normally. A guard
+    /// that refuses this too would have no satisfiable state at all.
+    #[test]
+    fn a_test_path_cell_citing_a_contract_tagged_decision_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-cited", json!([TRAP_CONTRACT]), json!([TRAP_TEST_PATH]), None, None);
+
+        let door = claim_cell_from_flags(root, "trap-cited", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — no test-shaped path, no citation, ramp fully armed. The trap
+    /// has an opinion only about test-writing cells; every other cell in
+    /// the repo claims exactly as it did before the trap existed.
+    #[test]
+    fn a_cell_with_no_test_shaped_path_and_no_citation_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(root, "trap-plain", json!([]), json!([TRAP_SOURCE]), Some("code"), None);
+
+        let door = claim_cell_from_flags(root, "trap-plain", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — THE NAMED, ACCEPTED HOLE, asserted rather than hidden.
+    ///
+    /// A `role: code` cell adding a `#[cfg(test)]` module inside a source
+    /// file it was already touching is the DOMINANT test-writing shape in
+    /// this repo, and the armed arm cannot see it: its `files` are
+    /// source-only. Only 27 of the 67 live cells that name tests in their
+    /// title or action carry any test-shaped path at all. Closing this
+    /// needs a real cell field declaring test intent, deferred with that
+    /// measurement rather than invented on a guess — so this cell MUST
+    /// claim, and the advisory arm (which its title fires) must warn
+    /// without ever refusing.
+    #[test]
+    fn a_role_code_cell_writing_tests_inside_a_source_file_claims_the_accepted_hole() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(TRAP_CONTRACT, r#""contract:cell-store""#)]);
+        trap_cell(
+            root,
+            "trap-hole",
+            json!([]),
+            json!([TRAP_SOURCE]),
+            Some("code"),
+            Some("Add a #[cfg(test)] module beside the guard and test its refusal"),
+        );
+
+        let door = claim_cell_from_flags(root, "trap-hole", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(
+            door.cell["status"],
+            json!("claimed"),
+            "the advisory arm never refuses, in any ramp state"
+        );
+        // The advisory line it printed is a single representation, so its
+        // wording is pinned here rather than re-spelled at the call site.
+        let line = mint_trap_advisory_line("trap-hole");
+        assert!(line.contains("ADVISORY ONLY"), "{line}");
+        assert!(line.contains("never refuses"), "{line}");
+    }
+
+    /// The RAMP (decision d853e4c6, touches 9c0104e0), both states of it in
+    /// one test because it is ONE rule with a condition, not two rules.
+    ///
+    /// While the active decision set holds no `contract:<name>` decision,
+    /// no cell on earth could satisfy the trap — a rule nobody can satisfy
+    /// is a dead workflow, not a guard — so the armed arm warns and says
+    /// what will make it refuse. The moment the first one is logged, the
+    /// SAME cell is refused. The condition is derived from the active
+    /// decision set: nothing is configured, flipped or stored between the
+    /// two halves below except that one decision.
+    #[test]
+    fn the_mint_trap_warns_until_the_first_contract_decision_exists_then_refuses() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        // A non-empty store with an ACTIVE decision that is simply not
+        // tagged `contract:` — so this proves the ramp is about the TAG,
+        // never about an empty decision log.
+        write_decision_events(root, &[decide_event(CIT_UNTAGGED, r#""process""#)]);
+        trap_cell(root, "trap-ramp", json!([]), json!([TRAP_TEST_PATH]), None, None);
+
+        let door = claim_cell_from_flags(root, "trap-ramp", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(
+            door.cell["status"],
+            json!("claimed"),
+            "with no contract decision to cite, the armed arm may only warn"
+        );
+        // The warning it printed, pinned through its single producer: a
+        // ramp warning that does not say what ends the ramp is a warning
+        // about nothing.
+        let warning = mint_trap_ramp_warning(
+            "trap-ramp",
+            &format!("declares the test-shaped file \"{TRAP_TEST_PATH}\""),
+        );
+        assert!(warning.contains("The moment the first one is logged"), "{warning}");
+        assert!(warning.contains("REFUSES"), "{warning}");
+        assert!(warning.contains("bee decisions log --tags contract:<name>"), "{warning}");
+
+        // The ONE thing that changes: a `contract:<name>` decision now
+        // exists. Same cell, put back exactly as it was.
+        std::fs::remove_file(claims_dir(root).join("trap-ramp.json")).unwrap();
+        trap_cell(root, "trap-ramp", json!([]), json!([TRAP_TEST_PATH]), None, None);
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_UNTAGGED, r#""process""#),
+                decide_event(TRAP_CONTRACT, r#""contract:cell-store""#),
+            ],
+        );
+
+        let refusal = thrown(claim_cell_from_flags(root, "trap-ramp", "w2", Some("sess-2"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNCITED — cell \"trap-ramp\" refused"),
+            "the first contract decision arms the refusal: {refusal}"
+        );
+        assert_untouched_by_refusal(root, "trap-ramp");
+    }
+
     /// The hole that made the whole claim door bypassable: `cells add` used
     /// to preserve any truthy `status` a payload carried, so one line of
     /// JSON minted a cell already "claimed" — one that never passes this

@@ -1111,24 +1111,100 @@ pub(crate) struct ContractCitationRefusal {
     pub(crate) message: String,
 }
 
-/// The tripwire. `None` means "nothing to refuse on" — including every
-/// unresolvable entry, and including a store this call could not read.
+/// The three store reads BOTH contract rules at the claim door run over —
+/// scor-4's citation tripwire and S5's mint trap below. A rule checked at
+/// two points needs one shared read; two rules over the same walk need one
+/// too, or the second one silently doubles the cost of every claim and the
+/// two can disagree about what the store said.
 ///
-/// Zero mutation, by construction: `active_decision_ids` and
-/// `decision_target_candidates` are plain JSONL reads, and
-/// `open_trigger_decision_keys` goes through
-/// `triggers::read_without_evaluating`, the read that leaves every trigger
-/// file byte-identical (the ordinary `triggers list` reader persists a
-/// waiting-to-due flip mid-read; a refusal path may not).
+/// Every field is a plain read. Nothing here writes: `open_trigger_keys`
+/// goes through `triggers::read_without_evaluating`, the read that leaves
+/// every trigger file byte-identical (the ordinary `triggers list` reader
+/// persists a waiting-to-due flip mid-read; a refusal path may not).
+pub(crate) struct ContractReads {
+    /// The active+ARCHIVE union of decide/supersede ids —
+    /// `resolve_store_citation`'s candidate set. Never the active set
+    /// alone: a superseded id is exactly the one D3 wants refused, and
+    /// against the active set it would resolve to `None` and be passed
+    /// over.
+    known_ids: Vec<String>,
+    /// `(id, overlay-applied event)` for every ACTIVE decide/supersede.
+    /// The events are here for their `tags` — the mint trap is the
+    /// tag-AWARE rule, where the tripwire is deliberately tag-blind.
+    /// Overlay-applied, so a decision retro-tagged by `decisions tag`
+    /// counts exactly like one tagged at log time.
+    active: Vec<(String, Value)>,
+    /// The ids of `active`, same order — `active_decision_ids`' value,
+    /// taken from the same single read rather than a second one.
+    active_ids: Vec<String>,
+    /// Every `decision` short8 carried by a trigger that is still open.
+    open_trigger_keys: Vec<String>,
+}
+
+impl ContractReads {
+    /// `None` means "this guard could not read its evidence" — it says so
+    /// out loud and lets the work through, the same shape
+    /// `red_base_refusal`'s Unknown arm takes. A guard that refuses on a
+    /// store it never read is worse than no guard.
+    fn load(root: &Path, cell_id: &str) -> Option<Self> {
+        let known_ids: Vec<String> = crate::verbs::decisions::decision_target_candidates(root)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        let active = match crate::verbs::decisions::active_decide_or_supersede_candidates(root) {
+            Ok(v) => v,
+            Err(_) => {
+                eprintln!(
+                    "WARNING: the decision log could not be read — cannot check cell \"{cell_id}\"'s contract citations; claim proceeding."
+                );
+                return None;
+            }
+        };
+        let active_ids: Vec<String> = active.iter().map(|(id, _)| id.clone()).collect();
+        let open_trigger_keys = crate::verbs::decisions::open_trigger_decision_keys(root);
+        Some(Self { known_ids, active, active_ids, open_trigger_keys })
+    }
+
+    /// The RAMP condition, derived from the read above and from nothing
+    /// else: does the ACTIVE decision set hold even one decision tagged in
+    /// the `contract:` namespace? No config key, no flag, no stored
+    /// counter — D1's "nothing new to forget to update" is the whole
+    /// reason this is a derived read rather than a switch.
+    fn any_contract_tagged(&self) -> bool {
+        self.active.iter().any(|(_, ev)| event_has_contract_tag(ev))
+    }
+
+    /// Does THIS active decision carry a `contract:` tag?
+    fn contract_tagged(&self, id: &str) -> bool {
+        self.active.iter().any(|(k, ev)| k == id && event_has_contract_tag(ev))
+    }
+}
+
+/// A decision event carrying at least one tag in the `contract:<name>`
+/// namespace — D2's convention, spelled exactly as locked.
 ///
-/// Reads are hoisted ABOVE the walk: a cell citing N decisions pays three
-/// store reads, never three per citation.
-pub(crate) fn contract_citation_refusal(
-    root: &Path,
-    cell_id: &str,
-    cell: Option<&Value>,
-) -> Option<ContractCitationRefusal> {
-    let entries: Vec<String> = match cell.and_then(|c| c.get("decisions")) {
+/// The BARE tag `contract` does not count. Five live decisions carry it
+/// and none of them names a contract; counting them would arm the trap on
+/// history that never opted in. The namespace comparison is
+/// ASCII-case-insensitive, and `tag_pattern_test` already keeps stored
+/// tags lowercase, so that can only ever add a match.
+fn event_has_contract_tag(event: &Value) -> bool {
+    let Some(Value::Array(tags)) = event.get("tags") else {
+        return false;
+    };
+    tags.iter().any(|t| match t {
+        Value::String(s) => match js_trim(s).split_once(':') {
+            Some((ns, name)) => ns.eq_ignore_ascii_case("contract") && !name.is_empty(),
+            None => false,
+        },
+        _ => false,
+    })
+}
+
+/// The non-empty, trimmed string entries of `cell.decisions` — the field
+/// both rules read, walked once for both.
+fn citation_entries(cell: Option<&Value>) -> Vec<String> {
+    match cell.and_then(|c| c.get("decisions")) {
         Some(Value::Array(a)) => a
             .iter()
             .filter_map(|v| match v {
@@ -1137,33 +1213,28 @@ pub(crate) fn contract_citation_refusal(
             })
             .collect(),
         _ => Vec::new(),
-    };
-    if entries.is_empty() {
-        return None;
     }
-    let known_ids: Vec<String> = crate::verbs::decisions::decision_target_candidates(root)
-        .into_iter()
-        .map(|(id, _)| id)
-        .collect();
-    let active_ids = match crate::verbs::decisions::active_decision_ids(root) {
-        Ok(ids) => ids,
-        Err(_) => {
-            // Same shape as `red_base_refusal`'s Unknown arm above: a guard
-            // that cannot read its evidence says so out loud and lets the
-            // work through, rather than refusing on a store it never read.
-            eprintln!(
-                "WARNING: the decision log could not be read — cannot check cell \"{cell_id}\"'s contract citations; claim proceeding."
-            );
-            return None;
-        }
-    };
-    let open_trigger_keys = crate::verbs::decisions::open_trigger_decision_keys(root);
-    for entry in &entries {
-        let Some(id) = crate::verbs::decisions::resolve_store_citation(&known_ids, entry) else {
+}
+
+/// The tripwire itself, over an already-loaded read. Behaviour is scor-4's,
+/// unchanged: the walk, the two refusals and their sentences are the same
+/// bytes the dispatch door prints.
+fn citation_refusal_over(
+    reads: &ContractReads,
+    cell_id: &str,
+    entries: &[String],
+) -> Option<ContractCitationRefusal> {
+    for entry in entries {
+        let Some(id) = crate::verbs::decisions::resolve_store_citation(&reads.known_ids, entry)
+        else {
             continue; // a local D-ID, or an id this store never logged
         };
         let short = crate::textutil::truncate_chars_head(&id, 8);
-        match crate::verbs::decisions::contract_status_over(&active_ids, &open_trigger_keys, &id) {
+        match crate::verbs::decisions::contract_status_over(
+            &reads.active_ids,
+            &reads.open_trigger_keys,
+            &id,
+        ) {
             crate::verbs::decisions::ContractStatus::Settled => {}
             crate::verbs::decisions::ContractStatus::Unknown => {
                 return Some(ContractCitationRefusal {
@@ -1184,6 +1255,210 @@ pub(crate) fn contract_citation_refusal(
         }
     }
     None
+}
+
+/// The tripwire. `None` means "nothing to refuse on" — including every
+/// unresolvable entry, and including a store this call could not read.
+///
+/// This is the DISPATCH door's spelling (verbs/drivers/prepare.rs) and the
+/// single-rule spelling generally: it runs the citation tripwire and
+/// nothing else. The claim door calls `contract_claim_refusal` below,
+/// which runs this rule and then the mint trap over one shared read.
+///
+/// Reads are hoisted ABOVE the walk: a cell citing N decisions pays three
+/// store reads, never three per citation.
+pub(crate) fn contract_citation_refusal(
+    root: &Path,
+    cell_id: &str,
+    cell: Option<&Value>,
+) -> Option<ContractCitationRefusal> {
+    let entries = citation_entries(cell);
+    if entries.is_empty() {
+        return None;
+    }
+    let reads = ContractReads::load(root, cell_id)?;
+    citation_refusal_over(&reads, cell_id, &entries)
+}
+
+// ─── slp-contract S5 (D4, store 9c0104e0): the MINT TRAP ──────────────────
+//
+// D4 locks that a test-writing cell citing NO contract decision is refused.
+// The absence problem is the whole point: a contract nobody ever logged
+// reads exactly like "there is no contract", so a worker writes tests
+// against it and the TESTS become the de-facto contract. The tripwire above
+// answers "the contract you cited moved"; this answers "you cited no
+// contract at all".
+//
+// THE SIGNAL, with its limits rather than around them. The cell record has
+// no field marking a test-writing cell (verbs/cells/validate.rs), so this
+// has two arms and they are not equals:
+//
+//   - ARMED (can refuse): the cell declares a test-shaped path in `files`,
+//     or carries `role: "test"`. The path test is `path_looks_like_test`
+//     (verbs/cells/finish_support.rs) — the classifier this repo already
+//     owns, with its own anti-false-positive notes, NOT a new glob set.
+//     Measured over the 92 live cells it fires on 30 with 0 false
+//     positives. `role: "test"` fires on 0 of them today and the role
+//     vocabulary is deliberately open and never membership-checked, so
+//     role is an ADDITIONAL trigger and never the signal.
+//   - ADVISORY (warns, never refuses, in any state): any other cell whose
+//     `title` or `action` names test writing. That is 67 of 92 cells —
+//     too soft to refuse on, loud enough to say.
+//
+// THE HOLE, named rather than hidden: a `role: code` cell adding a
+// `#[cfg(test)]` module inside a source file it was ALREADY touching is the
+// dominant test-writing shape in this repo, and the armed arm cannot see
+// it — only 27 of those 67 title/action matches carry any test-shaped path.
+// The advisory arm is what covers it. Closing it properly needs a real cell
+// field declaring test intent, which D1's "nothing new to forget to update"
+// spirit argues against inventing on a guess, so it is deferred WITH this
+// measurement attached. A guard that tests one state is a law with a hole;
+// this one says which hole.
+//
+// "CITES NO CONTRACT DECISION" is precise, not "cites nothing": the cell
+// trips the trap when NONE of its `cell.decisions` entries resolves to a
+// store decision carrying a `contract:<name>` tag. A local D-ID resolves to
+// nothing and therefore satisfies nothing, and a real store decision with
+// no `contract:` tag does not satisfy it either. This is the tag-AWARE
+// rule; the tripwire above stays tag-blind, and they share one read.
+//
+// THE RAMP, per decision d853e4c6 (touches 9c0104e0). The refusal ships
+// fully built, but while the ACTIVE decision set holds ZERO decisions
+// tagged `contract:<name>` no cell on earth could satisfy the rule, and a
+// rule nobody can satisfy is a dead workflow rather than a guard. So in
+// that state the armed arm WARNS and says what will make it refuse; the
+// moment the first `contract:<name>` decision exists it refuses. The
+// condition is derived from the same active-decision read the tripwire
+// uses — no config key, no flag, no stored counter, because a second thing
+// to forget to update is exactly what D1 refuses.
+//
+// PLACEMENT is the claim door only, unlike the tripwire's two doors. The
+// tripwire needs the dispatch door because a citation's STATUS can change
+// between claim and dispatch; the trap's signal is `files`, `role`,
+// `title` and `action` — static properties of the cell record, with no
+// claim-then-change window to miss.
+
+/// The first test-shaped path this cell declares in `files`, if any — the
+/// armed arm's primary signal, and the string the refusal quotes back so a
+/// worker can see WHICH path armed it.
+fn declared_test_path(cell: Option<&Value>) -> Option<String> {
+    let Some(Value::Array(files)) = cell.and_then(|c| c.get("files")) else {
+        return None;
+    };
+    files.iter().find_map(|v| match v {
+        Value::String(s) if path_looks_like_test(js_trim(s)) => Some(js_trim(s).to_string()),
+        _ => None,
+    })
+}
+
+/// `role: "test"` — the additional trigger. Never the signal on its own
+/// evidence (0 of 92 live cells carry it), but free to honour and the one
+/// declaration a cell CAN make today.
+fn cell_role_is_test(cell: Option<&Value>) -> bool {
+    matches!(cell.and_then(|c| c.get("role")), Some(Value::String(s)) if js_trim(s).eq_ignore_ascii_case("test"))
+}
+
+/// The advisory arm's read: does this text NAME test writing? Tokenised on
+/// non-alphanumerics, so `contest`, `latest` and `attest` never match a
+/// bare `test` substring — the same false-positive care
+/// `path_looks_like_test` takes with path segments.
+fn text_names_tests(text: &str) -> bool {
+    text.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| {
+        matches!(w.to_ascii_lowercase().as_str(), "test" | "tests" | "tested" | "testing")
+    })
+}
+
+/// The advisory arm's signal: `title` or `action` names test writing.
+fn names_test_writing(cell: Option<&Value>) -> bool {
+    let Some(cell) = cell else { return false };
+    ["title", "action"].iter().any(|k| match cell.get(*k) {
+        Some(Value::String(s)) => text_names_tests(s),
+        _ => false,
+    })
+}
+
+/// The ADVISORY arm's one line — a single representation, so the test that
+/// pins its wording pins the bytes the worker actually reads.
+pub(crate) fn mint_trap_advisory_line(cell_id: &str) -> String {
+    format!(
+        "WARNING: cell \"{cell_id}\" names test writing in its title or action, and its \"decisions\" field cites no decision tagged `contract:<name>` — tests written against a contract nobody logged BECOME the contract (D4, the mint trap). ADVISORY ONLY: this arm never refuses, because title/action wording is too soft to refuse on (67 of 92 live cells match it). FIX: cite the decision that settles what these tests check, or log it first with `bee decisions log --tags contract:<name> ...`."
+    )
+}
+
+/// The RAMP warning the armed arm prints INSTEAD of refusing, while the
+/// active decision set holds no `contract:<name>` decision. It has to say
+/// what will make it start refusing, or it is a warning about nothing.
+pub(crate) fn mint_trap_ramp_warning(cell_id: &str, signal: &str) -> String {
+    format!(
+        "WARNING: cell \"{cell_id}\" {signal} and cites no decision tagged `contract:<name>` — tests written against a contract nobody logged BECOME the contract (D4, the mint trap). This is a warning ONLY because the active decision set holds no `contract:<name>` decision yet, so no cell could satisfy the rule. The moment the first one is logged (`bee decisions log --tags contract:<name> ...`), this same claim REFUSES."
+    )
+}
+
+/// The trap, over the same already-loaded read the tripwire just used.
+/// `None` means "nothing to refuse on" — which includes both warn paths,
+/// because a warning is not a refusal.
+fn mint_trap_over(
+    reads: &ContractReads,
+    cell_id: &str,
+    cell: Option<&Value>,
+    entries: &[String],
+) -> Option<ContractCitationRefusal> {
+    let cites_contract = entries.iter().any(|e| {
+        crate::verbs::decisions::resolve_store_citation(&reads.known_ids, e)
+            .is_some_and(|id| reads.contract_tagged(&id))
+    });
+    if cites_contract {
+        return None;
+    }
+    let test_path = declared_test_path(cell);
+    let role_test = cell_role_is_test(cell);
+    if test_path.is_none() && !role_test {
+        // The advisory arm. It warns and returns None — always, in every
+        // ramp state. It is a heuristic over prose; it never refuses.
+        if names_test_writing(cell) {
+            eprintln!("{}", mint_trap_advisory_line(cell_id));
+        }
+        return None;
+    }
+    let signal = match &test_path {
+        Some(p) => format!("declares the test-shaped file \"{p}\""),
+        None => "carries role \"test\"".to_string(),
+    };
+    if !reads.any_contract_tagged() {
+        eprintln!("{}", mint_trap_ramp_warning(cell_id, &signal));
+        return None;
+    }
+    Some(ContractCitationRefusal {
+        code: "CONTRACT_UNCITED",
+        message: format!(
+            "cell \"{cell_id}\" refused — it {signal}, and its \"decisions\" field cites no decision tagged `contract:<name>`. D4: a test-writing cell that cites no contract decision is refused — a contract nobody logged reads exactly like \"there is no contract\", so the tests would MINT the contract instead of checking it. FIX: run `bee decisions active --tag contract:<name> --json` to find the decision that settles what these tests check and cite its id (`bee cells update --id \"{cell_id}\" --stdin` with a `{{\"decisions\": [...]}}` patch — the cell is still open, so it is updatable); if nothing settles it yet, settle it first with `bee decisions log --tags contract:<name> ...`."
+        ),
+    })
+}
+
+/// The CLAIM door's contract check: the citation tripwire (D3) and then the
+/// mint trap (D4), over ONE shared store read, each keeping its own typed
+/// code so a single red proof says which rule fired.
+///
+/// The reads are skipped entirely when neither rule could possibly speak —
+/// no citations to check and nothing that names tests — so the common cell
+/// pays exactly what it paid before the trap existed.
+pub(crate) fn contract_claim_refusal(
+    root: &Path,
+    cell_id: &str,
+    cell: Option<&Value>,
+) -> Option<ContractCitationRefusal> {
+    let entries = citation_entries(cell);
+    let trap_may_speak =
+        declared_test_path(cell).is_some() || cell_role_is_test(cell) || names_test_writing(cell);
+    if entries.is_empty() && !trap_may_speak {
+        return None;
+    }
+    let reads = ContractReads::load(root, cell_id)?;
+    if let Some(refusal) = citation_refusal_over(&reads, cell_id, &entries) {
+        return Some(refusal);
+    }
+    mint_trap_over(&reads, cell_id, cell, &entries)
 }
 
 // ─── D4 (route-record warn-to-deny escalation, docs/history/counter-teeth
@@ -1614,21 +1889,27 @@ pub(crate) fn claim_cell_cross_session_ex(
         release_claim(control, session, &cell_id)?;
         return Ok(CrossClaim::Refused { code: "RED_BASE".to_string(), reason });
     }
-    // slp-contract S4 (D3, store 9c0104e0) — the contract-citation tripwire,
-    // in the SAME pre-store-lock slot and with the SAME unwind as the three
-    // denies above, for the same reason each of them states: a refusal here
-    // releases the claim file and never touches cell status. This ONE
-    // placement covers `cells claim`, `cells claim-next` and `dispatch
-    // prepare --claim`, because all three funnel through this body.
+    // slp-contract S4/S5 (D3 and D4, store 9c0104e0) — the two contract
+    // rules, in the SAME pre-store-lock slot and with the SAME unwind as
+    // the three denies above, for the same reason each of them states: a
+    // refusal here releases the claim file and never touches cell status.
+    // This ONE placement covers `cells claim`, `cells claim-next` and
+    // `dispatch prepare --claim`, because all three funnel through this
+    // body.
     //
-    // Ordered LAST of the four pre-lock denies, on the same principle the
-    // D4 and D2 notes above set out: a racing loser sees CLAIMED, a session
-    // owed its one-time route warning sees NO_ROUTE_RECORD, and a red base
-    // sees RED_BASE — each of those is a fact about the CLAIMANT, and it
+    // Ordered LAST of the pre-lock denies, on the same principle the D4 and
+    // D2 notes above set out: a racing loser sees CLAIMED, a session owed
+    // its one-time route warning sees NO_ROUTE_RECORD, and a red base sees
+    // RED_BASE — each of those is a fact about the CLAIMANT, and it
     // outranks a fact about the cell's citations. `cell_for_budget` is the
     // caller's already-read record (Some on all three doors), so this pays
     // no second cell read.
-    if let Some(refusal) = contract_citation_refusal(root, &cell_id, cell_for_budget) {
+    //
+    // ONE call for both rules: the citation tripwire (CONTRACT_RETIRED /
+    // CONTRACT_UNSETTLED) runs first, then the mint trap
+    // (CONTRACT_UNCITED), over a single shared store read. Separately named
+    // codes, so one red proof says which rule fired.
+    if let Some(refusal) = contract_claim_refusal(root, &cell_id, cell_for_budget) {
         release_claim(control, session, &cell_id)?;
         return Ok(CrossClaim::Refused {
             code: refusal.code.to_string(),

@@ -113,6 +113,52 @@ matching authoring-side repair is that `bee cells add` now refuses any
 `status` but `open`: a payload could otherwise mint an already-`claimed`
 cell that never passed the claim door at all.
 
+**A test-writing cell that cites no contract decision is refused — the mint
+trap (slp-contract-original-request, cell scor-5, 2026-08-29).** The tripwire
+above asks "did the contract you cited move?"; this asks "did you cite a
+contract at all?". Without it a contract nobody logged reads exactly like
+"there is no contract", and the worker mints one by writing tests against it.
+The two rules run at the claim door over ONE shared store read, with separate
+typed codes (`CONTRACT_UNCITED` is the trap's), so a single red proof says
+which rule fired.
+
+The cell record has no field marking a test-writing cell, so the signal has
+two unequal arms. The **armed** arm can refuse: the cell declares a
+test-shaped path in `files` — judged by `path_looks_like_test`, the
+classifier the repo already owns, never a new glob set — or carries
+`role: "test"`. Measured over the 92 live cells the path arm fires on 30 with
+0 false positives; `role: test` fires on 0, and the role vocabulary is open
+and never membership-checked, so it is an additional trigger and never the
+signal. The **advisory** arm only warns, in every state: any other cell whose
+`title` or `action` names test writing, which is 67 of 92 cells — too soft to
+refuse on, loud enough to say.
+
+"Cites no contract decision" is precise, not "cites nothing": the trap fires
+when none of `cell.decisions` resolves to a store decision carrying a
+`contract:<name>` tag. A local `D1`-style id resolves to nothing and settles
+nothing; a real store decision with no `contract:` tag does not satisfy it
+either. This is the tag-AWARE rule, and it is the deliberate opposite of the
+tripwire's tag-blindness.
+
+**The named hole, recorded rather than hidden.** A `role: code` cell adding a
+`#[cfg(test)]` module inside a source file it was already touching is the
+DOMINANT test-writing shape in this repo, and the armed arm cannot see it:
+only 27 of the 67 cells that name tests in their title or action carry any
+test-shaped path, and 7 declare no `files` at all. The advisory arm is what
+covers it. Closing it properly needs a real cell field declaring test intent,
+which the "nothing new to forget to update" rule argues against inventing on
+a guess — so it is deferred with that measurement attached, and a test
+asserts that such a cell CLAIMS.
+
+**The ramp.** The refusal ships fully built, but while the ACTIVE decision set
+holds zero decisions tagged `contract:<name>` no cell could satisfy the rule,
+and a rule nobody can satisfy is a dead workflow rather than a guard — so the
+armed arm warns instead, and the warning says what will end the ramp. The
+first `contract:<name>` decision flips it to refusing. That condition is
+DERIVED from the same active-decision read the tripwire uses: no config key,
+no flag, no stored counter, because a second thing to forget to update is
+what the derived-status rule exists to refuse.
+
 **B8 — Unified command discovery and dispatch.** Every workflow operation — all
 nine verb groups — is available both through its specialized entry point and
 through one unified entry point, and the unified side owns the single
@@ -208,6 +254,19 @@ decision 80b64c20).
   candidate; resolution runs against the active+ARCHIVE union, never the
   active set alone, which is what makes the retired case reachable at all
   (slp-contract-original-request D3; decision 9c0104e0).
+- R19 — A cell whose `files` declare a test-shaped path (per
+  `path_looks_like_test`), or whose `role` is `test`, is refused at the CLAIM
+  door with `CONTRACT_UNCITED` when none of its `cell.decisions` entries
+  resolves to a store decision tagged `contract:<name>`. The refusal mutates
+  nothing: the claim file is released and the cell stays `open`. Two arms and
+  one ramp qualify it — a cell whose `title`/`action` merely names test
+  writing WARNS and is never refused, in any state; and while the ACTIVE
+  decision set holds zero `contract:<name>` decisions the armed arm also only
+  warns, naming what will make it refuse. The armed arm is blind to a
+  `role: code` cell adding a `#[cfg(test)]` module inside a source file it
+  already touches — the accepted, measured hole. Claim door only, unlike R16:
+  the trap's signal is static cell-record data, with no claim-then-change
+  window (slp-contract-original-request D4; decisions 9c0104e0, d853e4c6).
 - R18 — A new cell's `status` must be `open` or absent. `bee cells add`
   refuses any other value, naming the field and the verb that owns the
   transition. Without it, `"status":"claimed"` in the payload minted a cell
@@ -233,6 +292,17 @@ decision 80b64c20).
   untagged active decision passes exactly like a tagged one, and an untagged
   decision with an open trigger refuses exactly like a tagged one — the
   fail-safe direction for a refusal path.
+- The mint trap's ramp condition is a read, not a switch. Nothing is stored,
+  configured or flipped when it arms: logging the first decision tagged
+  `contract:<name>` is the whole state change, and removing that decision
+  puts the trap back to warning.
+- The bare tag `contract` does not arm the ramp and does not satisfy a
+  citation — only the `contract:<name>` namespace does. Five live decisions
+  carry the bare tag and none of them names a contract; counting them would
+  arm the rule on history that never opted in.
+- Both contract rules skip their store reads entirely when neither could
+  speak — no citations and nothing naming tests — so the ordinary cell pays
+  what it paid before either rule existed.
 
 ## Pointers (implementation)
 
@@ -259,6 +329,16 @@ decision 80b64c20).
   `open_trigger_decision_keys`). The authoring-side status refusal (R18) is
   in `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs`
   (`validate_new_cell_problems`). Evidence: `.bee/cells/scor-4.json`.
+- Mint trap (R19): `contract_claim_refusal` (the claim door's one entry for
+  both contract rules), `mint_trap_over`, `declared_test_path`,
+  `mint_trap_ramp_warning` and `mint_trap_advisory_line` in
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs`, sharing
+  `ContractReads` with the R16 tripwire. The path classifier it reuses is
+  `path_looks_like_test` in
+  `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs`. Tests:
+  `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` (refuse, allow, the
+  ramp's two states, and the named hole asserting it claims). Evidence:
+  `.bee/cells/scor-5.json`.
 - Unknown-flag rejection (R14): `main()` in `the bee binary` (mirrored
   `.bee/bin/bee`), firing after `validate()` and before every handler
   dispatch; registry gaps declared in `packages/bee/lib/command-registry.mjs`
