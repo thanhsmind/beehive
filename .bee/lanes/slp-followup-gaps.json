@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-followup-gaps",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"slp-followup-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at b89a17f; capture what settled, then bee close --feature slp-followup-gaps.",
+  "next_action": "Close the feature",
   "created_at": "2026-08-29T03:41:16.254Z",
-  "run_state": null,
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -27,12 +27,12 @@
   "last_scribing_run": {
     "feature": "slp-followup-gaps",
     "date": "2026-08-29",
-    "at": "2026-08-29T04:08:43.666Z",
+    "at": "2026-08-29T06:03:31.499Z",
     "areas_synced": [
       "hook-runtime",
       "bee-herding",
       "workflow-state"
     ],
-    "next_action": "Test the merged work in main, then approve the uat gate"
+    "next_action": "Close the feature"
   }
 }
