@@ -2,7 +2,7 @@
 type: grilling
 status: open
 claimed-by: none
-blocked-by: 004-waggledance-supervisor-feasibility
+blocked-by: none
 ---
 
 ## Question

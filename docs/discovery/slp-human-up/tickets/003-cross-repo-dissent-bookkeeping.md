@@ -2,7 +2,7 @@
 type: grilling
 status: open
 claimed-by: none
-blocked-by: 002-spec-handoff-transport
+blocked-by: none
 ---
 
 ## Question

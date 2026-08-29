@@ -49,6 +49,15 @@ work lands in the waggledance repo's own backlog when its cluster shapes.
   owner question: tickets/007-triage-owner.md
 - 28a75c87: weekly cross-project review at waggledance layer, report is a
   print, learnings capture back per-repo — shape: tickets/005-weekly-review-shape.md
+- 12deaa34: spec-drop transport = waggledance_dispatch + corr-id-as-PBI-id
+  (`pbi add --id`, idempotent), deliberately not herding-ignitable until
+  Qualify triage — tickets/002-spec-handoff-transport.md
+- 12be1c0b: waggledance supervisor = external tick + ask_state rollup reads +
+  per-repo bee-CLI writes + a dedicated cockpit repo for its own records —
+  tickets/004-waggledance-supervisor-feasibility.md
+- 07328333: hat wave = docs-only procedure over the dispatch door, seam is
+  bee-shaping pre-Lock, five advisor dispatches, blue hat = orchestrator —
+  tickets/006-hat-wave-seam.md
 
 ## Not yet specified
 
