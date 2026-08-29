@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "I'll read the six state surfaces now.",
-    "asked_at": "2026-08-29T17:48:21.260Z",
-    "session": "ae2f367a-d6f3-488a-828c-f9b4c63dbfac"
+    "subject": "All six surfaces are quiet, matching the established pattern from prior ticks: no active cells, no live workers, no danger signals. Writing",
+    "asked_at": "2026-08-29T21:54:50.076Z",
+    "session": "6c9c034d-b2c3-4e87-b0c9-06e97b585ba3"
   },
   "route": {
     "class": "feature",
