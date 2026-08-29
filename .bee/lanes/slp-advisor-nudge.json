@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-advisor-nudge",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": false,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"slp-advisor-nudge\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "bee close finished \"slp-advisor-nudge\" — feature is closed.",
   "created_at": "2026-08-29T09:49:40.168Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
