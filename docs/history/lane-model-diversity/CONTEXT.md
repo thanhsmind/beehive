@@ -71,18 +71,24 @@ absent seat may not resolve a built-in default).
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: both questions were answered during planning (plan.md Discovery: no --role/--brief-file interaction per reviewer P3-1; config validate is unported, D3 venue moved to doctor by decision) — this section records the shaping→planning handoff, it promises no future work -->
 ### Deferred To Planning
 
-- [ ] Whether `--role` + `--brief-file` interact anywhere in prepare's argument validation beyond the resolution walk — read the brief-file arm before wiring.
-- [ ] Where `bee config validate` hangs slot-level rules today (find the existing rule shapes before adding the hat-description rule).
+- [x] Whether `--role` + `--brief-file` interact anywhere in prepare's argument validation beyond the resolution walk — ANSWERED: none, `resolve_brief_file` never reads `role` (plan.md Discovery).
+- [x] Where `bee config validate` hangs slot-level rules today — ANSWERED: nowhere, the config verbs are unported; D3's venue moved to `bee doctor` (venue decision).
+<!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: this section's one idea is routed to the pi-support feature and already recorded there in the decision store (7f9c8518, 4a6e38be) — the pointer documents the routing, it is not an untracked promise -->
 ## Deferred Ideas
 
 - `models.pi` runtime block with these same seat roles — belongs to the `pi-support` feature (decisions `7f9c8518`, `4a6e38be`, model table settled 2026-08-29).
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: template boilerplate describing how planning consumes this record — machinery description, not a promise to act later -->
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads
 locked decisions, code context, canonical references, and
 deferred-to-planning questions. Planning's Gate 2 shape stage and reviewing
 use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->

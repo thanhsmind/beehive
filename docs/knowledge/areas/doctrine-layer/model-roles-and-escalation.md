@@ -172,6 +172,24 @@ PRESENT model line in an agent file is the drift, not a missing one.
 Opencode is unchanged on purpose — there the rendered file IS the
 enforcement (see Open Gaps).
 
+**B15 — Blind-lane and hat-wave seats carry their own roles, and an empty
+seat yields to the advisor** (lane-model-diversity D1/D2/D3/D4/D5). The
+eight seat names — `lane-1..lane-3` and `hat-facts-gaps`,
+`hat-risks`, `hat-value`, `hat-alternatives`, `hat-user-impact` — live in
+`SEAT_ROLES` beside `tier_role_list` in the drivers module (case-folded
+membership), and each configures a model in the same open `models.<runtime>`
+table as every other role (D1). On `--kind advisor` only, a declared seat
+whose slot resolves nothing — absent, null, or shapeless — rebinds to the
+advisor slot instead of refusing, keeping `resolve_advisor`'s one-name
+no-floor walk as the tail and stamping the marker `advisor` while the
+dispatch record keeps the asked-for seat as `economics.requested_role`
+(D2/D4); every other kind, and every non-seat name, keeps the
+`role_not_configured` refusal. A configured `hat-*` slot without a
+`description` is a `bee doctor` advisory, never a resolution input — the
+display-only law of B12 stands (lane-model-diversity D3, venue decision).
+The two procedure homes in `gates-and-delegation.md` name the seats and
+point back at `SEAT_ROLES` as the constant of record (D5).
+
 ## The one deliberate silent case
 
 Every rule above refuses or warns rather than resolving silently, with a single
