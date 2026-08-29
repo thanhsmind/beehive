@@ -307,6 +307,156 @@ pub(crate) fn resolve_supersedes_target(
     }
 }
 
+// ─── slp-contract S3: the DERIVED contract status (D1, D2) ────────────────
+//
+// D1 locks that a contract's settled/unsettled status is a DERIVED view
+// over the decision log — no registry, no reverse index, no cache, nothing
+// stored. Everything below is a pure read: it answers from the events
+// already in `.bee/decisions.jsonl` joined against the trigger records
+// already in `.bee/triggers/`, and it writes nothing anywhere.
+//
+// The join is on SHORT8, because that is all a trigger record carries:
+// `TriggerRecord.decision` (verbs/triggers/mod.rs) holds the first 8
+// characters of the deferring decision's id, never the full id.
+
+/// The derived status of ONE decision id, per D2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContractStatus {
+    /// Active, and no trigger keyed to it is still open.
+    Settled,
+    /// Active, and a trigger keyed to it is `waiting` or `due`.
+    Unsettled,
+    /// Not in the active decision set at all. D3's word "retired" resolves
+    /// here: the store has no `retired` state — only supersession, redaction
+    /// and archiving — and all three drop the id out of `active_decisions`,
+    /// which is exactly the condition to refuse on. A never-logged id lands
+    /// here too, and that is correct: an id nobody logged settles nothing.
+    Unknown,
+}
+
+/// The ids in the currently ACTIVE decide/supersede set, in file order —
+/// one store read, so a caller checking many citations does not pay one
+/// read per citation.
+pub(crate) fn active_decision_ids(root: &Path) -> Ex<Vec<String>> {
+    Ok(active_decide_or_supersede_candidates(root)?
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect())
+}
+
+/// Every `decision` key carried by a trigger that is still OPEN — status
+/// `waiting` or `due`. Read-only by construction: it goes through
+/// `triggers::read_without_evaluating`, which is `read_and_evaluate`'s own
+/// body with the persisting predicate flip turned OFF, so this call leaves
+/// every trigger file byte-identical.
+///
+/// Fail-open, inherited from that walk: no `.bee/triggers/` directory is
+/// simply no open keys, and a corrupt or shape-invalid trigger file
+/// contributes nothing rather than failing the read. A file that cannot be
+/// parsed cannot say a decision is unsettled, so the decision reads as
+/// settled — the same direction `triggers list` already degrades in.
+pub(crate) fn open_trigger_decision_keys(root: &Path) -> Vec<String> {
+    use crate::verbs::triggers::TriggerEntry;
+    crate::verbs::triggers::read_without_evaluating(root)
+        .into_iter()
+        .filter_map(|e| match e {
+            TriggerEntry::Ok(rec) if rec.status == "waiting" || rec.status == "due" => {
+                Some(rec.decision)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The derivation itself, over an already-read active set and an
+/// already-read open-trigger key set — the same "caller brings the
+/// candidates" shape `resolve_supersedes_target` above uses.
+///
+/// Three facts this join has to live with, all measured over the live
+/// store rather than assumed:
+///
+/// - A `manual`-tier trigger NEVER reaches `due` (verbs/triggers/mod.rs) —
+///   it only ever waits for a human, then gets `resolve`d. So a decision
+///   with a waiting manual trigger stays `Unsettled` until a person
+///   resolves that trigger. That is D2 working as locked, not a bug: the
+///   revisit condition is attached and has not been answered.
+/// - A trigger `decision` key that is not a short8 of any decision (the
+///   live store carries `herding-`, `P72`, `p-c6e61d`, `wayfindi`) simply
+///   matches nothing. It is never an error.
+/// - Two decision ids sharing a short8 share every trigger keyed to it —
+///   the record physically cannot say which of them it meant. Both read
+///   `Unsettled`, which is the fail-safe direction for a refusal path.
+///   Collisions among the live ids: 0.
+///
+/// The key comparison is ASCII-case-insensitive. Decision ids are
+/// lowercase hex, so this only ever ADDS a match, and an extra match can
+/// only move a decision toward `Unsettled` — the safe direction.
+pub(crate) fn contract_status_over(
+    active_ids: &[String],
+    open_trigger_keys: &[String],
+    id: &str,
+) -> ContractStatus {
+    let id = js_trim(id);
+    if id.is_empty() || !active_ids.iter().any(|a| a == id) {
+        return ContractStatus::Unknown;
+    }
+    let short8 = crate::textutil::truncate_chars_head(id, 8);
+    if open_trigger_keys.iter().any(|k| k.eq_ignore_ascii_case(&short8)) {
+        ContractStatus::Unsettled
+    } else {
+        ContractStatus::Settled
+    }
+}
+
+/// `contract_status_over` with both reads performed for you — the
+/// one-decision spelling.
+#[allow(dead_code)] // the tripwire that consumes this lands with S4
+pub(crate) fn contract_status(root: &Path, id: &str) -> Ex<ContractStatus> {
+    let active = active_decision_ids(root)?;
+    Ok(contract_status_over(&active, &open_trigger_decision_keys(root), id))
+}
+
+/// One `cell.decisions` entry → the store decision it cites, or `None`.
+///
+/// The field does NOT hold store decision ids: measured over the 92 live
+/// cells, 81 citations, only 11 resolve, and the entry-length histogram is
+/// `{2: 61, 3: 5, 8: 11, 24: 1, 25: 3}` — it is dominated by LOCAL D-IDs
+/// like `D1`, which point into a CONTEXT.md table. So `None` means "this
+/// entry is not a store citation", never "this entry is wrong": a caller
+/// passes over it silently.
+///
+/// Resolution, deliberately narrower than `resolve_supersedes_target`'s
+/// (that one is a user-typed argument and may complain; this one walks a
+/// record field and may not):
+///
+/// - an exact id match resolves;
+/// - a prefix of AT LEAST 8 characters matching EXACTLY ONE active
+///   decision resolves;
+/// - anything shorter than 8 characters resolves to `None`, ambiguous or
+///   not — `D1` must never resolve by accident;
+/// - a prefix matching two or more active decisions resolves to `None`,
+///   because a guard cannot guess which one was meant.
+#[allow(dead_code)] // the tripwire that consumes this lands with S4
+pub(crate) fn resolve_store_citation(active_ids: &[String], entry: &str) -> Option<String> {
+    let raw = js_trim(entry);
+    if raw.is_empty() {
+        return None;
+    }
+    if let Some(id) = active_ids.iter().find(|id| id.as_str() == raw) {
+        return Some(id.clone());
+    }
+    if raw.chars().count() < 8 {
+        return None;
+    }
+    let low = raw.to_lowercase();
+    let mut matches = active_ids.iter().filter(|id| id.to_lowercase().starts_with(&low));
+    let first = matches.next()?;
+    match matches.next() {
+        None => Some(first.clone()),
+        Some(_) => None,
+    }
+}
+
 // ─── filters (bee.mjs filterDecisionEvents / matchesWholeToken) ────────────
 
 #[derive(Default)]
