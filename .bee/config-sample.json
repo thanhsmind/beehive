@@ -22,6 +22,8 @@
         "description_field": "Any OBJECT-shaped slot may also carry \"description\": \"<what this role is for>\" — planner documentation only, never a selector: the session preamble's Roles line shows it beside the role name (clipped to 60 chars) so an agent knows when to assign the role, and resolution, the model guard, and dispatch prepare all ignore the field. A plain-string slot cannot carry one — spell it { \"model\": \"sonnet\", \"description\": \"...\" } instead. Live example on the `generation` slot below."
       },
       "advisor": "The AO3/AO13 consult identity required before Gate 2's execution component opens on high-risk work. Claude default: fable (the session-class model). Set null to skip the advisor line in worker prompts when no advisor resolves.",
+      "seat_roles": "The eight SEAT roles — one per parallel advisor position, so a blind-lane run or a hat wave can put a DIFFERENT model in each seat instead of sharing the one `advisor` slot (lane-model-diversity D1). Lanes: lane-1, lane-2, lane-3. Hats: hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact. They live in this same models.<runtime> table — no second config file. The constant of record is SEAT_ROLES in packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, and it is CLOSED: only those eight names. Fall-through (D2): a seat whose slot resolves NOTHING — key absent, null, or a shape the resolver reads as nothing — falls through to `advisor` on a `--kind advisor` dispatch rather than refusing, so an unconfigured seat keeps working exactly as before this table existed; every other kind keeps the ordinary role_not_configured refusal, and so does a name outside the eight (a typo like hat-risk never quietly borrows the advisor's model). The `[bee-tier: …]` marker names the RESOLVED role — `advisor` after a fall-through — and the dispatch log records the asked-for seat as `requested_role` (D4). There is no dispatch-time model flag: the model comes only from this table. The rows below are shown on `claude` as examples only; onboarding publishes NONE of them, because absent is what fall-through is for. Procedure home for both seats: skills/bee-hive/references/gates-and-delegation.md.",
+      "hat_description_rule": "A configured `hat-*` slot states its purpose in `description`, so the table reads back self-documenting (lane-model-diversity D3) — which is why the hat rows below are object-shaped and the interchangeable `lane-*` rows are plain strings. The field stays DISPLAY-ONLY, exactly as `description_field` above says: resolution, the model guard and dispatch prepare all ignore it. So a string-shaped `\"hat-risks\": \"opus\"` resolves perfectly well; `bee doctor` merely reports it as an unlabelled hat — an advisory line, never a verdict, never a refusal. A `null` hat is a seat switched OFF, not an undescribed one, and is passed over.",
       "codex_note": "On codex-cli 0.144.4 native subagents cannot pin a per-agent model — a string here records the REQUESTED model; the dispatch log will still say effective_model_status=inherited-or-unknown until a capability probe proves per-agent selection."
     },
     "retry": {
@@ -76,7 +78,30 @@
         "description": "default writer role — cell execution, code and tests"
       },
       "review": "opus",
-      "advisor": "fable"
+      "advisor": "fable",
+      "lane-1": "fable",
+      "lane-2": "opus",
+      "lane-3": "gpt-5.5",
+      "hat-facts-gaps": {
+        "model": "opus",
+        "description": "hat wave — what the spec cannot answer"
+      },
+      "hat-risks": {
+        "model": "fable",
+        "description": "hat wave — what breaks, and can it be undone"
+      },
+      "hat-value": {
+        "model": "sonnet",
+        "description": "hat wave — is this worth its cost"
+      },
+      "hat-alternatives": {
+        "model": "opus",
+        "description": "hat wave — is there a cheaper shape"
+      },
+      "hat-user-impact": {
+        "model": "sonnet",
+        "description": "hat wave — what the user sees and feels"
+      }
     },
     "codex": {
       "code": null,
