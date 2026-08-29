@@ -58,6 +58,15 @@ repo's own backlog when its cluster shapes.
 - 8fea3561: cross-repo dissent builds nothing new — B records locally, the
   supervisor's rollup is the only cross-project awareness, replies travel as
   data over the existing transport — tickets/003-cross-repo-dissent-bookkeeping.md
+- 30799303: weekly review = deterministic weekly timer; learnings drop as
+  proposed backlog items into related repos, leads triage —
+  tickets/005-weekly-review-shape.md
+- 423871d7: supervisor is a cold tick under an external scheduler; durable
+  records are its only memory; shutdown pauses, nothing lost — settled in
+  session, no ticket
+- 3cfd9980: poor-work signals → supervisor RECOMMENDS an advisor consult in
+  its intervention record; the struggling repo's own lead summons the
+  advisor — settled in session, no ticket
 - 28a75c87: weekly cross-project review at waggledance layer, report is a
   print, learnings capture back per-repo — shape: tickets/005-weekly-review-shape.md
 - 12deaa34: spec-drop transport = waggledance_dispatch + corr-id-as-PBI-id
