@@ -199,8 +199,14 @@ The settled values (pi-support D6): heavy roles (code, test, docs, review)
 ride herding agents running `claude --model opus`, advisor rides
 `claude --model fable`, and the cheap roles (read, extraction, generation,
 supervisor) ride `agy-flash` — herding constrains the transport, never the
-model vendor. Preview status: not production until `pi-result-mailbox`
-lands (see `docs/config-reference.md`, "Pi — models.pi is herding-only").
+model vendor. Delivery status (pi-result-mailbox): a Pi worker's result
+returns, and the path to plan on is the SYNCHRONOUS one every runtime
+shares — `bee herding run`'s own output, carrying `report_path` when the
+worker wrote a report. The Pi-only async half is opt-in per dispatch
+(`--inbox-session <token>`) and carries named limits: at-least-once
+delivery with `job_id` as the dedupe key, a drain that needs a live Pi
+session, and header-only injection (the report body is never injected).
+See `docs/config-reference.md`, "Pi — models.pi is herding-only".
 
 ## The one deliberate silent case
 

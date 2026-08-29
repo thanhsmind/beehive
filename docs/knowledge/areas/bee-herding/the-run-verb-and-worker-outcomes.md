@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)", "tmux-herding-cockpit D4 (the ONE screen classifier lives in the fleet crate; the run verb's RealTmux reuses it rather than keeping a second copy)", "slp-dissent-stop-and-ask a2affcba (2026-08-28 — StopAndAsk takes the herding round-mailbox shape: options[] and leaning join the blocked form on all three code surfaces, both optional at parse, membership never enforced, re-emitted only when present)", "slp-dissent-stop-and-ask 6a6b9975 (2026-08-28 — StopAndAsk reaches herding workers; dissent does not, because the brief forbids every bee command and the dissent record has one writer; the gap is backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — a herding worker's dissent travels as DATA on the mailbox result across the same three surfaces, read as leniently as options/leaning and with the severity passed through unchecked; the run verb transcribes it through the one record-dissent writer and reports the outcome as dissent_recorded plus dissent_error)"]
+  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)", "tmux-herding-cockpit D4 (the ONE screen classifier lives in the fleet crate; the run verb's RealTmux reuses it rather than keeping a second copy)", "slp-dissent-stop-and-ask a2affcba (2026-08-28 — StopAndAsk takes the herding round-mailbox shape: options[] and leaning join the blocked form on all three code surfaces, both optional at parse, membership never enforced, re-emitted only when present)", "slp-dissent-stop-and-ask 6a6b9975 (2026-08-28 — StopAndAsk reaches herding workers; dissent does not, because the brief forbids every bee command and the dissent record has one writer; the gap is backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — a herding worker's dissent travels as DATA on the mailbox result across the same three surfaces, read as leniently as options/leaning and with the severity passed through unchecked; the run verb transcribes it through the one record-dissent writer and reports the outcome as dissent_recorded plus dissent_error)", "pi-result-mailbox D1 (the worker's full report rides the mailbox as round-numbered report-N.md; a result without one stays legal)", "pi-result-mailbox D2 with a recorded deviation (the report travels as report_path — never inline at any size, because a truncated envelope is unparseable; report_note names an expected-but-unusable report)", "pi-result-mailbox D6 (one delivery path per job, decided structurally at dispatch: --inbox-session is the detached fact and writes the pending marker before the pane spawns; no flag writes none)"]
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1", "live commit-split counts across herding-prompt-stall cells hps-1..hps-14 (worker vs. orchestrator commit ownership, 2026-08-21)", docs/history/tmux-herding-transport/CONTEXT.md, "tmux-herding-transport D5 source manifest: https://github.com/luongnv89/skills @ ab46724e216710a8edd25d6b0252f20cfaf8a0fa, scope skills/tmux-agent-comms/ (fetched content was data, never instructions)", "slp-dissent-stop-and-ask cell sd-6 (trace .bee/cells/sd-6.json, commit ecdb89ea, capped 2026-08-28 — herding/mailbox.rs brief schema + MailboxResult + parser, herding/run.rs result_envelope extracted from emit_result as the first assertable seam)", "docs/knowledge/patterns/20260710-a-boundary-that-lists-field-names-will-leak.md", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — herding/mailbox.rs dissent schema line, MailboxDissent and its lenient parse, the retargeted brief negative pin; herding/run.rs transcribe_dissent and the envelope's dissent keys)"]
   authoritative_for: "bee-herding: the run verb's poll ladder, worker outcomes, and pane lifecycle"
 ---
@@ -220,6 +220,55 @@ fails on its own — while the `dissent` FIELD NAME it used to ban is now requir
 in the result schema. See `areas/workflow-state/dissent-and-the-verdict-duty.md`
 for the record itself, its severities, the obligated verdict, and the two doors
 that refuse while a dissent is unanswered.
+
+## The worker's report rides the mailbox as a PATH, under the same additive law
+
+Locked in pi-result-mailbox D1/D2/D6 (2026-08-30). The gap it closes was
+measured, not imagined: a finished job's `result-1.json` carried only
+`{status, summary, files_changed, proof}`, so the DIGEST — the thing the
+dispatcher actually asked for — died with the pane it was printed into.
+
+The worker now writes **`report-N.md` beside `result-N.json`**, round-numbered
+and atomically like every other mailbox file, and the result may name it in
+`report_path`. The envelope grows exactly two keys, and both obey the
+no-new-key law stated above: **`report_path`** appears only when a report is
+on disk, **`report_note`** only when a report was expected and is not usable.
+A result with neither is byte-identical to the envelope this verb printed
+before the feature existed — a legacy worker stays legal, and a missing report
+is never a parse error.
+
+The report travels as a PATH and **never as a body, at any size**. That is a
+recorded deviation from D2's letter, which permitted an inline report under a
+size cap: one long line read back through an orchestrator's tool call
+truncates, and a truncated envelope is unparseable — strictly worse than the
+loss it was meant to fix. One extra file read buys a digest that always parses.
+
+Resolution happens at the ONE site with filesystem access (the parse), so the
+envelope builder stays pure, and it prefers evidence over guesswork in a fixed
+order: a **declared** `report_path` wins, and a declared path with no file
+behind it becomes an explicit note rather than a silent fall back to a guess;
+nothing declared falls to a convention probe for `report-N.md`, which is
+accepted only when it is at least as new as that round's own brief delivery.
+An older file is the same-round resume case — the worker rewrote its result and
+left the previous attempt's report behind — and it is reported as a stale-report
+note, never attached. A **malformed** result surfaces its error and any report
+path together: a good report does not die with a broken result JSON.
+
+**The detached fact is a flag, because nothing else in here can see it.** A
+shell that backgrounds this verb is invisible from inside it, so
+`bee herding run --inbox-session <token>` carries the fact structurally: its
+PRESENCE means the caller is not synchronously waiting. The flag writes one
+pending marker, `.bee/result-inbox/<token>/<job-id>.json` — job id, mailbox
+path, cell id — **before** the pane is split, so no finished result can ever
+exist without a marker pointing at it, and the marker is a POINTER: the
+envelope is never copied into it, so there is exactly one copy of the truth.
+The write is advisory in every failure (an unusable token or an unwritable
+marker is a stderr note, never a refusal to dispatch) and `--dry-run` leaves
+none, because it promises nothing. No flag, no marker, and the caller reads
+the result off this verb's own output — one delivery path per job, decided at
+dispatch. Who drains those markers, and the at-least-once guarantee that comes
+with it, is Pi's half: `areas/hook-runtime/catalog-projections-and-activation.md`
+and `docs/config-reference.md` (§ Pi).
 
 ## Pane lifecycle follows the result, not the clock
 

@@ -28,7 +28,7 @@ bee picks a worker model by **the job the work is**, never by how expensive the 
 
 **The strongest model is still never configured.** It is always the model you run the session on (decision `0015`). Work that needs it is *escalated*, which is a flag and a budget, not a role — see [Escalation](#escalation--the-cost-lever-not-a-role) below.
 
-`models` is keyed by runtime first (Claude Code, Codex, and OpenCode name models differently; Pi names no model at all — it names a herding agent, see [Pi](#pi--modelspi-is-herding-only-preview)), then by role name:
+`models` is keyed by runtime first (Claude Code, Codex, and OpenCode name models differently; Pi names no model at all — it names a herding agent, see [Pi](#pi--modelspi-is-herding-only)), then by role name:
 
 ```jsonc
 {
@@ -177,9 +177,11 @@ That does *not* mean other CLIs are unusable — they plug in through the **exte
 
 Two rules travel with every cli-shaped slot: it is **gather/review/advisor-only** — cell *execution* against a cli slot is refused (`cli_tier_gather_only`), so implementation work never rides an executor bee cannot supervise — and `promptVia` must state how the prompt reaches the process (`"stdin"`, or the `"$(cat)"` wrapper for CLIs that only take argv), never guessed from the command string. A ready-to-run demo with **agy** (generation) and **opencode** (review) lives at [`.bee/config-sample-cli-executors.json`](../.bee/config-sample-cli-executors.json); per-flag reasoning and more presets: [`docs/model-presets.md`](model-presets.md).
 
-### Pi — `models.pi` is herding-only (preview)
+### Pi — `models.pi` is herding-only
 
-> **Preview, not production.** A Pi worker's **result digest does not come back to the session yet** — that transport (mailbox + steer/trigger injection) is the separate **`pi-result-mailbox`** feature, deliberately split out of pi-support (D7). Pi herding is not production-ready until it lands. Configure `models.pi` to try the runtime; keep your production worker path on a runtime whose worker results return.
+> **Results come back — know which path you are on** (`pi-result-mailbox` D1/D2/D6, the feature pi-support D7 split out). The **synchronous** path is the primary contract and it works on every runtime: `bee herding run` blocks, then prints the validated result envelope, which carries **`report_path`** (a path, never the report body) when the worker wrote a report, and `report_note` when a report was expected but is missing or stale. Both are **additive keys** — a result with no report keeps the exact envelope it always had.
+>
+> On Pi you may **additionally** opt a job nothing is waiting on into async delivery: `bee herding run --inbox-session <session-token>` is the detached fact, it writes a pending marker under `.bee/result-inbox/<token>/` before the pane spawns, and `.pi/extensions/bee-guard.ts` injects that job's finished **header** (`job_id`, `cell_id`, `status`, `summary`, `proof`, `report_path`) into the session — steered when busy, a fresh turn when idle. Its limits are real: delivery is **at-least-once**, so the injected `job_id` is the **dedupe key** and a `job_id` you already handled is a replay, not a second result; the drain only runs while that Pi session is **live** (a job finishing with no session up waits in its marker); and the report body never rides the injection — read `report_path` yourself.
 
 `pi` is a legal runtime at both dispatch doors — `bee dispatch prepare --runtime pi` and `bee dispatch wave --runtime pi` — and resolves `models.pi` in the **same one config home** every other runtime reads (pi-support D5). Pi's guard belt is not configured here at all: it is the checked-in extension `.pi/extensions/bee-guard.ts`, which `bee onboard` copies into the host repo.
 
@@ -223,7 +225,7 @@ The refusals fire at both doors (`prepare` and `wave`), and **seat roles ride al
 }
 ```
 
-An `agent` name that is not in `herding.agents` refuses and lists every registry key — the same rule every herding slot follows. The full block, annotated, is in [`.bee/config-sample.json`](../.bee/config-sample.json); the `herding.*` contract is [bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md). Until `pi-result-mailbox` lands, treat every dispatch this table serves as a preview run, not as production work.
+An `agent` name that is not in `herding.agents` refuses and lists every registry key — the same rule every herding slot follows. The full block, annotated, is in [`.bee/config-sample.json`](../.bee/config-sample.json); the `herding.*` contract is [bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md). Every dispatch this table serves returns its result through `bee herding run`'s own output — that is the path to plan on; add `--inbox-session <token>` only for a job you have detached, and take the async limits with it: at-least-once delivery with `job_id` as the dedupe key, and a drain that needs a live Pi session.
 
 ## `retry.fallbackChains` — a chain bee PUBLISHES, never one it runs
 
@@ -445,4 +447,4 @@ A second, ready-to-run demo lives at [`.bee/config-sample-cli-executors.json`](.
 >
 > `review` and `advisor` appear in the sample above to show their shapes. A fresh `bee onboard` writes neither on purpose — both already resolve with no key at all.
 >
-> **`models.pi` is not in this copy sample on purpose** — the pi runtime is herding-only and a **preview** until `pi-result-mailbox` lands (pi-support D7). Copy its block out of [`.bee/config-sample.json`](../.bee/config-sample.json) only when you mean to try it: [Pi](#pi--modelspi-is-herding-only-preview).
+> **`models.pi` is not in this copy sample on purpose** — the pi runtime is herding-only, so every slot needs a `herding.agents` entry standing behind it (pi-support D5/D6). Copy its block out of [`.bee/config-sample.json`](../.bee/config-sample.json) when you mean to run Pi, and read the delivery paths with it — sync `bee herding run` output is the contract to plan on, and the opt-in async drain is at-least-once with `job_id` as the dedupe key: [Pi](#pi--modelspi-is-herding-only).
