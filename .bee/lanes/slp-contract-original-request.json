@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"slp-contract-original-request\" started at phase \"exploring\" (lane).",
-  "next_action": "Merge the branch, then hand the user main for uat.",
+  "next_action": "Merged into main at 0e8478d; reload the product and test \"slp-contract-original-request\", then either approve uat (\"bee gate --name uat --approved true --lane slp-contract-original-request\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-28T15:12:05.550Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: slp-contract-original-request",
+    "asked_at": "2026-08-29T02:23:05.137Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -36,16 +41,6 @@
     "plan_sha256": "absent",
     "advisor": "fable (models.claude.advisor)",
     "digest_head": "# Advisor consult — high-risk execution gate, slice 1\n\n- Date: 2026-08-29 · Advisor: fable (configured `models.claude.advisor`)\n- Evidence bundle: `docs/history/slp-contract-original-request/plan.md` (rev 2),\n  `docs/history/slp-contract-original-request/CONTEXT.md`, base `37f6ae3a`.\n- Verdict: **GO — approve execution for slice 1 only.**\n\n## 1. Faithfulness of D1-D6\n\n**D1 — FAITHFUL.** Plan: \"A pure read, no store, no registry\" (plan.md\nApproach/S3) and Out of scope \"Any new store, registry, or"
-  },
-  "merge_ready": {
-    "since": "2026-08-29T01:15:40.546Z",
-    "branch": "wt/slp-contract-original-request",
-    "worktree_id": "beehive--wt--slp-contract-original-request",
-    "uat": "pending",
-    "blocked_by": [
-      "routing",
-      "doc-deferral"
-    ]
   },
   "last_scribing_run": {
     "feature": "slp-contract-original-request",
