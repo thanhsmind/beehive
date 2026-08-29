@@ -74,9 +74,13 @@ It does not hold. Verified live: `.bee/intent/default.json` carries a
 under a DO-NOT-PARAPHRASE banner is meaning-REPLACEMENT — the exact violation
 D5 forbids — while absence is a visible gap. `read_anchor_at`
 (`intent_group.rs:216`) has no staleness check, so no guard can distinguish a
-fresh default from a dead one. CONTEXT.md explicitly deferred "which anchor
+fresh default from a dead one.
+<!-- bee:not-a-deferral: reports a deferral CONTEXT.md already made and planning already answered; the answer is in plan.md, Approach Half B -->
+CONTEXT.md explicitly deferred "which anchor
 does a featureless dispatch read" to planning, so "none" is granted
-discretion, not narrowing. S1 is the right skeleton: end-to-end,
+discretion, not narrowing.
+<!-- /bee:not-a-deferral -->
+S1 is the right skeleton: end-to-end,
 dependency-free, and its riskiest property (byte-identical absence) is exactly
 what the existing pattern already pins twice.
 

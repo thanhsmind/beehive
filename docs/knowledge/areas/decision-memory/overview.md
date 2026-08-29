@@ -102,9 +102,11 @@ Three field failures (reported against a host repo, fixed generically):
     archiving, and all three drop the id out of `active_decisions`. A
     never-logged id reads `unknown` too.
 
+  <!-- bee:not-a-deferral: describes the trigger record's storage format; the word "deferring" names the decision a trigger points at, it promises no work -->
   The join onto triggers is on **SHORT8**, because that is all a trigger record
   carries: `TriggerRecord.decision` holds the first 8 characters of the
   deferring decision's id, never the full id. Three consequences to know:
+  <!-- /bee:not-a-deferral -->
   a trigger key that is not a short8 of any decision (the live store carries
   `herding-`, `P72`) matches nothing and is never an error; two decision ids
   sharing a short8 both inherit the one trigger, because the record cannot say

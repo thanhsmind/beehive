@@ -147,8 +147,8 @@ only 27 of the 67 cells that name tests in their title or action carry any
 test-shaped path, and 7 declare no `files` at all. The advisory arm is what
 covers it. Closing it properly needs a real cell field declaring test intent,
 which the "nothing new to forget to update" rule argues against inventing on
-a guess — so it is deferred with that measurement attached, and a test
-asserts that such a cell CLAIMS.
+a guess. It is deferred with that measurement attached, under trigger `the-mint-trap-s-advisory-arm-has-fired-o__d853e4c6`.
+A test asserts that such a cell CLAIMS.
 
 **The ramp.** The refusal ships fully built, but while the ACTIVE decision set
 holds zero decisions tagged `contract:<name>` no cell could satisfy the rule,
