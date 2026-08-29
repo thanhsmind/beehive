@@ -233,21 +233,42 @@ pub(crate) const KNOWN_KINDS: [&str; 2] = ["observation", "silence"];
 /// The MAILBOX row kinds (c80debd7) — a question addressed to ONE session.
 /// `urgent` is the danger-class member: same fields, same validation, two
 /// differences only (no frequency cap, one immediate notification).
-pub(crate) const MAILBOX_KINDS: [&str; 3] = ["intervention", "escalation", "urgent"];
+///
+/// `advisor-nudge` (3cfd9980) is one more KIND of this same record, never a
+/// second store: on poor-work evidence the supervisor RECOMMENDS an advisor
+/// consult to the struggling session's own lead, which reads it at its next
+/// turn boundary and decides for itself. The supervisor still only writes
+/// records — 704b691c holds untouched.
+pub(crate) const MAILBOX_KINDS: [&str; 4] =
+    ["intervention", "escalation", "urgent", "advisor-nudge"];
 
 /// The mailbox kinds the frequency cap COUNTS AGAINST. A kind outside this set
 /// is never refused for repeating a point: escalation IS the remedy the cap
 /// names, and `urgent` is danger-class — c80debd7 gives an UrgentAlert an
 /// immediate path, and a danger notice suppressed because the same point was
 /// raised calmly an hour ago is the one failure this store must not have.
-const CAPPED_KINDS: [&str; 1] = ["intervention"];
+///
+/// `advisor-nudge` is counted for the reason 9e5eda5b names: the same nudge
+/// twice is the ignored-twice case, and it must ESCALATE into the human's
+/// report rather than repeat at the lead that already passed on it.
+const CAPPED_KINDS: [&str; 2] = ["intervention", "advisor-nudge"];
 
 /// Every kind `record` accepts, in the order its refusal names them.
 /// `all_kinds_is_the_two_sets` keeps this from drifting out of the two above.
-pub(crate) const ALL_KINDS: [&str; 5] =
-    ["observation", "silence", "intervention", "escalation", "urgent"];
+pub(crate) const ALL_KINDS: [&str; 6] =
+    ["observation", "silence", "intervention", "escalation", "urgent", "advisor-nudge"];
 
-pub(crate) const KNOWN_SIGNALS: [&str; 4] = ["struggling-loop", "big-decision", "danger-op", "none"];
+/// The poor-work vocabulary. `budget-overrun` and `same-region-resubmit` are
+/// the two 3cfd9980 names beside `struggling-loop`; the telemetry that
+/// produces them landed with a8f4b8ab, so the word is what was missing.
+pub(crate) const KNOWN_SIGNALS: [&str; 6] = [
+    "struggling-loop",
+    "big-decision",
+    "danger-op",
+    "budget-overrun",
+    "same-region-resubmit",
+    "none",
+];
 
 /// The bound on one note. Two sentences fit in a fraction of it; the cap
 /// exists because these rows are rendered back into a ≤10-line WakeReport
@@ -482,13 +503,21 @@ pub(crate) struct Intervention {
     /// stamped ON the row rather than read back out of config, so editing the
     /// config later can never rewrite what the human is told happened.
     pub(crate) consent_timeout_seconds: Option<u64>,
+    /// The feature the target session was working in when this row was
+    /// written, derived once at record time from its live claim (3cfd9980's
+    /// nudge only). 423871d7 makes this the ONLY honest place for it: the
+    /// supervisor is a cold tick, so a later reader that needs to know which
+    /// work a nudge answers must find it ON the record — re-deriving it later
+    /// would read a claim that has since moved. `None` when the target held
+    /// no claim, and then the key is absent from the row entirely.
+    pub(crate) feature: Option<String>,
 }
 
 impl Intervention {
     /// The `record` event as it is appended — the row minus anything a later
     /// event owns.
     fn record_event(&self) -> Value {
-        json!({
+        let mut v = json!({
             "ts": self.ts,
             "event": "record",
             "id": self.id,
@@ -499,12 +528,14 @@ impl Intervention {
             "target_session": self.target_session,
             "tick": self.tick,
             "queued": self.queued,
-        })
+        });
+        with_feature(&mut v, self.feature.as_deref());
+        v
     }
 
     /// The folded row every reader answers with.
     pub(crate) fn to_value(&self) -> Value {
-        json!({
+        let mut v = json!({
             "id": self.id,
             "ts": self.ts,
             "kind": self.kind,
@@ -518,7 +549,18 @@ impl Intervention {
             "released_at": self.released_at,
             "consented_at": self.consented_at,
             "consent_timeout_seconds": self.consent_timeout_seconds,
-        })
+        });
+        with_feature(&mut v, self.feature.as_deref());
+        v
+    }
+}
+
+/// Attach the derived feature to a row — ABSENT rather than null when there is
+/// none, so every row shape that existed before this field is byte-identical
+/// to what it was. One owner for that rule, used by both row renderings.
+fn with_feature(v: &mut Value, feature: Option<&str>) {
+    if let (Some(map), Some(feature)) = (v.as_object_mut(), feature) {
+        map.insert("feature".to_string(), Value::String(feature.to_string()));
     }
 }
 
@@ -552,6 +594,11 @@ impl Intervention {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            // Optional by construction: every row written before this field
+            // existed, and every row whose target held no claim, has no key
+            // here — which reads as "counts against no feature", never as a
+            // parse failure.
+            feature: non_empty("feature"),
         })
     }
 
@@ -576,6 +623,49 @@ impl Intervention {
             self.question
         )
     }
+}
+
+/// The feature a session is working in RIGHT NOW, read claim → cell → feature
+/// out of the control root's own stores.
+///
+/// The walk is deliberately total: an unreadable claim, an unparseable cell,
+/// or a cell naming no feature is passed over rather than raised — this runs
+/// inside a write door whose whole contract is that it refuses BEFORE it
+/// writes, and a corrupt neighbouring file is not a reason to refuse a nudge.
+/// The entries are sorted so a session holding two claims derives the same
+/// answer on every run rather than whatever order the filesystem hands back.
+fn feature_of_session(control: &Path, session: &str) -> Option<String> {
+    let mut cells: Vec<String> = std::fs::read_dir(control.join(".bee").join("claims"))
+        .ok()?
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            // The file STEM is the cell id, and it is already a safe path
+            // segment because the store wrote it as one. The claim's own
+            // `cell` field is never joined into a path here — a hand-edited
+            // one could carry `..`, and this read is not worth that door.
+            name.strip_suffix(".json").map(str::to_string)
+        })
+        .collect();
+    cells.sort();
+    for cell in cells {
+        let claim = std::fs::read_to_string(control.join(".bee").join("claims").join(format!("{cell}.json")))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok());
+        let Some(claim) = claim else { continue };
+        if claim.get("session").and_then(Value::as_str) != Some(session) {
+            continue;
+        }
+        let feature = std::fs::read_to_string(control.join(".bee").join("cells").join(format!("{cell}.json")))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|c| c.get("feature").and_then(Value::as_str).map(str::to_string))
+            .filter(|f| !f.is_empty());
+        if feature.is_some() {
+            return feature;
+        }
+    }
+    None
 }
 
 /// A stable row id: 8 hex characters, the same short shape a decision id
@@ -736,6 +826,13 @@ pub(crate) fn record_intervention_into(
     // effect this mark is not allowed to have.
     let queued = kind != "urgent" && current_window(control).is_some();
 
+    // The nudge, and only the nudge, learns which work it is about (3cfd9980
+    // + 423871d7): the debt this record creates is owed by the target's own
+    // feature, and a cold tick has no memory to look it up in later. Every
+    // other kind's row shape is left exactly as it was.
+    let feature =
+        if kind == "advisor-nudge" { feature_of_session(control, &target_session) } else { None };
+
     let rec = Intervention {
         id: new_row_id(),
         ts: now_iso(),
@@ -750,6 +847,7 @@ pub(crate) fn record_intervention_into(
         released_at: None,
         consented_at: None,
         consent_timeout_seconds: None,
+        feature,
     };
     if append_jsonl(&interventions_path(control), &rec.record_event()).is_err() {
         return Err(format!("bee {cmd}: could not append to the intervention mailbox."));
@@ -3605,6 +3703,130 @@ mod tests {
         assert_eq!(mbx(control).len(), 3);
     }
 
+    // ─── advisor-nudge (3cfd9980, one more KIND of the c80debd7 record) ──
+
+    /// Plant the claim + cell pair `bee cells claim` writes, so a target
+    /// session HAS a live claim to derive a feature from. Both files live in
+    /// the control root, which is where the mailbox lives too.
+    fn plant_claim(control: &Path, cell: &str, session: &str, feature: &str) {
+        write(
+            control,
+            &format!(".bee/claims/{cell}.json"),
+            &json!({"cell": cell, "session": session, "workspace_id": "main"}).to_string(),
+        );
+        write(
+            control,
+            &format!(".bee/cells/{cell}.json"),
+            &json!({"id": cell, "feature": feature, "status": "claimed"}).to_string(),
+        );
+    }
+
+    /// TRUTH: "a second advisor-nudge on the same (target_session, point_key)
+    /// refuses and names escalation" — exactly `intervention`'s behavior,
+    /// because 9e5eda5b rides the frequency cap that already exists.
+    #[test]
+    fn advisor_nudge_is_a_mailbox_kind_the_frequency_cap_counts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        assert!(MAILBOX_KINDS.contains(&"advisor-nudge"), "the nudge is a mailbox kind");
+        assert!(CAPPED_KINDS.contains(&"advisor-nudge"), "the cap counts it, like an intervention");
+        assert!(ALL_KINDS.contains(&"advisor-nudge"), "`record` accepts it");
+
+        let first = ask(control, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor read help here?")
+            .expect("a valid advisor-nudge is accepted");
+        assert_eq!(first.kind, "advisor-nudge");
+
+        let err = ask(control, "advisor-nudge", "sess-1", " Retry-Loop ", "Still worth an advisor?").unwrap_err();
+        assert!(err.contains("already raised"), "{err}");
+        assert!(err.contains("--kind escalation"), "the refusal names its one remedy: {err}");
+        assert!(err.contains(&first.id), "the refusal names the row it collided with: {err}");
+        assert_eq!(mbx(control).len(), 1, "a capped point writes nothing");
+
+        // It reads back as a plain (non-urgent) delivery line — the lead is
+        // being handed a recommendation, not an alarm.
+        let store = read_interventions(control);
+        let pending = pending_for(&store, "sess-1");
+        assert_eq!(pending.len(), 1, "the row lists as pending");
+        assert_eq!(delivery_line(pending[0]), "bee supervisor: Would an advisor read help here?");
+    }
+
+    /// TRUTH: "the row carries the feature derived from the target session's
+    /// live claim at record time, or none when no claim exists" (423871d7 —
+    /// derived ONCE, onto the record, because records are the only memory).
+    #[test]
+    fn an_advisor_nudge_carries_the_feature_of_its_targets_live_claim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        plant_claim(control, "an-1", "sess-1", "slp-advisor-nudge");
+
+        let rec = ask(control, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor read help here?")
+            .unwrap();
+        assert_eq!(rec.feature.as_deref(), Some("slp-advisor-nudge"));
+
+        let row: Value = serde_json::from_str(&mbx(control)[0]).unwrap();
+        assert_eq!(row["feature"], "slp-advisor-nudge", "the derivation is ON the row: {row}");
+        assert_eq!(
+            read_interventions(control).rows[0].feature.as_deref(),
+            Some("slp-advisor-nudge"),
+            "and it folds back out of the store"
+        );
+    }
+
+    /// The same truth's other half: no claim ⇒ no feature FIELD at all, and
+    /// every other kind's row shape is untouched by this addition.
+    #[test]
+    fn a_nudge_with_no_live_claim_carries_no_feature_field_at_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        let rec = ask(control, "advisor-nudge", "sess-nobody", "retry-loop", "Would an advisor help?").unwrap();
+        assert_eq!(rec.feature, None);
+        let row: Value = serde_json::from_str(&mbx(control)[0]).unwrap();
+        assert!(row.get("feature").is_none(), "absent, never null: {row}");
+
+        // An ordinary intervention keeps the exact record event it always had.
+        plant_claim(control, "an-9", "sess-2", "some-feature");
+        ask(control, "intervention", "sess-2", "retry-loop", "What ends the retry?").unwrap();
+        let plain: Value = serde_json::from_str(&mbx(control)[1]).unwrap();
+        assert!(
+            plain.get("feature").is_none(),
+            "only the nudge derives a feature — no other kind's row shape moves: {plain}"
+        );
+    }
+
+    /// The poor-work signals 3cfd9980 names must be SPELLABLE (a8f4b8ab's
+    /// telemetry already produces them), and the set must still be closed.
+    #[test]
+    fn the_poor_work_signals_record_and_the_signal_set_stays_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let cmd = "supervisor record";
+        let q = Some("Would an advisor read help here?");
+
+        for signal in ["budget-overrun", "same-region-resubmit"] {
+            assert!(KNOWN_SIGNALS.contains(&signal), "{signal} must be a known signal");
+            record_intervention_into(
+                control, cmd, "advisor-nudge", Some(signal), Some("sess-1"), Some(signal), q, None,
+            )
+            .unwrap_or_else(|e| panic!("{signal} must record: {e}"));
+            // The observation seam takes the same word.
+            record_into(control, cmd, Some("observation"), Some(signal), Some("Seen."), None, None)
+                .unwrap_or_else(|e| panic!("{signal} must record as an observation: {e}"));
+        }
+
+        let err = record_intervention_into(
+            control, cmd, "advisor-nudge", Some("budget-overun"), Some("sess-1"), Some("typo"), q, None,
+        )
+        .unwrap_err();
+        assert!(err.contains("--signal must be one of"), "a near-miss is still refused: {err}");
+        let err = record_intervention_into(
+            control, cmd, "advisor-nudges", None, Some("sess-1"), Some("typo"), q, None,
+        )
+        .unwrap_err();
+        assert!(err.contains("--kind must be one of"), "a near-miss kind is still refused: {err}");
+    }
+
     #[test]
     fn every_mailbox_refusal_writes_nothing() {
         let tmp = tempfile::tempdir().unwrap();
@@ -4638,6 +4860,7 @@ mod tests {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            feature: None,
         };
         append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
     }
@@ -4979,6 +5202,7 @@ mod tests {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            feature: None,
         };
         append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
         row.id
@@ -5084,6 +5308,7 @@ mod tests {
                 released_at: None,
                 consented_at: None,
                 consent_timeout_seconds: None,
+                feature: None,
             };
             assert_eq!(
                 consent_refusal(&ConsentAsk::from_row(&row)),
@@ -5107,6 +5332,7 @@ mod tests {
             released_at: None,
             consented_at: None,
             consent_timeout_seconds: None,
+            feature: None,
         };
         assert_eq!(
             consent_refusal(&ConsentAsk::from_row(&present)),
