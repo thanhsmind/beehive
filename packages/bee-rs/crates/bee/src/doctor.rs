@@ -261,6 +261,91 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
     rows
 }
 
+/// The configured `hat-*` slots on this runtime that carry no description —
+/// lane-model-diversity D3 (store `23de5362`).
+///
+/// D3 requires every configured hat slot to state what the hat is FOR, so the
+/// model table reads self-documenting: five hats fanning out at once are worth
+/// nothing to the operator who cannot tell which seat is which. D3 named `bee
+/// config validate` as the enforcement point; that command was never ported off
+/// Node, and the dispatch door may not enforce it either, because `description`
+/// is DISPLAY-ONLY law (`hooks::model_guard::role_slot_description`) —
+/// `normalize_models` drops the field before any resolver sees it, and nothing
+/// that resolves, guards, or dispatches may read it. So the venue is `bee
+/// doctor`, as an ADVISORY: it reports, it never votes on the verdict ladder,
+/// and no dispatch behavior depends on the field. D3's intent is served and the
+/// display-only law stands unsuperseded.
+///
+/// Reads the RAW config for that same reason — the normalized map has no
+/// `description` to find. Three cases and their answers:
+///
+///   * a string-shaped slot (`"hat-risks": "opus"`) has nowhere to PUT a
+///     description, so it is flagged: it resolves fine, and it still reads as
+///     an unlabelled seat.
+///   * an object slot with no `description`, or an empty/whitespace one, is
+///     flagged — the same emptiness test the door itself applies.
+///   * a `null` slot is a seat switched OFF, not a configured one. It has no
+///     purpose to state and falls through to the advisor at dispatch, so it is
+///     passed over rather than nagged about.
+///
+/// Any key spelled `hat-…` counts, not only the five in `SEAT_ROLES`: an
+/// operator who invents a sixth hat is asking the same question of their own
+/// config, and a rule keyed to a closed list would answer it silently.
+fn hat_slots_missing_a_description(root: &Path, runtime: Runtime) -> Vec<String> {
+    let config = crate::state::read_config_raw(root);
+    let Some(table) = config
+        .get("models")
+        .and_then(|m| m.get(runtime.name()))
+        .and_then(Value::as_object)
+    else {
+        return Vec::new();
+    };
+    let mut missing = Vec::new();
+    for (slot, value) in table {
+        if !slot.to_ascii_lowercase().starts_with(crate::verbs::drivers::HAT_ROLE_PREFIX) {
+            continue;
+        }
+        if value.is_null() {
+            continue;
+        }
+        let described = value
+            .as_object()
+            .and_then(|o| o.get("description"))
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty());
+        if !described {
+            missing.push(slot.clone());
+        }
+    }
+    missing
+}
+
+/// The advisory as doctor publishes it — `None` when every configured hat says
+/// what it is for, so a clean config's payload and lines are byte-identical to
+/// before this row existed.
+///
+/// Status `advisory` is a fourth word beside ok/not_ok/unknown, and it is
+/// deliberately NOT a `Row`: every `Row` votes in `mechanical_ok`, so a hat
+/// missing one sentence would have BLOCKED the runtime. A missing description
+/// costs an operator clarity, never a working dispatch.
+fn hat_description_advisory(root: &Path, runtime: Runtime) -> Option<(Value, String)> {
+    let missing = hat_slots_missing_a_description(root, runtime);
+    if missing.is_empty() {
+        return None;
+    }
+    let detail = format!(
+        "{} hat slot(s) in models.{} carry no description: {} — each hat's purpose belongs in its own slot (\"{}\": {{\"model\": \"…\", \"description\": \"what this hat looks for\"}}), so the config reads self-documenting. Advisory only: it does not change the verdict.",
+        missing.len(),
+        runtime.name(),
+        missing.join(", "),
+        missing[0],
+    );
+    Some((
+        json!({"row": "hat_slot_descriptions", "status": "advisory", "detail": detail.clone()}),
+        detail,
+    ))
+}
+
 /// Source that ships without reinstalling the binary the hooks call is
 /// inert — a pattern this repo has paid for more than once (four features
 /// shipped to main in one session with `.bee/bin/bee` never rebuilt). This
@@ -570,6 +655,14 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
         }
     }
 
+    // D3's advisory rides ALONGSIDE the ladder, never inside it: it is
+    // appended after every row that votes, and `status` below is computed from
+    // `mechanical_ok` and the attestation exactly as it was.
+    let advisory = hat_description_advisory(&root, runtime);
+    if let Some((row, _)) = &advisory {
+        all.push(row.clone());
+    }
+
     // Never ready from presence alone: the ladder is evaluated, not assumed.
     let status = if !mechanical_ok {
         "blocked"
@@ -605,6 +698,9 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
             "  ?    codex trust rows        structurally unknown ({}) — review them in Codex's /hooks TUI, then: bee doctor attest --runtime codex",
             attest.reason
         ));
+    }
+    if let Some((_, detail)) = &advisory {
+        lines.push(format!("  note {:<22} {}", "hat_slot_descriptions", detail));
     }
     lines.push(match status {
         "blocked" => "next: fix the FAIL row(s) above — nothing else can be trusted until they are ok".to_string(),

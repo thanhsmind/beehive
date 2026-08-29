@@ -497,3 +497,117 @@ fn binary_freshness_is_absent_outside_a_source_checkout() {
         "a host project must never carry the binary_freshness row"
     );
 }
+
+// ═══ lane-model-diversity D3 — the hat-description advisory ════════════════
+
+fn repo_with_config(tmp: &Path, config: &str) -> PathBuf {
+    let root = repo(tmp, true, true, None);
+    std::fs::write(root.join(".bee/config.json"), config).unwrap();
+    root
+}
+
+/// D3 — a configured hat that does not say what it is for is named, one hat
+/// per name, so the operator can fix exactly the slots that are silent.
+#[test]
+fn every_configured_hat_without_a_description_is_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = repo_with_config(
+        tmp.path(),
+        r#"{"models":{"claude":{
+            "generation":"sonnet",
+            "advisor":"opus",
+            "lane-1":"fable",
+            "hat-risks":{"model":"haiku","description":"what could go wrong"},
+            "hat-value":{"model":"haiku"},
+            "hat-facts-gaps":{"model":"haiku","description":"   "},
+            "hat-alternatives":"opus"
+        }}}"#,
+    );
+    let missing = hat_slots_missing_a_description(&root, Runtime::Claude);
+    // Reported in the CONFIG's own order, never sorted: the operator is about
+    // to scan their own file top to bottom, and a re-ordered list makes them
+    // hunt for each name.
+    assert_eq!(
+        missing,
+        vec!["hat-value", "hat-facts-gaps", "hat-alternatives"],
+        "an absent, a whitespace-only and a string-shaped hat are all undescribed"
+    );
+    // A LANE is never asked for one — interchangeable seats have no per-seat
+    // purpose to state (D3), and nagging about them would train the operator
+    // to ignore the row.
+    assert!(!missing.iter().any(|s| s.starts_with("lane-")), "{missing:?}");
+    // The advisory names every one of them and says it does not vote.
+    let (row, detail) = hat_description_advisory(&root, Runtime::Claude).expect("an advisory");
+    assert_eq!(row.get("status"), Some(&json!("advisory")));
+    assert_eq!(row.get("row"), Some(&json!("hat_slot_descriptions")));
+    for slot in &missing {
+        assert!(detail.contains(slot.as_str()), "the advisory names {slot}: {detail}");
+    }
+    assert!(detail.contains("does not change the verdict"), "{detail}");
+}
+
+/// The advisory is SILENT when it has nothing to say — a described host, a
+/// hat-less host, and a host whose hats are switched off all read exactly as
+/// they did before this row existed.
+#[test]
+fn a_host_with_nothing_undescribed_gets_no_advisory_at_all() {
+    let tmp = tempfile::tempdir().unwrap();
+    for config in [
+        r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        r#"{"models":{"claude":{"hat-risks":{"model":"haiku","description":"risks"}}}}"#,
+        // A null hat is a seat switched OFF: it falls through to the advisor
+        // at dispatch and has no purpose to state.
+        r#"{"models":{"claude":{"hat-risks":null,"hat-value":null}}}"#,
+        r#"{}"#,
+    ] {
+        let root = repo_with_config(&tmp.path().join(sha256_of(config.as_bytes())), config);
+        assert!(
+            hat_description_advisory(&root, Runtime::Claude).is_none(),
+            "config {config} must raise no advisory"
+        );
+    }
+}
+
+/// The advisory NEVER votes. A host that is otherwise green stays ready with
+/// undescribed hats — a missing sentence costs clarity, never a dispatch — and
+/// the row is not a mechanical row at all.
+#[test]
+fn the_advisory_never_moves_the_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = repo_with_config(
+        tmp.path(),
+        r#"{"models":{"claude":{"generation":"sonnet","hat-risks":"opus"}}}"#,
+    );
+    std::fs::create_dir_all(root.join(".claude")).unwrap();
+    std::fs::write(
+        root.join(".claude/settings.json"),
+        r#"{"hooks":{"PreToolUse":[{"hooks":[{"command":".bee/bin/bee hook"}]}]}}"#,
+    )
+    .unwrap();
+    let rows = rows_of(&root, Runtime::Claude);
+    assert!(
+        rows.iter().all(|(k, _)| k != "hat_slot_descriptions"),
+        "the advisory must not be a mechanical row: {rows:?}"
+    );
+    assert!(
+        rows.iter().all(|(_, ok)| *ok == Some(true)),
+        "fixture must be mechanically green for this test to mean anything: {rows:?}"
+    );
+    assert!(hat_description_advisory(&root, Runtime::Claude).is_some(), "and it does have one");
+}
+
+/// Each runtime answers for its OWN table: a hat described under `codex` says
+/// nothing about the same-named hat under `claude`.
+#[test]
+fn the_advisory_reads_the_runtimes_own_table() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = repo_with_config(
+        tmp.path(),
+        r#"{"models":{
+            "claude":{"hat-risks":{"model":"haiku","description":"risks"}},
+            "codex":{"hat-risks":{"model":"gpt-5"}}
+        }}"#,
+    );
+    assert!(hat_description_advisory(&root, Runtime::Claude).is_none());
+    assert_eq!(hat_slots_missing_a_description(&root, Runtime::Codex), vec!["hat-risks"]);
+}

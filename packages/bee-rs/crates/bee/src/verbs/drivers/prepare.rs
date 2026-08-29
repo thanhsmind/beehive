@@ -272,6 +272,13 @@ pub(crate) fn recorded_str<'a>(cell: Option<&'a Value>, field: &str) -> Option<&
 ///
 /// The advisor is deliberately NOT here: it keeps `resolve_advisor`, one name
 /// and no fall-through at all (decision 4faf1de9).
+///
+/// lane-model-diversity D2 (store `23de5362`) does NOT change that. An
+/// unconfigured SEAT role (`lane-2`, `hat-risks`) falls through to the advisor
+/// at the `--kind advisor` door only, and it does so by REBINDING the role
+/// before resolution — never by appending `advisor` to an ordered list, here
+/// or anywhere. The advisor's tail is still its own floor-less one-name walk,
+/// and a cell declaring a seat role keeps this exact list, byte for byte.
 pub(crate) fn cell_role_list(role: &str) -> Vec<&str> {
     // role-surface-cleanup D1: the tail names skip anything already in the
     // list — a duplicate made the fall-through warn fire twice for one
@@ -1164,7 +1171,47 @@ pub(crate) fn prepare_dispatch_with_brief(
     // resolver can look up, exactly as `classify_marker` hands the guard one.
     // Admitting a spelling here without normalizing it would have moved the
     // two-answers defect one line down instead of closing it.
+    //
+    // lane-model-diversity D2 (store `23de5362`) — SEAT FALL-THROUGH, at the
+    // ADVISOR door and nowhere else. A blind lane or a hat asks for its own
+    // seat (`--role lane-3`, `--role hat-risks`); a host that has not
+    // configured that seat still has to get an advisor rather than a refusal,
+    // because the seats exist to let an operator OPT IN to model diversity and
+    // an un-opted host must keep working exactly as it did.
+    //
+    // Three properties make this narrow rather than a hole in T012a:
+    //
+    //   * Only the eight `SEAT_ROLES` names (closed constant) fall through, so
+    //     a typo'd `hat-risk` is still refused instead of quietly running on
+    //     the advisor's model.
+    //   * Only when the seat's own slot RESOLVES NOTHING — absent, null, or a
+    //     shape `resolve_configured` reads as nothing. A configured seat
+    //     resolves its own model and stamps its own marker (D4).
+    //   * Only on the advisor kind. `default_slot` is `slot_for_kind(kind)`,
+    //     and `advisor` is the one kind that maps to the advisor slot (see
+    //     `slot_map_tests::only_the_advisor_arm_resolves_the_advisor_slot`), so
+    //     `--kind gather --role lane-3` keeps T012a's refusal untouched.
+    //
+    // The fall-through REBINDS the canonical role to `advisor` rather than
+    // walking `[seat, advisor]` through `resolve_role_named`: that walk's last
+    // entry lands on the `Resolved::Budget` floor, which would hand an
+    // unconfigured advisor the session model — verbatim the outcome
+    // `4faf1de9` forbids. Rebinding lands on the advisor arm below, so the
+    // advisor keeps its own one-name walk AND its `advisor_not_configured`
+    // refusal for free.
+    //
+    // Nothing here reads a slot's `description`: that field is display-only
+    // (`hooks/model_guard::role_slot_description`) and `normalize_models` has
+    // already dropped it before `models` exists. D3's "a hat states its
+    // purpose" is enforced as a `bee doctor` advisory over the RAW config
+    // instead, so no resolution, guard, or dispatch decision depends on it.
+    let fallen_through_seat: Option<&'static str> = match role {
+        Some(declared) if default_slot == ADVISOR_ROLE => seat_role_named(declared)
+            .filter(|_| !role_slot_resolves(&models, runtime, declared, kind)),
+        _ => None,
+    };
     let canonical_role: Option<String> = match role {
+        Some(_) if fallen_through_seat.is_some() => Some(ADVISOR_ROLE.to_string()),
         Some(declared) => match known_role_named(&models, runtime, declared) {
             Some(canonical) => Some(canonical),
             None => {
@@ -1686,6 +1733,22 @@ pub(crate) fn prepare_dispatch_with_brief(
         native_confirmed,
     );
     economics.insert("tier_source".into(), Value::String(tier_source.to_string()));
+    // lane-model-diversity D2 — the seat that was ASKED FOR, beside the role
+    // that RESOLVED. `logical_tier` and the `[bee-tier: …]` marker both name
+    // `advisor` on a fallen-through seat (D4: the marker names the resolved
+    // role), so without this key the record cannot tell three lanes that all
+    // fell through apart from three plain advisor consults — and an operator
+    // reading the log to find out whether their seats are wired would have
+    // nothing to read. Present ONLY when a seat actually fell through: every
+    // other dispatch's economics block, envelope and log row stay
+    // byte-identical to before this key existed.
+    //
+    // It rides `economics` because that map is inserted into BOTH the returned
+    // envelope and the appended dispatch-log record, one write reaching both
+    // destinations rather than two that could drift.
+    if let Some(seat) = fallen_through_seat {
+        economics.insert("requested_role".into(), Value::String(seat.to_string()));
+    }
 
     let dispatch_id = pseudo_uuid_v4();
 
@@ -3140,5 +3203,255 @@ mod role_flag_tests {
         let v = envelope(&root, "gather", Some("Generatoin"));
         assert_eq!(v.get("reason"), Some(&json!("role_not_configured")));
         assert_eq!(v.get("role"), Some(&json!("Generatoin")));
+    }
+
+    // ═══ lane-model-diversity — the SEAT roles (D1/D2/D4) ══════════════════
+
+    /// A host that configures the advisor and nothing seat-shaped: every one
+    /// of the eight seats is unconfigured here, which is the state every
+    /// existing host is in the moment this ships.
+    const ADVISOR_ONLY: &str =
+        r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#;
+
+    /// D1 — the eight seats, as the two procedures name them. This asserts the
+    /// CONTENT of the list, not just that a list exists: the constant is what
+    /// `gates-and-delegation.md` cites, so a name silently dropped from it
+    /// would make the doc wrong with nothing red to say so.
+    #[test]
+    fn the_seat_roles_are_the_three_lanes_and_the_five_hats() {
+        assert_eq!(
+            SEAT_ROLES.to_vec(),
+            vec![
+                "lane-1",
+                "lane-2",
+                "lane-3",
+                "hat-facts-gaps",
+                "hat-risks",
+                "hat-value",
+                "hat-alternatives",
+                "hat-user-impact",
+            ]
+        );
+        // Membership folds case, like every other role door.
+        assert_eq!(seat_role_named("lane-2"), Some("lane-2"));
+        assert_eq!(seat_role_named("Lane-2"), Some("lane-2"));
+        assert_eq!(seat_role_named("HAT-RISKS"), Some("hat-risks"));
+        // …and it is CLOSED: a near-miss is not a seat, which is what keeps
+        // D2's fall-through from swallowing typos.
+        for stranger in ["hat-risk", "lane-4", "lane", "hat-", "advisor", "generation", ""] {
+            assert_eq!(seat_role_named(stranger), None, "{stranger} must not be a seat");
+        }
+        // Every hat is prefixed, no lane is — the predicate doctor's advisory
+        // reads.
+        for seat in SEAT_ROLES {
+            assert_eq!(
+                seat.starts_with(HAT_ROLE_PREFIX),
+                seat.starts_with("hat"),
+                "{seat} disagrees with the hat prefix"
+            );
+        }
+    }
+
+    /// D2 — the fall-through, in the two spellings of "this seat carries
+    /// nothing": the key is ABSENT, and the key is present but `null`.
+    ///
+    /// The null case is the one that had a hole. `resolve_role_named`'s last
+    /// entry always resolves, so a walk over `["lane-3"]` would have answered
+    /// `Resolved::Budget` — no model parameter, the subagent inherits the
+    /// SESSION model — for the exact spelling `.bee/config-sample.json`
+    /// teaches for "off". Both spellings must reach the advisor's model.
+    #[test]
+    fn an_unconfigured_seat_resolves_the_advisor_at_the_advisor_door() {
+        for (label, config) in [
+            ("absent", ADVISOR_ONLY),
+            (
+                "null",
+                r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-3":null}}}"#,
+            ),
+            (
+                "shapeless",
+                r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-3":{"nonsense":1}}}}"#,
+            ),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let v = envelope(&root, "advisor", Some("lane-3"));
+            assert_eq!(v.get("ok"), None, "{label}: a seat must not be refused: {v}");
+            assert_eq!(
+                v.get("payload").and_then(|p| p.get("model")),
+                Some(&json!("opus")),
+                "{label}: the advisor's model, never the session model"
+            );
+            // D4 — the marker names the RESOLVED role, so the guard reading it
+            // back sees a name this host configures.
+            let prompt = v
+                .get("payload")
+                .and_then(|p| p.get("prompt"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(prompt.starts_with("[bee-tier: advisor]"), "{label}: {prompt}");
+            let e = v.get("economics").unwrap();
+            assert_eq!(e.get("logical_tier"), Some(&json!("advisor")), "{label}");
+            // …and the seat that was ASKED for is on the record, or three
+            // fallen-through lanes read as three plain advisor consults.
+            assert_eq!(e.get("requested_role"), Some(&json!("lane-3")), "{label}");
+        }
+    }
+
+    /// A CONFIGURED seat is the whole point: it resolves its OWN model and
+    /// travels under its OWN name, so two lanes can run two models.
+    #[test]
+    fn a_configured_seat_resolves_its_own_model_and_names_itself() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-2":"fable","hat-risks":{"model":"haiku","description":"what could go wrong"}}}}"#,
+        );
+        let v = envelope(&root, "advisor", Some("lane-2"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("fable")));
+        let e = v.get("economics").unwrap();
+        assert_eq!(e.get("logical_tier"), Some(&json!("lane-2")));
+        assert_eq!(e.get("requested_role"), None, "nothing fell through, so nothing to record");
+        let prompt = v
+            .get("payload")
+            .and_then(|p| p.get("prompt"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: lane-2]"), "{prompt}");
+        // An object-shaped hat carrying D3's description resolves exactly like
+        // any other object slot: the description is display-only and the
+        // resolver never sees it.
+        let v = envelope(&root, "advisor", Some("hat-risks"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("haiku")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("hat-risks"))
+        );
+        // A string-shaped hat carries no description and STILL resolves —
+        // doctor's advisory flags it, the door does not.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let bare = repo(
+            &tmp2,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","hat-risks":"fable"}}}"#,
+        );
+        let v = envelope(&bare, "advisor", Some("hat-risks"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("fable")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("requested_role")),
+            None,
+            "a described-or-not configured seat is configured"
+        );
+    }
+
+    /// P2-2 — case folding, in both directions. `--role Lane-2` must resolve a
+    /// configured `lane-2` (the config's spelling travels), and fall through
+    /// when the seat is unconfigured. An exact-match seat test would have made
+    /// the mixed-case spelling a stranger and refused it, which is the
+    /// one-question-two-answers defect this codebase already closed twice.
+    #[test]
+    fn a_mixed_case_seat_resolves_and_falls_through_like_its_lowercase_spelling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let on = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","lane-2":"fable"}}}"#,
+        );
+        let v = envelope(&on, "advisor", Some("Lane-2"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("fable")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("lane-2")),
+            "the CONFIG's spelling travels, never the caller's"
+        );
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let off = repo(&tmp2, ADVISOR_ONLY);
+        let v = envelope(&off, "advisor", Some("Lane-2"));
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("opus")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("requested_role")),
+            Some(&json!("lane-2")),
+            "the record names the seat in the constant's own spelling"
+        );
+    }
+
+    /// The fall-through is bounded on BOTH axes it claims to be bounded on.
+    ///
+    /// By KIND: every non-advisor kind keeps T012a's refusal, so an
+    /// unconfigured seat cannot borrow the advisor's model through a `gather`
+    /// or a `reviewer` dispatch.
+    ///
+    /// By NAME: a typo'd seat is refused on the advisor kind too. Falling
+    /// through for any unconfigured name would let `hat-risk` run silently on
+    /// the advisor model, which is the outcome the refusal exists to prevent.
+    #[test]
+    fn the_seat_fall_through_is_bounded_by_kind_and_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, ADVISOR_ONLY);
+        for kind in ["gather", "reviewer"] {
+            for seat in SEAT_ROLES {
+                let v = envelope(&root, kind, Some(seat));
+                assert_eq!(
+                    v.get("reason"),
+                    Some(&json!("role_not_configured")),
+                    "{kind}/{seat}: T012a is unchanged off the advisor door"
+                );
+                assert_eq!(v.get("role"), Some(&json!(seat)), "{kind}/{seat}");
+            }
+        }
+        for typo in ["hat-risk", "lane-4", "lanes-1", "hat-value-add"] {
+            let v = envelope(&root, "advisor", Some(typo));
+            assert_eq!(
+                v.get("reason"),
+                Some(&json!("role_not_configured")),
+                "{typo} is not a seat, so it is refused rather than resolved"
+            );
+        }
+    }
+
+    /// P3-2 — when the advisor is ALSO off, the seat's fall-through lands on
+    /// the advisor's own refusal and says so by its own name. Reporting
+    /// `role_not_configured` here would send the operator to configure the
+    /// seat when what the host actually lacks is the advisor.
+    #[test]
+    fn a_seat_falling_through_to_a_missing_advisor_refuses_as_the_advisor() {
+        for config in [
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":null}}}"#,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let v = envelope(&root, "advisor", Some("lane-1"));
+            assert_eq!(v.get("ok"), Some(&json!(false)), "{config}");
+            assert_eq!(
+                v.get("reason"),
+                Some(&json!("advisor_not_configured")),
+                "{config}: the missing thing is the advisor, and the refusal names it"
+            );
+            let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+            assert!(fix.contains("models.claude.advisor"), "{fix}");
+        }
+    }
+
+    /// Nothing moved for anyone who never names a seat. A `--kind advisor`
+    /// dispatch with no `--role`, and every other kind's default path, are
+    /// byte-identical to the pre-seat spelling.
+    #[test]
+    fn a_dispatch_that_names_no_seat_is_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, ADVISOR_ONLY);
+        for kind in DISPATCH_KINDS {
+            if kind == "cell" {
+                continue; // a cell dispatch needs a claimed cell; covered above
+            }
+            let v = envelope(&root, kind, None);
+            let e = v.get("economics").unwrap();
+            assert_eq!(e.get("requested_role"), None, "{kind}: no seat, no key");
+        }
+        let v = envelope(&root, "advisor", None);
+        assert_eq!(v.get("payload").and_then(|p| p.get("model")), Some(&json!("opus")));
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("tier_source")),
+            Some(&json!("default"))
+        );
     }
 }
