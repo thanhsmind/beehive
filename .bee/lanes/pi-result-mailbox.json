@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Khối bọc chưa đóng và còn một bullet thứ hai — sửa nốt.",
-    "asked_at": "2026-08-29T21:55:49.894Z",
+    "subject": "▸ Bài học đã vào hàng capture. Release đang chạy: full suite → commit → tag → push → chờ CI. Sẽ báo khi có dòng `OK` cuối (hoặc lỗi kèm log",
+    "asked_at": "2026-08-29T22:06:15.619Z",
     "session": "a95c772f-e050-490b-98ad-5511130f6b08"
   },
   "route": {
