@@ -410,7 +410,12 @@ pub(crate) fn contract_status_over(
 
 /// `contract_status_over` with both reads performed for you — the
 /// one-decision spelling.
-#[allow(dead_code)] // the tripwire that consumes this lands with S4
+// Still marked: S4's tripwire walks a WHOLE `cell.decisions` list, so it
+// hoists the two reads itself and takes `contract_status_over` directly —
+// paying three store reads per cell instead of three per citation. This
+// spelling stays as the single-decision entry point (the derived-status
+// tests drive it) and for the next caller that has one id and no list.
+#[allow(dead_code)]
 pub(crate) fn contract_status(root: &Path, id: &str) -> Ex<ContractStatus> {
     let active = active_decision_ids(root)?;
     Ok(contract_status_over(&active, &open_trigger_decision_keys(root), id))
@@ -430,13 +435,20 @@ pub(crate) fn contract_status(root: &Path, id: &str) -> Ex<ContractStatus> {
 /// record field and may not):
 ///
 /// - an exact id match resolves;
-/// - a prefix of AT LEAST 8 characters matching EXACTLY ONE active
-///   decision resolves;
+/// - a prefix of AT LEAST 8 characters matching EXACTLY ONE candidate
+///   resolves;
 /// - anything shorter than 8 characters resolves to `None`, ambiguous or
 ///   not — `D1` must never resolve by accident;
-/// - a prefix matching two or more active decisions resolves to `None`,
-///   because a guard cannot guess which one was meant.
-#[allow(dead_code)] // the tripwire that consumes this lands with S4
+/// - a prefix matching two or more candidates resolves to `None`, because
+///   a guard cannot guess which one was meant.
+///
+/// The candidate set is the CALLER's, and which set it hands over decides
+/// what the answer means. S4's tripwire (verbs/cells/handlers_write.rs)
+/// passes the active+ARCHIVE union of decide/supersede ids, never the
+/// active set alone: a superseded id is exactly the one D3 wants refused,
+/// and against the active set it would resolve to `None` and be passed
+/// over. Resolution answers "is this entry a store citation"; the ACTIVE
+/// set's job is the separate question `contract_status_over` asks.
 pub(crate) fn resolve_store_citation(active_ids: &[String], entry: &str) -> Option<String> {
     let raw = js_trim(entry);
     if raw.is_empty() {

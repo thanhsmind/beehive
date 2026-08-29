@@ -90,6 +90,29 @@ block at all, byte-identically to the pre-anchor payload. The anchor itself
 is owned by
 [`../hook-runtime/the-intent-anchor-and-compaction-survival.md`](../hook-runtime/the-intent-anchor-and-compaction-survival.md).
 
+**A cell may not run against an unsettled or retired contract decision
+(slp-contract-original-request, cell scor-4, 2026-08-29).** The cell's
+existing `decisions` field is the citation slot, and one shared check reads
+it at TWO doors: the claim body (which `cells claim`, `cells claim-next` and
+`dispatch prepare --claim` all funnel through) and `dispatch prepare
+--kind cell`. Both, not one: a cell claimed BEFORE its cited decision was
+superseded, or before a trigger keyed to it reopened, slips a claim-only
+tripwire entirely. The check refuses on `CONTRACT_RETIRED` (the cited
+decision left the active set) and on `CONTRACT_UNSETTLED` (it is active but
+carries an open `waiting`/`due` trigger), and it mutates nothing on either
+path — the claim door releases its claim file and leaves the cell `open`,
+and the trigger store is byte-identical because the read goes through the
+non-evaluating trigger reader.
+
+The half that decides whether the guard is usable: an entry that does not
+resolve to a store decision is **passed over** — silently, refusing nothing.
+`cell.decisions` is dominated by local `D1`-style ids pointing into a
+CONTEXT.md table; only 13% of live citations resolve to the store, so
+refusing on an unresolvable entry would stall 87% of citing cells. The
+matching authoring-side repair is that `bee cells add` now refuses any
+`status` but `open`: a payload could otherwise mint an already-`claimed`
+cell that never passed the claim door at all.
+
 **B8 — Unified command discovery and dispatch.** Every workflow operation — all
 nine verb groups — is available both through its specialized entry point and
 through one unified entry point, and the unified side owns the single
@@ -157,6 +180,42 @@ decision 80b64c20).
   key. With nothing resolvable, every runtime × kind payload is byte-identical
   to its pre-anchor bytes (slp-contract-original-request D5, D6; decisions
   3899fa60, 9c0104e0).
+- R16 — A cell's `decisions` entries are checked at BOTH the claim door
+  (`bee cells claim`, `cells claim-next`, `dispatch prepare --claim` — all
+  three funnel through one claim body) and the dispatch door
+  (`dispatch prepare --kind cell`), through ONE shared check. Both doors are
+  needed: a cell claimed BEFORE its cited decision changed state slips a
+  claim-only tripwire, and the claim door cannot see that window. The check
+  refuses on two derived statuses — `CONTRACT_RETIRED` (the cited decision
+  is not in the ACTIVE set: superseded, redacted or archived; the store has
+  no `retired` state, so that is what "retired" means) and
+  `CONTRACT_UNSETTLED` (the decision is active but a trigger keyed to it is
+  `waiting` or `due`). `settled` passes. Every refusal is typed and mutates
+  nothing: the claim door releases its claim file and leaves the cell
+  `open`; the dispatch door records no dispatch; the trigger store is
+  byte-identical, because the read goes through the non-evaluating trigger
+  reader rather than the one `triggers list` uses
+  (slp-contract-original-request D2, D3; decisions 9c0104e0, ca9960f5).
+- R17 — An entry in `cell.decisions` that does NOT resolve to a store
+  decision is passed over: refusing nothing, warning nothing. The field does
+  not hold store decision ids. Measured over the 92 live cells: 48 cite
+  something, 81 citations total, only 11 (13%) resolve, and the
+  entry-length histogram is `{2: 61, 3: 5, 8: 11, 24: 1, 25: 3}` — the field
+  is dominated by LOCAL D-IDs (`D1`, `D2`) pointing into a CONTEXT.md table.
+  Refusing on an unresolvable entry would refuse 87% of citing cells for
+  using the field the way the repo has always used it. An entry resolves on
+  an exact id, or on a prefix of at least 8 characters matching exactly one
+  candidate; resolution runs against the active+ARCHIVE union, never the
+  active set alone, which is what makes the retired case reachable at all
+  (slp-contract-original-request D3; decision 9c0104e0).
+- R18 — A new cell's `status` must be `open` or absent. `bee cells add`
+  refuses any other value, naming the field and the verb that owns the
+  transition. Without it, `"status":"claimed"` in the payload minted a cell
+  that never passed the claim door, so every pre-claim deny — the citation
+  tripwire, the red base, the no-route escalation, the uncapped-deps check —
+  was bypassable in one line of JSON. Scoped to authoring: the
+  claim/verify/cap/block/drop transitions keep their own guards
+  (slp-contract-original-request D3; decision 9c0104e0).
 
 ## Edge Cases Settled
 
@@ -165,6 +224,15 @@ decision 80b64c20).
   while diagnostics can still report that discovery metadata changed.
 - A missing required parameter, a value with the wrong shape, or an unknown
   command is rejected before any workflow record changes.
+- A citation tripwire that cannot read the decision log warns on stderr and
+  lets the work through, rather than refusing on evidence it never read —
+  the same "cannot know" arm the red-base deny already takes.
+- The tripwire is tag-blind. `contract:<name>` names which decisions are
+  contracts for a human reader; the derived status the doors consume joins
+  the active decision set against open triggers and never reads a tag. So an
+  untagged active decision passes exactly like a tagged one, and an untagged
+  decision with an open trigger refuses exactly like a tagged one — the
+  fail-safe direction for a refusal path.
 
 ## Pointers (implementation)
 
@@ -179,6 +247,18 @@ decision 80b64c20).
   2-line forwarder with byte-identical output, then shim-retire (D1, decision
   bbc6bcea; `.bee/cells/shim-retire-{1..6}.json`) deleted those forwarders
   outright — `bee` is now the sole shipped CLI, no forwarders remain.
+- Contract-citation tripwire (R16, R17): one shared check,
+  `contract_citation_refusal` in
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs`, called from
+  the claim body beside the `RED_BASE` deny and from `prepare`'s
+  `kind == "cell"` arm in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`. The derived
+  status and the citation resolver it consumes live in
+  `packages/bee-rs/crates/bee/src/verbs/decisions/read.rs`
+  (`contract_status_over`, `resolve_store_citation`,
+  `open_trigger_decision_keys`). The authoring-side status refusal (R18) is
+  in `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs`
+  (`validate_new_cell_problems`). Evidence: `.bee/cells/scor-4.json`.
 - Unknown-flag rejection (R14): `main()` in `the bee binary` (mirrored
   `.bee/bin/bee`), firing after `validate()` and before every handler
   dispatch; registry gaps declared in `packages/bee/lib/command-registry.mjs`

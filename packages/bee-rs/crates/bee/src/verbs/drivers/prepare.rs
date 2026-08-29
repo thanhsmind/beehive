@@ -1090,6 +1090,31 @@ pub(crate) fn prepare_dispatch_with_brief(
             ov.insert("note".into(), Value::String("advisory bypass only — cell.trace.worker (the actual claim owner) was NOT transferred; no correct transfer primitive exists on this ownership axis (see comment above).".into()));
             ownership_override = Some(Value::Object(ov));
         }
+        // slp-contract S4 (D3, store 9c0104e0) — the SECOND door of the
+        // contract-citation tripwire, running the SAME shared check the
+        // claim body runs (`cells::contract_citation_refusal`), never a
+        // second copy of the walk. Why both: a cell claimed BEFORE its
+        // cited decision was superseded, or before a trigger keyed to it
+        // reopened, slips a claim-only check entirely — the claim door
+        // cannot see that window — and D3's letter names the dispatch.
+        //
+        // Placed AFTER the ownership refusal on the same ordering principle
+        // the claim door uses: who owns the claim is a fact about the
+        // caller and answers first; the citations are a fact about the
+        // cell. `--force-ownership` deliberately does not reach here — that
+        // flag is an ownership bypass and nothing else.
+        if let Some(refusal) =
+            crate::verbs::cells::contract_citation_refusal(root, cell_id, Some(&loaded))
+        {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String(refusal.code.to_ascii_lowercase()));
+            r.insert("code".into(), Value::String(refusal.code.to_string()));
+            r.insert("cell".into(), Value::String(cell_id.to_string()));
+            r.insert("fix".into(), Value::String(refusal.message));
+            return Ok(Prepared::Value(Value::Object(r)));
+        }
         resolved_worker = Some(trimmed);
         cell = Some(loaded);
     }

@@ -1056,6 +1056,136 @@ pub(crate) fn red_base_refusal(control: &Path, cell_id: &str, fix_first: Option<
     }
 }
 
+// ─── slp-contract S4: the contract-citation tripwire (D3, store 9c0104e0) ──
+//
+// D3 locks that a cell cites contract decisions in the EXISTING
+// `cell.decisions` field, and that a tripwire refuses the dispatch when a
+// cited decision is retired or trigger-waiting. This is that tripwire, and
+// it is the ONE producer of the refusal — both doors that check it (the
+// claim body below, and `dispatch prepare`'s `kind == "cell"` arm in
+// verbs/drivers/prepare.rs) call this function rather than each walking
+// the field themselves. A rule checked at two points needs one shared
+// read, or the two points drift and the guard stops meaning one thing.
+//
+// WHAT IT REFUSES ON, and — the load-bearing half — what it does NOT:
+//
+// `cell.decisions` does not hold store decision ids. Measured over the 92
+// live cells: 48 cite something, 81 citations total, and only 11 (13%)
+// resolve to a decision in `.bee/decisions.jsonl`; the entry-length
+// histogram is `{2: 61, 3: 5, 8: 11, 24: 1, 25: 3}`, so the field is
+// dominated by LOCAL D-IDs (`D1`, `D2`) pointing into a CONTEXT.md table.
+// An entry that does not resolve to a store decision is therefore PASSED
+// OVER — silently, refusing nothing and warning nothing. Refusing on it
+// would refuse 87% of citing cells for using the field the way this repo
+// has always used it, and a false refusal stalls every worker.
+//
+// An entry that DOES resolve is checked, and refuses on two of the three
+// derived statuses (verbs/decisions/read.rs, S3):
+//
+//   - `Unknown` — the id is not in the ACTIVE decision set. That is D3's
+//     word "retired", resolved: the store has no `retired` state, only
+//     supersession, redaction and archiving, and all three drop the id out
+//     of `active_decisions`.
+//   - `Unsettled` — active, but a trigger keyed to it is `waiting` or
+//     `due`, so the contract it names has an unanswered revisit condition
+//     (D2).
+//
+// `Settled` passes. So does a cell with no `decisions` field, an empty
+// list, or a list of local D-IDs only — and each of those costs zero store
+// reads, because the walk returns before the first one.
+//
+// Resolution runs against the active+archive UNION of decide/supersede
+// events (`decision_target_candidates`), never against the active set
+// alone. That is what makes the `Unknown` arm reachable at all: a
+// superseded id is not active, so resolving against the active set would
+// hand back `None` and pass the very citation D3 exists to refuse.
+
+/// One refused citation, in the grammar each door dresses in its own way.
+pub(crate) struct ContractCitationRefusal {
+    /// The claim door's typed code; the dispatch door lowercases it into
+    /// its own `reason` field.
+    pub(crate) code: &'static str,
+    /// The whole sentence — IDENTICAL at both doors, because there is one
+    /// producer of it. The same cell refused at claim and at dispatch reads
+    /// the same, which is the only way a worker can tell it is one rule.
+    pub(crate) message: String,
+}
+
+/// The tripwire. `None` means "nothing to refuse on" — including every
+/// unresolvable entry, and including a store this call could not read.
+///
+/// Zero mutation, by construction: `active_decision_ids` and
+/// `decision_target_candidates` are plain JSONL reads, and
+/// `open_trigger_decision_keys` goes through
+/// `triggers::read_without_evaluating`, the read that leaves every trigger
+/// file byte-identical (the ordinary `triggers list` reader persists a
+/// waiting-to-due flip mid-read; a refusal path may not).
+///
+/// Reads are hoisted ABOVE the walk: a cell citing N decisions pays three
+/// store reads, never three per citation.
+pub(crate) fn contract_citation_refusal(
+    root: &Path,
+    cell_id: &str,
+    cell: Option<&Value>,
+) -> Option<ContractCitationRefusal> {
+    let entries: Vec<String> = match cell.and_then(|c| c.get("decisions")) {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| match v {
+                Value::String(s) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    if entries.is_empty() {
+        return None;
+    }
+    let known_ids: Vec<String> = crate::verbs::decisions::decision_target_candidates(root)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    let active_ids = match crate::verbs::decisions::active_decision_ids(root) {
+        Ok(ids) => ids,
+        Err(_) => {
+            // Same shape as `red_base_refusal`'s Unknown arm above: a guard
+            // that cannot read its evidence says so out loud and lets the
+            // work through, rather than refusing on a store it never read.
+            eprintln!(
+                "WARNING: the decision log could not be read — cannot check cell \"{cell_id}\"'s contract citations; claim proceeding."
+            );
+            return None;
+        }
+    };
+    let open_trigger_keys = crate::verbs::decisions::open_trigger_decision_keys(root);
+    for entry in &entries {
+        let Some(id) = crate::verbs::decisions::resolve_store_citation(&known_ids, entry) else {
+            continue; // a local D-ID, or an id this store never logged
+        };
+        let short = crate::textutil::truncate_chars_head(&id, 8);
+        match crate::verbs::decisions::contract_status_over(&active_ids, &open_trigger_keys, &id) {
+            crate::verbs::decisions::ContractStatus::Settled => {}
+            crate::verbs::decisions::ContractStatus::Unknown => {
+                return Some(ContractCitationRefusal {
+                    code: "CONTRACT_RETIRED",
+                    message: format!(
+                        "cell \"{cell_id}\" refused — its \"decisions\" field cites \"{entry}\", which resolves to store decision {id}, and that decision is no longer in the active set (superseded, redacted or archived). D3: work may not run against a retired contract decision — the contract it names has already been replaced. FIX: run `bee decisions active --json` to find the decision that replaced {short}, cite that id instead (`bee cells update --id \"{cell_id}\" --stdin` with a `{{\"decisions\": [...]}}` patch — the cell is still open, so it is updatable), then retry."
+                    ),
+                });
+            }
+            crate::verbs::decisions::ContractStatus::Unsettled => {
+                return Some(ContractCitationRefusal {
+                    code: "CONTRACT_UNSETTLED",
+                    message: format!(
+                        "cell \"{cell_id}\" refused — its \"decisions\" field cites \"{entry}\", which resolves to store decision {id}, and that decision still carries an OPEN revisit trigger (waiting or due), so the contract it names is unsettled. D2/D3: work may not run against a contract nobody has settled — tests written against it would mint the contract instead of checking it. FIX: run `bee triggers list` to see the open trigger keyed to {short}, settle it (`bee triggers resolve --id <trigger> --outcome \"<what settled>\"`, or supersede the decision), then retry."
+                    ),
+                });
+            }
+        }
+    }
+    None
+}
+
 // ─── D4 (route-record warn-to-deny escalation, docs/history/counter-teeth
 // CONTEXT.md) ────────────────────────────────────────────────────────────
 //
@@ -1483,6 +1613,27 @@ pub(crate) fn claim_cell_cross_session_ex(
     if let Some(reason) = red_base_refusal(control, &cell_id, fix_first) {
         release_claim(control, session, &cell_id)?;
         return Ok(CrossClaim::Refused { code: "RED_BASE".to_string(), reason });
+    }
+    // slp-contract S4 (D3, store 9c0104e0) — the contract-citation tripwire,
+    // in the SAME pre-store-lock slot and with the SAME unwind as the three
+    // denies above, for the same reason each of them states: a refusal here
+    // releases the claim file and never touches cell status. This ONE
+    // placement covers `cells claim`, `cells claim-next` and `dispatch
+    // prepare --claim`, because all three funnel through this body.
+    //
+    // Ordered LAST of the four pre-lock denies, on the same principle the
+    // D4 and D2 notes above set out: a racing loser sees CLAIMED, a session
+    // owed its one-time route warning sees NO_ROUTE_RECORD, and a red base
+    // sees RED_BASE — each of those is a fact about the CLAIMANT, and it
+    // outranks a fact about the cell's citations. `cell_for_budget` is the
+    // caller's already-read record (Some on all three doors), so this pays
+    // no second cell read.
+    if let Some(refusal) = contract_citation_refusal(root, &cell_id, cell_for_budget) {
+        release_claim(control, session, &cell_id)?;
+        return Ok(CrossClaim::Refused {
+            code: refusal.code.to_string(),
+            reason: refusal.message,
+        });
     }
     // claimCell under the per-cell store lock; every throw unwinds the
     // claim file and surfaces as CLAIM_CELL_FAILED.

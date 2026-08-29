@@ -3074,6 +3074,211 @@ use std::time::Instant;
         assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-8", Some("bee-w8")).unwrap());
     }
 
+    // ══ slp-contract S4 — the contract-citation tripwire at the DISPATCH door ══
+    //
+    // Coverage audit before authoring (`.bee/expertise/tests.md`):
+    //   - verbs/cells/tests.rs now pins the CLAIM door over the same rule
+    //     (four refuse cases, six allow cases, zero mutation on each
+    //     refusal).
+    //   - this file already pins prepare's typed refusal grammar for
+    //     `claim_ownership` ("claim_less_prepare_of_cell_owned_by_another…")
+    //     and for an unmapped kind.
+    //   - Gap: the dispatch door over a citation, and — the reason there
+    //     are two doors at all — the claim-then-change window the claim
+    //     door structurally cannot see.
+
+    fn cit_repo(tmp: &tempfile::TempDir) -> PathBuf {
+        let root = repo(tmp, r#"{"models":{"claude":{"generation":"sonnet","code":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/lanes/cit.json",
+            r#"{"feature":"cit","approved_gates":{"execution":true},"route":true}"#,
+        );
+        w(
+            &root,
+            ".bee/test-results.json",
+            r#"{"ran_at":"2026-01-01T00:00:00.000Z","green":true,"commands":[{"command":"cargo test","exit":0,"duration_ms":1,"failure_excerpt":null}]}"#,
+        );
+        root
+    }
+
+    const CIT_SETTLED: &str = "11111111-0000-0000-0000-000000000001";
+    const CIT_RETIRED: &str = "22222222-0000-0000-0000-000000000002";
+    const CIT_WAITING: &str = "33333333-0000-0000-0000-000000000003";
+    const CIT_REPLACEMENT: &str = "77777777-0000-0000-0000-000000000007";
+
+    fn cit_decide(id: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d","rationale":"r","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn cit_supersede(id: &str, target: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"supersede","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r","supersedes":"{target}","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn cit_write_decisions(root: &Path, lines: &[String]) {
+        w(root, ".bee/decisions.jsonl", &format!("{}\n", lines.join("\n")));
+    }
+
+    /// A cell already CLAIMED by `w` — the state every `dispatch prepare
+    /// --kind cell` sees.
+    fn cit_claimed_cell(root: &Path, id: &str, decisions: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"cit","title":"t","status":"claimed","decisions":{decisions},"trace":{{"worker":"w"}}}}"#
+            ),
+        );
+    }
+
+    /// The window that justifies a SECOND door: the cell was claimed while
+    /// its citation was settled, and the decision was superseded
+    /// afterwards. The claim door cannot see that — it already ran — so a
+    /// claim-only tripwire would dispatch this worker against a retired
+    /// contract. D3's letter names the dispatch, and this is why.
+    #[test]
+    fn dispatching_a_cell_whose_citation_went_retired_after_the_claim_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_claimed_cell(&root, "c-cit", &format!(r#"["{CIT_RETIRED}"]"#));
+        // The store as it was at claim time: the citation was ACTIVE, so
+        // the claim door had nothing to refuse on.
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED)]);
+        assert!(
+            crate::verbs::cells::contract_citation_refusal(
+                &root,
+                "c-cit",
+                Some(&read_cell(&root, "c-cit").unwrap().unwrap())
+            )
+            .is_none(),
+            "the fixture must start settled, or this test proves nothing about the window"
+        );
+
+        // Now it is superseded — the change the claim door never saw.
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)]);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-cit"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        assert_eq!(v.get("ok"), Some(&json!(false)), "payload: {v}");
+        assert_eq!(v.get("type"), Some(&json!("refused")), "payload: {v}");
+        assert_eq!(v.get("reason"), Some(&json!("contract_retired")), "payload: {v}");
+        assert_eq!(v.get("code"), Some(&json!("CONTRACT_RETIRED")), "payload: {v}");
+        assert_eq!(v.get("cell"), Some(&json!("c-cit")), "payload: {v}");
+        let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert!(fix.contains(CIT_RETIRED), "the fix names the decision: {v}");
+        assert!(fix.contains("bee decisions active"), "payload: {v}");
+        // No envelope leaked out beside the refusal, and nothing was written.
+        assert!(v.get("payload").is_none(), "a refusal carries no dispatch payload: {v}");
+        assert_eq!(read_cell(&root, "c-cit").unwrap().unwrap()["status"], json!("claimed"));
+        assert!(!root.join(".bee/logs/dispatch.jsonl").exists(), "a refusal records no dispatch");
+    }
+
+    /// The unsettled arm at the same door: an ACTIVE decision whose trigger
+    /// is still waiting.
+    #[test]
+    fn dispatching_a_cell_citing_an_unsettled_contract_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_claimed_cell(&root, "c-cit", &format!(r#"["{CIT_WAITING}"]"#));
+        cit_write_decisions(&root, &[cit_decide(CIT_WAITING)]);
+        w(
+            &root,
+            ".bee/triggers/upstream__33333333.json",
+            r#"{"id":"upstream__33333333","decision":"33333333","condition":"revisit when upstream lands","tier":"manual","predicate":null,"status":"waiting","created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","outcome":null}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-cit"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        assert_eq!(v.get("reason"), Some(&json!("contract_unsettled")), "payload: {v}");
+        assert_eq!(v.get("code"), Some(&json!("CONTRACT_UNSETTLED")), "payload: {v}");
+        assert!(
+            v.get("fix").and_then(Value::as_str).unwrap_or_default().contains("bee triggers list"),
+            "payload: {v}"
+        );
+    }
+
+    /// The two doors are ONE rule, not two that happen to agree today: the
+    /// same cell refused at the claim door and at the dispatch door carries
+    /// the IDENTICAL sentence, because there is one producer of it
+    /// (`cells::contract_citation_refusal`). A fixture that cannot diverge
+    /// is the only proof worth having here.
+    #[test]
+    fn the_claim_door_and_the_dispatch_door_refuse_with_the_same_sentence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        cit_write_decisions(&root, &[cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)]);
+        // OPEN — the claim door's shape.
+        w(
+            &root,
+            ".bee/cells/c-both.json",
+            &format!(
+                r#"{{"id":"c-both","feature":"cit","title":"t","status":"open","decisions":["{CIT_RETIRED}"]}}"#
+            ),
+        );
+        let claim_refusal = match crate::verbs::cells::claim_cell_from_flags(
+            &root, "c-both", "w", Some("sess-1"), None,
+        ) {
+            Err(crate::verbs::cells::Fail::Thrown(m)) => m,
+            Err(crate::verbs::cells::Fail::Delegate) => panic!("unexpected delegate"),
+            Ok(_) => panic!("the claim door must refuse a retired citation"),
+        };
+        // The claim door refused, so the cell is still open — CLAIMED by
+        // hand for the dispatch door, which is the state it always sees.
+        assert_eq!(read_cell(&root, "c-both").unwrap().unwrap()["status"], json!("open"));
+        cit_claimed_cell(&root, "c-both", &format!(r#"["{CIT_RETIRED}"]"#));
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-both"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected a refusal value")
+        };
+        let dispatch_sentence = v.get("fix").and_then(Value::as_str).unwrap_or_default();
+        assert_eq!(
+            claim_refusal,
+            format!("claim: CONTRACT_RETIRED — {dispatch_sentence}"),
+            "the two doors must speak one sentence, not two that agree by luck"
+        );
+    }
+
+    /// ALLOW — a settled citation dispatches normally, and a list of local
+    /// D-IDs dispatches normally. The dispatch door repeats the claim
+    /// door's pass-over rule exactly: an entry that resolves to no store
+    /// decision refuses nothing.
+    #[test]
+    fn a_settled_or_local_citation_dispatches_normally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = cit_repo(&tmp);
+        // A store holding a retired decision, so the allow is proven to be
+        // about resolution rather than about an empty store.
+        cit_write_decisions(
+            &root,
+            &[cit_decide(CIT_SETTLED), cit_decide(CIT_RETIRED), cit_supersede(CIT_REPLACEMENT, CIT_RETIRED)],
+        );
+
+        for decisions in [format!(r#"["{CIT_SETTLED}"]"#), r#"["D1","D2"]"#.to_string(), "[]".to_string()] {
+            cit_claimed_cell(&root, "c-ok", &decisions);
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", "cell", Some("c-ok"), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope for {decisions}")
+            };
+            assert_eq!(v.get("tool"), Some(&json!("Agent")), "{decisions} must dispatch: {v}");
+            assert!(v.get("type").is_none(), "{decisions} must not be refused: {v}");
+        }
+    }
+
     #[test]
     fn absent_probe_record_classifies_budget_only_without_a_subprocess() {
         let tmp = tempfile::tempdir().unwrap();

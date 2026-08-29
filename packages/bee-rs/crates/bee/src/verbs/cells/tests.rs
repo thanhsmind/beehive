@@ -1679,6 +1679,383 @@ use std::time::Instant;
         assert!(!refusal.contains("RED_BASE"), "{refusal}");
     }
 
+    // ══ slp-contract S4 — the contract-citation tripwire at the CLAIM door ══
+    //
+    // Coverage audit before authoring (`.bee/expertise/tests.md`):
+    //   - verbs/decisions/tests.rs already pins the DERIVATION in isolation
+    //     ("an_active_decision_with_no_trigger_reads_as_settled",
+    //     "…_with_a_waiting_trigger_reads_as_unsettled",
+    //     "…_with_a_due_trigger_reads_as_unsettled", the superseded/unknown
+    //     case, the four `resolve_store_citation` cases, and the
+    //     byte-identity of the trigger store across that read).
+    //   - this file already pins the claim door's OTHER pre-lock denies
+    //     ("claim_warns_once_per_session_then_refuses_until_routed",
+    //     "claim_refuses_on_a_red_base_unless_fix_first_escapes_it",
+    //     "already_claimed_refusal_outranks_the_red_base_deny").
+    //   - Gap: nothing tests the DOOR over a citation — neither the refusals
+    //     nor, the half that stalls workers when it is wrong, the allows.
+    // So these test the door, and never re-derive the status.
+
+    /// Decision ids whose short8s are distinct and readable in a failure
+    /// line. Real ids are lowercase hex uuids; these keep that shape.
+    const CIT_ACTIVE: &str = "11111111-0000-0000-0000-000000000001";
+    const CIT_RETIRED: &str = "22222222-0000-0000-0000-000000000002";
+    const CIT_WAITING: &str = "33333333-0000-0000-0000-000000000003";
+    const CIT_DUE: &str = "44444444-0000-0000-0000-000000000004";
+    const CIT_RESOLVED: &str = "55555555-0000-0000-0000-000000000005";
+    const CIT_UNTAGGED: &str = "66666666-0000-0000-0000-000000000006";
+    const CIT_REPLACEMENT: &str = "77777777-0000-0000-0000-000000000007";
+
+    fn decide_event(id: &str, tags: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d","rationale":"r","tags":[{tags}]}}"#
+        )
+    }
+
+    /// A later event that retires `target` — the store's only "retired"
+    /// shape, and the one D3's word resolves to.
+    fn supersede_event(id: &str, target: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","type":"supersede","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r","supersedes":"{target}","tags":["contract:cell-store"]}}"#
+        )
+    }
+
+    fn write_decision_events(root: &Path, lines: &[String]) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("decisions.jsonl"),
+            format!("{}\n", lines.join("\n")),
+        )
+        .unwrap();
+    }
+
+    /// One trigger record file. `decision` is the SHORT8 the real store
+    /// writes, never the full id — the join this door depends on.
+    fn write_trigger_fixture(
+        root: &Path,
+        id: &str,
+        decision_short8: &str,
+        tier: &str,
+        predicate: Option<&str>,
+        status: &str,
+    ) -> PathBuf {
+        let dir = root.join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        let record = json!({
+            "id": id,
+            "decision": decision_short8,
+            "condition": "revisit when upstream lands",
+            "tier": tier,
+            "predicate": predicate,
+            "status": status,
+            "created_at": "2026-08-16T00:00:00.000Z",
+            "updated_at": "2026-08-16T00:00:00.000Z",
+            "outcome": null,
+        });
+        let path = dir.join(format!("{id}.json"));
+        std::fs::write(&path, format!("{record}\n")).unwrap();
+        path
+    }
+
+    /// A claimable open cell that cites `decisions`, on a routed feature
+    /// with a green recorded base — so the ONLY door that can refuse it is
+    /// the citation tripwire.
+    fn citing_cell(root: &Path, id: &str, decisions: Value) {
+        lane_with_route(root, "cit");
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+        let mut c = cell(id, "open", "cit", json!([]));
+        c["decisions"] = decisions;
+        write_cell_fixture(root, id, &c);
+    }
+
+    /// Every refusal path owes this: the cell is still open, nothing was
+    /// stamped on it, and the claim file it took was released.
+    fn assert_untouched_by_refusal(root: &Path, id: &str) {
+        let record = read_cell_norm(root, id).ok().unwrap().unwrap();
+        assert_eq!(record["status"], json!("open"), "a refusal must not move cell status");
+        assert!(
+            record.get("trace").and_then(|t| t.get("worker")).is_none(),
+            "a refusal must not stamp a worker"
+        );
+        assert!(
+            !claims_dir(root).join(format!("{id}.json")).exists(),
+            "a refusal must release the claim file it took"
+        );
+    }
+
+    /// REFUSE — a citation that resolves to a SUPERSEDED decision. The
+    /// store has no `retired` state, so this is what D3's word means, and
+    /// the cell is left exactly as it was.
+    #[test]
+    fn claiming_a_cell_citing_a_retired_decision_is_refused_and_leaves_it_open() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_RETIRED, r#""contract:cell-store""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-retired", json!([CIT_RETIRED]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-retired", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_RETIRED — cell \"cit-retired\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(CIT_RETIRED), "the refusal names what it resolved to: {refusal}");
+        assert!(refusal.contains("no longer in the active set"), "{refusal}");
+        assert!(refusal.contains("bee decisions active"), "the FIX names a reachable remedy: {refusal}");
+        assert_untouched_by_refusal(root, "cit-retired");
+    }
+
+    /// REFUSE — an ACTIVE decision whose trigger is still `waiting`: the
+    /// revisit condition is attached and unanswered, so the contract is
+    /// unsettled (D2). The trigger file is byte-identical afterwards — a
+    /// refusal path that writes is not a refusal path.
+    #[test]
+    fn claiming_a_cell_citing_a_decision_with_a_waiting_trigger_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_WAITING, r#""contract:cell-store""#)]);
+        let trigger =
+            write_trigger_fixture(root, "upstream__33333333", "33333333", "manual", None, "waiting");
+        let before = std::fs::read(&trigger).unwrap();
+        citing_cell(root, "cit-waiting", json!([CIT_WAITING]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-waiting", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNSETTLED — cell \"cit-waiting\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(CIT_WAITING), "{refusal}");
+        assert!(refusal.contains("OPEN revisit trigger"), "{refusal}");
+        assert!(refusal.contains("bee triggers list"), "the FIX names a reachable remedy: {refusal}");
+        assert_untouched_by_refusal(root, "cit-waiting");
+        assert_eq!(
+            std::fs::read(&trigger).unwrap(),
+            before,
+            "the tripwire must not rewrite the trigger store it read"
+        );
+    }
+
+    /// REFUSE — the other open status: a predicate-tier trigger already
+    /// flipped to `due`. Same refusal, because "unsettled" is waiting OR
+    /// due, and a door that knew only one of them would be a law with a
+    /// hole.
+    #[test]
+    fn claiming_a_cell_citing_a_decision_with_a_due_trigger_is_refused() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_DUE, r#""contract:cell-store""#)]);
+        write_trigger_fixture(
+            root,
+            "upstream__44444444",
+            "44444444",
+            "predicate",
+            Some("path-exists:never/lands.txt"),
+            "due",
+        );
+        citing_cell(root, "cit-due", json!([CIT_DUE]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-due", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CONTRACT_UNSETTLED — cell \"cit-due\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains(CIT_DUE), "{refusal}");
+        assert_untouched_by_refusal(root, "cit-due");
+    }
+
+    /// REFUSE — one good citation does not launder a bad one. The list is
+    /// walked whole, the first offender refuses, and it is named.
+    #[test]
+    fn one_settled_citation_beside_a_retired_one_still_refuses() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_ACTIVE, r#""contract:cell-store""#),
+                decide_event(CIT_RETIRED, r#""contract:claims""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-mixed", json!(["D1", CIT_ACTIVE, CIT_RETIRED]));
+
+        let refusal = thrown(claim_cell_from_flags(root, "cit-mixed", "w1", Some("sess-1"), None));
+        assert!(refusal.starts_with("claim: CONTRACT_RETIRED"), "{refusal}");
+        assert!(refusal.contains(CIT_RETIRED), "the refusal names the OFFENDING citation: {refusal}");
+        assert_untouched_by_refusal(root, "cit-mixed");
+    }
+
+    /// ALLOW — an active decision with no trigger at all. The plainest
+    /// settled case, and what every citing cell in a healthy store is.
+    #[test]
+    fn a_cell_citing_a_settled_decision_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_ACTIVE, r#""contract:cell-store""#)]);
+        citing_cell(root, "cit-ok", json!([CIT_ACTIVE]));
+
+        let door = claim_cell_from_flags(root, "cit-ok", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — an active decision whose trigger has been RESOLVED. The
+    /// revisit condition was answered, so the contract is settled again; a
+    /// door that refused on the mere existence of a trigger would deadlock
+    /// every decision that ever carried one.
+    #[test]
+    fn a_cell_citing_a_decision_whose_trigger_is_resolved_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_RESOLVED, r#""contract:cell-store""#)]);
+        write_trigger_fixture(root, "upstream__55555555", "55555555", "manual", None, "resolved");
+        citing_cell(root, "cit-resolved", json!([CIT_RESOLVED]));
+
+        let door = claim_cell_from_flags(root, "cit-resolved", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — the case that decides whether this guard is usable at all.
+    /// Measured over the 92 live cells, 87% of citations are LOCAL D-IDs
+    /// pointing into a CONTEXT.md table, not store ids. An entry that does
+    /// not resolve to a store decision is passed over silently — refusing
+    /// on it would stall almost every citing cell in the repo.
+    #[test]
+    fn a_cell_citing_only_local_d_ids_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        // A store that DOES hold a retired decision, so the pass-over is
+        // proven to be about resolution, not about an empty store.
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_RETIRED, r#""contract:cell-store""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-local", json!(["D1", "D3", "D12"]));
+
+        let door = claim_cell_from_flags(root, "cit-local", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — a full-length id this store never logged is not a citation
+    /// either. "Does not resolve" means "not a store citation", never
+    /// "wrong": the tripwire has no opinion about it.
+    #[test]
+    fn a_cell_citing_an_id_this_store_never_logged_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_ACTIVE, r#""contract:cell-store""#)]);
+        citing_cell(root, "cit-unlogged", json!(["99999999-0000-0000-0000-000000000099"]));
+
+        let door = claim_cell_from_flags(root, "cit-unlogged", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// ALLOW — an empty list, and a cell with no `decisions` key at all.
+    /// Both are the pre-tripwire world, and both must claim exactly as they
+    /// did before it existed.
+    #[test]
+    fn a_cell_with_no_citations_claims_exactly_as_before() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(
+            root,
+            &[
+                decide_event(CIT_RETIRED, r#""contract:cell-store""#),
+                supersede_event(CIT_REPLACEMENT, CIT_RETIRED),
+            ],
+        );
+        citing_cell(root, "cit-empty", json!([]));
+        // No `decisions` key whatsoever — the shape most live cells carry.
+        write_cell_fixture(root, "cit-absent", &cell("cit-absent", "open", "cit", json!([])));
+
+        assert_eq!(
+            claim_cell_from_flags(root, "cit-empty", "w1", Some("sess-1"), None).unwrap().cell["status"],
+            json!("claimed")
+        );
+        assert_eq!(
+            claim_cell_from_flags(root, "cit-absent", "w2", Some("sess-2"), None).unwrap().cell["status"],
+            json!("claimed")
+        );
+    }
+
+    /// ALLOW — an active decision carrying no `contract:` tag at all.
+    ///
+    /// Stated plainly, because it is a design fact rather than an accident:
+    /// the tripwire is TAG-BLIND. D2's tag convention names which decisions
+    /// are contracts for a human reader; the derived status this door
+    /// consumes (verbs/decisions/read.rs) joins the active set against open
+    /// triggers and never reads a tag. So an untagged active decision
+    /// passes exactly like a tagged one — and an untagged decision with an
+    /// open trigger would refuse exactly like a tagged one, which is the
+    /// fail-safe direction for a refusal path.
+    #[test]
+    fn a_cell_citing_an_untagged_active_decision_claims() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_decision_events(root, &[decide_event(CIT_UNTAGGED, r#""process""#)]);
+        citing_cell(root, "cit-untagged", json!([CIT_UNTAGGED]));
+
+        let door = claim_cell_from_flags(root, "cit-untagged", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// The hole that made the whole claim door bypassable: `cells add` used
+    /// to preserve any truthy `status` a payload carried, so one line of
+    /// JSON minted a cell already "claimed" — one that never passes this
+    /// door, nor the red-base or no-route denies beside it. Authoring a
+    /// status other than "open" is now refused by name; omitting it still
+    /// defaults to "open".
+    #[test]
+    fn add_cell_refuses_an_authored_status_and_still_defaults_an_absent_one_to_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        for injected in ["claimed", "capped", "blocked", "dropped", "open-ish"] {
+            let mut payload = addable("inj-1");
+            payload["status"] = json!(injected);
+            let problems = validate_new_cell_problems(root, &payload).unwrap();
+            assert_eq!(problems.len(), 1, "{injected}: {problems:?}");
+            assert!(
+                problems[0].starts_with("addCell: \"status\" must be \"open\""),
+                "{problems:?}"
+            );
+            assert!(
+                problems[0].contains(&format!("\"{injected}\"")),
+                "the refusal names the value it refused: {problems:?}"
+            );
+            assert!(
+                problems[0].contains("bee cells claim"),
+                "the refusal names who owns the transition: {problems:?}"
+            );
+        }
+
+        // An explicit "open" is fine — it is exactly what the default writes.
+        let mut explicit = addable("inj-2");
+        explicit["status"] = json!("open");
+        assert_eq!(validate_new_cell_problems(root, &explicit).unwrap(), Vec::<String>::new());
+
+        // Absent: no problem, and normalization still fills in "open".
+        let absent = addable("inj-3");
+        assert_eq!(validate_new_cell_problems(root, &absent).unwrap(), Vec::<String>::new());
+        assert_eq!(normalize_new_cell(&absent).unwrap()["status"], json!("open"));
+
+        // And the whole `cells add` door refuses it, not just the collector.
+        let mut injected = addable("inj-4");
+        injected["status"] = json!("claimed");
+        assert!(thrown(validate_new_cell(root, &injected)).contains("must be \"open\" on a new cell"));
+        let (ok, rows, normalized) = build_add_cells_report(root, &[injected]).unwrap();
+        assert!(!ok, "the batch door refuses it too");
+        assert!(rows[0].problems.iter().any(|p| p.contains("must be \"open\" on a new cell")));
+        assert!(normalized.is_none(), "nothing is written when the batch refuses");
+    }
+
     // ══ crf-1 — the claim ACQUIRES what the cap already releases ══════════
     //
     // docs/history/claim-reserves-files/CONTEXT.md: `finish_cap_and_release`
