@@ -1,6 +1,6 @@
 ---
 type: grilling
-status: open
+status: closed
 claimed-by: none
 blocked-by: none
 ---
@@ -18,4 +18,13 @@ now, or does the tier land as a new role beside the observer?
 
 ## Answer
 
-(open)
+Resolved 2026-08-29 by the user, in the opposite direction of the draft: the
+delegated-decision tier is DROPPED. The supervisor is assumed to run on a
+cheap model, so it observes, connects, and packages questions for the human —
+it decides nothing. (a)/(b)/(c) all dissolve: no auto-decidable ask class
+exists; c706053e's silence-is-consent stays as the deterministic-layer
+exception it already is (its timeout never belonged to the model); 322695d6's
+observer-only contract stays intact, no supersession needed. Decision
+704b691c supersedes 83baf03f. Companion decision 58796a73: the human working
+directly with one project's lead is a first-class channel — the supervisor is
+never a mandatory middleman.

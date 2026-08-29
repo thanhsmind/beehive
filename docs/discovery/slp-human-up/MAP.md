@@ -24,17 +24,22 @@ docs/history/research/paseo-pi-team-human-elevation.md. Doctrine lineage:
 the shipped slp-* clusters (docs/discovery/slp-supervisor-lead-peer/MAP.md).
 
 Build-order sketch (settled direction, exact clustering falls out of the
-tickets): (1) delegated-decision tier + ladder rungs 1–2, (2) spec handoff +
-herdr intake glue, (3) waggledance supervisor + weekly review. Waggledance-side
-work lands in the waggledance repo's own backlog when its cluster shapes.
+tickets): (1) spec handoff + ladder rung 1 (cross-repo dissent), (2)
+waggledance supervisor (observe/connect/relay only) + weekly review, (3) hat
+wave procedure (docs-only). The delegated-decision tier was dropped by
+704b691c — human elevation now rides on question quality, queueing, and
+per-repo gate_bypass levels. Waggledance-side work lands in the waggledance
+repo's own backlog when its cluster shapes.
 
 ## Decisions so far
 
 - 2f4bf3b1: supervisor's cross-project home is the waggledance layer; herdr
   stays the base; paseo optional — settled in session, no ticket
-- 83baf03f: delegated-decision tier (4 fail-closed criteria; unclear → up;
-  repeat offender → human; leads honor low-risk delegated decisions) —
-  boundary details: tickets/001-delegated-decision-boundary.md
+- 704b691c (supersedes 83baf03f): supervisor assumed cheap-model — observes,
+  connects, packages questions; decides NOTHING; rung 2 = one clear question
+  to the human — tickets/001-delegated-decision-boundary.md
+- 58796a73: human↔lead direct work is a first-class channel; the supervisor
+  is never a mandatory middleman — settled in session, no ticket
 - 6f039742: repos fully separate, spec delivered INTO the receiving repo,
   async + correlation id, no cross-repo storage — settled in session, no ticket
 - c39ced6c: A is binding arbiter; peers = facts/perspectives (hat wave on big
