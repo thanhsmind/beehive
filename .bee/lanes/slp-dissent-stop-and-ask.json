@@ -15,9 +15,9 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-08-28T22:24:49.087Z",
+    "kind": "turn-end",
+    "subject": "✓ Green — including the target that was red. The resolver now walks past the `mise` shim to the real binary.",
+    "asked_at": "2026-08-29T02:55:58.298Z",
     "session": "28e79000-c79d-4001-98f1-3de084df4673"
   },
   "route": {
