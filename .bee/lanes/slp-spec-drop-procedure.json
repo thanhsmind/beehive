@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"slp-spec-drop-procedure\" started at phase \"exploring\" (lane).",
   "next_action": "Apply the three docs edits, regen, capture, close.",
   "created_at": "2026-08-29T11:18:41.666Z",
-  "run_state": "awaiting-approval",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "docs",
