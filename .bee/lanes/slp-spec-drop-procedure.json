@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "▸ Release chạy lại ở nền, nối tiếp từ chỗ đứt (tag đã push, giờ canh CI build binary + kiểm asset). Có dòng `OK` cuối là tôi báo. Ghi chú: b",
-    "asked_at": "2026-08-29T11:22:57.295Z",
+    "subject": "Binary trong repo còn `2.23.0` (build trước lúc bump) — build lại từ đúng commit release và thay vào:",
+    "asked_at": "2026-08-29T11:47:56.653Z",
     "session": "f41a8a9c-99da-4110-9f84-26e014cc3785"
   },
   "route": {
