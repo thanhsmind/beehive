@@ -424,12 +424,16 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         let mut shared_denied = false;
         if denial.is_none() {
             for (rel, abs) in &shared_candidates {
-                // sfg-5: three answers, not two. The unreadable-session arm is
-                // the fail-open sfg-4 left here — this loop runs for EVERY
-                // Edit/Write with a resolvable target, so one truncated
-                // `.bee/sessions/<id>.json` used to switch the whole guard off
-                // on a real write. It denies now, in bee's own wording; see
-                // `unreadable_session_refusal` for why that departs from Node.
+                // sfg-5, then sfg-6: FOUR answers, not two. The two
+                // unreadable-record arms are the fail-opens sfg-4's sweep left
+                // here — this loop runs for EVERY Edit/Write/Bash with a
+                // resolvable target, so one truncated
+                // `.bee/sessions/<id>.json`, or one corrupt
+                // `.bee/companion-session.json`, used to switch the whole
+                // guard off on a real write. Both deny now, in bee's own
+                // wording; see `unreadable_session_refusal` and
+                // `unreadable_companion_marker_refusal` for why that departs
+                // from Node.
                 match is_shared_nested_checkout_target(
                     &root,
                     abs,
@@ -444,6 +448,11 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     }
                     SharedNested::UnreadableSession(file) => {
                         denial = Some(unreadable_session_refusal(rel, &file));
+                        shared_denied = true;
+                        break;
+                    }
+                    SharedNested::UnreadableCompanionMarker(file) => {
+                        denial = Some(unreadable_companion_marker_refusal(rel, &file));
                         shared_denied = true;
                         break;
                     }

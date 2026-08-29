@@ -2886,6 +2886,97 @@ use std::process::ExitCode;
         }
     }
 
+    // ── sfg-6 (slp-followup-gaps): the LAST store read that could switch the
+    // whole write guard off ────────────────────────────────────────────────
+
+    /// Every `.bee/companion-session.json` body the marker reader cannot turn
+    /// into JSON. A body that PARSES but says nothing usable (`[1,2,3]`,
+    /// `{}`) is not here: that is a readable marker declaring no mount, and it
+    /// answers `CompanionMount::None` exactly as it always did.
+    fn corrupt_companion_markers() -> Vec<&'static str> {
+        vec!["", "   \n", "{ not json", "{\"worktreePath\":", "\u{0}\u{1}\u{2}", "[1,2,3"]
+    }
+
+    /// The last fail-OPEN of this feature's four-round sweep.
+    ///
+    /// `resolve_verified_companion_mount_real` read the marker with a bare
+    /// `std::fs::read` plus `serde_json::from_str`, and both error arms
+    /// answered `Err(Nd)`. That error walked
+    /// `target_inside_verified_companion_mount` ->
+    /// `is_shared_nested_checkout_target` -> the hook's own `?` -> Delegate ->
+    /// `emit_undecidable`: exit 0, "the guard did NOT run on it". The
+    /// preconditions are the ordinary ones sfg-5 closed one branch above — a
+    /// resolvable target plus one other live session — so a corrupt marker
+    /// switched the whole guard off on everyday work.
+    ///
+    /// The fixture carries the live peer that
+    /// `companion_marker_present_delegates_on_containment_failure` has no
+    /// reason to: without a peer `is_concurrent_mode_strict` answers `false`
+    /// first and the marker is never read at all.
+    #[test]
+    fn sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open() {
+        for body in corrupt_companion_markers() {
+            for payload in [
+                json!({"tool_name":"Edit","tool_input":{"file_path":"src/inside.txt"},"session_id":"me"}),
+                json!({"tool_name":"Write","tool_input":{"file_path":"src/inside.txt"},"session_id":"me"}),
+                json!({"tool_name":"Bash","tool_input":{"command":"cp new.txt src/inside.txt"},"session_id":"me"}),
+            ] {
+                let fx = build_fixture("swarming", true);
+                add_live_session(&fx.root, "other-live");
+
+                // Control FIRST: the same fixture, same live peer, no marker
+                // at all is a native ALLOW — so the deny below is the marker
+                // firing, never the peer.
+                let ok = expect_done(payload.clone(), &fx.root);
+                assert_eq!(ok.code, 0, "{body:?}: {}", ok.stderr);
+
+                std::fs::write(fx.root.join(".bee").join("companion-session.json"), body).unwrap();
+                let e = expect_done(payload.clone(), &fx.root);
+                assert_eq!(e.code, 2, "{body:?}: {}", e.stderr);
+                assert!(e.stderr.contains("bee shared-checkout guard"), "{body:?}: {}", e.stderr);
+                assert!(e.stderr.contains("companion-session.json"), "{body:?}: {}", e.stderr);
+                assert!(e.stderr.contains("--with-companion"), "{body:?}: {}", e.stderr);
+            }
+        }
+    }
+
+    /// The non-ENOENT READ error closes the same way as the parse error —
+    /// neither escapes. A DIRECTORY where the marker file belongs is the
+    /// portable way to make `std::fs::read` fail without ENOENT.
+    #[test]
+    fn sfg6_an_unopenable_companion_marker_denies_too() {
+        let fx = build_fixture("swarming", true);
+        add_live_session(&fx.root, "other-live");
+        std::fs::create_dir_all(fx.root.join(".bee").join("companion-session.json")).unwrap();
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/inside.txt"},"session_id":"me"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee shared-checkout guard"), "{}", e.stderr);
+        assert!(e.stderr.contains("companion-session.json"), "{}", e.stderr);
+    }
+
+    /// The boundary of the fix, stated as a test.
+    ///
+    /// `companion_mount_rel` delegates on the MERE PRESENCE of the marker for
+    /// a target that already failed containment — the documented,
+    /// containment-gated branch in the module header. sfg-6 does not touch
+    /// it, and this pins why that is not a surviving hole of the same class: a
+    /// perfect marker and a corrupt one delegate IDENTICALLY there, so
+    /// unreadable data decides nothing. What sfg-6 closed is the other
+    /// consumer, where readability alone flipped the verdict.
+    #[test]
+    fn sfg6_the_containment_gated_delegate_never_turned_on_readability() {
+        let well_formed = "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n";
+        for body in std::iter::once(well_formed).chain(corrupt_companion_markers()) {
+            let fx = build_fixture("swarming", true);
+            add_live_session(&fx.root, "other-live");
+            std::fs::write(fx.root.join(".bee").join("companion-session.json"), body).unwrap();
+            expect_delegate(edit("../outside.txt"), &fx.root);
+        }
+    }
+
     // ── staging-lane D0 teeth #2: a direct `git commit` inside the
     // REGISTERED staging worktree is refused unless BEE_STAGING_MACHINERY=1
     // is set — phase-independent, like gc-2, so `build_linked`'s "swarming"
@@ -3281,7 +3372,12 @@ use std::process::ExitCode;
         )
         .unwrap();
         expect_delegate(edit("../outside.txt"), &fx.root);
-        // A contained target never consults the marker — stays native.
+        // A contained target never consults the marker ON THIS FIXTURE —
+        // stays native. sfg-6: the reason is the missing live peer, not the
+        // marker. `is_concurrent_mode_strict` answers `false` first, so the
+        // mount check never runs. Add a peer and the marker IS read; a corrupt
+        // one denies now instead of falling open — see
+        // `sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open`.
         let e = expect_done(edit("src/inside.txt"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
@@ -3893,11 +3989,12 @@ use std::process::ExitCode;
         Fx { _dir: dir, root }
     }
 
-    /// sfg-5: the primitive answers three ways now. These rows all read the
-    /// shared/not-shared verdict; the third answer (an unreadable session
-    /// record) is its own refusal, pinned by
-    /// `sfg5_an_unreadable_session_file_denies_instead_of_falling_open`, and
-    /// none of these fixtures can produce it.
+    /// sfg-5, then sfg-6: the primitive answers four ways now. These rows all
+    /// read the shared/not-shared verdict; the two unreadable-record answers
+    /// are their own refusals, pinned by
+    /// `sfg5_an_unreadable_session_file_denies_instead_of_falling_open` and
+    /// `sfg6_a_corrupt_companion_marker_denies_instead_of_falling_open`, and
+    /// none of these fixtures can produce either one.
     fn flagged(root: &Path, target: &Path) -> bool {
         match is_shared_nested_checkout_target(
             &root.to_string_lossy(),
@@ -3911,6 +4008,9 @@ use std::process::ExitCode;
             SharedNested::No => false,
             SharedNested::UnreadableSession(f) => {
                 panic!("fixture wrote no unreadable session record, got {}", f.display())
+            }
+            SharedNested::UnreadableCompanionMarker(f) => {
+                panic!("fixture wrote no unreadable companion marker, got {}", f.display())
             }
         }
     }
