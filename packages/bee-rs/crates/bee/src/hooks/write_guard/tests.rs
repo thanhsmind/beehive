@@ -2492,6 +2492,144 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("sess-owner"), "{}", e.stderr);
     }
 
+    // ── sfg-4 (slp-followup-gaps): no store or config READ can switch the
+    // whole write guard off ────────────────────────────────────────────────
+
+    /// A session record carrying an arbitrary `last_heartbeat` value.
+    fn add_session_with_heartbeat(root: &Path, id: &str, last_heartbeat: Value) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id,
+                    "started_at": ms_to_iso(now_ms()).unwrap(),
+                    "last_heartbeat": last_heartbeat
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// Every `last_heartbeat` shape `date_parse_ms` cannot turn into
+    /// milliseconds — the `Err(Nd)` arms, not the absent/blank ones.
+    fn unparseable_heartbeats() -> Vec<Value> {
+        vec![
+            json!("just now"),
+            json!("2026-08-29 10:56:37"),
+            json!(1_756_400_000_000_i64),
+            json!({ "iso": "2026-08-29T10:56:37.000Z" }),
+            json!(true),
+        ]
+    }
+
+    /// The residual fail-OPEN sfg-3 left one call frame away. `heartbeat_stale`
+    /// read the stamp through `date_parse_ms(..)?`, and
+    /// `check_workspace_ownership` `?`d it, so a malformed `last_heartbeat` in
+    /// the WORKSPACE OWNER's session record — a record the acting session does
+    /// not own and cannot see — reached `emit_undecidable`: exit 0, "the guard
+    /// did NOT run on it". A stamp the reader cannot parse is no evidence the
+    /// owner went away, so the owner reads LIVE and the guard REFUSES.
+    #[test]
+    fn sfg4_a_malformed_owner_heartbeat_never_stops_the_guard() {
+        for beat in unparseable_heartbeats() {
+            let fx = build_fixture("idle", false);
+            add_live_session(&fx.root, "sess-1");
+            add_session_with_heartbeat(&fx.root, "sess-owner", beat.clone());
+            write_owned_workspace(&fx.root, "main", "sess-owner");
+            let e = expect_done(
+                json!({
+                    "tool_name": "Edit",
+                    "tool_input": { "file_path": "src/app.js" },
+                    "session_id": "sess-1"
+                }),
+                &fx.root,
+            );
+            assert_eq!(e.code, 2, "beat {beat}: {}", e.stderr);
+            assert!(e.stderr.contains("bee write-policy"), "beat {beat}: {}", e.stderr);
+            assert!(e.stderr.contains("sess-owner"), "beat {beat}: {}", e.stderr);
+        }
+    }
+
+    /// The same reader, the second live call site: `active_worker_session_ids`
+    /// feeds `resolve_live_worker_count`, which `check_git_bash_command` reads
+    /// for the gc-2 whole-tree denial. One unparseable heartbeat in ANY session
+    /// file took that guard down too. Unparseable reads as live, so both
+    /// workers are counted and the bare `git commit` is REFUSED.
+    #[test]
+    fn sfg4_a_malformed_heartbeat_never_stops_the_live_worker_count() {
+        for beat in unparseable_heartbeats() {
+            let fx = build_git_fixture("swarming");
+            add_session_with_heartbeat(&fx.root, "sess-a", beat.clone());
+            add_session_with_heartbeat(&fx.root, "sess-b", beat.clone());
+            let e = expect_done(bash("git commit -m wip"), &fx.root);
+            assert_eq!(e.code, 2, "beat {beat}: {}", e.stderr);
+            assert!(
+                e.stderr.contains("bee concurrent-worker git guard"),
+                "beat {beat}: {}",
+                e.stderr
+            );
+            assert!(e.stderr.contains("2 workers are live"), "beat {beat}: {}", e.stderr);
+        }
+    }
+
+    /// The second residual: `check_product_root_silent` answered `Err(Nd)` for a
+    /// non-string `product_root`, or one naming a directory that is not there,
+    /// and that error walked out of `resolve_context` →
+    /// `control_root_for_state` → `resolve_write_record` → `emit_undecidable`.
+    /// Two lines of config switched the WHOLE guard off. `product_root` names
+    /// where PRODUCT DOCS live and this guard never reads it, so it contributes
+    /// nothing: the guard goes on allowing and refusing exactly as before.
+    #[test]
+    fn sfg4_a_product_root_the_guard_cannot_resolve_never_stops_it() {
+        for pr in [json!(42), json!("docs/nowhere-at-all"), json!(["a"]), json!(true)] {
+            let fx = build_fixture("swarming", true);
+            std::fs::write(
+                fx.root.join(".bee").join("config.json"),
+                format!("{}\n", serde_json::to_string(&json!({ "product_root": pr })).unwrap()),
+            )
+            .unwrap();
+            let allow = expect_done(edit("src/app.js"), &fx.root);
+            assert_eq!(allow.code, 0, "product_root {pr}: {}", allow.stderr);
+            let deny = expect_done(edit(".bee/state.json"), &fx.root);
+            assert_eq!(deny.code, 2, "product_root {pr}: {}", deny.stderr);
+        }
+    }
+
+    /// The third door into the same `Err(Nd)`: a `.git` FILE that does not
+    /// describe a valid linked worktree makes `resolve_context` answer `Threw`,
+    /// and `control_root_for_state` turned that into `Err(Nd)` — one broken
+    /// `.git` line, and the whole guard stopped running. A context the reader
+    /// cannot resolve is no evidence about WHERE the store is, so the root in
+    /// hand answers (JS `?? root`) and the guard keeps deciding both ways.
+    #[test]
+    fn sfg4_an_unresolvable_context_never_stops_the_guard() {
+        let fx = build_fixture("swarming", true);
+        add_live_session(&fx.root, "sess-1");
+        std::fs::write(fx.root.join(".git"), "gitdir: /nowhere/at/all\n").unwrap();
+        let allow = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": "src/app.js" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(allow.code, 0, "{}", allow.stderr);
+        let deny = expect_done(
+            json!({
+                "tool_name": "Edit",
+                "tool_input": { "file_path": ".bee/state.json" },
+                "session_id": "sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2, "{}", deny.stderr);
+    }
+
     // ── staging-lane D0 teeth #2: a direct `git commit` inside the
     // REGISTERED staging worktree is refused unless BEE_STAGING_MACHINERY=1
     // is set — phase-independent, like gc-2, so `build_linked`'s "swarming"

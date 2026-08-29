@@ -141,8 +141,12 @@ pub(crate) fn resolve_write_record(
             });
         }
     };
-    // resolvePipeline(controlRoot, { sessionId }).
-    let control2 = control_root_for_state(control_root)?;
+    // resolvePipeline(controlRoot, { sessionId }). sfg-4: infallible now —
+    // this `?` used to hand a broken `.git` file or an unreadable
+    // `product_root` straight to `emit_undecidable`, which switched the whole
+    // guard off. See `control_root_for_state` for why the root in hand is the
+    // safe answer.
+    let control2 = control_root_for_state(control_root);
     let defaults = |session_unbound: bool| -> R<RecordResolution> {
         Ok(RecordResolution::Ok {
             record: read_state(Path::new(control_root))?,
@@ -351,7 +355,10 @@ pub(crate) fn check_workspace_ownership(control_root: &str, ctx: &JsCtx, session
         Some(s) if matches!(s.get("status"), Some(Value::String(st)) if st == "closed" || st == "dead") => {
             false // a closed/dead owner session never holds the path live.
         }
-        Some(s) => !heartbeat_stale(&s, now_ms())?,
+        // sfg-4: infallible now. A `last_heartbeat` this reader cannot parse
+        // is no evidence the owner went away, so the owner reads LIVE and
+        // this guard REFUSES the write — it never falls open.
+        Some(s) => !heartbeat_stale(&s, now_ms()),
         None => false,
     };
     if !live {

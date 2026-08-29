@@ -87,26 +87,29 @@ pub(crate) fn read_config(root: &Path) -> R<Map<String, Value>> {
     Ok(crate::state::read_config_raw(root))
 }
 
-/// provenance: state.mjs resolveProductRoot — consulted (via resolveContext)
-/// only for its WARNING side effects; a configured product_root that would
-/// warn (non-string, or missing directory) is Nd.
-pub(crate) fn check_product_root_silent(root: &Path, config: &Map<String, Value>) -> R<()> {
-    match config.get("product_root") {
-        None | Some(Value::Null) => Ok(()),
-        Some(Value::String(s)) if s.is_empty() => Ok(()),
-        Some(Value::String(s)) => {
-            let resolved = if np_is_absolute(s) {
-                np_check_modelable(s)?;
-                s.clone()
-            } else {
-                np_resolve2(&root.to_string_lossy(), s)?
-            };
-            let is_dir = std::fs::metadata(Path::new(&resolved)).map(|m| m.is_dir()).unwrap_or(false);
-            if is_dir { Ok(()) } else { Err(Nd) } // Node warns here
-        }
-        Some(_) => Err(Nd), // non-string → Node warns
-    }
-}
+// sfg-4: `check_product_root_silent` used to live here. It ported state.mjs
+// resolveProductRoot's WARNING side effect and nothing else: it answered
+// `Err(Nd)` for a non-string `product_root`, or one naming a directory that
+// is not there — the two shapes Node printed a warning for.
+//
+// That error was not a warning here. It left `resolve_context`, then
+// `control_root_for_state`, then `resolve_write_record`, and landed on
+// `hooks/mod.rs`'s `emit_undecidable`: exit 0, "the guard did NOT run on
+// it", for every path and every `.bee` mutation. Two lines of config
+// therefore switched the WHOLE write guard off — the same fail-OPEN sfg-3
+// closed in the claim readers, one call frame away.
+//
+// The honest read is "nothing at all", and it is not a close call.
+// `product_root` names where PRODUCT DOCS live (docs/backlog.md,
+// docs/specs/). This guard never reads it: not for containment, not for the
+// acting record, not for any refusal it can utter. A product_root the reader
+// cannot resolve is not evidence of containment, and it is not evidence of
+// anything else the guard decides — so it decides nothing, and the guard
+// goes on judging the inputs it does read. The warning it stood for is not
+// lost either: the callers still perform the `read_config` beside it, which
+// is what prints bee's own corrupt-config line.
+//
+// Pinned by `sfg4_a_product_root_the_guard_cannot_resolve_never_stops_it`.
 
 /// provenance: worktree-store.mjs readGrants — swallow-all read of
 /// <mainStoreRoot>/runtime/worktree-grants.json.
@@ -237,8 +240,11 @@ pub(crate) fn resolve_context(cwd: &str) -> R<CtxOutcome> {
     let grants = read_grants(&Path::new(&main_root).join(".bee"));
     let granted = grants.get(&id) == Some(&Value::Bool(true));
     // resolveContext tail (linked branch).
-    let config = read_config(Path::new(&work_root))?; // resolveProductRoot(workspaceRoot)
-    check_product_root_silent(Path::new(&work_root), &config)?;
+    // resolveProductRoot(workspaceRoot). sfg-4: the READ stays — it is what
+    // prints bee's own corrupt-config line, and that output is pinned. The
+    // product_root CHECK that followed it is gone; see the note where it used
+    // to live for why a product_root the guard cannot resolve decides nothing.
+    let _config = read_config(Path::new(&work_root))?;
     Ok(CtxOutcome::Ok(JsCtx {
         control_root: Some(main_root),
         workspace_root: Some(work_root),
@@ -251,8 +257,9 @@ pub(crate) fn finish_ordinary(root: &str) -> R<CtxOutcome> {
     // resolveContext tail for an ordinary checkout: gitCommonDir stat can
     // throw only for exotic .git states — statSync inside resolveContext is
     // guarded by existsSync first; a race is Nd-irrelevant here.
-    let config = read_config(Path::new(root))?;
-    check_product_root_silent(Path::new(root), &config)?;
+    // sfg-4: read kept for its corrupt-config warning, product_root check
+    // dropped — same reason as the linked branch above.
+    let _config = read_config(Path::new(root))?;
     Ok(CtxOutcome::Ok(JsCtx {
         control_root: Some(root.to_string()),
         workspace_root: Some(root.to_string()),
@@ -262,12 +269,32 @@ pub(crate) fn finish_ordinary(root: &str) -> R<CtxOutcome> {
 }
 
 /// provenance: state.mjs controlRootFor — resolveContext(root).controlRoot ??
-/// root; a THROW here propagates in Node (no catch until the hook's outer
-/// catch-all) → Nd.
-pub(crate) fn control_root_for_state(root: &str) -> R<String> {
-    match resolve_context(root)? {
-        CtxOutcome::Ok(ctx) => Ok(ctx.control_root.unwrap_or_else(|| root.to_string())),
-        CtxOutcome::Threw => Err(Nd),
+/// root.
+///
+/// sfg-4: infallible by signature. `Err(Nd)` on `CtxOutcome::Threw` (and on
+/// every error `resolve_context` could raise on the way) walked straight out
+/// of `resolve_write_record` into `emit_undecidable` — one broken `.git`
+/// line, or one unreadable config value, and the write guard stopped running
+/// on EVERY path. That is the fail-OPEN sfg-3 closed for the claim readers;
+/// this is the same class, one frame up.
+///
+/// The safe read is the root already in hand — the exact fallback the `??
+/// root` in the Ok arm takes. A context the reader cannot resolve is no
+/// evidence about WHERE the store lives, so it may not be read as "the store
+/// lives somewhere else". The only consumer is `resolve_write_record`, which
+/// uses this answer to LOOK UP the acting session and its claims; a root that
+/// finds neither falls back to the control-root default record, which is the
+/// strictest record on offer (it keeps `source == "default"`, so the intake
+/// gate and the workspace-ownership deny both stay in front of this session).
+/// So this fallback can only ever be as restrictive as the resolved answer,
+/// never more permissive — and it never stops the guard.
+///
+/// Pinned by `sfg4_an_unresolvable_context_never_stops_the_guard`.
+pub(crate) fn control_root_for_state(root: &str) -> String {
+    match resolve_context(root) {
+        Ok(CtxOutcome::Ok(ctx)) => ctx.control_root.unwrap_or_else(|| root.to_string()),
+        // Threw, or a context the reader could not resolve at all.
+        _ => root.to_string(),
     }
 }
 
@@ -371,11 +398,39 @@ pub(crate) fn now_ms() -> f64 {
 }
 
 /// provenance: claims.mjs heartbeatStale.
-pub(crate) fn heartbeat_stale(session: &Map<String, Value>, now: f64) -> R<bool> {
-    let beat = date_parse_ms(session.get("last_heartbeat"))?;
-    match beat {
-        None => Ok(true),
-        Some(ms) => Ok(ms + HEARTBEAT_STALE_SECONDS * 1000.0 <= now),
+///
+/// sfg-4: infallible by signature, like sfg-3's claim readers. It read the
+/// stamp through `date_parse_ms(..)?`, and `check_workspace_ownership` `?`d
+/// the result, so ONE malformed `last_heartbeat` — in the WORKSPACE OWNER's
+/// session record, a record the acting session neither owns nor can see —
+/// reached `emit_undecidable`: exit 0, "the guard did NOT run on it". The
+/// same reader is read by `is_concurrent_mode` and
+/// `active_worker_session_ids`, so any session file in the store could do it.
+///
+/// Three answers, and the third is the new one:
+///
+/// - a stamp that parses answers the honest arithmetic;
+/// - NO stamp (absent, null, blank) is stale — claims.mjs `heartbeatStale`
+///   says so, and it is right: a session that never beat is not beating;
+/// - a stamp the reader CANNOT PARSE is NOT stale. An unreadable byte is no
+///   evidence the session went away — it is evidence about the byte. Reading
+///   it as staleness would invent a death.
+///
+/// That third answer is also the safe one at every call site, in the same
+/// direction: "not stale" means live, and live is what makes
+/// `check_workspace_ownership` REFUSE the write, what puts
+/// `is_concurrent_mode` into concurrent mode, and what makes
+/// `active_worker_session_ids` count the worker. So an unparseable heartbeat
+/// costs the guard teeth nowhere — it can only ever add them, and it can
+/// never again switch the guard off.
+///
+/// Pinned by `sfg4_a_malformed_owner_heartbeat_never_stops_the_guard` and
+/// `sfg4_a_malformed_heartbeat_never_stops_the_live_worker_count`.
+pub(crate) fn heartbeat_stale(session: &Map<String, Value>, now: f64) -> bool {
+    match date_parse_ms(session.get("last_heartbeat")) {
+        Ok(None) => true, // no beat at all
+        Ok(Some(ms)) => ms + HEARTBEAT_STALE_SECONDS * 1000.0 <= now,
+        Err(_) => false, // present but unreadable: not evidence of staleness
     }
 }
 
@@ -388,7 +443,7 @@ pub(crate) fn is_concurrent_mode(root: &str, exclude: Option<&str>, strict: bool
             continue; // a closed/dead session is never counted toward concurrent mode.
         }
         let id_matches = session.get("id") == Some(&Value::String(exclude.to_string()));
-        if !id_matches && !heartbeat_stale(&session, now)? {
+        if !id_matches && !heartbeat_stale(&session, now) {
             return Ok(true);
         }
     }
@@ -411,7 +466,7 @@ pub(crate) fn active_worker_session_ids(control_root: &str, exclude: Option<&str
         if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
             continue; // a closed/dead session never counts as an active worker.
         }
-        if id != exclude && !heartbeat_stale(&session, now)? {
+        if id != exclude && !heartbeat_stale(&session, now) {
             live.push(id);
         }
     }
