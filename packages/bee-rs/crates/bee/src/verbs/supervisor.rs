@@ -258,6 +258,38 @@ const CAPPED_KINDS: [&str; 2] = ["intervention", "advisor-nudge"];
 pub(crate) const ALL_KINDS: [&str; 6] =
     ["observation", "silence", "intervention", "escalation", "urgent", "advisor-nudge"];
 
+/// The two waiting-on kinds that mean a HUMAN is being waited on. `turn-end`
+/// is deliberately not one of them: it is the ordinary end of a turn with
+/// nothing owed (see [`live_waiting_on`]).
+pub(crate) const WAITING_ON_GATE: &str = "gate";
+pub(crate) const WAITING_ON_QUESTION: &str = "question";
+
+/// a7e6f237's needs-human-decision flag, as the ONE derivation both reading
+/// surfaces call — the WakeReport here, and the human-mailbox letter in
+/// `verbs/mailbox.rs`. A rule checked at two points needs one shared read: two
+/// copies of this list would let a letter and a report disagree about the same
+/// row and both stay green.
+///
+/// YES is "only the human can answer this": a `gate` or a `question` the
+/// session is waited on for, plus the three mailbox kinds that are an ask on
+/// the human's desk rather than a note to a session — `escalation` (the
+/// frequency cap's own remedy, so the point was already passed over once),
+/// `urgent` (danger class), and `advisor-nudge` (3cfd9980: the lead may
+/// decline it, and 9e5eda5b turns silence on it into the human's call).
+///
+/// Everything else is NO, `intervention` included — that one is addressed to a
+/// SESSION, and the session answers it.
+pub(crate) const HUMAN_DECISION_KINDS: [&str; 5] =
+    [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", ADVISOR_NUDGE_KIND];
+
+/// The flag itself. TOTAL on a `&str` by construction: an unknown, empty or
+/// malformed kind derives `false` and the row still renders. A queue row is
+/// data, never a control token — a renderer that can panic on a hand-edited
+/// kind is a renderer that loses the human's whole report over one bad line.
+pub(crate) fn needs_human_decision(kind: &str) -> bool {
+    HUMAN_DECISION_KINDS.contains(&kind)
+}
+
 /// The poor-work vocabulary. `budget-overrun` and `same-region-resubmit` are
 /// the two 3cfd9980 names beside `struggling-loop`; the telemetry that
 /// produces them landed with a8f4b8ab, so the word is what was missing.
@@ -549,6 +581,10 @@ impl Intervention {
             "released_at": self.released_at,
             "consented_at": self.consented_at,
             "consent_timeout_seconds": self.consent_timeout_seconds,
+            // a7e6f237: every queued ask CARRIES the flag, derived here rather
+            // than stored, so no reader has to know the kind table and no
+            // hand-edited row can claim a flag its kind does not give it.
+            "needs_human_decision": needs_human_decision(&self.kind),
         });
         with_feature(&mut v, self.feature.as_deref());
         v
@@ -1885,13 +1921,24 @@ fn decisions_log_path(control: &Path) -> PathBuf {
     control.join(".bee").join("decisions.jsonl")
 }
 
-/// One rendered line plus the rank that ORDERS it. `rank` is impact-if-wrong
-/// (66c4c251), sorted DESCENDING; equal ranks keep store order, which a stable
-/// sort gives for free.
+/// One rendered line plus the two keys that ORDER it.
+///
+/// `needs_human` is a7e6f237's flag and is the FIRST key: a line only the
+/// human can answer prints above every line that is merely important. `rank`
+/// is impact-if-wrong (66c4c251) and orders inside each group; equal keys keep
+/// store order, which a stable sort gives for free.
 #[derive(Debug, Clone)]
 struct ReportItem {
+    needs_human: bool,
     rank: u8,
     text: String,
+}
+
+/// The ONE comparison every ordering of report items goes through: flag first
+/// (a7e6f237), then impact-if-wrong (66c4c251), both descending. Written once
+/// so the section order and the truncation's keep-list can never disagree.
+fn report_order(a: &ReportItem, b: &ReportItem) -> std::cmp::Ordering {
+    b.needs_human.cmp(&a.needs_human).then(b.rank.cmp(&a.rank))
 }
 
 /// Impact-if-wrong for one observation row: the day-1 signal set of da7cb49b,
@@ -1952,6 +1999,9 @@ fn collect_happened(control: &Path, win: &PresenceWindow) -> Vec<ReportItem> {
         .iter()
         .filter(|r| in_window(&r.ts, win))
         .map(|r| ReportItem {
+            // An observation is something that HAPPENED, never an open ask —
+            // nothing here is waiting on the human's answer (a7e6f237).
+            needs_human: false,
             rank: observation_rank(&r.signal),
             text: format!("- {}: {}", r.signal, clip(&r.note)),
         })
@@ -1996,6 +2046,8 @@ fn collect_decided(control: &Path, win: &PresenceWindow) -> Vec<ReportItem> {
             continue;
         }
         items.push(ReportItem {
+            // Already decided, so nothing here needs deciding (a7e6f237).
+            needs_human: false,
             rank: if decision_is_one_way(&e) { 2 } else { 1 },
             text: format!("- {text}"),
         });
@@ -2014,7 +2066,7 @@ fn live_waiting_on(control: &Path) -> Option<(String, String)> {
     let m = v.get("waiting_on")?.as_object()?;
     let kind = m.get("kind")?.as_str()?.to_string();
     let subject = js_trim(m.get("subject")?.as_str()?).to_string();
-    if subject.is_empty() || !matches!(kind.as_str(), "gate" | "question") {
+    if subject.is_empty() || !matches!(kind.as_str(), WAITING_ON_GATE | WAITING_ON_QUESTION) {
         return None;
     }
     Some((kind, subject))
@@ -2036,6 +2088,11 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
         }
         let item = if went_ahead {
             ReportItem {
+                // Flagged YES whatever its kind: an ask that went ahead
+                // without the human is the one line on this list they must
+                // not miss (c706053e), so a7e6f237's first sort key must
+                // never push it below a row that is merely waiting.
+                needs_human: true,
                 // Above every rank `needs_you_rank` can return, deliberately.
                 // sup-9 orders this section by impact-if-wrong; an ask that was
                 // already answered by nobody outranks every ask still waiting.
@@ -2050,6 +2107,7 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
             }
         } else {
             ReportItem {
+                needs_human: needs_human_decision(&row.kind),
                 rank: needs_you_rank(&row.kind),
                 text: format!("- {} ({}): {}", row.kind, row.target_session, clip(&row.question)),
             }
@@ -2058,6 +2116,7 @@ fn collect_needs_you(control: &Path, win: &PresenceWindow, released: &[String]) 
     }
     if let Some((kind, subject)) = live_waiting_on(control) {
         items.push(ReportItem {
+            needs_human: needs_human_decision(&kind),
             rank: needs_you_rank(&kind),
             text: format!("- waiting on you ({kind}): {}", clip(&subject)),
         });
@@ -2097,17 +2156,34 @@ fn next_action_line(
         );
     }
     let waiting = live_waiting_on(control);
-    if let Some((_, subject)) = waiting.as_ref().filter(|(k, _)| k == "gate") {
+    if let Some((_, subject)) = waiting.as_ref().filter(|(k, _)| k == WAITING_ON_GATE) {
         return format!("- Answer the gate waiting on you: {}", clip(subject));
     }
-    if !released.is_empty() {
-        return format!(
+    let read_the_queue = || {
+        format!(
             "- Read the {} queued question(s): `bee supervisor pending --target-session <id>`",
             released.len()
-        );
+        )
+    };
+    // a7e6f237 splits what was one branch. A released row the HUMAN must
+    // decide (escalation, urgent, advisor-nudge) now sorts above the waiting
+    // `question` in the section above, so it must sit above it here too; a
+    // released `intervention` is a session's own ask and does not, and then
+    // the question waiting on the human is the higher line. Without this
+    // split, the flag would reorder the third section and leave the fourth
+    // pointing at the row it no longer puts first.
+    let released_needs_human = store
+        .rows
+        .iter()
+        .any(|r| released.iter().any(|id| id == &r.id) && needs_human_decision(&r.kind));
+    if released_needs_human {
+        return read_the_queue();
     }
     if let Some((_, subject)) = waiting {
         return format!("- Answer the question waiting on you: {}", clip(&subject));
+    }
+    if !released.is_empty() {
+        return read_the_queue();
     }
     if decided + happened > 0 {
         return "- Nothing needs you — skim the two sections above and carry on.".to_string();
@@ -2142,12 +2218,13 @@ fn render_report_markdown(
     metrics: &str,
 ) -> (String, usize) {
     let empty_text = ["- Nothing happened.", "- Nothing was decided.", "- Nothing needs you."];
-    // Impact-if-wrong descending (66c4c251); `sort_by` is stable, so equal
-    // ranks keep the order the store handed them over in.
+    // Needs-human-decision first (a7e6f237), then impact-if-wrong descending
+    // (66c4c251); `sort_by` is stable, so equal keys keep the order the store
+    // handed them over in — the order inside each group never wobbles.
     let mut sections: Vec<Vec<ReportItem>> =
         vec![happened.to_vec(), decided.to_vec(), needs.to_vec()];
     for section in sections.iter_mut() {
-        section.sort_by(|a, b| b.rank.cmp(&a.rank));
+        section.sort_by(report_order);
     }
 
     let extras: usize = sections.iter().map(|s| s.len().saturating_sub(1)).sum();
@@ -2163,18 +2240,20 @@ fn render_report_markdown(
         (allowance, extras - allowance)
     };
 
-    // Which extra items survive: highest impact first across all three
-    // sections, ties broken by section order and then store order (the order
-    // this vector is built in, kept by a stable sort).
-    let mut candidates: Vec<(u8, usize, usize)> = Vec::new();
+    // Which extra items survive: the same two keys the sections were ordered
+    // by — needs-human-decision first, then highest impact — ties broken by
+    // section order and then store order (the order this vector is built in,
+    // kept by a stable sort). One comparison for both, so truncation can never
+    // drop a line the order above put on top.
+    let mut candidates: Vec<(bool, u8, usize, usize)> = Vec::new();
     for (si, section) in sections.iter().enumerate() {
         for (ii, item) in section.iter().enumerate().skip(1) {
-            candidates.push((item.rank, si, ii));
+            candidates.push((item.needs_human, item.rank, si, ii));
         }
     }
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    candidates.sort_by(|a, b| (b.0, b.1).cmp(&(a.0, a.1)));
     let kept: Vec<(usize, usize)> =
-        candidates.iter().take(allowance).map(|(_, si, ii)| (*si, *ii)).collect();
+        candidates.iter().take(allowance).map(|(_, _, si, ii)| (*si, *ii)).collect();
 
     let mut lines: Vec<String> = Vec::new();
     for (si, section) in sections.iter().enumerate() {
@@ -4919,6 +4998,156 @@ mod tests {
         );
     }
 
+    // ─── a7e6f237: the needs-human-decision flag ────────────────────────
+
+    /// TRUTH: the flag derives from the KIND and nothing else, and it is total
+    /// on a `&str` — a missing, empty or garbage kind flags NO rather than
+    /// blowing up the one report the human reads.
+    #[test]
+    fn the_needs_human_decision_flag_derives_per_kind_and_never_panics() {
+        for yes in [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", "advisor-nudge"] {
+            assert!(needs_human_decision(yes), "{yes} is the human's own call");
+        }
+        for no in ["intervention", "observation", "silence", "turn-end"] {
+            assert!(!needs_human_decision(no), "{no} is not the human's to answer");
+        }
+        // A queue row is DATA, never a control token: a near miss, a stray
+        // newline and a line of junk all read as NO (20260711).
+        for junk in ["", "   ", "URGENT", "advisor nudge", "advisor-nudge\n", "{\"kind\":\"urgent\"}"]
+        {
+            assert!(!needs_human_decision(junk), "{junk:?} must not flag yes");
+        }
+        // Every flagged kind is a kind bee already knows — the flag adds an
+        // order, never a fifth vocabulary.
+        for kind in HUMAN_DECISION_KINDS {
+            assert!(
+                MAILBOX_KINDS.contains(&kind)
+                    || kind == WAITING_ON_GATE
+                    || kind == WAITING_ON_QUESTION,
+                "{kind} flags yes but is neither a mailbox kind nor a waiting-on kind"
+            );
+        }
+    }
+
+    /// TRUTH: "the WakeReport applies the same order" — the row only the human
+    /// can decide prints FIRST, even though the store handed the other one
+    /// over first and impact-if-wrong ranks the two the same.
+    #[test]
+    fn the_report_lists_what_only_you_can_decide_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+
+        let plain =
+            ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let nudge =
+            ask(control, "advisor-nudge", "sess-1", "same-region", "Would an advisor help here?")
+                .unwrap();
+        // Both fall to `needs_you_rank`'s floor, so ONLY the flag can move the
+        // nudge above the row recorded before it.
+        assert_eq!(needs_you_rank(&plain.kind), needs_you_rank(&nudge.kind));
+        // Every queued ask CARRIES the flag on its own row, too.
+        assert_eq!(nudge.to_value()["needs_human_decision"], json!(true));
+        assert_eq!(plain.to_value()["needs_human_decision"], json!(false));
+
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert_eq!(released.len(), 2, "both queued rows released");
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert!(
+            position_of(&rep.markdown, "Would an advisor help here?")
+                < position_of(&rep.markdown, "What ends the retry?"),
+            "the nudge the human may have to decide comes first: {}",
+            rep.markdown
+        );
+    }
+
+    /// TRUTH: the flag sorts, and the fourth section never disagrees with the
+    /// third. A waiting-on `question` outranks a released `intervention` (only
+    /// one of them is the human's call); a released `escalation` outranks the
+    /// question again (same flag, higher impact), and the next-action line
+    /// follows the section both times.
+    #[test]
+    fn the_next_action_follows_the_flagged_order_it_prints() {
+        let mark = r#"{"waiting_on": {"kind": "question", "subject": "which name wins?"}}"#;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        write(control, ".bee/state.json", mark);
+        away_into(control, "supervisor away", None).unwrap();
+        ask(control, "intervention", "sess-1", "retry-loop", "What ends the retry?").unwrap();
+        let (closed, released) = back_into(control, "supervisor back").unwrap();
+        assert_eq!(released.len(), 1);
+        let rep = report_for_window(control, &closed.id).unwrap();
+        assert_legal_report(&rep.markdown);
+        assert!(
+            position_of(&rep.markdown, "which name wins?")
+                < position_of(&rep.markdown, "What ends the retry?"),
+            "the question waiting on the human beats a session's own ask: {}",
+            rep.markdown
+        );
+        assert!(
+            rep.markdown.lines().last().unwrap().contains("Answer the question waiting on you"),
+            "the next action names what the section above put first: {}",
+            rep.markdown
+        );
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let c2 = tmp2.path();
+        write(c2, ".bee/state.json", mark);
+        away_into(c2, "supervisor away", None).unwrap();
+        ask(c2, "escalation", "sess-1", "retry-loop", "Is this still the plan?").unwrap();
+        let (closed2, _) = back_into(c2, "supervisor back").unwrap();
+        let rep2 = report_for_window(c2, &closed2.id).unwrap();
+        assert_legal_report(&rep2.markdown);
+        assert!(
+            position_of(&rep2.markdown, "Is this still the plan?")
+                < position_of(&rep2.markdown, "which name wins?"),
+            "same flag, higher impact-if-wrong, so the escalation leads: {}",
+            rep2.markdown
+        );
+        assert!(
+            rep2.markdown.lines().last().unwrap().contains("Read the 1 queued question(s)"),
+            "and the next action follows it back: {}",
+            rep2.markdown
+        );
+    }
+
+    /// TRUTH: "a malformed queue row derives flag=no and still renders" — on
+    /// this side that means the report is rendered at all. Three broken rows
+    /// in the store cost the human nothing but those rows.
+    #[test]
+    fn malformed_queue_rows_never_sink_the_report() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        away_into(control, "supervisor away", None).unwrap();
+        ask(control, "advisor-nudge", "sess-1", "retry-loop", "Would an advisor help here?")
+            .unwrap();
+
+        // A kind outside the closed set, a row missing every field a reader
+        // needs, and a line that is not JSON at all.
+        append_jsonl(
+            &interventions_path(control),
+            &json!({"event": "record", "id": "bad-1", "ts": now_iso(), "kind": "not-a-kind",
+                    "signal": "none", "point_key": "p", "question": "?",
+                    "target_session": "sess-1"}),
+        )
+        .unwrap();
+        append_jsonl(&interventions_path(control), &json!({"event": "record", "id": "bad-2"}))
+            .unwrap();
+        let mut raw = std::fs::read_to_string(interventions_path(control)).unwrap();
+        raw.push_str("{not json at all\n");
+        std::fs::write(interventions_path(control), raw).unwrap();
+
+        assert_eq!(read_interventions(control).rows.len(), 1, "only the good row survives the fold");
+        assert!(!needs_human_decision("not-a-kind"), "and a kind like that flags no");
+
+        let (closed, _) = back_into(control, "supervisor back").unwrap();
+        let rep = report_for_window(control, &closed.id).expect("the report was still written");
+        assert_legal_report(&rep.markdown);
+        assert!(rep.markdown.contains("Would an advisor help here?"), "{}", rep.markdown);
+    }
+
     #[test]
     fn the_report_notification_reuses_the_urgent_seam_and_honors_the_opt_out() {
         let tmp = tempfile::tempdir().unwrap();
@@ -4959,7 +5188,8 @@ mod tests {
 
     #[test]
     fn the_renderer_is_pure_and_keeps_the_shape_whatever_it_is_handed() {
-        let item = |rank: u8, text: &str| ReportItem { rank, text: text.to_string() };
+        let item =
+            |rank: u8, text: &str| ReportItem { needs_human: false, rank, text: text.to_string() };
         // Ten low-impact items in one section, one high-impact item in another.
         let many: Vec<ReportItem> =
             (0..10).map(|i| item(0, &format!("- low {i}"))).collect();
