@@ -38,25 +38,26 @@
     "docs/history/slp-followup-gaps/CONTEXT.md",
     "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
     "worker": null,
-    "outcome": "Closed the lease, hold and strict-session fail-opens; repaired two false comments and made the heartbeat lockout visible",
+    "outcome": "The lease, hold and strict-session fail-opens are closed, two false comments repaired, and the heartbeat lockout made visible",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
-      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
-      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs"
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
     ],
     "deviations": [
-      "Reserved and edited two files the cell did not list, jspath.rs and mod.rs — the warning queue the lockout line needs lives in jspath.rs and had no push helper, and mod.rs header still listed the strict session read as a delegated branch, which the cell requires to stop being true — something else had to be fixed first"
+      "Reserved and edited two files the cell did not list, jspath.rs and mod.rs — the warning queue the lockout line needs lives in jspath.rs and had no push helper, and mod.rs still listed the strict session read as delegated — something else had to be fixed first",
+      "The judge found one surviving escape on the companion marker and a header bullet narrowed too far; both were closed in cell sfg-6 — something else had to be fixed first"
     ],
     "friction": null,
-    "capped_at": "2026-08-29T05:19:07.206Z",
+    "capped_at": "2026-08-29T05:54:37.685Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -72,13 +73,14 @@
         "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
         "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
         "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
-        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
         "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
-        "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs"
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
       ],
-      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green (222 passed, 0 failed) — the whole write_guard suite is the blast radius of this change; the 6 new sfg5_* tests were red first (5 on Delegate, 1 on a silent deny)",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green — 225 write_guard tests after the sfg-6 revision of this cell; the 6 new sfg5_* tests were red first, five on Delegate and one on a deny that explained nothing",
       "deviations": [
-        "Reserved and edited two files the cell did not list, jspath.rs and mod.rs — the warning queue the lockout line needs lives in jspath.rs and had no push helper, and mod.rs header still listed the strict session read as a delegated branch, which the cell requires to stop being true — something else had to be fixed first"
+        "Reserved and edited two files the cell did not list, jspath.rs and mod.rs — the warning queue the lockout line needs lives in jspath.rs and had no push helper, and mod.rs still listed the strict session read as delegated — something else had to be fixed first",
+        "The judge found one surviving escape on the companion marker and a header bullet narrowed too far; both were closed in cell sfg-6 — something else had to be fixed first"
       ]
     },
     "warnings": [],
@@ -143,6 +145,14 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-08-29T05:54:37.685Z",
+        "reason": "The NEEDS_REVISION named one surviving escape — a corrupt .bee/companion-session.json at hook_local.rs:1015 — and a mod.rs header bullet this cell narrowed too far. Both were fixed in cell sfg-6 (commits d502e845 and 85ead065) and independently re-judged: the sfg-6 judge re-scanned all 11,628 lines of the module and returned PASS on no-remaining-escape, confirming the defect class is fully closed. Overriding because the revision landed in a separate cell.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ],
+    "inline_reason": "Orchestrator re-cap from the main checkout after a NEEDS_REVISION reopened the cell; the work and its revision are both merged."
   }
 }

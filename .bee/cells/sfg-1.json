@@ -38,10 +38,10 @@
     "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
     "docs/knowledge/patterns/20260828-a-session-bound-to-no-lane-commits-against-the-default-record.md"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
     "worker": null,
-    "outcome": "An unbound session's own live claim now resolves the acting write record before the control-root default, and the intake refusal names the session binding as a remedy",
+    "outcome": "An unbound session holding one live claim is judged against its claimed feature's lane record at both the write check and the git intake gate; the intake refusal names the session binding as the remedy",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
@@ -49,10 +49,11 @@
       "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
     ],
     "deviations": [
-      "Grouped the new source \"claim\" with \"default\" at the msn-21 workspace-ownership check (checks.rs) instead of letting it skip that guard — the claim arm derives WHICH LANE a session works under and says nothing about who owns the checkout, so the sessions that met that guard before this cell must still meet it — found a better route"
+      "Grouped the new source claim with default at the msn-21 workspace-ownership check instead of letting it skip that guard — the claim arm derives WHICH LANE a session works under and says nothing about who owns the checkout — found a better route",
+      "The judge found two hunt defects after the cap: the claim readers could fail the guard open on a malformed timestamp, and the ownership comment asserted an invariance the code no longer held. Both were fixed in cell sfg-3 and re-judged PASS — something else had to be fixed first"
     ],
     "friction": null,
-    "capped_at": "2026-08-29T03:56:49.733Z",
+    "capped_at": "2026-08-29T05:54:12.473Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -60,7 +61,7 @@
     "claim_session": null,
     "claimed_at": null,
     "report": {
-      "outcome": "An unbound session holding exactly one live claim is judged against that cell's feature lane record at both the write check and the git intake gate; every other input resolves as before, and the intake refusal names the session binding as a remedy when the default record answered an unbound session",
+      "outcome": "An unbound session holding one live claim is judged against its claimed feature lane record at both the write check and the git intake gate, and the intake refusal names the session binding as the remedy",
       "commit": "9809d34e15c2e670ce46134fb73f5b683433475f",
       "files": [
         "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
@@ -68,9 +69,10 @@
         "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
         "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
       ],
-      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green — the cell's own verify: 207 write_guard tests, the whole surface the four touched files serve; red-first first (3 new-behavior tests failed before the fix, 5 narrowing tests passed throughout)",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green — 225 write_guard tests after the sfg-3 revision of this cell, the whole surface the four touched files serve; red-first first",
       "deviations": [
-        "Grouped the new source \"claim\" with \"default\" at the msn-21 workspace-ownership check (checks.rs) instead of letting it skip that guard — the claim arm derives WHICH LANE a session works under and says nothing about who owns the checkout, so the sessions that met that guard before this cell must still meet it — found a better route"
+        "Grouped the new source claim with default at the msn-21 workspace-ownership check instead of letting it skip that guard — the claim arm derives WHICH LANE a session works under and says nothing about who owns the checkout — found a better route",
+        "The judge found two hunt defects after the cap: the claim readers could fail the guard open on a malformed timestamp, and the ownership comment asserted an invariance the code no longer held. Both were fixed in cell sfg-3 and re-judged PASS — something else had to be fixed first"
       ]
     },
     "warnings": [],
@@ -150,6 +152,14 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-08-29T05:54:12.472Z",
+        "reason": "The NEEDS_REVISION on this cell was two hunt findings, both fixed and independently re-judged: cell sfg-3 (commit 113093a1) made the claim readers infallible so a malformed claimed_at can no longer fail the guard open, and corrected the msn-21 ownership comment plus its pin. The sfg-3 judge returned PASS on all seven checks. Overriding because the revision landed in a separate cell rather than by re-capping this one.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ],
+    "inline_reason": "Orchestrator re-cap from the main checkout: the cell's work and its revision are both merged; this cap only re-records the proof line and the audited judge override after a NEEDS_REVISION reopened it."
   }
 }

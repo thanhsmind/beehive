@@ -36,20 +36,20 @@
     "docs/history/slp-followup-gaps/CONTEXT.md",
     "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
     "worker": null,
-    "outcome": "Closed the remaining store-data and config fail-opens: heartbeat_stale, control_root_for_state and the product_root check are infallible by signature, so no unparseable store or config byte can switch the write guard off",
+    "outcome": "The heartbeat, control-root and product-root readers are infallible, so no unparseable store or config byte can switch the write guard off through them",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
     ],
     "deviations": [
-      "followed the plan"
+      "The judge found the sweep incomplete: lease and hold timestamp readers and the read_session_strict path carried the same escape, and two hook_local.rs comments were left describing the old behavior. All were closed in cell sfg-5 — something else had to be fixed first"
     ],
     "friction": null,
-    "capped_at": "2026-08-29T04:55:01.897Z",
+    "capped_at": "2026-08-29T05:54:25.032Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -57,16 +57,16 @@
     "claim_session": null,
     "claimed_at": null,
     "report": {
-      "outcome": "Closed the remaining store-data and config fail-opens: heartbeat_stale, control_root_for_state and the product_root check are infallible by signature, so no unparseable store or config byte can switch the write guard off",
+      "outcome": "Closed the heartbeat, control-root and product-root fail-opens: the three readers are infallible by signature",
       "commit": "b98f03ab81600776631db25e2ef47ece9535bbbe",
       "files": [
         "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
         "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
         "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
       ],
-      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green (216 passed, 0 failed; the 4 new sfg4_* tests were red on Delegate before the fix; the 13 sfg1_*/sfg3_* tests still pass) — the whole write_guard suite is the module this cell changed, and it is the cell's declared verify command",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green — 225 write_guard tests after the sfg-5 revision of this cell; the 4 new sfg4_* tests were red on Delegate before the fix",
       "deviations": [
-        "followed the plan"
+        "The judge found the sweep incomplete: lease and hold timestamp readers and the read_session_strict path carried the same escape, and two hook_local.rs comments were left describing the old behavior. All were closed in cell sfg-5 — something else had to be fixed first"
       ]
     },
     "warnings": [],
@@ -126,6 +126,14 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-08-29T05:54:25.031Z",
+        "reason": "The NEEDS_REVISION named two paths this cell's sweep missed — the lease/hold timestamp readers and the read_session_strict escape — plus two comments it falsified. All four were fixed in cell sfg-5 (commit 77fbdfd5) and independently re-judged: the sfg-5 judge returned PASS on lease-hold-readers-infallible, unparseable-expiry-is-restrictive, strict-session-denies, lockout-is-visible, prior-truths-hold and red-first. Overriding because the revision landed in a separate cell.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ],
+    "inline_reason": "Orchestrator re-cap from the main checkout after a NEEDS_REVISION reopened the cell; the work and its revision are both merged."
   }
 }
