@@ -13,8 +13,13 @@
   "summary": "Feature \"slp-followup-gaps\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"slp-followup-gaps\" — feature is closed.",
   "created_at": "2026-08-29T03:41:16.254Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Let me check one thing before I answer — whether it is really in use, or only on this machine.",
+    "asked_at": "2026-08-29T06:06:19.770Z",
+    "session": "04c27e63-6543-47f5-a0e6-08bbc1cc2b72"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
