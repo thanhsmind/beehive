@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "a1a72974a3b2519d40cb186fc4f308d433ed159777b28bc530577c1a9f348993",
+      "sha256": "8649199ae2672d0007823874daaafc837217d521bbb8984dfc4cc7573c431379",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -322,6 +322,13 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-herdr/SKILL.md",
+      "sha256": "12aafbc435678f9b9a2ddf784a73ddcb40b7e7b325ec07f1378607afa1d5a5b1",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-herdr/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-hive/agents/openai.yaml",
@@ -654,7 +661,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "aabadf9f835e9b6552d824d5be5efa4e2042ca4ec64f346e8ca40d6a0f81cbc8",
+      "sha256": "8ddadaf8d7a8a7e8c8efae5d6b106c498907aaa502ce22c68b171475348f1b2d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -840,6 +847,13 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-herdr/SKILL.md",
+      "sha256": "12aafbc435678f9b9a2ddf784a73ddcb40b7e7b325ec07f1378607afa1d5a5b1",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-herdr/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-hive/agents/openai.yaml",
@@ -1569,6 +1583,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/SKILL.md"
+    },
+    {
+      "path": "skills/bee-herdr/SKILL.md",
+      "sha256": "12aafbc435678f9b9a2ddf784a73ddcb40b7e7b325ec07f1378607afa1d5a5b1",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-herdr/SKILL.md"
     },
     {
       "path": "skills/bee-hive/agents/openai.yaml",

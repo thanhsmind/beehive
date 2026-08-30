@@ -19,6 +19,10 @@
       "sha256": "16c88040430e4dbdfd7a68ec53520364fcc53df65483072971857a5bcb2d9b93"
     },
     {
+      "name": "bee-herdr",
+      "sha256": "cffea6d5ee5f6cf8af65ee3f821ca85b206616e632887463ad3528d60fa7feac"
+    },
+    {
       "name": "bee-hive",
       "sha256": "9cb5ebbcb1182a495286ff3fd88638022fafd64f33b71b1ab5da11dbbd63aebe"
     },
