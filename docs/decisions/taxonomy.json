@@ -452,6 +452,7 @@
     "context",
     "pi-result-mailbox",
     "headless",
-    "observability"
+    "observability",
+    "learning"
   ]
 }
