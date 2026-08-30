@@ -988,5 +988,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-08-29T21:55:27.453Z"
+  },
+  "proactive-leader-intake": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-30T00:38:55.447Z"
   }
 }

@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "proactive-leader-intake",
   "mode": "high-risk",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
-    "shape": true,
-    "execution": true,
+    "shape": false,
+    "execution": false,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"proactive-leader-intake\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c647200; reload the product and test \"proactive-leader-intake\", then either approve uat (\"bee gate --name uat --approved true --lane proactive-leader-intake\") or fix it in the worktree and merge again.",
+  "next_action": "Close proactive-leader-intake",
   "created_at": "2026-08-29T22:36:00.819Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: proactive-leader-intake",
-    "asked_at": "2026-08-30T00:27:08.703Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: test the hat-wave plan-check law on main, then approve",
+    "asked_at": "2026-08-30T00:27:17.178Z",
+    "session": "e51e3c84-7f03-4083-9ed7-09a72c9eacc4"
   },
   "route": {
     "class": "feature",
@@ -39,5 +39,15 @@
     "plan_sha256": "2488097958ca1a1f952d9540d956b348316d180d0923c0beaffeee4b9fb2b82a",
     "advisor": "fable (hat-risks seat, intake wave; refreshed post-plan per timing law)",
     "digest_head": "# Advisor consult digest — proactive-leader-intake\n\nConsult: hat-risks seat (fable, session-class) of the intake hat wave,\n2026-08-30 — the wave absorbs the advisor consult per D4; full digest in\ndocs/history/proactive-leader-intake/hat-wave-intake.md.\n\nVerdict carried into the plan: the feature is reversible only if\n(1) the pre-Lock wave is absorbed with a recorded supersession and\nrevisit path — plan keeps the window (D5) and the decisions store\ncarries the supersession trail; (2) the trigger "
+  },
+  "last_scribing_run": {
+    "feature": "proactive-leader-intake",
+    "date": "2026-08-30",
+    "at": "2026-08-30T00:37:01.569Z",
+    "areas_synced": [
+      "advisor-protocol",
+      "doctrine-layer"
+    ],
+    "next_action": "Close proactive-leader-intake"
   }
 }

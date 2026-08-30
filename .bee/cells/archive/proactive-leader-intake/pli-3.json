@@ -123,7 +123,32 @@
     "warnings": [
       "advisory: this cap's commit changes 1496 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "one-procedure-home",
+            "status": "PASS",
+            "evidence": "rg -c '### Hat wave' skills/bee-hive/references/gates-and-delegation.md = 1"
+          },
+          {
+            "id": "plan-step-law-present",
+            "status": "PASS",
+            "evidence": "rg -n 'plan step' gates-and-delegation.md hits incl. seat table line 216"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "claude-fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-30T00:37:27.386Z"
+      }
+    ]
   },
   "verify": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge index --check && rg -n 'hat wave' packages/bee/AGENTS.block.md AGENTS.md docs/knowledge/areas/advisor-protocol/triggers.md"
 }

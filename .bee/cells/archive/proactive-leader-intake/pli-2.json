@@ -80,7 +80,32 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "one-procedure-home",
+            "status": "PASS",
+            "evidence": "rg -c '### Hat wave' skills/bee-hive/references/gates-and-delegation.md = 1"
+          },
+          {
+            "id": "plan-step-law-present",
+            "status": "PASS",
+            "evidence": "rg -n 'plan step' gates-and-delegation.md hits incl. seat table line 216"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "claude-fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-30T00:37:27.382Z"
+      }
+    ]
   },
   "regen_obligation_ack": "wave-barrier",
   "verify": "rg -n 'hat wave' skills/bee-planning/SKILL.md skills/bee-planning/references/planning-reference.md"
