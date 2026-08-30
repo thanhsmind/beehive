@@ -152,6 +152,16 @@ form was a shell script that depended on GNU utilities and a modern shell, so it
 Windows at all. The one-shot cockpit setup is still a shell script and is a recorded gap
 (herding-orchestration D8).
 
+**A role's opening prompt is searched for, never assumed at one path.** Every role — dispatch,
+merge and supervisor — gets its prompt from `bee-herding/references/<role>-prompt.md`, but the
+root that file sits under depends on how bee arrived. The bee source repo carries the skill tree
+at `skills/`; every host project installs it under a runtime prefix instead. `read_prompt_file`
+therefore walks an ordered candidate list — `skills`, `.claude/skills`, `.agents/skills`,
+`.opencode/skills`, `.codex/skills` — and takes the first readable hit, with `skills` leading so
+the source repo resolves exactly as it always did. When no candidate reads, the error names every
+path tried. The single hardcoded `skills/` join this replaced is why the whole cockpit ran only
+inside the bee repo and died with "prompt file not found" in every host project.
+
 ## Actors & Access
 
 - **The owner** performs three acts and only three: bootstrap once, set the enable marker to arm
