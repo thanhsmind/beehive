@@ -40,6 +40,14 @@ Why this is the least workflow that protects the work: <one sentence>
 ## Requirements (from CONTEXT.md)
 - D1: <locked decision restated> ...
 
+## Load-bearing claims
+<one line naming the labels and the match rule, then the table — spec
+below. Every row is load-bearing; no `guessed` row survives the gate.>
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | <what the shape depends on being true> | read/ran/guessed | <path:line, or the command that was run> | <the bytes, verbatim> |
+
 ## Discovery
 <2–4 lines: what was inspected, the finding, the evidence command — or a
 one-line pointer to discovery.md when one exists.>
@@ -59,12 +67,59 @@ edge-dimensions.md, probes written per applicable dimension. Either way each
 cell's writer judges existing coverage first and authors only what is not
 already pinned (`.bee/expertise/tests.md`).>
 
+## Open Questions
+<what is still unknown, one line each — or "(none)". This is where a claim
+lands when it cannot be upgraded past `guessed`.>
+
 ## Out of scope
 <explicitly not solved; deferred ideas stay deferred>
 ```
 
 No `## Current slice` / `## Cells` sections are added post-approval: the
 plan stays frozen and the current slice lives only in cells.
+
+### The load-bearing claims table
+
+**Mandatory, and the gate enforces it.** A `## Load-bearing claims` table
+is required in every plan.md. A claim is load-bearing when the shape
+changes if the claim turns out to be false — that is the whole membership
+test. Five columns, in this order:
+
+| Column | Carries |
+|---|---|
+| `#` | the row number, so a refusal and an audit can name the row |
+| `Claim` | the one thing the shape depends on being true |
+| `Label` | `read`, `ran`, or `guessed` — nothing else |
+| `Anchor` | `path:line` or `path:line-line` for `read`; the exact command for `ran` |
+| `Verbatim evidence` | the bytes found there, copied, never retyped |
+
+**Label vocabulary.** `read` = the author opened that file at that line and
+saw those bytes. `ran` = the author executed that command and holds its
+output. `guessed` = inferred, not observed — legal while drafting, never at
+the gate.
+
+**Match rule (the audit's one rule).** The evidence column is a verbatim
+byte substring of the anchored line(s); multi-line evidence joins the lines
+with `" / "`. Reflowed, trimmed, prettified, or paraphrased text is a
+MISMATCH, not a near miss — a quote that drops a prefix is the exact defect
+this table exists to catch.
+
+**Membership converse.** Every load-bearing claim must be a row. A
+load-bearing claim living only in the plan's prose is a plan defect, caught
+by the leader's pre-flight check and by the audit
+(`.bee/expertise/review.md` ("Claims-table audit")) — the binary cannot
+judge prose.
+
+**The mechanical refusal.** `bee gate --name shape` and `bee gate --merge`
+refuse an approval while the table is missing or malformed, while any row
+lacks a label, anchor, or evidence, while a label sits outside the three
+words, or while any row is still `guessed`. There is no waiver flag. Two
+remedies, both self-serve: upgrade the label by doing the real read or the
+real run, or move the claim to `## Open Questions` and reshape so nothing
+load-bearing rests on it. The refusal fires at `shape` and at `--merge` —
+where plan.md is still editable — and never at a plain
+`--name execution`, which lands after the freeze where no edit could
+answer it.
 
 **Shape bodies by mode:**
 
@@ -289,6 +344,21 @@ the execution package exists. A SMALLER PATH FAIL is always surfaced to
 the human first, whatever the gate-bypass level; the hat wave never opens
 for these lanes — the cold-pickup criteria are self-checked
 while writing the cells.
+
+**Evidence folds INTO the one question — never a second artifact.** These
+lanes write no plan.md, so the load-bearing claims ride the gate message
+itself: `"…verified by [Z] (claim: <file:line> — "<verbatim quote>")"`.
+Same match rule as the table — the quote is bytes copied from that
+location, never a paraphrase. One claim stays inline in the sentence; at
+two or more claims, list them under the question, one line each. The list
+is the only permitted growth — a tiny lane never grows a plan.md to hold
+its evidence.
+
+**Zero load-bearing claims is a real answer.** When the change rests on
+nothing that could be false — a typo fix, a rename the compiler proves —
+say exactly that in the gate message ("no load-bearing claims: <why>").
+Never manufacture a claim to fill the slot: a quote nobody needed is
+noise, and it teaches the reader to skim the ones that matter.
 
 ## Plan check — the hat wave
 
