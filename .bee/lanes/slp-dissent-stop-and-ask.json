@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces are quiet — nothing to flag. Writing the required silence record.",
-    "asked_at": "2026-08-30T07:42:08.287Z",
-    "session": "05aa6e8a-e742-4080-9d8f-1feda7022ed1"
+    "subject": "Everything is quiet — same picture as the last several ticks. No open, claimed, or blocked cells (87 capped, 6 dropped), no reservations, no",
+    "asked_at": "2026-08-30T07:57:50.219Z",
+    "session": "f7fd746c-fc6d-43ce-acf5-a37f3f3c7d5d"
   },
   "route": {
     "class": "feature",
