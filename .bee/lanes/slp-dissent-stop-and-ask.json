@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": true
+    "uat": false
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
   "next_action": "Both SLP features are closed; an independent review is the user's call",
@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-08-30T16:16:02.423Z",
-    "session": "97fc563c-1777-460d-ac53-e0e07cb13630"
+    "subject": "Six surfaces read. One live worker (session `6ba76180`, cell `lr-1`, feature `letter-reflection`) is 9m20s into implementing a \"Mistakes & r",
+    "asked_at": "2026-08-30T16:47:54.512Z",
+    "session": "27057ab9-15d1-4269-9bd0-d294a990a134"
   },
   "route": {
     "class": "feature",
