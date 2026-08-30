@@ -3072,6 +3072,13 @@ fn feature_close_note(
 ///
 /// UNCONDITIONAL, by D9: every session appends its entries, attended or not.
 /// Arming decides only whether a letter is composed at the run's END.
+///
+/// AND THE LETTER IS FILED HERE, by D2 (aedb5be9): every close files its close
+/// letter at the moment of the close, attended sessions included. The entry
+/// data was already appended on the line above; filing was the missing step,
+/// and waiting for a run end meant an attended session's close letter was
+/// never written at all. FAIL-OPEN (D10): a letter that cannot be filed is
+/// said out loud and never turns a finished close into a refusal.
 fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Option<&str>) {
     use crate::verbs::mailbox;
     let control = crate::hooks::session_init::control_root_for(root);
@@ -3102,6 +3109,14 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Optio
         &entry,
         &feature_close_note(root, feature, usage_line),
     );
+    // D2: the same CONTROL root the entry just landed under — the letter must
+    // be composed where the entries and the caps are. A worktree root here
+    // would file an orphan letter in a checkout the human never reads.
+    if let mailbox::RunEnd::Failed(why) = mailbox::file_close_letter(&control, &run) {
+        eprintln!(
+            "bee: could not file the human-mailbox letter for the close of \"{feature}\" on run \"{run}\" ({why}) — the close itself is recorded; that run has no letter to read."
+        );
+    }
 }
 
 /// What close did with the feature's cells, and why.
