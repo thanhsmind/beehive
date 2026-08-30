@@ -1033,5 +1033,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-30T12:48:05.467Z"
+  },
+  "hook-name-before-stdin": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T13:54:00.554Z"
   }
 }
