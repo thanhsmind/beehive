@@ -54,6 +54,16 @@ patterns, decisions, and prior learnings — precedent beats research. Remove
 uncertainty at the lowest cost: cite a pattern or verify one fact; unfamiliar
 territory or competing approaches dispatch `bee-researching`, findings merged in.
 
+**One reality touch per novel surface, every lane, before the gate.** A
+surface the plan leans on and nobody here has opened yet gets touched once,
+cheaply: open the real file at the real line, or run the real path and keep
+the output. Existence is not evidence — that a file, flag, or table is named
+somewhere proves nothing about what it holds. Record the touch where the lane
+keeps its evidence: `## Discovery` and the claims table in plan.md
+(`references/planning-reference.md` ("The load-bearing claims table")), the
+gate message itself on `tiny`/`small`. A touch that contradicts the draft is
+the cheapest finding of the whole feature.
+
 ## Shape
 
 Draft the smallest honest shape — the smallest that still covers what the
@@ -81,6 +91,16 @@ Before the question, on a lane: `bee state plan-conflicts derive`, then one
 `bee state plan-conflicts verdict` per candidate — the gate refuses an
 execution approval while any candidate is unverdicted or the review is stale
 by `plan_rev` (see `docs/knowledge/areas/workflow-state/gates.md` R138).
+
+**Pre-flight the claims table yourself, before you present anything.** The
+leader walks the same checklist the binary runs: the `## Load-bearing claims`
+table exists, every row carries label, anchor, and evidence, every label is
+`read`/`ran`/`guessed`, no row is still `guessed`, and no load-bearing claim
+sits only in the prose. Fix what the walk finds — upgrade the label with a
+real read or run, or move the claim to `## Open Questions`. The mechanical
+refusal is the net under that walk, never the way you find out: a gate that
+refuses after the human already said yes spends their approval on your
+homework.
 
 Standard/high-risk: present the shape in plain language — what will be built,
 why this size, cost if the shape is wrong — link the plan, then ask verbatim:

@@ -215,7 +215,7 @@ never copied:**
 
 | Hat | Role | Asks at the plan step | Instrument |
 |---|---|---|---|
-| facts-gaps | `hat-facts-gaps` | what the drafted plan cannot answer | 5-Layer rubric + Truth Table Test over the plan (`.bee/expertise/review.md`) |
+| facts-gaps | `hat-facts-gaps` | what the drafted plan cannot answer | 5-Layer rubric + Truth Table Test over the plan, plus the claims-table audit — open each anchor, confirm the quoted bytes, sweep the prose for a load-bearing claim that never became a row; mismatch = BLOCKER (`.bee/expertise/review.md` ("Claims-table audit") is the home — CITED, never copied) |
 | alternatives | `hat-alternatives` | is there a cheaper shape for this plan | bee-planning's inline SMALLER PATH mandate, read at plan altitude — CITED, never copied (`bee-planning/SKILL.md` is the one home); several viable designs on a high-stakes ambiguous choice hands off to blind lanes |
 | user-impact | `hat-user-impact` | what the user sees and feels in the planned behavior | gray-area probes over the planned behavior + the SEE mock (bee-shaping references) |
 | risks *(5-seat only)* | `hat-risks` | what breaks, and can it be undone | CRUD Lifecycle check — the delete half is the reversibility interrogation (`.bee/expertise/review.md`) |

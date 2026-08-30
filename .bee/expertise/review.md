@@ -16,6 +16,7 @@ that produces thirty observations.
 | Building the list of what a correct change must handle | The 5-Layer rubric |
 | The diff adds branches, guards, or a new case | The Truth Table Test |
 | The change brings a thing into being or takes it away | The CRUD Lifecycle check |
+| Auditing a plan's load-bearing claims table | Claims-table audit |
 | About to file a suspected defect | Verify before reporting |
 | Cannot fully verify a finding | Label uncertainty exactly |
 | Writing the finding up | Evidence standards |
@@ -187,6 +188,44 @@ children, and a unique constraint over soft-deleted rows all surface at
 once. When the change owns only one of the four verbs, the other three
 are still the requirement it must not break — file that as the caller's
 expectation, not as an out-of-scope note.
+
+## Claims-table audit
+
+**Open every anchor. A quote nobody re-opened is not evidence.** A plan's
+`## Load-bearing claims` table says the shape rests on these facts and
+here is where each one was seen. The table is a promise about bytes on
+disk, and the only way to audit a promise about bytes is to go read the
+bytes. Reading the table and finding it well-formed audits nothing — the
+binary already did that at the gate.
+
+Row by row:
+
+1. **Open the anchor.** `path:line` or `path:line-line` → open that file
+   at those lines. A `ran` row → run that exact command again.
+2. **Compare bytes, by the match rule.** The evidence column must be a
+   verbatim byte substring of the anchored line(s); multi-line evidence
+   joins the lines with `" / "`. Reflowed, trimmed, prettified, or
+   paraphrased text is a MISMATCH. A dropped prefix is a mismatch. Close
+   enough is a mismatch.
+3. **File every mismatch as a BLOCKER.** Quote what the table claims and
+   what the file actually says, on one line each. A wrong anchor and a
+   wrong quote are the same finding at this severity: the shape rests on
+   a fact nobody verified, and severity follows the load the claim
+   carries, never the size of the diff between the two strings.
+
+Then the **membership sweep**, the half no machine can run: read the
+plan's prose — Approach, Discovery, Shape, the risk map — for a claim the
+shape depends on that never became a row. "X already handles this",
+"there is only one caller", "the format is stable" in prose, absent from
+the table, is a BLOCKER: the table's rule is that every load-bearing
+claim is a row, so a load-bearing claim in prose alone is the rule broken,
+not an oversight. Say which sentence, and which row it should have been.
+
+Two things this audit does NOT do. It does not re-argue the shape — that
+belongs to the plan's own review. And it does not soften a mismatch
+because the conclusion still looks right: a true conclusion resting on a
+fabricated quote is the most expensive finding in this file, because the
+next person will trust the next quote.
 
 ## Verify before reporting
 
