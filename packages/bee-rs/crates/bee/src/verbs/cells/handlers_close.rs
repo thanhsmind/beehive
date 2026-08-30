@@ -857,6 +857,10 @@ fn record_cap_in_mailbox(root: &Path, f: &CapFlags, capped: &Value, report: &Val
         // finished work, and a question that blocks something is a blocker
         // (stop kind 2 above) or a gate. Empty rather than guessed.
         needs_you: Vec::new(),
+        // letter-reflection: a mistake is written down by the agent through
+        // `bee mailbox reflect`, at the moment it is noticed. A cap must not
+        // guess one out of the work it just recorded.
+        better: None,
     };
     mailbox::record_stop(root, &run, &entry);
 }
@@ -1236,6 +1240,8 @@ fn record_block_in_mailbox(root: &Path, blocked: &Value, reason: &str, session_f
             blocked.get("title").and_then(Value::as_str),
             reason,
         )],
+        // Only a reflection entry carries letter-reflection's second part.
+        better: None,
     };
     mailbox::record_stop(root, &run, &entry);
 }

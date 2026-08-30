@@ -907,6 +907,7 @@ mod tests {
                 commit: None,
                 proof: None,
                 departure: None,
+                better: None,
             }],
             needs_you: Vec::new(),
             body: format!(
@@ -1181,6 +1182,7 @@ mod tests {
                 commit: None,
                 proof: None,
                 departure,
+                better: None,
             }],
             needs_you: Vec::new(),
             body,

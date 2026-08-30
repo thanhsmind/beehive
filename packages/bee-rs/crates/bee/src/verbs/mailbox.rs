@@ -518,7 +518,8 @@ pub(crate) fn needs_human_first(items: &mut [NeedsYou]) {
     items.sort_by_key(|n| !n.needs_human_decision());
 }
 
-/// D3's `items[]` element: `{what, files[], commit, proof, departure}`.
+/// D3's `items[]` element: `{what, files[], commit, proof, departure}`, plus
+/// letter-reflection's `better`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LetterItem {
     pub what: String,
@@ -526,6 +527,16 @@ pub(crate) struct LetterItem {
     pub commit: Option<String>,
     pub proof: Option<String>,
     pub departure: Option<Departure>,
+    /// letter-reflection D3's second part: what would have been better.
+    ///
+    /// ADDITIVE, and that is the constraint it was built under — the
+    /// frontmatter contract only GROWS, so a consumer written against the
+    /// five-field item parses a letter carrying this one unchanged, and a
+    /// letter filed before this field existed reads back with `None` rather
+    /// than failing. Only a [`KIND_REFLECTION`] entry ever carries it; every
+    /// other stop leaves it `None` and the key emits as `null`, exactly like
+    /// `commit` and `proof` already do.
+    pub better: Option<String>,
 }
 
 impl LetterItem {
@@ -536,6 +547,7 @@ impl LetterItem {
             "commit": self.commit,
             "proof": self.proof,
             "departure": self.departure.as_ref().map(Departure::to_value),
+            "better": self.better,
         })
     }
 
@@ -547,6 +559,9 @@ impl LetterItem {
             commit: opt_string(m, "commit"),
             proof: opt_string(m, "proof"),
             departure: m.get("departure").and_then(Departure::from_value),
+            // Absent on every letter filed before this field existed, and that
+            // is a `None`, never a parse failure.
+            better: opt_string(m, "better"),
         })
     }
 }
@@ -567,7 +582,23 @@ impl LetterItem {
 pub(crate) const KIND_CAP: &str = "cap";
 pub(crate) const KIND_FEATURE_CLOSE: &str = "feature-close";
 pub(crate) const KIND_BLOCKER: &str = "blocker";
-pub(crate) const ENTRY_KINDS: [&str; 3] = [KIND_CAP, KIND_FEATURE_CLOSE, KIND_BLOCKER];
+
+/// letter-reflection D2's kind: a mistake the acting agent noticed, written
+/// down by the agent through `bee mailbox reflect`.
+///
+/// It is NOT a fourth clean stop. The three above are appended by a stop that
+/// already happened (a cap, a block, a feature close); this one is appended by
+/// the agent at the moment it notices a mistake, or at the run-end look-back —
+/// so nothing in the codebase reaches it except the verb the human's own words
+/// asked for.
+///
+/// Two required parts (D3): `what` is what went wrong, [`Entry::better`] is
+/// what would have been better. The door that refuses a missing part is
+/// [`read_reflection`], and the verb calls it — the store and the door can
+/// never disagree, because there is one of them.
+pub(crate) const KIND_REFLECTION: &str = "reflection";
+pub(crate) const ENTRY_KINDS: [&str; 4] =
+    [KIND_CAP, KIND_FEATURE_CLOSE, KIND_BLOCKER, KIND_REFLECTION];
 
 /// One raw append written at a clean stop, before any letter exists.
 ///
@@ -590,6 +621,11 @@ pub(crate) struct Entry {
     pub proof: Option<String>,
     pub departure: Option<Departure>,
     pub needs_you: Vec<NeedsYou>,
+    /// letter-reflection D3's second part — what would have been better. It
+    /// mirrors [`LetterItem::better`], because the entry must be able to hold
+    /// every fact the letter prints (D8): a `better` the entry could not carry
+    /// would be one the composing pass had to author.
+    pub better: Option<String>,
 }
 
 impl Entry {
@@ -603,7 +639,31 @@ impl Entry {
             "proof": self.proof,
             "departure": self.departure.as_ref().map(Departure::to_value),
             "needs_you": self.needs_you.iter().map(NeedsYou::to_value).collect::<Vec<_>>(),
+            "better": self.better,
         })
+    }
+
+    /// letter-reflection D3's two parts, as ONE stored entry — the shape the
+    /// verb appends and the shape the section renders, built in one place so
+    /// the door and the composer can never disagree about what a reflection is.
+    ///
+    /// The two parts arrive already checked by [`read_reflection`]; this only
+    /// normalises them onto one line each, the same edit every other stored
+    /// sentence gets.
+    pub(crate) fn reflection(at: &str, wrong: &str, better: &str) -> Self {
+        Self {
+            at: at.to_string(),
+            kind: KIND_REFLECTION.to_string(),
+            // D8: the plain-language sentence is the agent's own, written at
+            // the moment it noticed the mistake. Taken verbatim.
+            what: one_line(wrong),
+            files: Vec::new(),
+            commit: None,
+            proof: None,
+            departure: None,
+            needs_you: Vec::new(),
+            better: Some(one_line(better)),
+        }
     }
 
     /// `None` for anything JSON-shaped but missing a required field — treated
@@ -624,7 +684,20 @@ impl Entry {
                 .and_then(Value::as_array)
                 .map(|a| a.iter().filter_map(NeedsYou::from_value).collect())
                 .unwrap_or_default(),
+            // Absent on every line appended before this field existed, and
+            // that is a `None`, never a parse failure — the whole entry layer
+            // is append-only, so old lines outlive every shape change.
+            better: opt_string(m, "better"),
         })
+    }
+
+    /// Is this a reflection entry (letter-reflection D2)?
+    ///
+    /// Asked by KIND rather than by "does it carry a `better`", because the
+    /// kind is what the verb stored and a field test would make a hand-edited
+    /// line able to move an entry between sections.
+    pub(crate) fn is_reflection(&self) -> bool {
+        self.kind == KIND_REFLECTION
     }
 
     /// The letter item this entry becomes. The composing pass groups and
@@ -636,8 +709,37 @@ impl Entry {
             commit: self.commit.clone(),
             proof: self.proof.clone(),
             departure: self.departure.clone(),
+            better: self.better.clone(),
         }
     }
+}
+
+/// letter-reflection D3's door: the two parts a reflection entry must carry.
+///
+/// `Err` names the MISSING part in the words the refusal hands back, because a
+/// refusal that does not say what to fix is a refusal the caller works around.
+/// Both parts are checked in one pass so a caller that left both out learns
+/// both at once instead of fixing one and being refused again.
+///
+/// It lives HERE, with the store, for the same reason [`read_departure`] does:
+/// the verb is argv plumbing, and the rule about what a reflection IS must have
+/// exactly one home.
+pub(crate) fn read_reflection<'a>(
+    wrong: Option<&'a str>,
+    better: Option<&'a str>,
+) -> Result<(&'a str, &'a str), String> {
+    let missing: Vec<&str> = [("--wrong", wrong), ("--better", better)]
+        .into_iter()
+        .filter(|(_, v)| v.map(str::trim).unwrap_or("").is_empty())
+        .map(|(name, _)| name)
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!(
+            "a reflection has two required parts, and it is missing {} (D3) — remedy: pass --wrong (what went wrong) and --better (what would have been better), each with text.",
+            missing.join(" and ")
+        ));
+    }
+    Ok((wrong.unwrap_or("").trim(), better.unwrap_or("").trim()))
 }
 
 /// Append one entry to this run's JSONL. One O_APPEND write, parents created
@@ -1150,6 +1252,11 @@ pub(crate) fn render_letter(letter: &Letter) -> String {
                     emit_scalar(&mut out, 6, "kind", &d.kind);
                 }
             }
+            // letter-reflection: ADDITIVE. It emits LAST, after every key the
+            // contract already had, and as `null` when there is nothing — the
+            // frontmatter only grows, so a consumer that reads the five older
+            // keys sees exactly what it saw before.
+            emit_opt(&mut out, 4, "better", item.better.as_deref());
         }
     }
 
@@ -1541,10 +1648,23 @@ pub(crate) fn mark_letter(root: &Path, id: &str, status: &str) -> Result<Marked,
 pub(crate) const SECTION_DONE: &str = "Done";
 pub(crate) const SECTION_DEPARTED: &str = "Where I departed from the plan and why";
 pub(crate) const SECTION_BROKEN: &str = "Broken or unfinished";
+/// letter-reflection D1's section, in D1's own words and D1's own place —
+/// after [`SECTION_BROKEN`], before [`SECTION_NEEDS_YOU`], in the nightly
+/// letter and the feature-close letter alike. It amends D7's section list and
+/// changes no other D7 rule: the drop rule reaches it exactly like the five it
+/// joins, so a run with no mistake to report files a letter with no such
+/// heading.
+pub(crate) const SECTION_REFLECTION: &str = "Mistakes & reflection";
 pub(crate) const SECTION_NEEDS_YOU: &str = "Needs your call";
 pub(crate) const SECTION_NEXT: &str = "Next";
-pub(crate) const SECTIONS: [&str; 5] =
-    [SECTION_DONE, SECTION_DEPARTED, SECTION_BROKEN, SECTION_NEEDS_YOU, SECTION_NEXT];
+pub(crate) const SECTIONS: [&str; 6] = [
+    SECTION_DONE,
+    SECTION_DEPARTED,
+    SECTION_BROKEN,
+    SECTION_REFLECTION,
+    SECTION_NEEDS_YOU,
+    SECTION_NEXT,
+];
 
 /// The subject of a letter whose every stored sentence is unusable as one.
 ///
@@ -1606,12 +1726,22 @@ fn push_section(out: &mut String, heading: &str, lines: &[String]) {
 ///
 /// Where each entry goes, and why nothing is invented on the way:
 ///
-///   * `Done` — every entry that is not a blocker, by its own sentence. Not a
-///     whitelist of kinds: an entry of some kind this build does not know is
-///     still a thing the run did, and dropping it would lose a stored fact.
+///   * `Done` — every entry that is neither a blocker nor a reflection, by its
+///     own sentence. Not a whitelist of kinds: an entry of some kind this build
+///     does not know is still a thing the run did, and dropping it would lose a
+///     stored fact. The two exclusions are the two kinds that are NOT things the
+///     run did — a blocker is work that stopped, and a mistake is not an
+///     achievement (letter-reflection D1).
 ///   * `Where I departed from the plan and why` — every entry carrying D5's
 ///     three parts, through `departure_line`.
 ///   * `Broken or unfinished` — every `KIND_BLOCKER` entry, by its sentence.
+///   * `Mistakes & reflection` — every `KIND_REFLECTION` entry, as
+///     `<what> — better: <better>`. "better:" is the second connective this
+///     pass adds of its own, spelled after the Needs-your-call bullet's own
+///     "blocks:" so a human learns ONE shape for "this stored part, labelled".
+///     D3 makes both parts required at the append, so a bullet here always has
+///     both halves; a stored line that somehow lost its second half prints its
+///     first half alone rather than an invented one.
 ///   * `Needs your call` — every stored `NeedsYou`, with its stable id and
 ///     what it blocks (D13). This feature ships no path to answer one; the id
 ///     is what keeps that surface reachable later.
@@ -1626,11 +1756,22 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
     let mut done: Vec<String> = Vec::new();
     let mut departed: Vec<String> = Vec::new();
     let mut broken: Vec<String> = Vec::new();
+    let mut reflection: Vec<String> = Vec::new();
     let mut asks: Vec<NeedsYou> = Vec::new();
 
     for entry in entries {
         if entry.kind == KIND_BLOCKER {
             broken.push(bullet(&entry.what));
+        } else if entry.is_reflection() {
+            // Its OWN section, and never Done — a mistake is not a thing the
+            // run did (letter-reflection D1). The two stored parts are joined
+            // by the one connective; nothing else is added.
+            reflection.push(bullet(&match entry.better.as_deref().map(one_line) {
+                Some(better) if !better.is_empty() => {
+                    format!("{} — better: {better}", one_line(&entry.what))
+                }
+                _ => one_line(&entry.what),
+            }));
         } else {
             done.push(bullet(&entry.what));
         }
@@ -1664,6 +1805,7 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
         (SECTION_DONE, &done),
         (SECTION_DEPARTED, &departed),
         (SECTION_BROKEN, &broken),
+        (SECTION_REFLECTION, &reflection),
         (SECTION_NEEDS_YOU, &needs_you),
         (SECTION_NEXT, &next),
     ] {
@@ -1678,9 +1820,17 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
 /// verbatim — never re-worded, because the words belong to whoever wrote them
 /// at the moment of the stop (D8). Append order, so the choice is stable: a
 /// run re-composed after two more stops keeps the subject it already had.
+///
+/// A REFLECTION entry is never a candidate (letter-reflection D1). The subject
+/// is the inbox row — the one line that answers "what happened" — and a run
+/// titled by its own mistake would tell the human the night went wrong when it
+/// did not. The mistake is still in the letter, in the section written for it;
+/// it just does not get to name the run. A run whose ONLY entries are
+/// reflections falls to [`FALLBACK_SUBJECT`], which is the honest row for it.
 fn choose_subject(entries: &[Entry]) -> String {
     entries
         .iter()
+        .filter(|e| !e.is_reflection())
         .map(|e| e.what.trim())
         .find(|s| check_subject(s).is_ok())
         .map(str::to_string)
@@ -2505,6 +2655,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let rest = &args[2..];
     match verb {
         "mark" => run_mark(parse_shape(rest, &["id", "status"])?, t0),
+        "reflect" => run_reflect(parse_shape(rest, &["wrong", "better", "session-id"])?, t0),
         _ => None,
     }
 }
@@ -2561,6 +2712,78 @@ fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     }
 }
 
+// ─── the verb: `bee mailbox reflect` (letter-reflection D2, D3) ─────────
+//
+// Argv plumbing only, exactly like `mark` above. The rule about what a
+// reflection IS lives in [`read_reflection`] and [`Entry::reflection`], with
+// the store.
+//
+//     bee mailbox reflect --wrong <text> --better <text> [--session-id <id>]
+//
+// WHAT IT IS CALLED, AND WHY — CONTEXT.md left the name and the place to the
+// agent's discretion, so the reasons are written down here rather than left to
+// be re-derived:
+//
+//   * The GROUP is `mailbox`, beside `mark`: this appends to the mailbox's own
+//     entry layer, and the store's name is already the group.
+//   * The VERB is `reflect`. It is the human's own word for the ask ("1 dạng
+//     phản tư" — a form of reflection), it is plain language, and it says
+//     nothing about reading or listing, so D1's ceiling on this feature — no
+//     rendering surface ships from bee — is untouched.
+//   * The two parts ride `--wrong` and `--better`, one flag per required part,
+//     the shape `cells dissent --reason/--alternative` already uses for "two
+//     halves of one record, each required". They are NEW spellings in this
+//     CLI's flag vocabulary, and the ratchet in `catalog.rs` carries the check
+//     of every near miss that was considered and rejected.
+//   * The run rides `--session-id`, the SAME spelling every other stop uses
+//     for "which session is this", and it resolves through the SAME chain
+//     (`resolve_session_flag_env`: the flag, then `BEE_SESSION_ID`, then
+//     `CLAUDE_CODE_SESSION_ID`) before `run_id` normalises it. A `--run` flag
+//     would have been a second word for a concept the vocabulary already has,
+//     and a caller who learned `--session-id` at the cap would have got it
+//     wrong here.
+//
+// FAIL-OPEN like every other append (D10): `record_stop` warns and returns, so
+// a mailbox that cannot be written never turns this into a refusal. The ONLY
+// refusal is D3's — a missing part — and it happens BEFORE anything is
+// written.
+
+fn run_reflect(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+    let cmd = "mailbox reflect";
+    let Ok(cwd) = std::env::current_dir() else { return None };
+    let root = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r.root,
+        RootsWt::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, cmd, parsed.pre_json, t0, &why))
+        }
+        RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, parsed.pre_json, t0)),
+    };
+    let drift = check_manifest_drift(&root);
+    let (wrong, better) =
+        match read_reflection(mark_flag(&parsed, "wrong"), mark_flag(&parsed, "better")) {
+            Ok(parts) => parts,
+            Err(why) => {
+                let msg = format!("bee {cmd}: {why}");
+                return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+            }
+        };
+
+    let session = crate::verbs::cells::resolve_session_flag_env(mark_flag(&parsed, "session-id"));
+    let run = run_id(session.as_deref());
+    let entry = Entry::reflection(&now_iso(), wrong, better);
+    record_stop(&root, &run, &entry);
+
+    let result = json!({
+        "run": run,
+        "kind": KIND_REFLECTION,
+        "at": entry.at,
+        "what": entry.what,
+        "better": entry.better,
+    });
+    let text = format!("Wrote down one mistake for run {run}. It goes in that run's letter.");
+    Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0))
+}
+
 // ─── tests ──────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2586,6 +2809,7 @@ mod tests {
                         why: "It makes a dead run's record findable by name".to_string(),
                         kind: "found a better route".to_string(),
                     }),
+                    better: None,
                 },
                 LetterItem {
                     what: "Followed the plan exactly".to_string(),
@@ -2593,6 +2817,7 @@ mod tests {
                     commit: None,
                     proof: None,
                     departure: None,
+                    better: None,
                 },
             ],
             needs_you: vec![NeedsYou {
@@ -2615,7 +2840,15 @@ mod tests {
             proof: Some("cargo test — green — one module".to_string()),
             departure: None,
             needs_you: vec![],
+            better: None,
         }
+    }
+
+    /// One reflection entry (letter-reflection D2, D3), built the ONE way the
+    /// verb builds it — through `Entry::reflection`, so a test can never prove
+    /// a shape the command does not produce.
+    fn sample_reflection(at: &str, wrong: &str, better: &str) -> Entry {
+        Entry::reflection(at, wrong, better)
     }
 
     // ── D2: the subject is a validity rule ──────────────────────────────
@@ -3338,6 +3571,17 @@ mod tests {
             kind: "found a better route".to_string(),
         });
         let second = sample_entry("2026-08-25T02:00:00.000Z", "Wired the note into every clean stop");
+        // letter-reflection: a mistake the agent wrote down mid-run. It rides
+        // the shared fixture on purpose, so every authorship walk and every
+        // section-position check below covers the new section for free — a
+        // section only one test looks at is a section the next change breaks
+        // silently. Stamped BEFORE the blocker, because D12's sweep names the
+        // moment a run went quiet out of the LAST entry's `at`.
+        let reflected = sample_reflection(
+            "2026-08-25T02:30:00.000Z",
+            "Guessed at the folder name instead of asking",
+            "Ask once, up front, before touching anything",
+        );
         let mut blocked = sample_entry("2026-08-25T03:00:00.000Z", "Stopped short of the rename");
         blocked.kind = KIND_BLOCKER.to_string();
         blocked.needs_you = vec![NeedsYou {
@@ -3346,7 +3590,7 @@ mod tests {
             blocks: "the rename".to_string(),
             kind: Some(WAITING_ON_QUESTION.to_string()),
         }];
-        vec![first, second, blocked]
+        vec![first, second, reflected, blocked]
     }
 
     /// Lowercase word tokens — the unit "a fact this text states" is checked in.
@@ -3357,45 +3601,65 @@ mod tests {
             .collect()
     }
 
+    /// Every word ONE stored entry carries — the whole allowance an authorship
+    /// walk gives that entry. It is a function rather than a block copied into
+    /// each walk so a NEW stored field (letter-reflection's `better` was one)
+    /// widens every walk at once: a walk that forgot the new field would go
+    /// green while the composer printed a fact it had no permission to print,
+    /// which is the hole a per-test copy leaves (20260710).
+    fn entry_words(e: &Entry) -> Vec<String> {
+        let mut allowed: Vec<String> = Vec::new();
+        allowed.extend(words(&e.what));
+        allowed.extend(words(&e.kind));
+        allowed.extend(words(&e.at));
+        for f in &e.files {
+            allowed.extend(words(f));
+        }
+        if let Some(c) = &e.commit {
+            allowed.extend(words(c));
+        }
+        if let Some(p) = &e.proof {
+            allowed.extend(words(p));
+        }
+        if let Some(b) = &e.better {
+            allowed.extend(words(b));
+        }
+        if let Some(d) = &e.departure {
+            allowed.extend(words(&d.what));
+            allowed.extend(words(&d.why));
+            allowed.extend(words(&d.kind));
+        }
+        for n in &e.needs_you {
+            allowed.extend(words(&n.id));
+            allowed.extend(words(&n.what));
+            allowed.extend(words(&n.blocks));
+        }
+        allowed
+    }
+
+    /// The connectives the composing pass is allowed to add of its own — the
+    /// complete list, named here so a third one cannot be slipped in without
+    /// this constant growing in the same commit.
+    const COMPOSER_CONNECTIVES: [&str; 2] = ["blocks", "better"];
+
     #[test]
     fn composition_never_states_a_fact_no_entry_carries() {
         // D8's authorship ban, as a test that FAILS the moment the composing
         // pass writes prose of its own. Every word the body says must come
-        // from a stored entry, from one of D7's five headings, or be the one
-        // fixed connective the Needs-your-call bullet adds.
+        // from a stored entry, from one of D7's headings (as amended by
+        // letter-reflection D1), or be one of the two fixed connectives.
         let entries = full_run();
         let letter =
             compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &entries).unwrap();
 
         let mut allowed: Vec<String> = Vec::new();
         for e in &entries {
-            allowed.extend(words(&e.what));
-            allowed.extend(words(&e.kind));
-            allowed.extend(words(&e.at));
-            for f in &e.files {
-                allowed.extend(words(f));
-            }
-            if let Some(c) = &e.commit {
-                allowed.extend(words(c));
-            }
-            if let Some(p) = &e.proof {
-                allowed.extend(words(p));
-            }
-            if let Some(d) = &e.departure {
-                allowed.extend(words(&d.what));
-                allowed.extend(words(&d.why));
-                allowed.extend(words(&d.kind));
-            }
-            for n in &e.needs_you {
-                allowed.extend(words(&n.id));
-                allowed.extend(words(&n.what));
-                allowed.extend(words(&n.blocks));
-            }
+            allowed.extend(entry_words(e));
         }
         for heading in SECTIONS {
             allowed.extend(words(heading));
         }
-        allowed.push("blocks".to_string());
+        allowed.extend(COMPOSER_CONNECTIVES.map(str::to_string));
 
         for word in words(&letter.body) {
             assert!(
@@ -3403,10 +3667,11 @@ mod tests {
                 "the body says {word:?}, which no stored entry carries — that is authoring (D8)"
             );
         }
-        // The subject is CHOSEN out of the stored sentences, never re-worded.
+        // The subject is CHOSEN out of the stored sentences, never re-worded —
+        // and never out of a reflection (letter-reflection D1).
         assert!(
-            entries.iter().any(|e| e.what == letter.subject),
-            "the subject {:?} is not one of the stored sentences",
+            entries.iter().filter(|e| !e.is_reflection()).any(|e| e.what == letter.subject),
+            "the subject {:?} is not one of the stored non-reflection sentences",
             letter.subject
         );
     }
@@ -3447,10 +3712,13 @@ mod tests {
 
     #[test]
     fn a_section_with_nothing_to_report_is_absent_never_printed_empty() {
-        // One plain cap: no departure, no blocker, no question, no next step.
+        // One plain cap: no departure, no blocker, no mistake, no question, no
+        // next step.
         let body = compose_body(&[sample_entry("2026-08-25T01:00:00.000Z", "Did one thing")]);
         assert!(body.contains(&format!("## {SECTION_DONE}")));
-        for heading in [SECTION_DEPARTED, SECTION_BROKEN, SECTION_NEEDS_YOU, SECTION_NEXT] {
+        for heading in
+            [SECTION_DEPARTED, SECTION_BROKEN, SECTION_REFLECTION, SECTION_NEEDS_YOU, SECTION_NEXT]
+        {
             assert!(
                 !body.contains(&format!("## {heading}")),
                 "section {heading:?} has nothing to report and must be dropped (D7)\n{body}"
@@ -3466,6 +3734,222 @@ mod tests {
         // with nothing to report is dropped.
         let body = compose_body(&full_run());
         assert!(!body.contains(&format!("## {SECTION_NEXT}")));
+    }
+
+    // ── letter-reflection: the Mistakes & reflection section ────────────
+
+    /// TRUTH: the section renders where D1 put it, with the ONE connective,
+    /// and it says exactly the two parts the entry stored.
+    #[test]
+    fn the_reflection_section_renders_between_broken_and_needs_your_call() {
+        let body = compose_body(&full_run());
+
+        let at = |heading: &str| {
+            body.find(&format!("## {heading}"))
+                .unwrap_or_else(|| panic!("{heading:?} is missing from:\n{body}"))
+        };
+        // D1's place, stated as the two neighbours it was named against.
+        assert!(at(SECTION_BROKEN) < at(SECTION_REFLECTION), "{body}");
+        assert!(at(SECTION_REFLECTION) < at(SECTION_NEEDS_YOU), "{body}");
+
+        // The bullet is the two stored parts and the one connective — the same
+        // "<label>: " shape the Needs-your-call bullet already teaches.
+        assert!(
+            body.contains(
+                "- Guessed at the folder name instead of asking — better: Ask once, up front, before touching anything"
+            ),
+            "{body}"
+        );
+    }
+
+    /// TRUTH: D7's drop rule reaches the new section too — a run that made no
+    /// mistake files a letter with no such heading, never an empty one. The
+    /// section is fed ONLY by stored reflection entries, so an empty one would
+    /// mean the composer invented the question.
+    #[test]
+    fn a_run_with_no_reflection_files_a_letter_without_the_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        // Every kind of stop EXCEPT a reflection.
+        for entry in full_run().into_iter().filter(|e| !e.is_reflection()) {
+            append_entry(root, "run-clean", &entry).unwrap();
+        }
+        let RunEnd::Filed(path) = file_run_letter(root, "run-clean") else {
+            panic!("an armed run that ends files its letter");
+        };
+        let letter = read_letter(&path).unwrap();
+        assert!(
+            !letter.body.contains(&format!("## {SECTION_REFLECTION}")),
+            "a run with no mistake to report must drop the section (D1, D7):\n{}",
+            letter.body
+        );
+        // …and the whole letter is still there.
+        assert!(letter.body.contains(&format!("## {SECTION_DONE}")));
+        assert!(letter.body.contains(&format!("## {SECTION_BROKEN}")));
+    }
+
+    /// TRUTH: a mistake is not a thing the run DID. It never appears under
+    /// Done — the section a human reads to learn what landed.
+    #[test]
+    fn a_reflection_never_appears_under_done() {
+        let body = compose_body(&full_run());
+        let done_at = body.find(&format!("## {SECTION_DONE}")).unwrap();
+        let broken_at = body.find(&format!("## {SECTION_BROKEN}")).unwrap();
+        let done_block = &body[done_at..broken_at];
+        assert!(
+            !done_block.contains("Guessed at the folder name"),
+            "the mistake landed under Done:\n{done_block}"
+        );
+        // It is in the letter — dropped from Done, never dropped entirely.
+        assert!(body.contains("Guessed at the folder name instead of asking"), "{body}");
+    }
+
+    /// TRUTH: a letter is never TITLED by its mistake, even when the mistake
+    /// is the first thing the run recorded and reads as a perfectly valid
+    /// subject on its own. This is the case the naive "first valid sentence
+    /// wins" rule gets wrong, so it is the case the test is written for.
+    #[test]
+    fn a_reflection_never_wins_the_subject() {
+        let mistake = sample_reflection(
+            "2026-08-25T01:00:00.000Z",
+            "The overnight run deleted the wrong folder",
+            "Read the path back before deleting anything",
+        );
+        // On its own the sentence WOULD be a valid subject — that is the trap.
+        assert!(check_subject(&mistake.what).is_ok(), "the fixture must be a valid subject");
+
+        let work = sample_entry("2026-08-25T02:00:00.000Z", "The overnight run rebuilt the index");
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[mistake, work])
+                .unwrap();
+        assert_eq!(letter.subject, "The overnight run rebuilt the index");
+    }
+
+    /// TRUTH: a run whose ONLY entries are reflections still gets a valid
+    /// subject — the last resort, which says nothing about what the run did.
+    /// Without the fallback, excluding reflections from the choice would file
+    /// a letter with no inbox row, which D2 refuses outright.
+    #[test]
+    fn a_run_of_nothing_but_reflections_still_gets_a_subject() {
+        let letter = compose_letter(
+            "beehive",
+            "run-one",
+            "2026-08-25T06:00:00.000Z",
+            &[sample_reflection("2026-08-25T01:00:00.000Z", "Guessed a path", "Read it first")],
+        )
+        .unwrap();
+        assert_eq!(letter.subject, FALLBACK_SUBJECT);
+        assert!(letter.validate().is_ok(), "and it is a valid record");
+    }
+
+    /// TRUTH: D3's two parts are both required, and the refusal names the part
+    /// that is missing. Checked at [`read_reflection`], the ONE door — the verb
+    /// is argv plumbing and calls this.
+    #[test]
+    fn a_reflection_missing_a_part_is_refused_and_the_refusal_names_it() {
+        let both = read_reflection(Some("went wrong"), Some("would be better")).unwrap();
+        assert_eq!(both, ("went wrong", "would be better"));
+        // Trimmed on the way through, like every other stored sentence.
+        assert_eq!(read_reflection(Some("  a  "), Some("  b  ")).unwrap(), ("a", "b"));
+
+        for (wrong, better, named) in [
+            (None, Some("would be better"), "--wrong"),
+            (Some("went wrong"), None, "--better"),
+            (Some("   "), Some("would be better"), "--wrong"),
+            (Some("went wrong"), Some("\t"), "--better"),
+        ] {
+            let err = read_reflection(wrong, better).unwrap_err();
+            assert!(err.contains(named), "the refusal does not name {named}: {err}");
+            assert!(err.contains("remedy:"), "a refusal must say what to fix: {err}");
+        }
+        // Both missing: BOTH are named, so one fix answers one refusal.
+        let err = read_reflection(None, None).unwrap_err();
+        assert!(err.contains("--wrong") && err.contains("--better"), "{err}");
+    }
+
+    /// TRUTH: the frontmatter contract only GROWS. A letter filed before the
+    /// `better` key existed reads back unchanged, and a letter carrying it
+    /// round-trips — so a consumer written against the older item shape never
+    /// breaks on a newer letter.
+    #[test]
+    fn the_better_key_is_additive_on_both_sides_of_the_contract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entries = full_run();
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &entries).unwrap();
+        let text = render_letter(&letter);
+        // Carried, beside the keys the contract already had.
+        assert!(text.contains("better: \"Ask once, up front, before touching anything\""), "{text}");
+        // …and `null` on every item that is not a reflection, exactly like
+        // `commit` and `proof` already emit.
+        assert!(text.contains("better: null"), "{text}");
+
+        let path = write_letter(root, &letter).unwrap();
+        // The reader trims the body, so the record — not the trailing byte —
+        // is what round-trips.
+        let mut expected = letter.clone();
+        expected.body = expected.body.trim().to_string();
+        assert_eq!(read_letter(&path).unwrap(), expected, "the record round-trips");
+
+        // An OLDER letter — no `better` key anywhere — still reads.
+        let older = text
+            .replace("    better: null\n", "")
+            .replace("    better: \"Ask once, up front, before touching anything\"\n", "");
+        // Only the FRONTMATTER key is stripped: the body's own "better:"
+        // connective is prose the older reader was always going to see.
+        assert!(
+            !split_frontmatter(&older).unwrap().0.contains("better:"),
+            "the fixture still carries the key:\n{older}"
+        );
+        let old_path = mailbox_dir(root).join("20260825T060000Z-older.md");
+        write_text_atomic(&old_path, &older).unwrap();
+        let read_back = read_letter(&old_path).unwrap();
+        assert_eq!(read_back.items.len(), letter.items.len(), "every item still parses");
+        assert!(read_back.items.iter().all(|i| i.better.is_none()), "a missing key reads as None");
+    }
+
+    /// TRUTH: a reflection entry survives the append/read round trip through
+    /// the entry layer, and an OLD stored line with no `better` still reads as
+    /// an entry rather than a corrupt one.
+    #[test]
+    fn a_reflection_entry_rides_the_entry_layer_and_old_lines_still_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entry = sample_reflection("2026-08-25T02:30:00.000Z", "Guessed a path", "Read it first");
+        append_entry(root, "run-a", &entry).unwrap();
+        let read_back = read_entries(root, "run-a");
+        assert_eq!(read_back, vec![entry.clone()]);
+        assert!(read_back[0].is_reflection());
+        assert_eq!(read_back[0].better.as_deref(), Some("Read it first"));
+
+        // A line appended before the field existed: no `better`, still an entry.
+        let mut old = entry.to_value();
+        old.as_object_mut().unwrap().remove("better");
+        append_jsonl(&entries_path(root, "run-a"), &old).unwrap();
+        let read_back = read_entries(root, "run-a");
+        assert_eq!(read_back.len(), 2, "the old line is read, not warned away");
+        assert_eq!(read_back[1].better, None);
+    }
+
+    /// TRUTH: `bee mailbox reflect` builds its entry through the store's own
+    /// constructor, so what the verb appends and what the section renders can
+    /// never be two different shapes.
+    #[test]
+    fn the_verb_and_the_section_agree_about_what_a_reflection_is() {
+        let entry = Entry::reflection("2026-08-25T02:30:00.000Z", "  Guessed  a path ", " Read it ");
+        assert_eq!(entry.kind, KIND_REFLECTION);
+        assert!(ENTRY_KINDS.contains(&entry.kind.as_str()), "the kind set names it");
+        // One line each, the only edit a stored sentence ever gets.
+        assert_eq!(entry.what, "Guessed a path");
+        assert_eq!(entry.better.as_deref(), Some("Read it"));
+        // A reflection edited nothing and proved nothing — empty, never guessed.
+        assert!(entry.files.is_empty() && entry.commit.is_none() && entry.proof.is_none());
+        assert!(entry.departure.is_none() && entry.needs_you.is_empty());
+
+        let body = compose_body(&[entry]);
+        assert!(body.contains("- Guessed a path — better: Read it"), "{body}");
     }
 
     #[test]
@@ -3515,7 +3999,7 @@ mod tests {
         assert!(!letter.project.trim().is_empty());
         assert!(!letter.filed_at.trim().is_empty());
         assert_eq!(letter.status, STATUS_UNREAD);
-        assert_eq!(letter.items.len(), 3, "every stored entry is an item");
+        assert_eq!(letter.items.len(), full_run().len(), "every stored entry is an item");
         assert_eq!(letter.needs_you.len(), 1);
         assert_eq!(letter.needs_you[0].id, "ny-7");
     }
@@ -3532,7 +4016,7 @@ mod tests {
         }
         assert!(matches!(file_run_letter(root, "run-one"), RunEnd::NotArmed));
         assert!(list_letter_files(root).is_empty());
-        assert_eq!(read_entries(root, "run-one").len(), 3, "the entries are kept");
+        assert_eq!(read_entries(root, "run-one").len(), full_run().len(), "the entries are kept");
     }
 
     #[test]
@@ -3812,33 +4296,12 @@ nested:
 
         let mut allowed: Vec<String> = Vec::new();
         for e in &entries {
-            allowed.extend(words(&e.what));
-            allowed.extend(words(&e.kind));
-            allowed.extend(words(&e.at));
-            for f in &e.files {
-                allowed.extend(words(f));
-            }
-            if let Some(c) = &e.commit {
-                allowed.extend(words(c));
-            }
-            if let Some(p) = &e.proof {
-                allowed.extend(words(p));
-            }
-            if let Some(d) = &e.departure {
-                allowed.extend(words(&d.what));
-                allowed.extend(words(&d.why));
-                allowed.extend(words(&d.kind));
-            }
-            for n in &e.needs_you {
-                allowed.extend(words(&n.id));
-                allowed.extend(words(&n.what));
-                allowed.extend(words(&n.blocks));
-            }
+            allowed.extend(entry_words(e));
         }
         for heading in SECTIONS {
             allowed.extend(words(heading));
         }
-        allowed.push("blocks".to_string());
+        allowed.extend(COMPOSER_CONNECTIVES.map(str::to_string));
         // The whole extra vocabulary D12 buys, named as constants so this test
         // measures the marking rather than being widened by it.
         allowed.extend(words(SECTION_UNFINISHED));
@@ -4055,6 +4518,7 @@ nested:
             proof: None,
             departure: None,
             needs_you: vec![],
+            better: None,
         }
     }
 
@@ -4183,9 +4647,7 @@ nested:
 
         let mut allowed: Vec<String> = Vec::new();
         for e in &entries {
-            allowed.extend(words(&e.what));
-            allowed.extend(words(&e.kind));
-            allowed.extend(words(&e.at));
+            allowed.extend(entry_words(e));
         }
         for list in note.lists() {
             for line in list {

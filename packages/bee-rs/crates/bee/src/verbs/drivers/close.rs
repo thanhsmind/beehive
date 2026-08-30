@@ -3102,6 +3102,8 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Optio
         // A green close left nothing outstanding; a close that needed the
         // human's call refused at a door and never reached this line (D13).
         needs_you: Vec::new(),
+        // Only a reflection entry carries letter-reflection's second part.
+        better: None,
     };
     mailbox::record_close_stop(
         &control,
