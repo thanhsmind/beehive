@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Running the regen chain the manifest obligation requires.",
-    "asked_at": "2026-08-30T07:47:20.537Z",
+    "subject": "The single-target loop runs clean — as expected, because this flake needs **load**. The release runs every crate's tests at once. Reproducin",
+    "asked_at": "2026-08-30T08:17:24.065Z",
     "session": "9edcd966-07e8-402f-89f0-a1ec504f42c1"
   },
   "route": {

@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "feature": "doctor-probe-etxtbsy",
+  "mode": "standard",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"doctor-probe-etxtbsy\" started at phase \"planning\" (lane).",
+  "next_action": "Ships in the next release.",
+  "created_at": "2026-08-30T08:18:57.325Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": "One probe function plus a regression test; the flag is the doctor row detail string that existing tests assert",
+    "updated_at": "2026-08-30T08:18:57.400Z",
+    "feature": "doctor-probe-etxtbsy"
+  },
+  "last_scribing_run": {
+    "feature": "doctor-probe-etxtbsy",
+    "date": "2026-08-30",
+    "at": "2026-08-30T08:24:00.909Z",
+    "areas_synced": [
+      "rust-runtime"
+    ],
+    "next_action": "Ships in the next release."
+  }
+}

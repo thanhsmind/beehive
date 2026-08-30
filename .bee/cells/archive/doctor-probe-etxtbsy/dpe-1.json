@@ -1,0 +1,63 @@
+{
+  "id": "dpe-1",
+  "feature": "doctor-probe-etxtbsy",
+  "lane": "small",
+  "title": "Retry the doctor version probe past a transient ETXTBSY and name why it failed",
+  "behavior_change": true,
+  "role": "code",
+  "tier": "generation",
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "action": "cargo test runs the bin target's tests as threads in ONE process, so a thread that forks while another has just written an executable leaves the child holding a write fd and the exec returns ETXTBSY. installed_binary_bee_version then returned Failed, binary_freshness_row set probe_failed, the mtime leg had nothing to report because the fixtures are deliberately older, and the row fell through to ok:None. Two freshness tests went red that way - binary_freshness_reports_not_ok_on_a_version_mismatch and binary_freshness_catches_release_drift_when_package_versions_agree - one of them inside the 2.25.2 release gate. Make ExecutableFileBusy the ONE retried spawn error (10 attempts, 20ms apart); every other spawn failure is already a real answer. Give ProbedBeeVersion::Failed a reason string and put it in the unknown row's detail, keeping the literal rs-info in the message because a test asserts it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "ExecutableFileBusy is retried and no other spawn error is",
+      "The unknown row's detail names the concrete failure reason",
+      "The detail still contains the literal rs-info",
+      "The doctor tests survive a 30-run stress loop",
+      "The full declared suite is green"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "dpe-inline-1",
+    "outcome": "ExecutableFileBusy is retried 10x20ms; the unknown row now names the real failure reason",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs"
+    ],
+    "deviations": [
+      "First wording of the new detail dropped the literal rs-info and broke binary_freshness_is_unknown_when_the_probe_fails_and_nothing_is_newer on the first stress run; reworded to keep it — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T08:23:50.817Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9edcd966-07e8-402f-89f0-a1ec504f42c1",
+    "claimed_at": "2026-08-30T08:23:33.980Z",
+    "inline_reason": "Flake triage: diagnosis and fix were one continuous investigation in the main checkout, and only this session is live; splitting the one-function change out to a dispatched worker would have separated the fix from the reproduction loop that proved it",
+    "report": {
+      "outcome": "Retry the doctor version probe past a transient ETXTBSY and name why it failed",
+      "commit": "53222d2c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast (full declared suite) plus a 30-run doctor-only stress loop — green — the flake was caught twice before the change and zero times in 30 runs after",
+      "deviations": [
+        "First wording of the new detail dropped the literal rs-info and broke binary_freshness_is_unknown_when_the_probe_fails_and_nothing_is_newer on the first stress run; reworded to keep it — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
