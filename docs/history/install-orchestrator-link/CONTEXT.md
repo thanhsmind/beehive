@@ -18,3 +18,9 @@ README.md § Install (after "Verify / update"): one sentence naming what
 the orchestrator is, the one-line installer, and that re-running the
 same line updates it in place. No script changes, no INSTALL.md change
 (that file documents bee's own installer options only).
+
+**Correction (owner, same day, cell iol-3):** the section belongs in
+INSTALL.md, not README. Moved verbatim to INSTALL.md as its own
+`## Orchestrator (waggledance)` section after `## 5. Update /
+uninstall`; the README subsection is removed (README's existing
+"Full options … INSTALL.md" pointer already covers discovery).
