@@ -399,7 +399,7 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         });
     };
 
-    let mut probe_failed = false;
+    let mut probe_failed: Option<String> = None;
     match installed_binary_bee_version(&bin) {
         ProbedBeeVersion::Missing => {
             return Some(Row {
@@ -427,7 +427,7 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         // is not evidence of freshness either. The mtime scan below still
         // runs and still wins; only when it finds nothing does this flag turn
         // the row into an honest unknown.
-        ProbedBeeVersion::Failed => probe_failed = true,
+        ProbedBeeVersion::Failed(reason) => probe_failed = Some(reason),
     }
 
     if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
@@ -453,13 +453,13 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         }
     }
 
-    if probe_failed {
+    if let Some(reason) = probe_failed {
         return Some(Row {
             key: KEY,
             ok: None,
             detail: format!(
-                "could not run the installed binary to read its release version (bee rs-info \
-                 failed), and no source input is newer than it — freshness is unknown. {REMEDY}"
+                "could not read the installed binary's release version (bee rs-info: {reason}), \
+                 and no source input is newer than it — freshness is unknown. {REMEDY}"
             ),
         });
     }
@@ -485,21 +485,49 @@ fn read_source_release_version(root: &Path) -> Option<String> {
 enum ProbedBeeVersion {
     Present(String),
     Missing,
-    Failed,
+    /// Carries WHY the probe produced no version. The reason is not decoration:
+    /// this arm ends in an `ok: None` row, and a row that says only "unknown"
+    /// leaves the next reader with nothing to act on.
+    Failed(String),
 }
+
+/// How long the spawn keeps retrying `ETXTBSY`, and the gap between tries.
+/// A binary written moments ago is not runnable while ANY process still holds
+/// a write descriptor to it, and a multi-threaded caller (cargo's test harness
+/// is one) can fork a child that inherits exactly that descriptor. The window
+/// closes as soon as the writer's fd does, so a handful of short retries turns
+/// a spurious "freshness unknown" into the real verdict; nothing else retries,
+/// because nothing else is transient.
+const PROBE_ETXTBSY_ATTEMPTS: u32 = 10;
+const PROBE_ETXTBSY_DELAY_MS: u64 = 20;
 
 /// The installed binary's answer to what release version it was built from —
 /// `bee rs-info`'s `bee_version` field. A probe, never a mutation: this only
 /// spawns and reads stdout.
 fn installed_binary_bee_version(bin: &Path) -> ProbedBeeVersion {
-    let Ok(out) = std::process::Command::new(bin).arg("rs-info").output() else {
-        return ProbedBeeVersion::Failed;
+    let mut spawned = Err(std::io::ErrorKind::Other.into());
+    for attempt in 0..PROBE_ETXTBSY_ATTEMPTS {
+        spawned = std::process::Command::new(bin).arg("rs-info").output();
+        // `ExecutableFileBusy` is the ONE retryable spawn failure: it means
+        // the file exists and is ours, just not runnable yet. A missing file,
+        // a permission denial or anything else is a real answer already.
+        match &spawned {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {}
+            _ => break,
+        }
+        if attempt + 1 < PROBE_ETXTBSY_ATTEMPTS {
+            std::thread::sleep(std::time::Duration::from_millis(PROBE_ETXTBSY_DELAY_MS));
+        }
+    }
+    let out = match spawned {
+        Ok(out) => out,
+        Err(e) => return ProbedBeeVersion::Failed(format!("could not spawn it ({e})")),
     };
     if !out.status.success() {
-        return ProbedBeeVersion::Failed;
+        return ProbedBeeVersion::Failed(format!("it exited {}", out.status));
     }
     let Ok(value) = serde_json::from_slice::<Value>(&out.stdout) else {
-        return ProbedBeeVersion::Failed;
+        return ProbedBeeVersion::Failed("its rs-info output is not JSON".to_string());
     };
     match value.get("bee_version").and_then(Value::as_str) {
         Some(ver) => ProbedBeeVersion::Present(ver.to_string()),
