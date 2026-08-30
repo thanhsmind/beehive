@@ -8,16 +8,16 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"letter-reflection\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 4e1aaf7; reload the product and test \"letter-reflection\", then either approve uat (\"bee gate --name uat --approved true --lane letter-reflection\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"letter-reflection\" (lane).",
   "created_at": "2026-08-30T16:32:10.543Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: letter-reflection",
-    "asked_at": "2026-08-30T16:55:51.777Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: test the Mistakes & reflection letter section on main, then approve",
+    "asked_at": "2026-08-30T16:57:48.543Z",
+    "session": "6ba76180-df07-43c5-8daa-38fdc5f4335b"
   }
 }

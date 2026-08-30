@@ -1043,5 +1043,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-30T15:07:31.730Z"
+  },
+  "letter-reflection": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T17:05:19.613Z"
   }
 }

@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Six surfaces read. One live worker (session `6ba76180`, cell `lr-1`, feature `letter-reflection`) is 9m20s into implementing a \"Mistakes & r",
-    "asked_at": "2026-08-30T16:47:54.512Z",
-    "session": "27057ab9-15d1-4269-9bd0-d294a990a134"
+    "subject": "Checked the earlier tick's flagged concern (whether the new AGENTS.md \"look back\" rule from lr-1 needed its own decision entry). Decision `b",
+    "asked_at": "2026-08-30T17:05:08.215Z",
+    "session": "712ded4d-ec56-44f8-9914-f91c4ca90938"
   },
   "route": {
     "class": "feature",
