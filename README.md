@@ -545,6 +545,16 @@ iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/inst
 
 Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`. Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beehive` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
 
+### Orchestrator (waggledance)
+
+Everything above sets up one project as an ordinary bee repo — the leader setup. The machine that supervises bee repos from the outside — receives specs, opens lead agents, tracks their runs — is the orchestrator, [waggledance](https://github.com/thanhsmind/waggledance), and it installs with its own one-liner:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/waggledance/main/install.sh | sh
+```
+
+Re-run the same line to update it to the current orchestrator standard; project installs are untouched.
+
 ---
 
 ## For LLM Agents
