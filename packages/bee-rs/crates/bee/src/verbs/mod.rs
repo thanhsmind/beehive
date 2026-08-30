@@ -28,6 +28,7 @@ pub mod help;
 pub mod intent_group;
 pub mod knowledge;
 pub mod mailbox;
+pub mod mailbox_digest; // library module (no try_native) — never probed below
 pub mod models_group;
 pub mod reservations;
 pub mod reviews;

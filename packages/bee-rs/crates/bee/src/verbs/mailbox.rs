@@ -79,7 +79,7 @@ use crate::verbs::reservations::{date_parse_val, now_iso, now_ms};
 use crate::verbs::supervisor::{needs_human_decision, WAITING_ON_QUESTION};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{json, Map, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -182,9 +182,30 @@ pub(crate) fn letter_path(root: &Path, filed_at: &str, run: &str) -> PathBuf {
     mailbox_dir(root).join(letter_filename(filed_at, run))
 }
 
+/// The name every digest file starts with (letter-digest D1, D3): a digest is
+/// `digest-YYYY-MM-DD.md` or `digest-YYYY-Www.md`, filed in the SAME directory
+/// as the letters because the mailbox is one directory of files a human reads
+/// in place.
+///
+/// It lives here, beside the letter's own filename rule, because it is the ONE
+/// thing every letter surface must know about digests: a digest is not a
+/// letter. Its name carries no run slug, nothing composed it from a run's
+/// entries, and D11's one-letter-per-run arithmetic does not reach it — so a
+/// digest that leaked into the lettered set would make D12's recovery pass see
+/// a run that never existed, and the run-end fold would try to re-compose a
+/// digest as if it were that phantom run's letter. Every reader that means
+/// "letters" filters this prefix out, and [`list_letter_files`] is where that
+/// filter is applied once for all of them.
+pub(crate) const DIGEST_PREFIX: &str = "digest-";
+
 /// Every filed letter, name-sorted — which is time-sorted, by D11's own
 /// construction. Names only: nothing is opened, so a caller asking "what is in
 /// the mailbox" pays one directory read.
+///
+/// Digests are NOT letters and never appear here (see [`DIGEST_PREFIX`]). The
+/// filter sits in this one function on purpose: [`letter_files_for_run`] and
+/// [`letter_paths_by_run_slug`] both read the mailbox THROUGH it, so there is
+/// one place where the difference between a letter and a digest is decided.
 pub(crate) fn list_letter_files(root: &Path) -> Vec<PathBuf> {
     let dir = mailbox_dir(root);
     let mut names: Vec<String> = match std::fs::read_dir(&dir) {
@@ -192,7 +213,7 @@ pub(crate) fn list_letter_files(root: &Path) -> Vec<PathBuf> {
             .flatten()
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().into_owned();
-                name.ends_with(".md").then_some(name)
+                (name.ends_with(".md") && !name.starts_with(DIGEST_PREFIX)).then_some(name)
             })
             .collect(),
         Err(_) => Vec::new(),
@@ -1061,7 +1082,7 @@ fn yq(s: &str) -> String {
     Value::String(s.to_string()).to_string()
 }
 
-fn emit_scalar(out: &mut String, indent: usize, key: &str, value: &str) {
+pub(crate) fn emit_scalar(out: &mut String, indent: usize, key: &str, value: &str) {
     out.push_str(&" ".repeat(indent));
     out.push_str(key);
     out.push_str(": ");
@@ -1086,7 +1107,7 @@ fn emit_bool(out: &mut String, indent: usize, key: &str, value: bool) {
     out.push_str(if value { ": true\n" } else { ": false\n" });
 }
 
-fn emit_string_list(out: &mut String, indent: usize, key: &str, values: &[String]) {
+pub(crate) fn emit_string_list(out: &mut String, indent: usize, key: &str, values: &[String]) {
     let pad = " ".repeat(indent);
     if values.is_empty() {
         out.push_str(&format!("{pad}{key}: []\n"));
@@ -1750,10 +1771,48 @@ fn project_of(root: &Path) -> String {
 ///
 /// An existing letter that cannot be READ stops the write instead of routing
 /// around it — writing beside it is how one run ends up with two letters.
+///
+/// ONE EXCEPTION TO THE ARMED GATE, and it is not a relaxation of D9: a run
+/// that ALREADY HAS a letter re-composes it whatever the arming says. D2
+/// (aedb5be9) files a letter at the moment of a feature close, attended
+/// sessions included, so an attended run can reach its end holding a letter
+/// filed hours before. Asking `armed()` first would freeze that letter at the
+/// close and silently drop everything the run did afterwards — the very loss
+/// D11's re-compose-in-place rule exists to prevent. The existence check is
+/// ONE directory listing of names, nothing opened, so an unarmed checkout with
+/// no letter still stops for about the cost it stopped for before.
 pub(crate) fn file_run_letter(root: &Path, run: &str) -> RunEnd {
-    if !armed(root) {
+    let existing = letter_files_for_run(root, run).into_iter().next();
+    if existing.is_none() && !armed(root) {
         return RunEnd::NotArmed;
     }
+    compose_and_file_letter(root, run, existing)
+}
+
+/// D2 (aedb5be9): file this run's letter at the moment of a FEATURE CLOSE —
+/// the same compose-and-file core [`file_run_letter`] runs, WITHOUT the armed
+/// gate.
+///
+/// D9 is untouched by this. That rule is about the letter a run gets for
+/// ENDING, and an attended run still gets none; this is the letter a run gets
+/// for CLOSING A FEATURE, which the human asked to read the moment it happens
+/// rather than whenever the session eventually stops. The entry data is
+/// already appended at close either way (`record_close_stop`) — filing is the
+/// step that was missing.
+///
+/// Still ONE letter per run (D11): a close-time letter is the run's own
+/// letter, so a later run end RE-COMPOSES this same file in place, keeping its
+/// `filed_at`, its name, and the human's read state.
+pub(crate) fn file_close_letter(root: &Path, run: &str) -> RunEnd {
+    compose_and_file_letter(root, run, letter_files_for_run(root, run).into_iter().next())
+}
+
+/// Compose this run's ONE letter and write it — the core both filing doors
+/// share, with the arming question already answered by the caller.
+///
+/// `existing` is the letter this run already has, if any, already resolved by
+/// the caller so the store is listed once rather than twice.
+fn compose_and_file_letter(root: &Path, run: &str, existing: Option<PathBuf>) -> RunEnd {
     // D14: the notes come off the very lines the entries do, so a run that
     // closed a feature carries its three extra sections into the ONE letter
     // it already gets — never into a second file beside it.
@@ -1764,7 +1823,7 @@ pub(crate) fn file_run_letter(root: &Path, run: &str) -> RunEnd {
 
     let mut filed_at = now_iso();
     let mut status = STATUS_UNREAD.to_string();
-    if let Some(existing) = letter_files_for_run(root, run).into_iter().next() {
+    if let Some(existing) = existing {
         match read_letter(&existing) {
             Ok(old) => {
                 filed_at = old.filed_at;
@@ -1830,11 +1889,16 @@ pub(crate) fn record_run_end(root: &Path, run: &str) -> RunEnd {
 //      checkout stops HERE and pays no directory read at all, so a repo that
 //      never runs unattended never pays for this feature (D9).
 //   1. `runs_with_entries` — ONE directory listing of `entries/`, names only.
-//   2. `letter_run_slugs` — ONE directory listing of the mailbox, names only.
+//   2. `letter_paths_by_run_slug` — ONE directory listing of the mailbox,
+//      names only.
 //   3. `session_ids` — ONE directory listing of `.bee/sessions/`, names only.
-//   4. For each CANDIDATE only — a run that has entries, has no letter, and is
-//      not this session — one session record read, and one entry-file read if
-//      it is filed. Candidates are normally ZERO.
+//   4. For a run that ALREADY HAS a letter — TWO stats (its entries file and
+//      its letter), still nothing opened. See "A lettered run can still go
+//      silent" below for why that question is asked at all.
+//   5. For each CANDIDATE only — a run that has entries, has no letter or a
+//      letter its entries have outrun, and is not this session — one session
+//      record read, and one entry-file read if it is filed. Candidates are
+//      normally ZERO.
 //
 // Three directory listings and no file opened is the whole steady-state cost.
 // It is O(runs + letters + sessions) in DIRECTORY ENTRIES and O(candidates) in
@@ -1873,6 +1937,25 @@ pub(crate) fn record_run_end(root: &Path, run: &str) -> RunEnd {
 // It is also why `UNATTRIBUTED_RUN` never gets an unfinished letter: nothing
 // ever wrote a session record named "unattributed", so there is no witness
 // that its run is over.
+//
+// ── A lettered run can still go silent (D2, aedb5be9) ───────────────────
+//
+// "Has a letter" USED TO MEAN "reached its end", because only a run end filed
+// one. D2 broke that equivalence: a feature close now files the run's letter
+// the moment it lands, so a run can hold a letter and then work on for hours
+// and die. Under the old rule that run was never a candidate again, and the
+// human would read a letter that stops at the close with no mark saying the
+// rest of the run never finished.
+//
+// So the question is no longer "does this run have a letter?" but "does this
+// run have a letter that is still the whole run?" — and the store already
+// answers it without opening anything: the entries file's mtime against the
+// letter's. Entries newer than the letter means the run recorded work the
+// letter does not carry. Two stats per lettered run, no opens.
+//
+// FAIL CLOSED again, the same posture as everything else here: a stat that
+// will not read answers "not newer", so an unreadable store leaves the letter
+// exactly as the human last saw it.
 //
 // ── The authorship ban still holds (D8) ─────────────────────────────────
 //
@@ -1986,19 +2069,37 @@ fn run_went_silent(control: &Path, run: &str, now: f64) -> bool {
     }
 }
 
-/// The `<short-run-slug>` of every filed letter. ONE directory listing, names
+/// Every filed letter by its `<short-run-slug>`. ONE directory listing, names
 /// only — the letter name is `<stamp>-<short-run-slug>.md` and the stamp
 /// carries no `-` (see [`compact_utc_stamp`]), so the first `-` is the split.
-fn letter_run_slugs(root: &Path) -> HashSet<String> {
-    let mut out = HashSet::new();
+///
+/// The PATH rides along with the slug because the candidate filter now asks a
+/// second question of a lettered run ("is its letter still the whole run?"),
+/// and answering that from the one listing it already did keeps the pass at
+/// three directory reads.
+fn letter_paths_by_run_slug(root: &Path) -> HashMap<String, PathBuf> {
+    let mut out = HashMap::new();
     for path in list_letter_files(root) {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
         let Some(stem) = name.strip_suffix(".md") else { continue };
         if let Some((_, slug)) = stem.split_once('-') {
-            out.insert(slug.to_string());
+            out.insert(slug.to_string(), path.clone());
         }
     }
     out
+}
+
+/// Has `run` recorded entries SINCE the letter at `letter` was written?
+///
+/// Two stats, nothing opened. Fail closed: a stat that will not read answers
+/// `false`, so a store bee cannot measure never gets a letter rewritten under
+/// the human's reading of it (see this section's header).
+fn entries_outran_letter(root: &Path, run: &str, letter: &Path) -> bool {
+    let modified = |path: &Path| std::fs::metadata(path).and_then(|m| m.modified()).ok();
+    match (modified(&entries_path(root, run)), modified(letter)) {
+        (Some(entries), Some(filed)) => entries > filed,
+        _ => false,
+    }
 }
 
 /// Every session id this checkout has a record for, name-sorted. ONE directory
@@ -2020,8 +2121,9 @@ fn session_ids(control: &Path) -> Vec<String> {
 }
 
 /// The runs that MIGHT have gone silent: they stored entries, they have no
-/// letter, and they are not this session. Three directory listings and not one
-/// file opened — see this section's header for the full cost.
+/// letter their entries have not outrun, and they are not this session. Three
+/// directory listings, two stats per lettered run, and not one file opened —
+/// see this section's header for the full cost.
 ///
 /// `root` is the CONTROL root: entries, letters and session records all live
 /// under it, and a linked worktree's cap already resolved its store there.
@@ -2035,7 +2137,7 @@ pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<Strin
     if entry_slugs.is_empty() {
         return Vec::new();
     }
-    let lettered = letter_run_slugs(root);
+    let lettered = letter_paths_by_run_slug(root);
     let mut out = Vec::new();
     for id in session_ids(root) {
         if id == current_run {
@@ -2044,8 +2146,13 @@ pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<Strin
         if !entry_slugs.contains(&slug_capped(&id, 64)) {
             continue;
         }
-        if lettered.contains(&short_run_slug(&id)) {
-            continue;
+        // D2: a letter no longer proves the run reached its end — only that it
+        // reached a feature close. A run whose entries outran its letter is a
+        // candidate again.
+        if let Some(letter) = lettered.get(&short_run_slug(&id)) {
+            if !entries_outran_letter(root, &id, letter) {
+                continue;
+            }
         }
         out.push(id);
     }
@@ -2057,26 +2164,49 @@ pub(crate) fn silent_run_candidates(root: &Path, current_run: &str) -> Vec<Strin
 /// D11 is re-checked at the door to the disk even though the candidate filter
 /// already applied it: a second letter for one run is the loss that rule
 /// exists to prevent, and the last check before a write is the one that has to
-/// hold. An existing letter is [`RunEnd::AlreadyFiled`] — a refusal, not a
-/// failure, and nothing is rewritten. Unlike an ordinary run end, this pass
-/// never re-composes a letter in place: the run is gone, so there is nothing
-/// new to fold in, and the human's own reading of that letter stands.
+/// hold. A letter that is still the whole run is [`RunEnd::AlreadyFiled`] — a
+/// refusal, not a failure, and nothing is rewritten: there is nothing new to
+/// fold in, and the human's own reading of that letter stands.
+///
+/// The ONE case that does rewrite is D2's: a run whose entries OUTRAN the
+/// letter it filed at a feature close recorded work that letter never carried,
+/// and it then went silent. That letter is re-composed IN PLACE — same file,
+/// same `filed_at`, same read state, one letter per run (D11) — now carrying
+/// the unfinished mark and the entries the close-time letter missed.
 pub(crate) fn file_unfinished_letter(root: &Path, run: &str) -> RunEnd {
     if !armed(root) {
         return RunEnd::NotArmed;
     }
+    let mut filed_at = now_iso();
+    let mut status = STATUS_UNREAD.to_string();
     if let Some(existing) = letter_files_for_run(root, run).into_iter().next() {
-        return RunEnd::AlreadyFiled(existing);
+        if !entries_outran_letter(root, run, &existing) {
+            return RunEnd::AlreadyFiled(existing);
+        }
+        match read_letter(&existing) {
+            Ok(old) => {
+                filed_at = old.filed_at;
+                status = old.status;
+            }
+            Err(why) => {
+                return RunEnd::Failed(format!(
+                    "this run already has a letter at {} that cannot be read ({}) — remedy: fix or delete that file; writing a second letter for one run is refused (D11)",
+                    existing.display(),
+                    why.message()
+                ))
+            }
+        }
     }
     // D14: a run that closed a feature and THEN went silent keeps the three
     // extra sections its close recorded — the recovery pass reads the same
     // lines the ordinary run end does.
     let (entries, notes) = read_run(root, run);
-    let Some(letter) =
-        compose_unfinished_letter_with(&project_of(root), run, &now_iso(), &entries, &notes)
+    let Some(mut letter) =
+        compose_unfinished_letter_with(&project_of(root), run, &filed_at, &entries, &notes)
     else {
         return RunEnd::NoEntries;
     };
+    letter.status = status;
     match write_letter(root, &letter) {
         Ok(path) => RunEnd::Filed(path),
         Err(why) => RunEnd::Failed(why.message()),
@@ -2681,6 +2811,30 @@ mod tests {
         assert_eq!(letter_files_for_run(root, "run-one").len(), 1);
         assert_eq!(letter_files_for_run(root, "run-two").len(), 1);
         assert_eq!(letter_files_for_run(root, "run-three").len(), 0);
+    }
+
+    #[test]
+    fn a_digest_is_never_read_as_a_letter() {
+        // letter-digest D1: digests are filed BESIDE the letters, in the same
+        // directory. Every surface that means "letters" must skip them, or
+        // D12's recovery pass sees a run that never existed.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_letter(root, &sample_letter()).unwrap();
+        for name in ["digest-2026-08-25.md", "digest-2026-W35.md"] {
+            write_text_atomic(&mailbox_dir(root).join(name), "---\ntype: \"digest\"\n---\n").unwrap();
+        }
+        let names: Vec<String> = list_letter_files(root)
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["20260825T031500Z-run-2026-08-25-0315.md".to_string()]);
+        let by_slug = letter_paths_by_run_slug(root);
+        assert_eq!(by_slug.len(), 1, "a digest was folded in as a run's letter: {by_slug:?}");
+        assert!(by_slug.contains_key("run-2026-08-25-0315"));
+        for slug in by_slug.keys() {
+            assert!(!slug.starts_with("2026-"), "a digest name was split into a run slug: {slug}");
+        }
     }
 
     #[test]
@@ -4105,5 +4259,161 @@ nested:
         assert!(closed.filename().ends_with(&format!("-{}.md", short_run_slug("run-close"))));
         assert!(nightly.filename().ends_with(&format!("-{}.md", short_run_slug("run-night"))));
         assert_eq!(list_letter_files(root).len(), 2, "one letter per run, no extra file");
+    }
+
+    // ── D2 (aedb5be9): the close letter is filed at the close ───────────
+
+    /// Push `path`'s mtime `secs` into the past, so "the entries outran the
+    /// letter" is a fact the test STATES rather than a race it hopes to win on
+    /// a filesystem with coarse timestamps.
+    fn age_file(path: &Path, secs: u64) {
+        let old = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - std::time::Duration::from_secs(secs),
+        );
+        filetime::set_file_mtime(path, old).unwrap();
+    }
+
+    /// An UNARMED store: the herding block is there, the owner's switch is
+    /// not — the attended session D9 files no run-end letter for.
+    fn attended_store(root: &Path) {
+        write_config(root, r#"{"herding": {"agent_command": "claude-sonnet"}}"#);
+    }
+
+    #[test]
+    fn an_attended_close_files_its_letter_at_the_moment_of_the_close() {
+        // D2: the letter no longer waits for the run to end, and no longer
+        // waits for arming. An attended close leaves something to read.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        attended_store(root);
+        assert!(!armed(root), "this store is the attended one D9 excludes");
+
+        append_entry(root, "run-close", &sample_entry("2026-08-25T03:00:00.000Z", "Did a thing"))
+            .unwrap();
+        append_close_entry(root, "run-close", &close_entry(), &close_note()).unwrap();
+
+        let RunEnd::Filed(path) = file_close_letter(root, "run-close") else {
+            panic!("every close files its close letter, attended included (D2)");
+        };
+        assert_eq!(list_letter_files(root).len(), 1, "one run, one letter (D11)");
+
+        let letter = read_letter(&path).unwrap();
+        assert_eq!(letter.run, "run-close");
+        assert_eq!(letter.status, STATUS_UNREAD);
+        for heading in CLOSE_SECTIONS {
+            assert!(
+                letter.body.contains(&format!("## {heading}")),
+                "the close letter is missing {heading}: {}",
+                letter.body
+            );
+        }
+        // D9 is untouched: the RUN END of this same attended run still files
+        // nothing for a run that has no letter yet.
+        assert!(matches!(file_run_letter(root, "run-nothing"), RunEnd::NotArmed));
+    }
+
+    #[test]
+    fn a_run_end_after_a_close_letter_recomposes_the_same_one_file() {
+        // The advisor's P1: without this, an attended run's letter freezes at
+        // the close and the rest of the run is never in it.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        attended_store(root);
+        append_entry(root, "run-close", &sample_entry("2026-08-25T03:00:00.000Z", "Before close"))
+            .unwrap();
+        append_close_entry(root, "run-close", &close_entry(), &close_note()).unwrap();
+        let RunEnd::Filed(first) = file_close_letter(root, "run-close") else { panic!("filed") };
+
+        // The human reads it, and the run works on.
+        let mut read_back = read_letter(&first).unwrap();
+        read_back.status = STATUS_READ.to_string();
+        write_letter(root, &read_back).unwrap();
+        let filed_at = read_back.filed_at.clone();
+        append_entry(root, "run-close", &sample_entry("2026-08-25T06:00:00.000Z", "After close"))
+            .unwrap();
+
+        let RunEnd::Filed(second) = file_run_letter(root, "run-close") else {
+            panic!("an existing letter re-composes whatever the arming says (D2, D11)");
+        };
+        assert_eq!(second, first, "one run keeps ONE letter, rewritten in place (D11)");
+        assert_eq!(list_letter_files(root).len(), 1, "no second letter file (D11)");
+
+        let letter = read_letter(&second).unwrap();
+        assert_eq!(letter.filed_at, filed_at, "the filename stays stable");
+        assert_eq!(letter.status, STATUS_READ, "the human's read state survives");
+        assert_eq!(letter.items.len(), 3, "the post-close entry is in the letter");
+        assert!(letter.body.contains("- After close"), "{}", letter.body);
+        assert!(letter.body.contains("- Before close"), "{}", letter.body);
+    }
+
+    #[test]
+    fn a_close_lettered_run_that_then_goes_silent_is_still_recovered() {
+        // D12 met D2: "has a letter" no longer means "reached its end". A run
+        // whose entries OUTRAN its close letter is a candidate again.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        armed_store(root);
+        append_entry(root, "sess-dead", &sample_entry("2026-08-25T03:00:00.000Z", "Before close"))
+            .unwrap();
+        append_close_entry(root, "sess-dead", &close_entry(), &close_note()).unwrap();
+        let RunEnd::Filed(first) = file_close_letter(root, "sess-dead") else { panic!("filed") };
+        let filed_at = read_letter(&first).unwrap().filed_at;
+
+        // As long as nothing was recorded after the letter, the run is not a
+        // candidate at all — no letter is rewritten under the human.
+        dead_session(root, "sess-dead");
+        assert!(
+            silent_run_candidates(root, "sess-now").is_empty(),
+            "a letter that is still the whole run keeps the run out of the pass (D11)"
+        );
+
+        // Then the run works on and dies without reaching its end.
+        age_file(&first, 60);
+        append_entry(root, "sess-dead", &sample_entry("2026-08-25T07:00:00.000Z", "After close"))
+            .unwrap();
+
+        assert_eq!(silent_run_candidates(root, "sess-now"), vec!["sess-dead".to_string()]);
+        let outcomes = file_letters_for_silent_runs(root, "sess-now");
+        assert_eq!(outcomes.len(), 1);
+        let RunEnd::Filed(second) = &outcomes[0].1 else {
+            panic!("the run that outran its letter gets its unfinished mark (D12)");
+        };
+        assert_eq!(second, &first, "in place — one run, one letter (D11)");
+        assert_eq!(list_letter_files(root).len(), 1);
+
+        let letter = read_letter(second).unwrap();
+        assert!(letter.subject.starts_with(UNFINISHED_SUBJECT_MARK), "{}", letter.subject);
+        assert_eq!(letter.filed_at, filed_at, "the filename stays stable");
+        assert_eq!(letter.items.len(), 3, "the post-close entry is in the letter");
+        assert!(letter.body.contains("- After close"), "{}", letter.body);
+        assert!(letter.body.contains("2026-08-25T07:00:00.000Z"), "{}", letter.body);
+        // D14's sections the close recorded are still there.
+        for heading in CLOSE_SECTIONS {
+            assert!(letter.body.contains(&format!("## {heading}")), "{}", letter.body);
+        }
+
+        // And the pass is idempotent: the rewrite is now the whole run again.
+        assert!(silent_run_candidates(root, "sess-later").is_empty());
+    }
+
+    #[test]
+    fn a_close_letter_that_cannot_be_filed_is_said_and_never_doubles() {
+        // D10, fail-open: the close has already happened. The filing failure
+        // is REPORTED — the caller in `drivers/close.rs` warns and returns —
+        // and no second letter lands for this one run (D11).
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        attended_store(root);
+        append_entry(root, "run-close", &sample_entry("2026-08-25T03:00:00.000Z", "Did a thing"))
+            .unwrap();
+        let RunEnd::Filed(path) = file_close_letter(root, "run-close") else { panic!("filed") };
+        std::fs::write(&path, "someone deleted the fence\n").unwrap();
+
+        append_close_entry(root, "run-close", &close_entry(), &close_note()).unwrap();
+        let RunEnd::Failed(why) = file_close_letter(root, "run-close") else {
+            panic!("a second letter for one run is refused (D11)")
+        };
+        assert!(why.contains("remedy"), "a refusal names what to fix: {why}");
+        assert_eq!(list_letter_files(root).len(), 1, "nothing was written beside it");
     }
 }

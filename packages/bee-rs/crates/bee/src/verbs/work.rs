@@ -25,6 +25,12 @@
 // hm-3 (docs/history/human-mailbox/CONTEXT.md D4/D9/D11): this group also
 // carries the END of a run — see `file_letter_at_run_end` at the foot of the
 // file, and the store itself in `verbs/mailbox.rs`.
+//
+// letter-digest (docs/history/letter-digest/CONTEXT.md D3/D4): and the moment a
+// finished DAY or WEEK gets folded — see `compose_digests_for_finished_periods`
+// at the foot of the file, and the composer in `verbs/mailbox_digest.rs`. Three
+// hooks, one path, for one reason: `work set` is where this process first
+// learns a session has taken up work.
 
 use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::hooks::activity::well_formed_id;
@@ -33,6 +39,7 @@ use crate::verbs::cells::resolve_session_flag_env;
 use crate::verbs::decisions::scanners::SECRET_PATTERNS;
 use crate::verbs::knowledge::{g_prelude, pre_json_scan, GPre};
 use crate::verbs::mailbox;
+use crate::verbs::mailbox_digest;
 use crate::verbs::reservations::{js_trim, keys_known, now_iso, parse_flags, FlagV};
 use serde_json::{Map, Value};
 use std::ffi::OsString;
@@ -298,6 +305,12 @@ fn run_set(
     // Then this run's own end. The record is on disk and the ask is over — see
     // `file_letter_at_run_end`.
     file_letter_at_run_end(&ctx.root, session_flag.as_deref(), status.as_deref());
+    // Then the periods that ENDED while nobody was looking — see
+    // `compose_digests_for_finished_periods`. BESIDE the two calls above, never
+    // inside either: those two stop early when the mailbox is not armed, and a
+    // digest is owed to an unarmed checkout just the same (D2 files a letter at
+    // every close, attended or not).
+    compose_digests_for_finished_periods(&ctx.root);
 
     let mut result = Map::new();
     result.insert("target".into(), Value::String(sink.label()));
@@ -395,6 +408,53 @@ fn file_letters_for_silent_runs(root: &Path, session_flag: Option<&str>) {
     let control = crate::hooks::session_init::control_root_for(root);
     let run = mailbox::run_id(resolve_session_flag_env(session_flag).as_deref());
     mailbox::record_silent_runs(&control, &run);
+}
+
+// ── the digest of a finished period (letter-digest, D3/D4) ─────────────────
+//
+// D3: "the daily and weekly digest is composed by the next session that starts
+// after the period ended and finds the digest missing — the same
+// recover-on-next-session pattern as dead-run letters. No scheduler, no cron."
+// This is that hook. Everything about WHICH periods are due, what a digest
+// says, and the weekly fold's lesson mining lives in `verbs/mailbox_digest.rs`;
+// this call site decides only WHEN, WHERE and HOW LOUDLY.
+//
+// WHY BESIDE THE TWO CALLS ABOVE, AND NOT INSIDE ONE OF THEM. Both mailbox
+// hooks stop early when the loop is not armed (D9: only an unattended run files
+// a run-end letter). A digest must not inherit that gate. D2 files a letter at
+// every close, attended sessions included, so an unarmed checkout accumulates
+// letters exactly like an armed one — and a checkout whose owner never arms
+// anything would then be the one that never gets a digest of the letters it
+// does have. Nesting the call inside either hook would hide that gate behind a
+// function whose name says nothing about arming.
+//
+// WHY IT IS CHEAP ENOUGH TO SIT ON THIS PATH. The ordinary answer is "no period
+// is due", reached from ONE directory listing of names — the same bounded read
+// D12's recovery makes, with nothing opened to decide. A period whose digest is
+// already on disk costs one `exists` call. Only the first session after a day
+// or a week actually ends reads letters, and it reads them once, ever: the
+// digest file it writes is the marker that stops the next session repeating it.
+//
+// FAIL-OPEN, like both hooks above: the composer warns on its own and returns
+// what it wrote. Setting a work record's status is the caller's actual ask, and
+// a digest that cannot be composed — or a lesson that cannot be logged — must
+// never turn that ask into a refusal.
+
+/// D3's pass, hooked to the moment this session takes up work.
+///
+/// WHICH ROOT is the control root, for the same reason `file_letter_at_run_end`
+/// uses it: the letters a cap filed and the `.bee/usage/<feature>.json` records
+/// a close wrote both live under the MAIN checkout, so a linked worktree that
+/// resolved its own root would fold an empty period and file a digest saying
+/// so.
+///
+/// WHICH MOMENT is now — a real clock read, because "has this period ended" is
+/// a question about the wall the human is looking at. The composer takes the
+/// stamp as an argument so a test can pin it; only this call site reads a
+/// clock.
+fn compose_digests_for_finished_periods(root: &Path) {
+    let control = crate::hooks::session_init::control_root_for(root);
+    mailbox_digest::compose_and_mine(&control, &now_iso());
 }
 
 #[cfg(test)]
@@ -541,6 +601,68 @@ mod tests {
             "the body never names the moment the run went silent: {}",
             letter.body
         );
+    }
+
+    // ── letter-digest D3: the hook that folds a finished period ────────────
+
+    /// One letter on disk, filed at `stamp`, through the store's own writer.
+    fn letter_at(root: &Path, run: &str, stamp: &str, subject: &str) {
+        let letter = crate::verbs::mailbox::Letter {
+            subject: subject.to_string(),
+            run: run.to_string(),
+            project: "beehive".to_string(),
+            filed_at: stamp.to_string(),
+            status: STATUS_UNREAD.to_string(),
+            items: Vec::new(),
+            needs_you: Vec::new(),
+            body: "## Done\n\n- did the work\n".to_string(),
+        };
+        crate::verbs::mailbox::write_letter(root, &letter).unwrap();
+    }
+
+    #[test]
+    fn a_session_taking_up_work_folds_a_period_that_ended_long_ago() {
+        // Deliberately NOT armed: D2 files a letter at every close, attended
+        // sessions included, so an unarmed checkout has letters to fold and
+        // must get its digest like any other. This is the whole reason the
+        // hook sits BESIDE the two mailbox calls rather than inside one.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        letter_at(root, "run-old", "2020-01-02T03:15:00.000Z", "The first run finished.");
+
+        compose_digests_for_finished_periods(root);
+
+        let dir = root.join(".bee").join("human-mailbox");
+        assert!(dir.join("digest-2020-01-02.md").exists(), "no daily digest was left behind");
+        assert!(dir.join("digest-2020-W01.md").exists(), "no weekly digest was left behind");
+        assert!(
+            list_letter_files(root).len() == 1,
+            "a digest was counted as a letter: {:?}",
+            list_letter_files(root)
+        );
+    }
+
+    #[test]
+    fn folding_a_period_is_a_no_op_when_nothing_has_finished() {
+        // An empty mailbox is the ordinary case on this path, and it must cost
+        // nothing and write nothing.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        compose_digests_for_finished_periods(root);
+        assert!(!root.join(".bee").join("human-mailbox").exists() || list_letter_files(root).is_empty());
+        // Running it twice over a folded period leaves the same one file.
+        letter_at(root, "run-old", "2020-01-02T03:15:00.000Z", "The first run finished.");
+        compose_digests_for_finished_periods(root);
+        let before = std::fs::read_to_string(
+            root.join(".bee").join("human-mailbox").join("digest-2020-01-02.md"),
+        )
+        .unwrap();
+        compose_digests_for_finished_periods(root);
+        let after = std::fs::read_to_string(
+            root.join(".bee").join("human-mailbox").join("digest-2020-01-02.md"),
+        )
+        .unwrap();
+        assert_eq!(before, after, "the second pass rewrote the digest");
     }
 
     #[test]
