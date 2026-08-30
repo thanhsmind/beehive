@@ -115,10 +115,10 @@ Per-repo configuration.
 | Key | Holds |
 |-----|-------|
 | `commands` | `{setup, start, test}` shell commands. **`test` is the single declaration of how the project is tested** (a string or an array run in order) — the one command CI runs on every push, and `bee test` runs on demand. Each cap records its own proof line `<command> — <result> — <scope reason>`; `bee close` and `bee worktree merge` check that recorded proof and run nothing themselves. A `"none"` sentinel means the gate is deliberately disabled |
-| `hooks` | toggle map over the nine handlers: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard`, `model-guard`, `tools-logger`, `codex-subagent-audit` — each default-on |
+| `hooks` | toggle map over nine of the ten handlers: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard`, `model-guard`, `tools-logger`, `codex-subagent-audit` — each default-on. The tenth, `activity` (the herding heartbeat), has no kill switch here |
 | `guards` | write-guard tuning: `idle_gate`, `max_read_lines` |
 | `gate_bypass` | `off` · `normal` · `full` · `total` — the opt-in gate autopilot level |
-| `models` | per-runtime **role→model** map: `{claude:{code, read, extraction, generation, review, advisor}, codex:{…}}`. The key is the job a dispatch asks for; a fresh config seeds `code`/`read` beside the historical `extraction`/`generation` tail, and any role name you add is legal — bee holds no fixed list, and asks "is this name configured", never "is it one of four words". A role value may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor — or `{kind:"herding", agent, fallback}`. `retry.fallbackChains` is a separate key: an explicit-only, role- or model-keyed chain bee PUBLISHES on the payload and never walks itself |
+| `models` | per-runtime **role→model** map: `{claude:{code, read, extraction, generation, review, advisor}, codex:{…}}`. The key is the job a dispatch asks for; a fresh config seeds `code`/`read` beside the historical `extraction`/`generation` tail, and any role name you add is legal — bee holds no fixed list, and asks "is this name configured", never "is it one of four words". Named seats exist too: the blind-lane and hat-wave seat roles (`lane-1..3`, `hat-*`) fall through to `advisor` when unconfigured, and `supervisor` names the herding observer's model. A role value may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor — or `{kind:"herding", agent, fallback}`; an object slot may carry a `description` (clipped to 60 chars) that `bee models show` and the dispatch-door roles line display. `models.pi` is a herding-only preview runtime — any non-herding dispatch shape on it refuses `pi_requires_herding`. `retry.fallbackChains` is a separate key: an explicit-only, role- or model-keyed chain bee PUBLISHES on the payload and never walks itself |
 | `product_root` | subdirectory the product lives in, when the repo root is not it — the product-file count that picks the lane is measured against it |
 | `worktree_first` | whether a code-touching route must open its feature worktree before execution |
 | `cells_archive_on_close` | default true — a capped cell is relocated to `.bee/cells/archive/<feature>/` at close |
@@ -333,6 +333,47 @@ copied from the source `expertise/` by onboarding. **Read-only from the agent's
 side**: skills reference `.bee/expertise/<guide>.md`, and a change belongs in the
 source tree, not the vendored render.
 
+### The memory surfaces (for the human)
+
+Four stores exist so the human can catch up without replaying transcripts.
+All four are written by the machine at fixed moments, never narrated by the
+agent:
+
+- `.bee/human-mailbox/` — the **letter store**: `entries/<run-slug>.jsonl`
+  (clean-stop entry appends), `<UTC-timestamp>-<short-run-slug>.md` letters
+  (typed YAML frontmatter — `subject`, `run`, `project`, `filed_at`,
+  `status: read|unread`, `items[]`, `needs_you[]` — over a short human body),
+  and `digest-<period>.md` folds. A letter files at an armed run's end, at
+  `bee close` (immediately), and — for a run that went silent — at the next
+  session start. `bee mailbox mark --id <file> --status read|unread` is the one
+  consuming verb. Digest folding runs at session start for every ended UTC day
+  (`digest-YYYY-MM-DD.md`) and ISO week (`digest-YYYY-Www.md`), transcribing
+  from close letters and `.bee/usage/` verbatim — no computed sums.
+- `.bee/usage/<feature>.json` — token usage recorded by a green `bee close`
+  (`bee-usage/v1`: `feature`, `closed_at`, `sessions`, `skipped`, `totals`),
+  committed inside the close bookkeeping commit. The close prints one `usage:`
+  summary line, and stays silent when no session transcript was readable —
+  never a false zero.
+- `.bee/supervisor/` — the herding supervisor's stores: `observations.jsonl`
+  (append-only, one record per cold tick) and `interventions.jsonl`
+  (`intervention` / `escalation` / `urgent` / `advisor-nudge` records).
+  Verbs: `supervisor away/back/presence` (presence marks; `back` renders one
+  WakeReport per away window), `record` (frequency-capped per
+  `(target_session, point_key)`; `--kind urgent` bypasses the cap and fires a
+  best-effort desktop notification), `report`, `pending`, `mark-delivered`,
+  `consent-sweep`, `metrics` (two-sided health bands; `not-measurable` is
+  first-class). An unanswered `advisor-nudge` arms the response debt the cap,
+  close, and merge doors check.
+- `.bee/triggers/` — registered revisit conditions, one JSON file per trigger
+  (`bee triggers add --decision <id> --condition "..."`, `list`, `resolve`).
+  The doc-deferral door and the contract guards resolve citations against it.
+
+Herding's transport keeps two stores of its own: `.bee/mailbox/<job-id>/` —
+one file-mailbox per dispatched job (`brief-N.txt`, `ack-N.json`,
+`result-N.json`, `report-N.md`, `job.json`), written through `bee herding run`
+and read natively, zero LLM tokens — and `.bee/wave-ledger.jsonl`, one row per
+real dispatch.
+
 ### Logs & caches (read-mostly)
 - `.bee/logs/test-results.json` — **the one test record**: `{ran_at, green,
   commands:[{command, exit, duration_ms, failure_excerpt, failure_log}]}`.
@@ -404,15 +445,15 @@ verb runs, so there is one implementation and one test set per operation:
 after the prefix is stripped and **refuses a flow verb** ("call it as `bee gate`,
 without `internal`"), so the boundary is real in both directions. The bare
 top-level spellings still work. `bee --help --all [--json]` lists the full registry
-(150 entries, 19 of them porcelain), each carrying its `surface` value;
+(189 entries, 35 of them porcelain), each carrying its `surface` value;
 `bee internal --help` lists just the plumbing.
 
 | Group | Verbs |
 |-------|-------|
-| `cells` | list · ready · show · add · update · claim · claim-next · unclaim · finish · cap · block · drop · reopen · escalate · judge · judge-record · reset-budget · schedule · archive · unarchive · backfill-roles |
+| `cells` | list · ready · show · add · update · claim · claim-next · unclaim · finish · cap · block · drop · reopen · escalate · dissent · dissent-verdict · judge · judge-record · reset-budget · schedule · archive · unarchive · backfill-roles |
 | `state` | set · gate · route · start-feature · lanes · scribing-run · compounding-run · plan-rev bump · session.* · handoff.* · workflows.* · rebuild-projections · advisor-ref.* · compact-* (worker.* = compat no-ops) |
 | `reservations` | reserve · release · list · sweep |
-| `decisions` | log · supersede · redact · active · search · archive · tag · render |
+| `decisions` | log · supersede · redact · active · search · archive · tag · reattribute · render |
 | `backlog` | add · propose · counts · rank · badges · render · findings · pbi.* |
 | `capture` | add · list · flush · count |
 | `reviews` | create · list · show · record · candidate.add · candidates · status |
@@ -420,16 +461,21 @@ top-level spellings still work. `bee --help --all [--json]` lists the full regis
 | `knowledge` | check · index · list · context · promote · search · bootstrap · report |
 | `worktree` | new · merge · list · register · unregister · prune |
 | `intent` | set · show · advance · clear |
-| *other* | `dispatch prepare` · `dispatch wave` · `timings report` · `tmp sweep` · `recovery scan` · `recovery window` · `config.*` · `perf.*` · `herding.*` · `doctor attest` |
+| `supervisor` | away · back · presence · record · report · pending · mark-delivered · consent-sweep · metrics · list |
+| `staging` | add · rebuild · status |
+| *other* | `dispatch prepare` · `dispatch wave` · `blind check` · `mailbox mark` · `models show` · `triggers add/list/resolve` · `discovery stub/list` · `work set/show` · `timings report` · `tmp sweep` · `recovery scan` · `recovery window` · `config.*` · `perf.*` · `herding.*` · `doctor attest` |
 
 ### Maintenance surfaces (outside the registry)
 
 These probe **before** the verb tree, so nothing in it can shadow them:
 
-- `bee hook <name>` — the nine handlers the hook catalogs invoke: `session-init`,
+- `bee hook <name>` — the ten handlers the hook catalogs invoke: `session-init`,
   `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`,
-  `session-close`, `tools-logger`, `codex-subagent-audit`. Each is fail-open: an
-  undecidable payload allows the operation and says the guard did not run on it.
+  `session-close`, `tools-logger`, `codex-subagent-audit`, `activity` (the
+  herding heartbeat — the one name that still runs under the cockpit's marker
+  and the one absent from `config.hooks`' nine kill switches). Each is
+  fail-open: an undecidable payload allows the operation and says the guard did
+  not run on it.
 - `bee onboard [--repo-root R] [--apply] [--json]` — the installer. `changes_needed`
   → summarize, get approval, re-run with `--apply`; `blocked_*` → zero mutations.
 - `bee dev render-skill-trees | render-prompt | render-hook-manifests | statusline |
@@ -468,6 +514,8 @@ reason, never a silent skip — it is written onto the record it excuses.
 | Door | Refuses when | Escape hatch |
 |---|---|---|
 | `cells add` | the target feature is in `exploring`/`planning` and its execution gate is not approved — no cells before the gate. One gated cell fails the whole batch | none — approve Gate 2 (`bee gate --merge`). A `docs` lane is exempt |
+| `bee gate --name shape` / `--merge` | `plan.md`'s load-bearing claims table is missing, malformed, carries an invalid label, or still holds a `guessed` row — a shape approval over a guessing plan is the defect the table exists to catch | none — do the reality touch, relabel the row `read`/`ran` with its anchor and verbatim evidence |
+| `cells claim` (contract guards) | `CONTRACT_UNCITED`: a test-writing cell (test-shaped path in `files`, or `role: test`) cites no store decision tagged `contract:<name>` · `CONTRACT_RETIRED` / `CONTRACT_UNSETTLED`: the cited contract decision is superseded/archived, or still carries an open trigger | none — cite the live contract decision, or settle/supersede it first. A local `D1`-style id passes over silently |
 | `cells claim` | `.bee/logs/test-results.json` records the last run as red — never claim onto a red base | `--fix-first "<reason>"`, stored on `trace.fix_first` |
 | `cells claim` | the feature has no route record **and** this session already spent its one-time warning on an earlier claim (warn once, then refuse) | `bee route --set …`. A racing loser sees the typed `CLAIMED` refusal first, so a claim conflict never reads as a routing problem |
 | `cells finish` (cap) | lane is `small`/`standard`/`high-risk` and `trace.worker` names no registered execution worker — a lane that must dispatch cannot cap as if it had | `--inline-reason "<why>"`, stored on `trace.inline_reason`. `tiny` never reaches this branch |
@@ -482,7 +530,11 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `reviews record` (`approved`) | a `P1` finding is not named in the decision's `p1_resolutions[]` with a fixing cell | none — land the fix cell, then record with `p1_resolutions` |
 | write-guard, `docs/history/<feature>/plan.md` | that feature's `approved_gates.shape` is true — plan.md freezes once shape is locked | `bee state plan-rev bump --lane <feature>`, or unapprove shape to redraft |
 | model-guard, `Agent`/`Task` | the dispatch declares no role and names no pinned subagent type, **or** its `[bee-tier: <name>]` marker names a role nothing configures (`role-not-configured`). A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` *derives* its role from the agent file instead of refusing | declare `[bee-tier: <role>]` (the marker keeps its historical spelling and carries a role name) or a `model` param; for an unconfigured name, add it to `models.<runtime>` or open with one that is configured. A derived `cli` role still refuses — an external process is not dispatchable as an agent |
-| `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
+| `worktree merge`, dirty main (`WORKTREE_MERGE_MAIN_DIRTY`) | before this row's own refusal can fire, dirt confined to the bookkeeping roots — `.bee/`, `docs/decisions/`, touched `docs/knowledge/`, and `docs/history/<the-merging-feature>/` — is auto-committed first, warn-never-block. A remaining **tracked** modification outside those roots refuses, named by path; an **untracked** file refuses only when it collides with a file the branch itself changed (measured from the merge base) — a bystander untracked file neither blocks nor is touched | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally. Mirrors `bee close`'s own bookkeeping auto-commit |
+| `bee close` (every lane) · `worktree merge` (`WORKTREE_MERGE_DISSENT_DEBT`) | a recorded dissent on any of the feature's cells has no `cells dissent-verdict` — the worker's question is data the orchestrator owes an answer | none — record the verdict (`accept` / `reject` / `escalate`, with `--reason`; it lands in the decision log) |
+| `cells finish` (cap) · `bee close` · `worktree merge` (advisor-nudge debt) | the feature has an unanswered supervisor `advisor-nudge` intervention (`feature_advisor_nudge_debt` > 0) | log a decision tagged `advisor-nudge` whose text names the nudge row's id — an answer, not a dismissal |
+| `dispatch prepare --kind advisor --brief-file` (LaneBrief guard) | the brief leans — a verdict stem or an invalid section shape betrays a preferred answer in what must be a neutral brief for blind lanes | none — rewrite the brief neutral; the check is lexical, and a quoted rival proposal rides a tagged fence past it |
+| `dispatch prepare`, runtime `pi` (`pi_requires_herding`) | any non-herding dispatch shape on the Pi runtime — Pi has no subagent tool surface, so it is a herding-only preview transport | none — route the dispatch through `bee herding run`, or use another runtime |
 | `worktree merge` (`WORKTREE_MERGE_UAT_PENDING`) | under `uat_stop: "merge"` (default), the feature's lane is standard/high-risk (missing/unrecognized lane fails closed as standard) and its `uat` gate is not approved | approve it (`bee gate --name uat --approved true`), or skip uat for JUST this merge (`bee worktree merge --id <id> --skip-uat`), or turn the door off repo-wide (`uat_stop: "off"`). Never auto-approved — `uat` is user-only at every `gate_bypass` level (uat-gate-before-merge D1) |
 | `bee close` (`uat` door, headline "Uat gate pending for") | under `uat_stop: "close"`, standard/high-risk lane (same fail-closed rule), the merged feature's `uat` gate is not yet approved | approve it (`bee gate --name uat --approved true`), or log a `uat-deferral` decision naming the feature (uat-stop-placement D2) |
 | `worktree merge` (`WORKTREE_MERGE_STAGING_FORBIDDEN`) | the worktree/branch being merged IS the staging branch — staging is disposable, never a source main merges from | none — the catastrophic direction has no hatch; the only exit is removing the staging config/record by hand (staging-lane D0) |
@@ -505,16 +557,16 @@ Three notes on doors that are not refusals:
 
 ### Declared but not built
 
-18 registry entries have no implementation in the current binary — the R6 Node
-deletion removed the only one they had (`state advisor-ref record/show`, once
-in this list, has since been ported and is built). Each refuses by name,
-states that nothing ran and nothing changed, and names its fallback:
+15 registry entries have no implementation in the current binary — the R6 Node
+deletion removed the only one they had (`state advisor-ref record/show` and
+`herding enable/disable/status`, once in this list, have since been ported and
+are built). Each refuses by name, states that nothing ran and nothing changed,
+and names its fallback:
 
 | Unbuilt | Count |
 |---|---|
 | `config get/set/unset/validate` | 4 |
 | `perf start/stop/section/log/render/report/sync` | 7 |
-| `herding enable/disable/status` | 3 |
 | `state compact-capsule/check/log` | 3 |
 | `recovery window` | 1 |
 

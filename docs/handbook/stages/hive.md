@@ -23,11 +23,16 @@ compaction. Re-entered whenever a routing or mode-gate decision is needed.
 - `docs/knowledge/index.md` (critical patterns) or `docs/history/learnings/critical-patterns.md`.
 
 ## Outputs
-- A routing decision. The lifecycle is **shape → plan → swarm → capture**, and
-  `bee orient`'s `next.skill` names the current stop; reviewing, researching and
-  grooming are out-of-band, on explicit request only. Herding is out-of-band too
-  but differently: it is an unattended cockpit whose bootstrap / dispatch / merge
-  roles a control loop drives, not something a session asks for mid-chain.
+- A routing decision. Two flows share the front door, and the agent picks — the
+  user never has to name one: a nameable outcome enters the **Main flow**
+  (**shape → plan → swarm → capture**, `bee orient`'s `next.skill` naming the
+  current stop); fog — no nameable outcome yet, or an explicit "brainstorm" /
+  "wayfinding" in any language — enters the **Discovery flow**
+  (`bee-wayfinding` charts the map; Lock consumes its D-IDs). Reviewing,
+  researching and grooming are out-of-band, on explicit request only. Herding is
+  out-of-band too but differently: it is an unattended cockpit whose bootstrap /
+  dispatch / merge roles a control loop drives — plus a cold supervisor observer
+  each tick — not something a session asks for mid-chain.
 - Onboarding mutations (via `bee onboard --repo-root <root> --apply`).
 - Gate presentations. hive owns no feature artifacts of its own.
 

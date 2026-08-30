@@ -97,8 +97,17 @@
 
 <div class="guide-note guide-note--warn">
   <span class="guide-note__title">Chỗ dễ nhầm</span>
-  <p>Một subagent không có "trí nhớ phiên" nào cả — nó chỉ thấy đúng những gì nằm trong prompt được cửa này dựng ra. Một cell mà chỉ đọc mỗi prompt đó thôi là không đủ để làm, thì trả về <code>[BLOCKED]</code> ngay là đúng — không phải đoán bừa rồi làm liều.</p>
+  <p>Một subagent không có "trí nhớ phiên" nào cả — nó chỉ thấy đúng những gì nằm trong prompt được cửa này dựng ra. Một cell mà chỉ đọc mỗi prompt đó thôi là không đủ để làm, thì trả về <code>[BLOCKED]</code> ngay là đúng — không phải đoán bừa rồi làm liều. Khi trả <code>[BLOCKED]</code>, worker được khuyến khích kèm vài dòng <code>Options:</code> (các lựa chọn) và một dòng <code>Leaning:</code> (nó nghiêng về đâu) — để người quyết định chọn nhanh.</p>
 </div>
+
+<h2>Worker được quyền cãi — có sổ sách</h2>
+
+<p>Worker tin rằng chính cái cell nó được giao là <em>sai</em>? Nó không im lặng làm theo, cũng không lặng lẽ làm khác đi. Nó ghi một lời <strong>phản đối</strong> (dissent):</p>
+
+<pre class="guide-code">bee cells dissent --id &lt;cell&gt; --reason "điều gì sai" \
+  --alternative "nên làm gì thay" --severity blocker|consider</pre>
+
+<p>Hai mức: <code>blocker</code> tạm dừng cell đó (và các cell phụ thuộc nó); <code>consider</code> chỉ ghi lại, không dừng gì. Ghi xong, worker thả claim và rút lui. Phần còn lại là <strong>nợ của orchestrator</strong>: phải trả lời bằng <code>bee cells dissent-verdict</code> (chấp nhận / bác bỏ / đưa lên người) kèm lý do — <code>bee close</code> và <code>worktree merge</code> đều từ chối chạy khi còn một dissent chưa có phán quyết. Một lời cãi có căn cứ không bao giờ bị bỏ lơ.</p>
 
 <h2>Herding — buồng lái không người trông</h2>
 
@@ -143,6 +152,10 @@
   <li><strong><code>gate_bypass_level</code> phải là <code>full</code> hoặc <code>total</code></strong> — mức thấp hơn, vòng lặp tự từ chối mỗi lượt, không dựng gì cả.</li>
   <li><strong>Người phải tự tay tạo "enable marker"</strong> (<code>touch .bee/tmp/bee-herding.enable</code>) — cấu hình cho phép chạy không tự động nghĩa là đang chạy; marker mới là "lượt này thật sự chạy".</li>
 </ul>
+
+<p>Không ai xem, nhưng không phải không ai <em>trông</em>: mỗi nhịp của vòng lặp còn chạy một <strong>supervisor</strong> — một người quan sát lạnh, chỉ đọc, không sửa gì. Nó ghi nhận xét vào <code>.bee/supervisor/observations.jsonl</code>, và khi bạn quay lại (<code>bee supervisor back</code>) nó đưa đúng một bản tin thức dậy (WakeReport) — vài dòng, xếp theo "sai thì thiệt bao nhiêu". Chuyện gấp thật sự thì bắn thông báo desktop ngay, không chờ.</p>
+
+<p>Còn việc "gõ đề bài vào một ô terminal của agent khác" — chuyển đề bài, xác nhận đã gửi, cứu một ô bị kẹt — có kỹ nghệ riêng: skill <code>bee-herdr</code>. Mỗi việc giao ra có một hộp thư file riêng (<code>.bee/mailbox/&lt;job-id&gt;/</code>): đề bài vào, biên nhận (<code>ack</code>) và kết quả (<code>result</code>) ra — máy tự chờ đọc kết quả, không tốn một token LLM nào cho việc ngồi canh.</p>
 
 <div class="guide-note guide-note--stop">
   <span class="guide-note__title">Nói thẳng</span>

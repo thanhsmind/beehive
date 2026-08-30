@@ -59,6 +59,7 @@
     <tr><td>orchestrator</td><td>Phiên agent đang điều phối: claim cell, giao việc cho worker, nói chuyện với bạn.</td></tr>
     <tr><td><code>worker</code></td><td>Một subagent được giao đúng một mẩu việc, trả lại đúng một status token. Xem <a href="/guide/giao-viec">chương 10</a>.</td></tr>
     <tr><td>sibling session</td><td>Một phiên bee khác đang sống trong cùng repo — checkout chính hoặc worktree khác — bạn thấy qua kho. Xem <a href="/guide/phoi-hop">chương 11</a>.</td></tr>
+    <tr><td>supervisor</td><td>Người quan sát lạnh của chế độ tự động: mỗi nhịp đọc trạng thái, ghi nhận xét, không sửa gì. Xem <a href="/guide/giao-viec">chương 10</a>.</td></tr>
   </tbody>
 </table>
 </div>
@@ -96,6 +97,9 @@
     <tr><td>capture stub</td><td>Một dòng ghi ngay lúc một điều gì đó vừa chốt, chờ gộp vào knowledge bundle.</td></tr>
     <tr><td>knowledge bundle</td><td>Lớp trạng thái đã đúc kết dưới <code>docs/knowledge/</code> — đọc trước khi đọc code.</td></tr>
     <tr><td>PBI</td><td>Một mục backlog đã đánh số, tính ra từ các sự kiện trong <code>.bee/backlog.jsonl</code>.</td></tr>
+    <tr><td>letter (thư)</td><td>Bản tin máy viết cho bạn ở mỗi điểm dừng sạch và mỗi lần đóng sổ, nằm trong <code>.bee/human-mailbox/</code>. Xem <a href="/guide/bo-nho">chương 12</a>.</td></tr>
+    <tr><td>claims table</td><td>Bảng khẳng định trong kế hoạch: mỗi điều dựa vào có nhãn <code>read</code>/<code>ran</code>/<code>guessed</code> kèm bằng chứng; còn <code>guessed</code> thì Cổng 2 từ chối. Xem <a href="/guide/cong-gate">chương 3</a>.</td></tr>
+    <tr><td>hat wave</td><td>Vòng cố vấn ở bước lập kế hoạch: vài góc nhìn cố định soi kế hoạch một lần cho mỗi feature lớn hoặc rủi ro.</td></tr>
   </tbody>
 </table>
 </div>
@@ -110,6 +114,7 @@
     <tr><td><code>reservation</code></td><td>Một agent giữ chỗ một đường dẫn file, gắn với một cell — chặn ghi đè của người khác.</td></tr>
     <tr><td>hold</td><td>Một reservation được phản chiếu vào sổ dùng chung của main, để checkout khác cũng thấy.</td></tr>
     <tr><td>budget</td><td>Giới hạn số lần claim/thất bại của một cell; hết ngân sách thì đóng cửa claim cho tới khi được reset có ghi nhận.</td></tr>
+    <tr><td>dissent</td><td>Lời phản đối có sổ sách của một worker về chính cell nó được giao — orchestrator nợ một phán quyết, close và merge chặn tới khi trả. Xem <a href="/guide/giao-viec">chương 10</a>.</td></tr>
   </tbody>
 </table>
 </div>

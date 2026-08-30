@@ -46,10 +46,10 @@ skill.
 
 ### What bee ships
 
-1. **Skills** (`skills/<name>/SKILL.md`) — nine of them, instruction content only.
-   Each body stays lean and teaches judgment; depth lives exactly one level down
-   in `references/`. `bee-hive` is the router; the rest are the chain stages and
-   the on-demand side steps.
+1. **Skills** (`skills/<name>/SKILL.md`) — thirteen of them, instruction content
+   only. Each body stays lean and teaches judgment; depth lives exactly one level
+   down in `references/`. `bee-hive` is the router; the rest are the chain
+   stages, the Discovery flow (`bee-wayfinding`), and the on-demand side steps.
 2. **Expertise** (`expertise/`) — the craft layer: 9 craft guides (thinking,
    planning, architecture, decisions, tests, review, documentation, knowledge,
    debugging) and 6 domain guides (data, apis, security, operations, performance,
@@ -70,10 +70,12 @@ skill.
    intent anchors, backlog, handoff mailboxes.
 6. **Hooks** — one catalog of record rendered per runtime (`hooks/hooks.json` for
    Codex's 8 events, `hooks/claude-hooks.json` for Claude Code's 7), every entry
-   launching the same vendored binary as `bee hook <name>`. Nine names are
+   launching the same vendored binary as `bee hook <name>`. Ten names are
    invokable: `session-init`, `prompt-context`, `write-guard`, `model-guard`,
    `state-sync`, `chain-nudge`, `session-close`, `tools-logger`,
-   `codex-subagent-audit`. Every one is **fail-open**: a payload it cannot decide
+   `codex-subagent-audit`, and `activity` (the herding heartbeat — the one hook
+   that still runs under the cockpit's marker, and the one with no config kill
+   switch). Every one is **fail-open**: a payload it cannot decide
    allows the operation and says so out loud. The hook is a net, *not* the
    authority — an unblocked write is not an approved write.
 
@@ -161,9 +163,15 @@ skills/                     the workflow, one SKILL.md per skill (instructions o
   bee-reviewing/            on-demand independent review gate    → stages/reviewing.md
   bee-capturing/            sync durable knowledge (Scribe) and
                             learnings + decisions (Compound)    → stages/scribing.md, stages/compounding.md
+  bee-wayfinding/           Discovery flow: chart a fog-state idea into a
+                            decision-ticket map before shaping
   bee-researching/          evidence-labeled research scout
   bee-grooming/             hunt tech debt
   bee-herding/              autonomous cockpit (bootstrap / dispatch / merge)
+  bee-herdr/                terminal-pane transport craft (deliver, prove,
+                            recover) — cockpit roles stay in bee-herding
+  bee-evolving/             gated self-improvement loop (bee repo only)
+  bee-writing-skills/       TDD-for-skills discipline for skill authors
   (maintainer guides for developing bee itself live in
    docs/handbook/writing-skills.md and docs/handbook/evolving.md)
 
@@ -199,6 +207,11 @@ packages/bee/               vendored payload ASSETS only (no runtime code)
   cells/<feature>-<n>.json  one unit of executable work                    → register.md
   decisions.jsonl           append-only decision log                       → register.md
   intent/ · lanes/ · claims/ · sessions/ · locks/ · reviews/               → register.md
+  human-mailbox/            letters and digests the runs write the human    → register.md
+  usage/<feature>.json      token usage recorded at feature close           → register.md
+  supervisor/               the observer's append-only observation store    → register.md
+  triggers/                 registered revisit conditions (one per file)    → register.md
+  mailbox/<job-id>/         herding job mailboxes (brief, ack, result)      → register.md
   logs/test-results.json    the one test record `cells claim`'s red-base
                              check reads                                    → register.md
 

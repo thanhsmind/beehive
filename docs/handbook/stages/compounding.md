@@ -25,7 +25,10 @@ with lessons worth keeping still runs it.
 - Logged decisions (superseding outdated ones, never editing them), backlog
   friction entries, a refreshed feedback digest.
 - A close commit, then the close recorded in state and the head registered as a
-  review candidate.
+  review candidate. The close itself also files a **close letter** into
+  `.bee/human-mailbox/` the moment it lands, writes the feature's token-usage
+  record `.bee/usage/<feature>.json`, and prints one `usage:` summary line
+  (silent when no session transcript is readable — never a false zero).
 
 ## Gate
 None. It **registers the feature as a review candidate** and states it is
@@ -57,6 +60,11 @@ git commit.
   `behavior_change` cells capped since the last scribing stamp and nothing captured
   them. Drain it with `bee-capturing`, or log a `capture-deferral` decision naming the
   feature — the deferral is a record, not a skip.
+- **So do the answer debts.** A dissent with no `cells dissent-verdict` refuses
+  the close in every lane, and an unanswered advisor nudge
+  (`feature_advisor_nudge_debt`) refuses it too — both are questions the work
+  raised; the close is where they stop being ignorable. See
+  [the doors that refuse](../register.md#the-doors-that-refuse).
 - **Housekeeping warns, never blocks** — a failed digest refresh or scratch sweep
   is a one-line warning, never a delay or a reversal of the close.
 - The phase is set **only after the close commit lands** — close, then flip.

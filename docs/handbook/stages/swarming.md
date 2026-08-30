@@ -63,7 +63,19 @@ unwound and nothing is left half-done),
 - **`[BLOCKED]` has a rescue ladder**: re-dispatch with the missing context →
   `bee cells escalate --id <id>` and re-dispatch (the session model is this session,
   so that rung hands it to you) → surface to the user with the worker's diagnosis. If it invalidates the plan,
-  return to planning.
+  return to planning. A blocked worker may hand back `Options:` lines and a
+  `Leaning:` — carry them to whoever decides, verbatim.
+- **A dissent is a debt, not an opinion.** A worker that disagrees with its
+  instructions records `bee cells dissent` (`{target, claim, alternative,
+  severity}` on the cell's trace; `blocker` severity parks the cell). The
+  orchestrator OWES the answer: `bee cells dissent-verdict` (`accept` /
+  `reject` / `escalate`, with `--reason`, logged as a decision). `bee close`
+  (every lane) and `bee worktree merge` (`WORKTREE_MERGE_DISSENT_DEBT`) refuse
+  while any dissent has no verdict.
+- **An advisor nudge owes an answer too.** A supervisor `advisor-nudge`
+  intervention aimed at the feature arms response debt — cap, close, and merge
+  each refuse while it stands; it clears only through a decision tagged
+  `advisor-nudge` that names the nudge row's id.
 - **Slice clean is a door set, not a feeling**: `bee close --feature <slug>
   --dry-run` names every remaining door with the command that settles it;
   proof is checked, never re-run — the final slice runs `bee close --feature

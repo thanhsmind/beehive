@@ -85,6 +85,8 @@
 
 <p>Phạm vi đã chốt được biến thành một hình dạng làm được: agent xếp <a href="/guide/cell-lane"><code>lane</code></a> cho việc này (docs/tiny/small/spike/standard/high-risk), viết bản kế hoạch nhỏ nhất còn trung thực, và xét xem việc này có đụng gì với việc khác đang chạy không. Kế hoạch <strong>đóng băng</strong> ngay khi cổng hình dạng được duyệt — sửa sau đó phải đóng dấu một phiên bản mới, không được sửa đè.</p>
 
+<p>Kế hoạch còn phải mang một <strong>bảng khẳng định</strong> (claims table): mỗi điều nó dựa vào có nhãn <code>read</code>/<code>ran</code>/<code>guessed</code> kèm bằng chứng — còn dòng <code>guessed</code> thì cổng từ chối duyệt. Với việc lớn, mơ hồ, hoặc rủi ro cao, agent còn mở một vòng cố vấn ở đúng bước này — gọi là <strong>hat wave</strong>: vài góc nhìn cố định (thiếu dữ kiện gì? có cách khác không? người dùng chịu gì?) soi kế hoạch trước khi nó tới tay bạn.</p>
+
 <p>Chặng này kết thúc ở <strong>Cổng 2</strong> — cổng "gộp", hỏi trong một hơi: đúng việc, đúng cỡ, và cho phép agent bắt đầu sửa file thật. Đây là lần duy nhất trước khi có cell nào tồn tại.</p>
 
 <p><strong>Bạn thấy gì:</strong> một câu hỏi thứ hai, ngắn gọn — sau đó agent bắt đầu động vào code.</p>
@@ -103,7 +105,7 @@
 
 <h2 id="close">6. Close — đóng sổ</h2>
 
-<p><code>bee close --feature &lt;tên&gt;</code> là cử chỉ cuối của cả feature: nó đi qua một bậc thang cửa cố định — nợ bằng chứng, nợ ghi lại hành vi đã đổi, nợ phán quyết giám khảo (với lane rủi ro cao), cổng nghiệm thu nếu cấu hình đặt ở đây — mỗi cửa hoặc báo cáo hoặc chặn, và mỗi cửa chặn đều có lối thoát được ghi lại rõ ràng (một cờ miễn trừ, hoặc một quyết định hoãn có tên). Đi qua trót lọt, close ghi luôn phần kết: một dòng capture, các cell cuối cùng được lưu trữ, và lane chuyển về <code>idle</code>.</p>
+<p><code>bee close --feature &lt;tên&gt;</code> là cử chỉ cuối của cả feature: nó đi qua một bậc thang cửa cố định — nợ bằng chứng, nợ ghi lại hành vi đã đổi, nợ phán quyết giám khảo (với lane rủi ro cao), <strong>nợ trả lời</strong> (một worker đã ghi <em>dissent</em> — lời phản đối — mà chưa có phán quyết, hay một lời nhắc "nên hỏi cố vấn" chưa được trả lời, đều chặn close), cổng nghiệm thu nếu cấu hình đặt ở đây — mỗi cửa hoặc báo cáo hoặc chặn, và mỗi cửa chặn đều có lối thoát được ghi lại rõ ràng (một cờ miễn trừ, hoặc một quyết định hoãn có tên). Đi qua trót lọt, close ghi luôn phần kết: một dòng capture, các cell cuối cùng được lưu trữ, một <strong>lá thư đóng sổ</strong> gửi vào hộp thư của bạn (<code>.bee/human-mailbox/</code>), một bản ghi chi phí token (<code>.bee/usage/&lt;feature&gt;.json</code> — kèm một dòng <code>usage:</code> in ra màn hình), và lane chuyển về <code>idle</code>.</p>
 
 <p><strong>Bạn thấy gì:</strong> một dòng — feature đã đóng, hoặc đúng một cửa đang chặn và cách gỡ nó.</p>
 

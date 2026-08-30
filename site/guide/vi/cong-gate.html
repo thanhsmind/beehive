@@ -102,6 +102,11 @@
   <p>Thu hồi cũng đi theo cặp: <code>bee gate --merge --approved false</code> rút lại cả hai nửa trong một lần, và việc rút lại được đóng dấu riêng (<code>gate_revoked_at</code>) để phân biệt "chưa từng duyệt" với "đã duyệt rồi rút lại".</p>
 </div>
 
+<div class="guide-note guide-note--warn">
+  <span class="guide-note__title">Cửa 2 giờ có thêm răng: bảng khẳng định</span>
+  <p>Kế hoạch (<code>plan.md</code>) phải mang một <strong>bảng khẳng định</strong> (claims table): mỗi điều kế hoạch dựa vào là một dòng, dán nhãn <code>read</code> (đã đọc), <code>ran</code> (đã chạy), hay <code>guessed</code> (đoán), kèm bằng chứng nguyên văn. Còn một dòng <code>guessed</code> — hoặc thiếu bảng — thì <code>bee gate --merge</code> <em>từ chối duyệt</em>. Vì sao? "File đó tồn tại" không chứng minh "file đó chứa cái ta nghĩ". Agent phải chạm vào thực tế trước khi xin bạn chữ ký.</p>
+</div>
+
 <h2>Agent không bao giờ tự duyệt cổng của chính nó</h2>
 
 <p>Đây là luật cứng, không có ngoại lệ ẩn: <strong>gate, câu trả lời quyết định, và duyệt riêng tư đều thuộc về bạn</strong>, không thuộc về agent. Mặc định actor của một lần duyệt là <code>user</code> — bản ghi trung thực của việc bạn vừa nói "được" và agent chỉ chuyển lời. Muốn agent tự bấm thay bạn, phải đi qua đúng cơ chế dưới đây, không có đường tắt nào khác.</p>

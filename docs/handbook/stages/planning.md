@@ -59,7 +59,20 @@ source edits happen until `approved_gates.execution` is true.
   and a feature demotes at most once, ever.
 - **The SMALLER PATH check runs in every lane** — one inline question, one line of
   evidence: is there a cheaper shape that still honors every locked decision? FAIL
-  → redraft. Standard/high-risk add the review wave before the gate.
+  → redraft. Big, vague, or high-risk features add the **hat wave** before the
+  gate — the plan-step consult, once per feature: fixed advisor perspectives
+  (`hat-facts-gaps`, `hat-alternatives`, `hat-user-impact`; high-risk adds
+  `hat-risks` and `hat-value`) dispatched `--kind advisor`, synthesized by the
+  leader. Its synthesis IS the plan check and the high-risk gate's advisor
+  consult, recorded with `bee state advisor-ref record` once `plan.md` is
+  gate-ready. It replaced the old review wave. Procedure home:
+  `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave").
+- **`plan.md` carries a load-bearing claims table** — every claim the plan rests
+  on, labeled `read` / `ran` / `guessed`, with a `path:line` or command anchor
+  and verbatim evidence. One **reality touch** per novel surface before the gate:
+  read the real data or run the real command. The gate has teeth here:
+  `bee gate --name shape` / `--merge` refuses while the table is missing,
+  malformed, or still holds a `guessed` row.
 - **Once approved, `plan.md` is frozen** — a stamp may follow, a content edit may
   not. The next slice is shaped as new work; an approved plan is never reopened. The
   write guard enforces it: an edit to `docs/history/<feature>/plan.md` is denied once
@@ -77,6 +90,12 @@ source edits happen until `approved_gates.execution` is true.
   `bee cells escalate --id <id>` puts a cell on the session model.
 - **A user-visible surface makes slice 1 a walking skeleton** — end to end, real
   behavior, no stubs.
+- **A test-writing cell cites the contract it tests.** A cell whose `files` name
+  a test path (or whose `role` is `test`) must cite a store decision tagged
+  `contract:<name>` in its `decisions` list — the claim door refuses
+  `CONTRACT_UNCITED` otherwise, and refuses `CONTRACT_RETIRED` /
+  `CONTRACT_UNSETTLED` when the cited contract is superseded or still carries an
+  open trigger.
 - **Tests are the writer's, TDD-style, inside each cell** — coverage judgment
   first: cite existing tests by file and case, author only the gap
   (`.bee/expertise/tests.md`). There is no trailing test cell per slice: each

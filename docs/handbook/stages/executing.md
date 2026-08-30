@@ -72,8 +72,17 @@ the cell's `trace`, one git commit.
   breakage in your path → fix and record; anything architectural → `[BLOCKED]`
   with the proposal. Never reinterpret a locked decision to make the cell fit.
   Package installs always checkpoint (`[BLOCKED]`).
+- **Disagreement has its own verb.** Convinced the instruction itself is wrong?
+  Record it — `bee cells dissent --id <cell> --reason "<what is wrong>"
+  --alternative "<instead>" --severity blocker|consider` — instead of silently
+  conforming or silently deviating. It rides the trace as data and releases your
+  claim (a dissenting worker is exiting); `blocker` parks the cell and its
+  dependents, `consider` pauses nothing. The orchestrator must answer with
+  `bee cells dissent-verdict` before close or merge can pass. This is NOT
+  `bee cells escalate`, which means model tier and keeps that meaning.
 - **Return exactly one token**: `[DONE]` (outcome, files, commit) · `[BLOCKED]`
-  (what, why, your diagnosis) · `[HANDOFF]` (at ~65% context — write
+  (what, why, your diagnosis — plus `Options:` lines and a `Leaning:` when you
+  can offer the decider real choices) · `[HANDOFF]` (at ~65% context — write
   `.bee/HANDOFF.json` first) · `[NOOP]` (cell missing or already capped). Never
   wait silently; never ask a blocking question — you run headless.
 

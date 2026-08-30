@@ -128,6 +128,22 @@ column 2. Using fallback; fix the file.</pre>
   <p>Gặp một lỗi kiểu <code>direct-edit guard</code> hay <code>lock busy</code>, đừng tìm cách lách — không sửa file khác để né, không thử lại bằng cách khác. Làm đúng cái <code>FIX:</code> câu lỗi đã nói. Xem toàn bộ danh mục hàng rào ở <a href="/guide/hooks-guards">chương 6</a>.</p>
 </div>
 
+<h2>Bốn góc kho dành cho bạn đọc</h2>
+
+<p>Phần lớn <code>.bee/</code> là sổ sách máy nói chuyện với máy. Nhưng có bốn góc được ghi <em>cho bạn</em> — để bạn bắt kịp mà không phải đọc lại transcript nào:</p>
+
+<div class="guide-table-wrap">
+<table class="guide-table">
+  <thead><tr><th>Góc</th><th>Chứa gì</th></tr></thead>
+  <tbody>
+    <tr><td><code>human-mailbox/</code></td><td>Hộp thư của bạn: mỗi lượt chạy dài kết thúc, mỗi feature đóng sổ, đều để lại một <strong>lá thư</strong> — có mục "cần bạn" riêng. Đọc xong đánh dấu bằng <code>bee mailbox mark</code>. Hết ngày, hết tuần, các thư được gấp thành một bản tin (<code>digest-…</code>).</td></tr>
+    <tr><td><code>usage/&lt;feature&gt;.json</code></td><td>Chi phí token của feature, ghi lúc đóng sổ — bao nhiêu phiên, bao nhiêu token, mới hay từ cache.</td></tr>
+    <tr><td><code>supervisor/</code></td><td>Sổ quan sát của người trông chừng chế độ tự động (xem <a href="/guide/giao-viec">chương 10</a>) — nhận xét từng nhịp, và các lời nhắc đang chờ bạn.</td></tr>
+    <tr><td><code>triggers/</code></td><td>Các điều kiện "khi nào thì xem lại" đã đăng ký — mỗi lời hứa hoãn trong tài liệu phải trỏ về một file ở đây, không được hứa suông.</td></tr>
+  </tbody>
+</table>
+</div>
+
 <h2>Đọc tiếp</h2>
 <ul>
   <li><a href="/guide/hooks-guards">Chương 6 — Hooks, người gác cổng</a>: hàng rào nào thật sự chặn được một cú ghi sai vào <code>.bee/</code>.</li>

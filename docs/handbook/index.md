@@ -18,7 +18,7 @@ a stage name to the file you edit.
 |---|-------|--------------|----------|------|------|
 | 0 | **hive** | `bee-hive` | Bootstrap, route, and keep the gates. Loaded first every session. | presents all three | [stages/hive.md](stages/hive.md) |
 | 1 | **exploring** | `bee-shaping` (Explore · Qualify · Lock · Brief) | Fuzzy request → locked decisions in `CONTEXT.md`. | Gate 1 | [stages/exploring.md](stages/exploring.md) |
-| 2 | **planning** | `bee-planning` | Locked decisions → lane, smallest honest shape, cells — plus the reality check (SMALLER PATH) and the review wave. | Gate 2 (merged shape+execution) | [stages/planning.md](stages/planning.md) |
+| 2 | **planning** | `bee-planning` | Locked decisions → lane, smallest honest shape, cells — plus the reality check (SMALLER PATH), the claims table, and the hat wave (the plan-step consult). | Gate 2 (merged shape+execution) | [stages/planning.md](stages/planning.md) |
 | 3 | **swarming** | `bee-swarming` | Orchestrate bounded workers over cells opened after Gate 2. | — | [stages/swarming.md](stages/swarming.md) |
 | 4 | **executing** | `bee-swarming` ("Execute") | Implement, test, and finish exactly one cell. | — | [stages/executing.md](stages/executing.md) |
 | 5 | **scribing** | `bee-capturing` ("Scribe") | Sync durable, tech-agnostic knowledge of every area. | — | [stages/scribing.md](stages/scribing.md) |
@@ -38,8 +38,16 @@ several closed features into one session.
 On-demand side steps (not chain stages, so no dedicated page): the Brief move
 of `bee-shaping` (render one implement plan), `bee-grooming` (hunt tech debt),
 the Qualify move of `bee-shaping` (unattended triage of a backlog row),
-`bee-researching` (research scout), `bee-herding` (the autonomous cockpit), and
+`bee-researching` (research scout), `bee-herding` (the autonomous cockpit),
+`bee-herdr` (terminal-pane transport craft for the cockpit's workers), and
 `bee-hive`'s "Gates" section (toggle gate autopilot).
+
+The Main flow above is not the only flow: a fog-state ask — no nameable
+outcome yet — enters the **Discovery flow** instead. `bee-wayfinding` charts it
+into a map of decision tickets (`docs/discovery/<effort>/MAP.md`); research,
+spikes, and grilling resolve the tickets; the exit is `bee-shaping`'s Lock
+consuming the map's D-IDs. Discovery has no stage page — it ends where
+exploring begins.
 
 ## Maintainer guides (developing bee itself, not shipped product)
 
@@ -62,6 +70,7 @@ the Qualify move of `bee-shaping` (unattended triage of a backlog row),
 | How learnings/critical patterns/decisions are captured; feature close | [compounding](stages/compounding.md) — `bee-capturing` "Compound" |
 | How an independent review is run, findings graded, merge approved | [reviewing](stages/reviewing.md) |
 | A runtime file's schema (`state.json`, `cells`, `decisions.jsonl`, …) | [register.md](register.md) |
+| The human mailbox (letters, digests), close-time token usage, the supervisor's observation store | [register.md](register.md#the-memory-surfaces-for-the-human) |
 | The CLI's two surfaces, the flow verbs, the refusal taxonomy | [register.md](register.md#the-cli--how-registers-are-mutated) |
 | Which door refuses an operation, and what its one escape hatch is | [register.md](register.md#the-doors-that-refuse) |
 | Multisession state: workflow records, leases, handoff mailboxes, worktrees | [register.md](register.md#the-control-plane-beeruntime) |

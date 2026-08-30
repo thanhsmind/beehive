@@ -76,9 +76,14 @@
     <tr><td>Decision</td><td>Thường là orchestrator, khi một thoả thuận thật sự chốt</td><td>Preamble (3 quyết định gần nhất), và bất kỳ ai trích dẫn bằng id</td></tr>
     <tr><td>Knowledge bundle</td><td>Người/agent áp dụng đề xuất <code>promote</code></td><td>Đầu mỗi feature, và mỗi lần <code>bee knowledge search</code> giữa chừng</td></tr>
     <tr><td>Backlog</td><td>Bất kỳ ai vấp friction, hoặc ai đề xuất hạng mục mới</td><td>Preamble, và <code>claim-next</code> khi xếp hạng việc kế tiếp</td></tr>
+    <tr><td>Thư (letter)</td><td>Máy, ở mỗi điểm dừng sạch và mỗi lần đóng sổ</td><td>Bạn — lúc nào rảnh; hết ngày/tuần thư tự gấp thành bản tin</td></tr>
   </tbody>
 </table>
 </div>
+
+<h2>Thư — tầng thứ năm, dành riêng cho bạn</h2>
+
+<p>Bốn tầng trên đều là agent viết cho agent. Tầng thứ năm viết cho <em>bạn</em>: hộp thư <code>.bee/human-mailbox/</code>. Một lượt chạy dài kết thúc, một feature đóng sổ, hay một lượt chạy chết giữa chừng — mỗi trường hợp để lại một <strong>lá thư</strong>: chuyện gì đã xảy ra, và một mục <em>needs_you</em> — những điều chỉ bạn quyết được. Đọc xong, đánh dấu bằng <code>bee mailbox mark --status read</code>. Bee không cộng dồn hay diễn giải lại thư — bản tin ngày (<code>digest-YYYY-MM-DD.md</code>) và tuần chỉ <em>chép nguyên văn</em> từ thư đóng sổ và sổ chi phí token, vì một con số tự tính lại là một con số có thể tính sai.</p>
 
 <div class="guide-note guide-note--ok">
   <span class="guide-note__title">Điểm mấu chốt</span>
