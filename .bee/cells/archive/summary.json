@@ -1003,5 +1003,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-30T06:10:31.475Z"
+  },
+  "mise-shim-stdout": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T07:47:07.028Z"
   }
 }

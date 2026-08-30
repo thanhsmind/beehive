@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "mise-shim-stdout",
+  "mode": "standard",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"mise-shim-stdout\" started at phase \"planning\" (lane).",
+  "next_action": "Ships in the next release; a local release run already carries the fix.",
+  "created_at": "2026-08-30T07:45:11.826Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "One direct task in two shell scripts: export MISE_QUIET=1 so mise's banner stops poisoning stdout captures",
+    "updated_at": "2026-08-30T07:45:11.843Z",
+    "feature": "mise-shim-stdout"
+  },
+  "last_scribing_run": {
+    "feature": "mise-shim-stdout",
+    "date": "2026-08-30",
+    "at": "2026-08-30T07:47:06.649Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "Ships in the next release; a local release run already carries the fix."
+  }
+}
