@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "letter-reflection",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"letter-reflection\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"letter-reflection\" (lane).",
+  "next_action": "bee close finished \"letter-reflection\" — feature is closed.",
   "created_at": "2026-08-30T16:32:10.543Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
