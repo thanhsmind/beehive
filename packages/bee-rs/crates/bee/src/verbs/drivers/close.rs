@@ -1938,6 +1938,202 @@ fn record_merge_ready_blocked_by(root: &Path, feature: &str, doors: &[Door]) {
     let _ = crate::verbs::workflow_store::merge_ready::set_blocked_by(root, feature, &names);
 }
 
+// ═══ the token-usage section (decision 2d3abd12) ═══════════════════════════
+//
+// WHAT IT ANSWERS. "What did this feature cost in tokens?" — asked at the one
+// moment the answer is final, and answered from the only place that already
+// holds the truth: the Claude transcript each session wrote. No new store, no
+// new counter, nothing to keep in sync.
+//
+// WHY NOT `performance.jsonl`. That record is written by the session-close
+// hook, so it is stale for the session that is running close RIGHT NOW — the
+// most interesting one — and it is keyed by project, not by feature. Both
+// alternatives are named as rejected in decision 2d3abd12.
+//
+// FAIL-SOFT, ALWAYS. This section is a report line on an already-green close.
+// Every read below degrades to "skipped" instead of erroring: a session with
+// no record, no stored `transcript_path`, a path that no longer exists on
+// disk (transcripts are outside the repo and get cleaned up), or a transcript
+// with no events at all. The skipped count is printed rather than swallowed —
+// a total summed over 1 of 4 sessions must never read like a total over 4.
+
+/// The three numbers a `Rollup`'s model entries already carry, summed across
+/// every model. `ModelAcc::finalize` computed `new`/`cached`/`total` before
+/// serialization (`hooks/session_close/perf.rs`), so this only ever ADDS them
+/// up — it never re-derives a total from input/output/cache fields, which
+/// would be a second, drift-prone definition of the same number.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct UsageBucket {
+    pub(crate) new_t: f64,
+    pub(crate) cached: f64,
+    pub(crate) total: f64,
+}
+
+impl UsageBucket {
+    fn add_models(&mut self, models: &Value) {
+        let Value::Object(map) = models else { return };
+        for m in map.values() {
+            self.new_t += crate::hooks::session_close::num_field(m, "new");
+            self.cached += crate::hooks::session_close::num_field(m, "cached");
+            self.total += crate::hooks::session_close::num_field(m, "total");
+        }
+    }
+
+    fn plus(&self, other: &UsageBucket) -> UsageBucket {
+        UsageBucket {
+            new_t: self.new_t + other.new_t,
+            cached: self.cached + other.cached,
+            total: self.total + other.total,
+        }
+    }
+
+    fn value(&self) -> Value {
+        json!({ "new": self.new_t, "cached": self.cached, "total": self.total })
+    }
+}
+
+/// The whole usage section: what was read, what could not be, and the two
+/// buckets. `sessions` counts the transcripts actually ROLLED UP, never the
+/// candidates — with `skipped` beside it the reader can always tell a
+/// complete total from a partial one.
+pub(crate) struct CloseUsage {
+    pub(crate) sessions: usize,
+    pub(crate) skipped: usize,
+    pub(crate) main: UsageBucket,
+    pub(crate) subagents: UsageBucket,
+}
+
+impl CloseUsage {
+    fn total(&self) -> UsageBucket {
+        self.main.plus(&self.subagents)
+    }
+
+    pub(crate) fn value(&self) -> Value {
+        json!({
+            "sessions": self.sessions,
+            "skipped": self.skipped,
+            "main": self.main.value(),
+            "subagents": self.subagents.value(),
+            "total": self.total().value(),
+        })
+    }
+}
+
+/// Every session id whose usage belongs to this feature: each `.bee/sessions/
+/// *.json` record bound to the lane, PLUS the session running close (which
+/// may not be lane-bound at all, and whose own record is the freshest and
+/// least likely to be in any rolled-up log yet).
+///
+/// Sorted and deduped. The sums are order-insensitive, but a deterministic
+/// candidate order keeps the skipped count and any future per-session detail
+/// reproducible across runs — the same reason `walk_subagents` sorts its own
+/// directory listing.
+pub(crate) fn usage_session_ids(
+    control: &Path,
+    feature: &str,
+    calling_session: Option<&str>,
+) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(crate::verbs::cells::sessions_dir(control)) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            // `.bee/sessions/` also holds `<id>.activity.jsonl` sidecars; only
+            // the plain `<id>.json` record carries the lane binding.
+            let Some(id) = name.strip_suffix(".json") else { continue };
+            if id.is_empty() || id.contains(".activity") {
+                continue;
+            }
+            let ReadJson::Parsed(record) = read_json(&entry.path()) else { continue };
+            if record.get("lane").and_then(Value::as_str) == Some(feature) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    if let Some(calling) = calling_session.map(str::trim).filter(|s| !s.is_empty()) {
+        ids.push(calling.to_string());
+    }
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// Roll every candidate session's transcript up into one usage section.
+///
+/// `calling_session` is a PARAMETER rather than an env read inside this
+/// function so the tests can drive it directly: `BEE_SESSION_ID` is
+/// process-global and two tests setting it would race under the default
+/// parallel test runner. The env resolution happens once, at the call site.
+pub(crate) fn collect_close_usage(
+    control: &Path,
+    feature: &str,
+    calling_session: Option<&str>,
+) -> CloseUsage {
+    let mut usage =
+        CloseUsage { sessions: 0, skipped: 0, main: UsageBucket::default(), subagents: UsageBucket::default() };
+    for id in usage_session_ids(control, feature, calling_session) {
+        let record = match read_json(&crate::verbs::cells::sessions_dir(control).join(format!("{id}.json"))) {
+            ReadJson::Parsed(r) => r,
+            // No record, or a corrupt one: a session we meant to cover and
+            // could not. Counted, never silently dropped.
+            _ => {
+                usage.skipped += 1;
+                continue;
+            }
+        };
+        let transcript = record
+            .get("transcript_path")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .filter(|p| p.exists());
+        let Some(transcript) = transcript else {
+            usage.skipped += 1;
+            continue;
+        };
+        // `rollup_transcript` answers None for an empty/unparseable transcript
+        // — same "could not read it" outcome as a missing file.
+        let Some(rollup) = crate::hooks::session_close::rollup_transcript(&transcript) else {
+            usage.skipped += 1;
+            continue;
+        };
+        usage.sessions += 1;
+        usage.main.add_models(&rollup.models);
+        usage.subagents.add_models(&rollup.subagent_models);
+    }
+    usage
+}
+
+/// The one summary line. `None` when no transcript was readable at all: a
+/// "usage: 0 session(s) — 0 tokens" line states a cost of zero, which is a
+/// FALSE claim about a feature whose transcripts merely could not be found.
+/// Saying nothing is the honest answer there.
+///
+/// Reuses `fmt_tokens` (`hooks/session_close/perf`'s sibling `html.rs`), the
+/// k/M/B spelling every other bee token readout already uses.
+pub(crate) fn close_usage_line(usage: &CloseUsage) -> Option<String> {
+    if usage.sessions == 0 {
+        return None;
+    }
+    let f = crate::hooks::session_close::fmt_tokens;
+    let total = usage.total();
+    let skipped = if usage.skipped > 0 {
+        format!(", {} session(s) skipped — no readable transcript", usage.skipped)
+    } else {
+        String::new()
+    };
+    Some(format!(
+        "usage: {} session(s) — {} tokens (main {}, subagents {}; new {}, cached {}){}",
+        usage.sessions,
+        f(total.total),
+        f(usage.main.total),
+        f(usage.subagents.total),
+        f(total.new_t),
+        f(total.cached),
+        skipped
+    ))
+}
+
 /// provenance: bee.mjs handleClose (~7643). `worktree` is provably null here
 /// (see the file header), so the merge-back line never renders natively.
 pub(crate) fn close_handler(
@@ -2488,6 +2684,32 @@ pub(crate) fn close_handler(
         Err(reason) => format!("Promote skipped for \"{feature}\": {reason}"),
     };
     lines.push(promote_line);
+
+    // ── the token-usage section (decision 2d3abd12) ───────────────────────
+    //
+    // GREEN, non-dry-run only, like every line around it: `--dry-run` returns
+    // near the top of this function and each blocking door returns above, so
+    // a refused close never prints a cost for work that is not finished.
+    //
+    // THE CONTROL ROOT, not `root`. `.bee/sessions/` is control-plane — for a
+    // linked worktree it lives in the main checkout, exactly as
+    // `record_feature_close_in_mailbox` above resolves it. Reading `root`
+    // here would find an empty sessions directory for every worktree feature
+    // and report a cost of zero for the ones that ran in a worktree, which is
+    // most of them.
+    //
+    // The calling session resolves through `resolve_session_flag_env` — the
+    // same BEE_SESSION_ID → CLAUDE_CODE_SESSION_ID chain the mailbox stop
+    // above already uses, so close names one session id, never two.
+    let usage = collect_close_usage(
+        &crate::hooks::session_init::control_root_for(root),
+        feature,
+        crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
+    );
+    result.insert("usage".into(), usage.value());
+    if let Some(line) = close_usage_line(&usage) {
+        lines.push(line);
+    }
 
     // ── bookkeeping auto-commit — GREEN, non-dry-run only, path-scoped ─────
     //
@@ -4342,5 +4564,192 @@ mod tests {
 
         // And a feature nobody ever worked on carries nothing either.
         assert!(feature_close_note(root, "never-existed").is_empty());
+    }
+
+    // ─── tests: the token-usage section (decision 2d3abd12) ────────────────
+
+    /// One transcript event, in the exact shape `aggregate_usage` reads:
+    /// `type: "assistant"` with a truthy `message.model` and a `message.usage`
+    /// block. `requestId` keeps the de-duplication path honest, `timestamp` is
+    /// what `walk_subagents` needs to accept a sidecar at all.
+    fn usage_event(model: &str, req: &str, input: u32, output: u32, cw: u32, cr: u32) -> String {
+        format!(
+            r#"{{"type":"assistant","requestId":"{req}","timestamp":"2026-08-30T12:00:00.000Z","message":{{"model":"{model}","usage":{{"input_tokens":{input},"output_tokens":{output},"cache_creation_input_tokens":{cw},"cache_read_input_tokens":{cr}}}}}}}"#
+        )
+    }
+
+    /// Writes `.bee/sessions/<id>.json` and, when `main` is given, the
+    /// transcript it points at — inside the SAME tempdir, so `transcript_path`
+    /// is a real absolute path that `.exists()` answers true for.
+    fn write_usage_session(
+        root: &Path,
+        id: &str,
+        lane: Option<&str>,
+        main: Option<&str>,
+        subagent: Option<&str>,
+    ) {
+        let transcript = root.join("transcripts").join(format!("{id}.jsonl"));
+        let lane_field = lane.map(|l| format!(r#","lane":"{l}""#)).unwrap_or_default();
+        // The path goes into a JSON string literal: escape the separator so a
+        // win32 checkout does not write an unparseable record.
+        let transcript_json = transcript.to_string_lossy().replace('\\', "\\\\");
+        w(
+            root,
+            &format!(".bee/sessions/{id}.json"),
+            &format!(r#"{{"id":"{id}","transcript_path":"{transcript_json}"{lane_field}}}"#),
+        );
+        if let Some(main) = main {
+            w(root, &format!("transcripts/{id}.jsonl"), &format!("{main}\n"));
+        }
+        if let Some(sub) = subagent {
+            w(root, &format!("transcripts/{id}/subagents/a.jsonl"), &format!("{sub}\n"));
+        }
+    }
+
+    /// The fixture the sum tests share: two readable sessions (one bound to
+    /// the lane and carrying a subagent sidecar, one reached only because it
+    /// is the CALLING session), one lane-bound session whose transcript is
+    /// gone, and one readable session belonging to a different feature that
+    /// must not be counted at all.
+    fn usage_fixture(root: &Path) {
+        write_usage_session(
+            root,
+            "s-bound",
+            Some("demo"),
+            Some(&usage_event("opus", "r1", 100, 10, 5, 1000)),
+            Some(&usage_event("sonnet", "s1", 50, 4, 1, 200)),
+        );
+        write_usage_session(root, "s-call", None, Some(&usage_event("opus", "r2", 200, 20, 0, 0)), None);
+        // Lane-bound, but the transcript it names was never written.
+        write_usage_session(root, "s-gone", Some("demo"), None, None);
+        // A readable transcript that belongs to somebody else's feature.
+        write_usage_session(
+            root,
+            "s-other",
+            Some("other-feature"),
+            Some(&usage_event("opus", "r3", 9_000, 9_000, 9_000, 9_000)),
+            None,
+        );
+    }
+
+    #[test]
+    fn usage_candidates_are_the_lane_bound_records_plus_the_calling_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        // s-other is bound to another lane; s-call has no lane at all and is
+        // reached ONLY through the calling-session argument.
+        assert_eq!(
+            usage_session_ids(root, "demo", Some("s-call")),
+            vec!["s-bound".to_string(), "s-call".to_string(), "s-gone".to_string()]
+        );
+        assert_eq!(
+            usage_session_ids(root, "demo", None),
+            vec!["s-bound".to_string(), "s-gone".to_string()]
+        );
+        // A calling session already bound to the lane is named once, not twice.
+        assert_eq!(
+            usage_session_ids(root, "demo", Some("s-bound")),
+            vec!["s-bound".to_string(), "s-gone".to_string()]
+        );
+    }
+
+    #[test]
+    fn usage_sums_main_and_subagent_tokens_and_counts_the_unreadable_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+
+        // s-bound and s-call rolled up; s-gone counted as skipped; s-other
+        // never a candidate, so it is neither summed NOR skipped.
+        assert_eq!(usage.sessions, 2);
+        assert_eq!(usage.skipped, 1);
+
+        // main = s-bound (100+10+5 new, 1000 cached) + s-call (220 new, 0 cached)
+        assert_eq!(usage.main.new_t, 335.0);
+        assert_eq!(usage.main.cached, 1000.0);
+        assert_eq!(usage.main.total, 1335.0);
+        // subagents = s-bound's one sidecar (50+4+1 new, 200 cached)
+        assert_eq!(usage.subagents.new_t, 55.0);
+        assert_eq!(usage.subagents.cached, 200.0);
+        assert_eq!(usage.subagents.total, 255.0);
+
+        // The JSON object close inserts: main + subagents, never re-derived.
+        assert_eq!(
+            usage.value(),
+            json!({
+                "sessions": 2,
+                "skipped": 1,
+                "main": {"new": 335.0, "cached": 1000.0, "total": 1335.0},
+                "subagents": {"new": 55.0, "cached": 200.0, "total": 255.0},
+                "total": {"new": 390.0, "cached": 1200.0, "total": 1590.0},
+            })
+        );
+    }
+
+    #[test]
+    fn usage_line_spells_both_buckets_and_names_the_skipped_sessions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+        assert_eq!(
+            close_usage_line(&usage).unwrap(),
+            "usage: 2 session(s) — 1.6k tokens (main 1.3k, subagents 255; new 390, cached 1.2k), \
+             1 session(s) skipped — no readable transcript"
+        );
+    }
+
+    #[test]
+    fn usage_line_drops_the_skipped_clause_when_every_transcript_was_read() {
+        let usage = CloseUsage {
+            sessions: 1,
+            skipped: 0,
+            main: UsageBucket { new_t: 500_000.0, cached: 900_000.0, total: 1_400_000.0 },
+            subagents: UsageBucket::default(),
+        };
+        assert_eq!(
+            close_usage_line(&usage).unwrap(),
+            "usage: 1 session(s) — 1.40M tokens (main 1.40M, subagents 0; new 500.0k, cached 900.0k)"
+        );
+    }
+
+    /// The honesty rule: a feature whose transcripts are all gone gets NO
+    /// line, because "0 tokens" would be a false claim about its cost. The
+    /// JSON object is still present, so a reader can tell "nothing read" from
+    /// "nothing spent".
+    #[test]
+    fn no_readable_transcript_emits_no_usage_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_usage_session(root, "s-gone", Some("demo"), None, None);
+        let usage = collect_close_usage(root, "demo", None);
+        assert_eq!(usage.sessions, 0);
+        assert_eq!(usage.skipped, 1);
+        assert!(close_usage_line(&usage).is_none());
+        assert_eq!(usage.value()["total"]["total"], json!(0.0));
+
+        // A feature with no session records at all: nothing read, nothing
+        // skipped, still no line.
+        let empty = collect_close_usage(root, "never-existed", None);
+        assert_eq!(empty.sessions, 0);
+        assert_eq!(empty.skipped, 0);
+        assert!(close_usage_line(&empty).is_none());
+    }
+
+    /// A session record that exists but stores no `transcript_path`, and one
+    /// whose transcript is present but empty, are both "could not read it" —
+    /// counted, never summed as a zero-cost session.
+    #[test]
+    fn usage_skips_a_record_with_no_transcript_path_and_an_empty_transcript() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/sessions/s-nopath.json", r#"{"id":"s-nopath","lane":"demo"}"#);
+        write_usage_session(root, "s-empty", Some("demo"), Some(""), None);
+        let usage = collect_close_usage(root, "demo", None);
+        assert_eq!(usage.sessions, 0);
+        assert_eq!(usage.skipped, 2);
+        assert!(close_usage_line(&usage).is_none());
     }
 }
