@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"close-usage-summary\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"close-usage-summary\" (lane).",
+  "next_action": "Merged into main at 799443a; capture what settled, then bee close --feature close-usage-summary.",
   "created_at": "2026-08-30T12:02:30.293Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "adds usage summary lines to bee close output; 0 risk flags; close.rs + perf.rs",
     "updated_at": "2026-08-30T12:02:38.374Z",
     "feature": "close-usage-summary"
-  },
-  "merge_ready": {
-    "since": "2026-08-30T12:11:57.085Z",
-    "branch": "wt/close-usage-summary",
-    "worktree_id": "beehive--wt--close-usage-summary",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
