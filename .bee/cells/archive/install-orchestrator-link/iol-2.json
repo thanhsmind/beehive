@@ -1,0 +1,36 @@
+{
+  "id": "iol-2",
+  "feature": "install-orchestrator-link",
+  "lane": "tiny",
+  "role": "docs",
+  "title": "Move the orchestrator install section from README to INSTALL.md",
+  "behavior_change": false,
+  "files": [
+    "README.md",
+    "INSTALL.md"
+  ],
+  "read_first": [
+    "INSTALL.md"
+  ],
+  "action": "Owner correction: the orchestrator (waggledance) install section belongs in INSTALL.md, not README. Remove the README subsection; add an ## Orchestrator (waggledance) section to INSTALL.md after ## 5. Update / uninstall; amend the tiny brief.",
+  "verify": "README no longer mentions the waggledance installer; INSTALL.md carries the section; the raw install.sh URL resolves 200.",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "dropped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "re-added as iol-3 after the closed lane refused route/claim; same scope"
+  }
+}

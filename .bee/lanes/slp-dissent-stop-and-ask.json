@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces are quiet: no cells in play, no risk signs. I'll log a silence record, which is the correct output for this tick.",
-    "asked_at": "2026-08-30T01:48:29.029Z",
-    "session": "67724607-03ae-44e6-b4d4-15783c9e9aca"
+    "subject": "All six surfaces are quiet — same pattern as the last several ticks. Writing the silence record now.",
+    "asked_at": "2026-08-30T02:34:30.051Z",
+    "session": "6ebe0cee-d278-444a-b704-8fd654ac991c"
   },
   "route": {
     "class": "feature",

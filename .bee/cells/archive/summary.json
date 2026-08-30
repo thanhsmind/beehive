@@ -996,7 +996,7 @@
   },
   "install-orchestrator-link": {
     "capped": 1,
-    "dropped": 0,
-    "archived_at": "2026-08-30T01:49:45.504Z"
+    "dropped": 1,
+    "archived_at": "2026-08-30T02:36:39.183Z"
   }
 }
