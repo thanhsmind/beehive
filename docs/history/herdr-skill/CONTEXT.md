@@ -27,9 +27,11 @@ code changes; bee-herding stays the cockpit-role home.
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: empty template section — nothing was deferred; the bee-writing-skills cycle was the plan -->
 ### Deferred To Planning
 
 (none — the bee-writing-skills cycle is the plan)
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 

@@ -1,4 +1,43 @@
-# bee-herdr skill — CREATION LOG (RED phase result: no failing baseline)
+# bee-herdr skill — CREATION LOG
+
+## Outcome
+
+Skill SHIPPED at skills/bee-herdr/SKILL.md (owner's explicit B decision,
+d1455e24, superseding the no-skill RED verdict f93a1835). Body kept to
+invariants proven in the runs below; cockpit content cross-referenced to
+bee-herding.
+
+## GREEN (2026-08-30, skill loaded, review-tier agents)
+
+- G1 stall re-test: PASS — chose salvage+re-deliver, cited SKILL.md lines,
+  refused the Red-Flag sentence verbatim.
+- G2 result-readback against a REAL mailbox: task PASS (status done read
+  through the wrapped envelope), plus 4 findings.
+
+## REFACTOR (all applied)
+
+- P1: herdr-result field path is relative to `result` — full working
+  invocation now in the body (`... | bee herding herdr-result status`).
+- P2: printf-wrap recipe was refused by the worktree write guard — swapped
+  for the guard-safe `jq '{ok:true,transport:"tmux",result:.}'`.
+- P2: start proof named a dispatch.jsonl that not every host writes —
+  reworded to job.json + ack-N.json with the environment-fact fallback.
+- P3: the open-pane morning check now names its command
+  (`bee herding occupancy`) in place.
+- G1 meta-gap: salvage/clear steps no longer name raw tmux; pane read +
+  pane close through the pane vocabulary; keystroke-clearing dropped (no
+  key-send verb exists, on purpose).
+
+## VALIDATE
+
+Checklist walked: frontmatter line 1, name=dir, trigger-only description
+(≤1024), version 0.1 + ecosystem bee + dependencies mapping, density one
+page, Headless, Red Flags, handoff sentence, no scripts to node-check.
+Vendoring: `bee dev regen` — all 3 steps green.
+
+---
+
+# RED phase record (kept verbatim below: 5/5 green baselines)
 
 Per bee-writing-skills, the Iron Law: no skill without a failing test first.
 
