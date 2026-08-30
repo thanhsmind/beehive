@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "letter-digest",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"letter-digest\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f1e2715; reload the product and test \"letter-digest\", then either approve uat (\"bee gate --name uat --approved true --lane letter-digest\") or fix it in the worktree and merge again.",
+  "next_action": "Feature closed; digests and lessons live at next release",
   "created_at": "2026-08-30T14:10:56.772Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: letter-digest",
-    "asked_at": "2026-08-30T15:01:10.700Z",
-    "session": "bee-worktree-merge-sessionless"
+    "asked_at": "2026-08-30T15:01:22.354Z",
+    "session": "c9eb2d43-4dec-4d2a-8ea5-f7438226e33d"
   },
   "route": {
     "class": "feature",
@@ -30,5 +30,17 @@
     "rationale": "D2 changes filing rules mailbox tests assert; mailbox.rs, close.rs, work.rs plus a digest module; story-sized behavior",
     "updated_at": "2026-08-30T14:12:32.449Z",
     "feature": "letter-digest"
+  },
+  "gate_revoked_at": {
+    "execution": "2026-08-30T15:04:30.614Z"
+  },
+  "last_scribing_run": {
+    "feature": "letter-digest",
+    "date": "2026-08-30",
+    "at": "2026-08-30T15:06:44.482Z",
+    "areas_synced": [
+      "human-mailbox"
+    ],
+    "next_action": "Feature closed; digests and lessons live at next release"
   }
 }
