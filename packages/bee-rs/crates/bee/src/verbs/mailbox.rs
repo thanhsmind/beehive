@@ -2156,10 +2156,11 @@ pub(crate) fn record_silent_runs(root: &Path, current_run: &str) -> Vec<(String,
 //
 // ── The authorship ban is NOT relaxed here (D8) ─────────────────────────
 //
-// Architecture, behaviour and usage may state no fact no stored entry
-// carries, exactly like the five sections above them. So nothing in this
-// module writes a word of them: the feature close reads three lists of
-// already-recorded facts out of the feature's own capped cells and STORES
+// Architecture, behaviour, usage and token usage may state no fact no stored
+// entry carries, exactly like the five sections above them. So nothing in this
+// module writes a word of them: the feature close reads its lists of
+// already-recorded facts out of the feature's own capped cells (and, for the
+// token-usage line, out of the transcripts it just rolled up) and STORES
 // them at the moment of the stop (`verbs/drivers/close.rs`
 // `record_feature_close_in_mailbox`), and the composing pass only sorts,
 // dedupes and drops. If a feature recorded no material for a section, that
@@ -2181,12 +2182,17 @@ pub(crate) fn record_silent_runs(root: &Path, current_run: &str) -> Vec<(String,
 pub(crate) const SECTION_ARCHITECTURE: &str = "Architecture";
 pub(crate) const SECTION_BEHAVIOUR: &str = "Behaviour";
 pub(crate) const SECTION_USAGE: &str = "Usage";
-pub(crate) const CLOSE_SECTIONS: [&str; 3] =
-    [SECTION_ARCHITECTURE, SECTION_BEHAVIOUR, SECTION_USAGE];
+/// Decision e97cc9d4: what the feature COST, beside what it is and how it is
+/// used. Its own heading rather than a bullet under [`SECTION_USAGE`] — that
+/// section lists the instructions a human opens to USE the thing, and a token
+/// count is a different question with a different answer.
+pub(crate) const SECTION_TOKEN_USAGE: &str = "Token usage";
+pub(crate) const CLOSE_SECTIONS: [&str; 4] =
+    [SECTION_ARCHITECTURE, SECTION_BEHAVIOUR, SECTION_USAGE, SECTION_TOKEN_USAGE];
 
-/// The keys the three lists ride under on a stored feature-close line, in the
+/// The keys the four lists ride under on a stored feature-close line, in the
 /// same order as [`CLOSE_SECTIONS`].
-const CLOSE_NOTE_KEYS: [&str; 3] = ["architecture", "behaviour", "usage"];
+const CLOSE_NOTE_KEYS: [&str; 4] = ["architecture", "behaviour", "usage", "token_usage"];
 
 /// What a feature-close stop recorded for D14's three extra sections.
 ///
@@ -2198,19 +2204,23 @@ pub(crate) struct CloseNote {
     pub architecture: Vec<String>,
     pub behaviour: Vec<String>,
     pub usage: Vec<String>,
+    /// The one token-usage line close already printed (e97cc9d4). A list, not
+    /// an `Option`, so one run that closes two features carries both lines
+    /// through the SAME dedupe-and-drop pass as the other three.
+    pub token_usage: Vec<String>,
 }
 
 impl CloseNote {
     pub(crate) fn is_empty(&self) -> bool {
-        self.architecture.is_empty() && self.behaviour.is_empty() && self.usage.is_empty()
+        self.lists().iter().all(|list| list.is_empty())
     }
 
-    /// The three lists in [`CLOSE_SECTIONS`] order.
-    fn lists(&self) -> [&Vec<String>; 3] {
-        [&self.architecture, &self.behaviour, &self.usage]
+    /// The four lists in [`CLOSE_SECTIONS`] order.
+    fn lists(&self) -> [&Vec<String>; 4] {
+        [&self.architecture, &self.behaviour, &self.usage, &self.token_usage]
     }
 
-    /// `None` for a line that carries none of the three keys — which is every
+    /// `None` for a line that carries none of the four keys — which is every
     /// line every other stop kind ever wrote — and for one that carries them
     /// all empty, so an empty note can never keep a heading alive.
     fn from_value(v: &Value) -> Option<Self> {
@@ -2222,6 +2232,7 @@ impl CloseNote {
             architecture: string_list(m, CLOSE_NOTE_KEYS[0]),
             behaviour: string_list(m, CLOSE_NOTE_KEYS[1]),
             usage: string_list(m, CLOSE_NOTE_KEYS[2]),
+            token_usage: string_list(m, CLOSE_NOTE_KEYS[3]),
         };
         (!note.is_empty()).then_some(note)
     }
@@ -2268,15 +2279,15 @@ pub(crate) fn close_sentence(feature: &str) -> String {
     }
 }
 
-/// D14's three sections' bullets, in [`CLOSE_SECTIONS`] order.
+/// D14's extra sections' bullets, in [`CLOSE_SECTIONS`] order.
 ///
 /// Deduped in first-seen order across every feature-close stop the run
 /// recorded (one run may close two features): dropping a repeat is DROPPING,
 /// which D8 allows, and nothing is re-worded or added on the way. An entry
 /// that is blank after `one_line` is dropped rather than rendered as an empty
 /// bullet.
-fn close_section_lines(notes: &[CloseNote]) -> [Vec<String>; 3] {
-    let mut out: [Vec<String>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+fn close_section_lines(notes: &[CloseNote]) -> [Vec<String>; 4] {
+    let mut out: [Vec<String>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for note in notes {
         for (slot, list) in out.iter_mut().zip(note.lists()) {
             for raw in list {
@@ -2293,10 +2304,10 @@ fn close_section_lines(notes: &[CloseNote]) -> [Vec<String>; 3] {
     out
 }
 
-/// [`compose_body`] plus D14's three extra sections — the ONE body renderer a
+/// [`compose_body`] plus D14's extra sections — the ONE body renderer a
 /// feature-close letter uses.
 ///
-/// The three come AFTER D7's five, which keeps those five contiguous and in
+/// They come AFTER D7's five, which keeps those five contiguous and in
 /// D7's own order: the news the human came for stays at the top of the file,
 /// and the reference material about what the feature now is sits below it.
 /// With no notes this is byte-identical to [`compose_body`], which is what
@@ -3873,6 +3884,10 @@ nested:
                 "A section with nothing to report is dropped".to_string(),
             ],
             usage: vec!["skills/bee-hive/SKILL.md".to_string()],
+            token_usage: vec![
+                "usage: 2 session(s) — 1.6k tokens (main 1.3k, subagents 255; new 390, cached 1.2k)"
+                    .to_string(),
+            ],
         }
     }
 
@@ -3931,6 +3946,33 @@ nested:
         assert_eq!(letter.status, STATUS_UNREAD);
     }
 
+    /// e97cc9d4: the one token-usage line close printed reaches the letter,
+    /// verbatim and under its own heading — and a close that could read no
+    /// transcript grows no heading at all, which is `close_usage_line`'s
+    /// silence reaching the mailbox unchanged.
+    #[test]
+    fn the_feature_close_letter_carries_the_token_usage_line() {
+        let entries = vec![close_entry()];
+        let note = close_note();
+        let body = compose_body_with(&entries, &[note.clone()]);
+        assert!(
+            body.contains(&format!("## {SECTION_TOKEN_USAGE}")),
+            "the token-usage section is missing:\n{body}"
+        );
+        assert!(
+            body.contains(&format!("- {}", note.token_usage[0])),
+            "the stored usage line is not in the letter verbatim:\n{body}"
+        );
+        // Below the other three: cost is reference material, not the news.
+        let at = |heading: &str| body.find(&format!("## {heading}")).unwrap();
+        assert!(at(SECTION_USAGE) < at(SECTION_TOKEN_USAGE));
+
+        // No line rendered (no readable transcript) → no heading.
+        let silent = CloseNote { token_usage: vec![], ..note };
+        let body = compose_body_with(&entries, &[silent]);
+        assert!(!body.contains(&format!("## {SECTION_TOKEN_USAGE}")), "{body}");
+    }
+
     #[test]
     fn a_nightly_letter_never_grows_the_extra_sections() {
         // The other direction of D7's promise: "only in the feature-close
@@ -3967,6 +4009,7 @@ nested:
             architecture: vec!["   ".to_string()],
             behaviour: vec![String::new()],
             usage: vec![],
+            token_usage: vec![],
         };
         let body = compose_body_with(&entries, &[blank]);
         for heading in CLOSE_SECTIONS {
