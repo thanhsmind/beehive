@@ -21,7 +21,9 @@ User: "/go [feature]"
 [STEP 2] bee-planning (shape) → plan.md (frozen at Gate 2 once approved); discovery.md/approach.md
                                  only for L2+ discovery or high-risk, else plan.md sections
          bee-shaping (Brief)   → implement-plan.md  (high-risk always; standard/small on-demand)
-         SMALLER PATH check + review wave run inline before the gate below
+         SMALLER PATH check inline + the plan-step hat wave (the plan check;
+         `--kind advisor` hat seats, procedure home gates-and-delegation.md)
+         run before the gate below
        ▼
 [GATE 2] ← HARD STOP — approves `shape` AND `execution` together in one call (`bee gate
           --merge`); review the implement plan, or plan.md when no brief was rendered

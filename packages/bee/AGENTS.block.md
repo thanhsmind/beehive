@@ -134,6 +134,14 @@ context before planning or executing.
   call). Never hand-pick `subagent_type`, a `model` param, or a
   leading `[bee-tier: …]` marker: those are what prepare RETURNS, and
   the model-guard hook refuses or rewrites anything else.
+- The internal consult is ONE thing: the plan-step **hat wave**, fixed
+  perspectives dispatched `--kind advisor` at the plan step, once per
+  feature. Its synthesis is the plan check AND the high-risk gate's
+  advisor consult (recorded with `bee state advisor-ref record` after
+  plan.md reaches its gate-ready bytes) — synthesis stays with the
+  leader, and independent review is untouched and still user-invoked.
+  Procedure home: `bee-hive/references/gates-and-delegation.md`
+  ("Hat wave").
 <!-- rule: agents-never-zero-execution-workers -->
 - From `small` up, cells run through dispatched workers — never zero
   *execution* workers; a tiny cell may run inline. This rule counts
@@ -264,7 +272,8 @@ The full mechanics live in `skills/bee-hive/SKILL.md` and its
 references, loaded when routing work: lanes and gate wording; § Gate
 bypass mode; § Progress ticks; § Judgment contract; § Goal-check
 judge tier; § Concurrency law in full; § Delegation contract;
-§ Blind lanes and convergence; worktrees; plus the worker contract
+§ Hat wave (the plan-step consult, single home); § Blind lanes and
+convergence; worktrees; plus the worker contract
 in `bee-swarming` ("Execute") — including native-Codex subagent tending on
 a Codex runtime — the capture discipline in
 `bee-capturing` ("Capture the moment it settles"), and the question

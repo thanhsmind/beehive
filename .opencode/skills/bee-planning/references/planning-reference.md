@@ -286,31 +286,53 @@ verified by [Z]. Approve?" The draft cells render as a preview **in the
 gate message** — approval covers the exact previewed packet, and
 `cells add` runs only after it. Execution approval is never granted before
 the execution package exists. A SMALLER PATH FAIL is always surfaced to
-the human first, whatever the gate-bypass level; the review wave never
-dispatches for these lanes — the cold-pickup criteria are self-checked
+the human first, whatever the gate-bypass level; the hat wave never opens
+for these lanes — the cold-pickup criteria are self-checked
 while writing the cells.
 
-## Review wave
+## Plan check — the hat wave
 
-Runs for standard/high-risk, dispatched the moment the shape is drafted,
-concurrent with the SMALLER PATH check — the stage costs
-`max(reviewer, planning)`, never the sum. Findings block nothing until the
-gate presentation, and the gate never happens while the wave is
-outstanding.
+Planning's plan check for standard/high-risk IS the hat wave. The
+plan-step wave the leader opens to build the plan absorbed the old merged
+plan-reviewer dispatch (proactive-leader-intake D4, decision `b34fdea9`).
+**The procedure lives in one home** —
+`bee-hive/references/gates-and-delegation.md` ("Hat wave"): firing point,
+seats and instruments, budget, quorum, idempotence, headless, bypass, and
+communication. This section is what PLANNING consumes, by pointer; it never
+restates that procedure.
 
-**One dispatch, two mandates, two vocabularies.** One reviewer subagent on
-the review tier returns one report with two sections: **Structure**
-(findings BLOCKER/WARNING) and **Cells, cold pickup** (findings
-CRITICAL/MINOR). Never merge the vocabularies.
+The wave opens the moment the shape is drafted, concurrent with the SMALLER
+PATH check — the stage costs `max(wave, planning)`, never the sum. Findings
+block nothing until the gate presentation, and the gate never happens while
+the wave is outstanding.
 
-**Scaling.** `standard` with ≤5 product files and zero hard-gate flags:
-no dispatch — the session model runs both mandates inline, same
-vocabularies, same caps. A hard-gate flag, a 6th product file, or doubt
-about self-review independence restores the dispatch. `high-risk` always
-dispatches, scaled to a small panel: **coherence** and **feasibility**
-personas always; add **security**, **product**, or **scope-guardian** by
-the diff of concerns. Dedupe findings, then split into auto-fix (apply,
-record) and present-for-decision.
+**The dispatch kind changed.** No reviewer subagent on the review tier any
+more: the check rides advisor-kind hat seats —
+`bee dispatch prepare --kind advisor --role <hat-role>`, one seat per
+dispatch — three by default (`hat-facts-gaps`, `hat-alternatives`,
+`hat-user-impact`), all five on high-risk (D3, decision `423e1664`). The
+leader synthesizes; synthesis never delegates.
+
+**SMALLER PATH — one home.** The inline SMALLER PATH check at every lane
+(`SKILL.md` ("Shape")) is the single home for that question. The
+`hat-alternatives` seat runs it at plan altitude by CITING that mandate —
+never by copying it into a seat prompt.
+
+**Two mandates, two vocabularies — never merged.** MANDATE 1 **Structure**
+(findings BLOCKER/WARNING) rides `hat-facts-gaps`' plan-step question.
+MANDATE 2 **Cells, cold pickup** (findings CRITICAL/MINOR) stays with the
+LEADER at cell drafting — the same self-check the `tiny`/`small` lanes
+already run. The synthesis carries both sections, in their own words.
+
+**Scaling.** A clear or tiny ask gets NO wave: the fast path stays, and
+ceremony capture is the named failure (D2, decision `a52c854d`). `standard`
+with ≤5 product files and zero hard-gate flags: no dispatch — the session
+model runs both mandates inline, same vocabularies, same caps. A hard-gate
+flag, a 6th product file, or doubt about self-review independence opens the
+wave at its three default seats. `high-risk` always opens it, at all five
+seats. The unit is once per FEATURE, never per message — the recorded
+advisor-ref is that mark (procedure home, "Idempotence"). Dedupe findings,
+then split into auto-fix (apply, record) and present-for-decision.
 
 **One shot, then at most one blocker pass.** WARNINGs and mechanically
 fixable findings are applied directly to the cells (legal — cells are
@@ -320,37 +342,38 @@ with both positions. All CRITICAL cell flags are fixed before the gate;
 MINOR ships with a recorded note. On slice 2+ the scope is new/changed
 cells only — the plan is frozen and was checked on slice 1.
 
-Reviewer prompt:
+**MANDATE 1 — Structure.** The leader folds these criteria into the
+`hat-facts-gaps` seat's prompt body, over `docs/history/<feature>/CONTEXT.md`,
+approach.md, plan.md, and the drafted cells
+(`.bee/bin/bee cells list --feature <feature>`). Assume the work is flawed
+until proven so. Verify exactly 5 dimensions:
 
-```text
-You are a merged plan reviewer. Two mandates. Assume the work is flawed until proven so.
-Inputs: docs/history/<feature>/CONTEXT.md, approach.md, plan.md, and the current-work
-cells (.bee/bin/bee cells list --feature <feature>).
-
-MANDATE 1 — STRUCTURE. Verify exactly 5 dimensions:
 1. Requirement/decision coverage — every locked decision lands in at least one cell.
 2. Cell completeness — each cell has files, read_first, directive action, must_haves
    (per lane tier), and a testable exit the declared suite can prove.
 3. Dependency correctness — deps form a DAG; no cell depends on a future slice.
 4. Key links — integration points named in plan.md are owned by a specific cell.
 5. Scope sanity — no cell is doing hidden architecture work or exceeds its lane.
-Report every structural finding as BLOCKER (structurally unsound) or WARNING
-(survivable, note it).
 
-MANDATE 2 — CELLS, COLD PICKUP. You have NO session history. For each cell, answer:
-could a worker who has read only CONTEXT.md, plan.md, and this cell implement and
+Every structural finding reports as BLOCKER (structurally unsound) or
+WARNING (survivable, note it).
+
+**MANDATE 2 — Cells, cold pickup.** The leader's own self-check at cell
+drafting, never a seat's job. Read each cell with NO session history: could
+a worker who has read only CONTEXT.md, plan.md, and this cell implement and
 verify it without guessing?
-Flag CRITICAL: assumed context, vague acceptance, scope overload, unproven feasibility,
-an exit the declared suite cannot prove.
-Flag MINOR: missing rationale, implicit file assumption, fuzzy boundary, known tradeoff
-not recorded.
 
-Return ONE report with both sections. Never merge the two vocabularies.
-Do not propose redesigns. Do not soften findings. Quote file/cell evidence per finding.
-```
+- CRITICAL: assumed context, vague acceptance, scope overload, unproven
+  feasibility, an exit the declared suite cannot prove.
+- MINOR: missing rationale, implicit file assumption, fuzzy boundary, known
+  tradeoff not recorded.
+
+Findings quote file/cell evidence, are never softened, and never propose a
+redesign. The synthesis carries both sections and never merges the two
+vocabularies:
 
 ```text
-REVIEW REPORT
+PLAN CHECK
 Work: <current slice / direct task>
 
 STRUCTURE

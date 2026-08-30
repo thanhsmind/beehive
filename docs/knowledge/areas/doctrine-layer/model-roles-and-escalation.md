@@ -191,6 +191,19 @@ display-only law of B12 stands (lane-model-diversity D3, venue decision).
 The two procedure homes in `gates-and-delegation.md` name the seats and
 point back at `SEAT_ROLES` as the constant of record (D5).
 
+**B15a — Planning's plan check rides the advisor-kind hat seats, not the
+`review` tier** (proactive-leader-intake D4, decision `b34fdea9`). The old
+merged plan reviewer was a `review`-role dispatch; it is retired as a seat
+holder. The plan check is now the plan-step hat wave — three `hat-*` seats by
+default, five on high-risk — dispatched `--kind advisor`, which is the one
+kind whose empty-seat rebind (B15) applies, so a host that configured no
+`hat-*` slot still gets the wave through its advisor slot instead of a
+`role_not_configured` refusal. Only the Structure mandate moved with it: the
+cold-pickup cell review stays with the leader, and the `review` role keeps its
+other consumers (bee-reviewing's specialists, exploring's fresh-eyes) plus its
+`null` fallback to generation. No constant changed — `SEAT_ROLES` and the
+resolution path are untouched; what moved is which skill asks for which kind.
+
 **B16 — `models.pi` is a herding-only role table with a settled value set**
 (pi-support D5/D6). The pi runtime resolves roles from the same one config
 home, but every slot must resolve `kind: herding` — the dispatch door's
