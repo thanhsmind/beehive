@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "That is the diagnosability that was missing. Restoring the required word.",
-    "asked_at": "2026-08-30T08:24:12.732Z",
+    "subject": "Untracked docs there belong to other work — the installer does not need a clean tree, so I am leaving them alone.",
+    "asked_at": "2026-08-30T09:55:24.024Z",
     "session": "9edcd966-07e8-402f-89f0-a1ec504f42c1"
   },
   "route": {

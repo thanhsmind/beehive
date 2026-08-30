@@ -1,0 +1,83 @@
+{
+  "id": "eine-skill-mandates",
+  "title": "Mandate the load-bearing claims table, the reality touch, and the claims audit in each rule's single home",
+  "lane": "standard",
+  "role": "docs",
+  "feature": "existence-is-not-evidence",
+  "files": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    ".bee/expertise/review.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "b350f7f9-5ad7-4ad4-9ada-f8862a6704c0",
+    "8c29ae9e-53ed-46cf-ac47-a96041928863",
+    "d75c0b15-3686-45c9-9c5e-4933c49c4e92"
+  ],
+  "action": "Land the claims-table spec, reality-touch and pre-flight mandates, the Open Questions template section, the tiny/small inline-evidence rule, and the claims-audit home in review.md with the hat row pointing at it; then run the full regen chain inside this cell.",
+  "verify": "bash -c '.bee/bin/bee dev regen && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check && diff skills/bee-planning/references/planning-reference.md .claude/skills/bee-planning/references/planning-reference.md'",
+  "must_haves": {
+    "truths": [
+      "the plan.md template in planning-reference.md shows a '## Load-bearing claims' section (columns, read/ran/guessed vocabulary, match rule, membership converse) and a '## Open Questions' section",
+      "the tiny/small merged-gate section folds evidence inline into the one question and says: zero load-bearing claims -> say so, never manufacture one",
+      "bee-planning SKILL.md names the pre-gate reality touch (Research) and the leader's pre-flight table check (Gate)",
+      ".bee/expertise/review.md carries the 'Claims-table audit' section (match rule + membership sweep, mismatch = BLOCKER) and the hat-facts-gaps row in gates-and-delegation.md points at it without copying it",
+      "bee dev regen exits green and the rendered .claude copy matches the source"
+    ]
+  },
+  "description": "planning-reference.md ('Artifact: plan.md'): add the '## Load-bearing claims' section spec — columns (#, Claim, Label, Anchor, Verbatim evidence), label vocabulary read/ran/guessed with one-line meanings, the match rule (evidence = verbatim byte substring of the anchored line(s), multi-line joined with ' / '; reflow/paraphrase = mismatch), the membership converse ('every load-bearing claim must be a row; a load-bearing claim living only in prose is a plan defect'), and a '## Open Questions' section in the template (the refusal remedy's destination). planning-reference.md ('Tiny/small merged gate'): evidence folds INLINE into the one gate question ('verified by [Z] (claim: file:line — \"quote\")'), listed only at >=2 claims; zero load-bearing claims -> say so, never manufacture one. bee-planning/SKILL.md (Research): one cheap reality touch per novel surface before the gate — open the real data or run the real path once, output recorded in Discovery; (Gate): the leader self-runs the table checklist BEFORE presenting the gate — the binary refusal is the net, never an ambush after a human yes. .bee/expertise/review.md: new 'Claims-table audit' section (the single home): open each anchor, confirm the quoted bytes at that location per the match rule, mismatch = BLOCKER; membership sweep — a load-bearing claim found only in prose is a BLOCKER. gates-and-delegation.md hat seat table, hat-facts-gaps row: extend the instrument BY POINTER to that review.md section — never copy it. Cap proof: bee dev regen green + spot diff of one rendered copy. Full contract: docs/history/existence-is-not-evidence/plan.md (Shape cell 2).",
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "eine-w2",
+    "outcome": "Landed the claims-table spec, Open Questions section, tiny/small inline evidence, the reality touch and pre-flight mandates, and the claims-audit home with a pointer-only hat row; regen chain green",
+    "files_changed": [
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "expertise/review.md",
+      ".bee/expertise/review.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Wrote the Claims-table audit into expertise/review.md, not only the .bee/expertise/review.md the cell named — the cell named the rendered copy, and bee dev regen silently reverted my first edit to it; expertise/ at repo root is the source of truth for that file — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T11:37:46.938Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e8e12ca2-710b-4966-bce9-a63cca8a00b9",
+    "claimed_at": "2026-08-30T11:32:18.447Z",
+    "report": {
+      "outcome": "Landed the claims-table spec, Open Questions section, tiny/small inline evidence, the reality touch and pre-flight mandates, and the claims-audit home with a pointer-only hat row; regen chain green",
+      "commit": "81f5daf1",
+      "files": [
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-planning/references/planning-reference.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "expertise/review.md",
+        ".bee/expertise/review.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bee dev regen && bee onboard --repo-root . --json && bee dev release-manifest --check && diff skills/bee-planning/references/planning-reference.md .claude/skills/bee-planning/references/planning-reference.md — green — docs cell: the regen chain plus source-vs-rendered parity is the proof this change type needs; no code path changed",
+      "deviations": [
+        "Wrote the Claims-table audit into expertise/review.md, not only the .bee/expertise/review.md the cell named — the cell named the rendered copy, and bee dev regen silently reverted my first edit to it; expertise/ at repo root is the source of truth for that file — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 680 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

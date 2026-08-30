@@ -1,0 +1,75 @@
+{
+  "id": "eine-rust-claims-gate",
+  "title": "Refuse a shape/merged gate approval over a plan.md whose load-bearing claims table is missing, malformed, or still guessing",
+  "lane": "standard",
+  "role": "code",
+  "feature": "existence-is-not-evidence",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/gates.md"
+  ],
+  "decisions": [
+    "a2afaff2-8ec9-40ef-8ec1-f788f9e3417b",
+    "b350f7f9-5ad7-4ad4-9ada-f8862a6704c0",
+    "304b1518-aee9-4909-a7d9-a433bcf2a242"
+  ],
+  "action": "Write plan_claims.rs (parser + rules + unit tests), wire plan_claims_refusal into set_gate.rs under its own shape/merge guard, add the integration tests, and keep the whole bee-rs suite green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee state gate --name shape --approved true (or --merge) over a plan.md carrying a guessed row refuses, naming the row, the expected shape, and the remedy",
+      "bee state gate --name execution over the same plan.md does not fire the claims check",
+      "a lane with no plan.md approves exactly as before (NotFound is inapplicable, not a refusal)",
+      "an unreadable plan.md (directory fixture) refuses — fail-closed",
+      "--approved false never fires the check"
+    ]
+  },
+  "description": "New module plan_claims.rs: parser for the '## Load-bearing claims' markdown table + rule evaluation + ALL rule-level unit tests. A <=15-line wrapper plan_claims_refusal in set_gate.rs under its OWN guard `approved && (merge || name == \"shape\")` (never plain --name execution — plan is frozen post-shape, remedy impossible), running AFTER the existing preconditions in the merged path so their refusal-message tests stay stable. Feature selection copies M1 (lane approval -> lane's feature; default record -> its feature field; no target record -> inapplicable). Path: advisor_plan_path(root, feature) (advisor_ref.rs:78). Rules: ErrorKind::NotFound -> inapplicable; any other read error -> refuse (portable fixture: plan.md as a directory); heading absent -> refuse; zero rows -> refuse; row missing label/anchor/evidence -> refuse; label outside {read,ran,guessed} (exact, lowercase) -> refuse; any guessed row -> refuse; read-labeled row with a path:line anchor whose path is absent under root -> refuse. Refusal text: offending row numbers + expected shape (columns + label vocabulary) + remedy (upgrade the label with a real read/run, or move the claim to '## Open Questions'). Integration tests in set_gate's test module: full-verb --merge refusal on a real plan.md with a guessed row; --name shape fires; --name execution does not (pin); no-plan.md pass-through; --approved false never fires; update the one existing fixture that writes plan.md then approves --merge (set_gate.rs:1587-1600) if refusal ordering does not already keep it green. Full contract: docs/history/existence-is-not-evidence/plan.md (Approach + Shape cell 1).",
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "eine-w1",
+    "outcome": "Shape/merged gate approvals now refuse a plan.md whose load-bearing claims table is missing, malformed, or still guessed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: The skill/template half of this feature is the plan's second cell, eine-skill-mandates (planning-reference.md, bee-planning/SKILL.md, review.md); this cell is the binary half by explicit scope split, and the two run in parallel on disjoint files."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T11:44:16.482Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e8e12ca2-710b-4966-bce9-a63cca8a00b9",
+    "claimed_at": "2026-08-30T11:32:18.380Z",
+    "sync_ack": "The skill/template half of this feature is the plan's second cell, eine-skill-mandates (planning-reference.md, bee-planning/SKILL.md, review.md); this cell is the binary half by explicit scope split, and the two run in parallel on disjoint files.",
+    "report": {
+      "outcome": "Shape/merged gate approvals now refuse a plan.md whose load-bearing claims table is missing, malformed, or still guessed",
+      "commit": "895ca5d0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_claims.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — the cell's declared verify: whole bee-rs suite, 3208+ tests, 0 failed; the 21 new plan_claims unit tests and 7 new set_gate integration tests were also confirmed green by name",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 767 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

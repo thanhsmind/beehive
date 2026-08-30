@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "feature": "existence-is-not-evidence",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"existence-is-not-evidence\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"existence-is-not-evidence\" (lane).",
+  "created_at": "2026-08-30T11:15:15.030Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 5,
+    "rationale": "bee CLI gate behavior is a public contract host repos depend on; new gate precondition changes covered contract existing set_gate tests assert; Rust + skill/template domains",
+    "updated_at": "2026-08-30T11:17:14.231Z",
+    "feature": "existence-is-not-evidence"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-30T11:30:10.842Z",
+    "feature": "existence-is-not-evidence",
+    "newest_decision_id": "304b1518-aee9-4909-a7d9-a433bcf2a242",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave: facts-gaps(opus), alternatives(opus), user-impact(sonnet)",
+    "digest_head": "# Hat-wave synthesis — existence-is-not-evidence (plan step)\n\nWave: 3 seats (standard lane), all returned within budget. Dispatched via\n`bee dispatch prepare --kind advisor` (facts-gaps: opus; alternatives: opus;\nuser-impact: sonnet). Draft under critique: plan.md revision 1 (pre-wave).\n\n## Seat returns\n\n### hat-facts-gaps (BLOCKER/WARNING over structure + claims-table audit)\n\n- B1 CONFIRMED, ACTED ON: existing preconditions guard on\n  `exec_component = merge || name == \"execution\"` (set_gate.rs"
+  },
+  "merge_ready": {
+    "since": "2026-08-30T11:44:16.487Z",
+    "branch": "wt/existence-is-not-evidence",
+    "worktree_id": "beehive--wt--existence-is-not-evidence",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
