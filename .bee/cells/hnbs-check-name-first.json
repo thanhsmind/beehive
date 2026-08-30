@@ -1,0 +1,52 @@
+{
+  "id": "hnbs-check-name-first",
+  "title": "Refuse an unknown hook name before the blocking stdin read",
+  "feature": "hook-name-before-stdin",
+  "lane": "tiny",
+  "role": "code",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "action": "In try_native (hooks/mod.rs), validate the hook name against HOOK_NAMES before read_stdin_once; unknown name refuses on argv alone, so a caller with an open silent stdin can no longer hang",
+  "description": "Move the unknown-name refusal above the read_stdin_once() call using the existing HOOK_NAMES const; the match's _ arm becomes unreachable. Existing test without_the_marker_the_same_invocation_reaches_dispatch keeps asserting the FAILURE exit and now cannot block on stdin.",
+  "acceptance": "bee hook <unknown> exits FAILURE without reading stdin; hooks tests green",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::tests",
+  "judge_obligation_ack": "argv-check reorder only; refusal behavior and every guard body unchanged, covered by the existing dispatch tests",
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "hnbs-inline",
+    "outcome": "unknown hook names are refused before the stdin read; the hang path is gone",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T13:53:51.494Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b3245841-d406-4c7d-a62e-3f8fda66b632",
+    "claimed_at": "2026-08-30T13:52:45.756Z",
+    "report": {
+      "outcome": "unknown hook names are refused before the stdin read; the hang path is gone",
+      "commit": "5bd52a32",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::tests — green — 7 dispatch tests cover the reordered path incl. the formerly hanging one",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
