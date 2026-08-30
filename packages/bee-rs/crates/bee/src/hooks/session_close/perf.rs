@@ -376,10 +376,11 @@ pub(crate) struct Rollup {
 
 /// auto-wait-mark rework: `perf_refresh` no longer calls this — it reads the
 /// transcript itself and calls `rollup_from_events` directly so the events
-/// can be reused for the turn-end mark — so this read-then-roll wrapper is
-/// test-only in a release build (kept for the roundtrip test below and any
-/// future direct caller that only has a path, not pre-read events).
-#[allow(dead_code)]
+/// can be reused for the turn-end mark. The read-then-roll wrapper stays for
+/// callers that hold only a PATH: close's token-usage section
+/// (`verbs/drivers/close.rs`, decision 2d3abd12) walks each feature-bound
+/// session record's stored `transcript_path` and has no pre-read events, so
+/// the `#[allow(dead_code)]` this carried while it was test-only is gone.
 pub(crate) fn rollup_transcript(file: &Path) -> Option<Rollup> {
     let events = read_jsonl(file);
     rollup_from_events(file, &events)
