@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "I'll run the six read-only surfaces for this tick.",
-    "asked_at": "2026-08-30T14:58:06.206Z",
-    "session": "4026a7e2-c2ec-4d32-9342-8351fdcd21b6"
+    "subject": "The agent still writes the spec. I wait one more time.",
+    "asked_at": "2026-08-30T15:37:16.373Z",
+    "session": "f8e47888-eb8f-480e-8287-5e5fc76b35d4"
   },
   "route": {
     "class": "feature",
