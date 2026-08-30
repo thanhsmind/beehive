@@ -1,0 +1,67 @@
+{
+  "id": "cur-usage-json-record",
+  "title": "Persist the close usage record: docs/history/<feature>/usage.json + letter line",
+  "feature": "close-usage-record",
+  "lane": "small",
+  "role": "code",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "e97cc9d4-1ac8-4e3b-b0cc-01536fe7bc0b"
+  ],
+  "action": "Persist the token-usage record at green close: write docs/history/<feature>/usage.json (detailed, per session) and append the one-line usage summary to the feature close letter in the human mailbox, with tests",
+  "description": "Build on the close-usage-summary work already in close.rs (UsageBucket/CloseUsage, usage_session_ids, collect_close_usage, close_usage_line). (1) Extend collect_close_usage (or add a sibling) so the per-session Rollup detail is kept, not only the summed buckets: for each counted session keep {session_id, models, subagent_models, subagent_count, started_ms, ended_ms, totals:{new,cached,total}}. (2) On the GREEN, non-dry-run close path, after usage is computed, write docs/history/<feature>/usage.json with write_text_atomic (same precedent as promote-proposals.md): pretty JSON {schema: \"bee-usage/v1\", feature, closed_at (ISO), sessions: [per-session detail], skipped, totals: {main:{new,cached,total}, subagents:{new,cached,total}, total:{new,cached,total}}}. Write the file on every green close, even when sessions is empty and only skipped is nonzero — an empty record with a skipped count and a missing file must not read alike. Give the write the same bookkeeping/auto-commit treatment promote-proposals.md gets (follow the existing precedent in close.rs; if the auto-commit is path-scoped to .bee only and does not cover docs/history, leave the file uncommitted exactly as promote-proposals is left, and say so in the cap report). (3) Append the close_usage_line text to the feature close letter the mailbox gets at close (record_feature_close_in_mailbox path — the letter composer may live in close.rs or verbs/mailbox.rs; follow where the letter body is built), only when a usage line was rendered. (4) Tests beside the existing close usage tests: green-close fixture asserts usage.json exists with the right sessions/skipped/totals numbers and schema field; a zero-readable-transcript fixture asserts the file is still written with sessions [] and the skipped count; the letter test asserts the usage line lands in the letter body when present. Follow existing test style.",
+  "acceptance": "A green bee close writes docs/history/<feature>/usage.json with per-session model/subagent detail and feature totals (empty-but-skipped recorded too), and the close letter carries the usage line; scoped cargo tests green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml usage",
+  "judge_obligation_ack": "touches close.rs and mailbox.rs only — no hook-guard source; hooks/ not in files",
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "cur-w1",
+    "outcome": "Green close writes docs/history/<feature>/usage.json with per-session detail and feature totals; the close letter carries the usage line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+    ],
+    "deviations": [
+      "Wrote the record with write_json_atomic instead of write_text_atomic — it is the same tmp-then-rename write plus the repo pretty-printer, and the payload is JSON — found a better route",
+      "Replaced CloseUsage.sessions (a stored count) with a derived sessions() over the new details list — two homes for one number is how a line and a file start disagreeing — found a better route",
+      "Put the usage line in its own Token usage letter section rather than under Usage — that section lists the docs a human opens to use the thing, and a token count is a different question — found a better route",
+      "Loosened clean_store_green_close_reports_reason_clean from \"porcelain is empty\" to \"nothing under .bee is dirty, only docs/ is untracked\" — a green close now always leaves usage.json — something else had to be fixed first",
+      "Two end-to-end close tests assert skipped >= 1 and starts_with rather than exact values — close_handler reads the ambient BEE_SESSION_ID, so an exact count would depend on the runner environment — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T12:30:14.868Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b3245841-d406-4c7d-a62e-3f8fda66b632",
+    "claimed_at": "2026-08-30T12:20:02.641Z",
+    "report": {
+      "outcome": "Green close writes docs/history/<feature>/usage.json (bee-usage/v1) with per-session detail, and the feature-close letter grows a Token usage section carrying the printed line",
+      "commit": "38550b0e55f0a8a51c5ae775dd53f969435d28b9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee — green — 3218 unit tests incl. the 15 usage tests and every close/mailbox test; both touched files live in this bin",
+      "deviations": [
+        "Wrote the record with write_json_atomic instead of write_text_atomic — it is the same tmp-then-rename write plus the repo pretty-printer, and the payload is JSON — found a better route",
+        "Replaced CloseUsage.sessions (a stored count) with a derived sessions() over the new details list — two homes for one number is how a line and a file start disagreeing — found a better route",
+        "Put the usage line in its own Token usage letter section rather than under Usage — that section lists the docs a human opens to use the thing, and a token count is a different question — found a better route",
+        "Loosened clean_store_green_close_reports_reason_clean from \"porcelain is empty\" to \"nothing under .bee is dirty, only docs/ is untracked\" — a green close now always leaves usage.json — something else had to be fixed first",
+        "Two end-to-end close tests assert skipped >= 1 and starts_with rather than exact values — close_handler reads the ambient BEE_SESSION_ID, so an exact count would depend on the runner environment — hit an unforeseen obstacle"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 442 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

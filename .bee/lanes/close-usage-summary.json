@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "close-usage-summary",
   "mode": "small",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"close-usage-summary\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 799443a; capture what settled, then bee close --feature close-usage-summary.",
+  "next_action": "bee close finished \"close-usage-summary\" — feature is closed.",
   "created_at": "2026-08-30T12:02:30.293Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "**What you do now:** the code is in main, but the `bee` tool you run is still the old build. The line shows up after the next release. Say \"",
+    "asked_at": "2026-08-30T12:17:17.795Z",
+    "session": "b3245841-d406-4c7d-a62e-3f8fda66b632"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
