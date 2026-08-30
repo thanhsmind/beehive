@@ -745,6 +745,35 @@ fn acknowledged_conflicts(root: &Path, lane: Option<&str>) -> Result<Vec<String>
     Ok(acknowledged_conflict_ids(&review))
 }
 
+// ─── D1/D2's load-bearing claims precondition (existence-is-not-evidence) ───
+//
+// The third precondition beside the two above, and the ONLY one that does not
+// ride `exec_component`. It has its own guard — `approved && (merge || name ==
+// "shape")` — because plan.md FREEZES at shape approval
+// (`skills/bee-planning/references/planning-reference.md`: "the only permitted
+// post-approval write is the approval stamp"). A refusal fired on a plain
+// `--name execution` would name a remedy the author is forbidden to take, so
+// the door stands where the plan is still editable: at shape, and at the
+// merged approval that contains it. The rules themselves live in
+// `plan_claims.rs`; this is only the target-selection wrapper.
+
+/// The claims-table refusal for the record this approval targets, or `None` to
+/// proceed. Feature selection copies the advisor precondition's M1 rule: a
+/// LANE approval reads that lane's own plan.md, a default-record approval
+/// reads the record's own `feature`, and a record naming no feature has no
+/// plan to check.
+fn plan_claims_refusal(
+    root: &Path,
+    record: &Map<String, Value>,
+    lane: Option<&str>,
+) -> Option<String> {
+    let feature = match lane {
+        Some(l) => l.to_string(),
+        None => record.get("feature").filter(|v| truthy(v)).map(js_disp)?,
+    };
+    claims_refusal(root, &feature)
+}
+
 /// The mutation body, root-parameterized so it can be exercised directly in
 /// tests without a process CWD (`run_gate` above is the only caller in
 /// production; `prelude`'s CWD-resolved root is threaded through as `root`).
@@ -847,6 +876,23 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         };
         if let Some(msg) = conflict_review_refusal(root, lane)? {
             return Ok(Out::Thrown(msg));
+        }
+    }
+    // D1/D2's claims precondition, on its own guard and LAST of the three, off
+    // the same pre-lock peek. Last on purpose: the two preconditions above
+    // keep their exact refusal messages for the calls that already hit them,
+    // and this door only speaks for a plan that got past them. One call site
+    // is enough here — unlike a record field, plan.md is not mutated under the
+    // lock this verb takes, so there is no peek/lock race to re-check.
+    if approved && (merge || name == "shape") {
+        if let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())? {
+            let lane = match &scope.feature {
+                Some(f) if scope.lane => Some(f.as_str()),
+                _ => None,
+            };
+            if let Some(msg) = plan_claims_refusal(root, &peek, lane) {
+                return Ok(Out::Thrown(msg));
+            }
         }
     }
     let locks = acquire_mutation_locks(root, &scope, &workflows)?;
@@ -1941,6 +1987,188 @@ mod tests {
         let Out::Emit(..) = out else {
             panic!("a shape-only approval is not an execution approval")
         };
+    }
+
+    // ── the load-bearing claims precondition (D1/D2) ───────────────────────
+    //
+    // The rule-level cases all live in `plan_claims.rs`. What is proved HERE
+    // is the wiring nobody else can see: which gate spellings open the door,
+    // which record's plan.md it reads, and that a refusal writes nothing.
+
+    const CLAIMS_HEADER: &str =
+        "| # | Claim | Label | Anchor | Verbatim evidence |\n|---|---|---|---|---|";
+
+    fn plan_with(rows: &str) -> String {
+        format!("# Plan\n\n## Approach\n\nprose\n\n## Load-bearing claims\n\n{CLAIMS_HEADER}\n{rows}\n\n## Shape\n\none cell\n")
+    }
+
+    /// A lane at `standard` mode — neither the advisor precondition nor the
+    /// conflict precondition applies, so the claims door is the only one that
+    /// can speak.
+    fn seed_claims_lane(root: &Path, feature: &str, plan_body: Option<&str>) {
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"}}"#),
+        );
+        if let Some(body) = plan_body {
+            w(root, &format!("docs/history/{feature}/plan.md"), body);
+        }
+    }
+
+    #[test]
+    fn a_merged_approval_refuses_over_a_still_guessed_claim_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(
+            root,
+            "eine-guessed",
+            Some(&plan_with("| 1 | the parser accepts it | guessed | somewhere | probably |")),
+        );
+        let Out::Thrown(msg) = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-guessed", "--merge", "--approved", "true"]),
+        )
+        .unwrap() else {
+            panic!("a guessed load-bearing claim must refuse the merged approval")
+        };
+        assert!(msg.contains("row 1 is still labeled `guessed`"), "names the row: {msg}");
+        assert!(msg.contains("docs/history/eine-guessed/plan.md"), "names the file: {msg}");
+        assert!(msg.contains("read / ran / guessed"), "names the vocabulary: {msg}");
+        assert!(msg.contains("## Open Questions"), "names the second remedy: {msg}");
+        let lane = read_json_file(root, ".bee/lanes/eine-guessed.json");
+        assert!(lane.get("approved_gates").is_none(), "a refusal writes nothing: {lane}");
+    }
+
+    /// The guard is this feature's one deliberate departure from its two
+    /// neighbours: `--name shape` IS covered (the plan is still editable) and
+    /// plain `--name execution` is NOT (plan.md froze at shape approval, so
+    /// the refusal's remedy would be forbidden).
+    #[test]
+    fn the_claims_precondition_covers_name_shape_but_not_name_execution() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(
+            root,
+            "eine-named",
+            Some(&plan_with("| 1 | it holds | guessed | somewhere | probably |")),
+        );
+        let Out::Thrown(msg) = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-named", "--name", "shape", "--approved", "true"]),
+        )
+        .unwrap() else {
+            panic!("a shape approval is exactly where this door stands")
+        };
+        assert!(msg.contains("load-bearing claims table"), "{msg}");
+
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-named", "--name", "execution", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else {
+            panic!("a post-freeze execution approval is never refused by the claims door")
+        };
+        let lane = read_json_file(root, ".bee/lanes/eine-named.json");
+        assert_eq!(lane["approved_gates"]["execution"], json!(true), "{lane}");
+    }
+
+    #[test]
+    fn a_lane_with_no_plan_md_approves_exactly_as_before() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(root, "eine-planless", None);
+        let out =
+            run_gate_body(root, &flags(&["--lane", "eine-planless", "--merge", "--approved", "true"]))
+                .unwrap();
+        let Out::Emit(..) = out else {
+            panic!("tiny and small lanes have no plan.md and must approve untouched")
+        };
+        let lane = read_json_file(root, ".bee/lanes/eine-planless.json");
+        assert_eq!(lane["approved_gates"]["shape"], json!(true), "{lane}");
+    }
+
+    #[test]
+    fn an_unapproval_never_consults_the_claims_table() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(
+            root,
+            "eine-revoke",
+            Some(&plan_with("| 1 | it holds | guessed | somewhere | probably |")),
+        );
+        for argv in [
+            vec!["--lane", "eine-revoke", "--merge", "--approved", "false"],
+            vec!["--lane", "eine-revoke", "--name", "shape", "--approved", "false"],
+        ] {
+            let out = run_gate_body(root, &flags(&argv)).unwrap();
+            let Out::Emit(..) = out else {
+                panic!("closing a gate is never gated on the plan's evidence: {argv:?}")
+            };
+        }
+    }
+
+    /// Fail-closed at the verb surface: "I could not read the plan" is not
+    /// "the plan is fine".
+    #[test]
+    fn an_unreadable_plan_md_refuses_the_shape_approval() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        seed_claims_lane(root, "eine-unreadable", None);
+        std::fs::create_dir_all(
+            root.join("docs").join("history").join("eine-unreadable").join("plan.md"),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = run_gate_body(
+            root,
+            &flags(&["--lane", "eine-unreadable", "--name", "shape", "--approved", "true"]),
+        )
+        .unwrap() else {
+            panic!("an unreadable plan.md must refuse")
+        };
+        assert!(msg.contains("could not be read"), "{msg}");
+    }
+
+    #[test]
+    fn a_sound_claims_table_lets_the_merged_approval_through() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, "src/real.rs", "fn real() {}\n");
+        seed_claims_lane(
+            root,
+            "eine-sound",
+            Some(&plan_with(
+                "| 1 | the helper exists | read | `src/real.rs:1` | fn real() {} |\n| 2 | the suite is green | ran | `cargo test` | test result: ok |",
+            )),
+        );
+        let out =
+            run_gate_body(root, &flags(&["--lane", "eine-sound", "--merge", "--approved", "true"]))
+                .unwrap();
+        let Out::Emit(..) = out else { panic!("a sound table is a door that opens") };
+        let lane = read_json_file(root, ".bee/lanes/eine-sound.json");
+        assert_eq!(lane["approved_gates"]["shape"], json!(true), "{lane}");
+        assert_eq!(lane["approved_gates"]["execution"], json!(true), "{lane}");
+    }
+
+    /// Feature selection, M1's default-record arm: a `--no-lane` approval
+    /// reads the plan.md of the feature the DEFAULT record names.
+    #[test]
+    fn the_default_record_approval_reads_its_own_features_plan() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", r#"{"phase":"planning","feature":"eine-default"}"#);
+        w(
+            root,
+            "docs/history/eine-default/plan.md",
+            &plan_with("| 1 | it holds | guessed | somewhere | probably |"),
+        );
+        let Out::Thrown(msg) =
+            run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"])).unwrap()
+        else {
+            panic!("the default record's own plan.md is the one that is checked")
+        };
+        assert!(msg.contains("docs/history/eine-default/plan.md"), "{msg}");
     }
 
     // ── run_gate_body — input validation (giv-1) ────────────────────────────
