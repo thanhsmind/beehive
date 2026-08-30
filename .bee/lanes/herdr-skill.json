@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"herdr-skill\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"herdr-skill\" (lane).",
+  "next_action": "Merged into main at 53cead8; capture what settled, then bee close --feature herdr-skill.",
   "created_at": "2026-08-30T15:28:16.721Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "docs",
