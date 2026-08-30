@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Checked the earlier tick's flagged concern (whether the new AGENTS.md \"look back\" rule from lr-1 needed its own decision entry). Decision `b",
-    "asked_at": "2026-08-30T17:05:08.215Z",
-    "session": "712ded4d-ec56-44f8-9914-f91c4ca90938"
+    "subject": "Shipping as 2.28.0 (new feature = minor bump). The script runs the suite, commits, tags, pushes, and waits for CI — I run it in the backgrou",
+    "asked_at": "2026-08-30T17:07:49.399Z",
+    "session": "6ba76180-df07-43c5-8daa-38fdc5f4335b"
   },
   "route": {
     "class": "feature",
