@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"hook-name-before-stdin\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"hook-name-before-stdin\" (lane).",
+  "next_action": "Merged into main at 5e96200; capture what settled, then bee close --feature hook-name-before-stdin.",
   "created_at": "2026-08-30T13:52:35.588Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": "hooks/mod.rs: validate hook name before the blocking stdin read; fixes the release-test hang",
     "updated_at": "2026-08-30T13:52:35.603Z",
     "feature": "hook-name-before-stdin"
-  },
-  "merge_ready": {
-    "since": "2026-08-30T13:53:51.516Z",
-    "branch": "wt/hook-name-before-stdin",
-    "worktree_id": "beehive--wt--hook-name-before-stdin",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
