@@ -258,6 +258,12 @@ skill ("Communication contract").
   cell id rides the last line of the body as a trailer (`cell: <id>`),
   and the diff carries the numbers.
 <!-- /rule -->
+- Before ending substantial work, look back once: for each real
+  mistake of the session — a wrong-record write, a wasted path, a bad
+  assumption — record `bee mailbox reflect --wrong "<what went wrong>"
+  --better "<what would have been better>"`, at the moment you notice
+  it or in this look-back. It feeds the letter's "Mistakes &
+  reflection" section; a session with no mistakes records nothing.
 - Before ending substantial work: cap or release every claimed cell,
   release reservations, leave `.bee/state.json` honest, run
   `commands.test` over what changed when one is recorded, and name the
