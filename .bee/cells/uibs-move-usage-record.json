@@ -1,0 +1,57 @@
+{
+  "id": "uibs-move-usage-record",
+  "title": "Move the close usage record to .bee/usage/<feature>.json",
+  "feature": "usage-in-bee-store",
+  "lane": "small",
+  "role": "code",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "62331863-0afd-411c-8fa5-b747c0c2a47c"
+  ],
+  "action": "Relocate the green-close usage record from docs/history/<feature>/usage.json to .bee/usage/<feature>.json so it lives in bee's own store and is committed by close's .bee-scoped bookkeeping auto-commit",
+  "description": "In close.rs, change write_usage_record (added by close-usage-record, commit 38550b0e) so the record lands at .bee/usage/<feature>.json under the CONTROL root's .bee (the same root resolution the sessions read uses — for a worktree close the record must land in the main checkout's .bee, mirror how collect_close_usage resolves control_root_for), creating .bee/usage/ as needed; keep schema bee-usage/v1, the record shape, the close-result usage_record relative path field (now .bee/usage/<feature>.json), and the letter Token usage section exactly as they are. Update the function's doc comment: the close-time bookkeeping auto-commit stages .bee (git add -A -- .bee), so the record is committed by close itself now — no merge dependency; verify .bee/usage/ is NOT matched by .gitignore (only .bee/logs/ and friends are ignored) and say so in the cap report. Remove the docs/history write entirely — no file, no fallback. Update every test that asserted the docs/history path to assert the .bee/usage path instead; keep the empty-but-skipped-still-written behavior and its test. If any doc or knowledge file in the repo names docs/history/<feature>/usage.json as the record home, list those paths in the cap report as follow-up rather than editing them (docs sweep is not this cell).",
+  "acceptance": "A green bee close writes .bee/usage/<feature>.json (control root) and no docs/history usage.json; close's own bookkeeping commit covers it; usage_record in the close JSON names the new path; scoped cargo tests green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee usage",
+  "judge_obligation_ack": "touches close.rs and mailbox.rs only — no hook-guard source in files",
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "uibs-w1",
+    "outcome": "Close writes its token-usage record to .bee/usage/<feature>.json under the control root; close's own bookkeeping commit lands it",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "Rewrote clean_store_green_close_reports_reason_clean as green_close_commits_the_usage_record_it_just_wrote — a green close now always writes .bee/usage/<feature>.json, so .bee is never clean at that point; the test now pins that the record is committed and asserts reason clean one step later — the plan was wrong about a fact",
+      "Widened green_close_commits_only_dirty_bee_paths_leaving_unrelated_dirt_uncommitted to expect .bee/usage/demo.json beside .bee/config.json — the record is a new .bee path the same path-scoped git add stages — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T12:47:41.778Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b3245841-d406-4c7d-a62e-3f8fda66b632",
+    "claimed_at": "2026-08-30T12:40:58.342Z",
+    "report": {
+      "outcome": "Close writes its token-usage record to .bee/usage/<feature>.json under the control root; close bookkeeping commit lands it",
+      "commit": "266cec3c21590a862afab4989db32e2e219af211",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee usage — green — cell verify (16 passed); also ran the same command with filter `close` (212 passed) because the record now lands inside the .bee scope the bookkeeping commit stages",
+      "deviations": [
+        "Rewrote clean_store_green_close_reports_reason_clean as green_close_commits_the_usage_record_it_just_wrote — a green close now always writes .bee/usage/<feature>.json, so .bee is never clean at that point; the test now pins that the record is committed and asserts reason clean one step later — the plan was wrong about a fact",
+        "Widened green_close_commits_only_dirty_bee_paths_leaving_unrelated_dirt_uncommitted to expect .bee/usage/demo.json beside .bee/config.json — the record is a new .bee path the same path-scoped git add stages — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
