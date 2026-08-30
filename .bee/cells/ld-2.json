@@ -4,7 +4,7 @@
   "title": "Compose daily and weekly digest files from letters and usage records",
   "lane": "standard",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "ld-1"
   ],
@@ -47,16 +47,92 @@
   },
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox",
   "trace": {
-    "worker": null,
+    "worker": "w-ld-2",
     "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+    ],
+    "deviations": [
+      "Periods compose ordered by the date they ENDED, not the date they started — a week starts before the days inside it, so a start-ordered pass wrote the week digest before the Tuesday digest it contains — found a better route",
+      "The digest frontmatter carries an unreadable[] list beside letters[] — the plan only said a torn letter is skipped with a stderr warning, which would let a torn letter vanish from the record with nothing kept — something else had to be fixed first"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-30T14:41:59.755Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "c9eb2d43-4dec-4d2a-8ea5-f7438226e33d",
+    "claimed_at": "2026-08-30T14:29:32.897Z",
+    "report": {
+      "outcome": "Digest composer: due-period detection from names, daily and weekly folds of letters plus usage records, idempotent by file existence; letter surfaces skip digest-*",
+      "commit": "d5c60fef",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox — green — 163 passed, 0 failed; covers the 10 new mailbox_digest tests and the mailbox letter/digest split I touched",
+      "deviations": [
+        "Periods compose ordered by the date they ENDED, not the date they started — a week starts before the days inside it, so a start-ordered pass wrote the week digest before the Tuesday digest it contains — found a better route",
+        "The digest frontmatter carries an unreadable[] list beside letters[] — the plan only said a torn letter is skipped with a stderr warning, which would let a torn letter vanish from the record with nothing kept — something else had to be fixed first"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 901 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:508",
+            "id": "finished day and ISO week each get one named digest"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:128",
+            "id": "digest filename shape digest-<period>.md"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:525",
+            "id": "re-run writes nothing (existence is the marker)"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:216",
+            "id": "list_letter_files filters digest-* for every letter surface"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:2082",
+            "id": "letter_paths_by_run_slug and letter_files_for_run read through that filter"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:408",
+            "id": "body transcribes only stored bytes, no computed aggregates"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs:262",
+            "id": "usage fields limited to stored closed_at and totals"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-30T15:00:49.333Z"
+      }
+    ]
   }
 }

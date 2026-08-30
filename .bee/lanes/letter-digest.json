@@ -25,5 +25,15 @@
     "rationale": "D2 changes filing rules mailbox tests assert; mailbox.rs, close.rs, work.rs plus a digest module; story-sized behavior",
     "updated_at": "2026-08-30T14:12:32.449Z",
     "feature": "letter-digest"
+  },
+  "merge_ready": {
+    "since": "2026-08-30T14:55:14.187Z",
+    "branch": "wt/letter-digest",
+    "worktree_id": "beehive--wt--letter-digest",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt",
+      "doc-deferral"
+    ]
   }
 }

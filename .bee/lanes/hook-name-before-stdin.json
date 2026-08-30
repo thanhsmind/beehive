@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "hook-name-before-stdin",
   "mode": "tiny",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"hook-name-before-stdin\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 5e96200; capture what settled, then bee close --feature hook-name-before-stdin.",
+  "next_action": "bee close finished \"hook-name-before-stdin\" — feature is closed.",
   "created_at": "2026-08-30T13:52:35.588Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Green — the hang test now finishes in 0.00s. Commit and cap.",
+    "asked_at": "2026-08-30T13:54:12.329Z",
+    "session": "b3245841-d406-4c7d-a62e-3f8fda66b632"
+  },
   "route": {
     "class": "bugfix",
     "lane": "tiny",

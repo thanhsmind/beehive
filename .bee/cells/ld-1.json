@@ -4,7 +4,7 @@
   "title": "File the close letter at the moment of close",
   "lane": "standard",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "aedb5be9-1dda-40e1-8edd-63e9e29219d4"
@@ -43,16 +43,88 @@
   },
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "w-ld-1",
+    "outcome": "Every bee close now files its close letter at the moment of close; an existing letter re-composes unarmed, and a close-lettered run that goes silent is recovered",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-30T14:29:07.110Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "c9eb2d43-4dec-4d2a-8ea5-f7438226e33d",
+    "claimed_at": "2026-08-30T14:21:25.193Z",
+    "report": {
+      "outcome": "Every bee close now files its close letter at the moment of close; an existing letter re-composes unarmed, and a close-lettered run that goes silent is recovered",
+      "commit": "db775259be553b4636706abe7d9737f0ae657c2a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox — green — 152 passed, 0 failed, including the four new D2 tests; cargo test ... close also green (216 passed) for the close.rs call site",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 326 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1806",
+            "id": "unarmed close files a close-section letter"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:3115",
+            "id": "close.rs calls it at the control root"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1829",
+            "id": "run end re-composes same file, filed_at+status kept"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:2152",
+            "id": "D12 candidacy for a lettered run with newer entries"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1786",
+            "id": "letterless run end still armed-gated"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:3082",
+            "id": "close never refuses on letter failure"
+          },
+          {
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs:4283",
+            "id": "tests green for all four truths"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-30T15:00:47.236Z"
+      }
+    ]
   }
 }

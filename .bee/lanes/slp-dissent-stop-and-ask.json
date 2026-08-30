@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "One question still open from before: do I build the inbox-delivery + weekly-digest feature next? That is the fix for \"human-mailbox looks em",
-    "asked_at": "2026-08-30T13:48:07.457Z",
-    "session": "b3245841-d406-4c7d-a62e-3f8fda66b632"
+    "subject": "I'll run the six read-only surfaces for this tick.",
+    "asked_at": "2026-08-30T14:58:06.206Z",
+    "session": "4026a7e2-c2ec-4d32-9342-8351fdcd21b6"
   },
   "route": {
     "class": "feature",
