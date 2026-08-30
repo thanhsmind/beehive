@@ -11,15 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"letter-reflection\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"letter-reflection\" (lane).",
+  "next_action": "Merged into main at 4e1aaf7; reload the product and test \"letter-reflection\", then either approve uat (\"bee gate --name uat --approved true --lane letter-reflection\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-30T16:32:10.543Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
-  "merge_ready": {
-    "since": "2026-08-30T16:54:03.791Z",
-    "branch": "wt/letter-reflection",
-    "worktree_id": "beehive--wt--letter-reflection",
-    "uat": "pending",
-    "blocked_by": []
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: letter-reflection",
+    "asked_at": "2026-08-30T16:55:51.777Z",
+    "session": "bee-worktree-merge-sessionless"
   }
 }
