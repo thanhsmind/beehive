@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"usage-in-bee-store\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"usage-in-bee-store\" (lane).",
+  "next_action": "Merged into main at 37ab827; capture what settled, then bee close --feature usage-in-bee-store.",
   "created_at": "2026-08-30T12:40:35.010Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "refactor",
@@ -23,12 +23,5 @@
     "rationale": "relocate usage.json write from docs/history to .bee/usage; close.rs + tests",
     "updated_at": "2026-08-30T12:40:35.026Z",
     "feature": "usage-in-bee-store"
-  },
-  "merge_ready": {
-    "since": "2026-08-30T12:47:41.800Z",
-    "branch": "wt/usage-in-bee-store",
-    "worktree_id": "beehive--wt--usage-in-bee-store",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
