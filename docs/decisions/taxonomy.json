@@ -451,6 +451,7 @@
     "hat-wave",
     "context",
     "pi-result-mailbox",
-    "headless"
+    "headless",
+    "observability"
   ]
 }

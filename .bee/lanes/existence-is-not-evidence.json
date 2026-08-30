@@ -13,8 +13,13 @@
   "summary": "Feature \"existence-is-not-evidence\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"existence-is-not-evidence\" — feature is closed.",
   "created_at": "2026-08-30T11:15:15.030Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Guard vấp vì lệnh gộp và grant worktree còn treo. Feature đã idle — tôi dọn grant bằng cửa chính rồi commit lại, tách lệnh đơn giản.",
+    "asked_at": "2026-08-30T11:54:20.057Z",
+    "session": "e8e12ca2-710b-4966-bce9-a63cca8a00b9"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
