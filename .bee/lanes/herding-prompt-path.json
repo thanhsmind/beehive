@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-prompt-path",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-prompt-path\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming for hpp-1.",
+  "created_at": "2026-08-30T06:00:20.377Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": "One function (read_prompt_file) plus its tests; the only flag is the error-message test whose asserted string must change",
+    "updated_at": "2026-08-30T06:01:38.201Z",
+    "feature": "herding-prompt-path"
+  },
+  "merge_ready": {
+    "since": "2026-08-30T06:08:14.304Z",
+    "branch": "wt/herding-prompt-path",
+    "worktree_id": "beehive--wt--herding-prompt-path",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
