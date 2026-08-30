@@ -51,13 +51,18 @@ generated it:
 2. The gate refuses mechanically while a load-bearing row is still
    `guessed` (R139) — "be diligent" (judgment) became "fill this field"
    (mechanical), and the net is a binary check, not a reminder.
-3. A second reader audits the table — opens each anchor, compares bytes.
-   Generation cannot fail at generating; only a task whose JOB is
-   comparison catches the author (pattern-20260825: the author is never
-   the one who catches it).
+3. A second reader audits the table — opens each anchor, compares bytes
+   (existence-is-not-evidence D4). Generation cannot fail at generating;
+   only a task whose JOB is comparison catches the author
+   (pattern-20260825: the author is never the one who catches it).
 4. One cheap reality touch per novel surface before the gate: open the
-   real data or run the real path once, output recorded. Each of the
-   seven errors dies in seconds against its real object.
+   real data or run the real path once, output recorded
+   (existence-is-not-evidence D3). Each of the seven errors dies in
+   seconds against its real object.
+
+The carrier for all four is skill text, templates, and the binary — a
+knowledge pattern like this one is additive, never the sole carrier
+(existence-is-not-evidence D5): prose alone already failed in the field.
 
 **Proof it works on its own author.** Building this very feature, the wave's
 second reader caught the author's plan asserting "existing tests may need

@@ -73,17 +73,28 @@ Discovery — planning decides, within D1-D5.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+### Resolved In Planning
 
-- [ ] Machine-checkable table format for D2 — what exact markdown shape does the bee-rs parser require, and how does it identify "load-bearing" rows (proposal: every row in the table IS load-bearing by definition; non-load-bearing claims simply don't go in it)
-- [ ] Where the D2 check runs for tiny/small lanes, which have no plan.md — gate-message text is not machine-parseable; does the merged gate call take a `--claims` input, or does the check apply only where plan.md exists (standard/high-risk) with tiny/small covered by skill text + D4-style spot checks only?
+- [x] Machine-checkable table format for D2 — RESOLVED: every row in the
+  table IS load-bearing by definition; parser shape in plan.md (Approach)
+  and R139 (`docs/knowledge/areas/workflow-state/gates.md`).
+- [x] Where the D2 check runs for tiny/small lanes — RESOLVED: the binary
+  check applies only where plan.md exists; tiny/small carry inline evidence
+  in the merged gate message under skill text + the D4 audit (plan.md,
+  Approach, "Rejected alternatives").
 
-## Deferred Ideas
+<!-- bee:not-a-deferral: both ideas below are captured as real backlog work or rejected on the record, not promises to act later -->
+## Ideas Routed Out Of Scope
 
-- Extending evidence labels to cell/worker claims at cap time — prove-the-whole-path territory, separate feature.
-- A one-line reinforcement in the AGENTS.md BEE block — deferred; carrier decision D5 covers skill/template/binary first.
+- Evidence labels at cell/worker cap time — backlog `p-4ec9c373`
+  (prove-the-whole-path layer, its own feature).
+- A one-line AGENTS.md BEE-block reinforcement — rejected for now: carrier
+  decision D5 puts the rule in skill/template/binary, and prose-only
+  reinforcement is the remedy this feature exists to replace.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
-CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads
-locked decisions, code context, and deferred-to-planning questions.
+CONTEXT.md is the source of truth. Decision IDs are stable. Planning read
+locked decisions, code context, and the questions above; both are settled
+in `plan.md` and R139.
