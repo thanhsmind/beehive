@@ -2168,13 +2168,13 @@ pub(crate) fn collect_close_usage(
 }
 
 /// The record's own version marker. A reader that walks
-/// `docs/history/*/usage.json` checks this before trusting a field name, so
+/// `.bee/usage/*.json` checks this before trusting a field name, so
 /// the string is a CONTRACT — a shape change earns `bee-usage/v2`, never a
 /// quiet edit of what v1 means.
 pub(crate) const USAGE_SCHEMA: &str = "bee-usage/v1";
 
-/// The detailed token record a green close leaves in the feature's history
-/// (decision e97cc9d4).
+/// The detailed token record a green close leaves in bee's own store
+/// (decision e97cc9d4, relocated by 62331863).
 ///
 /// `closed_at` is a parameter rather than a `utc_now()` read inside, so a test
 /// can pin the one field that is not derived from the usage itself.
@@ -2193,7 +2193,8 @@ pub(crate) fn usage_record_value(feature: &str, usage: &CloseUsage, closed_at: &
     })
 }
 
-/// Write `docs/history/<feature>/usage.json`, answering the written path.
+/// Write `.bee/usage/<feature>.json`, answering the written path (relative to
+/// the `control` root it was given).
 ///
 /// ALWAYS, on a green close — including the close whose transcripts were all
 /// unreadable, which writes `sessions: []` beside a non-zero `skipped`. A
@@ -2203,21 +2204,29 @@ pub(crate) fn usage_record_value(feature: &str, usage: &CloseUsage, closed_at: &
 /// that case — a printed "0 tokens" would be a false claim, while a stored
 /// empty `sessions` list beside `skipped` is a true one.
 ///
+/// THE CONTROL ROOT, like the sessions this record sums: the caller resolves
+/// it once through `control_root_for` and hands it to both
+/// [`collect_close_usage`] and this write, so a worktree close stores the
+/// record in the main checkout's `.bee` — the same place its `.bee/sessions/`
+/// evidence lives — instead of in a worktree that is about to disappear.
+///
 /// `write_json_atomic` is [`write_text_atomic`]'s JSON sibling — the same
 /// tmp-then-rename write `promote-proposals.md` gets, plus the repo's one
 /// pretty-printer, so this record is spelled like every other JSON file bee
-/// writes. Like that proposal file it lands under `docs/history/` and so falls
-/// OUTSIDE `commit_close_bookkeeping`'s `.bee`-scoped stage: close leaves it
-/// on disk uncommitted, and the merge-time auto-commit (which does stage
-/// `docs/history/<feature>/`) is what puts it in git.
+/// writes; it creates `.bee/usage/` on the way. Unlike that proposal file this
+/// record lands INSIDE `commit_close_bookkeeping`'s `.bee`-scoped stage
+/// (`git add -A -- .bee`), and `.bee/usage/` is not matched by `.gitignore`
+/// (only `.bee/logs/`, `.bee/sessions/`, `.bee/cache/` and friends are), so
+/// close's own bookkeeping commit puts the record in git — no merge-time
+/// dependency, nothing left dirty on disk.
 pub(crate) fn write_usage_record(
-    root: &Path,
+    control: &Path,
     feature: &str,
     usage: &CloseUsage,
 ) -> Result<String, String> {
-    let rel = format!("docs/history/{feature}/usage.json");
+    let rel = format!(".bee/usage/{feature}.json");
     let value = usage_record_value(feature, usage, &crate::verbs::cells::utc_now());
-    match write_json_atomic(&root.join(&rel), &value) {
+    match write_json_atomic(&control.join(&rel), &value) {
         Ok(()) => Ok(rel),
         Err(e) => Err(e.to_string()),
     }
@@ -2820,8 +2829,9 @@ pub(crate) fn close_handler(
     // The calling session resolves through `resolve_session_flag_env` — the
     // same BEE_SESSION_ID → CLAUDE_CODE_SESSION_ID chain the mailbox stop
     // above already uses, so close names one session id, never two.
+    let usage_control = crate::hooks::session_init::control_root_for(root);
     let usage = collect_close_usage(
-        &crate::hooks::session_init::control_root_for(root),
+        &usage_control,
         feature,
         crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
     );
@@ -2831,13 +2841,14 @@ pub(crate) fn close_handler(
         lines.push(line.clone());
     }
 
-    // The detailed record beside the printed line (decision e97cc9d4). Written
-    // BEFORE the bookkeeping commit below, exactly where `promote-proposals.md`
-    // is written, so a checkout whose auto-commit ever grows to cover
-    // `docs/history/` picks it up without this call moving. FAIL-SOFT like
-    // every other write on this tail: a record that could not be written is one
-    // warning line, never a failed close.
-    match write_usage_record(root, feature, &usage) {
+    // The detailed record beside the printed line (decision e97cc9d4), stored
+    // in bee's own store at `.bee/usage/<feature>.json` (decision 62331863).
+    // The CONTROL root again — the record belongs beside the `.bee/sessions/`
+    // evidence it sums, not in a worktree. Written BEFORE the bookkeeping
+    // commit below, which stages `.bee`, so close itself commits the record.
+    // FAIL-SOFT like every other write on this tail: a record that could not be
+    // written is one warning line, never a failed close.
+    match write_usage_record(&usage_control, feature, &usage) {
         Ok(rel) => {
             result.insert("usage_record".into(), json!(rel));
         }
@@ -3756,11 +3767,18 @@ mod tests {
         assert_eq!(result["bookkeeping_commit"]["committed"], json!(true));
         assert!(result["bookkeeping_commit"]["sha"].as_str().is_some_and(|s| !s.is_empty()));
 
+        // The dirtied tracked file plus the token-usage record this green
+        // close wrote (62331863) — both `.bee`, both staged by the same
+        // path-scoped `git add`. `unrelated.txt` is the point: it is dirt
+        // outside `.bee`, so it stays out of the commit.
         let committed = git_committed_paths(root);
-        assert_eq!(committed, vec![".bee/config.json".to_string()]);
+        assert_eq!(
+            committed,
+            vec![".bee/config.json".to_string(), ".bee/usage/demo.json".to_string()]
+        );
         let status = git_status_porcelain(root);
         assert!(status.contains("unrelated.txt"), "{status}");
-        assert!(!status.contains(".bee/config.json"), "{status}");
+        assert!(!status.contains(".bee/"), "{status}");
         let subject = git_out(root, &["log", "-1", "--pretty=%s"]);
         assert_eq!(subject, "Record demo close bookkeeping in the bee store");
     }
@@ -4063,14 +4081,17 @@ mod tests {
         );
     }
 
-    /// P2-4(b): a clean `.bee` (nothing for close to have dirtied) reports
-    /// `reason: "clean"` through the full `close_handler` path, GREEN, not
-    /// just through `commit_close_bookkeeping` directly. There are no
-    /// `docs/knowledge/` bundle and no cells for "demo" in this fixture, so
-    /// promote is skipped and retirement moves nothing — close itself never
-    /// touches `.bee` on top of the already-clean seed commit.
+    /// P2-4(b), rewritten by 62331863: this fixture has no
+    /// `docs/knowledge/` bundle and no cells for "demo", so promote is
+    /// skipped and retirement moves nothing — the ONE thing a green close
+    /// writes on top of the clean seed commit is its token-usage record. That
+    /// record now lands at `.bee/usage/demo.json`, INSIDE the `.bee` scope
+    /// this commit stages, so the green close no longer reports
+    /// `reason: "clean"`: it commits the record it just wrote and leaves the
+    /// tree clean. `reason: "clean"` itself is still pinned, one step later,
+    /// on a store that really has nothing left to commit.
     #[test]
-    fn clean_store_green_close_reports_reason_clean() {
+    fn green_close_commits_the_usage_record_it_just_wrote() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         init_bee_repo(root);
@@ -4078,14 +4099,20 @@ mod tests {
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
         assert_eq!(code, 0);
-        assert_eq!(result["bookkeeping_commit"], json!({"committed": false, "reason": "clean"}));
-        // e97cc9d4: the ONE thing a green close now leaves behind is the
-        // token-usage record under `docs/history/` — outside the `.bee` scope
-        // this commit stages, exactly like `promote-proposals.md`. `.bee`
-        // itself is still untouched, which is what "clean" means here.
+        assert_eq!(result["bookkeeping_commit"]["committed"], json!(true), "{result}");
+        assert_eq!(result["usage_record"], json!(".bee/usage/demo.json"));
+
+        // The record is IN the commit, not merely on disk — no merge-time
+        // auto-commit is needed to preserve it any more.
+        assert_eq!(git_committed_paths(root), vec![".bee/usage/demo.json".to_string()]);
         let status = git_status_porcelain(root);
-        assert!(!status.contains(".bee"), "{status}");
-        assert_eq!(status.trim(), "?? docs/", "{status}");
+        assert!(!status.contains(".bee"), "close must leave nothing in .bee dirty: {status}");
+
+        // And with the record committed, the store really is clean.
+        assert_eq!(
+            commit_close_bookkeeping(root, "demo").value(),
+            json!({"committed": false, "reason": "clean"})
+        );
     }
 
     /// P2-4(a) + P2-1 + P2-2: a `pre-commit` hook that fails SILENTLY (exit
@@ -4953,7 +4980,7 @@ mod tests {
         let usage = collect_close_usage(root, "demo", Some("s-call"));
 
         let rel = write_usage_record(root, "demo", &usage).unwrap();
-        assert_eq!(rel, "docs/history/demo/usage.json");
+        assert_eq!(rel, ".bee/usage/demo.json");
         let ReadJson::Parsed(record) = read_json(&root.join(&rel)) else {
             panic!("the usage record must be readable JSON")
         };
@@ -5000,11 +5027,11 @@ mod tests {
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
         assert_eq!(code, 0, "this close must be green");
-        assert_eq!(result["usage_record"], json!("docs/history/demo/usage.json"));
+        assert_eq!(result["usage_record"], json!(".bee/usage/demo.json"));
         // No readable transcript, so no printed line — and still a record.
         assert!(!text.contains("usage: "), "{text}");
 
-        let ReadJson::Parsed(record) = read_json(&root.join("docs/history/demo/usage.json")) else {
+        let ReadJson::Parsed(record) = read_json(&root.join(".bee/usage/demo.json")) else {
             panic!("a green close must write the usage record")
         };
         assert_eq!(record["schema"], json!(USAGE_SCHEMA));
@@ -5051,7 +5078,7 @@ mod tests {
             "{printed}"
         );
 
-        let ReadJson::Parsed(record) = read_json(&root.join("docs/history/demo/usage.json")) else {
+        let ReadJson::Parsed(record) = read_json(&root.join(".bee/usage/demo.json")) else {
             panic!("a green close must write the usage record")
         };
         assert_eq!(record["sessions"][0]["session_id"], json!("s-bound"));
