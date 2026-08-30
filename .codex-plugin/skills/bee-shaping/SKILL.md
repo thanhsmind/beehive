@@ -68,9 +68,18 @@ Stop when every locked decision can be written without inventing intent
 and each remaining unknown is a named Open Question; past that,
 questions are stalling — never ask "anything else?", present what's locked.
 
-A big, hard-to-reverse spec earns a **hat wave** before Lock — five fixed
-perspectives critique the draft; procedure single-homed in
-`bee-hive/references/gates-and-delegation.md` ("Hat wave"), decision 07328333.
+Two hat-wave windows touch shaping, and the PROCEDURE for both is
+single-homed in `bee-hive/references/gates-and-delegation.md` ("Hat wave"),
+decision 07328333 — these are pointers, never a second copy.
+
+- **Pre-Lock spec critique (discretionary).** A big, hard-to-reverse spec
+  earns a wave before Lock: the fixed perspectives critique the drafted
+  spec at SPEC altitude, and accepted findings route back through the
+  interview. A small spec gets no wave (decision `98ac20a1`).
+- **The plan-step wave (the default firing point).** Once shaping has
+  clarified the spec, the wave itself belongs to the PLAN step, where the
+  leader opens it to build the plan — not to shaping. Lock still never
+  takes hat output directly (decision `a52c854d`).
 
 ## Qualify (headless triage)
 

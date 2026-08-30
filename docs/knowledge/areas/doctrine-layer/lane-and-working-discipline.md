@@ -1,14 +1,14 @@
 ---
 type: bee.area
 title: Doctrine Layer — lane classification and working discipline
-description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, evidence-based re-lane demotion, diff-scaled review-wave ceremony, the shape-time survivors of the retired predictive-validation stage, the one canonical scratch home and its narrowed disposable-proof exemptions, the never-author-as-evidence rule, and the verify ladder."
+description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, evidence-based re-lane demotion, diff-scaled plan-check ceremony, the shape-time survivors of the retired predictive-validation stage, the one canonical scratch home and its narrowed disposable-proof exemptions, the never-author-as-evidence rule, and the verify ladder."
 timestamp: 2026-07-28
 bee:
   id: doctrine-layer-lane-and-working-discipline
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)"]
   sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
 ---
@@ -67,20 +67,27 @@ govern the working residue of a cell rather than its content.
   discovered risk stays available always. A demoted lane carries its full target
   contract (a demoted tiny is a real tiny: one direct task, merged gate, one
   dispatched worker).
-- **R16b — The review wave's ceremony scales with the measured diff (lane-lean
-  D3, 2026-07-27).** The wave lives in `bee-planning` (validation-diet D1/D5
-  folded the deleted standalone validating stage's reality gate and review wave in; there
-  is no standalone `validating` stage or phase). A standard-lane feature whose
+- **R16b — The plan check's ceremony scales with the measured diff (lane-lean
+  D3, 2026-07-27), and the check itself is the plan-step hat wave
+  (proactive-leader-intake D3/D4, `423e1664` / `b34fdea9`, 2026-08-30).** The
+  check lives in `bee-planning` (validation-diet D1/D5 folded the deleted
+  standalone validating stage's reality gate and review wave in; there is no
+  standalone `validating` stage or phase). A standard-lane feature whose
   counted touch set is at most 5 product files with zero hard-gate flags runs
-  the review wave inline on the session model — the same two mandates
-  (structural adversarial check,
-  cold-pickup cell review), the same finding vocabularies, the same
-  one-shot-then-one-blocker-pass cap — without dispatching a separate reviewer.
+  the check inline on the session model — the same two mandates (structural
+  adversarial check, cold-pickup cell review), the same finding vocabularies,
+  the same one-shot-then-one-blocker-pass cap — without dispatching anything.
   A hard-gate flag, a sixth product file, or genuine doubt about self-review
-  independence restores the dispatched merged reviewer; high-risk always runs
-  the dispatched persona panel. Rationale on record: the dispatched wave on a
-  4-5-file diff costs more than it catches, and ceremony must never displace
-  the main task (standing user feedback 5794a92a).
+  independence dispatches the hat wave instead: `hat-*` seats dispatched
+  `--kind advisor`, three by default and all five on high-risk, whose
+  synthesis carries the structure mandate back to the leader. The cold-pickup
+  mandate never dispatches — it stays with the leader at cell drafting on both
+  paths. The procedure itself — seats, instruments, budget, quorum, the
+  advisor-ref absorption and its timing law — has exactly one home,
+  `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave"); this rule
+  points there and never restates it. Rationale on record: dispatched ceremony
+  on a 4-5-file diff costs more than it catches, and ceremony must never
+  displace the main task (standing user feedback 5794a92a).
 - **R16d — There is no longer a separate stage that judges a plan before code
   exists; its two worthwhile checks now run inside the shape step itself
   (validation-diet D1/D5/D6, 2026-07-28).** The predictive stage's matrix of

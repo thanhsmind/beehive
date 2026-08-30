@@ -53,7 +53,7 @@ A gate message has two layers, and **only the human layer goes into chat**:
 
    Then the fixed gate question verbatim, with the standard options, and a link to the full report.
 
-2. **Machine layer (the linked report)** — the full mechanical material (reality-gate tables, feasibility matrices, plan-checker findings, cell lists) is written to `docs/history/<feature>/reports/` and **linked** from the gate message. It is never pasted into the gate message. It exists for the agent, the audit trail, and grooming — not for the human's eyes at decision time.
+2. **Machine layer (the linked report)** — the full mechanical material (reality-gate tables, feasibility matrices, the hat wave's synthesized plan findings — the plan-checker the wave absorbed, "Hat wave" below — cell lists) is written to `docs/history/<feature>/reports/` and **linked** from the gate message. It is never pasted into the gate message. It exists for the agent, the audit trail, and grooming — not for the human's eyes at decision time.
 
 Litmus test: **the user must be able to restate what they are approving in their own words.** A gate the user cannot restate is a dead gate. A technical term (BLOCKER count, spike id) may appear in the human layer only with an immediate plain-language gloss.
 
@@ -130,7 +130,7 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
 - **Lane rule** — the rubric applies in every lane and every phase, tiny/small included. The "0 subagents" rule for tiny/small caps *ceremony* subagents only (reviewers/checkers/panels) — it never speaks about execution workers (rule: agents-never-zero-execution-workers), and I/O workers are exempt from both counts. A 1-file tiny fix never crosses the rubric, so it stays inline naturally.
 - **Digest contract** — an I/O worker returns paths read, the facts extracted (with file:line anchors), and verbatim quotes only where asked; the orchestrator never re-reads what a digest already answers.
 - **Transport** — the door is `.bee/bin/bee dispatch prepare --runtime <rt> --kind <cell|gather|reviewer|advisor> [--role <name>] --json`: `prepare` reads the ROLE slot out of `.bee/config.json` and returns the tool plus the payload. `--role <name>` names the JOB this dispatch is and overrides the slot the kind would have resolved — `--kind gather --role extraction` is how a read-only gather reaches the cheap reader and gets `bee-extract`. Any name `models.<runtime>` carries is legal (bee holds no fixed list); a `--role` naming a name nothing configures is refused by name with a FIX, never resolved onto some other consumer's model — a model-shaped slot returns an Agent/Task payload naming the rendered bee agent, a `{kind:"herding"}` slot returns a Bash `bee herding run` payload, a `{kind:"cli"}` slot returns a Bash external-executor payload. `subagent_type: bee-build|bee-gather|bee-extract|bee-review` survives in the bullet only as what `prepare` RETURNS for a model-shaped slot, and as a spelling the guard still accepts (D2) — each rendered agent file declares the ordered ROLE list it serves and pins whatever model that list resolves to, so naming the agent declares the role and needs nothing else. Or an anchored `[bee-tier: <role>]` marker (the marker keeps its historical spelling and carries a role name), or a `model` param. A marker naming any role this runtime configures — plus `ceiling`, the escalation word for a session-model run — is a declaration; a marker naming a name nothing configures is DENIED by name (`role-not-configured`) with the configured roles in its FIX, never read as plain text. Where two of them disagree — a marker plus `subagent_type: general-purpose`, or a marker plus a mismatched `model` — the guard rewrites the request to config rather than refusing it, and says so in one line; you do not re-issue the dispatch. Plus one work-language intent sentence of what the worker will find/build/check plus the model name in the Agent description (a description that is only a model name or a codename is a red flag), background dispatch where the runtime supports it, the dispatch log as the audit trail. I/O workers do **not** register in `bee state worker add` — the registry stays swarm-cell-scoped (reservations/status are execution concerns); the dispatch log is the audit surface for gathers.
-- **Execution worker (second named class)** — the Delegation contract's other dispatch shape, distinguished from the I/O-offload worker by **authority and state effects**, not by task size. Unlike an I/O worker, an execution worker **does** register in the swarm registry (`bee state worker add`) and **does** take reservations under its own nickname; it implements exactly one assigned cell (claim → read `read_first` → implement within `files` → commit → finish, which caps the cell, releases the reservations, and records the required proof line, checked — never re-run — by `bee close`/`bee worktree merge`) and returns exactly one status token (`[DONE]`/`[BLOCKED]`/`[HANDOFF]`/`[NOOP]`) — it is authority-bearing, never a digest-only gather. Every `bee-swarming` worker dispatch belongs to this class: full waves in `standard`/`high-risk`, and the single dispatched worker that carries out `small` cell implementation (`bee-swarming/references/swarming-reference.md` ("Single execution worker in full")) (rule: agents-never-zero-execution-workers); `tiny` may execute inline in the orchestrator session instead, and when a tiny cell IS dispatched it belongs to this class too. **Parallel by default:** a `small` lane's 1-3 cells fan out to concurrent execution workers whenever every cell's product file set is disjoint — reservations are the proof and the police, 3-4 live workers is the cap; serial requires a named conflict recorded in the dispatch note (worker returns and its done-report lands before the conflicting next cell is claimed/dispatched) — never assumed as the default. **Parallel criterion:** cells run in parallel whenever every cell's *product* file set is provably disjoint; a cell's regen targets (release manifest, onboarding ledger, plugin mirrors) drop out of that comparison when it carries `regen_obligation_ack: "wave-barrier"` (the orchestrator then owes the full regen chain once, at wave close); any *actually shared* product file still forces serial — in doubt, serial. An independent reviewer or checker (plan-checker, cell reviewer, panel member) is **neither** class: it is a review-class dispatch — read-only, no registry entry, no reservations, no cell of its own — and is never called an "execution worker."
+- **Execution worker (second named class)** — the Delegation contract's other dispatch shape, distinguished from the I/O-offload worker by **authority and state effects**, not by task size. Unlike an I/O worker, an execution worker **does** register in the swarm registry (`bee state worker add`) and **does** take reservations under its own nickname; it implements exactly one assigned cell (claim → read `read_first` → implement within `files` → commit → finish, which caps the cell, releases the reservations, and records the required proof line, checked — never re-run — by `bee close`/`bee worktree merge`) and returns exactly one status token (`[DONE]`/`[BLOCKED]`/`[HANDOFF]`/`[NOOP]`) — it is authority-bearing, never a digest-only gather. Every `bee-swarming` worker dispatch belongs to this class: full waves in `standard`/`high-risk`, and the single dispatched worker that carries out `small` cell implementation (`bee-swarming/references/swarming-reference.md` ("Single execution worker in full")) (rule: agents-never-zero-execution-workers); `tiny` may execute inline in the orchestrator session instead, and when a tiny cell IS dispatched it belongs to this class too. **Parallel by default:** a `small` lane's 1-3 cells fan out to concurrent execution workers whenever every cell's product file set is disjoint — reservations are the proof and the police, 3-4 live workers is the cap; serial requires a named conflict recorded in the dispatch note (worker returns and its done-report lands before the conflicting next cell is claimed/dispatched) — never assumed as the default. **Parallel criterion:** cells run in parallel whenever every cell's *product* file set is provably disjoint; a cell's regen targets (release manifest, onboarding ledger, plugin mirrors) drop out of that comparison when it carries `regen_obligation_ack: "wave-barrier"` (the orchestrator then owes the full regen chain once, at wave close); any *actually shared* product file still forces serial — in doubt, serial. An independent reviewer or checker (a hat seat of the plan-step wave that absorbed the plan-checker, a cell reviewer, a panel member) is **neither** class: it is a review-class dispatch — read-only, no registry entry, no reservations, no cell of its own — and is never called an "execution worker."
 - **cli gather branch** — when the resolved gather role is a `cli` type, a gather dispatch runs the configured command **verbatim** via the shell — nothing appended, ever; the prompt goes in on **stdin**; every path handed to the worker is **absolute**; the run is **read-only** by contract. **Stdout IS the digest**, framed by a delimiter contract: the worker prompt instructs the CLI to emit its digest between `<<<BEE_DIGEST` and `BEE_DIGEST>>>` lines, and the orchestrator extracts only what sits between them — missing delimiters or an empty digest is a **failed run**, surfaced loudly, never accepted as a silent green. No `result.json`, no cell, no reservation, no `bee state worker add` registration for a gather, same as any other I/O worker. **Known measurement gap, named not solved here:** a Bash-launched gather emits zero `dispatch.jsonl` rows — closing that gap is Slice 3's job, not this branch's.
 - **herding execution branch** — `bee herding run` is the cell-execution mirror of the cli gather
   branch above: same shape (a foreign, bee-ignorant CLI agent is the worker), opposite purpose (write
@@ -181,35 +181,119 @@ Two or three isolated advisor consults design an answer to ONE hard question, cr
 Lanes GENERATE designs; hats CRITIQUE one existing draft from fixed disjoint
 perspectives (slp-blind-lanes D7). **This section is the single home for the
 hat-wave PROCEDURE** (decision `07328333`); bee-shaping carries the one-line
-trigger pointer, never a second copy.
+trigger pointers, never a second copy.
 
-**When hats open.** Inside bee-shaping, AFTER the spec content is drafted
+**Two windows, two jobs — one procedure.** The **plan-step wave** is the
+default firing point: the leader opens it itself once shaping has clarified
+the spec, and the wave BUILDS the implementation plan. The **pre-Lock
+spec-critique window** stays discretionary and CRITIQUES a drafted big spec
+before Lock. Neither absorbs the other, and neither is retired
+(proactive-leader-intake D5, decision `98ac20a1`).
+
+#### The plan-step wave (the default firing point)
+
+**When hats open.** At the PLAN step, never at raw intake. The leader
+clarifies the spec first (interview/scout as today); once the spec is clear
+enough, the leader proactively opens the wave to build the implementation
+plan, and the clarified spec is the draft the hats anchor on
+(proactive-leader-intake D1, decision `a52c854d`, superseding `8fb1e0da`).
+Synthesized answers feed plan.md THROUGH the leader — synthesis is
+decide-altitude and never delegates, and a hat finding never lands in Lock
+directly (Lock renders, it never originates).
+
+**Threshold.** Big, vague, or high-risk work gets the wave; a clear or tiny
+ask keeps today's fast path with NO wave. The unit is once per FEATURE, never
+per message — five dispatches on a typo fix is the named ceremony-capture
+failure (D2, `a52c854d`). The agent logs the open reason with
+`bee decisions log`, the same D1 posture lanes hold.
+
+**Seats.** Three by default — `hat-facts-gaps`, `hat-alternatives`,
+`hat-user-impact`. All five seats on high-risk work (D3, `423e1664`).
+
+**The seats at plan altitude, one instrument each, by POINTER to its home —
+never copied:**
+
+| Hat | Role | Asks at the plan step | Instrument |
+|---|---|---|---|
+| facts-gaps | `hat-facts-gaps` | what the drafted plan cannot answer | 5-Layer rubric + Truth Table Test over the plan (`.bee/expertise/review.md`) |
+| alternatives | `hat-alternatives` | is there a cheaper shape for this plan | bee-planning's inline SMALLER PATH mandate, read at plan altitude — CITED, never copied (`bee-planning/SKILL.md` is the one home); several viable designs on a high-stakes ambiguous choice hands off to blind lanes |
+| user-impact | `hat-user-impact` | what the user sees and feels in the planned behavior | gray-area probes over the planned behavior + the SEE mock (bee-shaping references) |
+| risks *(5-seat only)* | `hat-risks` | what breaks, and can it be undone | CRUD Lifecycle check — the delete half is the reversibility interrogation (`.bee/expertise/review.md`) |
+| value *(5-seat only)* | `hat-value` | is this worth its cost | materiality test (bee-shaping's shaping-reference) |
+
+**Absorption — the wave IS the internal consult.** The planning review wave
+(the plan-checker) and the high-risk advisor gate consult RUN AS this hat wave
+from now on (D4, decision `b34fdea9`). Two consult surfaces collapse into one.
+The wave's synthesis is recorded with `bee state advisor-ref record --advisor
+<identity> --digest-file <path>`, which satisfies the existing high-risk Gate 2
+precondition unchanged — no code edit. **Timing law:** record the ref AFTER
+plan.md has reached its gate-ready bytes and AFTER the last pre-gate
+`bee decisions log` write. The verb stamps its own staleness anchors — the
+active feature, the newest active decision id, and the sha256 of that feature's
+plan.md (`verbs/state_group/advisor_ref.rs:166-180`) — so a ref recorded at
+wave time goes stale by construction and refuses the very gate it was meant to
+open. **bee-reviewing and Gate 3 are untouched by this absorption**: the
+independent review stays user-invoked (rule: agents-review-user-invoked).
+
+**Mandate ownership (the absorbed plan-checker's two vocabularies).** The two
+vocabularies never merge. MANDATE 1 **Structure** — BLOCKER/WARNING over the
+five structure dimensions — rides `hat-facts-gaps`' plan-step question.
+MANDATE 2 **cold-pickup** — CRITICAL/MINOR — stays with the LEADER at cell
+drafting, the same self-check the `tiny`/`small` lanes already run.
+
+**Budget.** One wave, wall-clock ceiling 10 minutes. A seat that misses the
+ceiling is DROPPED and named in the synthesis record; a partial return
+synthesizes what came back and never blocks the gate on a missing seat.
+
+**Quorum.** No hard quorum — the wave runs with whatever seats resolve.
+All-fall-through (zero diversity) and every dropped seat are named in the
+record; `bee doctor`'s hat advisory stays the config nag.
+
+**Idempotence.** The recorded advisor-ref IS the once-per-feature mark. A live
+(non-stale) ref means the wave already ran, so a resumed or compacted session
+never re-runs on it; a ref gone stale after a material plan change permits
+exactly one re-run.
+
+**Gate bypass `full`/`total`.** The wave still runs — it is an internal
+consult, not a gate. Its questions are RECORDED as the plan's Open Questions
+exactly as headless records them, the recommended option proceeds, and nothing
+new stops; the always-stop information-question law at exploring/Gate 1 is
+untouched.
+
+**Headless.** An unattended wave never blocks and never self-answers. Its
+questions land as the plan's open questions (approach.md "Questions still
+open"), and the interview is never simulated (D6, decision `f73d6c49`).
+
+**Communication.** While the wave runs the user sees ONE plain state line, with
+no hat vocabulary. The output reaches the user as ONE leader voice, and every
+finding is filtered against the request text before anything surfaces (D7).
+
+#### The pre-Lock spec-critique window (discretionary, kept)
+
+**When it opens.** Inside bee-shaping, AFTER the spec content is drafted
 and BEFORE Lock — the only window where a product-altitude finding still has
 a channel back into the draft (post-Lock it can only become a supersession).
 Discretionary, reserved for big, hard-to-reverse specs; the agent logs the
 open reason with `bee decisions log`, the same D1 posture lanes hold. A
 small spec gets no wave — ceremony capture is the named failure.
 
-**The five hats, one instrument each, by POINTER to its home — never
-copied:**
+**Same seats, SPEC altitude.** The five hats run with their instruments read
+against the spec draft: facts-gaps asks what the spec cannot answer,
+alternatives runs the SMALLER PATH question at spec altitude, user-impact runs
+gray-area probes plus the SEE mock, risks runs the CRUD Lifecycle check, value
+runs the materiality test. Accepted findings route back through the interview
+as questions or Open Questions in the draft. Plan-altitude hats cannot critique
+a spec draft — that is why this window survives the absorption above.
 
-| Hat | Role | Asks | Instrument |
-|---|---|---|---|
-| facts-gaps | `hat-facts-gaps` | what the spec cannot answer | 5-Layer rubric + Truth Table Test (`.bee/expertise/review.md`) |
-| risks | `hat-risks` | what breaks, and can it be undone | CRUD Lifecycle check — the delete half is the reversibility interrogation (`.bee/expertise/review.md`) |
-| value | `hat-value` | is this worth its cost | materiality test (bee-shaping's shaping-reference) |
-| alternatives | `hat-alternatives` | is there a cheaper shape | the SMALLER PATH question at spec altitude; finding several viable designs on a high-stakes ambiguous choice hands off to blind lanes (D1) |
-| user-impact | `hat-user-impact` | what the user sees and feels | gray-area probes + the SEE mock (bee-shaping references) |
+#### The moves and the seat roles (both windows)
 
-**The moves.** Five parallel `bee dispatch prepare --kind advisor --role <hat-role>`
+**The moves.** Parallel `bee dispatch prepare --kind advisor --role <hat-role>`
 dispatches, one hat each, each naming its own role from the table above; the
 perspective rides the PROMPT body — never
 `--brief-file`, whose neutrality lint exists for lane briefs and would fight
 a brief whose leaning IS its job. Hats never see each other. The
 orchestrator is the synthesizing BLUE hat — synthesis is decide-altitude and
-never delegates. Accepted findings route back through the interview as
-questions or Open Questions in the draft; a hat finding never lands in Lock
-directly (Lock renders, it never originates).
+never delegates.
 
 **The hat seat roles carry a description.** The five `hat-*` names are
 `models.<runtime>` roles like any other, and the constant of record is the same
@@ -225,8 +309,10 @@ dispatch, the marker names the resolved role, and a name outside the eight keeps
 its ordinary refusal (D2, D4).
 
 **No checker verb.** Unlike blind convergence, nothing here autonomously
-logs a decision — the human at Lock is the check, the same checker-less
-posture bee-reviewing's critique wave already holds.
+logs a decision — the HUMAN is the check, and which human moment differs by
+window: the plan-step wave's check is **Gate 2** (the merged shape+execution
+gate the plan is built for), and the pre-Lock wave's check stays **Lock**. Same
+checker-less posture bee-reviewing's critique wave already holds.
 
 ### Judgment contract — rails for workers, boundaries for the orchestrator
 

@@ -68,7 +68,12 @@ work endangers (decomposition, walking skeleton, dependency thinking:
 
 Once drafted, the SMALLER PATH check — every lane, one inline question, one
 line of evidence: *is there a cheaper shape that still honors every locked
-decision?* FAIL → redraft. Standard/high-risk add the review wave before the gate.
+decision?* FAIL → redraft. That inline check is the ONE home for the SMALLER
+PATH question — the `hat-alternatives` seat cites it, never copies it.
+Standard/high-risk add the hat wave before the gate: the plan-step wave IS
+the plan check now (procedure home:
+`bee-hive/references/gates-and-delegation.md` ("Hat wave"); what planning
+consumes: `references/planning-reference.md` ("Plan check — the hat wave")).
 
 ## Gate
 
@@ -133,7 +138,7 @@ at the gate — never self-approved.
 
 | File | When to load |
 |---|---|
-| `references/planning-reference.md` | plan.md/approach.md templates, cell quality rules + example JSON, merged-gate protocol, review wave, verify scoping, greenfield init lane |
+| `references/planning-reference.md` | plan.md/approach.md templates, cell quality rules + example JSON, merged-gate protocol, the hat wave as the plan check, verify scoping, greenfield init lane |
 | `references/edge-dimensions.md` | 12 edge-case dimensions — high-risk/hard-gate test matrix only; standard and below use the triad |
 | `.bee/expertise/planning.md`, `.bee/expertise/tests.md` | Decomposition, walking skeleton, smaller path, cold pickup; coverage judgment, case selection, red-first |
 | `.bee/expertise/INDEX.md` | The work is domain-shaped — data and migrations, a contract callers depend on, a trust boundary, a rollout, a speed budget, a surface people use: route from the index for the ordering and reversibility constraints before slicing |

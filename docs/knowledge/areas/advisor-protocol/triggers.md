@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [advisor-protocol]
   required_context: [areas/advisor-protocol/overview.md]
-  decisions: ["AO2(b)/AO3/AO13 (one orchestrator trigger; execution-gate precondition, folded from the old standalone execution gate into Gate 2 by validation-diet D2/D14; event-based staleness, never a TTL)", AO4 (call paths split by trigger class), AO14 (execution-worker class), "126412b9 (precondition keys on the selected record's mode)", "20969403 (gate-door-refusal: the high-risk execution refusal states its own cause instead of rendering as an argument-shape complaint; the honesty shipped, the unblock deliberately did not — cell gdr-1, 2026-08-04)"]
+  decisions: ["AO2(b)/AO3/AO13 (one orchestrator trigger; execution-gate precondition, folded from the old standalone execution gate into Gate 2 by validation-diet D2/D14; event-based staleness, never a TTL)", AO4 (call paths split by trigger class), AO14 (execution-worker class), "126412b9 (precondition keys on the selected record's mode)", "20969403 (gate-door-refusal: the high-risk execution refusal states its own cause instead of rendering as an argument-shape complaint; the honesty shipped, the unblock deliberately did not — cell gdr-1, 2026-08-04)", "b34fdea9 (proactive-leader-intake D4: the orchestrator consult IS the plan-step hat wave's synthesis, recorded post-plan with the unchanged advisor-ref verb)"]
   sources: ["advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", first live orchestrator consult digest .bee/spikes/advisor-and-orchestration/slice5-advisor-digest.txt, "docs/specs/advisor-protocol.md#B1", "docs/specs/advisor-protocol.md#B3", "docs/specs/advisor-protocol.md#E3", "docs/specs/advisor-protocol.md#P2", "docs/specs/advisor-protocol.md#P6", "gate-door-refusal cell gdr-1 (both high-risk refusal arms return a stated refusal via one shared helper; trace .bee/cells/gdr-1.json, capped 2026-08-04 — state_group tests green)"]
   authoritative_for: "advisor-protocol: consult triggers"
 ---
@@ -24,6 +24,9 @@ bee:
   opens for work in the high-risk mode, the orchestrator must hold a live
   (non-stale) consult record. The approval verb itself refuses otherwise.
   This is machinery, not a human stop: every autopilot level still runs it.
+  Since proactive-leader-intake (decision `b34fdea9`) the consult is no
+  longer a separate dispatch: it IS the plan-step hat wave's synthesis
+  (B3 below).
 - No other trigger exists. Conflict-between-decisions and scope-creep triggers
   were considered and explicitly deferred/dropped (they lack a mechanical
   detector today).
@@ -36,15 +39,29 @@ one honest no-op; otherwise the dispatch names the adviser and exactly how to
 reach it (its proven transport). Workers on the session's strongest tier are
 offered advisers too — configuration outranks any strength intuition.
 
-**B3 — The orchestrator consults before high-risk execution approval.** The
-orchestrator builds the evidence bundle, runs the adviser **read-only**
-(external command: exactly as configured, bundle on standard input, printed
-output is the advice; model-shaped: a review-class read-only dispatch), and
-records the consult. The approval verb then verifies the record is live; a
-missing or stale record refuses the approval with a corrective message naming
-each failed condition and the exact consult flow. A workspace with no adviser
-configured records that fact and proceeds — the rule adds one trigger, not a
-dependency on configuration.
+**B3 — The high-risk consult is the plan-step hat wave's synthesis, recorded
+after the plan settles** (proactive-leader-intake D4, decision `b34fdea9`).
+The consult surface no longer stands alone. At the plan step the leader opens
+the hat wave — fixed perspectives dispatched `--kind advisor`, once per
+feature — and synthesizes their returns itself; that synthesis is the evidence
+bundle, and `bee state advisor-ref record --advisor <identity> --digest-file
+<path>` records it. The verb is unchanged and no code moved: the approval verb
+still verifies the record is live, and a missing or stale record still refuses
+with a corrective message naming each failed condition and the consult flow.
+
+**Timing law.** Record the ref AFTER plan.md holds its gate-ready bytes and
+AFTER the last pre-gate `bee decisions log` write. The verb stamps its
+staleness anchors from the active feature, the newest active decision id, and
+that plan.md's sha256, so a ref recorded at wave time goes stale by
+construction and refuses the very gate it was meant to open. The live ref
+doubles as the once-per-feature mark: a resumed session never re-runs the wave
+on it, and a stale ref after a material plan change permits exactly one re-run.
+
+A workspace with no adviser configured records that fact and proceeds — the
+rule adds one trigger, not a dependency on configuration. Procedure home for
+the wave: `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave").
+Independent review (bee-reviewing, Gate 3) is untouched and stays
+user-invoked.
 
 **B3a — The refusal states its own cause, and it took a cell to make that true
 (gate-door-refusal, cell gdr-1, 2026-08-04).** Until then B3's promise held only
