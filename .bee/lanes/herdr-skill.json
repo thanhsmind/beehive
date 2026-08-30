@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "herdr-skill",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herdr-skill\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"herdr-skill\" (lane).",
+  "created_at": "2026-08-30T15:28:16.721Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "herdr-skill: baselines all green — drop the redundant skill and spec-drop the delivery-contract fix to waggledance instead?",
+    "asked_at": "2026-08-30T15:35:07.845Z",
+    "session": "c9eb2d43-4dec-4d2a-8ea5-f7438226e33d"
+  },
+  "route": {
+    "class": "docs",
+    "lane": "docs",
+    "flags": [],
+    "product_files": 0,
+    "rationale": "new shipped skill under skills/; knowledge files only, no runtime code",
+    "updated_at": "2026-08-30T15:28:16.737Z",
+    "feature": "herdr-skill"
+  }
+}
