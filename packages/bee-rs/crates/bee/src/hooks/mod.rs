@@ -155,6 +155,15 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     if herding_worker_marker_set() && marker_short_circuits(&name) {
         return Some(ExitCode::SUCCESS);
     }
+    // An unknown hook name is decided by argv alone, so it is refused
+    // BEFORE the blocking stdin read below — `read_stdin_once` waits for
+    // EOF, and a caller holding stdin open but silent (an in-process test
+    // under a live pane socket, a miswired hook entry) would otherwise
+    // hang forever on a name this build cannot serve anyway.
+    if !HOOK_NAMES.contains(&name.as_str()) {
+        eprintln!("bee hook: unknown hook \"{name}\"");
+        return Some(ExitCode::FAILURE);
+    }
     let rest: Vec<String> = args
         .get(2..)
         .unwrap_or(&[])
@@ -174,10 +183,9 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "session-close" => session_close::run(&rest, &stdin_str),
         "model-guard" => model_guard::run(&rest, &stdin_str),
         "write-guard" => write_guard::run(&rest, &stdin_str),
-        _ => {
-            eprintln!("bee hook: unknown hook \"{name}\"");
-            return Some(ExitCode::FAILURE);
-        }
+        // Every name that reaches here passed the HOOK_NAMES membership
+        // check above, and the arms cover exactly that list.
+        _ => unreachable!("unknown hook names are refused before the stdin read"),
     };
     Some(match outcome {
         Outcome::Done(code) => code,
