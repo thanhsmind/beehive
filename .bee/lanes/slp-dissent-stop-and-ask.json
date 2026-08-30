@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces are quiet this tick. I'll write the silence record now.",
-    "asked_at": "2026-08-30T12:37:37.638Z",
-    "session": "80be9ce2-0248-45f8-9879-4f9bf92f5c66"
+    "subject": "Found one live pane: session b3245841 is running the beehive `release` script toward v2.26.0. It failed once (exit 1, tree had uncommitted b",
+    "asked_at": "2026-08-30T12:53:15.488Z",
+    "session": "794037c4-c8cd-4932-b1a6-6da2c6e79596"
   },
   "route": {
     "class": "feature",
