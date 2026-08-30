@@ -1,0 +1,129 @@
+{
+  "id": "pli-3",
+  "feature": "proactive-leader-intake",
+  "title": "Sweep old-law pointers, AGENTS block, knowledge homes; regen",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "pli-1",
+    "pli-2"
+  ],
+  "decisions": [
+    "a52c854d-6b01-4932-a42c-e646a0ae30ab",
+    "b34fdea9-8c76-40fc-9c12-bfc37f5c050a",
+    "98ac20a1-b24a-4c83-8aed-20840d70fe32"
+  ],
+  "files": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "packages/bee/AGENTS.block.md",
+    "docs/knowledge/areas/advisor-protocol/triggers.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "AGENTS.md",
+    ".claude/skills/*",
+    ".claude-plugin/*",
+    ".bee/capture-queue.jsonl",
+    "docs/knowledge/index.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/proactive-leader-intake/plan.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_skills": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/advisor-protocol/triggers.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "action": "Per plan.md 'Cell C', STRICT order. (1) skills/bee-shaping/SKILL.md: the pointer paragraph at anchor 'A big, hard-to-reverse spec earns a **hat wave** before Lock' splits into two pointers - pre-Lock critique wave (discretionary, per 98ac20a1) and the plan-step wave (per a52c854d), both by pointer to the procedure home. (2) Old-law sweep, four sites found by anchor text: routing-and-contracts.md 'the SMALLER PATH reality check and the review wave run inline before its merged Gate 2' plus its 'merged reviewer'/'persona panel' mentions (rg -n 'merged reviewer|persona panel|review wave' skills/bee-hive/references/routing-and-contracts.md); go-mode.md 'SMALLER PATH check + review wave run inline before the gate below'; swarming-reference.md 'bee-planning merged reviewer' (rg -n 'merged reviewer' skills/bee-swarming/references/swarming-reference.md) - each updates to the new law's pointer naming the advisor-kind dispatch change. (3) packages/bee/AGENTS.block.md: update the delegation/deep-contracts lines naming the advisor consult and hats (pointer language only); NEVER edit AGENTS.md's BEE:START/END block directly. (4) Knowledge concept EDITS, not stubs: advisor-protocol/triggers.md trigger 'B3 - The orchestrator consults before high-risk execution approval' rewrites to: the consult is the plan-step hat wave's synthesis, recorded post-plan; doctrine-layer/model-roles-and-escalation.md seat/tier law updates: plan check rides advisor-kind hat seats, not the review tier. Add ONE capture stub (bee capture add) for the settlement. (5) Run bee dev regen; confirm AGENTS.md re-rendered with the block edit and vendored .claude/skills/** refreshed. (6) bee knowledge index, then bee knowledge index --check green. Proof line: regen clean + pointer rg sweep (exactly one procedure home) + knowledge index --check - hand pointer check recorded as such.",
+  "must_haves": {
+    "truths": [
+      "rg for the old review-wave law finds only pointers to the procedure home",
+      "AGENTS.md carries the new law via the regenerated block"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "advisor/hat law lines updated at the source of the AGENTS block"
+      },
+      {
+        "path": "docs/knowledge/areas/advisor-protocol/triggers.md",
+        "substantive": "B3 trigger rewritten to the absorbed hat-wave consult law"
+      }
+    ],
+    "key_links": [
+      "bee dev regen run after all prose edits; AGENTS.md and .claude copies match their sources"
+    ],
+    "prohibitions": [
+      "No hand edit inside AGENTS.md BEE:START/END",
+      "No second copy of the hat-wave procedure",
+      "No bee-reviewing/Gate 3 change"
+    ]
+  },
+  "trace": {
+    "worker": "pli-w3",
+    "outcome": "Old review-wave law swept to hat-wave pointers; AGENTS block, advisor-protocol B3 and doctrine-layer B15a updated; regen + knowledge index green",
+    "files_changed": [
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/go-mode.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "packages/bee/AGENTS.block.md",
+      "docs/knowledge/areas/advisor-protocol/triggers.md",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+      "AGENTS.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Reserved .agents and .codex-plugin before committing — bee dev regen renders those two vendored trees as well, and the cell files list named only .claude/skills and .claude-plugin — hit an unforeseen obstacle",
+      "Left docs/history/proactive-leader-intake/*.md and .bee/tmp-dispatch-pli1.json unstaged — they are the leader-owned planning artifacts, not files this cell names — something else had to be fixed first",
+      "Did not edit docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md R16b, which still says independence restores the dispatched merged reviewer and high-risk runs the persona panel — that file is outside the cell files list, so it is the orchestrator scope call — found a better route",
+      "sync-ack: AGENTS.md changed only as bee dev regen output of the packages/bee/AGENTS.block.md delegation edit; the agents-capture-line-at-close rule text is untouched, so bee-capturing/SKILL.md and bee-hive/SKILL.md need no sync"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T00:23:12.892Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e51e3c84-7f03-4083-9ed7-09a72c9eacc4",
+    "claimed_at": "2026-08-30T00:19:00.009Z",
+    "sync_ack": "AGENTS.md changed only as bee dev regen output of the packages/bee/AGENTS.block.md delegation edit; the agents-capture-line-at-close rule text is untouched, so bee-capturing/SKILL.md and bee-hive/SKILL.md need no sync",
+    "report": {
+      "outcome": "Old review-wave law swept to hat-wave pointers; AGENTS block, advisor-protocol B3 and doctrine-layer B15a updated; regen + knowledge index green",
+      "commit": "ef936edc",
+      "files": [
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-hive/references/go-mode.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "packages/bee/AGENTS.block.md",
+        "docs/knowledge/areas/advisor-protocol/triggers.md",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        "AGENTS.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "bee dev regen && bee dev release-manifest --check && bee knowledge index --check && rg pointer sweep — green — docs-only diff: regen is the parity net for AGENTS.md and the vendored skill trees, release-manifest and knowledge index are the machine checks, and the one-procedure-home pointer sweep is HAND-checked (no automated pointer gate exists); the declared cargo suite was not run — zero Rust source touched, CI carries it",
+      "deviations": [
+        "Reserved .agents and .codex-plugin before committing — bee dev regen renders those two vendored trees as well, and the cell files list named only .claude/skills and .claude-plugin — hit an unforeseen obstacle",
+        "Left docs/history/proactive-leader-intake/*.md and .bee/tmp-dispatch-pli1.json unstaged — they are the leader-owned planning artifacts, not files this cell names — something else had to be fixed first",
+        "Did not edit docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md R16b, which still says independence restores the dispatched merged reviewer and high-risk runs the persona panel — that file is outside the cell files list, so it is the orchestrator scope call — found a better route"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1496 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "verify": ".bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge index --check && rg -n 'hat wave' packages/bee/AGENTS.block.md AGENTS.md docs/knowledge/areas/advisor-protocol/triggers.md"
+}

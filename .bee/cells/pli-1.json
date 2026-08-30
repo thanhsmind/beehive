@@ -1,0 +1,80 @@
+{
+  "id": "pli-1",
+  "feature": "proactive-leader-intake",
+  "title": "Rewrite the Hat wave procedure home to the plan-step law",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "a52c854d-6b01-4932-a42c-e646a0ae30ab",
+    "423e1664-d4ba-4a2e-9e58-509e3c95b654",
+    "b34fdea9-8c76-40fc-9c12-bfc37f5c050a",
+    "98ac20a1-b24a-4c83-8aed-20840d70fe32",
+    "f73d6c49-3f45-4d55-99a4-d217dbcf1c6a"
+  ],
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "read_first": [
+    "docs/history/proactive-leader-intake/CONTEXT.md",
+    "docs/history/proactive-leader-intake/plan.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [],
+  "action": "In skills/bee-hive/references/gates-and-delegation.md, rewrite the section opening at the anchor '### Hat wave - fixed perspectives critique one draft' (rg -n 'Hat wave' finds it; section ends where '### Judgment contract' opens) to the plan-step law, exactly per plan.md 'Cell A' and CONTEXT.md D1-D7: firing point = the plan step after shaping locks the spec (per a52c854d); threshold once-per-feature, clear/tiny skip, keep the ceremony-capture line (per a52c854d); seats 3 default (facts-gaps, alternatives, user-impact), 5 on high-risk (per 423e1664); the wave absorbs the plan-checker and the high-risk advisor consult, synthesis recorded via 'bee state advisor-ref record' AFTER plan.md's final bytes and the last pre-gate decision log (per b34fdea9 and the timing law in plan.md); mandate ownership: Structure rides hat-facts-gaps, cold-pickup stays with the leader at cell drafting, vocabularies never merge; instruments restated at plan altitude (facts-gaps 5-Layer rubric over the plan; alternatives cites bee-planning's inline SMALLER PATH mandate - one home; user-impact gray-area probes over planned behavior); the pre-Lock spec-critique window STAYS discretionary, retitled so the two windows read apart (per 98ac20a1); add Headless bullet (unattended waves record questions as the plan's open questions, never block, never self-answer, per f73d6c49) and Communication bullet (one plain state line, one leader voice, findings filtered against the request text); update the 'No checker verb' paragraph: the plan-step wave's check is Gate 2, the pre-Lock wave's check stays Lock; also update the two plan-checker/consult mentions elsewhere in this same file (rg -n 'plan-checker' skills/bee-hive/references/gates-and-delegation.md) to the absorbed law. Budget/quorum/idempotence/bypass lines land per plan.md 'Plan-step law details'. Bee-reviewing and Gate 3 explicitly untouched - add that one line. Keep this section the SINGLE procedure home (decision 07328333).",
+  "must_haves": {
+    "truths": [
+      "The Hat wave section states plan-step firing, 3/5 seats, absorption with the post-plan advisor-ref timing law, and the kept pre-Lock window"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/gates-and-delegation.md",
+        "substantive": "rewritten Hat wave section carrying D1-D7, no second procedure copy anywhere"
+      }
+    ],
+    "key_links": [
+      "Section still referenced by bee-shaping's pointer; 'No checker verb' paragraph names Gate 2 for the plan-step wave"
+    ],
+    "prohibitions": [
+      "No change to the blind-lanes procedure section",
+      "No change to bee-reviewing/Gate 3 law",
+      "Never edit .claude/skills/** copies"
+    ]
+  },
+  "trace": {
+    "worker": "pli-w1",
+    "outcome": "Hat wave section rewritten to the plan-step law: plan-step firing, 3/5 seats, absorbed plan-checker + advisor consult with the post-plan advisor-ref timing law, kept pre-Lock window; two in-file plan-checker mentions updated",
+    "files_changed": [
+      "skills/bee-hive/references/gates-and-delegation.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T00:15:02.909Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e51e3c84-7f03-4083-9ed7-09a72c9eacc4",
+    "claimed_at": "2026-08-30T00:10:50.524Z",
+    "report": {
+      "outcome": "Hat wave section rewritten to the plan-step law with D1-D7 carried; two other plan-checker mentions in the same file updated to the absorbed law",
+      "commit": "f1ab6d38",
+      "files": [
+        "skills/bee-hive/references/gates-and-delegation.md"
+      ],
+      "tests": "rg -n 'plan step' skills/bee-hive/references/gates-and-delegation.md; rg -c '### Hat wave' (=1); rg -i 'hat wave' sweep over skills/ + AGENTS.block.md — green — docs change: cell verify plus the single-procedure-home pointer check; no code touched, no automated pointer gate exists",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "verify": "rg -n 'plan step' skills/bee-hive/references/gates-and-delegation.md && test 1 -eq $(rg -c '### Hat wave' skills/bee-hive/references/gates-and-delegation.md)"
+}

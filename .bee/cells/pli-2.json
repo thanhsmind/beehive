@@ -1,0 +1,87 @@
+{
+  "id": "pli-2",
+  "feature": "proactive-leader-intake",
+  "title": "Point bee-planning at the hat wave as its plan check",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "pli-1"
+  ],
+  "decisions": [
+    "b34fdea9-8c76-40fc-9c12-bfc37f5c050a",
+    "423e1664-d4ba-4a2e-9e58-509e3c95b654",
+    "a52c854d-6b01-4932-a42c-e646a0ae30ab"
+  ],
+  "files": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md"
+  ],
+  "read_first": [
+    "docs/history/proactive-leader-intake/plan.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md"
+  ],
+  "affects_specs": [],
+  "action": "Per plan.md 'Cell B': in skills/bee-planning/SKILL.md, the line 'Standard/high-risk add the review wave before the gate' (rg -n 'review wave' skills/bee-planning/SKILL.md) now names the hat wave by POINTER to the procedure home (per b34fdea9); update the References table row naming 'review wave'. In skills/bee-planning/references/planning-reference.md, rewrite the '## Review wave' section (rg -n '## Review wave') to the hat-wave form: the wave replaces the reviewer-panel dispatch, keeps BOTH vocabularies (Structure BLOCKER/WARNING via hat-facts-gaps; Cells cold-pickup CRITICAL/MINOR via the leader's self-check at cell drafting), keeps the one-blocker-pass rule, and the scaling paragraph follows a52c854d's threshold (clear/tiny no wave) and 423e1664's seat counts; name the dispatch-kind change (advisor-kind hat seats, not the review tier). Add the one-home SMALLER PATH line: the inline check at every lane is the home; the hat-alternatives seat cites it, never copies it. Pointer language only - the procedure itself lives in gates-and-delegation.md.",
+  "must_haves": {
+    "truths": [
+      "bee-planning's plan check is the hat wave by pointer; no second procedure copy"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "Review wave section rewritten to hat-wave form with both vocabularies and scaling per the locked decisions"
+      }
+    ],
+    "key_links": [
+      "SKILL.md and planning-reference.md both point at the gates-and-delegation.md procedure home"
+    ],
+    "prohibitions": [
+      "No change to the tiny/small merged-gate protocol beyond the review-wave sentences",
+      "Never edit .claude/skills/** copies"
+    ]
+  },
+  "trace": {
+    "worker": "pli-w2",
+    "outcome": "bee-planning's plan check is the hat wave by pointer; both vocabularies and the blocker pass kept",
+    "files_changed": [
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md"
+    ],
+    "deviations": [
+      "Renamed the section heading Review wave to Plan check — the hat wave — the old title named the retired dispatch and no live skill file cited it — found a better route",
+      "Replaced the merged-reviewer prompt block with the two mandates as prose plus the synthesis shape — the prompt addressed a reviewer dispatch that no longer exists, while the five dimensions and cold-pickup flags live only here — the plan was wrong about a fact",
+      "Updated the tiny/small merged-gate sentence from the review wave never dispatches to the hat wave never opens — same review-wave sentence the cell scoped, wording only — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T00:18:40.544Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e51e3c84-7f03-4083-9ed7-09a72c9eacc4",
+    "claimed_at": "2026-08-30T00:15:25.323Z",
+    "report": {
+      "outcome": "bee-planning's plan check is the hat wave by pointer; both vocabularies and the blocker pass kept",
+      "commit": "ffd30d69",
+      "files": [
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-planning/references/planning-reference.md"
+      ],
+      "tests": "rg -n hat-wave-literal skills/bee-planning/SKILL.md skills/bee-planning/references/planning-reference.md — green — docs change: pointer/parity check is the proof type; no Rust touched",
+      "deviations": [
+        "Renamed the section heading Review wave to Plan check — the hat wave — the old title named the retired dispatch and no live skill file cited it — found a better route",
+        "Replaced the merged-reviewer prompt block with the two mandates as prose plus the synthesis shape — the prompt addressed a reviewer dispatch that no longer exists, while the five dimensions and cold-pickup flags live only here — the plan was wrong about a fact",
+        "Updated the tiny/small merged-gate sentence from the review wave never dispatches to the hat wave never opens — same review-wave sentence the cell scoped, wording only — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "verify": "rg -n 'hat wave' skills/bee-planning/SKILL.md skills/bee-planning/references/planning-reference.md"
+}

@@ -1,0 +1,80 @@
+{
+  "id": "pli-4",
+  "feature": "proactive-leader-intake",
+  "title": "Sweep the last old-law text out of lane-and-working-discipline R16b",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "pli-3"
+  ],
+  "decisions": [
+    "b34fdea9-8c76-40fc-9c12-bfc37f5c050a",
+    "423e1664-d4ba-4a2e-9e58-509e3c95b654"
+  ],
+  "files": [
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+    "docs/knowledge/index.md"
+  ],
+  "read_first": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "docs/history/proactive-leader-intake/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "action": "Completes the pli-3 sweep (per b34fdea9): in docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md, rule R16b (rg -n 'merged reviewer|persona panel' finds it, around lines 70-95) still says independence restores the dispatched merged reviewer and high-risk always runs the dispatched persona panel. Rewrite it to the absorbed law: the plan check is the hat wave (advisor-kind hat seats, 3 default, 5 on high-risk per 423e1664), by pointer to the procedure home skills/bee-hive/references/gates-and-delegation.md ('Hat wave'). Pointer language only, no second procedure copy. Then bee knowledge index and bee knowledge index --check green.",
+  "must_haves": {
+    "truths": [
+      "rg 'merged reviewer|persona panel' over docs/knowledge finds no statement of the retired dispatch law"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+        "substantive": "R16b restated to the hat-wave plan-check law by pointer"
+      }
+    ],
+    "key_links": [
+      "R16b points at the gates-and-delegation.md procedure home"
+    ],
+    "prohibitions": [
+      "No change to any other rule in the file",
+      "No second copy of the hat-wave procedure"
+    ]
+  },
+  "trace": {
+    "worker": "pli-w4",
+    "outcome": "R16b restated to the hat-wave plan-check law by pointer; the retired dispatch law is gone from docs/knowledge",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+      "docs/knowledge/areas/doctrine-layer/index.md"
+    ],
+    "deviations": [
+      "Reserved and committed docs/knowledge/areas/doctrine-layer/index.md instead of docs/knowledge/index.md — the changed description re-renders the AREA index, not the root one — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T00:26:34.263Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e51e3c84-7f03-4083-9ed7-09a72c9eacc4",
+    "claimed_at": "2026-08-30T00:24:09.019Z",
+    "report": {
+      "outcome": "R16b restated to the hat-wave plan-check law by pointer; the retired dispatch law is gone from docs/knowledge",
+      "commit": "f845dcd17d2f765082702321bf3c62ba39c20ecf",
+      "files": [
+        "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+        "docs/knowledge/areas/doctrine-layer/index.md"
+      ],
+      "tests": "rg for the retired terms (merged reviewer, persona panel) over docs/knowledge = 0 hits, plus .bee/bin/bee knowledge index --check — green — docs-only prose change: pointer and index-parity checks are the proof this change type needs, no code touched",
+      "deviations": [
+        "Reserved and committed docs/knowledge/areas/doctrine-layer/index.md instead of docs/knowledge/index.md — the changed description re-renders the AREA index, not the root one — the plan was wrong about a fact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "verify": "test 0 -eq $(rg -c 'persona panel' docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md || echo 0) && .bee/bin/bee knowledge index --check"
+}

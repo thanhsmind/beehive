@@ -450,6 +450,7 @@
     "models",
     "hat-wave",
     "context",
-    "pi-result-mailbox"
+    "pi-result-mailbox",
+    "headless"
   ]
 }

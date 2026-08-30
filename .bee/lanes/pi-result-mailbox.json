@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "▸ Bài học đã vào hàng capture. Release đang chạy: full suite → commit → tag → push → chờ CI. Sẽ báo khi có dòng `OK` cuối (hoặc lỗi kèm log",
-    "asked_at": "2026-08-29T22:06:15.619Z",
+    "subject": "Guard hiểu nhầm chuỗi lệnh ghép — tách lệnh đơn giản.",
+    "asked_at": "2026-08-29T22:30:50.498Z",
     "session": "a95c772f-e050-490b-98ad-5511130f6b08"
   },
   "route": {

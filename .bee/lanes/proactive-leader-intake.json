@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "feature": "proactive-leader-intake",
+  "mode": "high-risk",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"proactive-leader-intake\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-29T22:36:00.819Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "Gate 2 (shape): approve the proactive-leader-intake work shape",
+    "asked_at": "2026-08-29T23:46:15.228Z",
+    "session": "e51e3c84-7f03-4083-9ed7-09a72c9eacc4"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 5,
+    "rationale": "Workflow-law change across bee-hive/bee-shaping/bee-planning source skills + AGENTS regen; story-sized doctrine, no hard-gate flag",
+    "updated_at": "2026-08-29T23:37:26.926Z",
+    "feature": "proactive-leader-intake"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-29T23:46:15.184Z",
+    "feature": "proactive-leader-intake",
+    "newest_decision_id": "b34fdea9-8c76-40fc-9c12-bfc37f5c050a",
+    "plan_sha256": "2488097958ca1a1f952d9540d956b348316d180d0923c0beaffeee4b9fb2b82a",
+    "advisor": "fable (hat-risks seat, intake wave; refreshed post-plan per timing law)",
+    "digest_head": "# Advisor consult digest — proactive-leader-intake\n\nConsult: hat-risks seat (fable, session-class) of the intake hat wave,\n2026-08-30 — the wave absorbs the advisor consult per D4; full digest in\ndocs/history/proactive-leader-intake/hat-wave-intake.md.\n\nVerdict carried into the plan: the feature is reversible only if\n(1) the pre-Lock wave is absorbed with a recorded supersession and\nrevisit path — plan keeps the window (D5) and the decisions store\ncarries the supersession trail; (2) the trigger "
+  },
+  "merge_ready": {
+    "since": "2026-08-30T00:23:12.904Z",
+    "branch": "wt/proactive-leader-intake",
+    "worktree_id": "beehive--wt--proactive-leader-intake",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces are quiet, matching the established pattern from prior ticks: no active cells, no live workers, no danger signals. Writing",
-    "asked_at": "2026-08-29T21:54:50.076Z",
-    "session": "6c9c034d-b2c3-4e87-b0c9-06e97b585ba3"
+    "subject": "All six surfaces read as quiet: `pli-1` is claimed by session `e51e3c84` with a heartbeat only ~2 minutes old (fresh, not stalled); `pli-2`/",
+    "asked_at": "2026-08-30T00:14:38.050Z",
+    "session": "346223aa-a564-4cb7-9084-20a620eaed42"
   },
   "route": {
     "class": "feature",
