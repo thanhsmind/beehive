@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "letter-digest",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"letter-digest\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-30T14:10:56.772Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 4,
+    "rationale": "D2 changes filing rules mailbox tests assert; mailbox.rs, close.rs, work.rs plus a digest module; story-sized behavior",
+    "updated_at": "2026-08-30T14:12:32.449Z",
+    "feature": "letter-digest"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "id": "ld-1",
+  "feature": "letter-digest",
+  "title": "File the close letter at the moment of close",
+  "lane": "standard",
+  "role": "code",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "aedb5be9-1dda-40e1-8edd-63e9e29219d4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "docs/history/letter-digest/CONTEXT.md",
+    "docs/history/letter-digest/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D2 (store id aedb5be9): every bee close files its close letter immediately, attended sessions included. In mailbox.rs, split file_run_letter's compose-and-file core from its armed gate (anchor mailbox.rs:1754 'if !armed(root) {' / 1755 'return RunEnd::NotArmed;') and add pub(crate) fn file_close_letter(root: &Path, run: &str) -> RunEnd that runs the same core WITHOUT the armed gate. Also change file_run_letter so an EXISTING letter re-composes regardless of arming (advisor P1: check letter_files_for_run before the armed early-return; the existence check is names-only so an unarmed checkout with no letter still pays ~zero). Extend D12 recovery candidacy: a lettered run whose entries file mtime is newer than its letter file mtime is a candidate too (two stats, no opens; candidacy today is 'entries and NO letter', see silent_run_candidates / the lettered set near mailbox.rs:1992-2038). In drivers/close.rs, call file_close_letter fail-open INSIDE record_feature_close_in_mailbox (anchor close.rs:3075 'fn record_feature_close_in_mailbox', 3099 'mailbox::record_close_stop(') right after record_close_stop, using the SAME control root already resolved there — never the worktree root (advisor P2). A Failed outcome warns on stderr like record_run_end (mailbox.rs:1800-1808) and never refuses the close. Write tests per the plan's ld-1 triad; judge existing coverage in mailbox.rs and work.rs tests first and author only the gap.",
+  "must_haves": {
+    "truths": [
+      "An attended (unarmed) bee close leaves a filed letter with close sections in .bee/human-mailbox/",
+      "A later run end re-composes that same file: one letter, filed_at and read status preserved, post-close entries included",
+      "A close-lettered run that goes silent with newer entries is still recovered by the D12 pass"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "substantive": "file_close_letter plus unarmed re-compose of existing letters plus mtime-based recovery candidacy, with tests"
+      }
+    ],
+    "key_links": [
+      "record_feature_close_in_mailbox calls file_close_letter at the control root after record_close_stop"
+    ],
+    "prohibitions": [
+      "No second letter file for one run (D11)",
+      "Run-end filing for a run with NO letter stays gated on armed() (D9)",
+      "Close is never refused because of a letter failure (fail-open, D10)"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

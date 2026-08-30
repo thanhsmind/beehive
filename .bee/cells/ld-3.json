@@ -1,0 +1,62 @@
+{
+  "id": "ld-3",
+  "feature": "letter-digest",
+  "title": "Run due digests at work-set and mine weekly lessons into tagged decisions",
+  "lane": "standard",
+  "role": "code",
+  "status": "open",
+  "deps": [
+    "ld-2"
+  ],
+  "decisions": [
+    "dbbe0778-7dc5-469a-8307-6d9da266b9b2",
+    "b343870b-c267-4ac3-948d-88662a55061f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/work.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/audit.rs"
+  ],
+  "read_first": [
+    "docs/history/letter-digest/CONTEXT.md",
+    "docs/history/letter-digest/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D3 (dbbe0778) and D4 (b343870b): in work.rs, call mailbox_digest::compose_due_digests fail-open at the control root, BESIDE — never inside — the existing recovery call and its armed() early-out (anchor work.rs:300 'file_letter_at_run_end(&ctx.root, session_flag.as_deref(), status.as_deref());' and the record_silent_runs call near work.rs:396): it fires on every bee work set and relies on ld-2's idempotence; D2 letters exist in unarmed checkouts too, so the digest path must not be gated on armed(). Then the weekly fold mines lessons: source ONLY the letters' 'Broken or unfinished' bullets (anchor mailbox.rs:1522 'pub(crate) const SECTION_BROKEN: &str = \"Broken or unfinished\";') plus obstacle / plan-was-wrong / fix-first departure kinds — never better-route lines, never plan-followed statements (advisor P2). Normalize each line: one_line + lowercase + collapse digit runs to '#' + strip trailing punctuation. A shape qualifies when it has >=4 words and appears in letters of 2+ DISTINCT run slugs within the week. For each qualifying shape, append ONE decision tagged 'lesson' through a variant of log_decision (anchor cells/audit.rs:427 'pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> {') that accepts source \"agent\"; the rationale cites the letter filenames and a stable token shape:<first 12 hex of sha256(normalized shape)>. Dedupe before logging: scan .bee/decisions.jsonl for that shape: token across ALL prior lesson-tagged events INCLUDING superseded ones — a retired lesson is never re-logged (D4). A decisions-append failure warns and still files the digest (fail-open). Tests per the plan's ld-3 triad; judge existing coverage first.",
+  "must_haves": {
+    "truths": [
+      "bee work set on a store with a finished undigested period leaves the digest file behind",
+      "A normalized broken-shape in letters of 2 distinct runs in one week yields exactly one decision tagged lesson carrying its shape:<sha-12> token and citing the letter filenames",
+      "A shape whose token already exists in any prior lesson decision (active or superseded) is not logged again"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "substantive": "weekly lesson miner: sourced sections, normalization, distinct-run threshold, token dedupe, with tests"
+      }
+    ],
+    "key_links": [
+      "work.rs work-set path calls compose_due_digests at the control root, outside any armed() gate"
+    ],
+    "prohibitions": [
+      "Never mine better-route departures or plan-followed statements (overview rule 8)",
+      "A lesson decision states only what cited letters carry (D8)",
+      "A digest/lesson failure never refuses bee work set (fail-open)"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "id": "ld-2",
+  "feature": "letter-digest",
+  "title": "Compose daily and weekly digest files from letters and usage records",
+  "lane": "standard",
+  "role": "code",
+  "status": "open",
+  "deps": [
+    "ld-1"
+  ],
+  "decisions": [
+    "dbbe0778-7dc5-469a-8307-6d9da266b9b2",
+    "b610a1dc-0191-44e8-81f8-64a5bfc0cd84"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+  ],
+  "read_first": [
+    "docs/history/letter-digest/CONTEXT.md",
+    "docs/history/letter-digest/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D3 (store id dbbe0778) and D1 (b610a1dc): new module packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs, registered in verbs/mod.rs. It derives finished-and-undigested periods from directory names alone: letter filenames are UTC-stamp-led (anchor mailbox.rs:177 'pub(crate) fn letter_filename(filed_at: &str, run: &str) -> String {'), digests are named digest-YYYY-MM-DD.md (UTC day) and digest-YYYY-Www.md (ISO week) in the same .bee/human-mailbox/ directory. compose_due_digests(root, now) composes, oldest first, every period that (a) has fully ended in UTC, (b) has 1+ letters by filename stamp, (c) has no digest file yet — idempotent by digest-file existence, never reopening an existing digest. The digest is a RENDERER, never a summarizer (mailbox D8): group the period's letters by project/feature, transcribe letter subjects and their Done / Broken or unfinished / Needs your call bullets via the existing letter reader, and transcribe per-feature .bee/usage/<feature>.json fields verbatim for records whose closed_at (anchor close.rs:2185 '\"closed_at\": closed_at,', path anchor close.rs:2227 'let rel = format!(\".bee/usage/{feature}.json\");') falls in the period. NO computed aggregates: no counts, no totals bee did not store, no mood lines (advisor P3). Digest frontmatter carries type: digest plus a readable subject line. Make letter-only surfaces skip digests: list_letter_files (mailbox.rs:188-199) and letter_run_slugs must ignore names starting 'digest-' so digests never enter D12's lettered set or get folded as letters (advisor P1). A torn or unreadable letter is skipped with a stderr warning; the digest still composes from the readable rest. A D12-recovered letter digests under its filed_at day. Tests per the plan's ld-2 triad; judge existing coverage first.",
+  "must_haves": {
+    "truths": [
+      "A finished UTC day with letters and no digest gains exactly one digest-YYYY-MM-DD.md on compose_due_digests; a finished ISO week likewise gains digest-YYYY-Www.md",
+      "Re-running compose_due_digests writes nothing new (idempotent by file existence)",
+      "list_letter_files and letter_run_slugs never return digest-* files"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "substantive": "period detection from names, daily+weekly composer folding letters and usage records, with tests"
+      }
+    ],
+    "key_links": [
+      "verbs/mod.rs registers mailbox_digest; the composer reads letters through mailbox.rs's existing letter reader"
+    ],
+    "prohibitions": [
+      "No fact in a digest body that no letter or stored usage field carries (D8)",
+      "No verb, no CLI surface, no viewer (D1); composing is library code only",
+      "Never rewrite or reopen an existing digest file"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
