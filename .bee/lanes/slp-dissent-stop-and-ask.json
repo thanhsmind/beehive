@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Shipping as 2.28.0 (new feature = minor bump). The script runs the suite, commits, tags, pushes, and waits for CI — I run it in the backgrou",
-    "asked_at": "2026-08-30T17:07:49.399Z",
+    "subject": "The release is running again. I report when it prints its final OK.",
+    "asked_at": "2026-08-30T17:08:37.094Z",
     "session": "6ba76180-df07-43c5-8daa-38fdc5f4335b"
   },
   "route": {
