@@ -50,11 +50,15 @@ existing consumers must parse filed letters unchanged.
 
 ## Outstanding Questions
 
-- [ ] Deferred to planning: whether the reflection entry rides the
-  existing per-run entries file or needs its own kind marker inside it —
-  resolved by reading the entries store shape in mailbox.rs.
+<!-- bee:not-a-deferral: resolved during execution, recorded here as history — cell lr-1 rode the existing per-run entries file with a new kind plus an optional `better` field; nothing is still owed -->
+- [x] Resolved in lr-1: the reflection entry rides the existing per-run
+  entries file as a new kind with an optional `better` field — no
+  separate store.
+<!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: the obligation lives in the filed backlog proposal row, not in this prose — this section only documents where it went -->
 ## Deferred Ideas
 
 - Widen LD4 lesson mining to read reflection entries — filed as a
   backlog proposal under this feature (D4).
+<!-- /bee:not-a-deferral -->
