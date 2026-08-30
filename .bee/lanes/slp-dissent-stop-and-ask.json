@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces are quiet — same pattern as the last several ticks. Writing the silence record now.",
-    "asked_at": "2026-08-30T02:34:30.051Z",
-    "session": "6ebe0cee-d278-444a-b704-8fd654ac991c"
+    "subject": "(Đường vòng nếu không muốn bật: bạn tự mở một phiên Claude trong repo waggledance và nói \"shape p-ba554933\" — kết quả như nhau.)",
+    "asked_at": "2026-08-30T02:40:14.614Z",
+    "session": "1994bcc5-28cb-45f8-9300-bc4469c0a11b"
   },
   "route": {
     "class": "feature",
