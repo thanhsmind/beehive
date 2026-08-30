@@ -182,9 +182,30 @@ pub(crate) fn letter_path(root: &Path, filed_at: &str, run: &str) -> PathBuf {
     mailbox_dir(root).join(letter_filename(filed_at, run))
 }
 
+/// The name every digest file starts with (letter-digest D1, D3): a digest is
+/// `digest-YYYY-MM-DD.md` or `digest-YYYY-Www.md`, filed in the SAME directory
+/// as the letters because the mailbox is one directory of files a human reads
+/// in place.
+///
+/// It lives here, beside the letter's own filename rule, because it is the ONE
+/// thing every letter surface must know about digests: a digest is not a
+/// letter. Its name carries no run slug, nothing composed it from a run's
+/// entries, and D11's one-letter-per-run arithmetic does not reach it — so a
+/// digest that leaked into the lettered set would make D12's recovery pass see
+/// a run that never existed, and the run-end fold would try to re-compose a
+/// digest as if it were that phantom run's letter. Every reader that means
+/// "letters" filters this prefix out, and [`list_letter_files`] is where that
+/// filter is applied once for all of them.
+pub(crate) const DIGEST_PREFIX: &str = "digest-";
+
 /// Every filed letter, name-sorted — which is time-sorted, by D11's own
 /// construction. Names only: nothing is opened, so a caller asking "what is in
 /// the mailbox" pays one directory read.
+///
+/// Digests are NOT letters and never appear here (see [`DIGEST_PREFIX`]). The
+/// filter sits in this one function on purpose: [`letter_files_for_run`] and
+/// [`letter_paths_by_run_slug`] both read the mailbox THROUGH it, so there is
+/// one place where the difference between a letter and a digest is decided.
 pub(crate) fn list_letter_files(root: &Path) -> Vec<PathBuf> {
     let dir = mailbox_dir(root);
     let mut names: Vec<String> = match std::fs::read_dir(&dir) {
@@ -192,7 +213,7 @@ pub(crate) fn list_letter_files(root: &Path) -> Vec<PathBuf> {
             .flatten()
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().into_owned();
-                name.ends_with(".md").then_some(name)
+                (name.ends_with(".md") && !name.starts_with(DIGEST_PREFIX)).then_some(name)
             })
             .collect(),
         Err(_) => Vec::new(),
@@ -1061,7 +1082,7 @@ fn yq(s: &str) -> String {
     Value::String(s.to_string()).to_string()
 }
 
-fn emit_scalar(out: &mut String, indent: usize, key: &str, value: &str) {
+pub(crate) fn emit_scalar(out: &mut String, indent: usize, key: &str, value: &str) {
     out.push_str(&" ".repeat(indent));
     out.push_str(key);
     out.push_str(": ");
@@ -1086,7 +1107,7 @@ fn emit_bool(out: &mut String, indent: usize, key: &str, value: bool) {
     out.push_str(if value { ": true\n" } else { ": false\n" });
 }
 
-fn emit_string_list(out: &mut String, indent: usize, key: &str, values: &[String]) {
+pub(crate) fn emit_string_list(out: &mut String, indent: usize, key: &str, values: &[String]) {
     let pad = " ".repeat(indent);
     if values.is_empty() {
         out.push_str(&format!("{pad}{key}: []\n"));
@@ -2790,6 +2811,30 @@ mod tests {
         assert_eq!(letter_files_for_run(root, "run-one").len(), 1);
         assert_eq!(letter_files_for_run(root, "run-two").len(), 1);
         assert_eq!(letter_files_for_run(root, "run-three").len(), 0);
+    }
+
+    #[test]
+    fn a_digest_is_never_read_as_a_letter() {
+        // letter-digest D1: digests are filed BESIDE the letters, in the same
+        // directory. Every surface that means "letters" must skip them, or
+        // D12's recovery pass sees a run that never existed.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_letter(root, &sample_letter()).unwrap();
+        for name in ["digest-2026-08-25.md", "digest-2026-W35.md"] {
+            write_text_atomic(&mailbox_dir(root).join(name), "---\ntype: \"digest\"\n---\n").unwrap();
+        }
+        let names: Vec<String> = list_letter_files(root)
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["20260825T031500Z-run-2026-08-25-0315.md".to_string()]);
+        let by_slug = letter_paths_by_run_slug(root);
+        assert_eq!(by_slug.len(), 1, "a digest was folded in as a run's letter: {by_slug:?}");
+        assert!(by_slug.contains_key("run-2026-08-25-0315"));
+        for slug in by_slug.keys() {
+            assert!(!slug.starts_with("2026-"), "a digest name was split into a run slug: {slug}");
+        }
     }
 
     #[test]
