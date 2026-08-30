@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Two workers just started fresh cells (claimed ~3 minutes ago) in the `existence-is-not-evidence` feature; no repeats, no drift, nothing else",
-    "asked_at": "2026-08-30T11:35:34.899Z",
-    "session": "b1263c4a-d0ec-40ae-aff3-64977929f44f"
+    "subject": "All six surfaces are quiet. Everything is at rest: the two cells from the last tick's note (`eine-rust-claims-gate`, `eine-skill-mandates`)",
+    "asked_at": "2026-08-30T11:51:14.256Z",
+    "session": "c415135f-07ce-4827-838e-854022535a68"
   },
   "route": {
     "class": "feature",
