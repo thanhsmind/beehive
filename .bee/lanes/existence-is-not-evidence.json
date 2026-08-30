@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"existence-is-not-evidence\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"existence-is-not-evidence\" (lane).",
+  "next_action": "Merged into main at f0e7c70; reload the product and test \"existence-is-not-evidence\", then either approve uat (\"bee gate --name uat --approved true --lane existence-is-not-evidence\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-30T11:15:15.030Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: existence-is-not-evidence",
+    "asked_at": "2026-08-30T11:46:45.687Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -35,12 +40,5 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave: facts-gaps(opus), alternatives(opus), user-impact(sonnet)",
     "digest_head": "# Hat-wave synthesis — existence-is-not-evidence (plan step)\n\nWave: 3 seats (standard lane), all returned within budget. Dispatched via\n`bee dispatch prepare --kind advisor` (facts-gaps: opus; alternatives: opus;\nuser-impact: sonnet). Draft under critique: plan.md revision 1 (pre-wave).\n\n## Seat returns\n\n### hat-facts-gaps (BLOCKER/WARNING over structure + claims-table audit)\n\n- B1 CONFIRMED, ACTED ON: existing preconditions guard on\n  `exec_component = merge || name == \"execution\"` (set_gate.rs"
-  },
-  "merge_ready": {
-    "since": "2026-08-30T11:44:16.487Z",
-    "branch": "wt/existence-is-not-evidence",
-    "worktree_id": "beehive--wt--existence-is-not-evidence",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
