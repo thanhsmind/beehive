@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-prompt-path",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"herding-prompt-path\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 2783340; capture what settled, then bee close --feature herding-prompt-path.",
+  "next_action": "Release bee so host projects pick up the fixed prompt-path resolver.",
   "created_at": "2026-08-30T06:00:20.377Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,5 +25,14 @@
     "rationale": "One function (read_prompt_file) plus its tests; the only flag is the error-message test whose asserted string must change",
     "updated_at": "2026-08-30T06:01:38.201Z",
     "feature": "herding-prompt-path"
+  },
+  "last_scribing_run": {
+    "feature": "herding-prompt-path",
+    "date": "2026-08-30",
+    "at": "2026-08-30T06:10:30.938Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "Release bee so host projects pick up the fixed prompt-path resolver."
   }
 }
