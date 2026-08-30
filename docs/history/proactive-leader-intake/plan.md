@@ -18,6 +18,7 @@ Store-id map the cells cite: D1/D2 → a52c854d (supersedes 8fb1e0da),
 D3 → 423e1664, D4 → b34fdea9, D5 → 98ac20a1, D6 → f73d6c49; procedure
 home decision 07328333.
 
+<!-- bee:not-a-deferral: this paragraph RESOLVES the handed-down questions; the answers shipped in cell pli-1 -->
 Plan-step law details the review asked planning to set (CONTEXT
 "Deferred To Planning" — answered here, they land in Cell A's text):
 
@@ -161,7 +162,7 @@ Strict order inside the cell:
 
 Could one cell do it? The three files' edits are disjoint and each has
 its own proof surface; one mega-cell loses the one-commit-per-cell
-trail on a doctrine change reviewers will read later. Could we skip
+trail on a doctrine change future reviewers read. Could we skip
 planning-reference? No — it is the plan-checker's home; leaving it
 contradicts D4. Shape holds: 3 cells, no code, no new artifact types.
 

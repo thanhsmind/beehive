@@ -71,6 +71,8 @@ the leader's; findings feed the interview only — never Lock directly.
 
 ## Open questions carried to the interview
 
+<!-- bee:not-a-deferral: historical record of the wave's output; every question below was answered in the same session and locked in CONTEXT.md D1-D7 or resolved in plan.md -->
+
 1. Trigger boundary: wave on every feature intake, or only above the
    clear/tiny line (threshold-gated)?
 2. Seat count: always 5, or 3 default / 5 on high-risk?
@@ -79,3 +81,4 @@ the leader's; findings feed the interview only — never Lock directly.
 5. Budget/timeout, seat quorum, idempotence unit (per feature vs per
    session) — settle at Lock or defer to planning as named Open
    Questions.
+<!-- /bee:not-a-deferral -->

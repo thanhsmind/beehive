@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "proactive-leader-intake",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": false,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"proactive-leader-intake\" started at phase \"exploring\" (lane).",
-  "next_action": "Close proactive-leader-intake",
+  "next_action": "bee close finished \"proactive-leader-intake\" — feature is closed.",
   "created_at": "2026-08-29T22:36:00.819Z",
   "run_state": "awaiting-approval",
   "waiting_on": {

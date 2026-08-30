@@ -90,27 +90,34 @@ source is `skills/**`, NEVER `.claude/skills/**` — the vendored
 
 ## Outstanding Questions
 
-### Deferred To Planning
+<!-- bee:not-a-deferral: every item below was answered in plan.md ("Plan-step law details") and shipped in cells pli-1..pli-4; this section is the historical record of the handoff, not a promise to act later -->
+### Resolved In Planning (was: Deferred To Planning)
 
-- [ ] Per-wave wall-clock and token ceiling, and the partial-return
-  rule when hit — planning sets the numbers.
-- [ ] Seat quorum when hats are null/unconfigured (all-fall-through =
-  zero diversity): degrade, skip, or run — planning decides within D2.
-- [ ] Idempotence on resume/compaction: the once-per-feature unit needs
-  a concrete carrier (state field vs. record presence).
-- [ ] Gate-bypass `full`/`total` reading of wave questions — reconcile
-  with the always-stop information-question law.
-- [ ] The one home for the SMALLER PATH question (D discretion above).
+- [x] Per-wave wall-clock and token ceiling, and the partial-return
+  rule when hit — set in plan.md: 10-minute ceiling, dropped seats
+  named, partial synthesis never blocks the gate.
+- [x] Seat quorum when hats are null/unconfigured — set in plan.md:
+  no hard quorum; degradation named in the record; doctor advisory
+  stays the config nag.
+- [x] Idempotence on resume/compaction — set in plan.md: the recorded
+  advisor-ref is the once-per-feature carrier.
+- [x] Gate-bypass `full`/`total` reading of wave questions — set in
+  plan.md: recorded as plan Open Questions, nothing new stops.
+- [x] The one home for the SMALLER PATH question — set in plan.md:
+  bee-planning's inline check; the hat-alternatives seat cites it.
+<!-- /bee:not-a-deferral -->
 
-## Deferred Ideas
+## Declined Ideas
 
+<!-- bee:not-a-deferral: recorded as declined, not promised — a future owner starts its own shaping -->
 - Hats as the user-invoked review's engine (retiring Gate 3's separate
   flow) — user declined for this feature; would supersede
   agents-review-user-invoked and needs its own shaping.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning
-reads locked decisions, integration points, and deferred-to-planning
-questions. Planning's Gate 2 shape stage and reviewing use locked
-decisions for coverage and UAT.
+read the locked decisions and integration points; every open question
+above was resolved in plan.md before the gate. Planning's Gate 2 shape
+stage and reviewing use locked decisions for coverage and UAT.

@@ -57,6 +57,15 @@ construction and refuses the very gate it was meant to open. The live ref
 doubles as the once-per-feature mark: a resumed session never re-runs the wave
 on it, and a stale ref after a material plan change permits exactly one re-run.
 
+The wave's own law rides the same feature: firing point and threshold are
+proactive-leader-intake D1/D2 (`a52c854d` — plan-step firing, once per
+feature, clear/tiny asks skip), the kept discretionary pre-Lock critique
+window is proactive-leader-intake D5 (`98ac20a1`), unattended runs recording
+questions instead of blocking is proactive-leader-intake D6 (`f73d6c49`), and
+the one-plain-voice communication rule is proactive-leader-intake D7. The
+procedure home stays `skills/bee-hive/references/gates-and-delegation.md`
+("Hat wave").
+
 A workspace with no adviser configured records that fact and proceeds — the
 rule adds one trigger, not a dependency on configuration. Procedure home for
 the wave: `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave").
