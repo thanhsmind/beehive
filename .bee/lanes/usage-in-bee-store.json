@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Current version is 2.25.3. Three new features → next version is 2.26.0. I run the release script now. It tests first, then tags, pushes, and",
-    "asked_at": "2026-08-30T12:52:36.073Z",
+    "subject": "Tree is clean. I run the release again — the script picks the work back up.",
+    "asked_at": "2026-08-30T12:53:49.472Z",
     "session": "b3245841-d406-4c7d-a62e-3f8fda66b632"
   },
   "route": {
