@@ -993,5 +993,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-08-30T00:38:55.447Z"
+  },
+  "install-orchestrator-link": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-30T01:49:45.504Z"
   }
 }

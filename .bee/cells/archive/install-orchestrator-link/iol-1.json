@@ -1,0 +1,52 @@
+{
+  "id": "iol-1",
+  "feature": "install-orchestrator-link",
+  "lane": "tiny",
+  "role": "docs",
+  "title": "Add the orchestrator (waggledance) install link to README § Install",
+  "behavior_change": false,
+  "files": [
+    "README.md"
+  ],
+  "read_first": [
+    "README.md"
+  ],
+  "action": "Add a short ### Orchestrator (waggledance) subsection to README.md § Install after Verify / update: one sentence naming the seat, the published one-line installer (curl waggledance install.sh), and that re-running the same line updates in place. The leader installers above stay untouched.",
+  "verify": "README § Install carries the orchestrator subsection; the linked raw URL resolves (HTTP 200).",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "iol-inline",
+    "outcome": "README § Install carries the orchestrator (waggledance) subsection with the one-line installer and update note",
+    "files_changed": [
+      "README.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-30T01:49:42.363Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1994bcc5-28cb-45f8-9300-bc4469c0a11b",
+    "claimed_at": "2026-08-30T01:49:05.841Z",
+    "report": {
+      "outcome": "Added ### Orchestrator (waggledance) to README § Install: one sentence naming the seat, the published one-liner, re-run-to-update note; leader installers untouched",
+      "commit": "8b0fa735",
+      "files": [
+        "README.md"
+      ],
+      "tests": "curl -s -o /dev/null -w %{http_code} https://raw.githubusercontent.com/thanhsmind/waggledance/main/install.sh — 200 (repo page also 200) — docs-only change; the proof a link section needs is that both link targets resolve",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
