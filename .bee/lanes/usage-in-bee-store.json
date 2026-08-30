@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "usage-in-bee-store",
   "mode": "small",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"usage-in-bee-store\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 37ab827; capture what settled, then bee close --feature usage-in-bee-store.",
+  "next_action": "bee close finished \"usage-in-bee-store\" — feature is closed.",
   "created_at": "2026-08-30T12:40:35.010Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Current version is 2.25.3. Three new features → next version is 2.26.0. I run the release script now. It tests first, then tags, pushes, and",
+    "asked_at": "2026-08-30T12:52:36.073Z",
+    "session": "b3245841-d406-4c7d-a62e-3f8fda66b632"
+  },
   "route": {
     "class": "refactor",
     "lane": "small",
