@@ -8,7 +8,10 @@
 //   - parse a required `--role dispatch|merge` plus the optional
 //     `--main-root`, `--interval`, `--timeout`, `--max-iterations`,
 //     `--max-consecutive-failures`, `--turn-ceiling` and `--once`;
-//   - read the role's opening prompt from `skills/bee-herding/references`;
+//   - read the role's opening prompt from the installed bee-herding skill
+//     tree (`skills/bee-herding/references` in this source repo, or the
+//     runtime-prefixed copy every host project installs instead — see
+//     `SKILL_ROOT_PREFIXES` and `read_prompt_file` below);
 //   - build the control agent's argv (D13 — see `build_control_argv` below);
 //   - check the stop file (`<main-root>/.bee/tmp/bee-herding.stop`) BOTH
 //     before and after every iteration;
@@ -402,21 +405,47 @@ pub(crate) fn build_control_argv(
     }
 }
 
-/// `<main-root>/skills/bee-herding/references/<role>-prompt.md` — the same
-/// file control-loop.sh's `$SCRIPT_DIR/../references/${ROLE}-prompt.md`
-/// resolves to when `$SCRIPT_DIR` is (as it always is) `skills/bee-herding/
-/// scripts` under that same repo root: `scripts/../references` collapses to
+/// Where a bee-herding skill tree can sit under `main_root`, in search
+/// order. `skills` is the bee SOURCE repo's layout — the tree as committed
+/// here. Every other entry is a runtime's installed skill root: a host
+/// project never has a bare `skills/`, it has `.claude/skills` (or the
+/// agents/opencode/codex spelling), the same set
+/// `devtools::plugin_distribution` sweeps for repo-local skill copies.
+///
+/// `skills` leads DELIBERATELY. This repo builds bee with bee, so the source
+/// tree must keep resolving to its own committed prompt files byte-for-byte,
+/// and a checkout carrying both layouts must keep answering with the one it
+/// answered with before this search existed.
+const SKILL_ROOT_PREFIXES: [&str; 5] =
+    ["skills", ".claude/skills", ".agents/skills", ".opencode/skills", ".codex/skills"];
+
+/// `<main-root>/<skill-root>/bee-herding/references/<role>-prompt.md`, where
+/// `<skill-root>` is the FIRST entry of `SKILL_ROOT_PREFIXES` that yields a
+/// readable file. With `skills` leading, that is the same file
+/// control-loop.sh's `$SCRIPT_DIR/../references/${ROLE}-prompt.md` resolved
+/// to when `$SCRIPT_DIR` was (as it always was) `skills/bee-herding/scripts`
+/// under that same repo root: `scripts/../references` collapses to
 /// `references` under `skills/bee-herding`, exactly this path anchored at
 /// main-root instead. A compiled binary has no "the directory this script
-/// lives in" to resolve against, so this anchors at `main_root` instead —
-/// the same anchor the stop file already uses — rather than reinventing one.
+/// lives in" to resolve against, so this anchors at `main_root` — the same
+/// anchor the stop file already uses — rather than reinventing one.
+///
+/// The single join this replaced named ONLY the source-repo layout, so
+/// dispatch, merge and supervisor all died with "prompt file not found" in
+/// any host project — the one place herding is actually meant to run. When
+/// no candidate reads, the error names EVERY path tried, so a cold operator
+/// sees where bee looked instead of guessing at one path that never existed.
 fn read_prompt_file(main_root: &Path, role: Role) -> Result<String, String> {
-    let path = main_root
-        .join("skills")
-        .join("bee-herding")
-        .join("references")
-        .join(format!("{}-prompt.md", role.as_str()));
-    std::fs::read_to_string(&path).map_err(|e| format!("prompt file not found: {}: {e}", path.display()))
+    let leaf = format!("{}-prompt.md", role.as_str());
+    let mut tried: Vec<String> = Vec::with_capacity(SKILL_ROOT_PREFIXES.len());
+    for prefix in SKILL_ROOT_PREFIXES {
+        let path = main_root.join(prefix).join("bee-herding").join("references").join(&leaf);
+        match std::fs::read_to_string(&path) {
+            Ok(body) => return Ok(body),
+            Err(_) => tried.push(path.display().to_string()),
+        }
+    }
+    Err(format!("prompt file not found: tried {}", tried.join(", ")))
 }
 
 /// The ONE function that computes what a real iteration spawns: reads the
@@ -1166,6 +1195,84 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let err = resolve_iteration_argv(tmp.path(), Role::Dispatch, 50).unwrap_err();
         assert!(err.contains("prompt file not found"), "{err}");
+        // The reader searches several skill roots now, so the error reports
+        // the SEARCH — never one path that was only ever one guess of five.
+        assert!(err.contains("tried"), "{err}");
+    }
+
+    // ── the prompt lives wherever the skill tree was installed ───────────
+
+    #[test]
+    fn host_repo_layout_under_dot_claude_skills_resolves_the_prompt() {
+        // The bug this fixes: a host project has NO bare `skills/` tree, so
+        // the old single join found no prompt anywhere and every role died
+        // before it could spawn.
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join(".claude").join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("supervisor-prompt.md"), "host prompt").unwrap();
+
+        let body = read_prompt_file(tmp.path(), Role::Supervisor).expect("the installed prompt reads");
+        assert_eq!(body, "host prompt");
+    }
+
+    #[test]
+    fn every_role_resolves_through_the_one_installed_skill_root_reader() {
+        // All three roles go through the same reader; none keeps a private
+        // path of its own.
+        for (prefix, role) in [
+            (".claude/skills", Role::Dispatch),
+            (".agents/skills", Role::Merge),
+            (".opencode/skills", Role::Supervisor),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let refs = tmp.path().join(prefix).join("bee-herding").join("references");
+            std::fs::create_dir_all(&refs).unwrap();
+            std::fs::write(refs.join(format!("{}-prompt.md", role.as_str())), "p").unwrap();
+
+            assert_eq!(read_prompt_file(tmp.path(), role).expect("resolves"), "p", "{prefix} {role:?}");
+        }
+        // `.codex/skills` is the last candidate — reached only when nothing
+        // ahead of it reads.
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join(".codex").join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("dispatch-prompt.md"), "last").unwrap();
+        assert_eq!(read_prompt_file(tmp.path(), Role::Dispatch).expect("resolves"), "last");
+    }
+
+    #[test]
+    fn source_repo_skills_layout_still_resolves_and_still_wins() {
+        // `skills/` stays FIRST: this repo builds bee with bee, so a checkout
+        // carrying both layouts must answer with the committed source tree —
+        // byte-identical to the behaviour before the search existed.
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("dispatch-prompt.md"), "source tree").unwrap();
+
+        assert_eq!(read_prompt_file(tmp.path(), Role::Dispatch).expect("resolves"), "source tree");
+
+        let installed = tmp.path().join(".claude").join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&installed).unwrap();
+        std::fs::write(installed.join("dispatch-prompt.md"), "installed copy").unwrap();
+
+        assert_eq!(
+            read_prompt_file(tmp.path(), Role::Dispatch).expect("resolves"),
+            "source tree",
+            "skills/ must win when both layouts are present"
+        );
+    }
+
+    #[test]
+    fn no_prompt_anywhere_names_every_candidate_path_tried() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = read_prompt_file(tmp.path(), Role::Merge).unwrap_err();
+        for prefix in SKILL_ROOT_PREFIXES {
+            let expected =
+                tmp.path().join(prefix).join("bee-herding").join("references").join("merge-prompt.md");
+            assert!(err.contains(&expected.display().to_string()), "{prefix} missing from: {err}");
+        }
     }
 
     // ── config-driven substitution: per-token, never join-then-split ──────
