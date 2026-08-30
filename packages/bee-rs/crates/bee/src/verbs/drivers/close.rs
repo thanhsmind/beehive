@@ -1992,25 +1992,70 @@ impl UsageBucket {
     }
 }
 
+/// One rolled-up session, kept whole (decision e97cc9d4).
+///
+/// The printed line only ever needed the sums, but the RECORD close writes
+/// beside it answers "where did this feature's tokens go" — which model, how
+/// many subagents, over what span. Every field is copied straight off the
+/// `Rollup` the transcript already produced; nothing here is re-derived, for
+/// the same reason [`UsageBucket::add_models`] only ever adds.
+///
+/// `totals` is this session's WHOLE cost — its own models plus its subagents'
+/// — because that is the number a per-session reader wants first. The split
+/// is never lost: `models` and `subagent_models` ride beside it.
+pub(crate) struct SessionUsage {
+    pub(crate) session_id: String,
+    pub(crate) models: Value,
+    pub(crate) subagent_models: Value,
+    pub(crate) subagent_count: usize,
+    pub(crate) started_ms: Option<f64>,
+    pub(crate) ended_ms: Option<f64>,
+    pub(crate) totals: UsageBucket,
+}
+
+impl SessionUsage {
+    fn value(&self) -> Value {
+        json!({
+            "session_id": self.session_id,
+            "models": self.models,
+            "subagent_models": self.subagent_models,
+            "subagent_count": self.subagent_count,
+            // Null, never 0, when the transcript carried no timestamp: a span
+            // that could not be read must not read like an instant one.
+            "started_ms": self.started_ms,
+            "ended_ms": self.ended_ms,
+            "totals": self.totals.value(),
+        })
+    }
+}
+
 /// The whole usage section: what was read, what could not be, and the two
-/// buckets. `sessions` counts the transcripts actually ROLLED UP, never the
+/// buckets. `details` holds the transcripts actually ROLLED UP, never the
 /// candidates — with `skipped` beside it the reader can always tell a
 /// complete total from a partial one.
+///
+/// The session COUNT is [`CloseUsage::sessions`], derived from `details` and
+/// never stored beside it: one number, one home, so the printed line and the
+/// written record can never disagree about how many sessions were read.
 pub(crate) struct CloseUsage {
-    pub(crate) sessions: usize,
+    pub(crate) details: Vec<SessionUsage>,
     pub(crate) skipped: usize,
     pub(crate) main: UsageBucket,
     pub(crate) subagents: UsageBucket,
 }
 
 impl CloseUsage {
+    pub(crate) fn sessions(&self) -> usize {
+        self.details.len()
+    }
+
     fn total(&self) -> UsageBucket {
         self.main.plus(&self.subagents)
     }
 
     pub(crate) fn value(&self) -> Value {
         json!({
-            "sessions": self.sessions,
+            "sessions": self.sessions(),
             "skipped": self.skipped,
             "main": self.main.value(),
             "subagents": self.subagents.value(),
@@ -2068,8 +2113,12 @@ pub(crate) fn collect_close_usage(
     feature: &str,
     calling_session: Option<&str>,
 ) -> CloseUsage {
-    let mut usage =
-        CloseUsage { sessions: 0, skipped: 0, main: UsageBucket::default(), subagents: UsageBucket::default() };
+    let mut usage = CloseUsage {
+        details: Vec::new(),
+        skipped: 0,
+        main: UsageBucket::default(),
+        subagents: UsageBucket::default(),
+    };
     for id in usage_session_ids(control, feature, calling_session) {
         let record = match read_json(&crate::verbs::cells::sessions_dir(control).join(format!("{id}.json"))) {
             ReadJson::Parsed(r) => r,
@@ -2097,11 +2146,81 @@ pub(crate) fn collect_close_usage(
             usage.skipped += 1;
             continue;
         };
-        usage.sessions += 1;
-        usage.main.add_models(&rollup.models);
-        usage.subagents.add_models(&rollup.subagent_models);
+        // The session's own two buckets, summed once and used twice: added
+        // into the feature totals, and kept whole on its own record line.
+        let mut session_main = UsageBucket::default();
+        session_main.add_models(&rollup.models);
+        let mut session_subagents = UsageBucket::default();
+        session_subagents.add_models(&rollup.subagent_models);
+        usage.main = usage.main.plus(&session_main);
+        usage.subagents = usage.subagents.plus(&session_subagents);
+        usage.details.push(SessionUsage {
+            session_id: id,
+            models: rollup.models,
+            subagent_models: rollup.subagent_models,
+            subagent_count: rollup.subagent_count,
+            started_ms: rollup.started_ms,
+            ended_ms: rollup.ended_ms,
+            totals: session_main.plus(&session_subagents),
+        });
     }
     usage
+}
+
+/// The record's own version marker. A reader that walks
+/// `docs/history/*/usage.json` checks this before trusting a field name, so
+/// the string is a CONTRACT — a shape change earns `bee-usage/v2`, never a
+/// quiet edit of what v1 means.
+pub(crate) const USAGE_SCHEMA: &str = "bee-usage/v1";
+
+/// The detailed token record a green close leaves in the feature's history
+/// (decision e97cc9d4).
+///
+/// `closed_at` is a parameter rather than a `utc_now()` read inside, so a test
+/// can pin the one field that is not derived from the usage itself.
+pub(crate) fn usage_record_value(feature: &str, usage: &CloseUsage, closed_at: &str) -> Value {
+    json!({
+        "schema": USAGE_SCHEMA,
+        "feature": feature,
+        "closed_at": closed_at,
+        "sessions": usage.details.iter().map(SessionUsage::value).collect::<Vec<Value>>(),
+        "skipped": usage.skipped,
+        "totals": {
+            "main": usage.main.value(),
+            "subagents": usage.subagents.value(),
+            "total": usage.total().value(),
+        },
+    })
+}
+
+/// Write `docs/history/<feature>/usage.json`, answering the written path.
+///
+/// ALWAYS, on a green close — including the close whose transcripts were all
+/// unreadable, which writes `sessions: []` beside a non-zero `skipped`. A
+/// missing file and an empty record must never read alike: the file says "we
+/// looked and found nothing readable", the absence says nothing at all. That
+/// is the same honesty rule [`close_usage_line`] follows by staying SILENT for
+/// that case — a printed "0 tokens" would be a false claim, while a stored
+/// empty `sessions` list beside `skipped` is a true one.
+///
+/// `write_json_atomic` is [`write_text_atomic`]'s JSON sibling — the same
+/// tmp-then-rename write `promote-proposals.md` gets, plus the repo's one
+/// pretty-printer, so this record is spelled like every other JSON file bee
+/// writes. Like that proposal file it lands under `docs/history/` and so falls
+/// OUTSIDE `commit_close_bookkeeping`'s `.bee`-scoped stage: close leaves it
+/// on disk uncommitted, and the merge-time auto-commit (which does stage
+/// `docs/history/<feature>/`) is what puts it in git.
+pub(crate) fn write_usage_record(
+    root: &Path,
+    feature: &str,
+    usage: &CloseUsage,
+) -> Result<String, String> {
+    let rel = format!("docs/history/{feature}/usage.json");
+    let value = usage_record_value(feature, usage, &crate::verbs::cells::utc_now());
+    match write_json_atomic(&root.join(&rel), &value) {
+        Ok(()) => Ok(rel),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// The one summary line. `None` when no transcript was readable at all: a
@@ -2112,7 +2231,7 @@ pub(crate) fn collect_close_usage(
 /// Reuses `fmt_tokens` (`hooks/session_close/perf`'s sibling `html.rs`), the
 /// k/M/B spelling every other bee token readout already uses.
 pub(crate) fn close_usage_line(usage: &CloseUsage) -> Option<String> {
-    if usage.sessions == 0 {
+    if usage.sessions() == 0 {
         return None;
     }
     let f = crate::hooks::session_close::fmt_tokens;
@@ -2124,7 +2243,7 @@ pub(crate) fn close_usage_line(usage: &CloseUsage) -> Option<String> {
     };
     Some(format!(
         "usage: {} session(s) — {} tokens (main {}, subagents {}; new {}, cached {}){}",
-        usage.sessions,
+        usage.sessions(),
         f(total.total),
         f(usage.main.total),
         f(usage.subagents.total),
@@ -2707,8 +2826,24 @@ pub(crate) fn close_handler(
         crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
     );
     result.insert("usage".into(), usage.value());
-    if let Some(line) = close_usage_line(&usage) {
-        lines.push(line);
+    let usage_line = close_usage_line(&usage);
+    if let Some(line) = &usage_line {
+        lines.push(line.clone());
+    }
+
+    // The detailed record beside the printed line (decision e97cc9d4). Written
+    // BEFORE the bookkeeping commit below, exactly where `promote-proposals.md`
+    // is written, so a checkout whose auto-commit ever grows to cover
+    // `docs/history/` picks it up without this call moving. FAIL-SOFT like
+    // every other write on this tail: a record that could not be written is one
+    // warning line, never a failed close.
+    match write_usage_record(root, feature, &usage) {
+        Ok(rel) => {
+            result.insert("usage_record".into(), json!(rel));
+        }
+        Err(e) => lines.push(format!(
+            "Warning: the token-usage record for \"{feature}\" could not be written: {e}"
+        )),
     }
 
     // ── bookkeeping auto-commit — GREEN, non-dry-run only, path-scoped ─────
@@ -2821,7 +2956,7 @@ pub(crate) fn close_handler(
     // ignore block is absent would otherwise commit a run's letter material
     // into the project's history. The lane write just above is the existing
     // precedent for a `.bee` write that lands after that commit.
-    record_feature_close_in_mailbox(root, feature);
+    record_feature_close_in_mailbox(root, feature, usage_line.as_deref());
 
     lines.push(
         "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
@@ -2866,7 +3001,17 @@ pub(crate) fn close_handler(
 /// The three lists D14's extra sections are composed from, read out of the
 /// feature's own capped cells. Cells are read INCLUDING the archive, because
 /// this runs after `auto_archive_on_close` has already moved them.
-fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::CloseNote {
+///
+/// The FOURTH list is the token-usage line (decision e97cc9d4) — the same one
+/// string close just printed, handed in rather than recomputed here so the
+/// letter and the terminal can never state two different costs. `None` when no
+/// transcript was readable: the letter then grows no Token usage section at
+/// all, which is `close_usage_line`'s own honesty rule reaching the mailbox.
+fn feature_close_note(
+    root: &Path,
+    feature: &str,
+    usage_line: Option<&str>,
+) -> crate::verbs::mailbox::CloseNote {
     fn push_unique(out: &mut Vec<String>, value: &str) {
         let value = value.trim();
         if !value.is_empty() && !out.iter().any(|seen| seen == value) {
@@ -2893,7 +3038,13 @@ fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::Clos
             }
         }
     }
-    crate::verbs::mailbox::CloseNote { architecture, behaviour, usage }
+    let token_usage = usage_line
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .into_iter()
+        .collect();
+    crate::verbs::mailbox::CloseNote { architecture, behaviour, usage, token_usage }
 }
 
 /// Record this feature close as ONE human-mailbox entry, the moment the close
@@ -2910,7 +3061,7 @@ fn feature_close_note(root: &Path, feature: &str) -> crate::verbs::mailbox::Clos
 ///
 /// UNCONDITIONAL, by D9: every session appends its entries, attended or not.
 /// Arming decides only whether a letter is composed at the run's END.
-fn record_feature_close_in_mailbox(root: &Path, feature: &str) {
+fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Option<&str>) {
     use crate::verbs::mailbox;
     let control = crate::hooks::session_init::control_root_for(root);
     let run = mailbox::run_id(
@@ -2934,7 +3085,12 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str) {
         // human's call refused at a door and never reached this line (D13).
         needs_you: Vec::new(),
     };
-    mailbox::record_close_stop(&control, &run, &entry, &feature_close_note(root, feature));
+    mailbox::record_close_stop(
+        &control,
+        &run,
+        &entry,
+        &feature_close_note(root, feature, usage_line),
+    );
 }
 
 /// What close did with the feature's cells, and why.
@@ -3923,7 +4079,13 @@ mod tests {
         let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
         assert_eq!(code, 0);
         assert_eq!(result["bookkeeping_commit"], json!({"committed": false, "reason": "clean"}));
-        assert!(git_status_porcelain(root).is_empty(), "{}", git_status_porcelain(root));
+        // e97cc9d4: the ONE thing a green close now leaves behind is the
+        // token-usage record under `docs/history/` — outside the `.bee` scope
+        // this commit stages, exactly like `promote-proposals.md`. `.bee`
+        // itself is still untouched, which is what "clean" means here.
+        let status = git_status_porcelain(root);
+        assert!(!status.contains(".bee"), "{status}");
+        assert_eq!(status.trim(), "?? docs/", "{status}");
     }
 
     /// P2-4(a) + P2-1 + P2-2: a `pre-commit` hook that fails SILENTLY (exit
@@ -4538,7 +4700,7 @@ mod tests {
 
         // D14's three lists, each read out of the feature's own capped cell —
         // which retirement has already moved into the archive by now.
-        let note = feature_close_note(root, "demo");
+        let note = feature_close_note(root, "demo", None);
         assert_eq!(note.architecture, vec!["src/one.rs".to_string(), "src/two.rs".to_string()]);
         assert_eq!(
             note.behaviour,
@@ -4559,11 +4721,18 @@ mod tests {
             ".bee/cells/demo-1.json",
             r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test — green — one module","deviations":[]}}}"#,
         );
-        let note = feature_close_note(root, "demo");
+        let note = feature_close_note(root, "demo", None);
         assert!(note.is_empty(), "a feature that recorded nothing must carry nothing: {note:?}");
 
         // And a feature nobody ever worked on carries nothing either.
-        assert!(feature_close_note(root, "never-existed").is_empty());
+        assert!(feature_close_note(root, "never-existed", None).is_empty());
+
+        // e97cc9d4: the token-usage line is the ONE string this note takes
+        // from outside the cells, and it is passed through untouched — a
+        // blank one is dropped rather than stored as an empty bullet.
+        let priced = feature_close_note(root, "demo", Some("usage: 1 session(s) — 9 tokens"));
+        assert_eq!(priced.token_usage, vec!["usage: 1 session(s) — 9 tokens".to_string()]);
+        assert!(feature_close_note(root, "demo", Some("   ")).is_empty());
     }
 
     // ─── tests: the token-usage section (decision 2d3abd12) ────────────────
@@ -4663,7 +4832,7 @@ mod tests {
 
         // s-bound and s-call rolled up; s-gone counted as skipped; s-other
         // never a candidate, so it is neither summed NOR skipped.
-        assert_eq!(usage.sessions, 2);
+        assert_eq!(usage.sessions(), 2);
         assert_eq!(usage.skipped, 1);
 
         // main = s-bound (100+10+5 new, 1000 cached) + s-call (220 new, 0 cached)
@@ -4704,7 +4873,15 @@ mod tests {
     #[test]
     fn usage_line_drops_the_skipped_clause_when_every_transcript_was_read() {
         let usage = CloseUsage {
-            sessions: 1,
+            details: vec![SessionUsage {
+                session_id: "s-one".to_string(),
+                models: json!({}),
+                subagent_models: json!({}),
+                subagent_count: 0,
+                started_ms: None,
+                ended_ms: None,
+                totals: UsageBucket::default(),
+            }],
             skipped: 0,
             main: UsageBucket { new_t: 500_000.0, cached: 900_000.0, total: 1_400_000.0 },
             subagents: UsageBucket::default(),
@@ -4725,7 +4902,7 @@ mod tests {
         let root = tmp.path();
         write_usage_session(root, "s-gone", Some("demo"), None, None);
         let usage = collect_close_usage(root, "demo", None);
-        assert_eq!(usage.sessions, 0);
+        assert_eq!(usage.sessions(), 0);
         assert_eq!(usage.skipped, 1);
         assert!(close_usage_line(&usage).is_none());
         assert_eq!(usage.value()["total"]["total"], json!(0.0));
@@ -4733,7 +4910,7 @@ mod tests {
         // A feature with no session records at all: nothing read, nothing
         // skipped, still no line.
         let empty = collect_close_usage(root, "never-existed", None);
-        assert_eq!(empty.sessions, 0);
+        assert_eq!(empty.sessions(), 0);
         assert_eq!(empty.skipped, 0);
         assert!(close_usage_line(&empty).is_none());
     }
@@ -4748,8 +4925,142 @@ mod tests {
         w(root, ".bee/sessions/s-nopath.json", r#"{"id":"s-nopath","lane":"demo"}"#);
         write_usage_session(root, "s-empty", Some("demo"), Some(""), None);
         let usage = collect_close_usage(root, "demo", None);
-        assert_eq!(usage.sessions, 0);
+        assert_eq!(usage.sessions(), 0);
         assert_eq!(usage.skipped, 2);
         assert!(close_usage_line(&usage).is_none());
+    }
+
+    // ─── tests: the usage RECORD (decision e97cc9d4) ───────────────────────
+
+    /// The three token numbers under `at`, read back as f64.
+    ///
+    /// The record is written through the repo's JS-shaped pretty printer, so a
+    /// whole f64 comes back as `1115`, not `1115.0` — comparing VALUES rather
+    /// than `Value`s keeps these assertions about the tokens instead of about
+    /// the spelling.
+    fn tokens(at: &Value) -> (f64, f64, f64) {
+        let n = |key: &str| at[key].as_f64().unwrap_or_else(|| panic!("{key} missing in {at}"));
+        (n("new"), n("cached"), n("total"))
+    }
+
+    /// The record keeps what the printed line throws away: which session,
+    /// which model, how many subagents — and the feature totals beside them.
+    #[test]
+    fn the_usage_record_keeps_per_session_detail_beside_the_feature_totals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        usage_fixture(root);
+        let usage = collect_close_usage(root, "demo", Some("s-call"));
+
+        let rel = write_usage_record(root, "demo", &usage).unwrap();
+        assert_eq!(rel, "docs/history/demo/usage.json");
+        let ReadJson::Parsed(record) = read_json(&root.join(&rel)) else {
+            panic!("the usage record must be readable JSON")
+        };
+
+        assert_eq!(record["schema"], json!(USAGE_SCHEMA));
+        assert_eq!(record["feature"], json!("demo"));
+        // Written at the close, so only its shape is pinned here.
+        assert!(record["closed_at"].as_str().is_some_and(|s| s.ends_with('Z')));
+        assert_eq!(record["skipped"], json!(1));
+
+        // Candidate order is the sorted session-id order `usage_session_ids`
+        // guarantees: s-bound, then s-call.
+        let sessions = record["sessions"].as_array().unwrap();
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0]["session_id"], json!("s-bound"));
+        assert_eq!(sessions[0]["subagent_count"], json!(1));
+        assert_eq!(sessions[0]["models"]["opus"]["total"].as_f64(), Some(1115.0));
+        assert_eq!(sessions[0]["subagent_models"]["sonnet"]["total"].as_f64(), Some(255.0));
+        // The session's WHOLE cost: its own 1115 plus its subagent's 255.
+        assert_eq!(tokens(&sessions[0]["totals"]), (170.0, 1200.0, 1370.0));
+        assert_eq!(sessions[1]["session_id"], json!("s-call"));
+        assert_eq!(sessions[1]["subagent_count"], json!(0));
+        assert_eq!(tokens(&sessions[1]["totals"]), (220.0, 0.0, 220.0));
+
+        // Same three buckets the printed line names — one computation, two
+        // renderings, so the file and the terminal can never disagree.
+        assert_eq!(tokens(&record["totals"]["main"]), (335.0, 1000.0, 1335.0));
+        assert_eq!(tokens(&record["totals"]["subagents"]), (55.0, 200.0, 255.0));
+        assert_eq!(tokens(&record["totals"]["total"]), (390.0, 1200.0, 1590.0));
+    }
+
+    /// The honesty rule the record adds to the line's silence: a close that
+    /// could read NO transcript still writes the file, with an empty
+    /// `sessions` list beside a non-zero `skipped`. "We looked and found
+    /// nothing readable" and "nobody ever wrote a record" must not read alike.
+    #[test]
+    fn a_green_close_writes_the_usage_record_even_with_nothing_readable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        // Lane-bound, but the transcript it names was never written.
+        write_usage_session(root, "s-gone", Some("demo"), None, None);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "this close must be green");
+        assert_eq!(result["usage_record"], json!("docs/history/demo/usage.json"));
+        // No readable transcript, so no printed line — and still a record.
+        assert!(!text.contains("usage: "), "{text}");
+
+        let ReadJson::Parsed(record) = read_json(&root.join("docs/history/demo/usage.json")) else {
+            panic!("a green close must write the usage record")
+        };
+        assert_eq!(record["schema"], json!(USAGE_SCHEMA));
+        assert_eq!(record["sessions"], json!([]));
+        // At least s-gone. `close_handler` also names the CALLING session from
+        // the ambient `BEE_SESSION_ID`, which the test runner may or may not
+        // carry — pinning an exact count here would make this test depend on
+        // the environment it runs in, so it pins what the record is FOR: the
+        // unreadable ones are counted, never swallowed.
+        assert!(record["skipped"].as_u64().unwrap() >= 1, "{record}");
+        assert_eq!(tokens(&record["totals"]["total"]), (0.0, 0.0, 0.0));
+    }
+
+    /// The whole green path, end to end: the record lands and the SAME line
+    /// close printed is stored for the feature-close letter.
+    #[test]
+    fn a_green_close_records_the_usage_and_hands_the_line_to_the_letter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_usage_session(
+            root,
+            "s-bound",
+            Some("demo"),
+            Some(&usage_event("opus", "r1", 100, 10, 5, 1000)),
+            None,
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "this close must be green");
+
+        let printed = text
+            .lines()
+            .find(|l| l.starts_with("usage: "))
+            .expect("a readable transcript prints a usage line");
+        // `starts_with`, not equality: an ambient `BEE_SESSION_ID` in the test
+        // runner adds one unreadable candidate and its skipped clause, which
+        // says nothing about what this test is for.
+        assert!(
+            printed.starts_with(
+                "usage: 1 session(s) — 1.1k tokens (main 1.1k, subagents 0; new 115, cached 1.0k)"
+            ),
+            "{printed}"
+        );
+
+        let ReadJson::Parsed(record) = read_json(&root.join("docs/history/demo/usage.json")) else {
+            panic!("a green close must write the usage record")
+        };
+        assert_eq!(record["sessions"][0]["session_id"], json!("s-bound"));
+        assert_eq!(tokens(&record["totals"]["total"]), (115.0, 1000.0, 1115.0));
+        assert_eq!(result["usage"]["sessions"], json!(1));
+
+        // The letter's material: the printed line, verbatim, in the note the
+        // feature-close stop stores.
+        let note = feature_close_note(root, "demo", Some(printed));
+        assert_eq!(note.token_usage, vec![printed.to_string()]);
     }
 }
