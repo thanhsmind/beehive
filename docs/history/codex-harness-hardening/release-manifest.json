@@ -1384,7 +1384,7 @@
     },
     {
       "path": "scripts/install.sh",
-      "sha256": "0dee67a1661e91bdb745ef927157a605f3496cdc097885fc40e69b5b4a933e8d",
+      "sha256": "521baec6b2d15c28f6ab57a8d11732024aedc7532c1c3dcc8e42e9e7f63e4bea",
       "mode": "644",
       "role": "distribution_tool"
     },

@@ -43,6 +43,12 @@
 
 set -euo pipefail
 
+# A mise shim writes its activation banner ("mise <config> tools: gh@X.Y.Z") to
+# STDOUT before the real tool's own output, so it lands INSIDE the `gh` captures
+# below — step 8 read it as the CI run id and 404'd, and step 9 read it as an
+# asset name. Silencing it once here beats wrapping every call site.
+export MISE_QUIET=1
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 

@@ -17,6 +17,12 @@ set -euo pipefail
 # supported: onboarding merges via BEE:START/END markers, never touches content
 # outside them, never overwrites existing state, and is idempotent.
 
+# A mise shim writes its activation banner ("mise <config> tools: codex@X.Y.Z")
+# to STDOUT before the real tool's own output, so it lands INSIDE the plugin
+# probe files below and makes them unparseable JSON. Silencing it once here
+# beats wrapping every call site.
+export MISE_QUIET=1
+
 REPO_URL="https://github.com/thanhsmind/beehive.git"
 RAW_BASE="https://raw.githubusercontent.com/thanhsmind/beehive/main"
 
@@ -427,7 +433,7 @@ probe_plugin_state() {
   fi
   "$BEE_BIN" dev install-support merge-plugin-state \
       --claude "$claude_json" --codex "$codex_json" --out "$dest" \
-    || fail "Plugin status probe returned unreadable data (package-list shape drift)"
+    || fail "Plugin status probe returned unreadable data — either a probe file is not valid JSON (a tool wrapper such as a mise shim writing its own banner to stdout lands inside it; check $claude_json and $codex_json) or the runtime's package-list shape has drifted"
 }
 
 # Whether the bee plugin was installed for <runtime> in the pre-run snapshot.
