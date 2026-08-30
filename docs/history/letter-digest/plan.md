@@ -34,7 +34,9 @@ verbatim byte substring of the anchored line(s).
 |---|-------|-------|--------|-------------------|
 | 1 | Close already appends its mailbox entry unconditionally; only letter FILING is gated, so D2 needs a filing call, not new data | read | packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:3073 | UNCONDITIONAL, by D9: every session appends its entries, attended or not. |
 | 2 | armed() is the only gate between stored entries and a filed letter | read | packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1755 | return RunEnd::NotArmed; |
+<!-- bee:not-a-deferral: "later" here describes run-end timing in the built behavior, not a promise to act later -->
 | 3 | An existing letter is re-composed in place keeping filename and read state, so a close-time letter plus a later run end stays ONE letter (D11 safe) | read | packages/bee-rs/crates/bee/src/verbs/mailbox.rs:1770 | filed_at = old.filed_at; |
+<!-- /bee:not-a-deferral -->
 | 4 | Letter filenames are UTC-stamp-led, so a period's letters are listable from directory names alone (D3's bounded detection) | read | packages/bee-rs/crates/bee/src/verbs/mailbox.rs:177 | pub(crate) fn letter_filename(filed_at: &str, run: &str) -> String { |
 | 5 | The session path that already runs mailbox recovery is `bee work set` in work.rs — the due-digest check rides beside it | read | packages/bee-rs/crates/bee/src/verbs/work.rs:300 | file_letter_at_run_end(&ctx.root, session_flag.as_deref(), status.as_deref()); |
 | 6 | An internal decision-append exists for D4's lesson logging (no shell-out) | read | packages/bee-rs/crates/bee/src/verbs/cells/audit.rs:427 | pub(crate) fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> MR<()> { |
@@ -66,7 +68,9 @@ Recommended (cites D1–D4): extend the existing mailbox store in place.
    run's letter freezes at close and misses the run's tail). D12 recovery
    also candidates a lettered run whose entries file is newer (mtime) than
    its letter — two stats, still zero opens — so a close-lettered run that
+   <!-- bee:not-a-deferral: "later dies" describes the recovered failure case, not a promise to act later -->
    later dies still gets its unfinished mark.
+   <!-- /bee:not-a-deferral -->
 2. New sibling module `mailbox_digest.rs`: derive finished-and-undigested
    periods from directory names (claim 4); compose `digest-YYYY-MM-DD.md`
    (daily) and `digest-YYYY-Www.md` (weekly) into `.bee/human-mailbox/`,

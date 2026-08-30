@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [human-mailbox]
   required_context: []
-  decisions: ["D1 303488de (bee owns the mailbox data and the code that emits it, and nothing above it)", "D2 e3618e3b (a readable subject is a validity rule, not a formatting preference)", "D3 1b079912 (one markdown file per letter with typed frontmatter; no JSON twin, no index stream)", "D4 1d56c1d2 (append at every clean stop; compose when the run ends)", "D5 e9cb4c15 (a departure has three required parts and a closed kind set)", "D6 2009bc71 (read state is a field bee owns; the inbox flips it by calling a bee command)", "D7 b94381e5 (five nightly sections, empty ones dropped; architecture/behaviour/usage only in the close letter)", "D8 1c7a9d87 (sentences written at the moment of the event; the composing pass may never author a fact)", "D9 d970d6fc (every session appends; only an unattended run files)", "D10 1fb69f4b (the explicit no-departure statement is enforced only while armed)", "D11 349f25d8 (one letter maps to one run, never one night)", "D12 05b5f964 (a run that died gets its letter from the next session; no scheduler)", "D13 c3ece144 (each needs-your-call item carries a stable id and names what it blocks)", "D14 a6475e2c (the feature-close letter is in scope; a weekly digest is not)", "D17 1660158a (bee and the consuming project are separate; bee never writes another project's tree)"]
+  decisions: ["D1 303488de (bee owns the mailbox data and the code that emits it, and nothing above it)", "D2 e3618e3b (a readable subject is a validity rule, not a formatting preference)", "D3 1b079912 (one markdown file per letter with typed frontmatter; no JSON twin, no index stream)", "D4 1d56c1d2 (append at every clean stop; compose when the run ends)", "D5 e9cb4c15 (a departure has three required parts and a closed kind set)", "D6 2009bc71 (read state is a field bee owns; the inbox flips it by calling a bee command)", "D7 b94381e5 (five nightly sections, empty ones dropped; architecture/behaviour/usage only in the close letter)", "D8 1c7a9d87 (sentences written at the moment of the event; the composing pass may never author a fact)", "D9 d970d6fc (every session appends; only an unattended run files)", "D10 1fb69f4b (the explicit no-departure statement is enforced only while armed)", "D11 349f25d8 (one letter maps to one run, never one night)", "D12 05b5f964 (a run that died gets its letter from the next session; no scheduler)", "D13 c3ece144 (each needs-your-call item carries a stable id and names what it blocks)", "D14 a6475e2c (the feature-close letter is in scope; a weekly digest is not — superseded in effect by letter-digest LD1/LD3)", "D17 1660158a (bee and the consuming project are separate; bee never writes another project's tree)", "LD1 b610a1dc (the mailbox stays files; daily and weekly digests are files beside the letters)", "LD2 aedb5be9 (every bee close files its close letter at the moment of close, attended included)", "LD3 dbbe0778 (the next session composes a finished period's missing digest; no scheduler)", "LD4 b343870b (the weekly fold auto-logs repeat error shapes as decisions tagged lesson)"]
   sources: ["docs/history/human-mailbox/CONTEXT.md (the locked decisions)", "docs/history/human-mailbox/plan.md (four phases, strictly ordered)", "docs/discovery/human-mailbox/MAP.md (the discovery map and its 14 tickets)", "cells hm-1..hm-10 (four slices, merged 2026-08-25/26)"]
   authoritative_for: "human-mailbox: the letter record, when it is filed, and the one command a consumer may call"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs]
@@ -33,10 +33,14 @@ follows from that.
 
 - **A clean stop** — a unit of work is capped, a feature is closed, or a blocker
   is hit. Each appends its own entry at the moment it happens.
+- **A feature close** — files the run's letter immediately, attended or not
+  (LD2); the run end later re-composes that same letter in place.
 - **The end of a run** — an armed run composes its entries into one letter and
   files it.
 - **The start of a session** — a run that went silent without ever reaching its
-  end gets its letter here, from the next session that starts.
+  end gets its letter here, from the next session that starts; the same moment
+  composes the digest of every finished day or week that has letters and no
+  digest yet (LD3), and the weekly fold logs its mined lessons (LD4).
 - **A consuming inbox** — flips a filed letter's read state by calling one
   command, and never by writing the file.
 
@@ -52,6 +56,8 @@ follows from that.
 | **plan-followed statement** | The explicit declaration that a unit followed its plan. Recorded separately from departures, so that a statement meaning *nothing happened* can never be mined as though it were a lesson. |
 | **unfinished letter** | A letter filed by a later session for a run that went silent, marked plainly as such and naming the moment the run last recorded anything. |
 | **read state** | Whether the human has read a letter. It lives inside the letter file, and bee is its only writer. |
+| **digest** | One markdown file folding one finished period — a UTC day (`digest-YYYY-MM-DD.md`) or an ISO week (`digest-YYYY-Www.md`) — from that period's letters and stored usage records, filed beside the letters with frontmatter `type: digest`. A renderer, never a summarizer: it groups and transcribes, it computes nothing (LD1, LD3). |
+| **lesson** | A decision tagged `lesson`, auto-logged by the weekly fold when the same normalized error shape appears in letters of two or more distinct runs. It cites the letters and carries a stable `shape:<sha-12>` token; a token already logged — active or superseded — is never re-logged, so a retired lesson stays retired (LD4). |
 
 ## Behaviors & Operations
 
@@ -110,7 +116,11 @@ scheduler being introduced to watch for this.
    subject is not valid (D2).
 4. **One letter maps to one run, never one night** (D11). Folding a night would
    hide the fact that one run died.
-5. **Every session appends; only an armed run files** (D9).
+5. **Every session appends; only an armed run files the run-end letter of a
+   letterless run** (D9, narrowed by LD2): a feature close files immediately,
+   armed or not, and an existing letter re-composes at run end whatever the
+   arming says — arming still gates only the first filing of a run that
+   never closed a feature.
 6. **A departure carries three parts and a kind from a closed set of four**
    (D5): hit an unforeseen obstacle, found a better route, the plan was wrong
    about a fact, or something else had to be fixed first. A unit that followed
@@ -130,6 +140,20 @@ scheduler being introduced to watch for this.
 12. **bee owns the data and nothing above it** (D1, D17). No listing, no
     rendering, no viewer ships from here, and nothing is ever written into
     another project's tree.
+13. **Digests are files beside the letters, composed by the next session**
+    (LD1, LD3) — no email, no scheduler, idempotent by file existence, and
+    letter-only surfaces never see a `digest-*` name, so a digest can never
+    enter the lettered set or be folded as a letter.
+14. **A close-lettered run that later goes silent is still recovered** — a
+    lettered run whose entries file is newer than its letter is a D12
+    candidate (two stats, no opens), and recovery re-composes that one
+    letter in place.
+15. **Lesson mining reads only trouble** (LD4): the broken-or-unfinished
+    bullets plus the obstacle / plan-was-wrong / fix-first departure kinds —
+    never better-route departures, never plan-followed statements. A mined
+    decision carries `source: "agent"` and only what its cited letters say
+    (D8). A digest or lesson failure never refuses the work that triggered
+    it.
 
 ## Edge Cases Settled
 
@@ -164,6 +188,7 @@ scheduler being introduced to watch for this.
 ## Pointers (implementation)
 
 - The store, the record and every composing rule: `packages/bee-rs/crates/bee/src/verbs/mailbox.rs`.
+- The digest composer, period detection and lesson miner: `packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs`; the work-set hook: `packages/bee-rs/crates/bee/src/verbs/work.rs`; the agent-sourced decision append: `packages/bee-rs/crates/bee/src/verbs/cells/audit.rs` (`log_decision_from`).
 - The cap's append and the departure door: `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs`.
 - The run-end hook and silent-run recovery: `packages/bee-rs/crates/bee/src/verbs/work.rs`.
 - The feature-close letter: `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs`.

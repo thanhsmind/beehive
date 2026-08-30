@@ -77,24 +77,30 @@ a silent edit.
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: both questions were answered during execution — digests carry frontmatter type: digest (ld-2), and the miner sources SECTION_BROKEN bullets plus stored trouble-kind departures (ld-3); kept for the record, nothing is pending -->
 ### Deferred To Planning
 
-- [ ] Whether digests need their own frontmatter `type` so the inbox
+- [x] Whether digests need their own frontmatter `type` so the inbox
   listing can tell a digest from a letter — read `mailbox.rs` listing
   code to answer.
-- [ ] Where the error shapes for D4 come from in the letter body
+- [x] Where the error shapes for D4 come from in the letter body
   (Broken/unfinished section vs departures) — read the entry fields to
   answer.
+<!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: these are rejected scope, not promises to act later — the user refused email delivery at shaping, and human-mailbox D1 bans a viewer -->
 ## Deferred Ideas
 
 - Real email delivery (SMTP or send command) — the user rejected it: the
   mailbox is files, not a delivery system.
 - A digest viewer or rendering — human-mailbox D1 bans anything above
   the data.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: template boilerplate naming the deferred-to-planning section, not a promise to act later -->
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->
