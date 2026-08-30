@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"herdr-skill\" — feature is closed.",
   "created_at": "2026-08-30T15:28:16.721Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The skill is live (it now appears in this session's own skill list). One heading trips the deferral scanner again — I wrap it and close.",
+    "asked_at": "2026-08-30T15:43:09.807Z",
+    "session": "c9eb2d43-4dec-4d2a-8ea5-f7438226e33d"
+  },
   "route": {
     "class": "docs",
     "lane": "docs",
