@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 123 concept(s)
-- [patterns/](patterns/index.md) — 155 concept(s)
+- [patterns/](patterns/index.md) — 156 concept(s)
 - [work/](work/index.md) — 35 concept(s)
 
 ## Critical patterns
@@ -77,3 +77,4 @@ never a generation timestamp or any other wall-clock value.
 - [A dead worker has the code and is missing the last mechanical step](patterns/20260827-a-dead-worker-has-the-code-and-is-missing-the-last-mechanical-step.md) — A dead worker has the code and is missing the last mechanical step
 - [An allowlist that names a client grants every subcommand it has](patterns/20260828-an-allowlist-that-names-a-client-grants-every-subcommand-it-has.md) — An allowlist that names a client grants every subcommand it has
 - [A guard that fails open on data it merely read](patterns/20260829-a-guard-that-fails-open-on-data-it-merely-read.md) — When a guard's readers can return an error, that error becomes a third verdict the guard never meant to have — and if the guard's undecidable answer is "let it through", one unreadable byte in a record the guard only consulted switches the whole guard off. Each reader looks correct on its own; the hole exists only at the seam between the reader's error type and the verdict channel.
+- [Existence is not evidence — a plan that cannot be authored without reading is the only plan that was read](patterns/20260830-existence-is-not-evidence.md) — Existence is not evidence — checking that a thing exists is not checking what it contains or whether its path runs; the fix is structural, never exhortative

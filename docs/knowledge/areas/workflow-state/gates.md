@@ -452,6 +452,27 @@ a malformed record has earned none.
   and under `conflicts_acknowledged` on the JSON result — present only when
   non-empty — so the contradiction is approved with eyes open rather than
   found after approval.
+- R139 — A shape or merged approval never opens over a plan.md whose
+  load-bearing claims table is missing, malformed, or still guessing
+  (existence-is-not-evidence D1/D2, cell eine-rust-claims-gate, 2026-08-30).
+  The check runs under its OWN guard — `approved && (merge || name ==
+  "shape")` — never on plain `--name execution` (the plan is frozen after
+  shape approval, so a later refusal would be undischargeable) and never on
+  an unapprove. It reads `advisor_plan_path(root, feature)` with the
+  advisor precondition's M1 feature selection (a lane approval reads the
+  lane's own feature); `ErrorKind::NotFound` is inapplicable — tiny/small
+  lanes legitimately carry no plan.md — while any other read error refuses,
+  fail-closed (portable fixture: plan.md as a directory). Refusal causes:
+  heading absent, zero rows, a row missing label/anchor/evidence, a label
+  outside {read, ran, guessed}, any `guessed` row, or a `read` row whose
+  `path:line` anchor names a path absent under root. The refusal names the
+  offending rows, the expected shape, and the remedy (upgrade the label
+  with a real read/run, or move the claim to the plan's `## Open
+  Questions`). Parser and rules live in
+  `verbs/state_group/plan_claims.rs`; the wrapper sits beside the other
+  two preconditions in `set_gate.rs`, runs AFTER them in the merged path,
+  and takes a single pre-lock call site — a plan-file read has no
+  peek/lock record race (named deviation from the twins' two-site shape).
 - R104 — An approvals map merges over the gate defaults only when it is stored as
   an object; every other shape yields the defaults untouched, and no shape is
   read partially or refused (js-parity-cleanup D2, cell jp-4, 2026-08-04).
