@@ -697,7 +697,41 @@ mod tests {
         // roster of today's set. The live set is the one `KNOWN_SIGNALS`
         // holds (verbs/supervisor.rs), and the shipped supervisor prompt is
         // pinned to it by `the_shipped_prompt_pins_the_record_verbs_own_closed_sets`.
-        const PINNED_FLAG_COUNT: usize = 199;
+        // 199 -> 201 (letter-reflection lr-1): `mailbox.reflect` adds exactly
+        // TWO new spellings, `--wrong` and `--better` — the two required parts
+        // of one reflection (its D3), one flag each. They are minted together
+        // or not at all: D3's whole point is that a mistake without "what
+        // would have been better" is half a record, and a single flag carrying
+        // both halves would put that pairing back into prose nobody can read
+        // apart. The run rides `--session-id`, which is why this is +2 and not
+        // +3: every other mailbox stop already spells "which run is this" that
+        // way, and a `--run` would have been a second word for one idea.
+        //
+        // Checked first, the nearest spellings this vocabulary already carries
+        // for "what went wrong". `--reason` (cells block, cells drop, worktree
+        // remove) names why an action was TAKEN — the justification of a move
+        // the caller is making right now. A reflection names something the
+        // caller wishes it had not done, which is the opposite polarity, and
+        // folding them would make `Broken or unfinished` and `Mistakes &
+        // reflection` two renderings of one field. `--friction` (cells finish)
+        // is the closest miss of all and was rejected on evidence: it records
+        // what the HARNESS made hard, feeding the friction ledger, while a
+        // reflection is what the AGENT got wrong — reusing it would silently
+        // route every self-criticism into a report about the tooling.
+        // `--outcome` is the one line about what a cap achieved, `--note` is
+        // free prose attached to a record, and `--deviation` is D5's departure,
+        // which is a CHOICE made on purpose with a why and a kind, never a
+        // mistake.
+        //
+        // Checked next, for "what would have been better". `--alternative`
+        // (cells dissent) is the nearest, and the reason `--better` is earned:
+        // an alternative is a proposal for work that has NOT happened yet — the
+        // thing to do instead, now, before the cell runs. `--better` is
+        // retrospective and unactionable by design; the work is already done.
+        // `--next-action` names the next move, `--rejected` (decisions log)
+        // names options ruled out with why, and `--acceptance` names how a
+        // thing will be judged. None of them meant "what I should have done".
+        const PINNED_FLAG_COUNT: usize = 201;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

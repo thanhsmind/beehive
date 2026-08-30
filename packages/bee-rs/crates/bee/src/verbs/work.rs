@@ -485,6 +485,7 @@ mod tests {
             proof: Some("cargo test — green — one module".to_string()),
             departure: None,
             needs_you: vec![],
+            better: None,
         }
     }
 
