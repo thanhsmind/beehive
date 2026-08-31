@@ -21,6 +21,14 @@ Most of its load-bearing ideas are ALREADY decided in the slp map or already exi
 | Advisor: gỡ HOW, không làm hộ, không sửa spec, stateless, cắm cờ `van_de_thuoc_spec` | `Local` exists: advisor consult (read-only, one call); the how/what/unclear triage matches bee-swarming's rescue ladder |
 | Escalation always carries 2–3 suggested options so the human only picks | `Local` exists as bee's question craft (bee-shaping interview rules) |
 
+`Local` since narrowed (feature slp-contract-original-request, 2026-08-29): the
+verbatim-anchor row above is served by `bee intent`'s anchor, and **36959e8b**
+narrows that read to FEATURE-KEYED only — no default or session fallback. Four
+sibling execution decisions from the same feature (d853e4c6, 443a4999,
+45f0aeee, 6f379e40) refine 9c0104e0's separate contract_status half and leave
+this row's citation unchanged; full picture:
+docs/discovery/slp-supervisor-lead-peer/tickets/007-contract-status-original-request.md.
+
 ## Four steals (worth taking)
 
 1. **Two stuck-detection rules** for the supervisor feature's signal set (extends da7cb49b's day-1 list): `Upstream` `vuot_uoc_luong` — wall-clock or tool-calls > 2× the task's own estimate, measured by the harness, not self-reported; and `sua_lap_cho_cu` — two consecutive submissions differing only in the same region. Both are computable from bee's existing surfaces (cell trace attempts, activity transitions) plus one estimate field. `Local` narrowed by ea02cb68: bee adds NO estimate field — the over-2x signal is SKIP-UNTIL-PRESENT, computed only where an estimate is already recorded, and reported as "no estimate recorded" otherwise.
@@ -31,6 +39,16 @@ Most of its load-bearing ideas are ALREADY decided in the slp map or already exi
 ## One trap (do not import)
 
 `Upstream` Their **Supervisor is a router-dispatcher** (small stateful model deciding who acts next — bee's herding control loop + orchestrator already own this). The slp map's **Supervisor is an observer** that only asks open questions (322695d6, c80debd7). Same word, opposite powers. Import mechanisms, never the name — in bee vocabulary their "Supervisor" is the herding control loop, their "Leader" is the orchestrator session, their "Advisor/QA" are the advisor/review tiers, their "Hats" are blind lanes.
+
+`Local` since extended: the per-repo observer above gained a cross-project
+home in the waggledance layer, which OBSERVES every registered repo's
+records from a cockpit — herdr stays the execution base in each repo
+(**2f4bf3b1**); the per-repo supervisor and the cross-project one stand
+side by side, neither replacing the other (**b590e508**); and a bounded
+delegated-decision tier now lets the supervisor decide a matter on the
+human's behalf when scope is small, reversible, proven, and in-protocol
+(**83baf03f**) — a narrower power than "opposite powers" implied, still
+short of router-dispatcher.
 
 ## One flagged idea (user's call, not taken)
 
@@ -97,7 +115,8 @@ is only valid when it names what is missing.
 - **"Trò chơi điện thoại" guard** (App. B): forwarding UP is verbatim;
   the orchestrator COMPARES forwarded payload length against the
   original to catch silent compression. Mechanical complement to
-  3899fa60/9c0104e0.
+  3899fa60/9c0104e0 (narrowed since to feature-keyed reads only —
+  **36959e8b**).
 - **Log-before-act**: "chưa ghi Assumption/Decision thì kết quả không
   hợp lệ" — matches bee's decision-before-continue invariant.
 - **7-step build roadmap** (App. A): schemas + code validation FIRST
@@ -123,3 +142,9 @@ is only valid when it names what is missing.
 ## Next step
 
 Feed this brief plus the two research digests into bee-shaping for `slp-supervisor-heartbeat`: take steals 1–2 into the feature's signal/telemetry shape, take steal 4 into the wake-queue sort rule, and note that the "silence is consent" flag was since decided as c706053e (narrow opt-in, gates always wait). Steal 3 (R0 keyword growth) is a separate tiny backlog item on `bee route`.
+
+`Local` since noted: c706053e's every citation above (the timeout-belongs-
+to-the-deterministic-layer line and this paragraph) stands unchanged — the
+later delegated-decision tier (**83baf03f**) is a distinct autonomy grant
+(bounded proactive decisions), not a revision of the silence-is-consent
+timeout mechanism itself.

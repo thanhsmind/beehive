@@ -34,6 +34,16 @@ reinterpreted. IDs are bee decision-log ids (search with
 | 66c4c251 | Reports carry a small health-metric set with two-sided bands (wrong-assumption rate, escalations/task, blocked rate, self-answered band, spec-flag band…); RAISING silence-is-consent is EARNED — zero human-reversed one-way decisions across 40–60 tasks, and the human still flips the switch; the WakeReport sorts assumptions/decisions by impact-if-wrong descending | |
 | a020319d | This feature is the FIRST of the four slp clusters; dissent, blind lanes, and contract/original-request are separate features and out of this boundary | — |
 
+Refined since (slp-human-up, 2026-08-29): 322695d6's per-repo observer gained
+a cross-project home in the waggledance layer, watching every registered
+repo's records from a cockpit while herdr stays each repo's execution base
+(**2f4bf3b1**) — the per-repo supervisor above stands beside it, neither
+replacing the other (**b590e508**) — and both supervisors may now decide a
+narrow, reversible, proven, in-protocol matter on the human's behalf without
+a round-trip (**83baf03f**), a bounded exception to "never approves anything"
+above. c706053e's silence-is-consent timeout is untouched by 83baf03f — a
+distinct grant, not a revision of that mechanism.
+
 ### Agent's Discretion
 
 Everything the decisions above leave open is implementer's choice at

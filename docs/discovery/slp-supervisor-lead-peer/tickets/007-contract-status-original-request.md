@@ -32,3 +32,14 @@ anchor, read at dispatch prepare and rendered into every prompt
 template (~10 lines; today it survives compaction but never reaches a
 dispatch). Findings:
 docs/history/research/slp-contract-request-surfaces.md.
+
+Executed (feature slp-contract-original-request, 2026-08-29) with five
+refinements: the mint trap ships built but RAMPS — it warns until the
+first `contract:<name>` decision exists, then refuses (**d853e4c6**);
+"retired" resolves to "not in the active decision set", no separate
+state (**443a4999**); a `cell.decisions` entry counts as a store
+citation only when it resolves against the active-plus-archive union,
+short/ambiguous entries pass over silently (**45f0aeee**); the
+original_request anchor is read FEATURE-KEYED only — no default or
+session fallback (**36959e8b**); the citation tripwire is tag-blind
+while the mint trap is tag-aware (**6f379e40**).

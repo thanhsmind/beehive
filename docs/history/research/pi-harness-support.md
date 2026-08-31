@@ -16,6 +16,18 @@ date: 2026-08-29
 - Settled table (user, 2026-08-29): heavy roles (code, test, docs, review) stay on **Claude Opus**, advisor on **Fable** — as herding slots whose agents run the claude CLI (`claude --model opus` / `--model fable`, same shape as the existing `claude-sonnet` entry); cheap roles (read, extraction, generation, supervisor) default to the `agy-flash` herding agent. A pi-runtime dispatch landing on a claude-CLI pane is consistent: "every slot is herding" constrains the transport, not the model vendor.
 - Locked constraint (user, 2026-08-29): Pi has **no native subagent surface** — no Task/Agent-style tool. On a Pi session, every worker dispatch routes through the herding transport (`bee herding run` / herdr panes); `dispatch prepare --runtime pi` must never emit an Agent-tool payload. Consequence: herding transport quality (result payloads, digest return) is a hard dependency of pi-support, not an optional cockpit — the digest-loss friction below is in scope.
 
+  Executed since (feature pi-support, 2026-08-29): the dispatch door on
+  runtime pi refuses every slot resolution that isn't `kind: herding` —
+  plain-string, Native, Cli, Budget, and escalated/ceiling roles all refuse
+  by name, no silent fallback (**8650ca7b**). The digest-loss friction
+  recorded below got its fix scoped: the worker-result mailbox transport
+  splits into its own follow-up feature, pi-result-mailbox — this belt
+  ships first on the existing `bee herding run` result contract, friction
+  standing until the mailbox lands (**4d7438ec**). Per **29dc2003**
+  (impact door for pi-support's 8 flagged citations, this brief included):
+  pi-support touched 7f9c8518 and 4a6e38be by extending them, retired
+  neither, so every citation on this page stays true as written.
+
 ## Repo Snapshot
 
 - Repo type / primary languages / runtimes: bee — Rust CLI (`packages/bee-rs`), plus TS plugin shims per harness.

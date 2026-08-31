@@ -34,3 +34,11 @@ Refined by **D9 (d970d6fc)** and **D12 (05b5f964)**: every session
 appends entries, attended or not, but only an unattended run composes
 and files a letter — and a run that dies before its own end gets its
 letter from the next session that starts, marked as unfinished.
+
+Narrowed by **LD2 (aedb5be9)**: D9's "only an unattended run files" now
+holds for run-end letters only — every `bee close`, attended sessions
+included, files its close letter at the moment of close. **LD3
+(dbbe0778)** extends D12's recover-on-next-session pattern to the daily
+and weekly digest: the next session that starts after a period ends and
+finds the digest missing composes it, same as a dead run's letter — no
+scheduler either way.
