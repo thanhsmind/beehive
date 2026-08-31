@@ -453,6 +453,8 @@
     "pi-result-mailbox",
     "headless",
     "observability",
-    "learning"
+    "learning",
+    "version-verb",
+    "worktree-first"
   ]
 }

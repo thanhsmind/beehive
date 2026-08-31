@@ -1,0 +1,50 @@
+{
+  "id": "vv-1",
+  "feature": "version-verb",
+  "lane": "tiny",
+  "role": "code",
+  "title": "Serve bee version (and --version/-V) from the router",
+  "action": "Add a rootless version verb to the bee-rs router: print bee BEE_VERSION (text) or {version, binary} (--json); accept the spellings version, --version, -V; declare it in registry_payload.json with a runnable example; add the PORTED line; add tests.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/front_door.rs"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "bee version prints the BEE_VERSION from .claude-plugin/plugin.json and exits 0; bee --version and bee -V print the same; --json emits {version, binary}; registry example passes the registry_dispatch walk",
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/version.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "version-verb-lead",
+    "outcome": "bee version / --version / -V served rootless from the router; registry entry + PORTED line + black-box tests",
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-31T00:50:43.424Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b5e31bf7-2545-46a3-a36e-1b508c43cdf4",
+    "claimed_at": "2026-08-31T00:45:45.819Z",
+    "report": {
+      "outcome": "bee version, --version and -V print bee <BEE_VERSION>; --json adds the crate version; stray argv still refuses against the version entry",
+      "commit": "e6d24773",
+      "files": [
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/tests/front_door.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green — full declared suite in the version-verb worktree, 3256 unit + all integration suites, 0 failed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
