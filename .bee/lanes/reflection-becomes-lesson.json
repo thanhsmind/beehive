@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"reflection-becomes-lesson\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c642059; reload the product and test \"reflection-becomes-lesson\", then either approve uat (\"bee gate --name uat --approved true --lane reflection-becomes-lesson\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming for rbl-1.",
   "created_at": "2026-08-31T14:13:16.880Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: reflection-becomes-lesson",
-    "asked_at": "2026-08-31T15:22:34.554Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for reflection-becomes-lesson: test that bee close now demands a mistakes answer, then approve or reject",
+    "asked_at": "2026-08-31T15:25:06.416Z",
+    "session": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9"
   },
   "route": {
     "class": "feature",
