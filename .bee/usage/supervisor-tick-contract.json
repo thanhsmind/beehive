@@ -1,38 +1,38 @@
 {
   "schema": "bee-usage/v1",
   "feature": "supervisor-tick-contract",
-  "closed_at": "2026-08-31T08:42:32.622Z",
+  "closed_at": "2026-08-31T08:47:22.851Z",
   "sessions": [
     {
       "session_id": "a91b2f53-3ba5-4d92-911f-02771534fea4",
       "models": {
         "claude-sonnet-5": {
-          "input": 242,
-          "output": 69032,
-          "cache_write": 251264,
-          "cache_read": 20162527,
-          "new": 320538,
-          "cached": 20162527,
-          "total": 20483065
+          "input": 308,
+          "output": 90887,
+          "cache_write": 305101,
+          "cache_read": 29201769,
+          "new": 396296,
+          "cached": 29201769,
+          "total": 29598065
         }
       },
       "subagent_models": {},
       "subagent_count": 0,
       "started_ms": 1788164829322,
-      "ended_ms": 1788165746639,
+      "ended_ms": 1788166037026,
       "totals": {
-        "new": 320538,
-        "cached": 20162527,
-        "total": 20483065
+        "new": 396296,
+        "cached": 29201769,
+        "total": 29598065
       }
     }
   ],
   "skipped": 0,
   "totals": {
     "main": {
-      "new": 320538,
-      "cached": 20162527,
-      "total": 20483065
+      "new": 396296,
+      "cached": 29201769,
+      "total": 29598065
     },
     "subagents": {
       "new": 0,
@@ -40,9 +40,9 @@
       "total": 0
     },
     "total": {
-      "new": 320538,
-      "cached": 20162527,
-      "total": 20483065
+      "new": 396296,
+      "cached": 29201769,
+      "total": 29598065
     }
   }
 }
