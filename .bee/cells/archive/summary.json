@@ -1063,5 +1063,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-31T08:42:32.608Z"
+  },
+  "reflection-becomes-lesson": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-31T15:36:14.582Z"
   }
 }

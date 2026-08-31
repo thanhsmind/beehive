@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"reflection-becomes-lesson\" started at phase \"exploring\" (lane).",
   "next_action": "Invoke bee-swarming for rbl-1.",
   "created_at": "2026-08-31T14:13:16.880Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat for reflection-becomes-lesson: test that bee close now demands a mistakes answer, then approve or reject",
-    "asked_at": "2026-08-31T15:25:06.416Z",
-    "session": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
