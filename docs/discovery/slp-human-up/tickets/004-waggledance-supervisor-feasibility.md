@@ -52,3 +52,15 @@ machinery being the tick owner and a slightly widened ask_state digest.
   the snapshot, absent from the digest). dispatch/await/runs give gated hands.
 
 Decision logged: see MAP.md. Ticket 005 unblocked.
+
+**2f4bf3b1** (the supervisor's cross-project home is the waggledance
+layer) was built out by five further decisions: **12be1c0b** shapes the
+waggledance supervisor itself — an external tick reading the fleet
+rollup and writing records by spawning each target repo's own bee CLI;
+**58796a73** keeps the human able to work a repo's lead directly, never
+routed through the supervisor; **8fea3561** needs no new cross-repo
+dissent bookkeeping — a repo's own dissent machinery is enough, the
+waggledance supervisor just surfaces it in its rollup; **423871d7**
+pins the tick as always cold, zero in-process memory; **b590e508**
+keeps this per-repo supervisor running alongside the waggledance one
+rather than being replaced by it.

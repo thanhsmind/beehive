@@ -24,3 +24,9 @@ Ordinary interventions reach the human only through the daily/wake
 reports; danger-class UrgentAlerts notify immediately. This suits the
 cold-tick supervisor (322695d6): a persistent record is what survives
 between ticks. Spec §10 (f) thereby resolved: not real-time.
+
+322695d6 later gained a cross-project layer (slp-human-up): **2f4bf3b1**
+puts a second, waggledance-level supervisor above this per-repo one,
+and **83baf03f** widens what a supervisor may decide without waiting
+for the human, on named conditions — both build on this file records
+mechanism rather than replacing it.

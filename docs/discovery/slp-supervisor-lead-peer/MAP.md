@@ -155,6 +155,47 @@ cho 3 phần còn lại" — the one-ticket cap yields to the user's say-so;
 mechanism research for the same tickets ran in parallel at the
 advisor tier per the user's "use the biggest model" instruction.
 
+## Extended after this map closed
+
+Decisions above were touched by later, more specific decisions as their
+features executed. The bullets above still state the design as locked
+here; these are the refinements layered on top, not corrections.
+
+- **322695d6** (supervisor as a herding-control-loop role) gained a
+  cross-project layer in slp-human-up: **2f4bf3b1** puts the
+  cross-project home at the waggledance cockpit (herdr stays the
+  per-repo execution base); **b590e508** keeps the per-repo supervisor
+  running alongside the waggledance one rather than replacing it — a
+  near eye and a far eye, both cold ticks.
+- **c706053e** (narrow opt-in silence-is-consent) is generalized by
+  **83baf03f** into a delegated-decision tier: the supervisor may
+  decide FOR the human only when scope is small, the action is
+  reversible, the observation is proven, and it stays inside protocol
+  — one decision per message, a recorded rollback path, unclear always
+  escalates.
+- **4b7aa303** (blocker dissent obligates a logged one-of-three
+  response) is extended cross-repo by **5bed1c01**: the receiving
+  repo's executing lead keeps full dissent rights against a handed-off
+  spec, verdict included.
+- **6a6b9975** (herding-lane dissent is out of slp-dissent-stop-and-ask's
+  boundary because a herding worker cannot run a bee command) is
+  resolved by **7db30738**: dissent now travels as DATA on the
+  worker's mailbox result and the run verb transcribes it through
+  `record_dissent`, the same writer the CLI verb calls — the boundary
+  gap this map left open is closed, not worked around.
+- **9c0104e0** (contract label = `contract:<name>` tag view;
+  original_request = bee intent's verbatim anchor at dispatch prepare)
+  gained five execution-time refinements in slp-contract-original-request:
+  the mint trap ramps from WARN to refuse only once a first
+  `contract:*`-tagged decision exists (**d853e4c6**); "retired" reads
+  as the active-decision-set complement, no new store state
+  (**443a4999**); a `cell.decisions` citation resolves only against
+  the active-plus-archive union, shorter/ambiguous entries pass over
+  silently (**45f0aeee**); the dispatch-prepare intent anchor reads
+  feature-keyed only, never the shared default or session key
+  (**36959e8b**); and the citation tripwire is tag-blind while only
+  the mint trap is tag-aware (**6f379e40**).
+
 ## Not yet specified
 
 Nothing. Every open question this map could phrase has an answer.

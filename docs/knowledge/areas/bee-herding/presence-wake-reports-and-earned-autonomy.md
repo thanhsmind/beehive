@@ -114,6 +114,12 @@ Its defaults are the safety:
 - Each auto-proceed is rendered **prominently** in the wake report. The metrics
   line is the reason the report floor moved from eight lines to nine.
 
+This narrow mode was generalized by slp-human-up's **83baf03f** into a
+delegated-decision tier: the supervisor may decide a matter on the
+human's behalf only when all four hold — small scope, reversible,
+proven observation, inside protocol — one decision per message with a
+recorded rollback path; unclear still always escalates.
+
 ## Autonomy is earned, and the human still flips the switch
 
 Widening this mode is not automatic and never self-granted. The bar is a clean

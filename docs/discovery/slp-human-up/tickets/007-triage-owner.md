@@ -23,3 +23,9 @@ question collapses into a discovery A makes while planning (d2701784's
 A-spec path opens only then), and the human may name a different A when
 dropping. The supervisor's only role at intake is its usual one: a question
 if something looks mis-aimed.
+
+**a786d07a** later locks the shape of the A-spec path this ticket
+opens: a feature never spans repos — cross-project work always
+decomposes through A's spec into independent per-repo features, each
+shipped and proven inside its own repo, with no cross-repo integration
+owner or assembly step as a separate entity.

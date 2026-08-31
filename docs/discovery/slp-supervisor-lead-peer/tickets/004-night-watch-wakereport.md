@@ -32,3 +32,9 @@ user-set timeout, logged and prominent in the WakeReport; gates and
 one-way low-confidence asks still always wait. a8f4b8ab sorts the queue
 by the confidence×door predicate; 66c4c251 sorts the WakeReport's
 assumptions by impact-if-wrong descending.
+
+slp-human-up's **83baf03f** later generalizes c706053e's silence-is-consent
+mode into a delegated-decision tier: the supervisor may decide a matter
+on the human's behalf, not just auto-proceed a queued ask, when scope
+is small, the action is reversible, the observation is proven, and it
+stays inside protocol.
