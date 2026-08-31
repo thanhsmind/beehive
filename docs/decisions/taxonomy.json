@@ -455,6 +455,7 @@
     "observability",
     "learning",
     "version-verb",
-    "worktree-first"
+    "worktree-first",
+    "install-target-dir"
   ]
 }

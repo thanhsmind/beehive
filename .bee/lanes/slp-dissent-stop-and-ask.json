@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Everything checks out quiet this tick: cell `vv-1` (tiny, version-verb) is being worked normally in its own worktree — tests going green in",
-    "asked_at": "2026-08-31T00:49:37.996Z",
-    "session": "280b987a-73eb-4ed5-ae24-b841b06f6e75"
+    "subject": "No action needed from you. Just wait.",
+    "asked_at": "2026-08-31T01:07:46.386Z",
+    "session": "c73a23f9-6de9-4b87-abf4-13f8a2abdcbf"
   },
   "route": {
     "class": "feature",
