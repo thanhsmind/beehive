@@ -29,8 +29,14 @@ Measured in this checkout on 2026-08-31, before any change:
 - `bee mailbox reflect` exists (`packages/bee-rs/crates/bee/src/verbs/mailbox.rs:2751`).
 - **Zero** files under `skills/`, `AGENTS.md`, or `CLAUDE.md` name it.
   The verb is orphaned: nothing ever tells an agent to call it.
-- **Zero** reflection entries exist across the **30** filed letters in
-  `.bee/human-mailbox/`, in the month since the feature shipped.
+- **Zero** reflection entries exist anywhere in `.bee/human-mailbox/` —
+  across its 4 filed letters and 26 per-run entry stores. Corrected
+  during the plan-step hat wave: an earlier reading of this line said
+  "30 filed letters", which counted the entry stores as letters. The
+  window is short — letter-reflection shipped 2026-08-30, one day
+  before this measurement — so the zero proves the verb is unreachable
+  (nothing names it), not that a written doctrine line was tried and
+  failed. No doctrine line was ever written.
 - letter-reflection LR4 (`bb73e821`) locks reflection entries out of the
   LD4 mining set, so even a recorded one stops at the letter.
 
