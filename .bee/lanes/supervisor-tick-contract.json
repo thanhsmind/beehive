@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "supervisor-tick-contract",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"supervisor-tick-contract\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"supervisor-tick-contract\" (lane).",
+  "next_action": "bee close finished \"supervisor-tick-contract\" — feature is closed.",
   "created_at": "2026-08-31T08:37:56.273Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
