@@ -456,6 +456,8 @@
     "learning",
     "version-verb",
     "worktree-first",
-    "install-target-dir"
+    "install-target-dir",
+    "cross-repo",
+    "notebook"
   ]
 }
