@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces check clean: no open/claimed/blocked cells, no reservations, and the two lane-bound recovery candidates are freshly re-veri",
-    "asked_at": "2026-08-31T08:41:44.678Z",
-    "session": "5fed20a1-8ca8-47c7-8a7c-5f3517ed4bbb"
+    "subject": "Everything checks out clean. I will write one silence record now.",
+    "asked_at": "2026-08-31T15:13:50.419Z",
+    "session": "3adc347d-b949-468b-932f-dc8f725f29f9"
   },
   "route": {
     "class": "feature",

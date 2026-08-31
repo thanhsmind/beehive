@@ -1,0 +1,112 @@
+{
+  "id": "rbl-1",
+  "feature": "reflection-becomes-lesson",
+  "title": "Demand, record and instruct the mistakes answer",
+  "role": "code",
+  "lane": "high-risk",
+  "slice": 1,
+  "action": "Make a caught mistake survive the run, end to end. Four parts, one commit.\n\n(1) THE STORE — packages/bee-rs/crates/bee/src/verbs/mailbox.rs. Add a new entry kind for the explicit clean-run answer (D2 a240362a), beside KIND_REFLECTION (line 599) and built the one way the store builds entries, through an Entry:: constructor like Entry::reflection (line 653). It must be excluded from the Done section and from choose_subject by the SAME predicate family is_reflection uses (lines 1765-1767 and 1833) — never by matching on the string — and its `what` must fail check_subject, so an older or reverted binary re-composing a letter can never elect it as the subject. It renders in no letter section at all: it is the record that the run was asked and answered clean, not a thing the run did.\n\n(2) THE CAP COLLECTS — packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs. Accept a `mistakes` array in the worker --report JSON and a matching cap flag, each line carrying the two required parts (what went wrong, what would have been better) and parsed through the EXISTING read_reflection door (mailbox.rs:717-738) so the two-part rule keeps one home. Add NO refusal here — the cap's behaviour is otherwise unchanged and its blast radius stays at zero. The cap is the ONE writer and fills two sinks from one set of values, so they can never disagree: the cell trace gains the mistakes answer beside the existing trace.plan_followed (handlers_close.rs:419-511 is the precedent to mirror), and the run's mailbox gains the reflection entry that renders in the letter. A cap that reports no mistakes writes the clean-run answer to both sinks.\n\n(3) THE CLOSE ENFORCES — packages/bee-rs/crates/bee/src/verbs/drivers/close.rs. Refuse a close when any capped cell of the feature carries no mistakes answer, naming those cells (D1 db562f26, D5 20fe96d3). Read the FEATURE'S CAPPED CELLS — the walk already at close.rs:3036-3051 — and NEVER the closing session's own run file: reflections are stored per run (mailbox.rs:2771-2772) and close resolves its own run (close.rs:3084-3087), which under the default uat_stop close is a different run from the workers'. A run-scoped door would refuse every close. This door is NOT armed-gated: a feature close files its letter unconditionally, attended sessions included (close.rs:2970, 3075-3077). Place it with the other blocking doors, before any write (close.rs:2429-2446 region, see the doors-before-tail comment at 2955-2960), copying the scribing-debt door's shape: Out::Emit(..., 1) with a typed message, a `remedy:` line and a `next:` line. Refusal text, in this order and this spirit — name what the letter cannot say, offer reflect FIRST and the clean-run flag SECOND, end on the human reason:\n  close: feature \"<slug>\" — close stops at the mistakes door: this run's letter cannot say whether anything went wrong, because cell(s) <ids> recorded no reflection and no clean-run statement.\n  remedy: record each mistake with `bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\"` — or, if those cells truly hit none, say so: <the clean-run flag>.\n  next: answer, then re-run bee close --feature <slug>\n\n(4) THE THREE DOCTRINE HOMES (D4 c556c959) — AGENTS.md (the `## Care for the session` section at line 248), packages/bee/AGENTS.block.md (the host-repo block, 281 lines), and packages/bee/prompts/worker-cell.md (the cap bullet at line 44 and the result-form paragraph at line 47, beside the `deviations` rule the new `mistakes` field mirrors). No home derives from another and no parity test syncs them (tests/pointer_integrity.rs:35), so all three are edited. The WORDING is part of this cell, not an afterthought: each line must carry the moment-of-notice rule — write the mistake when you notice it, never composed from memory at the end — and must demand a concrete noun in the what-went-wrong part: a file, a command, or an observable. Match each file's surrounding voice.\n\nNew flag spellings trip catalog.rs's PINNED_FLAG_COUNT ratchet and need the registry payload updated (packages/bee-rs/crates/bee/src/generated/registry_payload.json) — letter-reflection hit both; edit the payload JSON directly, mirroring the mailbox.mark entry's shape.\n\nDo NOT touch mailbox_digest.rs: the miner is cell rbl-2.\n\nBefore capping, run the full regen chain in THIS cell, in this order: .bee/bin/bee dev render-skill-trees, then .bee/bin/bee onboard --repo-root . --apply, then .bee/bin/bee dev release-manifest --write — packages/bee/AGENTS.block.md falls under a root the release manifest hashes.",
+  "acceptance": "bee close refuses a feature whose capped cell recorded no mistakes answer, naming that cell, and writes nothing when it refuses; a close by a session whose own run holds no mailbox entries still passes when the cells carry answers; the clean-run answer never appears under Done, never becomes a letter's subject, and renders in no section; the cap collects a mistakes array without refusing anything; and the three doctrine files each name the reflect instruction with the moment-of-notice rule.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/prompts/worker-cell.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handlers_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers::close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+  "decisions": [
+    "db562f26-d849-41db-82b2-3eef724ddc7b",
+    "a240362a-314f-449a-b7be-bee1aa34099d",
+    "c556c959-c6ca-44af-80d7-cb6f37aa9a85",
+    "20fe96d3-28e1-445e-8684-4cce62f18071"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "bee close refuses a feature whose capped cell recorded no mistakes answer, and the refusal names that cell",
+      "a refused close appends no mailbox entry and files no letter",
+      "a close by a session whose own run holds no mailbox entries still passes when the feature's capped cells carry answers",
+      "the clean-run answer never appears under Done and never becomes a letter's subject",
+      "the cap accepts a mistakes array and refuses nothing it did not refuse before",
+      "AGENTS.md, packages/bee/AGENTS.block.md and packages/bee/prompts/worker-cell.md each name the reflect instruction with the moment-of-notice rule"
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "rbl-worker-1",
+    "outcome": "Made the mistakes answer survive a run: a clean-run entry kind that renders nowhere, a cap that fills both sinks from one reading, a close door that refuses cells that never answered, and the instruction in all three doctrine homes.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "AGENTS.md",
+      "packages/bee/AGENTS.block.md",
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Gave the close door a second way to pass — a mistakes answer recorded in the closing run clears it — because the refusal text the cell dictates offers bee mailbox reflect as its first remedy, and that verb writes to the run, never to an already-capped cell trace; without this the printed remedy is a dead end. The debt COUNT still reads the feature capped cells only, so the refuse-every-close hazard cannot occur. — a remedy that does not clear the door it is printed under is a trap — the plan was wrong about a fact",
+      "Spelled the clean-run flag as bee mailbox reflect --no-mistakes rather than a flag on bee close: a close flag needed a new parameter through close_handler and its ~50 call sites, and it would have had to write before the doors ran, breaking the must-have that a refused close writes nothing. — found a better route",
+      "Edited four files the cell did not list: finish_support.rs (parse_report_flag is where the optional mistakes key had to be accepted), cells/tests.rs, drivers/tests.rs, knowledge/tests.rs (every CapFlags literal is exhaustive, so two new fields break them all). All four reserved under this cell before writing. — the new field could not compile without them — something else had to be fixed first",
+      "Left docs/knowledge/areas/human-mailbox/overview.md untouched though the cell names it in affects_specs: it is not in the cell files list, and that sync belongs to the scribe step or to rbl-2, which owns the miner half of the same area. — the cell file list is the scope — something else had to be fixed first",
+      "sync-ack: D4 (c556c959) names exactly three doctrine homes for this instruction — AGENTS.md, packages/bee/AGENTS.block.md and the worker prompt — and the cell declares affects_skills [] with no skills path in its files. The skills copies of the cap and close contract are a separate sweep, not this cell."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-31T15:01:37.277Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9",
+    "claimed_at": "2026-08-31T14:33:07.827Z",
+    "sync_ack": "D4 (c556c959) names exactly three doctrine homes for this instruction — AGENTS.md, packages/bee/AGENTS.block.md and the worker prompt — and the cell declares affects_skills [] with no skills path in its files. The skills copies of the cap and close contract are a separate sweep, not this cell.",
+    "report": {
+      "outcome": "The mistakes answer now survives a run end to end: a new clean-run entry kind that renders nowhere, a cap that fills the cell trace and the run mailbox from one reading, a close door that refuses a feature whose capped cells never answered, and the instruction in all three doctrine homes.",
+      "commit": "8c898a37efaf729c85b70f596d6a9ad6cdf7492f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "AGENTS.md",
+        "packages/bee/AGENTS.block.md",
+        "packages/bee/prompts/worker-cell.md",
+        ".bee/bin/prompts/worker-cell.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release -p bee mailbox + handlers_close + drivers::close + --test registry_contracts + bee dev release-manifest --check — green — the cell verify, over the four touched modules plus the flag-ratchet and manifest walks; the full --bin bee run is green apart from one pre-existing red (hooks::cli_shape documented_invocations, from docs/discovery/spec-drops/sup-20260831-7f3a.md at HEAD, untouched here)",
+      "deviations": [
+        "Gave the close door a second way to pass — a mistakes answer recorded in the closing run clears it — because the refusal text the cell dictates offers bee mailbox reflect as its first remedy, and that verb writes to the run, never to an already-capped cell trace; without this the printed remedy is a dead end. The debt COUNT still reads the feature capped cells only, so the refuse-every-close hazard cannot occur. — a remedy that does not clear the door it is printed under is a trap — the plan was wrong about a fact",
+        "Spelled the clean-run flag as bee mailbox reflect --no-mistakes rather than a flag on bee close: a close flag needed a new parameter through close_handler and its ~50 call sites, and it would have had to write before the doors ran, breaking the must-have that a refused close writes nothing. — found a better route",
+        "Edited four files the cell did not list: finish_support.rs (parse_report_flag is where the optional mistakes key had to be accepted), cells/tests.rs, drivers/tests.rs, knowledge/tests.rs (every CapFlags literal is exhaustive, so two new fields break them all). All four reserved under this cell before writing. — the new field could not compile without them — something else had to be fixed first",
+        "Left docs/knowledge/areas/human-mailbox/overview.md untouched though the cell names it in affects_specs: it is not in the cell files list, and that sync belongs to the scribe step or to rbl-2, which owns the miner half of the same area. — the cell file list is the scope — something else had to be fixed first"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
