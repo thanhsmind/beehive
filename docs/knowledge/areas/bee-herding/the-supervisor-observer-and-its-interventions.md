@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["slp-supervisor-heartbeat 787a9eb0 (SLP is distilled into bee's skeleton; bee's locked rules win on any conflict — the observer adds beside them, never relaxes them)", "slp-supervisor-heartbeat 322695d6 (the supervisor is a new role of the herding control loop, cold per tick, model from the configured supervisor role, tool surface enumerated read/query only)", "slp-supervisor-heartbeat da7cb49b (observation reads bee's seven existing surfaces; day-1 signals struggling-loop, big-decision, danger-op; the cheap Detector poller is NOT this feature)", "slp-supervisor-heartbeat c80debd7 (interventions are file records read at the target session's NEXT turn boundary, never mid-turn injection; same point twice escalates, never repeats; danger-class alerts notify immediately)", "slp-supervisor-heartbeat a8f4b8ab (added signals: work over 2x its recorded estimate measured by the harness, and two consecutive submissions differing only in the same region)", "slp-supervisor-heartbeat a020319d (this is the FIRST of four slp clusters; dissent, blind lanes, and contract/original-request are separate features)"]
+  decisions: ["slp-supervisor-heartbeat 787a9eb0 (SLP is distilled into bee's skeleton; bee's locked rules win on any conflict — the observer adds beside them, never relaxes them)", "slp-supervisor-heartbeat 322695d6 (the supervisor is a new role of the herding control loop, cold per tick, model from the configured supervisor role, tool surface enumerated read/query only)", "slp-supervisor-heartbeat da7cb49b (observation reads bee's seven existing surfaces; day-1 signals struggling-loop, big-decision, danger-op; the cheap Detector poller is NOT this feature)", "slp-supervisor-heartbeat c80debd7 (interventions are file records read at the target session's NEXT turn boundary, never mid-turn injection; same point twice escalates, never repeats; danger-class alerts notify immediately)", "slp-supervisor-heartbeat a8f4b8ab (added signals: work over 2x its recorded estimate measured by the harness, and two consecutive submissions differing only in the same region)", "slp-supervisor-heartbeat a020319d (this is the FIRST of four slp clusters; dissent, blind lanes, and contract/original-request are separate features)", "slp-human-up 3cfd9980 (an advisor-nudge record recommends only; the target lead summons the advisor itself)", "slp-human-up 9e5eda5b (an advisor-nudge is a response debt enforced like judge-debt/dissent-debt)"]
   sources: [docs/history/slp-supervisor-heartbeat/CONTEXT.md, docs/history/slp-supervisor-heartbeat/plan.md, docs/discovery/slp-supervisor-lead-peer/MAP.md, docs/history/research/slp-observer-surfaces.md, docs/history/research/slp-supervisor-placement.md, "slp-supervisor-heartbeat cells sup-1, sup-2, sup-3 (the role arm, the observation store and its verbs, the end-to-end tick; traces in `.bee/cells/`, 2026-08-27)", "slp-supervisor-heartbeat cells sup-5, sup-6, sup-7 (the frequency-capped intervention mailbox, next-turn delivery through the prompt hook, the urgent class; traces in `.bee/cells/`, 2026-08-27)", "capture stub 3b7b9e9c (Phase 3 shape: four event-sourced stores resolved against the control root)"]
   authoritative_for: "bee-herding: the supervisor observer role, its observation tick, and the intervention channel"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/supervisor.rs, packages/bee-rs/crates/bee/src/herding/control_loop.rs]
@@ -92,6 +92,23 @@ There is no third state where the observer nags.
 
 Ordinary interventions reach the human only through reports. They do not
 notify.
+
+## The advisor-nudge record
+
+A second record kind, `advisor-nudge`, fires when a poor-work signal
+(struggling-loop, budget overrun, same-region resubmits) supports it
+(3cfd9980). It **recommends only** — the supervisor still decides nothing and
+acts on nothing (787a9eb0 holds): it never summons the advisor itself. The
+struggling session's own lead reads the nudge at its next turn boundary and
+either runs the consult or records a reasoned decline, using an existing lead
+power that is read-only and reversible.
+
+The nudge is a **response debt**, enforced the same way as the judge-debt and
+dissent-debt doors: an unanswered nudge targeting a cell refuses that cell's
+cap, and refuses a close attempt, with the remedy printed (9e5eda5b). Silence
+on the same point twice escalates into the human's report rather than
+repeating. The consent sweep never auto-proceeds an unanswered nudge — an
+unknown intervention kind falls through to no action, the safe direction.
 
 ## The urgent class
 

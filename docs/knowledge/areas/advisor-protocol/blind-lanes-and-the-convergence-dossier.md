@@ -131,3 +131,11 @@ against whatever it happened to say.
   home: `skills/bee-hive/references/gates-and-delegation.md` ("Blind lanes and
   convergence"). This concept describes what shipped; it never restates that
   procedure.
+- A second, sibling plan-step consult now lives beside blind lanes at that
+  same home: the **hat wave** — five fixed-perspective advisor dispatches at
+  the plan step, prompt-carried perspective, blue hat = orchestrator, the
+  human at Lock is the checker. Shipped as a docs-only procedure (no new
+  code); its home is the same file, section "Hat wave"
+  (`skills/bee-hive/references/gates-and-delegation.md`). The foreign-origin
+  spec-drop intake (corr-id as PBI id, provenance in CoS, proposed-until-shaped)
+  is documented separately, in `skills/bee-shaping/SKILL.md` ("Qualify").

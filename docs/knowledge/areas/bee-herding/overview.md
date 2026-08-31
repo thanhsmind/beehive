@@ -261,3 +261,9 @@ inside the bee repo and died with "prompt file not found" in every host project.
   [waves and occupancy](waves-and-occupancy.md) for why it lives there.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.
+- The herdr pane-transport craft — one-door delivery through `bee herding run`, ack/result-file
+  receipts, never a blind Enter into a stalled composer, and reading `herdr-result`'s response as
+  the wrapped envelope `{ok, transport, result: {...}}` rather than a bare `result-N.json` (piping
+  the mailbox file straight in fails with "herdr response missing result.status" — unwrap first) —
+  is a dedicated skill, `skills/bee-herdr/SKILL.md`, built RED-first with its baselines recorded in
+  `docs/history/herdr-skill/CREATION-LOG.md`.
