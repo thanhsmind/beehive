@@ -451,12 +451,21 @@ try {
     # nothing from pipelining and cannot afford a coin flip.
     $prevPipelining = $env:CARGO_BUILD_PIPELINING
     $env:CARGO_BUILD_PIPELINING = 'false'
+    # TARGET DIR PINNED, deliberately - same reason as install.sh: the binary
+    # check below reads packages\bee-rs\target\release, and a host that sets
+    # CARGO_TARGET_DIR (or config.toml build.target-dir) would build somewhere
+    # else and fail that check after a green build. The env var outranks every
+    # config file, so pinning it makes the output path the one checked.
+    $prevTargetDir = $env:CARGO_TARGET_DIR
+    $env:CARGO_TARGET_DIR = Join-Path $beeSrc 'packages\bee-rs\target'
     Write-Host 'build    cargo build --release (packages/bee-rs) - first build takes a few minutes'
     try {
       cargo build --release --manifest-path $cargoToml
     } finally {
       if ($null -eq $prevPipelining) { Remove-Item Env:\CARGO_BUILD_PIPELINING -ErrorAction SilentlyContinue }
       else { $env:CARGO_BUILD_PIPELINING = $prevPipelining }
+      if ($null -eq $prevTargetDir) { Remove-Item Env:\CARGO_TARGET_DIR -ErrorAction SilentlyContinue }
+      else { $env:CARGO_TARGET_DIR = $prevTargetDir }
     }
     if ($LASTEXITCODE -ne 0) {
       Fail ('cargo build --release failed. Run `rustup update stable` first - bee needs a current toolchain. ' +

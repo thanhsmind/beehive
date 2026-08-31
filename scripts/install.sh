@@ -295,7 +295,13 @@ if [ -z "$BEE_BIN" ]; then
   # found for `rlib` dependency <crate>" plus a cascade that reads as a broken
   # toolchain and is not one (rust-lang/cargo#16790). A cold one-shot install
   # build gains almost nothing from pipelining and cannot afford a coin flip.
-  CARGO_BUILD_PIPELINING=false cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Run \`rustup update stable\` first — bee needs a current toolchain. If the errors mention a metadata stub or a missing .rmeta, delete $BEE_SRC/packages/bee-rs/target and re-run."
+  # TARGET DIR PINNED, deliberately — the binary check below looks at
+  # packages/bee-rs/target/release, but a host with CARGO_TARGET_DIR set (or a
+  # config.toml build.target-dir) builds somewhere else entirely, the check
+  # finds nothing, and a green build reads as "produced no binary". The env
+  # var outranks every config file, so pinning it here makes the output path
+  # the one the check reads on every host.
+  CARGO_BUILD_PIPELINING=false CARGO_TARGET_DIR="$BEE_SRC/packages/bee-rs/target" cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Run \`rustup update stable\` first — bee needs a current toolchain. If the errors mention a metadata stub or a missing .rmeta, delete $BEE_SRC/packages/bee-rs/target and re-run."
   BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee"
   [ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
   [ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"
