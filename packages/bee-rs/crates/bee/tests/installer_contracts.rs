@@ -434,8 +434,18 @@ fn both_installers_build_with_pipelining_disabled() {
     let sh = read("scripts/install.sh");
     let ps1 = read("scripts/install.ps1");
 
+    // The contract is that the fallback build's OWN line carries the setting —
+    // never that the assignment sits flush against `cargo`. Other env pins live
+    // on that line too (`CARGO_TARGET_DIR`, added by ba1fe413), and an assertion
+    // that pinned adjacency called a correct line wrong the moment one landed.
+    // `--manifest-path` is what separates the INVOCATION from the log line
+    // above it, which also spells "cargo build --release" as prose.
+    let sh_build = sh
+        .lines()
+        .find(|l| l.contains("cargo build --release --manifest-path"))
+        .expect("install.sh no longer runs a fallback cargo build");
     assert!(
-        sh.contains("CARGO_BUILD_PIPELINING=false cargo build --release"),
+        sh_build.contains("CARGO_BUILD_PIPELINING=false"),
         "install.sh runs the fallback cargo build with pipelining ON again"
     );
     assert!(
