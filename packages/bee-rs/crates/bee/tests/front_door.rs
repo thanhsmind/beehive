@@ -19,6 +19,7 @@
 // refused, or unknown — never silence, never a zero exit with no output.
 
 use assert_cmd::Command;
+use std::path::Path;
 
 #[test]
 fn rs_info_reports_rust_runtime_and_no_fallback() {
@@ -94,10 +95,23 @@ fn a_bare_invocation_refuses_out_loud() {
 /// The release version the way `crate::version::BEE_VERSION` gets it — from
 /// the plugin manifest, the one source of truth — read here independently so
 /// the test checks the binary against the manifest, not against itself.
+///
+/// Read at RUN time, deliberately. `include_str!` baked the manifest into the
+/// test binary, and cargo rebuilt the `bee` bin but not this test when only
+/// that file changed — so a release bump produced a FALSE red comparing a
+/// fresh binary (2.30.0) against a stale constant (2.29.0), and the release
+/// script's test gate refused a release that was in fact fine. A gate that
+/// cries wolf on every version bump is worse than no gate. Reading the file
+/// now also makes the independence the doc claims literal: the bytes on disk,
+/// at the moment of the assertion.
 fn release_version() -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../..")
+        .join(".claude-plugin/plugin.json");
+    let body = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("plugin manifest reads at {}: {e}", path.display()));
     let manifest: serde_json::Value =
-        serde_json::from_str(include_str!("../../../../../.claude-plugin/plugin.json"))
-            .expect("plugin manifest parses");
+        serde_json::from_str(&body).expect("plugin manifest parses");
     manifest["version"].as_str().expect("manifest has a version").to_string()
 }
 
