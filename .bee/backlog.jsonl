@@ -1206,3 +1206,4 @@
 {"ts":"2026-08-31T08:14:40.560Z","kind":"pbi","event":"add","id":"sup-20260831-7f3a","title":"Make bee supervisor actually run — bee-side governance","status":"proposed","cos":"Spec-drop: docs/discovery/spec-drops/sup-20260831-7f3a.md. Not yet triaged."}
 {"ts":"2026-08-31T08:27:26.824Z","kind":"pbi","event":"status","id":"sup-20260831-7f3a","status":"proposed"}
 {"ts":"2026-08-31T08:34:21.157Z","kind":"pbi","event":"status","id":"sup-20260831-7f3a","status":"in-flight","feature":"supervisor-tick-contract"}
+{"ts":"2026-08-31T08:47:28.726Z","kind":"pbi","event":"status","id":"sup-20260831-7f3a","status":"done"}
