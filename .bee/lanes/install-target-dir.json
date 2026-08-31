@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Green: the exact failing case now completes — \"bee installed.\" with `CARGO_TARGET_DIR` set. Committing and landing.",
-    "asked_at": "2026-08-31T01:12:46.036Z",
+    "subject": "Everything was already pushed — one small bookkeeping file changed after. I push that too so the tree is fully clean.",
+    "asked_at": "2026-08-31T01:13:47.311Z",
     "session": "b5e31bf7-2545-46a3-a36e-1b508c43cdf4"
   },
   "route": {

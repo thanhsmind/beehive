@@ -425,3 +425,25 @@
 {"ts":"2026-08-31T00:55:54.178Z","event":"add","id":"4ec8eee6-264e-4b01-818e-2d69e433a4e3","kind":"promote","feature":"version-verb","cells":[],"areas":[],"files":["docs/history/version-verb/promote-proposals.md"],"reason":"Promote proposal for \"version-verb\" awaiting apply — docs/history/version-verb/promote-proposals.md."}
 {"ts":"2026-08-31T01:12:17.287Z","event":"add","id":"fecf63ef-0a17-4add-bffc-7242cedc8cf1","kind":"worktree-cleanup","feature":"install-target-dir","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--install-target-dir"],"reason":"Worktree beehive--wt--install-target-dir (branch wt/install-target-dir) merged into main at 293993036ed5d827ab77493482bf419e7ef7e294 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-08-31T01:12:20.873Z","event":"add","id":"7bcf3138-a7bd-49fb-9700-b8e1642f6e43","kind":"promote","feature":"install-target-dir","cells":[],"areas":[],"files":["docs/history/install-target-dir/promote-proposals.md"],"reason":"Promote proposal for \"install-target-dir\" awaiting apply — docs/history/install-target-dir/promote-proposals.md."}
+{"ts":"2026-08-31T01:14:02.367Z","event":"complete","id":"3bcebd75-1236-45dd-a73f-167a6426bb4d"}
+{"ts":"2026-08-31T01:14:02.620Z","event":"complete","id":"5a00886b-6c5d-4595-8d0e-df306102822d"}
+{"ts":"2026-08-31T01:14:02.870Z","event":"complete","id":"ce5dc623-67d6-4f29-ade7-0be1130d950d"}
+{"ts":"2026-08-31T01:14:03.122Z","event":"complete","id":"614edef2-ebba-4dd4-9063-26ab18413a7e"}
+{"ts":"2026-08-31T01:14:03.385Z","event":"complete","id":"7e4f037a-bacd-4dfd-89a7-730fa73a08a3"}
+{"ts":"2026-08-31T01:14:03.645Z","event":"complete","id":"fb5a75f9-d0f1-4d2b-bdaf-fdb567c36cc4"}
+{"ts":"2026-08-31T01:14:03.938Z","event":"complete","id":"fecf63ef-0a17-4add-bffc-7242cedc8cf1"}
+{"ts":"2026-08-31T01:14:04.209Z","event":"complete","id":"a7665a7d-d891-458c-b1e5-9adfbbde0182"}
+{"ts":"2026-08-31T01:14:04.477Z","event":"complete","id":"f0c16816-4a46-4f5e-b01e-3ad830a5b23d"}
+{"ts":"2026-08-31T01:14:04.740Z","event":"complete","id":"f847762b-2635-44b0-a33a-f65a39cd2661"}
+{"ts":"2026-08-31T01:14:04.994Z","event":"complete","id":"18172e0b-5a76-4b78-ae8d-c8a8cc864df9"}
+{"ts":"2026-08-31T01:14:05.254Z","event":"complete","id":"b14bc1d2-dc84-4eae-a845-98a478ccc1dd"}
+{"ts":"2026-08-31T01:14:05.515Z","event":"complete","id":"2e4dfafe-bfd9-42d5-ad44-9b6b4ff7e8c7"}
+{"ts":"2026-08-31T01:14:05.789Z","event":"complete","id":"2af11c6f-a313-4810-9aef-51ccf61da9a0"}
+{"ts":"2026-08-31T01:14:06.042Z","event":"complete","id":"fc605c80-e308-4e43-9f93-d51e55c03d5a"}
+{"ts":"2026-08-31T01:14:06.302Z","event":"complete","id":"11d78623-8515-47a1-b530-f3027155de57"}
+{"ts":"2026-08-31T01:14:06.560Z","event":"complete","id":"80c253cb-1687-4783-8218-0205965cdd3d"}
+{"ts":"2026-08-31T01:14:06.823Z","event":"complete","id":"b1281f49-050b-49aa-92e3-f02f20e1e971"}
+{"ts":"2026-08-31T01:14:06.823Z","event":"complete","id":"79246f6f-b57f-492c-b3f1-e45d75f9321c"}
+{"ts":"2026-08-31T01:14:06.823Z","event":"complete","id":"75291ea1-7b12-4c7d-8268-7d7105ab8772"}
+{"ts":"2026-08-31T01:14:07.127Z","event":"complete","id":"877176dd-4f77-4591-85c4-12ecfd59e5e5"}
+{"ts":"2026-08-31T01:14:07.404Z","event":"complete","id":"0161c7f1-ca2b-411e-9109-a9b14b6b664d"}
