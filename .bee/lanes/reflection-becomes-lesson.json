@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"reflection-becomes-lesson\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming for rbl-1.",
+  "next_action": "Merged into main at c642059; reload the product and test \"reflection-becomes-lesson\", then either approve uat (\"bee gate --name uat --approved true --lane reflection-becomes-lesson\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-31T14:13:16.880Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "▸ Full test đang chạy. Trong lúc chờ, kiểm tra lá thư có đúng mục \"Mistakes & reflection\" chưa:",
-    "asked_at": "2026-08-31T15:20:01.622Z",
-    "session": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9"
+    "kind": "gate",
+    "subject": "uat: reflection-becomes-lesson",
+    "asked_at": "2026-08-31T15:22:34.554Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -41,12 +41,5 @@
     "plan_sha256": "44b7dafefab837103f022e55e13456f41d1599f372c401081680499591cda307",
     "advisor": "fable (hat wave, five seats)",
     "digest_head": "# reflection-becomes-lesson — plan-step hat wave\n\n**Date:** 2026-08-31 · **Seats:** five (high-risk) · **Quorum:** all five\nreturned inside the ceiling · **Synthesis:** the leader.\n\nThe wave was the plan check and the high-risk advisor consult, per the\nabsorption rule. It changed the plan in four material ways.\n\n## What the wave changed\n\n| Seat | Finding | Disposition |\n|---|---|---|\n| facts-gaps | **B1 BLOCKER** — reflections are stored per run; `bee close` resolves its own session's run, which"
-  },
-  "merge_ready": {
-    "since": "2026-08-31T15:01:37.291Z",
-    "branch": "wt/reflection-becomes-lesson",
-    "worktree_id": "beehive--wt--reflection-becomes-lesson",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
