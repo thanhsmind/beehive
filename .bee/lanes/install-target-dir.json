@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"install-target-dir\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"install-target-dir\" (lane).",
+  "next_action": "Merged into main at 2939930; capture what settled, then bee close --feature install-target-dir.",
   "created_at": "2026-08-31T01:10:01.870Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": "installers hardcode packages/bee-rs/target/release; a set CARGO_TARGET_DIR builds elsewhere and install fails at the binary check — pin CARGO_TARGET_DIR on the installer build line in install.sh and install.ps1",
     "updated_at": "2026-08-31T01:10:11.651Z",
     "feature": "install-target-dir"
-  },
-  "merge_ready": {
-    "since": "2026-08-31T01:12:11.110Z",
-    "branch": "wt/install-target-dir",
-    "worktree_id": "beehive--wt--install-target-dir",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
