@@ -29,6 +29,12 @@ The word *supervisor* here means **observer**, not router. A supervisor asks
 open questions and writes reports. Anything that hands out work is a different
 role, and that second meaning is rejected in this area (CONTEXT Terms).
 
+**This is the per-repo supervisor.** slp-human-up (2f4bf3b1) added a second,
+cross-project supervisor at the waggledance layer; **b590e508** settled that
+the two coexist rather than one replacing the other — "a near eye inside each
+repo and a far eye across the fleet, both cold ticks, neither replacing the
+other." Everything below describes the near eye only.
+
 ## One tick, one record
 
 A supervisor tick wakes **cold** — no memory of the previous tick — on the

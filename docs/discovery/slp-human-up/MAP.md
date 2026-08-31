@@ -83,7 +83,10 @@ repo's own backlog when its cluster shapes.
   tickets/004-waggledance-supervisor-feasibility.md
 - 07328333: hat wave = docs-only procedure over the dispatch door, seam is
   bee-shaping pre-Lock, five advisor dispatches, blue hat = orchestrator —
-  tickets/006-hat-wave-seam.md
+  tickets/006-hat-wave-seam.md. Extended by **98ac20a1** (proactive-leader-intake):
+  the pre-Lock wave is kept, not retired, and gains a sibling — an intake wave
+  that frames open questions before any draft exists, so the hat wave now runs
+  at two windows instead of one.
 
 ## Not yet specified
 

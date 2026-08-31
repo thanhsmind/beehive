@@ -20,3 +20,8 @@ high-risk content parks; deliberately NOT herding-ignitable before triage.
 **Will do:** exactly those three edits (gates-and-delegation.md section,
 bee-shaping SKILL.md pointer + Qualify paragraph), then the regen chain and
 a capture line. No verb, no store, no code.
+
+**Later touched:** proactive-leader-intake (98ac20a1) kept this pre-Lock wave
+rather than retiring it, and gave it a sibling — an intake-time wave that
+frames open questions before any draft exists — so the hat wave now runs at
+two windows instead of one; see gates-and-delegation.md for the current home.
