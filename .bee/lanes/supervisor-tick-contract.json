@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"supervisor-tick-contract\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"supervisor-tick-contract\" — feature is closed.",
+  "next_action": "Merged into main at 579a8e6; capture what settled, then bee close --feature supervisor-tick-contract.",
   "created_at": "2026-08-31T08:37:56.273Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "docs",
@@ -23,12 +23,5 @@
     "rationale": "Four-gap triage resolves to decision-log entries, a parked PBI, and one knowledge-area doc addition -- no packages/ or skills/ source file is touched, only docs/ and .bee/ state. Full explore-gate-plan-execute-scribe chain run anyway per explicit user instruction (no longer file-and-stop).",
     "updated_at": "2026-08-31T08:38:47.944Z",
     "feature": "supervisor-tick-contract"
-  },
-  "merge_ready": {
-    "since": "2026-08-31T08:41:42.680Z",
-    "branch": "wt/supervisor-tick-contract",
-    "worktree_id": "beehive--wt--supervisor-tick-contract",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
