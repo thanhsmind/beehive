@@ -61,8 +61,8 @@ rather than trusting the spec's claims at face value.
 
 None blocking planning. The only genuinely open design question (the notebook's causal shape, gap 4) is resolved by deferral, not left open — see `p-bd1debcd`.
 
+<!-- bee:not-a-deferral: template section heading plus a pointer to an already-registered deferral (parked PBI p-bd1debcd is the live record; this section promises no untracked future action) -->
 ## Deferred Ideas
 
-<!-- bee:not-a-deferral: documents an already-registered deferral (parked PBI p-bd1debcd is the live record; this line only points to it, no unregistered promise here) -->
 - Enforcing Demonthorn §4.2's full seven-field notebook shape in `bee supervisor record` — filed as parked PBI `p-bd1debcd`, revisit only if the current terse shape proves insufficient in practice.
 <!-- /bee:not-a-deferral -->
