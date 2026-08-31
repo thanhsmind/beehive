@@ -293,12 +293,20 @@ pub(crate) fn needs_human_decision(kind: &str) -> bool {
 /// The poor-work vocabulary. `budget-overrun` and `same-region-resubmit` are
 /// the two 3cfd9980 names beside `struggling-loop`; the telemetry that
 /// produces them landed with a8f4b8ab, so the word is what was missing.
-pub(crate) const KNOWN_SIGNALS: [&str; 6] = [
+///
+/// `dead-lead` is the one signal the tick does not infer from a pane: it reads
+/// `bee status --json` → `recovery.candidates`, which the recovery sweep
+/// already builds and already gates on a work signal. The observer NEVER
+/// starts a successor — the note it writes carries the facts and a resume line,
+/// and the human's keystroke is the spawn. The automatic half of the ported
+/// idea was refused at its plan check (`docs/history/slp-lead-recovery/`).
+pub(crate) const KNOWN_SIGNALS: [&str; 7] = [
     "struggling-loop",
     "big-decision",
     "danger-op",
     "budget-overrun",
     "same-region-resubmit",
+    "dead-lead",
     "none",
 ];
 
@@ -1946,7 +1954,12 @@ fn report_order(a: &ReportItem, b: &ReportItem) -> std::cmp::Ordering {
 /// nothing about it says "getting this wrong costs".
 fn observation_rank(signal: &str) -> u8 {
     match signal {
-        "danger-op" => 3,
+        "danger-op" => 4,
+        // A lead that stopped with unfinished work is the one row whose whole
+        // value is being READ on return — at the `_ => 0` floor it is the
+        // first line a busy report truncates, which is exactly the report it
+        // exists for. Above the poor-work signals, below the danger class.
+        "dead-lead" => 3,
         "big-decision" => 2,
         "struggling-loop" => 1,
         _ => 0,
@@ -3841,6 +3854,38 @@ mod tests {
     fn all_kinds_is_exactly_the_tick_set_plus_the_mailbox_set() {
         let joined: Vec<&str> = KNOWN_KINDS.iter().chain(MAILBOX_KINDS.iter()).copied().collect();
         assert_eq!(ALL_KINDS.to_vec(), joined, "the refusal set must stay the union of the two");
+    }
+
+    /// A stopped lead is read on RETURN, from a report that truncates by rank.
+    /// At the `_ => 0` floor it sorted below every named signal and was the
+    /// first line dropped from a busy window — the one window it exists for.
+    #[test]
+    fn a_dead_lead_outranks_the_poor_work_signals_and_yields_to_the_danger_class() {
+        assert!(
+            observation_rank("dead-lead") > observation_rank("struggling-loop"),
+            "a stopped lead must not sort below a loop that is still working"
+        );
+        assert!(
+            observation_rank("dead-lead") > observation_rank("big-decision"),
+            "a stopped lead must not sort below a decision someone is still around to defend"
+        );
+        assert!(
+            observation_rank("danger-op") > observation_rank("dead-lead"),
+            "an undo-hard operation in flight still outranks a session that already stopped"
+        );
+        assert!(
+            observation_rank("dead-lead") > observation_rank("none"),
+            "a named signal must outrank the unranked floor"
+        );
+    }
+
+    /// The signal is only worth a rank if the verb accepts it: this is the
+    /// half `record` refuses on, and `KNOWN_SIGNALS` is the closed set it
+    /// checks. The shipped prompt is tied to this same set by
+    /// `herding::control_loop::the_shipped_prompt_pins_the_record_verbs_own_closed_sets`.
+    #[test]
+    fn dead_lead_is_a_signal_the_record_verb_accepts() {
+        assert!(KNOWN_SIGNALS.contains(&"dead-lead"), "record would refuse the signal it is ranked for");
     }
 
     #[test]

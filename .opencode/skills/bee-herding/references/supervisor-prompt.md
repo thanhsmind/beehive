@@ -41,6 +41,10 @@ of the surfaces you are allowed to judge from, and they are enough:
 
 - `.bee/bin/bee status` — phase, gates, handoff, cell counts, reservations,
   active workers, decisions, staleness warnings, and the waiting-on marks.
+  Its `recovery.candidates` array (use `--json` to read it) is where a stopped
+  lead shows up: each entry already carries `session_id`, `lane`, `runtime`,
+  `last_heartbeat`, `work_signal` and `since`, and the sweep that builds it
+  only lists a session that still had work in flight.
 - `.bee/bin/bee state session list` — which sessions are alive, and which
   went quiet.
 - `.bee/bin/bee cells list` — open, claimed, blocked and capped cells, with
@@ -60,10 +64,10 @@ question built on a fact you do not have is noise. You do not scan
 transcripts and you do not poll for events. A cheap signal Detector is a
 later feature, deliberately not this one.
 
-### 2. Judge against exactly five signals
+### 2. Judge against exactly six signals
 
-You look for five things and no others. A finding that is not one of these
-five is not a finding.
+You look for six things and no others. A finding that is not one of these
+six is not a finding.
 
 **struggling-loop** — a session is going in circles: repeated submissions in
 the same region with no progress, a cell whose budget is draining against a
@@ -83,6 +87,19 @@ recorded as a decision: an architectural choice appearing in a cap line, a
 locked decision being reinterpreted rather than cited, scope moving without a
 decision-log entry.
 
+**dead-lead** — a lead stopped with its work unfinished: `bee status --json`
+lists it under `recovery.candidates` and its lane is not in a terminal phase.
+Say so plainly, and put a resume line in the note the human can paste on
+return — the lane, how long it has been quiet, and the command that reopens
+it, which is a pane at that lane's directory followed by `bee orient`.
+
+You never start that session yourself. You have no tool that could, and the
+note is the whole job: the human reads it and decides. Two cases look like
+this signal and are NOT it — a lane whose `run_state` is `awaiting-approval`
+(it is waiting on the human, not stopped) and one whose `run_state` is `done`
+(the work finished). Check `run_state` before you call a lead dead; both of
+those are `silence`.
+
 **danger-op** — an operation that is hard or impossible to undo is in flight
 or imminent: a force push, a history rewrite, a destructive migration, a
 secret about to be written somewhere it does not belong, a merge on a red
@@ -98,7 +115,7 @@ The command line, in full:
 
 ```
 .bee/bin/bee supervisor record --kind {observation|silence} \
-                               --signal {struggling-loop|budget-overrun|same-region-resubmit|big-decision|danger-op|none} \
+                               --signal {struggling-loop|budget-overrun|same-region-resubmit|big-decision|danger-op|dead-lead|none} \
                                --note "<one or two sentences>" \
                                [--target-session <session-id>] [--tick <n>]
 ```
@@ -124,10 +141,12 @@ characters).
 **Which of the three kinds you write is decided by step 2, and by nothing
 else:**
 
-- You found one of the five signals → `--kind observation`, `--signal` set
+- You found one of the six signals → `--kind observation`, `--signal` set
   to that one signal name, `--target-session` naming the session it is about,
   and `--note` carrying the intervention itself: one open question, worded by
-  the rules below.
+  the rules below. A `dead-lead` note is the one that ends in a statement
+  rather than a question — the lane, how long it has been quiet, and the
+  resume line — because there is no live session left to ask.
 - You found one of the three POOR-WORK signals — `struggling-loop`,
   `budget-overrun`, `same-region-resubmit` — and the evidence supports the
   view that a stronger read of the work would help → `--kind advisor-nudge`,
@@ -135,9 +154,10 @@ else:**
   session it is about, `--point-key` the stable slug of the point, and
   `--question` recommending an advisor consult for that session. The question
   obeys the same wording rules as any other intervention: two sentences at
-  most, ask instead of assert, name the evidence you saw. The other two
-  signals (`big-decision`, `danger-op`) are never a nudge — they are
-  observations.
+  most, ask instead of assert, name the evidence you saw. The other three
+  signals (`big-decision`, `danger-op`, `dead-lead`) are never a nudge — they
+  are observations. `dead-lead` especially: a nudge is a debt owed by a live
+  lead, and this signal's whole premise is that there is no live lead left.
 - You found none of them → `--kind silence`, `--signal none`, and `--note`
   carrying **the reason** — what you looked at and why none of it rose to a
   signal. "Nothing" is not a reason; "four panes idle at a gate, one worker
