@@ -82,5 +82,7 @@ consumers must parse filed letters unchanged.
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: this line states that nothing was deferred; the word deferred is the subject, not a promise -->
 None. The four decisions above cover the whole ask; nothing was
 deferred and nothing was guessed.
+<!-- /bee:not-a-deferral -->

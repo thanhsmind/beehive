@@ -35,9 +35,11 @@ follows from that.
   is hit. Each appends its own entry at the moment it happens.
 - **A feature close** — first demands the mistakes answer: it refuses while
   any capped cell of the feature has neither a reflection nor the clean-run
+<!-- bee:not-a-deferral: describes when the run end re-composes an already-filed letter — shipped machinery, not a promise to act later -->
   statement (RBL D1, D5). Past that door it files the run's letter
   immediately, attended or not (LD2); the run end later re-composes that same
   letter in place.
+<!-- /bee:not-a-deferral -->
 - **The end of a run** — an armed run composes its entries into one letter and
   files it.
 - **The start of a session** — a run that went silent without ever reaching its
@@ -58,7 +60,9 @@ follows from that.
 | **departure** | A recorded difference between what the plan said and what was done, in three required parts — what was done differently, why, and which kind — with kind drawn from a closed set of four. |
 | **plan-followed statement** | The explicit declaration that a unit followed its plan. Recorded separately from departures, so that a statement meaning *nothing happened* can never be mined as though it were a lesson. |
 | **reflection** | An entry kind the agent appends the moment it notices a mistake, or at the run-end look-back, via `bee mailbox reflect --wrong <what went wrong> --better <what would have been better>` (LR2). Both parts are required; a missing part refuses the append (LR3). It renders as the letter's "Mistakes & reflection" section, between Broken-or-unfinished and Needs-your-call, dropped when empty (LR1); a reflection never appears in Done and never becomes the subject — a mistake is not a thing the run did. Lesson mining reads it as a trouble source, by its `what` alone (RBL D3 `0872f328`, superseding LR4). |
+<!-- bee:not-a-deferral: "a later session" names which session files the letter, shipped recovery behaviour, not a deferred task -->
 | **unfinished letter** | A letter filed by a later session for a run that went silent, marked plainly as such and naming the moment the run last recorded anything. |
+<!-- /bee:not-a-deferral -->
 | **read state** | Whether the human has read a letter. It lives inside the letter file, and bee is its only writer. |
 | **digest** | One markdown file folding one finished period — a UTC day (`digest-YYYY-MM-DD.md`) or an ISO week (`digest-YYYY-Www.md`) — from that period's letters and stored usage records, filed beside the letters with frontmatter `type: digest`. A renderer, never a summarizer: it groups and transcribes, it computes nothing (LD1, LD3). |
 | **lesson** | A decision tagged `lesson`, auto-logged by the weekly fold when the same normalized error shape appears in letters of two or more distinct runs. It cites the letters and carries a stable `shape:<sha-12>` token; a token already logged — active or superseded — is never re-logged, so a retired lesson stays retired (LD4). |
@@ -148,6 +152,7 @@ scheduler being introduced to watch for this.
     (LD1, LD3) — no email, no scheduler, idempotent by file existence, and
     letter-only surfaces never see a `digest-*` name, so a digest can never
     enter the lettered set or be folded as a letter.
+<!-- bee:not-a-deferral: "later goes silent" names the state recovery covers — shipped behaviour, not a deferred task -->
 14. **A close-lettered run that later goes silent is still recovered** — a
     lettered run whose entries file is newer than its letter is a D12
     candidate (two stats, no opens), and recovery re-composes that one
@@ -191,6 +196,7 @@ scheduler being introduced to watch for this.
     reading of the reported values lands both the cell trace the door reads
     and the mailbox entry the letter renders, so the two can never disagree
     about what a run answered. The cap itself adds no refusal of its own.
+<!-- /bee:not-a-deferral -->
 
 ## Edge Cases Settled
 

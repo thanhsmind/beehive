@@ -146,9 +146,11 @@ the same underlying mistake, written in different runs about different
 files, will not hash to the same token — so **auto-mined lessons will be
 rare**. What ships immediately and visibly is the letter: every run's
 mistakes become readable, and they become the raw material a human or a
+<!-- bee:not-a-deferral: names the honest ceiling on auto-mined lessons; the follow-up is filed as PBI p-6061cd5f and backlog rows, not owed by this prose -->
 later feature can distill. Saying this now is the point; the user's
 complaint returning in a month as "still no lessons" is the failure this
 paragraph exists to prevent.
+<!-- /bee:not-a-deferral -->
 
 Two known limits, stated rather than hidden:
 
