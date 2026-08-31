@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["slp-supervisor-heartbeat 787a9eb0 (SLP is distilled into bee's skeleton; bee's locked rules win on any conflict — the observer adds beside them, never relaxes them)", "slp-supervisor-heartbeat 322695d6 (the supervisor is a new role of the herding control loop, cold per tick, model from the configured supervisor role, tool surface enumerated read/query only)", "slp-supervisor-heartbeat da7cb49b (observation reads bee's seven existing surfaces; day-1 signals struggling-loop, big-decision, danger-op; the cheap Detector poller is NOT this feature)", "slp-supervisor-heartbeat c80debd7 (interventions are file records read at the target session's NEXT turn boundary, never mid-turn injection; same point twice escalates, never repeats; danger-class alerts notify immediately)", "slp-supervisor-heartbeat a8f4b8ab (added signals: work over 2x its recorded estimate measured by the harness, and two consecutive submissions differing only in the same region)", "slp-supervisor-heartbeat a020319d (this is the FIRST of four slp clusters; dissent, blind lanes, and contract/original-request are separate features)", "slp-human-up 3cfd9980 (an advisor-nudge record recommends only; the target lead summons the advisor itself)", "slp-human-up 9e5eda5b (an advisor-nudge is a response debt enforced like judge-debt/dissent-debt)"]
+  decisions: ["slp-supervisor-heartbeat 787a9eb0 (SLP is distilled into bee's skeleton; bee's locked rules win on any conflict — the observer adds beside them, never relaxes them)", "slp-supervisor-heartbeat 322695d6 (the supervisor is a new role of the herding control loop, cold per tick, model from the configured supervisor role, tool surface enumerated read/query only)", "slp-supervisor-heartbeat da7cb49b (observation reads bee's seven existing surfaces; day-1 signals struggling-loop, big-decision, danger-op; the cheap Detector poller is NOT this feature)", "slp-supervisor-heartbeat c80debd7 (interventions are file records read at the target session's NEXT turn boundary, never mid-turn injection; same point twice escalates, never repeats; danger-class alerts notify immediately)", "slp-supervisor-heartbeat a8f4b8ab (added signals: work over 2x its recorded estimate measured by the harness, and two consecutive submissions differing only in the same region)", "slp-supervisor-heartbeat a020319d (this is the FIRST of four slp clusters; dissent, blind lanes, and contract/original-request are separate features)", "slp-human-up 3cfd9980 (an advisor-nudge record recommends only; the target lead summons the advisor itself)", "slp-human-up 9e5eda5b (an advisor-nudge is a response debt enforced like judge-debt/dissent-debt)", "supervisor-tick-contract 051b87ba (--role supervisor --once --main-root PATH is the documented external-trigger primitive for a cross-repo caller; no new verb, no signature change)"]
   sources: [docs/history/slp-supervisor-heartbeat/CONTEXT.md, docs/history/slp-supervisor-heartbeat/plan.md, docs/discovery/slp-supervisor-lead-peer/MAP.md, docs/history/research/slp-observer-surfaces.md, docs/history/research/slp-supervisor-placement.md, "slp-supervisor-heartbeat cells sup-1, sup-2, sup-3 (the role arm, the observation store and its verbs, the end-to-end tick; traces in `.bee/cells/`, 2026-08-27)", "slp-supervisor-heartbeat cells sup-5, sup-6, sup-7 (the frequency-capped intervention mailbox, next-turn delivery through the prompt hook, the urgent class; traces in `.bee/cells/`, 2026-08-27)", "capture stub 3b7b9e9c (Phase 3 shape: four event-sourced stores resolved against the control root)"]
   authoritative_for: "bee-herding: the supervisor observer role, its observation tick, and the intervention channel"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/supervisor.rs, packages/bee-rs/crates/bee/src/herding/control_loop.rs]
@@ -149,11 +149,56 @@ stateDiagram-v2
     Delivered --> [*]
 ```
 
+## External trigger (cross-repo callers)
+
+**This is the per-repo store's own supervisor; `.bee/supervisor/` still anchors
+at the control root, never cross-repo (see "Four stores, one root" above).**
+A cross-repo caller — waggledance's own fleet-wide supervisor is the
+motivating case — never reads or writes that store directly. What it CAN do
+is trigger one cold tick of this repo's own observer from outside, and that
+trigger already exists: it needs no new verb.
+
+**The primitive:**
+
+```
+bee herding control-loop --role supervisor --once --main-root <path-to-repo>
+```
+
+Run from anywhere — the caller's own process, not a pane inside the target
+repo — this spawns exactly one tick against the named repo's own store, the
+same way any other cross-repo write in this ecosystem works: by spawning the
+target repo's own bee CLI at its root, never by reaching into its `.bee/`
+directly (the pattern `docs/discovery/slp-human-up/tickets/004-waggledance-supervisor-feasibility.md`
+already established for `bee decisions log` / `bee backlog pbi add`).
+
+- **No pane required.** `--role supervisor` needs neither `tmux` nor
+  `herdr`: the loop's own spawn path (`run_iteration_with_ceiling`) calls
+  `Command::new(argv[0]).spawn()` directly — a plain subprocess, exactly
+  `claude -p "<prompt>" --model <supervisor-model> --max-turns N
+  --allowedTools <SUPERVISOR_ALLOWED_TOOLS>`.
+- **Exit code contract.** `0` on a completed OR gracefully-timed-out tick
+  (`--once` is `LoopOutcome::NormalStop`); `1` only if the spawn itself
+  fails (the `claude` binary is missing, or the process cannot start/wait).
+  A supervisor tick never fails the caller's script by finding something
+  worth flagging — that outcome is a normal `0` exit with an observation
+  record on disk, not a nonzero exit.
+- **Safe to call repeatedly, even concurrently with a repo's own interval
+  loop.** Every store this tick touches is append-only, and the point-key
+  frequency cap (see "The same point is never made twice" above) absorbs a
+  duplicate tick as redundant model spend, never as a correctness bug or a
+  duplicate delivery. No lock file guards concurrent invocation, and none
+  was added — there is no real failure mode to guard against.
+- **No verb surface change.** This is the existing `--once`/`--main-root`
+  shape (322695d6); `bee supervisor`'s 10 verbs are untouched, so a caller
+  already built against that surface (waggledance's own PBI
+  `sup-20260831-b2e1`) needs no changes on this side either.
+
 ## Pointers
 
 - Role arm and the enumerated tool surface: `packages/bee-rs/crates/bee/src/herding/control_loop.rs` (`Role`, `allowed_tools_for`).
 - Stores, records, and every verb: `packages/bee-rs/crates/bee/src/verbs/supervisor.rs`.
 - Verb surface: `bee supervisor record | list | pending | mark-delivered`, driven by `bee herding control-loop --role supervisor --interval 900`.
+- External trigger: `bee herding control-loop --role supervisor --once --main-root <path>` (see "External trigger (cross-repo callers)" above).
 - Store root: `.bee/supervisor/` under the control root.
 - Observer prompt: `skills/bee-herding/references/supervisor-prompt.md`.
 - Delivery point: the `UserPromptSubmit` hook.
