@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"slp-lead-recovery\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 57a5f6a; reload the product and test \"slp-lead-recovery\", then either approve uat (\"bee gate --name uat --approved true --lane slp-lead-recovery\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-planning for \"slp-lead-recovery\" (lane).",
   "created_at": "2026-08-31T04:23:46.986Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: slp-lead-recovery",
-    "asked_at": "2026-08-31T04:50:00.756Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",

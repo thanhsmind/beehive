@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The pane that the last tick flagged (`w1:pE`, session `6aa67394`) has moved past the stuck \"done\" state — it's now showing a live plan-revie",
-    "asked_at": "2026-08-31T04:42:34.086Z",
-    "session": "d1700a59-c803-4234-b303-866bde221cde"
+    "subject": "(turn ended)",
+    "asked_at": "2026-08-31T04:58:46.086Z",
+    "session": "cfe130a8-4c2d-4e46-953f-66c6560be7f8"
   },
   "route": {
     "class": "feature",
