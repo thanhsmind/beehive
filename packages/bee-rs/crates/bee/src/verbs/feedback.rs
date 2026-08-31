@@ -890,6 +890,7 @@ struct CollectData {
     skipped: usize,
     scanned: Vec<&'static str>,
     absent: Vec<&'static str>,
+    mistakes: MistakesTally,
 }
 
 struct CountsData {
@@ -898,6 +899,71 @@ struct CountsData {
     skipped: usize,
     scanned: Vec<&'static str>,
     absent: Vec<&'static str>,
+    mistakes: MistakesTally,
+}
+
+/// reflection-becomes-lesson D6: how the caps ANSWERED the mistakes question.
+///
+/// A run that reaches for `--no-mistakes` on every close regresses the whole
+/// chain back to the silence it was built to end, and it does so quietly: every
+/// door stays green, every letter stays empty, and nobody notices for a month.
+/// These two numbers are the witness. They are counted off the cell traces the
+/// cap already writes (`trace.no_mistakes` and `trace.mistakes`), so nothing new
+/// is stored to produce them.
+///
+/// A WITNESS, NEVER A GUARD. Nothing here refuses, drops, or scores anything —
+/// the digest reports the ratio and the human reads it.
+#[derive(Default)]
+struct MistakesTally {
+    /// Caps that answered "nothing went wrong", out loud (D2).
+    clean: usize,
+    /// Caps that wrote down at least one real mistake.
+    recorded: usize,
+}
+
+impl MistakesTally {
+    /// `<clean> clean / <recorded> reflected`, the human-readable half.
+    ///
+    /// The counts lead and the ratio trails, because the counts are the facts
+    /// and the ratio is the reading of them. With no answers at all the ratio
+    /// is left unsaid rather than printed as a division by zero.
+    fn line(&self) -> String {
+        let answered = self.clean + self.recorded;
+        if answered == 0 {
+            return "no mistakes answer yet".to_string();
+        }
+        let pct = (self.clean as f64) * 100.0 / (answered as f64);
+        format!("{} clean / {} reflected ({pct:.0}% clean)", self.clean, self.recorded)
+    }
+
+    /// The tally a built digest carries, read back out of its `counts`.
+    ///
+    /// One rendering for both halves: the digest object and the line printed
+    /// beside it can never state two different ratios, because the line is
+    /// computed FROM the object.
+    fn from_counts(counts: &Value) -> Self {
+        let n = |key: &str| counts["mistakes_answer"][key].as_u64().unwrap_or(0) as usize;
+        Self { clean: n("clean"), recorded: n("recorded") }
+    }
+
+    fn to_value(&self) -> Value {
+        let answered = self.clean + self.recorded;
+        let mut m = Map::new();
+        m.insert("clean".into(), Value::from(self.clean));
+        m.insert("recorded".into(), Value::from(self.recorded));
+        m.insert("answered".into(), Value::from(answered));
+        // `null` rather than 0 when nothing answered: no ratio exists yet, and
+        // a zero would read as "every cap reflected".
+        m.insert(
+            "clean_ratio".into(),
+            if answered == 0 {
+                Value::Null
+            } else {
+                Value::from(((self.clean as f64) * 1000.0 / (answered as f64)).round() / 1000.0)
+            },
+        );
+        Value::Object(m)
+    }
 }
 
 /// scanTitle: secret takes precedence over injection; non-strings scan as ''.
@@ -923,6 +989,8 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
     let mut absent: Vec<&'static str> = Vec::new();
     let mut skipped = 0usize;
     let mut raw: Vec<RawCandidate> = Vec::new();
+    // D6's witness, filled from the same cell walk below.
+    let mut mistakes = MistakesTally::default();
 
     // .bee/backlog.jsonl — friction/proposal rows (kind:'pbi' rows skipped).
     match resolve_in_scope(&real_root, SRC_BACKLOG) {
@@ -1042,6 +1110,17 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
                     Some(Value::String(s)) => Value::String(s.clone()),
                     _ => Value::String(String::new()),
                 };
+                // reflection-becomes-lesson D6 — COUNT ONLY. A written
+                // mistake outranks the clean flag here for the same reason the
+                // cap ranks them that way: the mistake is the fact, and a cap
+                // that wrote one did not have a clean run. A cap that answered
+                // neither is counted in neither column; silence is not an
+                // answer, and this line will not invent one for it.
+                if matches!(field("mistakes"), Some(Value::Array(a)) if !a.is_empty()) {
+                    mistakes.recorded += 1;
+                } else if field("no_mistakes").map(js_truthy).unwrap_or(false) {
+                    mistakes.clean += 1;
+                }
                 if field("blocked_reason").map(js_truthy).unwrap_or(false) {
                     raw.push(RawCandidate {
                         ty: Value::String("blocked".into()),
@@ -1112,7 +1191,7 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
 
     scanned.sort();
     absent.sort();
-    Some(CollectData { raw, skipped, scanned, absent })
+    Some(CollectData { raw, skipped, scanned, absent, mistakes })
 }
 
 // ─── ENTRY_FIELD_SPEC / buildEntry (LOCAL, trusted path only) ─────────────
@@ -1282,6 +1361,7 @@ fn collect_counts(root: &Path) -> Option<CountsData> {
         skipped: data.skipped,
         scanned: data.scanned,
         absent: data.absent,
+        mistakes: data.mistakes,
     })
 }
 
@@ -1315,6 +1395,10 @@ fn counts_value(data: &CountsData) -> Value {
         "sources_absent".into(),
         Value::Array(data.absent.iter().map(|s| Value::String(s.to_string())).collect()),
     );
+    // D6, LAST: the digest's key order is frozen up to here, so a consumer
+    // written against the six keys above reads a digest carrying this one
+    // unchanged. It grows the object and moves nothing.
+    counts.insert("mistakes_answer".into(), data.mistakes.to_value());
     Value::Object(counts)
 }
 
@@ -1615,7 +1699,12 @@ fn digest_summary_line(digest: &Value) -> String {
             .join(", ")
     };
     let word = if entries == 1 { "entry" } else { "entries" };
-    format!("{entries} {word}, {dropped_n} dropped ({summary})")
+    // D6 rides the line the human already reads. Trailing, so the counts that
+    // were here first still lead, and stated in words rather than a bare
+    // fraction — "12 clean / 0 reflected" is the sentence that makes a
+    // reflexive clean answer impossible to miss.
+    let mistakes = MistakesTally::from_counts(&digest["counts"]).line();
+    format!("{entries} {word}, {dropped_n} dropped ({summary}); mistakes: {mistakes}")
 }
 
 fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -2182,7 +2271,88 @@ mod tests {
         assert_eq!(summary_line(&data), "0 entries, 0 dropped (none)");
         assert_eq!(
             jsjson::stringify(&counts_value(&data)),
-            r#"{"entries":0,"dropped":0,"skipped":0,"by_kind":{},"sources_scanned":[],"sources_absent":[".bee/backlog.jsonl",".bee/cells",".bee/decisions.jsonl","docs/history/learnings"]}"#
+            concat!(
+                r#"{"entries":0,"dropped":0,"skipped":0,"by_kind":{},"sources_scanned":[],"#,
+                r#""sources_absent":[".bee/backlog.jsonl",".bee/cells",".bee/decisions.jsonl","docs/history/learnings"],"#,
+                // D6's counter grows the object at the END; every key Node
+                // froze is still in its old place, so a consumer reading the
+                // six above parses this digest unchanged.
+                r#""mistakes_answer":{"clean":0,"recorded":0,"answered":0,"clean_ratio":null}}"#
+            )
+        );
+    }
+
+    /// reflection-becomes-lesson D6: the collapse is a NUMBER, not a hope.
+    ///
+    /// Four caps that answered clean against two that wrote a mistake is
+    /// exactly the shape D6 exists to make visible, and the digest says so in
+    /// its object and in the line printed beside it.
+    #[test]
+    fn the_digest_counts_clean_run_answers_against_real_reflections() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        for n in 1..=4 {
+            std::fs::write(
+                cells.join(format!("clean-{n}.json")),
+                format!(r#"{{"id":"c-{n}","title":"t","trace":{{"no_mistakes":true}}}}"#),
+            )
+            .unwrap();
+        }
+        std::fs::write(
+            cells.join("reflected.json"),
+            r#"{"id":"r-1","title":"t","trace":{"mistakes":["the binary was stale"]}}"#,
+        )
+        .unwrap();
+        // A cap that wrote a mistake AND reached for the clean flag counts as
+        // the mistake: the written fact outranks the flag, exactly as it does
+        // at the cap that read both.
+        std::fs::write(
+            cells.join("both.json"),
+            r#"{"id":"b-1","title":"t","trace":{"no_mistakes":true,"mistakes":["it broke"]}}"#,
+        )
+        .unwrap();
+        // A cap nobody ever asked answers NEITHER column. Silence is not clean.
+        std::fs::write(
+            cells.join("silent.json"),
+            r#"{"id":"s-1","title":"t","trace":{"capped_at":"2026-01-01T00:00:00Z"}}"#,
+        )
+        .unwrap();
+
+        let data = collect_counts(tmp.path()).unwrap();
+        assert_eq!(data.mistakes.clean, 4);
+        assert_eq!(data.mistakes.recorded, 2);
+        assert_eq!(data.mistakes.line(), "4 clean / 2 reflected (67% clean)");
+
+        let digest = build_digest(tmp.path()).unwrap();
+        assert_eq!(digest["counts"]["mistakes_answer"]["clean"], json!(4));
+        assert_eq!(digest["counts"]["mistakes_answer"]["recorded"], json!(2));
+        assert_eq!(digest["counts"]["mistakes_answer"]["answered"], json!(6));
+        assert_eq!(digest["counts"]["mistakes_answer"]["clean_ratio"], json!(0.667));
+        // The human-readable line carries it too — a number in a JSON file
+        // nobody opens is the silence this counter exists to break.
+        assert!(
+            digest_summary_line(&digest).ends_with("mistakes: 4 clean / 2 reflected (67% clean)"),
+            "{}",
+            digest_summary_line(&digest)
+        );
+
+        // A WITNESS, NEVER A GUARD: it refuses nothing and drops nothing. The
+        // cells still scan, and the digest is still built.
+        assert_eq!(data.dropped.len(), 0);
+        assert_eq!(data.skipped, 0, "the counter skipped a cell it only had to count");
+        assert!(digest["entries"].is_array());
+    }
+
+    #[test]
+    fn a_repo_with_no_mistakes_answer_yet_states_that_instead_of_a_ratio() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = collect_counts(tmp.path()).unwrap();
+        assert_eq!(data.mistakes.line(), "no mistakes answer yet");
+        assert_eq!(
+            build_digest(tmp.path()).unwrap()["counts"]["mistakes_answer"]["clean_ratio"],
+            json!(null),
+            "a ratio was invented out of no answers"
         );
     }
 
