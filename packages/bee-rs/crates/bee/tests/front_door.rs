@@ -91,6 +91,52 @@ fn a_bare_invocation_refuses_out_loud() {
     assert!(stderr.contains("(no command given)"), "stderr was: {stderr}");
 }
 
+/// The release version the way `crate::version::BEE_VERSION` gets it — from
+/// the plugin manifest, the one source of truth — read here independently so
+/// the test checks the binary against the manifest, not against itself.
+fn release_version() -> String {
+    let manifest: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../../.claude-plugin/plugin.json"))
+            .expect("plugin manifest parses");
+    manifest["version"].as_str().expect("manifest has a version").to_string()
+}
+
+/// `bee version` and its two conventional aliases print the release version —
+/// the plugin-manifest BEE_VERSION, not the crate version — with no repo, no
+/// state, no store. The answer is compiled in; asking for it must never
+/// require an onboarded directory.
+#[test]
+fn version_prints_the_release_version_with_no_repo() {
+    let tmp = tempfile::tempdir().unwrap();
+    let want = format!("bee {}\n", release_version());
+    for args in [["version"], ["--version"], ["-V"]] {
+        let out = Command::cargo_bin("bee")
+            .unwrap()
+            .args(args)
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?} exited {:?}", out.status.code());
+        assert_eq!(String::from_utf8_lossy(&out.stdout), want, "{args:?}");
+    }
+}
+
+#[test]
+fn version_json_carries_both_release_and_binary_versions() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["version", "--json"])
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
+    assert_eq!(v["version"].as_str(), Some(release_version().as_str()));
+    assert!(v["binary"].as_str().is_some_and(|s| !s.is_empty()));
+}
+
 /// `--help` is the surface the refusal points at, so it had better work with
 /// no repo and no state — it renders entirely from the embedded registry.
 #[test]

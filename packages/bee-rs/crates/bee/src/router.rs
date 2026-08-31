@@ -138,6 +138,10 @@ pub const PORTED: &[&str] = &[
     "discovery stub --effort <slug> --from <text> [--json]",
     // slp-blind-lanes — the convergence door over a blind-lane dossier
     "blind check --dossier <path> [--json]",
+    // version-verb — release identity, rootless, in the spelling every CLI
+    // teaches. `--version`/`-V` are argv aliases of the one verb, not
+    // registry entries of their own.
+    "version | --version | -V [--json]",
 ];
 
 // ── the front door's two namespaces ────────────────────────────────────────
@@ -238,6 +242,9 @@ fn internal_namespace(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 fn dispatch(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first().and_then(|a| a.to_str()) == Some("rs-info") {
         return Some(rs_info());
+    }
+    if let Some(code) = try_version(args) {
+        return Some(code);
     }
     if let Some(code) = crate::hooks::try_native(args) {
         return Some(code);
@@ -721,6 +728,25 @@ mod tests {
         );
     }
 
+    /// The three spellings serve; anything more on the argv falls through so
+    /// the dispatcher can refuse it against the `version` registry entry.
+    #[test]
+    fn the_version_probe_claims_its_three_spellings_and_nothing_more() {
+        for argv in [&["version"][..], &["--version"], &["-V"], &["version", "--json"]] {
+            assert!(try_version(&strs(argv)).is_some(), "{argv:?} must serve");
+        }
+        for argv in [&["version", "wat"][..], &["--version", "--verbose"], &["versions"]] {
+            assert!(try_version(&strs(argv)).is_none(), "{argv:?} must fall through");
+        }
+    }
+
+    #[test]
+    fn a_stray_positional_after_version_refuses_against_the_version_entry() {
+        let (kind, msg) = classify_argv(&["version", "wat"]);
+        assert_eq!(kind, "unexpected_argument");
+        assert!(msg.contains("bee version"), "{msg}");
+    }
+
     /// The black-box suites detect "the front door refused" by these five
     /// leading phrases. If a message is reworded without updating
     /// REFUSAL_HEADLINES, `tests/concurrency.rs` stops recognising an unserved
@@ -749,6 +775,43 @@ mod tests {
         assert_eq!(kind, "unsupported_argument_shape");
         assert!(msg.starts_with(REFUSAL_HEADLINES[4]), "{msg}");
     }
+}
+
+/// `bee version` — the release identity, in the spelling every CLI teaches
+/// (`--version` and `-V` are aliases of the same probe). Rootless like
+/// `rs-info`: the answer is compiled in, so it must work in an empty
+/// directory, before onboarding, on a broken store. Prints
+/// `crate::version::BEE_VERSION` — the plugin-manifest release version, the
+/// number `scripts/release.sh` bumps — with the crate version beside it only
+/// in `--json`, where `rs-info` already taught callers that the two differ.
+///
+/// The probe claims exactly `version|--version|-V` plus an optional `--json`.
+/// Anything else returns None untouched, so a stray positional still gets the
+/// dispatcher's named refusal against the `version` registry entry.
+fn try_version(args: &[OsString]) -> Option<ExitCode> {
+    let head = args.first()?.to_str()?;
+    if !matches!(head, "version" | "--version" | "-V") {
+        return None;
+    }
+    let mut json = false;
+    for arg in &args[1..] {
+        match arg.to_str() {
+            Some("--json") => json = true,
+            _ => return None,
+        }
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "version": crate::version::BEE_VERSION,
+                "binary": env!("CARGO_PKG_VERSION"),
+            })
+        );
+    } else {
+        println!("bee {}", crate::version::BEE_VERSION);
+    }
+    Some(ExitCode::SUCCESS)
 }
 
 fn rs_info() -> ExitCode {
