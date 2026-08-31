@@ -37,6 +37,10 @@ Post-close narrowing (feature slp-dissent-stop-and-ask, 2026-08-28).
 6a6b9975: herding-lane dissent is OUT of the feature boundary — the
 dissent record has one writer, the CLI, and a herding worker is
 instructed never to run a bee command; the gap is backlog p-05d2a4f4.
+Filled by **7db30738** (slp-followup-gaps, 2026-08-29): the gap closes
+without a second writer — a herding worker's dissent rides the mailbox
+result as data, and the run verb transcribes it through the same one
+CLI writer.
 StopAndAsk (options[] + leaning on the blocked form) still ships for
 herding workers. e29918f7: the merge door carried proof debt only, so
 the merge half of the obligation was written as new code, not copied

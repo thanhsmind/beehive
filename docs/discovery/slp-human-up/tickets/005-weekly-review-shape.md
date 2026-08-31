@@ -26,3 +26,7 @@ cold tick under an external scheduler — a machine shutdown pauses ticks,
 nothing to resume, nothing lost) and 3cfd9980 (poor-work signals →
 intervention record recommends an advisor consult; the struggling repo's own
 lead summons it).
+
+Extended by **9e5eda5b**: that recommendation is enforced as a response
+debt — the lead either runs the consult or records a reasoned decline, and
+a point ignored twice escalates into the human's report.
