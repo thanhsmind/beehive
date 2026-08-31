@@ -447,3 +447,4 @@
 {"ts":"2026-08-31T01:14:06.823Z","event":"complete","id":"75291ea1-7b12-4c7d-8268-7d7105ab8772"}
 {"ts":"2026-08-31T01:14:07.127Z","event":"complete","id":"877176dd-4f77-4591-85c4-12ecfd59e5e5"}
 {"ts":"2026-08-31T01:14:07.404Z","event":"complete","id":"0161c7f1-ca2b-411e-9109-a9b14b6b664d"}
+{"ts":"2026-08-31T04:50:00.814Z","event":"add","id":"4ef9c3a6-458a-4451-a765-07f2534954e8","kind":"worktree-cleanup","feature":"slp-lead-recovery","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--slp-lead-recovery"],"reason":"Worktree beehive--wt--slp-lead-recovery (branch wt/slp-lead-recovery) merged into main at 57a5f6a377cf09fc6cb67837c3a0a210e8eb2dc4 and kept per default (D1) — remove it with `bee worktree prune`."}
