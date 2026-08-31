@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-08-31T05:15:46.687Z",
-    "session": "b1307e64-7acf-4723-9ba6-60b491e43db7"
+    "subject": "All six surfaces check clean: no open/claimed/blocked cells, no reservations, and the two lane-bound recovery candidates are freshly re-veri",
+    "asked_at": "2026-08-31T08:41:44.678Z",
+    "session": "5fed20a1-8ca8-47c7-8a7c-5f3517ed4bbb"
   },
   "route": {
     "class": "feature",
