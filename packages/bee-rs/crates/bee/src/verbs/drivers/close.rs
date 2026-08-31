@@ -46,6 +46,18 @@ pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
 /// rest of the dissent surface). Cite: a2affcba and 4b7aa303.
 pub(crate) const CLOSE_DISSENT_DEBT_PREFIX: &str = "Dissent debt for";
 
+/// reflection-becomes-lesson D1: pinned prefix of the mistakes-door refusal
+/// headline (message-contract test lives in this file's own tests). The
+/// headline opens with the command's own name because it is the first line a
+/// human reads when a close stops, and "close:" is what tells them which of
+/// their commands stopped. Cite: db562f26 and 20fe96d3.
+pub(crate) const CLOSE_MISTAKES_PREFIX: &str = "close: feature";
+
+/// The clean-run answer, spelled as the command that records it. Written once
+/// and cited by the refusal below, so the remedy a human is handed and the
+/// flag that actually clears the door can never drift apart.
+pub(crate) const MISTAKES_CLEAN_RUN_COMMAND: &str = "bee mailbox reflect --no-mistakes";
+
 /// slp-advisor-nudge an-3: pinned prefix of the advisor-nudge refusal
 /// headline (message-contract tests live in verbs/cells/tests.rs, beside the
 /// dissent door's own). Cite: 9e5eda5b.
@@ -228,6 +240,59 @@ pub(crate) fn read_state(root: &Path) -> D<Map<String, Value>> {
 pub(crate) struct DebtSummary {
     pub(crate) count: usize,
     pub(crate) ids: Vec<Value>,
+}
+
+/// reflection-becomes-lesson D1/D5: the feature's capped cells that never
+/// answered the mistakes question.
+///
+/// WHAT IS READ: the FEATURE'S CAPPED CELLS, through the walk close already
+/// performs (`list_cells_including_archive`), and never a run's own mailbox
+/// file. Reflections are stored per run, and a close resolves its OWN run —
+/// which under the default `uat_stop: "close"` is the attended orchestrator's
+/// run, a different one from the workers' — so a run-scoped debt count would
+/// see nothing and refuse every close.
+///
+/// WHAT COUNTS AS ANSWERED: `trace.mistakes` (one or more written mistakes)
+/// or `trace.no_mistakes` (the explicit clean-run statement). Both are
+/// written by the cap, from one reading, so they can never disagree.
+///
+/// LEGACY IS CLEAR, on the same rule the proof door already uses
+/// (`verbs/cells/proof.rs`): a capped cell with no `trace.report` at all
+/// predates the era in which a cap records a structured answer, and a door
+/// that refused it would demand a field its worker was never asked for.
+pub(crate) fn mistakes_debt(root: &Path, feature: &str) -> D<DebtSummary> {
+    let mut ids = Vec::new();
+    for cell in list_cells_including_archive(root, feature, Some("capped"))? {
+        let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
+        if vget(&trace, "report").is_none() {
+            continue; // legacy cap — see above
+        }
+        let recorded = matches!(vget(&trace, "mistakes"), Some(Value::Array(a)) if !a.is_empty());
+        let clean = matches!(vget(&trace, "no_mistakes"), Some(Value::Bool(true)));
+        if recorded || clean {
+            continue;
+        }
+        ids.push(vget(&cell, "id").cloned().unwrap_or(Value::Null));
+    }
+    Ok(DebtSummary { count: ids.len(), ids })
+}
+
+/// Did the closing session itself answer the mistakes question?
+///
+/// This is the REMEDY path, never the debt count: the refusal below tells the
+/// acting agent to write the mistakes down with `bee mailbox reflect` (or to
+/// state the clean run with `--no-mistakes`), and that verb writes into the
+/// closing session's own run. Reading that run HERE is what makes the remedy
+/// true — and it can only ever let a close through, so it never turns into
+/// the refuse-every-close hazard a run-scoped debt COUNT would be.
+///
+/// Same run and same root the close's own entry and letter use, so "the run
+/// whose letter this close files" is one idea with one resolution.
+fn closing_run_answered_mistakes(root: &Path) -> bool {
+    use crate::verbs::mailbox;
+    let control = crate::hooks::session_init::control_root_for(root);
+    let run = mailbox::run_id(crate::verbs::cells::resolve_session_flag_env(None).as_deref());
+    mailbox::read_entries(&control, &run).iter().any(mailbox::Entry::is_mistakes_answer)
 }
 
 /// provenance: cells.mjs scribingDebt(root, {feature}) — the feature-scoped
@@ -1464,6 +1529,34 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         command: None,
     });
 
+    // reflection-becomes-lesson D1: the mistakes door, in EVERY lane and
+    // never armed-gated. A feature close files its letter unconditionally,
+    // attended sessions included, so a close may always demand the answer
+    // that letter is supposed to carry.
+    let mistakes = mistakes_debt(root, feature)?;
+    let answered_here = mistakes.count > 0 && closing_run_answered_mistakes(root);
+    let mistakes_blocking = mistakes.count > 0 && !answered_here;
+    doors.push(Door {
+        door: "mistakes",
+        blocking: mistakes_blocking,
+        detail: if mistakes.count == 0 {
+            "clear".to_string()
+        } else if answered_here {
+            format!(
+                "answered by this run — {} capped cell(s) recorded no answer ({}); this run's own mailbox carries one",
+                mistakes.count,
+                js_join(&mistakes.ids, ", ")
+            )
+        } else {
+            format!(
+                "pending — {} capped cell(s) recorded no reflection and no clean-run statement ({}); write each mistake with bee mailbox reflect, or state the clean run with {MISTAKES_CLEAN_RUN_COMMAND}",
+                mistakes.count,
+                js_join(&mistakes.ids, ", ")
+            )
+        },
+        command: if mistakes_blocking { Some("bee mailbox reflect") } else { None },
+    });
+
     // wl-3: the judge-debt door exists ONLY for a standard/high-risk
     // closing route — a tiny/small feature never grows this door at all
     // (AGENTS.md's own judge-on-smell carve-out for those lanes), not
@@ -2547,6 +2640,34 @@ pub(crate) fn close_handler(
             ),
             "remedy: run the advisor consult for each row above, then record what came of it with bee decisions log --tags advisor-nudge — or record a reasoned decline the same way. The decision text must NAME the row id; one decision answers one row, and a decision naming no row clears nothing.".to_string(),
             format!("next: settle the advisor-nudge debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // reflection-becomes-lesson D1/D5: refuse on the mistakes door, in EVERY
+    // lane and for attended sessions too.
+    //
+    // Same "read the door's own verdict, never recompute it" discipline the
+    // refusals above keep, and the same placement: with the blocking doors,
+    // BEFORE any write — a refused close appends no mailbox entry and files
+    // no letter, so answering and re-running is the whole cost of getting it
+    // wrong.
+    if doors.iter().any(|d| d.door == "mistakes" && d.blocking) {
+        let debt = mistakes_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!(
+                "{CLOSE_MISTAKES_PREFIX} \"{feature}\" — close stops at the mistakes door: this run's letter cannot say whether anything went wrong, because cell(s) {} recorded no reflection and no clean-run statement.",
+                js_join(&debt.ids, ", ")
+            ),
+            format!(
+                "remedy: record each mistake with `bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\"` — or, if those cells truly hit none, say so: {MISTAKES_CLEAN_RUN_COMMAND}."
+            ),
+            format!("next: answer, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
@@ -4673,10 +4794,13 @@ mod tests {
         w(
             root,
             ".bee/cells/demo-1.json",
+            // reflection-becomes-lesson: the cap stated its mistakes answer
+            // (here, the clean-run half), which is what lets this close reach
+            // its green tail instead of stopping at the mistakes door.
             r#"{"id":"demo-1","feature":"demo","status":"capped",
                 "acceptance":"A letter is filed once per run and never twice",
                 "affects_skills":["bee-hive"],"affects_specs":["docs/specs/letters.md"],
-                "trace":{"files_changed":["src/one.rs","src/two.rs"],
+                "trace":{"files_changed":["src/one.rs","src/two.rs"],"no_mistakes":true,
                 "report":{"outcome":"o","commit":"c","files":["src/one.rs"],
                 "tests":"cargo test — green — the touched module","deviations":[]}}}"#,
         );
@@ -4720,6 +4844,115 @@ mod tests {
             !crate::verbs::mailbox::entries_dir(root).exists(),
             "a refused close appended a mailbox entry"
         );
+    }
+
+    // ── reflection-becomes-lesson D1/D5: the mistakes door ───────────────
+
+    /// The same capped cell `capped_cell` writes, minus its mistakes answer:
+    /// a cap that was never asked, or never said.
+    fn unanswered_cell(root: &Path) {
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped",
+                "acceptance":"A letter is filed once per run and never twice",
+                "trace":{"files_changed":["src/one.rs"],
+                "report":{"outcome":"o","commit":"c","files":["src/one.rs"],
+                "tests":"cargo test — green — the touched module","deviations":[]}}}"#,
+        );
+    }
+
+    /// TRUTH: a close whose feature has a capped cell that never answered the
+    /// mistakes question is REFUSED, the refusal names that cell, and the
+    /// close writes nothing — no mailbox entry, no letter. Answering and
+    /// re-running is the whole cost of getting it wrong.
+    #[test]
+    fn close_refuses_a_feature_whose_capped_cell_never_answered_about_mistakes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "the mistakes door must stop this close: {text}");
+        assert!(text.starts_with(CLOSE_MISTAKES_PREFIX), "text: {text}");
+        assert!(text.contains("demo-1"), "the refusal must name the cell: {text}");
+        // The remedy offers the reflect verb FIRST and the clean-run flag
+        // SECOND, and the last line says what to do next.
+        assert!(text.contains("bee mailbox reflect --wrong"), "text: {text}");
+        assert!(text.contains(MISTAKES_CLEAN_RUN_COMMAND), "text: {text}");
+        assert!(text.contains("next: answer, then re-run bee close --feature demo"), "text: {text}");
+        assert_eq!(
+            result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "mistakes").unwrap()
+                ["blocking"],
+            json!(true)
+        );
+
+        // Nothing was written: no entry, no letter.
+        assert!(
+            !crate::verbs::mailbox::entries_dir(root).exists(),
+            "a refused close appended a mailbox entry"
+        );
+        assert!(
+            std::fs::read_dir(crate::verbs::mailbox::mailbox_dir(root))
+                .map(|d| d.count())
+                .unwrap_or(0)
+                == 0,
+            "a refused close filed a letter"
+        );
+    }
+
+    /// TRUTH (the D5 regression): the door reads the FEATURE'S CAPPED CELLS,
+    /// never the closing session's own run. Under the default `uat_stop:
+    /// "close"` the closing session is the attended orchestrator — a
+    /// different run from the workers' — so a run-scoped door would refuse
+    /// every close. This close's own run holds no entry at all, and it
+    /// passes, because the cells carry the answer.
+    #[test]
+    fn a_close_whose_own_run_recorded_nothing_still_passes_when_the_cells_answered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        capped_cell(root);
+        assert!(
+            !crate::verbs::mailbox::entries_dir(root).exists(),
+            "the fixture must start with an empty mailbox — that is the point"
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "the cells answered, so nothing stops this close: {text}");
+    }
+
+    /// TRUTH: the remedy the refusal prints is a remedy that WORKS. The
+    /// acting agent writes the mistake into its own run with
+    /// `bee mailbox reflect`, and the same close then goes through — the
+    /// letter can now say whether anything went wrong, which is the whole
+    /// thing the door is protecting.
+    #[test]
+    fn the_refusals_own_remedy_clears_the_mistakes_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        unanswered_cell(root);
+
+        let run = crate::verbs::mailbox::run_id(
+            crate::verbs::cells::resolve_session_flag_env(None).as_deref(),
+        );
+        crate::verbs::mailbox::record_stop(
+            root,
+            &run,
+            &crate::verbs::mailbox::Entry::reflection(
+                "2026-08-31T01:00:00.000Z",
+                "Capped demo-1 without saying what went wrong",
+                "Answer the mistakes question at the cap, when it is still in hand",
+            ),
+        );
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "the recorded reflection must clear the door: {text}");
     }
 
     #[test]

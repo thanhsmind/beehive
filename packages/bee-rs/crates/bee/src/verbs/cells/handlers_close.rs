@@ -32,7 +32,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 13] = [
+pub(crate) const CAP_FLAGS: [&str; 15] = [
     "id",
     "outcome",
     "files",
@@ -46,6 +46,8 @@ pub(crate) const CAP_FLAGS: [&str; 13] = [
     "inline-reason",
     "report",
     "sync-ack",
+    "mistake",
+    "no-mistakes",
 ];
 
 /// resolveDeclaredBehaviorChange (E6).
@@ -113,6 +115,16 @@ pub(crate) struct CapFlags {
     /// worker check below for a small+ cell and is recorded on the capped
     /// cell's own `trace.inline_reason`.
     pub(crate) inline_reason: Option<String>,
+    /// reflection-becomes-lesson D5: `--mistake "<what went wrong> — <what
+    /// would have been better>"`, RAW — `None` = not passed. One line per
+    /// cap/finish call, the same single-value discipline `--deviation` keeps.
+    /// Read through `mailbox::read_mistake`, so the two-part rule has exactly
+    /// one home.
+    pub(crate) mistake: Option<String>,
+    /// reflection-becomes-lesson D2: `--no-mistakes`, the explicit statement
+    /// that this cell hit none. It is the OTHER half of the answer, and the
+    /// reason silence and a clean run do not read alike.
+    pub(crate) no_mistakes: bool,
     /// wfl-1/D8: `--report <json-string>`, RAW — validated against the
     /// worker Result-form shape (finish_support.rs's `parse_report_flag`)
     /// before any write, then stored verbatim as `trace.report`. `None`
@@ -251,6 +263,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     if armed {
         departure_door(id, f, &report_value)?;
     }
+
+    // reflection-becomes-lesson D5: read the mistakes answer ONCE, before any
+    // write, and fill both sinks from it below. NOT armed-gated, unlike the
+    // departure door above: `bee close` files its letter unconditionally, so
+    // the answer it will ask for must be recorded unconditionally too.
+    let mistakes_answer = read_mistakes_answer(id, f, &report_value)?;
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
     // to run the declared command HERE and refuse a red cap — that run and
@@ -511,6 +529,30 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         if plan_followed {
             trace.insert("plan_followed".into(), Value::Bool(true));
         }
+        // reflection-becomes-lesson D5: SINK ONE — the answer on the cell's
+        // own trace, beside `plan_followed` above and for the same reason. It
+        // survives a resumed, compacted or handed-over session, which a
+        // run-scoped record cannot, and it is what `bee close` reads when it
+        // asks whether this feature's work ever said what went wrong.
+        // `Silent` writes NOTHING: an absent key is the unanswered case, and
+        // writing a false "clean" for it would be the silence D1 exists to
+        // end, spelled as an answer.
+        match &mistakes_answer {
+            MistakesAnswer::Recorded(list) => {
+                trace.insert(
+                    "mistakes".into(),
+                    Value::Array(
+                        list.iter()
+                            .map(|(wrong, better)| json!({ "wrong": wrong, "better": better }))
+                            .collect(),
+                    ),
+                );
+            }
+            MistakesAnswer::Clean => {
+                trace.insert("no_mistakes".into(), Value::Bool(true));
+            }
+            MistakesAnswer::Silent => {}
+        }
         trace.insert(
             "friction".into(),
             f.friction.clone().map(Value::String).unwrap_or(Value::Null),
@@ -632,7 +674,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
     // this stop has HAPPENED, so its entry is appended now, not gathered
     // at the end of the run. Never refuses (D10), never conditional on
     // arming (D9). See `record_cap_in_mailbox`.
-    record_cap_in_mailbox(root, f, &saved, &report_value);
+    record_cap_in_mailbox(root, f, &saved, &report_value, &mistakes_answer);
     // merge-ready-fact D1: the cap that leaves NOTHING outstanding for this
     // feature is the one moment bee can know the feature is finished in its
     // worktree, so this is where the stored fact is written. Everything about
@@ -776,6 +818,74 @@ fn departure_door(id: &str, f: &CapFlags, report: &Value) -> MR<()> {
     Ok(())
 }
 
+/// reflection-becomes-lesson D1/D2/D5: what this cap says about mistakes.
+///
+/// ONE reading, for TWO sinks. The cap is the only writer of both the cell's
+/// `trace` and the run's mailbox entry, so reading the flags and the report
+/// once — here — is what makes it impossible for the two records to disagree
+/// about whether this cell hit anything.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum MistakesAnswer {
+    /// The cap was never asked and never said: no flag, and no `mistakes` key
+    /// in the report. This is the case `bee close` refuses on — silence and a
+    /// clean run must not read alike (D1).
+    Silent,
+    /// One or more mistakes, each already through `mailbox::read_reflection`
+    /// as `(what went wrong, what would have been better)`.
+    Recorded(Vec<(String, String)>),
+    /// The explicit clean-run statement (D2).
+    Clean,
+}
+
+/// Read the mistakes answer out of the cap's flags and the worker's report.
+///
+/// Sources, in order: `--mistake`, then the report's `mistakes` array. A
+/// PRESENT-but-empty `mistakes` array is an answer — the worker was asked and
+/// said none — while an absent key is silence; that difference is the whole
+/// point of D1's door, and it is why the key is optional at the report gate
+/// and never defaulted here.
+///
+/// The two-part rule is NOT re-implemented: every line goes through
+/// `mailbox::read_mistake`, which ends at the same `read_reflection` door
+/// `bee mailbox reflect` uses. A line that misses a part is refused by the
+/// words that door hands back — the only refusal this feature adds at the
+/// cap, and it is unreachable from any caller that worked before it, because
+/// both spellings (`--mistake`, `"mistakes"`) were refused outright as
+/// unknown until now.
+pub(crate) fn read_mistakes_answer(id: &str, f: &CapFlags, report: &Value) -> MR<MistakesAnswer> {
+    let mut recorded: Vec<(String, String)> = Vec::new();
+    let mut asked = f.no_mistakes;
+    let mut lines: Vec<Value> = Vec::new();
+    if let Some(raw) = &f.mistake {
+        lines.push(Value::String(raw.clone()));
+    }
+    if let Some(Value::Array(reported)) = report.get("mistakes") {
+        asked = true;
+        lines.extend(reported.iter().cloned());
+    }
+    for line in &lines {
+        let (wrong, better) = mailbox::read_mistake(line).map_err(|why| {
+            Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — a recorded mistake is incomplete: {why}"
+            ))
+        })?;
+        if !recorded.iter().any(|(w, b)| w == &wrong && b == &better) {
+            recorded.push((wrong, better));
+        }
+    }
+    if !recorded.is_empty() {
+        // A written mistake outranks the clean-run flag: the mistake is a fact
+        // somebody wrote down, and the flag is a claim about the absence of
+        // one. Nothing is refused over the contradiction — the cap's blast
+        // radius stays at zero — and the record keeps the fact.
+        return Ok(MistakesAnswer::Recorded(recorded));
+    }
+    if asked {
+        return Ok(MistakesAnswer::Clean);
+    }
+    Ok(MistakesAnswer::Silent)
+}
+
 /// D4/D8/D9 (docs/history/human-mailbox/CONTEXT.md): record this cap as one
 /// human-mailbox entry, THE MOMENT the cap lands.
 ///
@@ -794,7 +904,13 @@ fn departure_door(id: &str, f: &CapFlags, report: &Value) -> MR<()> {
 /// FAIL-OPEN, by D10: `mailbox::record_stop` warns and returns. A cap in a
 /// run that files no letter keeps the byte-identical behaviour it had before
 /// this feature — nothing here refuses a cap, and no cap flag changes shape.
-fn record_cap_in_mailbox(root: &Path, f: &CapFlags, capped: &Value, report: &Value) {
+fn record_cap_in_mailbox(
+    root: &Path,
+    f: &CapFlags,
+    capped: &Value,
+    report: &Value,
+    mistakes: &MistakesAnswer,
+) {
     // The run is the SESSION's span (D9, D12 — see `mailbox::run_id`): the
     // caller's own session, resolved through the ordinary chain, and the
     // claim's recorded session when this process has no session of its own
@@ -863,6 +979,31 @@ fn record_cap_in_mailbox(root: &Path, f: &CapFlags, capped: &Value, report: &Val
         better: None,
     };
     mailbox::record_stop(root, &run, &entry);
+
+    // reflection-becomes-lesson D5: SINK TWO — the same answer, in the run's
+    // mailbox, appended from the SAME values the trace above was written
+    // from. A reflection renders in the letter's own section; the clean-run
+    // statement renders in no section at all (D2) and is stored only so the
+    // record can tell a clean run from a run nobody asked.
+    //
+    // Fail-open like every other append (D10): `record_stop` warns and
+    // returns, and a mailbox that cannot be written never turns a landed cap
+    // into a refusal.
+    match mistakes {
+        MistakesAnswer::Recorded(list) => {
+            for (wrong, better) in list {
+                mailbox::record_stop(
+                    root,
+                    &run,
+                    &mailbox::Entry::reflection(&utc_now(), wrong, better),
+                );
+            }
+        }
+        MistakesAnswer::Clean => {
+            mailbox::record_stop(root, &run, &mailbox::Entry::no_mistakes(&utc_now()));
+        }
+        MistakesAnswer::Silent => {}
+    }
 }
 
 pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
@@ -888,6 +1029,11 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     // whitespace-only value by name instead of this probe silently treating
     // it as absent.
     let deviation = opt_string_flag(flags, "deviation")?;
+    // reflection-becomes-lesson: raw (untrimmed), same posture as
+    // `--deviation` above — `cap_cell_from_flags` names the problem itself
+    // rather than this probe reading a blank line as "not passed".
+    let mistake = opt_string_flag(flags, "mistake")?;
+    let no_mistakes = bool_flag(flags, "no-mistakes")?;
     let force_ownership = bool_flag(flags, "force-ownership")?;
     // D2's --fix-first convention: trimmed; empty/absent = None.
     let commit_pending = match opt_string_flag(flags, "commit-pending")? {
@@ -912,6 +1058,8 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         deviations: Vec::new(), // filled inside dispatch (file read may throw)
         deviation,
         override_reason,
+        mistake,
+        no_mistakes,
         session_flag,
         force_ownership,
         commit_pending,
@@ -1613,6 +1761,8 @@ mod tests {
             deviations: Vec::new(),
             deviation: None,
             override_reason: String::new(),
+            mistake: None,
+            no_mistakes: false,
             // Pinned so the run this test reads back can never depend on a
             // BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID the test process inherited.
             session_flag: Some("mb-run".to_string()),
@@ -1679,6 +1829,126 @@ mod tests {
         let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[1].what, "Wired the second stop");
+    }
+
+    // ── reflection-becomes-lesson D5: the cap collects the answer ────────
+
+    /// A cap whose report carries `mistakes`, with `<mistakes>` spliced into
+    /// the report JSON. Everything else is `mailbox_cap_flags`' own shape.
+    fn cap_flags_with_mistakes(id: &str, mistakes: &str) -> CapFlags {
+        let mut flags = mailbox_cap_flags(id, "Landed the work");
+        flags.report = Some(format!(
+            "{{\"outcome\":\"o\",\"commit\":\"abc1234\",\"files\":[],\"tests\":\"{PROOF}\",\"deviations\":[\"followed the plan\"],\"mistakes\":{mistakes}}}"
+        ));
+        flags
+    }
+
+    /// TRUTH: the cap is the ONE writer and it fills BOTH sinks from ONE
+    /// reading — the cell's own trace and the run's mailbox — so the two can
+    /// never disagree about what this cell hit.
+    #[test]
+    fn a_cap_that_reports_mistakes_fills_both_sinks_from_one_reading() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m1");
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_with_mistakes(
+                "mb-m1",
+                "[\"Guessed the folder name — Read the path back first\"]",
+            ),
+            false,
+        )
+        .unwrap();
+
+        // SINK ONE: the cell's own trace, in the two parts the door read.
+        assert_eq!(
+            capped["trace"]["mistakes"],
+            json!([{ "wrong": "Guessed the folder name", "better": "Read the path back first" }])
+        );
+        assert!(capped["trace"].get("no_mistakes").is_none(), "a mistake is not a clean run");
+
+        // SINK TWO: the run's mailbox, where the letter reads it.
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 2, "the cap stop, then the mistake");
+        assert_eq!(entries[0].kind, crate::verbs::mailbox::KIND_CAP);
+        assert!(entries[1].is_reflection());
+        assert_eq!(entries[1].what, "Guessed the folder name");
+        assert_eq!(entries[1].better.as_deref(), Some("Read the path back first"));
+    }
+
+    /// TRUTH: a cap that was ASKED and hit none says so — in both sinks — and
+    /// that stored answer is what keeps silence and a clean run apart.
+    #[test]
+    fn a_cap_that_reports_an_empty_mistakes_array_states_the_clean_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m2");
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_with_mistakes("mb-m2", "[]"), false).unwrap();
+
+        assert_eq!(capped["trace"]["no_mistakes"], json!(true));
+        assert!(capped["trace"].get("mistakes").is_none());
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 2);
+        assert!(entries[1].is_no_mistakes());
+        assert!(entries[1].is_mistakes_answer());
+    }
+
+    /// TRUTH: the `--no-mistakes` FLAG says the same thing as an empty array —
+    /// one answer, one recorded shape, whichever door the caller came through.
+    #[test]
+    fn the_clean_run_flag_records_the_same_answer_as_an_empty_array() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m3");
+        let mut flags = mailbox_cap_flags("mb-m3", "Landed the work");
+        flags.no_mistakes = true;
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["no_mistakes"], json!(true));
+        assert!(crate::verbs::mailbox::read_entries(root, "mb-run")[1].is_no_mistakes());
+    }
+
+    /// TRUTH: SILENCE IS NOT AN ANSWER. A cap that says nothing about
+    /// mistakes records nothing — no trace key, no mailbox entry — which is
+    /// exactly what `bee close` refuses on. Writing a "clean" here would be
+    /// the silence D1 exists to end, spelled as an answer.
+    #[test]
+    fn a_cap_that_says_nothing_about_mistakes_records_no_answer_at_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m4");
+        // The pre-existing fixture: a report with no `mistakes` key, and no
+        // flag — byte-identical to every cap that shipped before this
+        // feature.
+        let capped =
+            cap_cell_from_flags(root, &mailbox_cap_flags("mb-m4", "Landed the work"), false)
+                .unwrap();
+        assert!(capped["trace"].get("mistakes").is_none());
+        assert!(capped["trace"].get("no_mistakes").is_none());
+        let entries = crate::verbs::mailbox::read_entries(root, "mb-run");
+        assert_eq!(entries.len(), 1, "the cap stop, and nothing else");
+    }
+
+    /// TRUTH: half a mistake is refused by the SAME two-part door
+    /// `bee mailbox reflect` uses, and the refusal names the missing part.
+    /// It refuses nothing that worked before: `--mistake` did not exist.
+    #[test]
+    fn a_half_written_mistake_is_refused_by_the_two_part_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        mailbox_cell(root, "mb-m5");
+        let mut flags = mailbox_cap_flags("mb-m5", "Landed the work");
+        flags.mistake = Some("Guessed the folder name".to_string());
+        let err = match cap_cell_from_flags(root, &flags, false) {
+            Err(Fail::Thrown(why)) => why,
+            other => panic!("expected a refusal, got {other:?}"),
+        };
+        assert!(err.contains("--better"), "{err}");
+        assert!(err.contains("mb-m5"), "the refusal names the cell: {err}");
+        // Refused BEFORE any write: the cell is untouched and the run
+        // recorded no stop.
+        assert!(!crate::verbs::mailbox::entries_dir(root).exists());
     }
 
     #[test]
