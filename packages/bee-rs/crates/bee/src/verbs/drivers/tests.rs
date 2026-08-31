@@ -3558,6 +3558,7 @@ use std::time::Instant;
                 "door tests: open — no capped cells yet — nothing to prove\n",
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
+                "door mistakes: clear\n",
                 "door dissent-debt: clear\n",
                 // an-3: the advisor-nudge door joined the builder beside the
                 // dissent one; this feature carries no nudge, so it is clear.
@@ -3920,12 +3921,12 @@ use std::time::Instant;
         w(
             &root,
             ".bee/cells/demo-1.json",
-            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched a.rs","deviations":[]}}}"#,
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"no_mistakes":true,"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched a.rs","deviations":[]}}}"#,
         );
         w(
             &root,
             ".bee/cells/demo-2.json",
-            r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched b.rs","deviations":[]}}}"#,
+            r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"no_mistakes":true,"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched b.rs","deviations":[]}}}"#,
         );
         let Out::Emit(result, text, code) =
             close_handler(&root, "demo", false, None, None, &HashMap::new()).unwrap()
@@ -3978,6 +3979,10 @@ use std::time::Instant;
             vec![
                 "door scribing-debt: BLOCKING — pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it | settle: bee-capturing",
                 "door capture-queue: open — pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing",
+                // reflection-becomes-lesson: the mistakes door joined the
+                // builder too; these cells carry no report at all, so they
+                // read as legacy caps and the door reports clear.
+                "door mistakes: clear",
                 // sd-4: the dissent-debt door joined the builder; this
                 // feature carries no dissent, so it reports clear.
                 "door dissent-debt: clear",
@@ -5823,7 +5828,10 @@ use std::time::Instant;
         w(
             &root,
             ".bee/cells/demo-1.json",
-            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+            // reflection-becomes-lesson: the cap answered the mistakes
+            // question, so the ONE door standing here is the tests door —
+            // which is what this test is about.
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"no_mistakes":true,"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
         );
 
         let Out::Emit(_, text, code) =

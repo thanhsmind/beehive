@@ -883,6 +883,8 @@ use std::time::Instant;
             deviations: vec![json!("dev-file-line")],
             deviation: Some("  dev-flag-line  ".to_string()),
             override_reason: String::new(),
+            mistake: None,
+            no_mistakes: false,
             session_flag: None,
             force_ownership: false,
             commit_pending: None,

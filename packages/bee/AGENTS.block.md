@@ -251,6 +251,14 @@ skill ("Communication contract").
   cell id rides the last line of the body as a trailer (`cell: <id>`),
   and the diff carries the numbers.
 <!-- /rule -->
+- Write a mistake down the MOMENT you notice it, never composed from
+  memory at the end: `bee mailbox reflect --wrong "<what went wrong>"
+  --better "<what would have been better>"`. Name a concrete thing in
+  the first part — a file, a command, or something you saw — never
+  "the approach". A cap answers the same question for its own cell
+  (`--mistake "<wrong> — <better>"`, or `--no-mistakes` when it hit
+  none), and `bee close` refuses a feature whose capped cells never
+  answered: silence and a clean run must not read alike.
 - Before ending substantial work: cap or release every claimed cell,
   release reservations, leave `.bee/state.json` honest, run
   `commands.test` over what changed when one is recorded, and name the

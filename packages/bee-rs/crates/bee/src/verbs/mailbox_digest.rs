@@ -57,7 +57,7 @@
 
 use super::mailbox::{
     emit_scalar, emit_string_list, list_letter_files, mailbox_dir, read_letter,
-    Letter, DIGEST_PREFIX, SECTION_BROKEN, SECTION_DONE, SECTION_NEEDS_YOU,
+    Letter, LetterItem, DIGEST_PREFIX, SECTION_BROKEN, SECTION_DONE, SECTION_NEEDS_YOU,
 };
 use crate::fsutil::write_text_atomic;
 use chrono::{Datelike, Days, NaiveDate, Weekday};
@@ -573,11 +573,14 @@ pub(crate) fn compose_due_digests(root: &Path, now: &str) -> Vec<DigestWritten> 
 // in front of the write. That trade only holds if the pass is HARD TO FIRE and
 // EASY TO AUDIT, so every rule below is a brake:
 //
-//   * ONLY trouble is mined. A letter's `Broken or unfinished` bullets, plus
-//     the departures whose kind reports trouble. A "found a better route"
-//     departure is a good outcome, and a "followed the plan" statement is the
-//     absence of an event — neither is a lesson, and mining them would fill the
-//     decision log with rows nobody can act on.
+//   * ONLY trouble is mined. A letter's `Broken or unfinished` bullets, the
+//     departures whose kind reports trouble, and — since
+//     reflection-becomes-lesson D3 — the reflections a run wrote about its own
+//     mistakes. A "found a better route" departure is a good outcome, a
+//     "followed the plan" statement is the absence of an event, and D2's
+//     clean-run answer says nothing went wrong at all — none of the three is a
+//     lesson, and mining them would fill the decision log with rows nobody can
+//     act on.
 //   * TWO DISTINCT RUNS. One run repeating itself is one event, however many
 //     bullets it wrote about it; D4's "two or more letters" means two or more
 //     RUNS, which is what makes a shape a pattern rather than a bad night.
@@ -690,9 +693,32 @@ fn debullet(line: &str) -> &str {
     line.strip_prefix("- ").unwrap_or(line).trim()
 }
 
+/// The mistake a letter item reports, by the item's own `what` — `None` for
+/// every item that is not a reflection (reflection-becomes-lesson D3).
+///
+/// The discriminator is `better`, the field ONLY a `KIND_REFLECTION` entry ever
+/// fills (`mailbox::LetterItem::better` says so, and `Entry::reflection` is the
+/// one constructor that sets it). That is this pass's spelling of the same
+/// predicate family the letter composer uses — a structural test on what the
+/// store wrote, never a match on a sentence.
+///
+/// It is also what keeps D2's clean-run answer out: that entry carries no
+/// `better`, because a run with nothing to regret has nothing it would have
+/// done better. So "the cell was asked about mistakes and reported none" is
+/// excluded by its SHAPE, exactly as a "followed the plan" statement already
+/// is — not by its wording, which one edit would slip past.
+fn reflection_what(item: &LetterItem) -> Option<&str> {
+    let better = item.better.as_deref()?;
+    if better.trim().is_empty() {
+        return None;
+    }
+    let what = item.what.trim();
+    (!what.is_empty()).then_some(what)
+}
+
 /// Every line of ONE letter that reports trouble, in the letter's own words.
 ///
-/// Two sources, and no third:
+/// Three sources, and no fourth:
 ///
 ///   * the `Broken or unfinished` section, bullet by bullet — the letter's
 ///     stated list of what did not work;
@@ -701,12 +727,16 @@ fn debullet(line: &str) -> &str {
 ///     run did differently, which is the part that recurs across runs. The
 ///     `why` is that one run's circumstances and the `kind` is a label from a
 ///     closed set, so neither is a shape.
+///   * each stored item's reflection, by its `what` (D3) — the sentence naming
+///     what went wrong. NOT the rendered `<what> — better: <better>` bullet:
+///     the counterfactual is that one run's idea of the fix, so joining it in
+///     would make the same mistake with a differently worded better fail to
+///     match, which is the whole thing this source exists to catch.
 ///
-/// The departures are read from the STORED items rather than parsed back out of
-/// the rendered `Where I departed from the plan and why` prose: the items carry
-/// the three parts apart, so this pass never has to re-derive a kind from a
-/// sentence and can never disagree with the letter about what kind a departure
-/// was.
+/// Both item sources are read from the STORED items rather than parsed back out
+/// of the rendered prose: the items carry their parts apart, so this pass never
+/// has to re-derive a kind or split a bullet on a connective, and can never
+/// disagree with the letter about what it is reading.
 fn trouble_lines(letter: &Letter) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for line in section_lines(&letter.body, SECTION_BROKEN) {
@@ -716,6 +746,9 @@ fn trouble_lines(letter: &Letter) -> Vec<String> {
         }
     }
     for item in &letter.items {
+        if let Some(what) = reflection_what(item) {
+            out.push(what.to_string());
+        }
         let Some(departure) = &item.departure else { continue };
         if !MINED_DEPARTURE_KINDS.iter().any(|k| *k == departure.kind.trim()) {
             continue;
@@ -887,7 +920,8 @@ pub(crate) fn compose_and_mine(root: &Path, now: &str) -> (Vec<DigestWritten>, V
 mod tests {
     use super::*;
     use crate::verbs::mailbox::{
-        check_subject, write_letter, Departure, LetterItem, DEPARTURE_KINDS, STATUS_UNREAD,
+        check_subject, compose_letter, write_letter, Departure, Entry, LetterItem,
+        DEPARTURE_KINDS, NO_MISTAKES_WHAT, STATUS_UNREAD,
     };
     use serde_json::json;
 
@@ -1190,6 +1224,68 @@ mod tests {
         write_letter(root, &letter).unwrap()
     }
 
+    /// A letter for `run` composed the way a real run composes one — from
+    /// stored [`Entry`] values through `compose_letter` — so the items this
+    /// miner reads can never drift from the items the store actually files.
+    ///
+    /// `reflections` are `(what went wrong, what would have been better)`
+    /// pairs; `clean` appends D2's explicit clean-run answer beside them.
+    fn file_answer_letter(
+        root: &Path,
+        run: &str,
+        stamp: &str,
+        reflections: &[(&str, &str)],
+        clean: bool,
+    ) -> PathBuf {
+        let mut entries: Vec<Entry> = reflections
+            .iter()
+            .map(|(wrong, better)| Entry::reflection(stamp, wrong, better))
+            .collect();
+        if clean {
+            entries.push(Entry::no_mistakes(stamp));
+        }
+        let letter = compose_letter("beehive", run, stamp, &entries).unwrap();
+        write_letter(root, &letter).unwrap()
+    }
+
+    /// The one mistake two runs both wrote down. Ten words, so no test below is
+    /// measuring the four-word brake by accident.
+    const REFLECTED: &str = "the vendored binary was stale and refused the new flag";
+
+    /// The row bee logged for `token` some earlier week, written by hand so a
+    /// test does not depend on a first pass to set up the second. `retired`
+    /// adds the human's supersede beside it — the row stays in the file, out
+    /// of the ACTIVE view and never removed.
+    ///
+    /// ONE seeding for both spent-token tests: the never-relog rule is checked
+    /// at two sources now, and a fixture each source could word differently
+    /// would prove only that each agrees with itself.
+    fn seed_spent_lesson(root: &Path, token: &str, retired: bool) {
+        let mut rows = vec![json!({
+            "id": "old-lesson",
+            "type": "decide",
+            "date": "2026-08-01T00:00:00.000Z",
+            "decision": "Separate runs reported the same thing.",
+            "rationale": format!("cited: a.md, b.md. Stable id for this wording: {token}"),
+            "tags": ["lesson"],
+            "source": "agent",
+        })];
+        if retired {
+            rows.push(json!({
+                "id": "human-retired-it",
+                "type": "supersede",
+                "date": "2026-08-02T00:00:00.000Z",
+                "decision": "That repeat note was wrong.",
+                "rationale": "the two runs were unrelated",
+                "supersedes": "old-lesson",
+                "source": "user",
+            }));
+        }
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let text: String = rows.iter().map(|r| format!("{r}\n")).collect::<Vec<_>>().concat();
+        std::fs::write(decisions_path(root), text).unwrap();
+    }
+
     fn decisions_rows(root: &Path) -> Vec<Value> {
         read_jsonl(&decisions_path(root)).rows
     }
@@ -1311,6 +1407,103 @@ mod tests {
     }
 
     #[test]
+    fn one_reflection_shape_in_two_runs_becomes_exactly_one_cited_lesson() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // The SAME mistake on two nights, with a differently worded
+        // counterfactual each time. Only the stored `what` is tokenized, so the
+        // two still fold to ONE shape — were the rendered
+        // `<what> — better: <better>` bullet the mined text, these would be two
+        // shapes, each reported by one run, and no lesson at all.
+        file_answer_letter(
+            root,
+            "run-a",
+            "2026-08-25T03:15:00.000Z",
+            &[(REFLECTED, "read the binary's version before trusting a flag")],
+            false,
+        );
+        file_answer_letter(
+            root,
+            "run-b",
+            "2026-08-26T21:40:00.000Z",
+            &[(REFLECTED, "rebuild and vendor the binary first")],
+            false,
+        );
+
+        let (written, logged) = compose_and_mine(root, WEEK_NOW);
+
+        assert!(written.iter().any(|d| d.period.id == "2026-W35"), "{written:?}");
+        assert_eq!(logged.len(), 1, "one reflection shape, one lesson: {logged:?}");
+
+        let rows = lessons(root);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        let decision = rows[0]["decision"].as_str().unwrap();
+        assert!(decision.contains(REFLECTED), "the lesson does not quote the reflection: {decision}");
+        assert!(
+            !decision.contains("better:"),
+            "the rendered bullet was mined instead of the stored `what`: {decision}"
+        );
+
+        let rationale = rows[0]["rationale"].as_str().unwrap();
+        assert!(rationale.contains("20260825T031500Z-run-a.md"), "{rationale}");
+        assert!(rationale.contains("20260826T214000Z-run-b.md"), "{rationale}");
+        assert!(rationale.contains(&logged[0]), "the token is not cited: {rationale}");
+    }
+
+    #[test]
+    fn the_clean_run_answer_is_never_mined_however_many_runs_answer_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Four runs that were asked and answered clean. Its sentence is well
+        // over the four-word brake and identical every time, so only the rule
+        // keeps it out of the log — nothing else would.
+        for (run, stamp) in [
+            ("run-a", "2026-08-25T03:15:00.000Z"),
+            ("run-b", "2026-08-26T21:40:00.000Z"),
+            ("run-c", "2026-08-27T03:15:00.000Z"),
+            ("run-d", "2026-08-28T03:15:00.000Z"),
+        ] {
+            file_answer_letter(root, run, stamp, &[], true);
+        }
+        assert!(
+            normalize_shape(NO_MISTAKES_WHAT).split_whitespace().count() >= MIN_SHAPE_WORDS,
+            "the clean-run sentence is short enough that the brake, not the rule, would hide it"
+        );
+
+        let (written, logged) = compose_and_mine(root, WEEK_NOW);
+
+        assert!(!written.is_empty(), "the digest was not filed either: {written:?}");
+        assert!(logged.is_empty(), "a run that answered clean taught a lesson: {logged:?}");
+        assert!(lessons(root).is_empty());
+        assert!(
+            !decisions_rows(root)
+                .iter()
+                .any(|r| r["decision"].as_str().is_some_and(|d| d.contains(NO_MISTAKES_WHAT))),
+            "the clean-run answer reached the decisions store"
+        );
+    }
+
+    #[test]
+    fn a_reflection_shape_an_earlier_lesson_spent_is_never_logged_again() {
+        for retired in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            file_answer_letter(root, "run-a", "2026-08-25T03:15:00.000Z", &[(REFLECTED, "check it first")], false);
+            file_answer_letter(root, "run-b", "2026-08-26T21:40:00.000Z", &[(REFLECTED, "check it first")], false);
+            seed_spent_lesson(root, &shape_token(&normalize_shape(REFLECTED)), retired);
+
+            let (written, logged) = compose_and_mine(root, WEEK_NOW);
+
+            assert!(!written.is_empty(), "the digest was not filed either");
+            assert!(
+                logged.is_empty(),
+                "a reflection shape the store already spent was logged again (retired: {retired}): {logged:?}"
+            );
+            assert_eq!(lessons(root).len(), 1, "a second lesson row appeared");
+        }
+    }
+
+    #[test]
     fn the_mined_kinds_are_real_departure_kinds_and_leave_the_good_one_out() {
         for kind in MINED_DEPARTURE_KINDS {
             assert!(DEPARTURE_KINDS.contains(&kind), "{kind:?} is not one of D5's four");
@@ -1327,36 +1520,9 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let root = tmp.path();
             two_runs_reporting(root, REPEATED, REPEATED);
-            let token = shape_token(&normalize_shape(REPEATED));
-
-            // The row bee logged some earlier week, by hand here so the test
-            // does not depend on the first pass to set up the second.
-            let mut rows = vec![json!({
-                "id": "old-lesson",
-                "type": "decide",
-                "date": "2026-08-01T00:00:00.000Z",
-                "decision": "Separate runs reported the same thing.",
-                "rationale": format!("cited: a.md, b.md. Stable id for this wording: {token}"),
-                "tags": ["lesson"],
-                "source": "agent",
-            })];
-            if retired {
-                // The human read it, disagreed, and superseded it. It stays in
-                // the file — filtered out of the ACTIVE view, never removed.
-                rows.push(json!({
-                    "id": "human-retired-it",
-                    "type": "supersede",
-                    "date": "2026-08-02T00:00:00.000Z",
-                    "decision": "That repeat note was wrong.",
-                    "rationale": "the two runs were unrelated",
-                    "supersedes": "old-lesson",
-                    "source": "user",
-                }));
-            }
-            std::fs::create_dir_all(root.join(".bee")).unwrap();
-            let text: String =
-                rows.iter().map(|r| format!("{r}\n")).collect::<Vec<_>>().concat();
-            std::fs::write(decisions_path(root), text).unwrap();
+            // The human read the earlier row, disagreed, and superseded it when
+            // `retired` — it stays in the file either way.
+            seed_spent_lesson(root, &shape_token(&normalize_shape(REPEATED)), retired);
 
             let (written, logged) = compose_and_mine(root, WEEK_NOW);
 

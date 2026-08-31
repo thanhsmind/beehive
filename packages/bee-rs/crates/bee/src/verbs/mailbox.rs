@@ -597,8 +597,34 @@ pub(crate) const KIND_BLOCKER: &str = "blocker";
 /// [`read_reflection`], and the verb calls it — the store and the door can
 /// never disagree, because there is one of them.
 pub(crate) const KIND_REFLECTION: &str = "reflection";
-pub(crate) const ENTRY_KINDS: [&str; 4] =
-    [KIND_CAP, KIND_FEATURE_CLOSE, KIND_BLOCKER, KIND_REFLECTION];
+
+/// reflection-becomes-lesson D2's kind: the run was ASKED whether anything
+/// went wrong and answered "nothing" — out loud, on the record.
+///
+/// It is the other half of [`KIND_REFLECTION`], and it exists for one reason:
+/// silence and a clean run must not read alike. An absent reflection could
+/// mean the work went cleanly or that nobody ever looked; this entry is the
+/// stored difference between those two.
+///
+/// It renders in NO letter section — not Done, not Mistakes & reflection —
+/// because it is not a thing the run DID. Done and the subject chooser both
+/// exclude it through [`Entry::is_mistakes_answer`], the same predicate family
+/// [`Entry::is_reflection`] already gave them, never by matching the string.
+/// Its `what` is [`NO_MISTAKES_WHAT`], which deliberately FAILS
+/// [`check_subject`], so an older or reverted binary re-composing a letter
+/// still cannot elect it as that letter's subject.
+pub(crate) const KIND_NO_MISTAKES: &str = "no-mistakes";
+pub(crate) const ENTRY_KINDS: [&str; 5] =
+    [KIND_CAP, KIND_FEATURE_CLOSE, KIND_BLOCKER, KIND_REFLECTION, KIND_NO_MISTAKES];
+
+/// The stored sentence of the clean-run answer (D2).
+///
+/// Two jobs at once. It reads as a plain sentence to anyone who opens the
+/// JSONL, and it FAILS [`check_subject`] — "cell" is in [`BEE_VOCABULARY`] —
+/// so the belt-and-braces promise holds: a build that has never heard of
+/// [`KIND_NO_MISTAKES`] and re-composes an old run's letter still cannot make
+/// this line the subject a human reads in their inbox.
+pub(crate) const NO_MISTAKES_WHAT: &str = "The cell was asked about mistakes and reported none.";
 
 /// One raw append written at a clean stop, before any letter exists.
 ///
@@ -666,6 +692,29 @@ impl Entry {
         }
     }
 
+    /// reflection-becomes-lesson D2's clean-run answer, built the ONE way this
+    /// store builds an entry — through a constructor, beside
+    /// [`Entry::reflection`], so the two halves of the mistakes answer can
+    /// never be shaped differently by two callers.
+    ///
+    /// It carries no `better`: there is nothing to have done better. Its
+    /// sentence is fixed ([`NO_MISTAKES_WHAT`]) rather than taken from the
+    /// caller, because this entry states one fact and only one, and a caller's
+    /// wording of it is a wording the letter would have to render.
+    pub(crate) fn no_mistakes(at: &str) -> Self {
+        Self {
+            at: at.to_string(),
+            kind: KIND_NO_MISTAKES.to_string(),
+            what: NO_MISTAKES_WHAT.to_string(),
+            files: Vec::new(),
+            commit: None,
+            proof: None,
+            departure: None,
+            needs_you: Vec::new(),
+            better: None,
+        }
+    }
+
     /// `None` for anything JSON-shaped but missing a required field — treated
     /// by every caller exactly like a parse failure, so one bad line never
     /// sinks a run's whole entry set.
@@ -698,6 +747,25 @@ impl Entry {
     /// line able to move an entry between sections.
     pub(crate) fn is_reflection(&self) -> bool {
         self.kind == KIND_REFLECTION
+    }
+
+    /// Is this the explicit clean-run answer (reflection-becomes-lesson D2)?
+    ///
+    /// By KIND, for the same reason [`Entry::is_reflection`] is: the kind is
+    /// what the writer stored, and a field test would let a hand-edited line
+    /// move an entry between sections.
+    pub(crate) fn is_no_mistakes(&self) -> bool {
+        self.kind == KIND_NO_MISTAKES
+    }
+
+    /// Either half of the mistakes answer: a written reflection, or the
+    /// explicit statement that there was none.
+    ///
+    /// This is the ONE predicate the Done section and the subject chooser
+    /// exclude by, so the two can never drift apart and neither ever matches a
+    /// kind string of its own.
+    pub(crate) fn is_mistakes_answer(&self) -> bool {
+        self.is_reflection() || self.is_no_mistakes()
     }
 
     /// The letter item this entry becomes. The composing pass groups and
@@ -740,6 +808,44 @@ pub(crate) fn read_reflection<'a>(
         ));
     }
     Ok((wrong.unwrap_or("").trim(), better.unwrap_or("").trim()))
+}
+
+/// The SEPARATOR between a mistake's two parts, on the one-line spelling.
+///
+/// The same `" — "` a departure and a D8 proof string already ask a worker to
+/// type ([`DEPARTURE_SEPARATOR`]), borrowed rather than re-declared: one
+/// separator to learn, and no way for two of them to drift.
+pub(crate) const MISTAKE_SEPARATOR: &str = DEPARTURE_SEPARATOR;
+
+/// ONE recorded mistake, in whichever of the two shapes it was written, read
+/// through the SAME door `bee mailbox reflect` uses ([`read_reflection`]).
+///
+/// Two shapes, because two writers already exist: a cap flag hands one LINE
+/// (`<what went wrong> — <what would have been better>`), and a worker's
+/// `--report` may hand a structured `{wrong, better}` object. Both end at
+/// `read_reflection`, so the two-part rule keeps exactly one home and a
+/// mistake recorded at a cap is the same thing as one written by the verb.
+///
+/// `Err` carries the words the refusal hands back, naming the missing part.
+pub(crate) fn read_mistake(v: &Value) -> Result<(String, String), String> {
+    let (wrong, better) = match v {
+        Value::String(line) => match line.split_once(MISTAKE_SEPARATOR) {
+            Some((wrong, better)) => (wrong.trim().to_string(), better.trim().to_string()),
+            // No separator at all: the whole line is offered as `--wrong` so
+            // the refusal below names the part that is actually missing,
+            // rather than a generic "unparseable" a writer cannot act on.
+            None => (line.trim().to_string(), String::new()),
+        },
+        Value::Object(m) => {
+            let part = |key: &str| {
+                m.get(key).and_then(Value::as_str).unwrap_or("").trim().to_string()
+            };
+            (part("wrong"), part("better"))
+        }
+        _ => (String::new(), String::new()),
+    };
+    let (wrong, better) = read_reflection(Some(&wrong), Some(&better))?;
+    Ok((wrong.to_string(), better.to_string()))
 }
 
 /// Append one entry to this run's JSONL. One O_APPEND write, parents created
@@ -1762,6 +1868,12 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
     for entry in entries {
         if entry.kind == KIND_BLOCKER {
             broken.push(bullet(&entry.what));
+        } else if entry.is_no_mistakes() {
+            // NO section (reflection-becomes-lesson D2). It is the record that
+            // the run was asked and answered clean — not a thing the run did,
+            // and not a mistake either. The letter says nothing about it; the
+            // close door and the ratio that watches for a reflexive clean
+            // answer are the readers it exists for.
         } else if entry.is_reflection() {
             // Its OWN section, and never Done — a mistake is not a thing the
             // run did (letter-reflection D1). The two stored parts are joined
@@ -1830,7 +1942,7 @@ pub(crate) fn compose_body(entries: &[Entry]) -> String {
 fn choose_subject(entries: &[Entry]) -> String {
     entries
         .iter()
-        .filter(|e| !e.is_reflection())
+        .filter(|e| !e.is_mistakes_answer())
         .map(|e| e.what.trim())
         .find(|s| check_subject(s).is_ok())
         .map(str::to_string)
@@ -2647,6 +2759,23 @@ fn mark_flag<'a>(parsed: &'a ParsedArgs, name: &str) -> Option<&'a str> {
     parsed.flags.get(name).map(|s| js_trim(s)).filter(|s| !s.is_empty())
 }
 
+/// Take a BARE `--<name>` out of the token list, answering whether it was
+/// there. The remaining tokens are what the value-flag parser sees, so a
+/// boolean flag never has to teach that parser a second token shape.
+fn lift_bare_flag(tokens: &[OsString], name: &str) -> (Vec<OsString>, bool) {
+    let want = format!("--{name}");
+    let mut present = false;
+    let mut kept: Vec<OsString> = Vec::new();
+    for tok in tokens {
+        if tok.to_str() == Some(want.as_str()) {
+            present = true;
+            continue;
+        }
+        kept.push(tok.clone());
+    }
+    (kept, present)
+}
+
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first()?.to_str()? != "mailbox" {
         return None;
@@ -2655,7 +2784,19 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let rest = &args[2..];
     match verb {
         "mark" => run_mark(parse_shape(rest, &["id", "status"])?, t0),
-        "reflect" => run_reflect(parse_shape(rest, &["wrong", "better", "session-id"])?, t0),
+        "reflect" => {
+            // reflection-becomes-lesson D2: `--no-mistakes` is a BARE flag,
+            // and `parse_shape` only knows value flags (plus `--json`), so it
+            // is lifted out of the token list here — the same shape `--json`
+            // already has, kept out of the shared parser because this one
+            // belongs to a single verb.
+            let (rest, no_mistakes) = lift_bare_flag(rest, "no-mistakes");
+            run_reflect(
+                parse_shape(&rest, &["wrong", "better", "session-id"])?,
+                no_mistakes,
+                t0,
+            )
+        }
         _ => None,
     }
 }
@@ -2748,7 +2889,7 @@ fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
 // refusal is D3's — a missing part — and it happens BEFORE anything is
 // written.
 
-fn run_reflect(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<ExitCode> {
     let cmd = "mailbox reflect";
     let Ok(cwd) = std::env::current_dir() else { return None };
     let root = match resolve_store_root_worktree(&cwd) {
@@ -2759,6 +2900,35 @@ fn run_reflect(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, parsed.pre_json, t0)),
     };
     let drift = check_manifest_drift(&root);
+
+    // reflection-becomes-lesson D2: the clean-run answer. The two forms are
+    // exclusive on purpose — a call that states a mistake AND states there
+    // was none says nothing, and guessing which half was meant would store a
+    // fact nobody wrote.
+    if no_mistakes {
+        if mark_flag(&parsed, "wrong").is_some() || mark_flag(&parsed, "better").is_some() {
+            let msg = format!(
+                "bee {cmd}: --no-mistakes states that this run hit none, so it cannot be passed with --wrong or --better — remedy: drop --no-mistakes to write the mistake down, or drop the two parts to state the clean run."
+            );
+            return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+        }
+        let session =
+            crate::verbs::cells::resolve_session_flag_env(mark_flag(&parsed, "session-id"));
+        let run = run_id(session.as_deref());
+        let entry = Entry::no_mistakes(&now_iso());
+        record_stop(&root, &run, &entry);
+        let result = json!({
+            "run": run,
+            "kind": KIND_NO_MISTAKES,
+            "at": entry.at,
+            "what": entry.what,
+        });
+        let text = format!(
+            "Wrote down that run {run} was asked about mistakes and hit none. It appears in no letter section."
+        );
+        return Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0));
+    }
+
     let (wrong, better) =
         match read_reflection(mark_flag(&parsed, "wrong"), mark_flag(&parsed, "better")) {
             Ok(parts) => parts,
@@ -3866,6 +4036,130 @@ mod tests {
         // Both missing: BOTH are named, so one fix answers one refusal.
         let err = read_reflection(None, None).unwrap_err();
         assert!(err.contains("--wrong") && err.contains("--better"), "{err}");
+    }
+
+    // ── reflection-becomes-lesson D2: the clean-run answer ───────────────
+
+    /// TRUTH: the clean-run answer renders in NO section — not Done, not
+    /// Mistakes & reflection — and it never becomes the letter's subject.
+    /// It is the record that the run was ASKED, not a thing the run did.
+    #[test]
+    fn the_clean_run_answer_renders_in_no_section_and_never_titles_the_letter() {
+        let clean = Entry::no_mistakes("2026-08-25T01:00:00.000Z");
+        assert_eq!(clean.kind, KIND_NO_MISTAKES);
+        assert!(clean.is_no_mistakes() && clean.is_mistakes_answer() && !clean.is_reflection());
+
+        // Alone in a run: the letter still composes, and its body says
+        // nothing about it — no Done bullet, no Mistakes section, no
+        // sentence anywhere.
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &[clean.clone()])
+                .unwrap();
+        assert!(
+            !letter.body.contains(&format!("## {SECTION_DONE}")),
+            "the clean-run answer grew a Done section:\n{}",
+            letter.body
+        );
+        assert!(
+            !letter.body.contains(&format!("## {SECTION_REFLECTION}")),
+            "the clean-run answer grew a Mistakes section:\n{}",
+            letter.body
+        );
+        assert!(
+            !letter.body.contains(NO_MISTAKES_WHAT),
+            "the stored sentence reached the letter:\n{}",
+            letter.body
+        );
+        // Nothing else could have titled it, and it did not.
+        assert_eq!(letter.subject, FALLBACK_SUBJECT);
+        assert!(letter.validate().is_ok(), "and it is still a valid record");
+
+        // Beside real work: the work is what the human reads, and the
+        // answer is still invisible.
+        let work = sample_entry("2026-08-25T02:00:00.000Z", "The overnight run rebuilt the index");
+        let letter =
+            compose_letter("beehive", "run-two", "2026-08-25T06:00:00.000Z", &[clean, work])
+                .unwrap();
+        assert_eq!(letter.subject, "The overnight run rebuilt the index");
+        assert!(!letter.body.contains(NO_MISTAKES_WHAT), "{}", letter.body);
+    }
+
+    /// TRUTH: the belt-and-braces half of D2 — the stored sentence itself
+    /// FAILS `check_subject`, so a build that has never heard of this kind
+    /// still cannot elect it as a letter's subject.
+    #[test]
+    fn the_clean_run_sentence_could_not_be_a_subject_even_to_a_binary_that_ignores_its_kind() {
+        assert!(
+            check_subject(NO_MISTAKES_WHAT).is_err(),
+            "the stored sentence must not be electable as a subject"
+        );
+        // Chosen by a chooser that does NOT know the kind: still refused.
+        let entries = [Entry::no_mistakes("2026-08-25T01:00:00.000Z")];
+        let older_binary_choice = entries
+            .iter()
+            .map(|e| e.what.trim())
+            .find(|s| check_subject(s).is_ok())
+            .map(str::to_string)
+            .unwrap_or_else(|| FALLBACK_SUBJECT.to_string());
+        assert_eq!(older_binary_choice, FALLBACK_SUBJECT);
+    }
+
+    /// TRUTH: the bare `--no-mistakes` token reaches the verb, and the
+    /// value-flag parser never sees it. `parse_shape` refuses any token it
+    /// does not know, so without this lift the whole command would fall
+    /// through instead of recording the answer.
+    #[test]
+    fn the_bare_clean_run_flag_is_lifted_out_before_the_value_parser_runs() {
+        let toks = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+
+        let (rest, present) = lift_bare_flag(&toks(&["--no-mistakes"]), "no-mistakes");
+        assert!(present);
+        assert!(rest.is_empty());
+        // What is left is exactly what the value-flag parser accepts.
+        let parsed = parse_shape(&rest, &["wrong", "better", "session-id"]).expect("parses");
+        assert!(parsed.flags.is_empty());
+
+        // Beside a value flag, in either order, the value flag survives.
+        let (rest, present) =
+            lift_bare_flag(&toks(&["--session-id", "run-7", "--no-mistakes"]), "no-mistakes");
+        assert!(present);
+        let parsed = parse_shape(&rest, &["wrong", "better", "session-id"]).expect("parses");
+        assert_eq!(parsed.flags.get("session-id").map(String::as_str), Some("run-7"));
+
+        // Absent: nothing is taken, and nothing is claimed.
+        let (rest, present) = lift_bare_flag(&toks(&["--wrong", "a", "--better", "b"]), "no-mistakes");
+        assert!(!present);
+        assert_eq!(rest.len(), 4);
+    }
+
+    /// TRUTH: a recorded mistake reaches the store through the SAME two-part
+    /// door the verb uses, in either shape it was written, and a half-written
+    /// one is refused by the words that door hands back.
+    #[test]
+    fn read_mistake_takes_both_shapes_and_refuses_a_missing_part() {
+        let line = Value::String(
+            "Guessed the folder name — Read the path back before deleting anything".to_string(),
+        );
+        assert_eq!(
+            read_mistake(&line).unwrap(),
+            (
+                "Guessed the folder name".to_string(),
+                "Read the path back before deleting anything".to_string()
+            )
+        );
+        let object = json!({ "wrong": "  Guessed the folder name  ", "better": "Read it first" });
+        assert_eq!(
+            read_mistake(&object).unwrap(),
+            ("Guessed the folder name".to_string(), "Read it first".to_string())
+        );
+
+        // Half a record, in each shape: refused, and the refusal names the
+        // missing part — the same words `read_reflection` hands the verb.
+        let err = read_mistake(&Value::String("Guessed the folder name".to_string())).unwrap_err();
+        assert!(err.contains("--better"), "{err}");
+        assert!(err.contains("remedy:"), "{err}");
+        let err = read_mistake(&json!({ "better": "Read it first" })).unwrap_err();
+        assert!(err.contains("--wrong"), "{err}");
     }
 
     /// TRUTH: the frontmatter contract only GROWS. A letter filed before the

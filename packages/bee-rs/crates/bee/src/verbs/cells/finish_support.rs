@@ -52,8 +52,21 @@ pub(crate) fn test_results_path(root: &Path) -> PathBuf {
 // flag" posture). Absent `--report` never touches `trace.report` at all —
 // old finish behavior stays byte-identical.
 
-/// The Result form's five keys, in the order worker-cell.md documents them.
+/// The Result form's five REQUIRED keys, in the order worker-cell.md
+/// documents them.
 pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests", "deviations"];
+
+/// reflection-becomes-lesson: the Result form's optional keys — accepted,
+/// never demanded.
+///
+/// `mistakes` is the worker's answer to "did anything go wrong": an array,
+/// each entry one mistake in two parts. It is OPTIONAL here on purpose. Every
+/// caller that shipped before it exists keeps working byte for byte, and the
+/// cap adds no refusal of its own — the door that demands the answer is
+/// `bee close`, which reads the capped cells and names the ones that never
+/// answered. Making the key required here would refuse caps mid-flight for a
+/// field their prompt never mentioned.
+pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 1] = ["mistakes"];
 
 /// D8 (docs/history/test-doctrine/CONTEXT.md) proof-string separator —
 /// three segments joined by `" — "` (space, em dash U+2014, space).
@@ -101,10 +114,11 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
         )));
     };
     for key in map.keys() {
-        if !REPORT_KEYS.contains(&key.as_str()) {
+        if !REPORT_KEYS.contains(&key.as_str()) && !REPORT_OPTIONAL_KEYS.contains(&key.as_str()) {
             return Err(Fail::Thrown(format!(
-                "cells finish: --report has unknown key \"{key}\" — only {} are allowed.",
-                REPORT_KEYS.join(", ")
+                "cells finish: --report has unknown key \"{key}\" — only {} (plus the optional {}) are allowed.",
+                REPORT_KEYS.join(", "),
+                REPORT_OPTIONAL_KEYS.join(", ")
             )));
         }
     }
@@ -144,6 +158,20 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
         _ => {
             return Err(Fail::Thrown(
                 "cells finish: --report key \"deviations\" must be an array.".to_string(),
+            ))
+        }
+    }
+    // reflection-becomes-lesson: `mistakes` is optional, but a `mistakes` that
+    // is not an array is a typo, not an answer — and the shape is refused here
+    // rather than silently read as "no mistakes", which would turn a worker's
+    // written mistake into the clean-run statement. This widens no existing
+    // refusal: before this key existed, ANY spelling of it was refused
+    // outright as an unknown key.
+    match map.get("mistakes") {
+        None | Some(Value::Array(_)) => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"mistakes\" must be an array — one entry per mistake, each \"<what went wrong> — <what would have been better>\"; an empty array states that this cell hit none.".to_string(),
             ))
         }
     }

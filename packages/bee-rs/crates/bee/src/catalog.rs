@@ -731,7 +731,33 @@ mod tests {
         // `--next-action` names the next move, `--rejected` (decisions log)
         // names options ruled out with why, and `--acceptance` names how a
         // thing will be judged. None of them meant "what I should have done".
-        const PINNED_FLAG_COUNT: usize = 201;
+        // 201 -> 203 (reflection-becomes-lesson rbl-1): the mistakes answer
+        // reaches the CAP, so `cells.cap`/`cells.finish` add `--mistake` (one
+        // mistake, two parts on one line) and `--no-mistakes` (the explicit
+        // clean-run statement), and `mailbox.reflect` reuses that same
+        // `--no-mistakes` — which is why this is +2 and not +3.
+        //
+        // Checked first, the spellings that already exist for these two
+        // ideas. `--wrong`/`--better` (mailbox.reflect) are the two PARTS of
+        // one mistake, and reusing them on the cap would have meant a cap can
+        // record exactly one mistake and never a list — `--mistake` names the
+        // whole record, the way `--deviation` names a whole departure, and it
+        // takes the same `" — "` separator, so a caller learns one shape.
+        // `--deviation` itself was rejected on polarity: a departure is a
+        // choice made on purpose, with a why and a kind, and folding a
+        // mistake into it would file every error under "where I departed from
+        // the plan". `--friction` records what the HARNESS made hard, not
+        // what the agent got wrong.
+        //
+        // For the clean-run statement, the nearest existing spelling is
+        // `--deviation "followed the plan"` — a VALUE, not a flag, and that
+        // is exactly why a value would not do here: the departure statement
+        // rides a flag that already had to be passed, while the mistakes
+        // answer must be sayable by a caller passing nothing else at all
+        // (`bee mailbox reflect --no-mistakes`). `--force`, `--skip` and the
+        // other booleans in this vocabulary all mean "override a check";
+        // `--no-mistakes` ANSWERS one.
+        const PINNED_FLAG_COUNT: usize = 203;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
