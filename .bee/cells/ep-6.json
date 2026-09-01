@@ -1,0 +1,82 @@
+{
+  "id": "ep-6",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Ship the decisions, tests, review, documentation and knowledge principles",
+  "action": "Add FIVE principles, same procedure and same row/page grammar as cell ep-5 (read the rows and pages ep-5 left in place and match them). The names, guide anchors and classes are FIXED: (1) principle-record-at-the-moment-of-settlement, expertise/decisions.md § Record at the moment of settlement, classes: feature, research, docs. (2) principle-test-behavior-not-structure, expertise/tests.md § Test behavior, not structure, classes: feature, bugfix, refactor. (3) principle-verify-before-reporting, expertise/review.md § Verify before reporting, classes: feature, bugfix, refactor, docs, release, perf. (4) principle-the-rebuild-test, expertise/documentation.md § The rebuild test, classes: docs. (5) principle-one-fact-one-home, expertise/knowledge.md § One fact, one home, classes: docs, feature, refactor. Rows append to the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md; pages go to skills/principle-<slug>/SKILL.md modelled on skills/principle-red-before-green/SKILL.md. Read each guide section before writing its page. Do NOT edit any file under expertise/ (CONTEXT.md D1). Run .bee/bin/bee dev release-manifest --write after the files land.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test principle_index_parity && .bee/bin/bee dev release-manifest --check && .bee/bin/bee knowledge check",
+  "affects_skills": [
+    "skills/principle-record-at-the-moment-of-settlement/SKILL.md",
+    "skills/principle-test-behavior-not-structure/SKILL.md",
+    "skills/principle-verify-before-reporting/SKILL.md",
+    "skills/principle-the-rebuild-test/SKILL.md",
+    "skills/principle-one-fact-one-home/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "Exactly the five named principles land — no rename, no extra, no omission.",
+      "The new rows and pages match the shape ep-5 already established; a second style in one index is drift.",
+      "principle-test-behavior-not-structure does not restate principle-red-before-green — they are different rules from the same guide.",
+      "No file under expertise/ is edited (CONTEXT.md D1).",
+      "bee dev release-manifest --write runs before the cap."
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "ep-5"
+  ],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-7",
+    "outcome": "Five craft principles ship as thin skills with rows in the doctrine-layer principle index",
+    "files_changed": [
+      "skills/principle-record-at-the-moment-of-settlement/SKILL.md",
+      "skills/principle-test-behavior-not-structure/SKILL.md",
+      "skills/principle-verify-before-reporting/SKILL.md",
+      "skills/principle-the-rebuild-test/SKILL.md",
+      "skills/principle-one-fact-one-home/SKILL.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T18:36:39.699Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T18:33:08.274Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Five craft principles ship as thin skills with rows in the doctrine-layer principle index",
+      "commit": "2d7ba60b",
+      "files": [
+        "skills/principle-record-at-the-moment-of-settlement/SKILL.md",
+        "skills/principle-test-behavior-not-structure/SKILL.md",
+        "skills/principle-verify-before-reporting/SKILL.md",
+        "skills/principle-the-rebuild-test/SKILL.md",
+        "skills/principle-one-fact-one-home/SKILL.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --test principle_index_parity && bee dev release-manifest --check && bee knowledge check — green:unit — the cell verify: index/skill/class/anchor parity, manifest parity, knowledge check (0 errors)",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 192 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
