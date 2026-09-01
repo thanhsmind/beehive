@@ -159,7 +159,7 @@ use crate::version::BEE_VERSION;
         );
         assert!(
             text.contains(
-                "  - `principle-red-before-green` — watch it fail for the reported reason before you fix it"
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it"
             ),
             "{text}"
         );

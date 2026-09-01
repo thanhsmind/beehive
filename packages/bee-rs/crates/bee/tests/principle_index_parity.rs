@@ -1,19 +1,19 @@
 // The principle-index parity fence.
 //
-// A craft principle lives in THREE places: a `skills/principle-<slug>/`
+// A craft principle lives in THREE places: a `skills/bee-principle-<slug>/`
 // directory that ships it, one row in the `## Principle homes` section of the
 // doctrine-layer concept, and the `expertise/` guide section that holds its
 // depth. `principles.rs` reads the rows and hands them to `bee orient` and the
 // session preamble — silently. Every failure mode of that reader is quiet: a
 // row whose skill was never shipped, a skill nobody indexed, a `classes:` value
 // that is not a route class, a missing `spoken:` line, an anchor pointing at a
-// heading that moved. Each one costs the agent a principle it never learns it
-// lost.
+// heading that moved, a skill that reaches no plugin tree. Each one costs the
+// agent a principle it never learns it lost.
 //
-// Four things are pinned here.
+// Five things are pinned here.
 //
-//   1. Every `skills/principle-*/` directory has exactly one row, and every row
-//      names a directory that exists — both directions.
+//   1. Every `skills/bee-principle-*/` directory has exactly one row, and every
+//      row names a directory that exists — both directions.
 //   2. Every value on a row's `classes:` line is a real route class, read from
 //      `ROUTE_CLASS_VALUES` in `workflows.rs`. A class value nobody routes is a
 //      row `bee orient` can never select.
@@ -23,6 +23,11 @@
 //      parsed as one.
 //   4. Every row's guide anchor names a file under `expertise/` that exists and
 //      a heading that appears in it — the pointer the skill's depth rests on.
+//   5. Every shipped principle skill also exists in BOTH generated plugin
+//      trees. This one reads the DISTRIBUTION, not the source: the whole suite
+//      was green while all fourteen principles shipped to zero host repos,
+//      because both pipes enumerate skill directories by a literal `bee-` name
+//      prefix and the slugs did not carry it.
 //
 // Shape, deliberately: pure filesystem, std only, and NOTHING imported from the
 // bee crate — the model is `rule_index_parity.rs` and `route_class_parity.rs`.
@@ -46,8 +51,16 @@ const INDEX: &str =
 const HEADING: &str = "## Principle homes";
 
 /// Where the principle skills ship from, and the slug prefix that marks one.
+/// The `bee-` head is load-bearing, not cosmetic — see `PLUGIN_SKILL_DIRS`.
 const SKILLS_DIR: &str = "skills";
-const SLUG_PREFIX: &str = "principle-";
+const SLUG_PREFIX: &str = "bee-principle-";
+
+/// The two generated trees the plugins ship, written by `bee dev regen`. Both
+/// distribution pipes enumerate skill directories by a literal `bee-` name
+/// prefix (`devtools/skill_trees.rs::list_bee_skill_dirs`,
+/// `onboard/render.rs::list_bee_skill_entries`), so a skill named outside that
+/// namespace never lands here at all.
+const PLUGIN_SKILL_DIRS: [&str; 2] = [".claude-plugin/skills", ".codex-plugin/skills"];
 
 /// The single home of the route-class vocabulary, read as text.
 const WORKFLOWS_RS: &str = "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs";
@@ -155,8 +168,8 @@ fn index_rows() -> Vec<Row> {
 
 // ── the shipped skills ─────────────────────────────────────────────────────
 
-/// Every `skills/principle-*/` directory name. This listing IS the principle
-/// set; the fence states no set of its own.
+/// Every `skills/bee-principle-*/` directory name. This listing IS the
+/// principle set; the fence states no set of its own.
 fn shipped_slugs() -> BTreeSet<String> {
     let dir = repo_root().join(SKILLS_DIR);
     let entries = std::fs::read_dir(&dir)
@@ -379,5 +392,34 @@ fn every_row_anchors_an_existing_guide_heading() {
          broken anchor strands the depth. FIX: repoint each anchor above at the heading's \
          current spelling, or restore the heading in the guide.",
         broken.join("\n  "),
+    );
+}
+
+// ── every principle reaches both shipped plugin trees ──────────────────────
+
+#[test]
+fn every_principle_skill_ships_in_both_plugin_trees() {
+    let root = repo_root();
+    let mut missing: Vec<String> = Vec::new();
+    for slug in shipped_slugs() {
+        for tree in PLUGIN_SKILL_DIRS {
+            if !root.join(tree).join(&slug).join("SKILL.md").is_file() {
+                missing.push(format!("{tree}/{slug}/SKILL.md"));
+            }
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "principle skill(s) under {SKILLS_DIR}/ are missing from the generated plugin \
+         tree(s):\n\n  {}\n\nThose trees ARE the distribution: a skill absent from them \
+         reaches zero host repos while every other check here stays green — the exact silence \
+         this one exists to break. Both pipes enumerate skill directories by a literal `bee-` \
+         name prefix (`devtools/skill_trees.rs::list_bee_skill_dirs`, \
+         `onboard/render.rs::list_bee_skill_entries`). FIX: run `.bee/bin/bee dev regen`. If a \
+         slug is still missing after a green regen it is named outside that namespace and must \
+         be renamed to `{SLUG_PREFIX}<slug>` — never widen the prefix filters, because \
+         `onboard/skills.rs` locks the host-repo skill DELETION domain to the same prefix.",
+        missing.join("\n  "),
     );
 }

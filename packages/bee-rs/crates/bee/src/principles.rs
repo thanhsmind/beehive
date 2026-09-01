@@ -31,7 +31,7 @@ const HEADING: &str = "## Principle homes";
 /// One row of the index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Principle {
-    /// The skill slug, e.g. `principle-red-before-green`.
+    /// The skill slug, e.g. `bee-principle-red-before-green`.
     pub(crate) slug: String,
     /// The line a reader can say out loud to redirect the work.
     pub(crate) spoken: String,
@@ -57,9 +57,10 @@ pub(crate) fn parse_principles(body: &str) -> Vec<Principle> {
     let mut spoken = String::new();
     let mut classes: Vec<String> = Vec::new();
 
-    // A row opens at column 0 (`- \`principle-x\` (...)`); every continuation —
-    // `spoken:`, `classes:`, and the `- applied_at:` block — is indented, which
-    // is what keeps an applied_at bullet from reading as a new row.
+    // A row opens at column 0 (`- \`bee-principle-x\` (...)`); every
+    // continuation — `spoken:`, `classes:`, and the `- applied_at:` block — is
+    // indented, which is what keeps an applied_at bullet from reading as a new
+    // row.
     let mut flush = |slug: &mut Option<String>, spoken: &mut String, classes: &mut Vec<String>| {
         if let Some(s) = slug.take() {
             if !spoken.is_empty() && !classes.is_empty() {
@@ -149,20 +150,20 @@ pub(crate) const TEST_INDEX: &str = "\
 
 Prose the parser walks past.
 
-- `principle-red-before-green` (expertise/tests.md § Red before green):
+- `bee-principle-red-before-green` (expertise/tests.md § Red before green):
   spoken: watch it fail for the reported reason before you fix it
   classes: feature, bugfix, refactor
   - applied_at:
-    - `skills/principle-red-before-green/SKILL.md`
-- `principle-one-home` (expertise/architecture.md § One home):
+    - `skills/bee-principle-red-before-green/SKILL.md`
+- `bee-principle-one-home` (expertise/architecture.md § One home):
   spoken: a rule lives in one place and every other surface points at it
   classes: refactor
   - applied_at:
-    - `skills/principle-one-home/SKILL.md`
+    - `skills/bee-principle-one-home/SKILL.md`
 
 ## Open Gaps
 
-- `principle-not-a-principle` (past the section boundary):
+- `bee-principle-not-a-principle` (past the section boundary):
   spoken: never read
   classes: feature
 ";
@@ -182,7 +183,7 @@ mod tests {
             vec![
                 "- Principles (class=bugfix) — name each one you apply and the decision it changed:"
                     .to_string(),
-                "  - `principle-red-before-green` — watch it fail for the reported reason before you fix it"
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it"
                     .to_string(),
             ]
         );
@@ -193,7 +194,7 @@ mod tests {
         for class in ["feature", "bugfix", "refactor"] {
             let lines = render_lines(INDEX, class);
             assert!(
-                lines.iter().any(|l| l.contains("principle-red-before-green")),
+                lines.iter().any(|l| l.contains("bee-principle-red-before-green")),
                 "class {class} lost the three-class row: {lines:?}"
             );
         }
@@ -231,7 +232,7 @@ mod tests {
     #[test]
     fn rows_past_the_section_boundary_are_not_read() {
         let slugs: Vec<String> = parse_principles(INDEX).into_iter().map(|p| p.slug).collect();
-        assert_eq!(slugs, vec!["principle-red-before-green", "principle-one-home"]);
+        assert_eq!(slugs, vec!["bee-principle-red-before-green", "bee-principle-one-home"]);
     }
 
     /// This repo's own index must parse — a fixture that cannot diverge from
@@ -244,7 +245,7 @@ mod tests {
         let rows = parse_principles(&body);
         assert!(!rows.is_empty(), "{PRINCIPLE_INDEX} carries no parseable principle rows");
         for row in &rows {
-            assert!(row.slug.starts_with("principle-"), "row slug is not a skill slug: {row:?}");
+            assert!(row.slug.starts_with("bee-principle-"), "row slug is not a skill slug: {row:?}");
             assert!(!row.spoken.is_empty(), "row has no spoken line: {row:?}");
             assert!(!row.classes.is_empty(), "row has no classes: {row:?}");
         }

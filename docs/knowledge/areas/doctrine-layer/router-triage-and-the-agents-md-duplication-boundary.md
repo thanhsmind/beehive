@@ -269,95 +269,95 @@ rules are homed in `AGENTS.md`, not here.
 ## Principle homes
 
 Craft principles stay homed in the `expertise/` guides and ship as thin
-`principle-<slug>` skills on top (`expertise-principles` D1). `bee orient` names
-the candidates for a task from its route class, so this index is read on the way
-in, never always-loaded (D2). Rows use the same grammar as the section above:
+`bee-principle-<slug>` skills on top (`expertise-principles` D1). `bee orient`
+names the candidates for a task from its route class, so this index is read on
+the way in, never always-loaded (D2). Rows use the same grammar as the section above:
 `spoken:` and `classes:` both sit ABOVE `applied_at:`, because the indented
 block after `applied_at:` is read as paths.
 
-- `principle-red-before-green` (expertise/tests.md § Red before green):
+- `bee-principle-red-before-green` (expertise/tests.md § Red before green):
   spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it
   classes: feature, bugfix, refactor
   - applied_at:
-    - `skills/principle-red-before-green/SKILL.md`
+    - `skills/bee-principle-red-before-green/SKILL.md`
 
-- `principle-chestertons-fence` (expertise/thinking.md § Chesterton's Fence):
+- `bee-principle-chestertons-fence` (expertise/thinking.md § Chesterton's Fence):
   spoken: find out why it was put there before you take it down — "I don't see why this is here" is the argument for investigating, never for removing
   classes: refactor, bugfix, feature
   - applied_at:
-    - `skills/principle-chestertons-fence/SKILL.md`
+    - `skills/bee-principle-chestertons-fence/SKILL.md`
 
-- `principle-smallest-honest-shape` (expertise/planning.md § The smallest honest shape):
+- `bee-principle-smallest-honest-shape` (expertise/planning.md § The smallest honest shape):
   spoken: size the work from what it endangers, not from how the request sounds — the smallest shape that is still honest, then escalate on evidence
   classes: feature, refactor, research, spike
   - applied_at:
-    - `skills/principle-smallest-honest-shape/SKILL.md`
+    - `skills/bee-principle-smallest-honest-shape/SKILL.md`
 
-- `principle-split-never-shrink` (expertise/planning.md § Scope integrity: split, never shrink):
+- `bee-principle-split-never-shrink` (expertise/planning.md § Scope integrity: split, never shrink):
   spoken: work that will not fit gets split into slices or renegotiated with its owner — never quietly delivered smaller than what was agreed
   classes: feature, refactor, release
   - applied_at:
-    - `skills/principle-split-never-shrink/SKILL.md`
+    - `skills/bee-principle-split-never-shrink/SKILL.md`
 
-- `principle-the-deletion-test` (expertise/architecture.md § The Deletion Test):
+- `bee-principle-the-deletion-test` (expertise/architecture.md § The Deletion Test):
   spoken: delete the module in your head and inline it at every call site — if the complexity vanishes it was a pass-through, if it reappears N times it earned its keep
   classes: refactor, feature
   - applied_at:
-    - `skills/principle-the-deletion-test/SKILL.md`
+    - `skills/bee-principle-the-deletion-test/SKILL.md`
 
-- `principle-single-source-of-truth` (expertise/architecture.md § Single Source of Truth):
+- `bee-principle-single-source-of-truth` (expertise/architecture.md § Single Source of Truth):
   spoken: every fact gets one authoritative home and everything else derives from it — when copies already disagree, elect the owner instead of syncing them
   classes: feature, refactor, docs
   - applied_at:
-    - `skills/principle-single-source-of-truth/SKILL.md`
+    - `skills/bee-principle-single-source-of-truth/SKILL.md`
 
-- `principle-record-at-the-moment-of-settlement` (expertise/decisions.md § Record at the moment of settlement):
+- `bee-principle-record-at-the-moment-of-settlement` (expertise/decisions.md § Record at the moment of settlement):
   spoken: write the record when the decision lands — "okay, so we'll do X" is the trigger, and a cleanup pass at the end reconstructs from memory and loses the boundaries
   classes: feature, research, docs
   - applied_at:
-    - `skills/principle-record-at-the-moment-of-settlement/SKILL.md`
+    - `skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md`
 
-- `principle-test-behavior-not-structure` (expertise/tests.md § Test behavior, not structure):
+- `bee-principle-test-behavior-not-structure` (expertise/tests.md § Test behavior, not structure):
   spoken: assert what the code observably does, never its choreography — a refactor that preserves behavior must not turn the suite red
   classes: feature, bugfix, refactor
   - applied_at:
-    - `skills/principle-test-behavior-not-structure/SKILL.md`
+    - `skills/bee-principle-test-behavior-not-structure/SKILL.md`
 
-- `principle-verify-before-reporting` (expertise/review.md § Verify before reporting):
+- `bee-principle-verify-before-reporting` (expertise/review.md § Verify before reporting):
   spoken: reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently
   classes: feature, bugfix, refactor, docs, release, perf
   - applied_at:
-    - `skills/principle-verify-before-reporting/SKILL.md`
+    - `skills/bee-principle-verify-before-reporting/SKILL.md`
 
-- `principle-the-rebuild-test` (expertise/documentation.md § The rebuild test):
+- `bee-principle-the-rebuild-test` (expertise/documentation.md § The rebuild test):
   spoken: a spec is good when a stranger could rebuild the behavior on a different stack from it alone — every question they would have to ask you is a hole
   classes: docs
   - applied_at:
-    - `skills/principle-the-rebuild-test/SKILL.md`
+    - `skills/bee-principle-the-rebuild-test/SKILL.md`
 
-- `principle-one-fact-one-home` (expertise/knowledge.md § One fact, one home):
+- `bee-principle-one-fact-one-home` (expertise/knowledge.md § One fact, one home):
   spoken: read what the base already holds before writing, then extend the existing entry instead of filing a near-duplicate beside it
   classes: docs, feature, refactor
   - applied_at:
-    - `skills/principle-one-fact-one-home/SKILL.md`
+    - `skills/bee-principle-one-fact-one-home/SKILL.md`
 
-- `principle-reproduce-first` (expertise/debugging.md § Reproduce first):
+- `bee-principle-reproduce-first` (expertise/debugging.md § Reproduce first):
   spoken: get the failure happening on demand — exact command, exact input, exact wrong output — before you read the implementation, and let that repro be the finish line too
   classes: bugfix
   - applied_at:
-    - `skills/principle-reproduce-first/SKILL.md`
+    - `skills/bee-principle-reproduce-first/SKILL.md`
 
-- `principle-crash-site-versus-fault-site` (expertise/debugging.md § Crash site versus fault site):
+- `bee-principle-crash-site-versus-fault-site` (expertise/debugging.md § Crash site versus fault site):
   spoken: the crash is where the bad state was detected, not where it was created — trace the value back to its origin and fix it there, never with a check at the crash site
   classes: bugfix
   - applied_at:
-    - `skills/principle-crash-site-versus-fault-site/SKILL.md`
+    - `skills/bee-principle-crash-site-versus-fault-site/SKILL.md`
 
-- `principle-never-invent-behavior-neither-side-has` (expertise/merges.md § Never invent behavior neither side has):
+- `bee-principle-never-invent-behavior-neither-side-has` (expertise/merges.md § Never invent behavior neither side has):
   spoken: a conflict with no clean answer is not yours to design — never ship a compromise neither side contains; pick one and record it as a named guess, or escalate to whoever owns the tradeoff
   classes: refactor, feature, release
   - applied_at:
-    - `skills/principle-never-invent-behavior-neither-side-has/SKILL.md`
+    - `skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md`
 
 ## Open Gaps
 
