@@ -1,0 +1,92 @@
+{
+  "id": "pg-2",
+  "feature": "pstack-gaps",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Give each rule id a spoken line and state the invocation law",
+  "behavior_change": true,
+  "files": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-gaps/CONTEXT.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "action": "Two edits, per pstack-gaps D4 and D5.\n\nEDIT 1 — the spoken forms. In docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, section `## AGENTS.md rule homes`, every one of the ten rules already has a row shaped `- \\`<rule-id>\\` (AGENTS.md § <section>):` followed by an indented `- applied_at:` block. Add to EACH of the ten rows one INDENTED line, placed directly under the row and BEFORE its `applied_at:` line, shaped exactly:\n\n  spoken: <one plain sentence, in the words a person would say>\n\nCRITICAL CONSTRAINT: the line MUST be indented (two spaces) and MUST NOT start with `- ` or `* ` at column 0. Read `parse_agents_rule_homes` in packages/bee-rs/crates/bee/src/verbs/knowledge/ownership.rs first: it treats any line starting with a dash as a NEW rule row, so a sibling bullet would make `bee knowledge check` report twenty rules instead of ten. Prove it afterwards by running `.bee/bin/bee knowledge check --json` and confirming the rule count is still ten and no new `duplicate_rule_home` or `unknown_rule_ref` finding appeared.\n\nWrite each spoken line as the sentence a user would actually say out loud, not a restatement of the id. Keep it one line, under 110 characters, no trailing period needed. The ten ids are agents-review-user-invoked, agents-gates-never-self-approved, agents-worktree-first, agents-proof-at-cap, agents-never-build-on-red, agents-never-zero-execution-workers, agents-capture-line-at-close, agents-one-next-action, agents-context-handoff-65, agents-one-commit-per-cell. Derive each sentence from that rule's own AGENTS.md section — read the section, do not guess from the id.\n\nEDIT 2 — the invocation law. In packages/bee/AGENTS.block.md add ONE short paragraph, in ONE place only, stating: a user may invoke any rule id by name mid-run ('apply never-build-on-red'); the agent resolves the id in the rule index at docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md (`## AGENTS.md rule homes`), applies it to the work in hand, and the reply MUST name the decision or step the rule changed — or state plainly that it changed nothing. Never a bare acknowledgement. Place it where the surrounding contract already talks about rules or communication; keep it under 6 lines and match the file's voice. Then run `.bee/bin/bee dev regen` so AGENTS.md and every generated copy carry the same paragraph — do NOT hand-edit AGENTS.md.\n\nDo not add a CLI verb, a new file, or a second index.\n\nREGEN, inside this cell and in this order: `.bee/bin/bee dev render-skill-trees`, then `.bee/bin/bee onboard --repo-root . --apply`, then `.bee/bin/bee dev release-manifest --write`. Commit the regenerated copies with the change; a hand-edited generated copy is a defect.",
+  "verify": "`rg -c 'spoken:' docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md` returns 10. `.bee/bin/bee knowledge check --json` still reports exactly ten homed rules with no new duplicate_rule_home or unknown_rule_ref finding. The invocation law appears in packages/bee/AGENTS.block.md and, after `.bee/bin/bee dev regen`, in AGENTS.md, and both name the index path. `git diff --stat` shows AGENTS.md changed by regen, never by hand. `.bee/bin/bee dev release-manifest --check` is clean.",
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "pg-1"
+  ],
+  "decisions": [
+    "pstack-gaps D4",
+    "pstack-gaps D5"
+  ],
+  "must_haves": {
+    "truths": [
+      "All ten rule rows in the `## AGENTS.md rule homes` section carry a non-empty indented `spoken:` line, placed before their `applied_at:` line.",
+      "No spoken line starts with `- ` or `* ` at column 0, so `parse_agents_rule_homes` still reads exactly ten rules.",
+      "`bee knowledge check` reports the same ten homed rules as before, with no new duplicate_rule_home or unknown_rule_ref finding.",
+      "Each spoken line is derived from that rule's own AGENTS.md section, not paraphrased from its id.",
+      "packages/bee/AGENTS.block.md states the invocation law once, naming the index path and requiring the reply to name what the rule changed or say plainly that it changed nothing.",
+      "AGENTS.md carries the same paragraph and reached it through the regen chain, never a hand edit."
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "pg-worker-2",
+    "outcome": "Ten rule rows gained a spoken line and the operating block states the rule-invocation law",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Committed .bee/onboarding.json, which the cell did not name — the cell-ordered onboard --apply step rewrites its managed agents_block hash, so leaving it out would commit a stale record — hit an unforeseen obstacle",
+      "sync-ack: AGENTS.md gained one new paragraph outside every rule marker; no rule block changed text, so the applied_at restatements of agents-capture-line-at-close stay accurate"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T16:31:16.306Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1",
+    "claimed_at": "2026-09-01T16:26:36.297Z",
+    "sync_ack": "AGENTS.md gained one new paragraph outside every rule marker; no rule block changed text, so the applied_at restatements of agents-capture-line-at-close stay accurate",
+    "mistakes": [
+      {
+        "wrong": "A compound diff over two process substitutions was refused by the worktree-isolation guard, costing a retry",
+        "better": "should have written the two sorted JSON files first and diffed them with a plain command"
+      }
+    ],
+    "report": {
+      "outcome": "Ten rule rows gained an indented spoken line and the operating block states the rule-invocation law, regenerated into AGENTS.md",
+      "commit": "1db0606b71083ee214e61f75e6df763a4122b0a8",
+      "files": [
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "knowledge check --json then dev release-manifest --check — green:live — docs edit: rule-home findings byte-identical to the pre-edit run (0 errors, 0 profile errors, same 138 warnings), section still parses ten dash-led rows, generated copies match the manifest",
+      "deviations": [
+        "Committed .bee/onboarding.json, which the cell did not name — the cell-ordered onboard --apply step rewrites its managed agents_block hash, so leaving it out would commit a stale record — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "A compound diff over two process substitutions was refused by the worktree-isolation guard, costing a retry — should have written the two sorted JSON files first and diffed them with a plain command"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

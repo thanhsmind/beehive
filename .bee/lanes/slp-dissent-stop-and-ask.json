@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "I'll read the six required surfaces now.",
-    "asked_at": "2026-09-01T15:57:55.864Z",
-    "session": "30399b89-afed-49b2-b130-03ec6ec30415"
+    "subject": "All six surfaces check out clean. Writing the tick record now.",
+    "asked_at": "2026-09-01T16:29:09.015Z",
+    "session": "b9363e1b-0e5e-4446-99f3-2ed671c923e3"
   },
   "route": {
     "class": "feature",
