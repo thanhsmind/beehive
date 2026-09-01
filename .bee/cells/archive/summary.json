@@ -1068,5 +1068,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-31T15:36:14.582Z"
+  },
+  "verification-ships-to-hosts": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-01T10:18:22.847Z"
   }
 }

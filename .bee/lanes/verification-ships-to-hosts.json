@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "verification-ships-to-hosts",
   "mode": "standard",
-  "phase": "planning",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"verification-ships-to-hosts\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 46ec146; capture what settled, then bee close --feature verification-ships-to-hosts.",
+  "next_action": "Review the two P2 findings the independent pass raised: the offer sits beside a notice that leaks internal wording, and a refused offer has no suppression.",
   "created_at": "2026-09-01T08:47:00.182Z",
-  "run_state": null,
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -37,5 +37,14 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave: 5 seats (facts-gaps, risks, alternatives, value, user-impact)",
     "digest_head": "# Hat wave — verification-ships-to-hosts (2026-09-01, plan step)\n\nFive perspectives, dispatched via the one door. Synthesis held by the leader.\n\nVERDICT: the drafted shape is DEAD. The replacement is SMALLER — render, never prune.\n\n## What each seat returned\n\n- **facts-gaps** — the one invalidating fact: the renderer strips the executable\n  bit (source 0755, rendered 0644; `write_file_atomic_random` is `fs::write` +\n  rename, and the fingerprint hashes content only, so a `chmod` never drifts).\n "
+  },
+  "last_scribing_run": {
+    "feature": "verification-ships-to-hosts",
+    "date": "2026-09-01",
+    "at": "2026-09-01T10:17:23.421Z",
+    "areas_synced": [
+      "onboarding"
+    ],
+    "next_action": "Review the two P2 findings the independent pass raised: the offer sits beside a notice that leaks internal wording, and a refused offer has no suppression."
   }
 }

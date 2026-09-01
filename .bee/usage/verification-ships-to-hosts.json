@@ -1,0 +1,85 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "verification-ships-to-hosts",
+  "closed_at": "2026-09-01T10:18:22.910Z",
+  "sessions": [
+    {
+      "session_id": "6e15dde7-f4f0-4e62-81fc-a10e3d955722",
+      "models": {
+        "claude-opus-5": {
+          "input": 576,
+          "output": 247205,
+          "cache_write": 2201723,
+          "cache_read": 93028165,
+          "new": 2449504,
+          "cached": 93028165,
+          "total": 95477669
+        }
+      },
+      "subagent_models": {
+        "claude-fable-5": {
+          "input": 250,
+          "output": 25020,
+          "cache_write": 1037044,
+          "cache_read": 11348387,
+          "new": 1062314,
+          "cached": 11348387,
+          "total": 12410701
+        },
+        "claude-opus-5": {
+          "input": 480,
+          "output": 18760,
+          "cache_write": 674716,
+          "cache_read": 16445889,
+          "new": 693956,
+          "cached": 16445889,
+          "total": 17139845
+        },
+        "claude-sonnet-5": {
+          "input": 22,
+          "output": 59,
+          "cache_write": 118942,
+          "cache_read": 537412,
+          "new": 119023,
+          "cached": 537412,
+          "total": 656435
+        },
+        "claude-haiku-4-5-20251001": {
+          "input": 50,
+          "output": 14,
+          "cache_write": 24433,
+          "cache_read": 55267,
+          "new": 24497,
+          "cached": 55267,
+          "total": 79764
+        }
+      },
+      "subagent_count": 19,
+      "started_ms": 1788240130569,
+      "ended_ms": 1788257897283,
+      "totals": {
+        "new": 4349294,
+        "cached": 121415120,
+        "total": 125764414
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 2449504,
+      "cached": 93028165,
+      "total": 95477669
+    },
+    "subagents": {
+      "new": 1899790,
+      "cached": 28386955,
+      "total": 30286745
+    },
+    "total": {
+      "new": 4349294,
+      "cached": 121415120,
+      "total": 125764414
+    }
+  }
+}
