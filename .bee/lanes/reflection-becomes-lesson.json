@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Đây là bản minor vì có lệnh mới và hành vi mới, không phá vỡ cái cũ. Script chỉ báo `OK` khi CI xanh và asset đã lên GitHub — tôi sẽ chỉ nói",
-    "asked_at": "2026-08-31T15:37:01.196Z",
+    "subject": "✓ Release in dòng cuối: `OK  bee 2.31.0 is live`. Kiểm tra cảnh báo \"uncommitted changes\":",
+    "asked_at": "2026-08-31T15:43:03.720Z",
     "session": "42e9abd1-7a36-4512-a5e3-cb7fa626dea9"
   },
   "route": {

@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-08-31T15:29:37.735Z",
-    "session": "a9fc8ad7-13a9-4bfa-b7bf-16d043ba585c"
+    "subject": "All state confirms the same picture as the last several ticks: no live work, no signals.",
+    "asked_at": "2026-09-01T05:37:53.843Z",
+    "session": "624b5612-1da4-4905-981f-d9e52c1a4635"
   },
   "route": {
     "class": "feature",
