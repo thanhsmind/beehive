@@ -263,6 +263,21 @@ The list is kept by hand because `AGENTS.md` carries no frontmatter. A
 resolves a target against the rules this concept's own body homes, and these
 ten are homed in `AGENTS.md`, not here.
 
+## Principle homes
+
+Craft principles stay homed in the `expertise/` guides and ship as thin
+`principle-<slug>` skills on top (`expertise-principles` D1). `bee orient` names
+the candidates for a task from its route class, so this index is read on the way
+in, never always-loaded (D2). Rows use the same grammar as the section above:
+`spoken:` and `classes:` both sit ABOVE `applied_at:`, because the indented
+block after `applied_at:` is read as paths.
+
+- `principle-red-before-green` (expertise/tests.md § Red before green):
+  spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it
+  classes: feature, bugfix, refactor
+  - applied_at:
+    - `skills/principle-red-before-green/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens
