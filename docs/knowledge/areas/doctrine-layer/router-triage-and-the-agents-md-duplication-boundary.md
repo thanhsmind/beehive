@@ -271,9 +271,27 @@ rules are homed in `AGENTS.md`, not here.
 Craft principles stay homed in the `expertise/` guides and ship as thin
 `bee-principle-<slug>` skills on top (`expertise-principles` D1). `bee orient`
 names the candidates for a task from its route class, so this index is read on
-the way in, never always-loaded (D2). Rows use the same grammar as the section above:
-`spoken:` and `classes:` both sit ABOVE `applied_at:`, because the indented
-block after `applied_at:` is read as paths.
+the way in, never always-loaded (`expertise-principles` D2). Rows use the same
+grammar as the section above: `spoken:` and `classes:` both sit ABOVE
+`applied_at:`, because the indented block after `applied_at:` is read as paths.
+
+Two rules complete the layer. The reply must name each principle it applied
+and the decision that principle changed, or say plainly that it changed
+nothing — the `agents-name-applied-principles` rule above, widening the
+invocation law to router-selected principles (`expertise-principles` D3). And
+the set is the CRAFT half only: `thinking`, `planning`, `architecture`,
+`decisions`, `tests`, `review`, `documentation`, `knowledge`, `debugging`,
+`merges`. The six domain guides — `data`, `apis`, `security`, `operations`,
+`performance`, `frontend` — carry no principles yet
+(`expertise-principles` D4).
+
+The skills are named `bee-principle-*`, not `principle-*`, and the prefix is
+load-bearing: both distribution pipes discover skill directories by that
+literal prefix (`devtools/skill_trees.rs`, `onboard/render.rs`), and the same
+prefix is the host-repo skill DELETION domain (`onboard/skills.rs`). A
+principle outside the namespace passes every source-side check and ships to no
+host repo at all — which is why the parity fence also reads the rendered
+plugin trees, not just `skills/`.
 
 - `bee-principle-red-before-green` (expertise/tests.md § Red before green):
   spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it
