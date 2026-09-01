@@ -147,6 +147,23 @@ Tradeoff: <if any>
 after orchestrator judgment), `manual` (needs design input), `advisory`
 (report-only) — and never bypasses judgment or the merge question.
 
+## Dismissal shape
+
+A suspicion that was raised and then dropped is NOT a finding: it takes
+no severity, no axis, no `autofix_class`, and it never enters the summary
+line's counts. It takes one line in the report's Dismissed section:
+
+```markdown
+- <suspicion, one line> — `path:line` — dismissed: <reason>
+```
+
+`reason` is REQUIRED and names what was checked, never a verdict word —
+"traced `retry()`; the guard at `src/net/retry.ts:118` already catches
+it", "could not reproduce against the frozen diff", "duplicate of [P2]
+<title>". "Not a problem" and "low value" are not reasons. Omit the whole
+section when nothing was dismissed; an empty section is noise, not
+honesty.
+
 ## Human UAT
 
 For each SEE/CALL/RUN decision in CONTEXT.md, verbatim:

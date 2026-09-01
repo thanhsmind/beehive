@@ -240,6 +240,18 @@ burns their trust, and buries the real findings in the same report. A
 review with three verified defects outranks one with three verified
 defects and seven maybes — the maybes cost the three their credibility.
 
+A dropped suspicion is still a result. When a suspected defect fails
+verification and you drop it, RECORD the drop instead of discarding it:
+the suspicion in one line, the `path:line` that raised it, and the reason
+it went — what you checked, never a verdict word. "Traced `retry()`; the
+guard at `src/net/retry.ts:118` already catches it" is a reason. "Not a
+problem" is not. Return those records beside your findings; they are what
+the report renders as its Dismissed section
+(`skills/bee-reviewing/SKILL.md`, "Dismissed — show what the lead
+rejected"). A silent drop is an invisible filter — the author never sees
+the judgement, so they can never overturn it, and a wrong drop costs more
+than a wrong finding because nothing reveals it.
+
 ## Label uncertainty exactly
 
 Uncertainty is allowed; unlabeled uncertainty is not. When you cannot

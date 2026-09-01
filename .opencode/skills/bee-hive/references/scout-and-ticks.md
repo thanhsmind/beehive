@@ -32,6 +32,8 @@ the touched area.
 `bee route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused:
 
 - `class` ∈ `feature`, `bugfix`, `docs`, `refactor`, `research`, `release`, `spike`, `perf`
+  — each class has a playbook the plan cites by name and anchor, never copies:
+  `bee-planning/references/planning-reference.md` ("Class playbooks")
 - `lane` ∈ `docs`, `tiny`, `small`, `spike`, `standard`, `high-risk`
 - `flags[]` — every entry from the canonical mode-gate list (auth, authorization, data-model, audit-security, external-systems, public-contracts, cross-platform, covered-contract-change, proof-weakening, multi-domain)
 - `product_files` — a non-negative integer

@@ -76,6 +76,28 @@ When zero findings survive verification, that last line is verbatim —
 `No findings. Scope clean — <N> file(s), <M> capped cell(s) verified.` —
 never padded with observations to look like work.
 
+## Dismissed — show what the lead rejected
+
+Directly above that last line, a review that dismissed anything carries a
+**Dismissed** section: every suspicion the reviewers raised and this
+review dropped, one line each — the suspicion, its `path:line`, and the
+reason it went. It exists to be overridable. An invisible filter asks the
+human to trust the lead's judgement; a shown one lets them reverse it —
+the same honesty rule that keeps the zero-findings line verbatim. Two
+independent studies of pstack reached this recommendation on their own
+(`docs/history/research/pstack-xia.md:110`).
+
+The reviewers' drops arrive with their reasons already attached
+(`.bee/expertise/review.md`, "Verify before reporting"); synthesis adds
+its own — a duplicate, a suspicion that did not survive the conservative
+route. Line shape: `references/reviewing-reference.md` ("Dismissal
+shape"). Dismissals are not findings: no severity, no axis, no
+`bee reviews record --kind finding` entry, and the summary line above
+stays exactly as it is — they never enter its counts.
+
+A review that dismissed nothing shows NO Dismissed section — not an empty
+one, and never one padded to look thorough.
+
 ## Verify the artifacts, not the story
 
 - Every capped behavior-change cell: read the verification evidence in
