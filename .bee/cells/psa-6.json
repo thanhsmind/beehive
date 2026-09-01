@@ -1,0 +1,94 @@
+{
+  "id": "psa-6",
+  "feature": "pstack-adoption",
+  "lane": "standard",
+  "role": "docs",
+  "title": "A review report shows the findings it dismissed, and why",
+  "action": "Per D5 (store 7332c6ca). This lands in TWO places, and both are required — a report cannot display a bucket nothing was told to keep:\n\n1. .bee/expertise/review.md, in or beside its `## Verify before reporting` section (:232-233, 'Reproduce or trace every suspected defect before you file it'). Today that section tells a reviewer to DROP what it cannot substantiate, and the drop leaves no trace. Add the keep-instruction: when a suspected defect is dropped, record it with the reason it was dropped. That record is what the report renders. Without this the display half is decorative.\n\n2. skills/bee-reviewing/SKILL.md, beside the fixed summary line at :72 (`<N> finding(s) — P1 <a>, P2 <b>, P3 <c> · axis: spec <s>, standards <t>.`). The report gains a Dismissed section listing each dropped finding with its one-line reason. Say plainly why it exists: showing what the lead rejected lets a human override the judgement instead of trusting an invisible filter — the same honesty rule that already makes the zero-findings line verbatim at :75-76. Keep the existing summary line unchanged; the Dismissed section is additive, and a review that dismissed nothing shows no section rather than an empty one.\n\nIf skills/bee-reviewing/references/reviewing-reference.md carries the finding schema, add the dismissal's reason field there too so the schema and the report agree.\n\nRun `bee dev regen` after touching skills/**.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "acceptance": "review.md instructs the reviewer to RECORD a dropped finding with its reason. bee-reviewing/SKILL.md describes the Dismissed section, additive to the unchanged summary line, absent when nothing was dismissed. If the reference carries the finding schema, it names the reason field. release-manifest --check passes after regen.",
+  "files": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md",
+    ".bee/expertise/review.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".bee/onboarding.json"
+  ],
+  "affects_skills": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-reviewing/references/reviewing-reference.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "psa-5"
+  ],
+  "decisions": [
+    "7332c6ca-c32b-4c62-a067-408a4acdf60e"
+  ],
+  "read_first": [
+    "skills/bee-reviewing/SKILL.md",
+    ".bee/expertise/review.md",
+    "docs/history/pstack-adoption/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "the KEEP instruction lands in .bee/expertise/review.md — a dropped finding is recorded with its reason, not silently discarded",
+      "bee-reviewing/SKILL.md describes the Dismissed section and leaves the existing summary line at :72 unchanged",
+      "a review that dismissed nothing shows no Dismissed section, not an empty one",
+      "cargo test is green and bee dev release-manifest --check passes after bee dev regen"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-psa-6",
+    "outcome": "A review report now shows the findings it dismissed and why, and the reviewer is told to record each drop with its reason",
+    "files_changed": [
+      "expertise/review.md",
+      ".bee/expertise/review.md",
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-reviewing/references/reviewing-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Also edited expertise/review.md, a path the cell did not name — the named .bee/expertise/review.md is an onboarding-installed copy that bee onboard --apply overwrote from that source — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T14:31:24.325Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T14:26:48.634Z",
+    "mistakes": [
+      {
+        "wrong": "I edited .bee/expertise/review.md, the file the cell named, but that path is an onboarding-installed copy",
+        "better": "bee onboard --apply inside bee dev regen silently overwrote my edit from the source at expertise/review.md — Before writing any path under .bee/expertise/, check whether a source of the same name exists at expertise/<name>.md and edit the source, then let onboard install it"
+      }
+    ],
+    "report": {
+      "outcome": "A review report now shows the findings it dismissed and why, and the reviewer is told to record each drop with its reason",
+      "commit": "5be81a0f825d4656969e8e44c6b444c6b5216125",
+      "files": [
+        "expertise/review.md",
+        ".bee/expertise/review.md",
+        "skills/bee-reviewing/SKILL.md",
+        "skills/bee-reviewing/references/reviewing-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && bee dev release-manifest --check && bee onboard --repo-root . --json — green — the workspace suite (30/30 binaries, 0 failed, exit 0) covers the skill-tree parity and instruction-law guards this docs edit touches; release-manifest --check (exit 0, 292 files match) covers skills/**; onboard --json returns up_to_date, covering the .bee/expertise managed-hash ledger",
+      "deviations": [
+        "Also edited expertise/review.md, a path the cell did not name — the named .bee/expertise/review.md is an onboarding-installed copy that bee onboard --apply overwrote from that source — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "I edited .bee/expertise/review.md, the file the cell named, but that path is an onboarding-installed copy — bee onboard --apply inside bee dev regen silently overwrote my edit from the source at expertise/review.md — Before writing any path under .bee/expertise/, check whether a source of the same name exists at expertise/<name>.md and edit the source, then let onboard install it"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 292 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces read, nothing rises to a signal. Writing the silence record now.",
-    "asked_at": "2026-09-01T14:05:15.695Z",
-    "session": "0ff3882a-be02-4c95-8e32-85d04d349b7f"
+    "subject": "I'll read the six required surfaces now.",
+    "asked_at": "2026-09-01T14:21:24.057Z",
+    "session": "36b29d9b-4b59-4ff4-a58a-ab2b0077d6f9"
   },
   "route": {
     "class": "feature",

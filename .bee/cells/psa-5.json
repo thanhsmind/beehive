@@ -1,0 +1,87 @@
+{
+  "id": "psa-5",
+  "feature": "pstack-adoption",
+  "lane": "standard",
+  "role": "docs",
+  "title": "The dispatch role refuses a candidate whose CoS it cannot check",
+  "action": "Per D4 (store b03574c6). In skills/bee-herding/references/role-dispatch.md, extend the existing two-key lane-safety filter — Key 2 at :273 already says 'Read the candidate's full title+cos yourself', so this is a SECOND question over text the role already has in hand, not a new read.\n\nAdd the rule: a candidate whose Condition of Satisfaction is not CHECKABLE is skipped, and the skip line NAMES why. Checkable means the CoS points at something an agent can evaluate — a command it can run, a file:line it can open, or a repository state it can inspect. It is a reading rule, not a regex: do not add a keyword list.\n\nCarry a worked pair so the rule is teachable rather than abstract:\n- NOT checkable — `cos: \"make the parser better\"`. Nothing to run, nothing to open, no state to compare. Skip line: `SKIPPED p-xxxxxxxx — cos is not checkable: it names no command, path, or state an agent can evaluate.`\n- Checkable — `cos: \"zero old callers remain and every parser fixture passes\"`. Two evaluable facts.\n\nState the boundary plainly in one line: this fires at DISPATCH time only. Nothing checks a CoS when it is written, so a vague item is accepted at filing and refused later, with its author out of the loop — that gap is filed as backlog p-0b2812f8 and is deliberately NOT closed here.\n\nRun `bee dev regen` after touching skills/**.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "acceptance": "role-dispatch.md's lane-safety filter carries the checkable-CoS rule, a worked checkable/uncheckable pair, the exact skip-line wording, and the one-line statement that authoring-time checking is out of scope with its backlog id. No keyword list was added. release-manifest --check passes after regen.",
+  "files": [
+    "skills/bee-herding/references/role-dispatch.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/role-dispatch.md"
+  ],
+  "affects_specs": [],
+  "deps": [
+    "psa-4"
+  ],
+  "decisions": [
+    "b03574c6-8e07-4231-af25-27671c22ea87"
+  ],
+  "read_first": [
+    "skills/bee-herding/references/role-dispatch.md",
+    "docs/history/pstack-adoption/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "the rule sits inside the existing two-key lane-safety filter, extending Key 2's own read rather than adding a new pass over the backlog",
+      "a worked uncheckable example and a worked checkable example both appear, with the exact skip-line wording",
+      "no keyword or English-word list was introduced — the text says it is a reading rule",
+      "one line states that this fires at dispatch time only and names backlog p-0b2812f8 as the unclosed authoring-time gap",
+      "cargo test is green and bee dev release-manifest --check passes after bee dev regen"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-psa-5",
+    "outcome": "Key 2 of the herding lane-safety filter now refuses a candidate whose CoS names no command, path, or state an agent can evaluate",
+    "files_changed": [
+      "skills/bee-herding/references/role-dispatch.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      ".agents/skills/bee-herding/references/role-dispatch.md",
+      ".claude/skills/bee-herding/references/role-dispatch.md",
+      ".claude-plugin/skills/bee-herding/references/role-dispatch.md",
+      ".codex-plugin/skills/bee-herding/references/role-dispatch.md",
+      ".opencode/skills/bee-herding/references/role-dispatch.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T14:26:33.102Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T14:23:50.291Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Key 2 of the herding lane-safety filter now refuses a candidate whose CoS names no command, path, or state an agent can evaluate, with a worked pair and the exact skip line",
+      "commit": "9e427875deb1a72f2fbbb2d845603c73fdafbc80",
+      "files": [
+        "skills/bee-herding/references/role-dispatch.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".agents/skills/bee-herding/references/role-dispatch.md",
+        ".claude/skills/bee-herding/references/role-dispatch.md",
+        ".claude-plugin/skills/bee-herding/references/role-dispatch.md",
+        ".codex-plugin/skills/bee-herding/references/role-dispatch.md",
+        ".opencode/skills/bee-herding/references/role-dispatch.md"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && bee dev release-manifest --check — green — skills/** change owes the regen chain, so both halves of the cell verify ran: 0 failed across the workspace suite, 292 files match the stored manifest",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 196 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
