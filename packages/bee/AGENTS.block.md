@@ -78,6 +78,13 @@ never-build-on-red" mid-run. Resolve the id in the rule index
 the reply the decision or step it changed — or say plainly that it
 changed nothing. A bare acknowledgement is not an answer.
 
+<!-- rule: agents-name-applied-principles -->
+The same answer is owed to a principle nobody spoke: `bee orient` names
+the craft principles a task routes to, and on a multi-step task the
+reply names each one it applied and the decision that principle
+changed — or says plainly it changed nothing.
+<!-- /rule -->
+
 ## Start a session
 
 Read the injected preamble instead of re-fetching state. One ritual, one

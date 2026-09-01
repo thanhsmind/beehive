@@ -114,8 +114,8 @@ rule never disappears — only its elaboration moves.
   without the changed-nothing branch the law invites a fabricated change. No second index and no CLI
   verb were added — this registry already existed and `bee knowledge check` already validated it;
   what was missing was one sentence per rule. The spoken line MUST stay indented: `parse_agents_rule_homes`
-  reads any line opening with a dash as a new rule row, so a sibling bullet would report twenty rules
-  where there are ten. `tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
+  reads any line opening with a dash as a new rule row, so a sibling bullet would report one rule
+  as two. `tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
   the markers in `packages/bee/AGENTS.block.md`, and the rows here — plus the spoken line's presence.
 
 ## Edge Cases Settled
@@ -257,11 +257,14 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/references/scout-and-ticks.md`
     - `skills/bee-planning/SKILL.md`
     - `skills/bee-swarming/SKILL.md`
+- `agents-name-applied-principles` (AGENTS.md § Judgment and deviation):
+  spoken: name each principle you applied and the decision it changed — or say plainly it changed nothing
+  - applied_at:
 
 The list is kept by hand because `AGENTS.md` carries no frontmatter. A
 `bee.applied_at` key on this concept would not serve: `applied_at_unlinked`
 resolves a target against the rules this concept's own body homes, and these
-ten are homed in `AGENTS.md`, not here.
+rules are homed in `AGENTS.md`, not here.
 
 ## Principle homes
 
