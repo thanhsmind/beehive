@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"code-shape-doctrine\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"code-shape-doctrine\" (lane).",
+  "next_action": "Merged into main at 151c0a1; capture what settled, then bee close --feature code-shape-doctrine.",
   "created_at": "2026-09-01T14:50:57.130Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "Two product files at most: the worker brief source and possibly the bee-build agent template. Prose only, no refusal path, no test asserts the brief's text today.",
     "updated_at": "2026-09-01T14:51:54.669Z",
     "feature": "code-shape-doctrine"
-  },
-  "merge_ready": {
-    "since": "2026-09-01T14:56:37.086Z",
-    "branch": "wt/code-shape-doctrine",
-    "worktree_id": "beehive--wt--code-shape-doctrine",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
