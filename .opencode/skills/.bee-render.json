@@ -47,6 +47,14 @@
       "sha256": "7a63fea7091d8b798933f2519c2a3062fe87c629fc1803e3975cb4dce4b1e7ba"
     },
     {
+      "name": "bee-verify-upkeep",
+      "sha256": "97c66132fe8980a15bfe91fc7f6af31828d960a3237e7eaa569e495b5db5cc9f"
+    },
+    {
+      "name": "bee-verifying",
+      "sha256": "60136705b47115459d3519c3d42c33e30d730efd7b6b4faae927d85a7403570d"
+    },
+    {
       "name": "bee-wayfinding",
       "sha256": "b743438a713c5a802b2678d21d88f93776afdb568c673130d13ea2fef8772f71"
     },

@@ -18,13 +18,19 @@ use super::hooks_wiring as hw;
 use super::merge::{merge_agents_content, merge_gitignore_content};
 use super::migration::{apply_worktree_migration, build_migration_conflict_reason, stranded_json};
 use super::notices::compose_agents_header;
-use super::plan::{compute_plan, ComputedPlan, Options};
-use super::render::{build_render_sidecar, runtime_for_target_kind, source_skill_digest_entries};
+use super::plan::{
+    compute_plan, verify_marker_errors, verify_root_refusal, verify_source_root, ComputedPlan,
+    Options,
+};
+use super::render::{
+    build_render_sidecar, render_skill_bytes, runtime_for_target_kind, source_skill_digest_entries,
+    walk_skill_tree,
+};
 use super::skills::{apply_remove_skill, apply_sync_skill};
 use super::source::Engine;
 use super::templates as T;
 use super::util::{
-    exists, join_rel, read_json_if_exists, read_text_if_exists, write_file_atomic,
+    exists, join_rel, lstat_if_exists, read_json_if_exists, read_text_if_exists, write_file_atomic,
 };
 use crate::jsjson;
 use serde_json::{json, Map, Value};
@@ -87,6 +93,91 @@ fn posix_basename(p: &str) -> &str {
         Some(i) => &p[i + 1..],
         None => p,
     }
+}
+
+/// The write half of plan.rs section 8 (verification-ships-to-hosts D3):
+/// render ONE host-generated `.bee/verify/<name>/` into ONE runtime skill
+/// home. `Some(reason)` is a loud per-skill skip, exactly as `apply_sync_skill`
+/// reports one.
+///
+/// It is modelled on the `copy_expertise` arm above, NOT on `apply_sync_skill`:
+/// it creates directories and writes rendered bytes, and it has no cleanup
+/// phase at all. `apply_remove_skill`, `remove_dir_all`, `remove_dir` and
+/// `remove_file` are unreachable from here by construction — a `verify-*`
+/// directory in a runtime home that bee never generated is data this code
+/// cannot delete, and neither is an extra file a host dropped INSIDE a
+/// rendered one. Staleness belongs to `bee-verify-upkeep`, in a git working
+/// tree, where a deletion is reviewable.
+///
+/// Every plan-time check is re-run here so a plan-to-apply race fails closed
+/// rather than writing through a link that appeared in between.
+fn apply_copy_verify_skill(
+    repo_root: &Path,
+    name: &str,
+    target_dir: &Path,
+    runtime: &str,
+) -> Option<String> {
+    if let Some(reason) = verify_root_refusal(repo_root) {
+        return Some(format!("{reason} - {name} skipped"));
+    }
+    let source_dir = verify_source_root(repo_root).join(name);
+    if !lstat_if_exists(&source_dir).is_some_and(|s| !s.is_symlink && s.is_dir) {
+        return Some(format!("source .bee/verify/{name} is not a plain directory - skipped"));
+    }
+    let render = |buf: &[u8]| render_skill_bytes(buf, runtime);
+    let source_walk = walk_skill_tree(&source_dir, Some(&render));
+    if let Some(b) = &source_walk.blocked {
+        return Some(format!(
+            "source .bee/verify/{name} contains a {} at {} - skipped",
+            b.reason, b.path
+        ));
+    }
+    let marker_errors = verify_marker_errors(&source_dir);
+    if !marker_errors.is_empty() {
+        return Some(format!(
+            "source .bee/verify/{name} has malformed bee:only markers - skipped, nothing rendered: {}",
+            marker_errors.join("; ")
+        ));
+    }
+    let mut target_walk = super::render::Walk::default();
+    match lstat_if_exists(target_dir) {
+        Some(st) if st.is_symlink => {
+            return Some(format!(
+                "installed {name} is a symlink (plausibly a live checkout) - skipped, never written through"
+            ));
+        }
+        Some(st) if !st.is_dir => {
+            // A non-directory occupant is NOT cleared out of the way. The
+            // `bee-*` sync unlinks it and writes the source shape; here the
+            // occupant is the host's file and the answer is to leave it alone.
+            return Some(format!("installed {name} is not a directory - skipped, never removed"));
+        }
+        Some(_) => {
+            let walked = walk_skill_tree(target_dir, None);
+            if let Some(b) = &walked.blocked {
+                return Some(format!(
+                    "installed {name} contains a {} at {} - skipped, nothing inside it written",
+                    b.reason, b.path
+                ));
+            }
+            target_walk = walked;
+        }
+        None => {}
+    }
+    if std::fs::create_dir_all(target_dir).is_err() {
+        return Some(format!("installed {name} could not be created - skipped"));
+    }
+    for rel in &source_walk.dirs {
+        let _ = std::fs::create_dir_all(join_rel(target_dir, rel));
+    }
+    for (rel, hash) in &source_walk.files {
+        if target_walk.file_hash(rel) == Some(hash.as_str()) {
+            continue; // already byte-identical
+        }
+        let raw = std::fs::read(join_rel(&source_dir, rel)).unwrap_or_default();
+        let _ = write_file_atomic(&join_rel(target_dir, rel), &render(&raw));
+    }
+    None
 }
 
 /// utcNow(): `new Date().toISOString()`.
@@ -532,7 +623,25 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     continue;
                 }
             }
-            "blocked_symlink" | "blocked_alias" => {
+            // verification-ships-to-hosts D3. Deliberately NOT part of the
+            // three arms above: it shares no writer, no source root and no
+            // deletion domain with them. `item.path` is already the target
+            // skill directory, repo-relative, so `target` is the directory to
+            // render into.
+            "copy_verify_skill" => {
+                let kind = item["target"].as_str().unwrap_or("");
+                let skill = item["skill"].as_str().unwrap_or("");
+                if let Some(reason) = apply_copy_verify_skill(
+                    repo_root,
+                    skill,
+                    &target,
+                    runtime_for_target_kind(kind),
+                ) {
+                    skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
+                    continue; // skipped loudly, not applied
+                }
+            }
+            "blocked_symlink" | "blocked_alias" | "blocked_verify_skill" => {
                 skipped_skills.push(json!({
                     "skill": item["skill"], "target": item["target"], "reason": item["reason"]
                 }));
