@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)"]
   sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
 ---
@@ -21,6 +21,39 @@ stage is invoked. The unnumbered verify-ladder rule travels with R17: both
 govern the working residue of a cell rather than its content.
 
 ## Business Rules
+
+- **R18** — A route class carries a PLAYBOOK, and a plan CITES it rather than
+  copying it (pstack-adoption D1 as superseded by `132551fb`, D2, D3; cells
+  psa-1..psa-6, 2026-09-01). `bee route --set --class` was a validated enum that
+  no procedure read: nothing branched on the value, so `bugfix` and `refactor`
+  scaled ceremony identically. Four classes now carry a named step list, homed
+  once in `bee-planning/references/planning-reference.md` ("Class playbooks") —
+  `perf` (baseline, change, re-measure; "it feels faster" is not a result),
+  `bugfix` (reproduce, watch it fail, find the mechanism, fix, re-run the same
+  reproduction), `refactor` (record existing behavior first and keep that record
+  green at every step; a behavior change is a separate cell), and `research`
+  (read-only, trace the runtime path, name the sources that came up empty).
+  `perf` is the eighth enum value; it is safe beside the `mode`-carries-a-class
+  leak (`close.rs`, `uat.rs`) only because it is absent from
+  `ROUTE_LANE_VALUES`, and `tests/route_class_parity.rs` now pins the vocabulary
+  across all four documents that name it, reading both lists out of
+  `workflows.rs` as text rather than re-declaring them. The plan cites the
+  playbook by name and anchor and never transcribes it: a copied step list goes
+  stale and can be satisfied by transcription (`docs/history/research/pstack-xia.md`
+  lists verbatim playbook todo-lists under *What must not be ported*). A step
+  that does not apply stays VISIBLE with its recorded reason — the existing
+  named-deviation rule — and is never a refusal. The playbook binds the ROUTE
+  class only; the cell-level `change_class` enum is a different taxonomy.
+- **R19** — Two duties keep an agent's own judgment auditable (pstack-adoption
+  D4, D5; cells psa-5, psa-6, 2026-09-01). The herding dispatch role refuses a
+  candidate whose Condition of Satisfaction names no command, path, or state it
+  can evaluate, and its skip line says so — a reading rule, never a keyword
+  list; it fires at dispatch time only, and the authoring-time gap is filed,
+  not closed. And a review report carries the findings it DISMISSED, each with
+  the reason it went. That one lands in two places or it is decorative: the
+  reviewer's instrument records the drop, and the report renders it. An
+  invisible filter asks the human to trust the lead's judgment; a shown one
+  lets them reverse it.
 
 - **R13** — Small work starts from an executable work packet, never a shrunken
   feature plan (lane-ceremony-v3 D3/D4/D5). The tiny lane's complete work shape

@@ -7,7 +7,9 @@
 > because the four items it ranks became the `pstack-adoption` feature, and
 > because its `class`-enum evidence (nothing branches on `route.class`) is not
 > in the other study. Where the two disagree, `pstack-xia.md` wins — it already
-> did once, on verbatim playbooks (decision `132551fb`).
+> did once, on verbatim playbooks (decision `132551fb`, which SUPERSEDED
+> `cc87b3c4`'s "copies verbatim" wording; both are settled and the feature
+> shipped under the superseding one, so this citation needs no revisit).
 
 Source: `docs/history/research/pstack-source.md` (Flavio Copes' write-up of Cursor's
 pstack plugin by Lauren Tan / @poteto). Local path, no ref/SHA — the
