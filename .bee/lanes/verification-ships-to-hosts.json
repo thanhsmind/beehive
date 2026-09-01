@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "verification-ships-to-hosts",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"verification-ships-to-hosts\" started at phase \"planning\" (lane).",
-  "next_action": "Review the two P2 findings the independent pass raised: the offer sits beside a notice that leaks internal wording, and a refused offer has no suppression.",
+  "next_action": "bee close finished \"verification-ships-to-hosts\" — feature is closed.",
   "created_at": "2026-09-01T08:47:00.182Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
