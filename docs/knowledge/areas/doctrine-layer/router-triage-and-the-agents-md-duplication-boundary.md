@@ -341,6 +341,24 @@ block after `applied_at:` is read as paths.
   - applied_at:
     - `skills/principle-one-fact-one-home/SKILL.md`
 
+- `principle-reproduce-first` (expertise/debugging.md § Reproduce first):
+  spoken: get the failure happening on demand — exact command, exact input, exact wrong output — before you read the implementation, and let that repro be the finish line too
+  classes: bugfix
+  - applied_at:
+    - `skills/principle-reproduce-first/SKILL.md`
+
+- `principle-crash-site-versus-fault-site` (expertise/debugging.md § Crash site versus fault site):
+  spoken: the crash is where the bad state was detected, not where it was created — trace the value back to its origin and fix it there, never with a check at the crash site
+  classes: bugfix
+  - applied_at:
+    - `skills/principle-crash-site-versus-fault-site/SKILL.md`
+
+- `principle-never-invent-behavior-neither-side-has` (expertise/merges.md § Never invent behavior neither side has):
+  spoken: a conflict with no clean answer is not yours to design — never ship a compromise neither side contains; pick one and record it as a named guess, or escalate to whoever owns the tradeoff
+  classes: refactor, feature, release
+  - applied_at:
+    - `skills/principle-never-invent-behavior-neither-side-has/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens

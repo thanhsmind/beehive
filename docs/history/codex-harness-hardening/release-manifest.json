@@ -2047,6 +2047,20 @@
       "packagePath": "skills/principle-chestertons-fence/SKILL.md"
     },
     {
+      "path": "skills/principle-crash-site-versus-fault-site/SKILL.md",
+      "sha256": "4c9a64415cd0dc094246b0034caeea0ef76ae78e77313242e6a600258b03fc8f",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-crash-site-versus-fault-site/SKILL.md"
+    },
+    {
+      "path": "skills/principle-never-invent-behavior-neither-side-has/SKILL.md",
+      "sha256": "effc457c66bd8f835009afcfe17a18a0747499adca2211cc05cc0a53bd641d96",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-never-invent-behavior-neither-side-has/SKILL.md"
+    },
+    {
       "path": "skills/principle-one-fact-one-home/SKILL.md",
       "sha256": "5beb461caa1b2d900bb6183a166b13ead904cec72d8e39be61c8c20cdae890ea",
       "mode": "644",
@@ -2066,6 +2080,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/principle-red-before-green/SKILL.md"
+    },
+    {
+      "path": "skills/principle-reproduce-first/SKILL.md",
+      "sha256": "6a301670367203aa1197850f902818254771105c57cc632f0be891cb0c5b4e7a",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-reproduce-first/SKILL.md"
     },
     {
       "path": "skills/principle-single-source-of-truth/SKILL.md",
