@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"expertise-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at c6fa883; capture what settled, then bee close --feature expertise-principles.",
   "created_at": "2026-09-01T17:44:45.673Z",
   "run_state": "done",
   "waiting_on": null,
@@ -27,12 +27,5 @@
     "rationale": "Adds a principle skill layer (~15 new skills), a class-to-principle mapping read by bee orient, and widens the AGENTS.md naming law. public-contracts: the orient/preamble output and the skill surface. covered-contract-change: session_preamble and skill-sync tests assert today's shapes. multi-domain: skills authoring, Rust router/orient, the AGENTS block, and a parity test. No hard-gate flag.",
     "updated_at": "2026-09-01T17:49:12.203Z",
     "feature": "expertise-principles"
-  },
-  "merge_ready": {
-    "since": "2026-09-01T19:11:01.225Z",
-    "branch": "wt/expertise-principles",
-    "worktree_id": "beehive--wt--expertise-principles",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
