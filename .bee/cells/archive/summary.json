@@ -1088,5 +1088,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-01T14:58:34.425Z"
+  },
+  "proof-strength-and-expiry": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-01T16:01:41.867Z"
   }
 }
