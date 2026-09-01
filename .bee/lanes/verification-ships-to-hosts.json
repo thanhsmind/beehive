@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"verification-ships-to-hosts\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"verification-ships-to-hosts\" (lane).",
+  "next_action": "Merged into main at 09b33bb; reload the product and test \"verification-ships-to-hosts\", then either approve uat (\"bee gate --name uat --approved true --lane verification-ships-to-hosts\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-01T08:47:00.182Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Theo quyết định `ci-owned-verify` (23/07), **vòng lặp dev không chạy full suite tại chỗ** — CI sở hữu việc đó. Nên tôi chạy đúng phần hợp nh",
-    "asked_at": "2026-09-01T09:58:06.978Z",
-    "session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722"
+    "kind": "gate",
+    "subject": "uat: verification-ships-to-hosts",
+    "asked_at": "2026-09-01T09:59:13.320Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -42,12 +42,5 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave: 5 seats (facts-gaps, risks, alternatives, value, user-impact)",
     "digest_head": "# Hat wave — verification-ships-to-hosts (2026-09-01, plan step)\n\nFive perspectives, dispatched via the one door. Synthesis held by the leader.\n\nVERDICT: the drafted shape is DEAD. The replacement is SMALLER — render, never prune.\n\n## What each seat returned\n\n- **facts-gaps** — the one invalidating fact: the renderer strips the executable\n  bit (source 0755, rendered 0644; `write_file_atomic_random` is `fs::write` +\n  rename, and the fingerprint hashes content only, so a `chmod` never drifts).\n "
-  },
-  "merge_ready": {
-    "since": "2026-09-01T09:20:18.921Z",
-    "branch": "wt/verification-ships-to-hosts",
-    "worktree_id": "beehive--wt--verification-ships-to-hosts",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
