@@ -72,11 +72,36 @@ pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 1] = ["mistakes"];
 /// three segments joined by `" — "` (space, em dash U+2014, space).
 pub(crate) const PROOF_SEPARATOR: &str = " — ";
 
+/// D1/D3 (docs/history/proof-strength-and-expiry/CONTEXT.md) — the closed
+/// vocabulary a cap's proof line may record in its RESULT segment. Each
+/// value's meaning is written beside it HERE and nowhere else: a meaning
+/// restated in a second place is how a closed vocabulary decays back into
+/// three free-text values. Checked on the WRITE path only, in
+/// [`parse_report_flag`] — see the D2 note on [`parse_tests_proof`].
+pub(crate) const PROOF_RESULT_VALUES: [&str; 3] = [
+    // the real product or command was driven and its observable result inspected
+    "green:live",
+    // automated tests passed
+    "green:unit",
+    // it compiled, type-checked, linted, or a parity/pointer check passed,
+    // with nothing executed
+    "green:static",
+];
+
 /// parseTestsProof — splits a D8 proof string `<command> — <result> —
 /// <scope reason>` into its three segments, splitting on the FIRST TWO
 /// occurrences of [`PROOF_SEPARATOR`] only, so the reason segment may
 /// itself contain the same separator. `None` when fewer than two
 /// separators are found, or any segment trims to empty.
+///
+/// This parser checks SHAPE only and is deliberately blind to
+/// [`PROOF_RESULT_VALUES`]. D2 (docs/history/proof-strength-and-expiry):
+/// the READ path — `feature_proof_check` (proof.rs) — calls this same
+/// function over already-capped cells, so a vocabulary check HERE would
+/// retroactively refuse the ~200 historical caps that carry a bare
+/// `green`. The vocabulary is checked in [`parse_report_flag`] instead, on
+/// the tuple this returns, write path only. That inaction IS the write/read
+/// split; do not "fix" it by moving the check down here.
 pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
     let first = s.find(PROOF_SEPARATOR)?;
     let (command, rest) = s.split_at(first);
@@ -101,7 +126,8 @@ pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
 /// split on the FIRST TWO ` — ` separators only, so the reason may itself
 /// carry the same separator) — never the retired `boundary`/`undeclared`
 /// enum. A result segment reading `red` refuses the cap outright (D6's
-/// spirit: a red is fix-first, never a done). Every refusal names the
+/// spirit: a red is fix-first, never a done), and every other result
+/// segment must be one of [`PROOF_RESULT_VALUES`] (D1). Every refusal names the
 /// offending key so a cold reader fixes it without re-deriving the shape
 /// from this function.
 pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
@@ -189,7 +215,7 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
     match map.get("tests") {
         Some(Value::String(s)) if s == "boundary" || s == "undeclared" => {
             return Err(Fail::Thrown(format!(
-                "cells finish: --report key \"tests\" no longer accepts \"{s}\" — the boundary/undeclared enum is retired. Record a proof string instead: \"<command> — <result> — <scope reason>\" (e.g. \"cargo test -p bee — green — touched close.rs\"). In a no-test-sentinel repo, name the command segment \"none\" and put the parity/docs proof used in the reason segment (e.g. \"none — green — regen parity check only\")."
+                "cells finish: --report key \"tests\" no longer accepts \"{s}\" — the boundary/undeclared enum is retired. Record a proof string instead: \"<command> — <result> — <scope reason>\" (e.g. \"cargo test -p bee — green:unit — touched close.rs\"). In a no-test-sentinel repo, name the command segment \"none\" and put the parity/docs proof used in the reason segment (e.g. \"none — green:static — regen parity check only\")."
             )))
         }
         Some(Value::String(s)) => match parse_tests_proof(s) {
@@ -198,10 +224,22 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
                     "cells finish: --report key \"tests\" result segment is \"red\" — a red is fix-first, never a cap. Fix the failure, re-run the proof, and cap with a passing result.".to_string(),
                 ))
             }
+            // D1 (docs/history/proof-strength-and-expiry/CONTEXT.md): the
+            // result segment is closed over `PROOF_RESULT_VALUES`, checked
+            // HERE — on the tuple, beside `red`, write path only — so the
+            // read path keeps accepting historical bare-`green` caps (D2).
+            // The refusal names the whole legal set, `ROUTE_CLASS_VALUES`
+            // style, because this message is what a cold worker fixes from.
+            Some((_, result, _)) if !PROOF_RESULT_VALUES.contains(&result.as_str()) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: --report key \"tests\" result segment is \"{result}\" — a cap records HOW the change was shown to work, so the result must be one of {} (a bare \"green\" no longer says which).",
+                    PROOF_RESULT_VALUES.join(", ")
+                )))
+            }
             Some(_) => {}
             None => {
                 return Err(Fail::Thrown(
-                    "cells finish: --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\" — three non-empty segments separated by \" — \" (e.g. \"cargo test -p bee — green — touched close.rs\")."
+                    "cells finish: --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\" — three non-empty segments separated by \" — \" (e.g. \"cargo test -p bee — green:unit — touched close.rs\")."
                         .to_string(),
                 ))
             }

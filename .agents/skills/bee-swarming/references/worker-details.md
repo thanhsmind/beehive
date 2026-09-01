@@ -14,8 +14,8 @@ You own test scope: pick the proof your change type needs (code →
 related tests green; docs → parity/pointer checks; behavior → judge
 verdict), run it yourself, and record it on `cells finish --report` as
 the required `tests` proof line — `<command> — <result> — <scope
-reason>` (three non-empty segments, e.g. `cargo test -p bee — green —
-touched close.rs`). `bee close` and `bee worktree merge` CHECK that
+reason>` (three non-empty segments, e.g.
+`cargo test -p bee — green:unit — touched close.rs`). `bee close` and `bee worktree merge` CHECK that
 recorded proof at the boundary; neither runs `commands.test` itself. CI
 runs the project's declared `.bee/config.json` `commands.test` on every
 push — the one deterministic net. A `red` result segment refuses the

@@ -227,7 +227,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         Some(raw) => parse_report_flag(raw)?,
         None => {
             return Err(Fail::Thrown(format!(
-                "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green — touched close.rs\").",
+                "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green:unit — touched close.rs\").",
                 REPORT_KEYS.join(", ")
             )))
         }
@@ -1739,7 +1739,7 @@ pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Op
 mod tests {
     use super::*;
 
-    const PROOF: &str = "cargo test -p bee — green — the cap hook only";
+    const PROOF: &str = "cargo test -p bee — green:unit — the cap hook only";
 
     fn mailbox_cell(root: &Path, id: &str) {
         let dir = root.join(".bee").join("cells");

@@ -138,3 +138,126 @@ fn env_prefix_stripping_only_eats_environment_assignments() {
     // Not an assignment: an `=` inside the command itself is left alone.
     assert_eq!(strip_env_prefix("cargo test --cfg x=y"), "cargo test --cfg x=y");
 }
+
+// ── the qualified-proof teaching fence ─────────────────────────────────────
+//
+// `PROOF_RESULT_VALUES` closed the proof line's result segment over three
+// values (docs/history/proof-strength-and-expiry, D1). A doc, prompt or
+// refusal message still showing the now-refused bare `green` teaches the
+// refused form — the reader copies the example and the cap refuses.
+//
+// This is an ALLOWLIST, `route_class_parity.rs`'s design: it names the sites
+// that TEACH the form by example and asserts each one still shows a qualified
+// value. It is deliberately NOT a whole-tree denylist — the read path stays
+// tolerant of historical bare-`green` caps (D2), and the fixtures in
+// `verbs/cells/proof.rs`, `verbs/work.rs`, `verbs/mailbox.rs` and
+// `verbs/drivers/close.rs` are that tolerance's in-tree evidence. A denylist
+// would forbid the evidence along with the mistake.
+//
+// The rot guard is the anchor: a listed site whose anchor is gone FAILS
+// rather than quietly dropping out of the set.
+
+/// The vocabulary's single home. This file reads it as TEXT — the constant is
+/// `pub(crate)` and an integration test cannot import it — and states no value
+/// of its own, so the fence cannot agree with a stale copy of itself.
+const FINISH_SUPPORT_RS: &str = "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs";
+
+/// (path, anchor). The anchor identifies the line carrying that site's
+/// example; that line must hold one of `PROOF_RESULT_VALUES`. Where a site
+/// teaches by example twice, one anchor matches both lines and both are
+/// checked.
+const TEACHING_SITES: &[(&str, &str)] = &[
+    ("packages/bee/prompts/worker-cell.md", "cargo test -p bee"),
+    ("skills/bee-swarming/references/worker-details.md", "cargo test -p bee"),
+    ("docs/product-description/verification/lifecycle.md", r#""outcome":"note added""#),
+    ("docs/product-description/verification/foundations.md", r#"--report "<cmd>"#),
+    ("docs/product-description/lifecycle/execution.md", "cargo test -p auth"),
+    ("site/guide/vi/cell-lane.html", "cargo test -p auth"),
+    (
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "Test gates disabled by repo declaration",
+    ),
+    (
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "Test gates disabled by repo declaration",
+    ),
+    (
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "refused — --report is required",
+    ),
+];
+
+/// Read the `const PROOF_RESULT_VALUES: [&str; N] = [ … ];` initializer out of
+/// `finish_support.rs` as text. The declared arity is checked against what was
+/// found, so a misparse says so instead of fencing a half-read list.
+fn proof_result_values(src: &str) -> Vec<String> {
+    let decl = "const PROOF_RESULT_VALUES: [&str; ";
+    let at = src.find(decl).unwrap_or_else(|| {
+        panic!(
+            "`PROOF_RESULT_VALUES` is no longer declared as `{decl}...` in {FINISH_SUPPORT_RS}.\n\n\
+             FIX: point this parser at the new declaration — do NOT paste the values in here."
+        )
+    });
+    let rest = &src[at + decl.len()..];
+    let arity: usize = rest[..rest.find(']').expect("the `[&str; N]` type is unterminated")]
+        .trim()
+        .parse()
+        .expect("`PROOF_RESULT_VALUES` has a non-numeric arity in its type");
+
+    let eq = rest.find('=').expect("the declaration has no `=`");
+    let open = eq + rest[eq..].find('[').expect("the initializer has no `[`");
+    let close = open + rest[open..].find(']').expect("the initializer has no `]`");
+    // One value per line, each on its own line under its meaning comment.
+    let values: Vec<String> = rest[open + 1..close]
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix('"'))
+        .filter_map(|l| l.split('"').next())
+        .map(str::to_string)
+        .collect();
+
+    assert_eq!(
+        values.len(),
+        arity,
+        "read {values:?} out of `PROOF_RESULT_VALUES` but its type declares {arity} value(s) — \
+         this fence misparsed the source and would guard the wrong list"
+    );
+    values
+}
+
+#[test]
+fn every_site_teaching_the_proof_line_shows_a_qualified_result() {
+    let root = repo_root();
+    let values = proof_result_values(&read(&root, FINISH_SUPPORT_RS));
+    let mut bare: Vec<String> = Vec::new();
+
+    for (rel, anchor) in TEACHING_SITES {
+        let text = read(&root, rel);
+        let mut anchored = 0usize;
+        for (i, line) in text.lines().enumerate() {
+            if !line.contains(anchor) {
+                continue;
+            }
+            anchored += 1;
+            if !values.iter().any(|v| line.contains(v.as_str())) {
+                bare.push(format!("  {rel}:{}\n      {}", i + 1, line.trim()));
+            }
+        }
+        assert!(
+            anchored > 0,
+            "{rel} no longer carries the anchor {anchor:?}, so this fence stopped reading it.\n\n\
+             A site that silently drops out of the allowlist is the drift this test exists to \
+             catch. FIX: update the anchor here, or drop the site if that document genuinely \
+             stopped teaching the proof line by example."
+        );
+    }
+
+    assert!(
+        bare.is_empty(),
+        "site(s) teaching the cap's proof line show a result segment that is not one of [{}] \
+         ({FINISH_SUPPORT_RS}):\n\n{}\n\nAn example showing an unqualified `green` teaches the \
+         form the cap now REFUSES — the reader copies it and the cap refuses. FIX: qualify the \
+         example with the honest value for that site.",
+        values.join(" "),
+        bare.join("\n"),
+    );
+}

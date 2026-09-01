@@ -47,6 +47,14 @@ pub(crate) struct Staged {
     /// second time. `None` only when the worktree's feature could not be
     /// resolved — matches `proof`'s own `None` condition exactly.
     pub(crate) feature: Option<String>,
+    /// D4 (docs/history/proof-strength-and-expiry/CONTEXT.md): the capped
+    /// cells whose recorded proof is OLDER than the tree this merge lands —
+    /// computed pre-merge (the merge base only exists before the merge) and
+    /// carried across the released lock exactly like `proof`, so P3 can
+    /// report it. Empty on every ordinary merge; an ADVISORY, never a
+    /// refusal — this door checks recorded proof and runs nothing
+    /// (verbs/cells/proof.rs), and D4 adds no new door.
+    pub(crate) proof_stale: Vec<String>,
     /// uat-stop-placement D4.1: the placement `uat_stop_config` already
     /// resolved for the merge precondition above, carried across the
     /// released lock so P3's lane write (D4.2) and cleanup suppression
@@ -58,6 +66,53 @@ pub(crate) enum StageOut {
     /// A TERMINAL outcome already fully resolved inside the P1 lock.
     Done(MergeAnswer),
     Staged(Box<Staged>),
+}
+
+/// D4: the capped cells of this feature whose recorded proof predates the
+/// tree being merged — the rows the `proof-stale` advisory names.
+///
+/// A cap records the commit its proof was taken at (`ProofCheck.commits`,
+/// verbs/cells/proof.rs). The merge base is where `branch` and main last
+/// agreed, so it is the newest state both sides of this merge already
+/// contain: a cap whose commit DESCENDS from the base was proven against
+/// that state, and one that does not was proven before it — main moved (or
+/// the branch was rewritten) after the proof was taken, which is the exact
+/// event D4 exists to make visible.
+///
+/// It FAILS OPEN in every uncertain case, because a warning that is wrong
+/// is worse than no warning: no merge base, a git call that did not run, or
+/// a recorded sha this repo does not have (`--is-ancestor` exits 128, not
+/// 1) all say nothing. Only a definite "not a descendant" — exit 1 — is
+/// reported stale. Caps with no recorded commit never reach here at all;
+/// `feature_proof_check` drops the `"none"` sentinel at the read.
+///
+/// The merge base is computed HERE rather than taken from
+/// `branch_changed_files` (merge.rs): that helper's own base is a local,
+/// and its only call site runs far below this one.
+fn stale_proof_cells(
+    main_root: &Path,
+    branch: &str,
+    proof: &crate::verbs::cells::ProofCheck,
+) -> Vec<String> {
+    if proof.commits.is_empty() {
+        return Vec::new();
+    }
+    let base = run_git(main_root, &["merge-base", "HEAD", branch]);
+    if base.status != Some(0) {
+        return Vec::new();
+    }
+    let base = js_trim(&base.stdout.unwrap_or_default()).to_string();
+    if base.is_empty() {
+        return Vec::new();
+    }
+    proof
+        .commits
+        .iter()
+        .filter(|(_, commit)| {
+            run_git(main_root, &["merge-base", "--is-ancestor", &base, commit]).status == Some(1)
+        })
+        .map(|(id, _)| id.clone())
+        .collect()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -448,6 +503,18 @@ pub(crate) fn merge_stage(
         }
     }
 
+    // D4: the staleness advisory's own read — still inside the zero-mutation
+    // zone, and read-only git. It cannot sit beside the proof check further
+    // up (which is where the merge door READS proof) because `branch` is not
+    // resolved until the detached-HEAD/branch-mismatch checks above, and the
+    // merge base needs it; it cannot sit after the merge either, because the
+    // merge is what destroys the base. Nothing here can refuse — the rows
+    // are carried to P3 and reported beside the merge that landed.
+    let proof_stale = proof
+        .as_ref()
+        .map(|p| stale_proof_cells(main_root, &branch, p))
+        .unwrap_or_default();
+
     // worktree-companion-hook: every zero-mutation refusal above (both
     // dirty-tree checks, detached-HEAD, branch-mismatch) has now cleared, so
     // it is safe to tear the companion down. It cannot run any earlier (that
@@ -570,6 +637,7 @@ pub(crate) fn merge_stage(
         companion,
         bookkeeping_commit,
         proof,
+        proof_stale,
         feature: identity.feature.clone(),
         uat_stop,
     })))
@@ -728,6 +796,7 @@ pub(crate) fn merge_finish(
         companion,
         bookkeeping_commit,
         proof,
+        proof_stale,
         feature,
         uat_stop,
     } = state;
@@ -794,6 +863,21 @@ pub(crate) fn merge_finish(
         result.insert("worktreeRoot".into(), json!(p(worktree_root)));
         let verify_field = proof_report_field(proof.as_ref());
         result.insert("verify".into(), json!(verify_field));
+        // D4: the `proof-stale` advisory, beside the `verify` field it
+        // qualifies. Present only when there is something to say, and the
+        // merge it rides on has already landed — this names an age, never a
+        // fault, and refuses nothing.
+        if !proof_stale.is_empty() {
+            result.insert("proof_stale".into(), json!({
+                "code": "proof_stale",
+                "cells": proof_stale,
+                "message": format!(
+                    "{} capped cell(s) recorded their proof before the merge base this branch is landing against ({}) — the tree moved after those proofs were taken, so they were never run against what is merging now. The merge is NOT refused (bee worktree merge checks recorded proof and runs nothing); re-run their proof if the change is one main could have broken.",
+                    proof_stale.len(),
+                    proof_stale.join(", "),
+                ),
+            }));
+        }
         // `...(companion ? { companion } : {})` — after `verify`, BEFORE the
         // post-commit `warning` and the cleanup keys.
         if let Some(companion) = companion {

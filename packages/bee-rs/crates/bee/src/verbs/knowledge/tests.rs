@@ -894,7 +894,7 @@ use std::time::Instant;
             // the --report contract itself, so it just needs SOME valid
             // proof string.
             report: Some(
-                r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
+                r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — fixture","deviations":[]}"#
                     .to_string(),
             ),
             sync_ack: None,

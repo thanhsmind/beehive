@@ -73,7 +73,7 @@ use std::time::Instant;
     /// required on every cap path, these fixtures need SOME valid report
     /// even though they are not testing its shape.
     fn default_test_report_json() -> String {
-        r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
+        r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — fixture","deviations":[]}"#
             .to_string()
     }
 
@@ -5584,7 +5584,7 @@ use std::time::Instant;
     /// for the JSON array literal under test.
     fn dol_report(deviations: &str) -> String {
         format!(
-            r#"{{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":{deviations}}}"#
+            r#"{{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — fixture","deviations":{deviations}}}"#
         )
     }
 
@@ -5834,7 +5834,7 @@ use std::time::Instant;
     // `<command> — <result> — <scope reason>`, written by the agent that
     // ran it — never the retired `boundary`/`undeclared` enum (decision
     // 13ce1858, test-cadence-boundary D1a).
-    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"cargo test -p bee — green — touched close.rs","deviations":[]}"#;
+    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"cargo test -p bee — green:unit — touched close.rs","deviations":[]}"#;
 
     #[test]
     fn valid_report_is_validated_and_stored_on_trace() {
@@ -5851,7 +5851,7 @@ use std::time::Instant;
                 "outcome": "did the thing",
                 "commit": "abc123",
                 "files": ["a.rs"],
-                "tests": "cargo test -p bee — green — touched close.rs",
+                "tests": "cargo test -p bee — green:unit — touched close.rs",
                 "deviations": [],
             })
         );
@@ -5869,12 +5869,12 @@ use std::time::Instant;
         write_cell_fixture(root, "wfl-r1u", &cell("wfl-r1u", "claimed", "f", json!([])));
 
         let report =
-            r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"none — green — regen parity check only","deviations":[]}"#;
+            r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"none — green:static — regen parity check only","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r1u", Some(report));
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(
             capped["trace"]["report"]["tests"],
-            json!("none — green — regen parity check only")
+            json!("none — green:static — regen parity check only")
         );
     }
 
@@ -5888,12 +5888,12 @@ use std::time::Instant;
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "wfl-r1s", &cell("wfl-r1s", "claimed", "f", json!([])));
 
-        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched close.rs — and finish_support.rs","deviations":[]}"#;
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — touched close.rs — and finish_support.rs","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r1s", Some(report));
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(
             capped["trace"]["report"]["tests"],
-            json!("cargo test -p bee — green — touched close.rs — and finish_support.rs")
+            json!("cargo test -p bee — green:unit — touched close.rs — and finish_support.rs")
         );
     }
 
@@ -6006,6 +6006,61 @@ use std::time::Instant;
         let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert!(refusal.contains("\"red\""), "{refusal}");
         assert!(refusal.contains("fix-first"), "{refusal}");
+    }
+
+    /// D1 (docs/history/proof-strength-and-expiry/CONTEXT.md): the result
+    /// segment is closed over the three strength values. A bare `green` —
+    /// every cap's form until this change — is REFUSED at the write path,
+    /// and the refusal names the whole legal set.
+    ///
+    /// The message assertion below is pinned on the FULL set, the way
+    /// `route_set_validation_names_every_bad_value` pins the route-class
+    /// one: the refusal is the contract a cold worker fixes its cap from, so
+    /// a value added or renamed without editing this line is a silent
+    /// contract change. Update it with the vocabulary; never delete it.
+    #[test]
+    fn report_tests_key_bare_green_is_refused_naming_the_three_strengths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "pse-v1", &cell("pse-v1", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched close.rs","deviations":[]}"#;
+        let flags = cap_flags_report("pse-v1", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert_eq!(
+            refusal,
+            "cells finish: --report key \"tests\" result segment is \"green\" — a cap records HOW the change was shown to work, so the result must be one of green:live, green:unit, green:static (a bare \"green\" no longer says which)."
+        );
+        // The refused cap wrote nothing: the cell is still claimed.
+        let after: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(cell_file(root, "pse-v1")).unwrap())
+                .unwrap();
+        assert_eq!(after["status"], json!("claimed"));
+    }
+
+    /// D1: each of the three qualified values caps. `green:unit` is the one
+    /// a test run records; `live` and `static` ride the same arm, so one
+    /// loop pins all three rather than three near-identical tests.
+    #[test]
+    fn report_tests_key_accepts_every_qualified_strength_value() {
+        for (n, strength) in ["green:live", "green:unit", "green:static"].iter().enumerate() {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_bee_config(root, &json!({"commands": {"test": "none"}}));
+            let id = format!("pse-v2{n}");
+            write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
+
+            let proof = format!("cargo test -p bee — {strength} — touched close.rs");
+            let report = json!({
+                "outcome": "o", "commit": "c", "files": [],
+                "tests": proof, "deviations": [],
+            })
+            .to_string();
+            let flags = cap_flags_report(&id, Some(&report));
+            let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+            assert_eq!(capped["trace"]["report"]["tests"], json!(proof));
+        }
     }
 
     /// D8: --report is now required on every cap path — an absent flag
