@@ -125,3 +125,4 @@ that names the contract is the one to open.
 | `references/scout-and-ticks.md` | Deciding how much to read before acting, re-judging a lane against evidence, or writing a tick / ship-visibility / route-record line exactly |
 | `references/onboarding.md` | ONLY when onboarding is in question — `.bee/onboarding.json` missing or stale, an install/upgrade request, or a `blocked_*` result. Never on a session that is already `up_to_date` |
 | `references/go-mode.md` | `/go` runs: gate wording, slice loop, fallbacks, headless + bypass |
+| `docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md` ("Principle homes") | Where the craft principle set lives — one row per principle, its spoken line, and the classes it routes to |

@@ -182,6 +182,12 @@ carries its recorded reason — "named deviation is the system working"
 (`AGENTS.md` ("Judgment and deviation")). A skipped step is never a refusal:
 nothing in this section blocks anything.
 
+**Which principles a class routes.** `bee orient` names them in the session
+preamble, read from the `## Principle homes` section of
+`docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md`.
+Those `classes:` lines are the one home of that mapping; a playbook never
+restates them.
+
 ### perf
 
 1. Capture a baseline with the real command or trace, and record the number.

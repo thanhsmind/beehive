@@ -162,6 +162,7 @@ at the gate — never self-approved.
 | File | When to load |
 |---|---|
 | `references/planning-reference.md` | plan.md/approach.md templates, cell quality rules + example JSON, merged-gate protocol, the hat wave as the plan check, verify scoping, greenfield init lane |
+| `docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md` ("Principle homes") | The routed principles for this class, and what each one's spoken line is |
 | `references/edge-dimensions.md` | 12 edge-case dimensions — high-risk/hard-gate test matrix only; standard and below use the triad |
 | `.bee/expertise/planning.md`, `.bee/expertise/tests.md` | Decomposition, walking skeleton, smaller path, cold pickup; coverage judgment, case selection, red-first |
 | `.bee/expertise/INDEX.md` | The work is domain-shaped — data and migrations, a contract callers depend on, a trust boundary, a rollout, a speed budget, a surface people use: route from the index for the ordering and reversibility constraints before slicing |
