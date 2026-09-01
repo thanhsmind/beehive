@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)", "code-shape-doctrine D1/D2/D3/D4/D5 (docs/history/code-shape-doctrine/CONTEXT.md, 2026-09-01 — four code-shape rules placed in the worker brief rather than the always-loaded contract)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)", "code-shape-doctrine D1/D2/D3/D4/D5 (docs/history/code-shape-doctrine/CONTEXT.md, 2026-09-01 — four code-shape rules placed in the worker brief rather than the always-loaded contract)", "pstack-gaps D1/D2/D3 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — the research class gains named Trace and Provenance sweep procedures, homed once in bee-researching)"]
   sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
 ---
@@ -75,6 +75,24 @@ govern the working residue of a cell rather than its content.
   reviewer's instrument records the drop, and the report renders it. An
   invisible filter asks the human to trust the lead's judgment; a shown one
   lets them reverse it.
+- **R21** — The `research` class's two questions have named procedures, homed
+  once in `bee-researching/references/trace-and-provenance.md` (pstack-gaps D1,
+  D2, D3; cell pg-1, 2026-09-01). R18 gave `research` a four-step playbook whose
+  steps 2 and 3 — trace the runtime, name the empty sources — were duties with
+  no method behind them. **Trace** answers "how does this run?": the outcome is
+  an ordered runtime path anchored `path:line`, never a file list; the leader
+  fans read-only workers at 2 to 4 DISJOINT entry points through the dispatch
+  door, folds every return into ONE account, and names each step it could not
+  follow as unfollowed with its reason. One honest entry point means no fan-out
+  and the account says so — splitting one path to reach the floor is theater.
+  **Provenance sweep** answers "why is it this way?" over seven evidence
+  categories (decision log, git history, `docs/history/`, the knowledge bundle,
+  code comments, tests, external tracker), and the report rule is the whole
+  point: a category that returned nothing is named as EMPTY and one not swept is
+  named as UNSWEPT. Seven rows go in, seven come out — an omitted row is the
+  defect the procedure exists to stop, the same honesty rule R19's dismissed
+  bucket applies to review. The playbook and the skill CITE this home; neither
+  transcribes it.
 
 - **R13** — Small work starts from an executable work packet, never a shrunken
   feature plan (lane-ceremony-v3 D3/D4/D5). The tiny lane's complete work shape

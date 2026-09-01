@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md, areas/verify-pipeline/skill-reference-pointer-integrity.md]
-  decisions: [router-cost D5, router-cost D6, router-cost D7]
+  decisions: [router-cost D5, router-cost D6, router-cost D7, "pstack-gaps D4/D5 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — every rule id gains a spoken line here and a spoken rule obliges the reply to name what it changed)"]
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cells rc-3, rc-4, capped)"]
   authoritative_for: "doctrine-layer: router triage and the duplication boundary"
 ---
@@ -104,6 +104,19 @@ rule never disappears — only its elaboration moves.
   sanctioned path. Semantic every-turn rules (where no enforcement is possible), and any sentence
   that is the canonical home other documents cite, keep their full text (block-lean L1a-L1d,
   `docs/history/block-lean/CONTEXT.md`).
+- **R10.** **Every rule id is speakable, and a spoken rule owes an answer** (pstack-gaps D4, D5; cell
+  pg-2, 2026-09-01). The `## AGENTS.md rule homes` section below is the rule index, and each row now
+  carries an indented `spoken:` line — the sentence a person would actually say. A user may invoke a
+  rule mid-run by name ("apply never-build-on-red"); the agent resolves the id here, applies the rule
+  to the work in hand, and names in the reply the decision or step it changed — or says plainly that
+  it changed nothing. A bare acknowledgement is not an answer. The leverage is the obligation on the
+  reply, not the list: without it an invoked id is a no-op an agent can acknowledge and ignore, and
+  without the changed-nothing branch the law invites a fabricated change. No second index and no CLI
+  verb were added — this registry already existed and `bee knowledge check` already validated it;
+  what was missing was one sentence per rule. The spoken line MUST stay indented: `parse_agents_rule_homes`
+  reads any line opening with a dash as a new rule row, so a sibling bullet would report twenty rules
+  where there are ten. `tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
+  the markers in `packages/bee/AGENTS.block.md`, and the rows here — plus the spoken line's presence.
 
 ## Edge Cases Settled
 
