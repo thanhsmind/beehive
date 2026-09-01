@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pstack-gaps\" started at phase \"exploring\" (lane).",
   "next_action": "bee close pstack-gaps, then the user's uat on main",
   "created_at": "2026-09-01T16:12:37.383Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat for pstack-gaps: the three pstack gaps are on main — test bee, then approve or send it back",
-    "asked_at": "2026-09-01T17:32:03.922Z",
-    "session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -45,7 +40,7 @@
     "since": "2026-09-01T17:31:22.726Z",
     "branch": "wt/pstack-gaps",
     "worktree_id": "beehive--wt--pstack-gaps",
-    "uat": "pending",
+    "uat": "approved",
     "blocked_by": []
   }
 }

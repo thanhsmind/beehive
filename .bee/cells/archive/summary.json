@@ -1093,5 +1093,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-09-01T16:01:41.867Z"
+  },
+  "pstack-gaps": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-09-01T17:32:56.387Z"
   }
 }
