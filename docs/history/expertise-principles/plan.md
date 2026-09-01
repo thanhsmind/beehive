@@ -29,7 +29,7 @@ Labels: `read` — the file was opened at the named line this session. `ran` —
 
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
-| 1 | Both skill pipelines discover skills by scanning the canonical `skills/` directory, so new `skills/principle-*/` dirs reach the plugin trees and host repos with NO Rust change. | read | `packages/bee-rs/crates/bee/src/devtools/skill_trees.rs:17-19`, `:436`, `:459` | `//   .claude-plugin/skills/ = render(canonical skills/, "claude")` / `//   .codex-plugin/skills/  = render(canonical skills/, "codex")`; `let Ok(entries) = std::fs::read_dir(src) else {` |
+| 1 | **FALSIFIED at ep-8 — see the note under this table.** Both skill pipelines discover skills by scanning the canonical `skills/` directory, so new `skills/principle-*/` dirs reach the plugin trees and host repos with NO Rust change. | read (wrongly) | `packages/bee-rs/crates/bee/src/devtools/skill_trees.rs:17-19`, `:436`, `:459` | `//   .claude-plugin/skills/ = render(canonical skills/, "claude")` / `//   .codex-plugin/skills/  = render(canonical skills/, "codex")`; `let Ok(entries) = std::fs::read_dir(src) else {` |
 | 2 | There are EIGHT route classes but only FOUR class playbooks. `feature`, `docs`, `release`, and `spike` have none. | read | `packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:287-288`; `skills/bee-planning/references/planning-reference.md` headings `185,195,207,216` | `pub(crate) const ROUTE_CLASS_VALUES: [&str; 8] =` / `["feature", "bugfix", "docs", "refactor", "research", "release", "spike", "perf"];` — and the only `### ` playbook headings are `perf`, `bugfix`, `refactor`, `research` |
 | 3 | The doctrine-layer concept already carries a parsed row grammar for named rules: an id line, a `spoken:` line, then an indented `applied_at:` list. It is parsed by `parse_agents_rule_homes` and fenced by `rule_index_parity.rs`. | read | `docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md:181-197`; `packages/bee-rs/crates/bee/tests/rule_index_parity.rs:1-45` | `- `agents-never-build-on-red` (AGENTS.md § Prove, then say so):` / `  spoken: never build on a red base — the red is the work now: fix it first, then carry on` / `  - applied_at:` |
 | 4 | The session preamble renders the Route line — the exact place a principle block belongs beside — in `budget.rs`. | read | `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs:545` | `"- Route: class={} | lane={} | flags={flag_count} [{flag_list}] | files={}",` |
@@ -37,6 +37,18 @@ Labels: `read` — the file was opened at the named line this session. `ran` —
 | 6 | Control-plane verbs (`state start-feature`, `state route`) REFUSE inside a granted feature worktree; they must run from the main checkout. | ran | `.bee/bin/bee state route --set …` run from `/home/thanhsmind/Projects/goglbe/beehive--wt--expertise-principles` | `bee state route: refused inside a granted feature worktree — this command reads the shared control plane (sessions, claims, workers, workflows, handoff), which lives in the main checkout. FIX: run it from /home/thanhsmind/Projects/goglbe/beehive.` |
 | 7 | `AGENTS.md` and `packages/bee/AGENTS.block.md` each carry exactly TEN `<!-- rule: … -->` markers, and the parity fence pins the two sets equal to the index rows. | ran | `rg -c '<!-- rule: ' AGENTS.md packages/bee/AGENTS.block.md` | `packages/bee/AGENTS.block.md:10` / `AGENTS.md:10` |
 | 8 | The ten craft guides hold roughly 160 headings between them — far more than a principle set can carry, which is why D1 keeps the guides as the body. | ran | `for f in expertise/*.md; do … rg -c '^#{2,3} ' $f; done` | `expertise/tests.md 4611 words 22 headings`; `expertise/thinking.md 2529 words 21 headings`; `expertise/architecture.md 2483 words 20 headings` |
+
+**Claim 1 was false, and this is what it cost.** The label said `read`, but
+what was read was the module docstring in `devtools/skill_trees.rs`, not the
+discovery predicate. Both pipes filter directory entries on a literal `bee-`
+name prefix — `skill_trees.rs:448` and `onboard/render.rs:379` — so all 14
+principle skills reached ZERO host repos while a 3628-test suite stayed green.
+The `ep-8` worker refused to cap on it and filed a blocker dissent; the verdict
+was `accept`. The layer was renamed into the `bee-principle-` namespace and the
+parity fence grew a check that reads the SHIPPED plugin trees, not just the
+source. Rule learned: a claim about WHAT a pipeline discovers is settled by the
+filter expression. Seeing `read_dir` proves a directory is walked, never which
+entries survive.
 
 ## Discovery
 
@@ -106,6 +118,7 @@ and the reply is obliged to cite it.
   `AGENTS.md` carries the eleventh marker and `rule_index_parity.rs` stays
   green.
 
+<!-- bee:not-a-deferral: slice-planning machinery, and now archaeology — slices 2 and 3 were both built, capped and merged; the domain half's own deferral carries trigger the-craft-principle-half-has-lived-throu__f1b48dac -->
 **Later slices (headlines only — no cells yet).**
 
 - *Slice 2* — The remaining craft principles, derived from the ten guides
@@ -113,6 +126,7 @@ and the reply is obliged to cite it.
   principle only if speaking its name can steer a task.
 - *Slice 3* — Point each existing class playbook and each craft guide at its
   principles, so a reader arriving from either side finds the same set.
+<!-- /bee:not-a-deferral -->
 
 ## Test matrix
 

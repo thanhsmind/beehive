@@ -129,20 +129,30 @@ From the quick scout only. Downstream agents read these before planning.
 
 None.
 
+<!-- bee:not-a-deferral: this section RECORDS two questions that were measured and answered at slice 3; it promises no later action -->
 ### Deferred To Planning
 
-- [ ] Does adding ~15 skills to a host repo's skill index cost enough
-      always-loaded description budget to matter? — measure the current
-      skill-description total, then the projected one, before choosing
-      how terse each principle's `description` must be.
-- [ ] Do the principle skills need `disable-model-invocation: true`
-      (pstack's choice, so the model never auto-fires a leaf) or does
-      bee want them model-invocable? — decide from how D2's router
-      output actually reads in a live session.
+Both were measured and answered at slice 3; neither is open.
 
+- [x] **Always-loaded description budget.** Measured on the shipped tree:
+      the 15 workflow skills carry 6,526 characters of description
+      (~1,631 tokens); the 14 principle skills add 2,382 (~595 tokens),
+      averaging 170 characters each. The principle layer is 27% of the
+      skill-description budget. That is affordable at the length the
+      pages already use, so no re-terseing was needed.
+- [x] **Model invocation.** The principle skills ship model-invocable —
+      none carries `disable-model-invocation`. pstack disables it because
+      `/poteto-mode` is the only router; bee has a second one, so a
+      description matching a task the route class did not predict is a
+      useful extra path in, not an unwanted auto-fire.
+<!-- /bee:not-a-deferral -->
+
+<!-- bee:not-a-deferral: section heading naming what was left out of scope; the one entry below carries its registered trigger -->
 ## Deferred Ideas
+<!-- /bee:not-a-deferral -->
 
 - The six domain guides (`data`, `apis`, `security`, `operations`,
   `performance`, `frontend`) get their own principle layer. Deliberately
-  out of scope per D4; revisit once the craft half has lived through
+  out of scope per D4; revisit on `the-craft-principle-half-has-lived-throu__f1b48dac`,
+  once the craft half has lived through
   real tasks.
