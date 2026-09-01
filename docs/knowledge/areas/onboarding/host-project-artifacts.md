@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: ["3318374a (installer hardening: default instructions import, D1)", "bbc6bcea (shim-retire: unified command surface; retired helper scripts removed from hosts)", de967733 (advisor mode removed; stale config key warned-and-ignored), capture flush b57f6470 (shipped configuration sample is the annotated reference; 2026-07-19)]
-  sources: ["shim-retire D2 retirement pass (cells shim-retire-2, shim-retire-6 self-onboard proof, 2026-07-14)", "installer-hardening ih-1..ih-6 (cells, 2026-07-13; flushed capture stub 92c9bcf6)", "fanout-delegation D1 (stale advisor key tolerance, 2026-07-12)", "capture stub b57f6470-bac2-422a-9dea-1bb4cc93bc0e (shipped config sample carries a per-surface doc block, all model-slot shapes, gate-bypass levels, hook toggles, and the external-command tier's gather-only contract; flushed 2026-07-19)", "docs/specs/onboarding.md#R13", "docs/specs/onboarding.md#R14", "docs/specs/onboarding.md#E6", "docs/specs/onboarding.md#E15", "docs/specs/onboarding.md#P14"]
+  decisions: ["verification-ships-to-hosts D1/D2/D3 (a host project also receives a verification skill pair and, once generated, its own project verification skill rendered into every runtime home; the generated drive command composes into the declared test command)", "0d3e4f89 (that render creates and updates only, never removes)", "3318374a (installer hardening: default instructions import, D1)", "bbc6bcea (shim-retire: unified command surface; retired helper scripts removed from hosts)", de967733 (advisor mode removed; stale config key warned-and-ignored), capture flush b57f6470 (shipped configuration sample is the annotated reference; 2026-07-19)]
+  sources: ["verification-ships-to-hosts cells vsh-1..vsh-4 (2026-09-01; the skill pair, the copy-only render path, the offer notice and the consent split — capped traces, independently goal-checked, and driven end to end against a throwaway host repo)", "shim-retire D2 retirement pass (cells shim-retire-2, shim-retire-6 self-onboard proof, 2026-07-14)", "installer-hardening ih-1..ih-6 (cells, 2026-07-13; flushed capture stub 92c9bcf6)", "fanout-delegation D1 (stale advisor key tolerance, 2026-07-12)", "capture stub b57f6470-bac2-422a-9dea-1bb4cc93bc0e (shipped config sample carries a per-surface doc block, all model-slot shapes, gate-bypass levels, hook toggles, and the external-command tier's gather-only contract; flushed 2026-07-19)", "docs/specs/onboarding.md#R13", "docs/specs/onboarding.md#R14", "docs/specs/onboarding.md#E6", "docs/specs/onboarding.md#E15", "docs/specs/onboarding.md#P14"]
   authoritative_for: "onboarding: the artifacts a host project receives and keeps"
 ---
 
@@ -132,6 +132,40 @@ same source bullet.)
   starts from and the one this document's own contracts are checked against
   (capture flush b57f6470, 2026-07-19).
 
+## A way to prove the project works
+
+A host project that declares no test command has no way to show that it works;
+its agents can only report that unit tests passed, which proves that the tests
+agree with the code and nothing more. Onboarding therefore names the gap out
+loud: when no test command is declared, the run ends by offering to build a
+project verification check, in the user's own language, and says plainly that
+the choice is theirs to accept or refuse. Onboarding only offers. It never
+builds anything, and it holds no record of a refusal — an offer declined
+returns on the next run unless the project declares itself deliberately
+test-free.
+
+Accepting produces one project verification skill: it studies the project,
+drives the real product the way a person does, and leaves a single command
+anyone can run. That skill is authored once and belongs to the project, so it
+is kept as the project's own source and rendered into every runtime skill home
+from there — one act of authoring serves every agent runtime the project uses,
+and the rendered copies are derived, never hand-edited.
+
+The render **creates and updates; it never removes.** This is the boundary that
+makes the feature safe to ship into someone else's repository: a verification
+skill a team wrote by hand, which onboarding did not generate, is not merely
+left alone — no step of the run ever names it. Keeping a rendered copy current
+when its source changes is the render's job; deciding that a stale one should
+go is a person's, done in a working tree where the deletion is visible and
+reversible.
+
+Wiring the check into the project's declared test command is a **separate
+agreement**, asked after the check has been built and proven and carrying the
+measured cost that proof run actually took. A project that already declares a
+test command keeps it: the new check is appended, never substituted. The two
+questions stay apart because a person who wanted proof their product works has
+not thereby agreed that every future commit should become slower.
+
 ## Pointers (implementation)
 
 - Windows shell section: template `packages/bee/AGENTS.windows.md`, appended by
@@ -149,3 +183,15 @@ same source bullet.)
   (`_doc` block per top-level key); `.bee/config-sample-cli-executors.json` —
   full external-command executor examples; `scripts/tests/test_config_samples_safe.mjs`
   keeps both inert (never diffs against the live `.bee/config.json`).
+
+- Verification skill pair and the copy-only render: skills `bee-verifying` and
+  `bee-verify-upkeep`; project source `.bee/verify/<name>/`, rendered to the
+  three targets in `REPO_SKILL_TARGETS`. Planner `compute_verify_skill_items`
+  and `verify_root_refusal` (`onboard/plan.rs`), applier
+  `apply_copy_verify_skill` (`onboard/apply.rs`) — neither reaches
+  `apply_remove_skill`, and `onboard/skills.rs` is unmodified by the feature.
+  Offer constant `NO_TEST_VERIFICATION_OFFER` and the shared `declares_test`
+  predicate (`onboard/notices.rs`). Key test:
+  `a_host_authored_verify_skill_is_byte_identical_after_apply` — the only test
+  that goes red when a prune arm is injected. Provenance: cells `vsh-1`..`vsh-4`,
+  commits 55b9c9ea, 4721ad4c, 25370f52, 228be6ff, eb228cf0.
