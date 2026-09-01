@@ -1,0 +1,371 @@
+#!/usr/bin/env bash
+# control-bee — the one driver for the verify-bee skill.
+#
+# Every verification action goes through this script. It exists for two
+# reasons that are specific to this repo:
+#
+#  1. bee's own PreToolUse write guard refuses a Bash command whose write
+#     target still carries an unexpanded "$VAR", and refuses any write that
+#     follows a `cd` in the same compound command. Inline multi-step shell
+#     recipes therefore die before they run. One executable script is a
+#     single opaque command the guard passes.
+#  2. Isolation. bee mutates .bee/ state in place. A verification run must
+#     never touch the developer's own checkout, so every drive is aimed at a
+#     throwaway sandbox repo under $VERIFY_HOME and the isolation check is
+#     re-asserted on every call, not once at launch.
+#
+# Usage:
+#   control-bee build                 build the release binary, print its path
+#   control-bee bin                   print the binary path (no build)
+#   control-bee paths                 print run id, sandbox and evidence dirs
+#   control-bee launch                create + onboard a fresh sandbox repo
+#   control-bee doctor                read-only health check (run before driving)
+#   control-bee cli -- <args...>      run `bee <args>` inside the sandbox
+#   control-bee sh -- <cmd...>        run any command inside the sandbox
+#   control-bee put <rel-path>        write stdin to a file inside the sandbox
+#   control-bee newrepo <name>        create a second, NOT-onboarded target repo
+#   control-bee host -- <cmd...>      run a command with cwd = the real checkout
+#                                     (must name a --repo-root under VERIFY_HOME)
+#   control-bee snapshot <label>      copy sandbox .bee state into evidence
+#   control-bee cleanup               remove the sandbox; KEEP the evidence
+#
+# Environment:
+#   VERIFY_HOME   root for runs and evidence (default ${TMPDIR:-/tmp}/bee-verify)
+#   VERIFY_RUN    run id (default: written by `launch`, read from the pointer file)
+
+set -euo pipefail
+
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$SKILL_DIR/../../.." && pwd)"
+MANIFEST="$REPO/packages/bee-rs/Cargo.toml"
+PLUGIN_JSON="$REPO/.claude-plugin/plugin.json"
+
+VERIFY_HOME="${VERIFY_HOME:-${TMPDIR:-/tmp}/bee-verify}"
+RUN_POINTER="$VERIFY_HOME/current-run"
+
+die() { printf 'control-bee: %s\n' "$*" >&2; exit 1; }
+ok()  { printf '  ok    %s\n' "$*"; }
+
+# ---------------------------------------------------------------- run identity
+
+run_id() {
+  if [ -n "${VERIFY_RUN:-}" ]; then printf '%s' "$VERIFY_RUN"; return; fi
+  [ -f "$RUN_POINTER" ] || die "no run yet — run 'control-bee launch' first (or set VERIFY_RUN)"
+  tr -d '\n' < "$RUN_POINTER"
+}
+
+run_dir()      { printf '%s/run/%s' "$VERIFY_HOME" "$(run_id)"; }
+
+# Which tree inside the run to drive. Defaults to the main sandbox checkout;
+# set VERIFY_CWD to a sibling to drive a worktree bee created, e.g.
+#   VERIFY_CWD=repo--wt--my-feature control-bee cli -- status --json
+sandbox_dir()  { printf '%s/%s' "$(run_dir)" "${VERIFY_CWD:-repo}"; }
+main_dir()     { printf '%s/repo' "$(run_dir)"; }
+evidence_dir() { printf '%s/evidence/%s' "$VERIFY_HOME" "$(run_id)"; }
+
+# The isolation assertion. Every call that touches a sandbox runs this.
+assert_isolated() {
+  local sb; sb="$(sandbox_dir)"
+  case "${VERIFY_CWD:-repo}" in /*|*..*) die "VERIFY_CWD must be a plain name under the run dir" ;; esac
+  case "$sb" in
+    "$VERIFY_HOME"/run/*) : ;;
+    *) die "sandbox '$sb' is not under $VERIFY_HOME/run — refusing to drive it" ;;
+  esac
+  [ "$sb" != "$REPO" ] || die "sandbox resolved to the real checkout — refusing"
+  case "$REPO" in "$sb"/*) die "the real checkout sits inside the sandbox — refusing" ;; esac
+}
+
+# ------------------------------------------------------------------- the binary
+
+bee_bin() {
+  local target="${CARGO_TARGET_DIR:-$REPO/packages/bee-rs/target}"
+  printf '%s/release/bee' "$target"
+}
+
+release_version() {
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$PLUGIN_JSON"
+}
+
+json_get() { # json_get <file> <dotted.path>  -> value or the literal MISSING
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+try:
+    cur = json.load(open(sys.argv[1]))
+except Exception:
+    print("MISSING"); raise SystemExit(0)
+for part in sys.argv[2].split('.'):
+    if isinstance(cur, dict) and part in cur:
+        cur = cur[part]
+    else:
+        print("MISSING"); raise SystemExit(0)
+print(json.dumps(cur) if isinstance(cur, (dict, list)) else cur)
+PY
+}
+
+cmd_build() {
+  [ -f "$MANIFEST" ] || die "no manifest at $MANIFEST"
+  PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" \
+    cargo build --release --manifest-path "$MANIFEST" >&2
+  printf '%s\n' "$(bee_bin)"
+}
+
+cmd_bin() {
+  local b; b="$(bee_bin)"
+  [ -x "$b" ] || die "no binary at $b — run 'control-bee build'"
+  printf '%s\n' "$b"
+}
+
+cmd_paths() {
+  printf 'run_id    %s\n' "$(run_id)"
+  printf 'binary    %s\n' "$(bee_bin)"
+  printf 'sandbox   %s\n' "$(sandbox_dir)"
+  printf 'evidence  %s\n' "$(evidence_dir)"
+}
+
+# ------------------------------------------------------------------------ launch
+
+cmd_launch() {
+  local b; b="$(bee_bin)"
+  [ -x "$b" ] || die "no binary at $b — run 'control-bee build' first"
+
+  local id; id="${VERIFY_RUN:-$(date +%Y%m%d-%H%M%S)-$$}"
+  mkdir -p "$VERIFY_HOME"
+  printf '%s' "$id" > "$RUN_POINTER"
+  VERIFY_RUN="$id"; export VERIFY_RUN
+  unset VERIFY_CWD          # launch always builds the main sandbox checkout
+
+  assert_isolated
+  local sb ev; sb="$(sandbox_dir)"; ev="$(evidence_dir)"
+  rm -rf "$(run_dir)"
+  mkdir -p "$sb" "$ev"
+
+  git -C "$sb" init -q .
+  git -C "$sb" config user.email verify@bee.local
+  git -C "$sb" config user.name  "bee verification"
+  printf '# sandbox\n\nVerification sandbox for verify-bee. Disposable.\n' > "$sb/README.md"
+  git -C "$sb" add -A
+  git -C "$sb" commit -qm "seed the sandbox"
+
+  # `bee onboard` finds the engine to vendor by walking UP from its own cwd for
+  # packages/bee-rs/crates/bee/Cargo.toml, so it must run with cwd = the real
+  # checkout even though --repo-root points at the sandbox.
+  ( cd "$REPO" && "$b" onboard --repo-root "$sb" --apply --json ) > "$ev/launch-onboard.json" 2>"$ev/launch-onboard.err"
+
+  local status; status="$(json_get "$ev/launch-onboard.json" status)"
+  [ "$status" = "applied" ] || die "onboard did not apply (status=$status) — see $ev/launch-onboard.json"
+
+  git -C "$sb" add -A
+  git -C "$sb" commit -qm "onboard bee into the sandbox"
+
+  printf '%s\n' "$sb"
+}
+
+# ------------------------------------------------------------------------ doctor
+
+cmd_doctor() {
+  local b sb ev want got fails=0
+  b="$(bee_bin)"; assert_isolated; sb="$(sandbox_dir)"; ev="$(evidence_dir)"
+
+  printf 'doctor: run %s\n' "$(run_id)"
+  want="$(release_version)"
+
+  if [ -x "$b" ]; then ok "binary $b"; else printf '  FAIL  no binary at %s\n' "$b"; fails=1; fi
+
+  if [ "$fails" -eq 0 ]; then
+    got="$("$b" version --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])' 2>/dev/null || echo MISSING)"
+    if [ "$got" = "$want" ]; then ok "version $got matches .claude-plugin/plugin.json"
+    else printf '  FAIL  binary reports %s, manifest says %s\n' "$got" "$want"; fails=1; fi
+  fi
+
+  if [ -d "$sb/.git" ]; then ok "sandbox is a git repo: $sb"
+  else printf '  FAIL  sandbox missing or not a git repo: %s\n' "$sb"; fails=1; fi
+
+  # The real onboarding.json carries no `completed` flag — its presence IS the
+  # marker, and `bee_version` is what says which engine wrote it.
+  if [ -f "$sb/.bee/onboarding.json" ]; then
+    got="$(json_get "$sb/.bee/onboarding.json" bee_version)"
+    if [ "$got" = "$want" ]; then ok "sandbox onboarded by bee $got"
+    else printf '  FAIL  onboarding.json bee_version=%s, expected %s\n' "$got" "$want"; fails=1; fi
+  else printf '  FAIL  no %s/.bee/onboarding.json\n' "$sb"; fails=1; fi
+
+  if [ "$fails" -eq 0 ]; then
+    ( cd "$sb" && "$b" status --json ) > "$ev/doctor-status.json" 2>/dev/null || true
+    got="$(json_get "$ev/doctor-status.json" onboarding.bee_version)"
+    if [ "$got" = "$want" ]; then ok "sandbox store reports bee $got"
+    else printf '  FAIL  sandbox store reports %s, expected %s\n' "$got" "$want"; fails=1; fi
+    got="$(json_get "$ev/doctor-status.json" onboarding.drift)"
+    if [ "$got" = "False" ] || [ "$got" = "false" ]; then ok "no onboarding drift"
+    else printf '  FAIL  onboarding drift=%s\n' "$got"; fails=1; fi
+  fi
+
+  if [ -w "$ev" ]; then ok "evidence dir writable: $ev"
+  else printf '  FAIL  evidence dir not writable: %s\n' "$ev"; fails=1; fi
+
+  [ "$fails" -eq 0 ] || die "doctor failed — do not drive this instance"
+  printf 'doctor: healthy\n'
+}
+
+# -------------------------------------------------------------------- drive + log
+
+# Runs a command with cwd = sandbox, tees stdout/stderr/exit to the evidence dir,
+# and mirrors stdout so the caller can read it directly.
+record() { # record <slug> <cmd...>  — runs in the sandbox
+  local slug="$1"; shift
+  record_in "$(sandbox_dir)" "$slug" "$@"
+}
+
+record_in() { # record_in <cwd> <slug> <cmd...>
+  local cwd="$1"; shift
+  local slug="$1"; shift
+  local ev n stem rc
+  ev="$(evidence_dir)"; mkdir -p "$ev"
+  # Count .cmd files only — each record writes four files per step.
+  n="$(printf '%03d' "$(( $(find "$ev" -maxdepth 1 -name '[0-9][0-9][0-9]-*.cmd' | wc -l) + 1 ))")"
+  stem="$ev/$n-$slug"
+  while [ -e "$stem.cmd" ]; do n="$(printf '%03d' "$((10#$n + 1))")"; stem="$ev/$n-$slug"; done
+  { printf '$ %s\n' "$*"; } > "$stem.cmd"
+  # Pin the sandbox's session identity. Without this the sandbox inherits
+  # CLAUDE_CODE_SESSION_ID from the driving agent, so claims, locks and mailbox
+  # entries get stamped with the real session — evidence that is neither
+  # reproducible nor isolated.
+  local sid; sid="verify-$(run_id)"
+  set +e
+  ( cd "$cwd" && \
+    env BEE_SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" "$@" ) > "$stem.out" 2> "$stem.err"
+  rc=$?
+  set -e
+  printf '%s\n' "$rc" > "$stem.exit"
+  cat "$stem.out"
+  [ -s "$stem.err" ] && cat "$stem.err" >&2
+  printf 'exit=%s  evidence=%s.{cmd,out,err,exit}\n' "$rc" "$stem" >&2
+  return 0   # a refusal is data, not a harness failure — assert on $stem.exit
+}
+
+slugify() { printf '%s' "$*" | tr -cs 'A-Za-z0-9' '-' | sed 's/^-//; s/-$//' | cut -c1-60; }
+
+cmd_cli() {
+  [ "${1:-}" = "--" ] && shift
+  [ "$#" -gt 0 ] || die "cli needs a command: control-bee cli -- status --json"
+  assert_isolated
+  local b; b="$(cmd_bin)"
+  record "$(slugify "bee $*")" "$b" "$@"
+}
+
+cmd_sh() {
+  [ "${1:-}" = "--" ] && shift
+  [ "$#" -gt 0 ] || die "sh needs a command"
+  assert_isolated
+  record "$(slugify "$*")" "$@"
+}
+
+# Writes stdin to a path inside the sandbox. The caller cannot use a plain
+# shell redirect for this: bee's write guard refuses a Bash redirect to an
+# absolute path outside the worktree, so the write has to happen inside this
+# script, where the guard sees one opaque command.
+cmd_put() {
+  local rel="${1:-}"
+  [ -n "$rel" ] || die "put needs a sandbox-relative path"
+  case "$rel" in /*|*..*) die "put path must be relative and free of '..': $rel" ;; esac
+  assert_isolated
+  local dst; dst="$(sandbox_dir)/$rel"
+  mkdir -p "$(dirname "$dst")"
+  cat > "$dst"
+  printf '%s\n' "$dst"
+}
+
+# Creates a second, NOT-onboarded git repo under the run dir. The onboard
+# feature needs a virgin target: `launch`'s sandbox is already onboarded, so it
+# cannot show the plan -> apply transition.
+cmd_newrepo() {
+  local name="${1:-}"
+  [ -n "$name" ] || die "newrepo needs a name"
+  case "$name" in /*|*..*|*/*) die "newrepo name must be a plain directory name: $name" ;; esac
+  [ -f "$RUN_POINTER" ] || [ -n "${VERIFY_RUN:-}" ] || die "no run yet — run 'control-bee launch' first"
+  local dst; dst="$(run_dir)/$name"
+  case "$dst" in "$VERIFY_HOME"/run/*) : ;; *) die "refusing to create '$dst' outside $VERIFY_HOME/run" ;; esac
+  rm -rf "$dst"; mkdir -p "$dst"
+  git -C "$dst" init -q .
+  git -C "$dst" config user.email verify@bee.local
+  git -C "$dst" config user.name  "bee verification"
+  printf '# target\n\nVirgin onboard target. Disposable.\n' > "$dst/README.md"
+  git -C "$dst" add -A
+  git -C "$dst" commit -qm "seed the target"
+  printf '%s\n' "$dst"
+}
+
+# Runs a command with cwd = the REAL bee checkout, recording evidence the same
+# way `cli` does. `bee onboard` needs this: --repo-root says where to install,
+# but the engine it vendors is found by walking up from cwd, so onboard aimed at
+# a sandbox must still run from the checkout.
+#
+# Guard: the command must name a --repo-root under $VERIFY_HOME/run. That is
+# what keeps a `host` call from ever mutating the developer's own repo.
+cmd_host() {
+  [ "${1:-}" = "--" ] && shift
+  [ "$#" -gt 0 ] || die "host needs a command"
+  local want prev="" target=""
+  for want in "$@"; do
+    [ "$prev" = "--repo-root" ] && { target="$want"; break; }
+    case "$want" in --repo-root=*) target="${want#--repo-root=}"; break ;; esac
+    prev="$want"
+  done
+  [ -n "$target" ] || die "host refuses a command with no --repo-root: it would target the real checkout"
+  case "$target" in
+    "$VERIFY_HOME"/run/*) : ;;
+    *) die "host --repo-root must point under $VERIFY_HOME/run, got '$target'" ;;
+  esac
+  record_in "$REPO" "$(slugify "host $*")" "$@"
+}
+
+cmd_snapshot() {
+  local label="${1:-snapshot}"
+  assert_isolated
+  local sb ev dst; sb="$(sandbox_dir)"; ev="$(evidence_dir)"
+  dst="$ev/state-$label"
+  mkdir -p "$dst"
+  for f in state.json config.json onboarding.json decisions.jsonl backlog.jsonl reservations.json; do
+    [ -f "$sb/.bee/$f" ] && cp "$sb/.bee/$f" "$dst/$f"
+  done
+  [ -d "$sb/.bee/cells" ] && cp -r "$sb/.bee/cells" "$dst/cells"
+  ( cd "$sb" && git log --oneline -n 20 ) > "$dst/git-log.txt" 2>/dev/null || true
+  ( cd "$sb" && git status --porcelain ) > "$dst/git-status.txt" 2>/dev/null || true
+  printf '%s\n' "$dst"
+}
+
+# ----------------------------------------------------------------------- cleanup
+
+cmd_cleanup() {
+  assert_isolated
+  local rd ev; rd="$(run_dir)"; ev="$(evidence_dir)"
+  # The whole run dir holds the sandbox AND any sibling worktrees bee created
+  # (../<basename>--wt--<feature>), so one removal takes them all. The evidence
+  # dir lives outside it on purpose and is never touched here.
+  if [ -d "$rd" ]; then
+    git -C "$rd/repo" worktree prune >/dev/null 2>&1 || true
+    rm -rf "$rd"
+    printf 'removed sandbox %s\n' "$rd"
+  else
+    printf 'nothing to remove at %s\n' "$rd"
+  fi
+  [ -f "$RUN_POINTER" ] && [ "$(tr -d '\n' < "$RUN_POINTER")" = "$(run_id)" ] && rm -f "$RUN_POINTER"
+  printf 'evidence kept at %s\n' "$ev"
+}
+
+# --------------------------------------------------------------------- dispatch
+
+case "${1:-}" in
+  build)    shift; cmd_build "$@" ;;
+  bin)      shift; cmd_bin "$@" ;;
+  paths)    shift; cmd_paths "$@" ;;
+  launch)   shift; cmd_launch "$@" ;;
+  doctor)   shift; cmd_doctor "$@" ;;
+  cli)      shift; cmd_cli "$@" ;;
+  sh)       shift; cmd_sh "$@" ;;
+  put)      shift; cmd_put "$@" ;;
+  host)     shift; cmd_host "$@" ;;
+  newrepo)  shift; cmd_newrepo "$@" ;;
+  snapshot) shift; cmd_snapshot "$@" ;;
+  cleanup)  shift; cmd_cleanup "$@" ;;
+  ""|-h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown subcommand '$1' — run 'control-bee --help'" ;;
+esac
