@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "dda719c19db85b21c7e4f215e61efbbc7d85502bc45facd3dd806d6c8260788e",
+      "sha256": "270e7d2b9358e78dd37bfba429c80023f6076d0cbf54d7f6db5a8a76d76a35d1",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -276,7 +276,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/role-dispatch.md",
-      "sha256": "d47114948d7d82ffc48e544d569ad74ba5a88a83e2014a47ec5dd8d77d870873",
+      "sha256": "26031d40b0b87023ffcfcacd19c6c4c3d5b28631d118e8af7bc4ea099547e45b",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/role-dispatch.md"
@@ -696,7 +696,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "cdd019e6002ad125adcced0eb4199e6a1d76b3183dfb5cd6b18a560863a628ef",
+      "sha256": "a055be7a95d2258bfdde3af43223da4efb894a60657b99ae0def10c52b137556",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -836,7 +836,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/role-dispatch.md",
-      "sha256": "d47114948d7d82ffc48e544d569ad74ba5a88a83e2014a47ec5dd8d77d870873",
+      "sha256": "26031d40b0b87023ffcfcacd19c6c4c3d5b28631d118e8af7bc4ea099547e45b",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/role-dispatch.md"
@@ -1607,7 +1607,7 @@
     },
     {
       "path": "skills/bee-herding/references/role-dispatch.md",
-      "sha256": "d47114948d7d82ffc48e544d569ad74ba5a88a83e2014a47ec5dd8d77d870873",
+      "sha256": "26031d40b0b87023ffcfcacd19c6c4c3d5b28631d118e8af7bc4ea099547e45b",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/role-dispatch.md"
