@@ -24,11 +24,11 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "6569b7339542ad3f6df1a18ebedca79e51965de6938a8442c3050080f70792b1"
+      "sha256": "45de0cfb230e632d7d579d5fb72464c67d4997b86179e7953a951b3900f6e04a"
     },
     {
       "name": "bee-planning",
-      "sha256": "4c7bd1bc99c8de5346093ab8bd62b01da06feb42a5416ec89c9678ee24a32359"
+      "sha256": "b2753f3d023b80fabf3b69666ff8dd7f39e67ceb5151f428865c74d2344d73c3"
     },
     {
       "name": "bee-principle-chestertons-fence",
