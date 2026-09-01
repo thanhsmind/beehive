@@ -160,8 +160,12 @@ estimate is not the question either — quote what the proof run actually took.
 On a **no**, the skill stays and stays manual: nothing is written, and the
 generated skill loses nothing. Record that answer
 (`bee decisions log --relation none`, or the repo's own record where bee is not
-installed) so the question is not asked again unprompted at the next onboard.
-Everything below runs only after a yes.
+installed) and read that record before ever asking again — **no code consults
+it**. Honoring a refusal is the agent's job, not the tool's: onboard recomputes
+the offer from configuration on every run and will surface it again regardless.
+A project that is deliberately test-free silences the question for good by
+declaring its test command as the string `none`. Everything below runs only
+after a yes.
 
 ### Compose: append, never replace
 
