@@ -1,0 +1,131 @@
+{
+  "id": "vsh-1",
+  "feature": "verification-ships-to-hosts",
+  "title": "Land bee-verifying and bee-verify-upkeep in the bee-* namespace",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-verifying/references/feature-map-example/README.md",
+    "skills/bee-verifying/references/feature-map-example/create-note.md",
+    "skills/bee-verifying/references/feature-map-example/search.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    ".claude-plugin/skills/",
+    ".codex-plugin/skills/",
+    ".claude/skills/",
+    ".agents/skills/",
+    ".opencode/skills/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".claude/skills/create-verification-skill/SKILL.md",
+    ".claude/skills/maintain-verification-skill/SKILL.md",
+    "skills/bee-researching/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md"
+  ],
+  "affects_specs": [],
+  "verify": "bee dev regen && bee dev release-manifest --check",
+  "action": "Move the two proven verification skills into bee's own namespace so onboard can install them into host repos (per D1). Source them from .claude/skills/create-verification-skill/ and .claude/skills/maintain-verification-skill/, which are byte-identical copies of pstack v0.14.5. Create skills/bee-verifying/ from the generator (carry its references/feature-map-example/ tree across unchanged) and skills/bee-verify-upkeep/ from the maintainer. KEEP the disable-model-invocation: true key in both frontmatters - the hat wave found it is honored by Claude Code and keeps both out of the always-loaded routing surface, so the context cost of D1 is near zero. Rewrite each description to name its own trigger: bee-verifying fires once, when a repo has no scripted way to prove product behavior; bee-verify-upkeep fires periodically, to audit an existing verification skill's feature map. Replace every .cursor/skills/ path with the bee equivalent, and every reference to the other skill's old name. Do NOT touch any Rust file and do NOT add a proof tier or a door (per D4) - this cell is skills plus regen only. Finish by running the regen chain in order (render-skill-trees, onboard --repo-root . --apply, release-manifest --write) so the committed per-runtime trees carry both new skills.",
+  "must_haves": {
+    "truths": [
+      "skills/bee-verifying and skills/bee-verify-upkeep both exist with valid YAML frontmatter carrying name, description and disable-model-invocation: true",
+      "No file under skills/bee-verifying or skills/bee-verify-upkeep mentions .cursor/skills or the old create-/maintain-verification-skill names",
+      "bee dev release-manifest --check passes after the regen"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-verifying/SKILL.md",
+        "substantive": "frontmatter plus the generator's five steps, no placeholders, no .cursor paths"
+      },
+      {
+        "path": "skills/bee-verify-upkeep/SKILL.md",
+        "substantive": "frontmatter plus the upkeep pass, outcomes and edit scope, no .cursor paths"
+      }
+    ],
+    "key_links": [
+      "skills/bee-verifying/SKILL.md points at bee-verify-upkeep for the maintenance loop",
+      "skills/bee-verifying/references/feature-map-example/ is referenced from the skill body"
+    ],
+    "prohibitions": [
+      "No Rust file is touched",
+      "No new bee door, verb or proof tier",
+      "The disable-model-invocation key is not dropped from either skill"
+    ]
+  },
+  "trace": {
+    "worker": "vsh-w1",
+    "outcome": "bee-verifying and bee-verify-upkeep land in the bee-* namespace, rendered into all five committed skill trees",
+    "files_changed": [
+      "skills/bee-verifying/SKILL.md",
+      "skills/bee-verifying/references/feature-map-example/README.md",
+      "skills/bee-verifying/references/feature-map-example/create-note.md",
+      "skills/bee-verifying/references/feature-map-example/search.md",
+      "skills/bee-verify-upkeep/SKILL.md",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      ".claude/skills",
+      ".agents/skills",
+      ".opencode/skills",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Committed .bee/onboarding.json, a file the cell did not name — the cell's own mandated `bee dev regen` rewrites its updated_at timestamp and the repo commits that file with every regen commit (8c898a37, a3aaa48b); reserved it under vsh-w1 before committing rather than leaving the worktree dirty — something else had to be fixed first",
+      "Named THREE runtime skill homes in both skill bodies (.claude/skills, .agents/skills, .opencode/skills) where D3 names two — plan.md load-bearing claim 6 read templates.rs:317-321 and found repo-opencode is a third target, so writing D3's two verbatim would have shipped a false instruction — the plan was wrong about a fact",
+      "Added a Helpers line stating a shipped script is invoked as `bash <path>` because the render strips the executable bit — plan.md claim 5 proves it by ran evidence, and the source generator's 'any script the skill ships is executable' would otherwise be a wrong instruction inside a rendered copy — found a better route",
+      "Added a bee-idiom metadata block (version/ecosystem/dependencies) to both frontmatters, which the two pstack sources did not carry — every other bee-* skill has one, and skill-body wording is Agent's Discretion per CONTEXT.md — found a better route",
+      "Capped with --sync-ack instead of repairing affects_skills — the cell predicted only the two SKILL.md paths while its own files list also named the three references/feature-map-example/ files, and `bee cells update` refuses inside a granted feature worktree (it reads the main checkout's control plane) — hit an unforeseen obstacle",
+      "sync-ack: cell predicted only the two SKILL.md paths, but its own files list named the three references/feature-map-example/ files that shipped with bee-verifying; bee cells update refuses inside a granted feature worktree, so the prediction could not be repaired from here"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T09:20:18.914Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722",
+    "claimed_at": "2026-09-01T09:11:58.553Z",
+    "sync_ack": "cell predicted only the two SKILL.md paths, but its own files list named the three references/feature-map-example/ files that shipped with bee-verifying; bee cells update refuses inside a granted feature worktree, so the prediction could not be repaired from here",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee-verifying and bee-verify-upkeep land in the bee-* namespace, rendered into all five committed skill trees",
+      "commit": "55b9c9ea4690cd366f7ec37e7ffe8931bca79aea",
+      "files": [
+        "skills/bee-verifying/SKILL.md",
+        "skills/bee-verifying/references/feature-map-example/README.md",
+        "skills/bee-verifying/references/feature-map-example/create-note.md",
+        "skills/bee-verifying/references/feature-map-example/search.md",
+        "skills/bee-verify-upkeep/SKILL.md",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills",
+        ".claude/skills",
+        ".agents/skills",
+        ".opencode/skills",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "bee dev regen && bee dev release-manifest --check — green — docs/skills change: the cell's own verify, plus a source-to-rendered parity diff over all five trees (10/10 identical) and a YAML frontmatter parse of both new skills",
+      "deviations": [
+        "Committed .bee/onboarding.json, a file the cell did not name — the cell's own mandated `bee dev regen` rewrites its updated_at timestamp and the repo commits that file with every regen commit (8c898a37, a3aaa48b); reserved it under vsh-w1 before committing rather than leaving the worktree dirty — something else had to be fixed first",
+        "Named THREE runtime skill homes in both skill bodies (.claude/skills, .agents/skills, .opencode/skills) where D3 names two — plan.md load-bearing claim 6 read templates.rs:317-321 and found repo-opencode is a third target, so writing D3's two verbatim would have shipped a false instruction — the plan was wrong about a fact",
+        "Added a Helpers line stating a shipped script is invoked as `bash <path>` because the render strips the executable bit — plan.md claim 5 proves it by ran evidence, and the source generator's 'any script the skill ships is executable' would otherwise be a wrong instruction inside a rendered copy — found a better route",
+        "Added a bee-idiom metadata block (version/ecosystem/dependencies) to both frontmatters, which the two pstack sources did not carry — every other bee-* skill has one, and skill-body wording is Agent's Discretion per CONTEXT.md — found a better route",
+        "Capped with --sync-ack instead of repairing affects_skills — the cell predicted only the two SKILL.md paths while its own files list also named the three references/feature-map-example/ files, and `bee cells update` refuses inside a granted feature worktree (it reads the main checkout's control plane) — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 2377 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

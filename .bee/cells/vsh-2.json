@@ -1,0 +1,101 @@
+{
+  "id": "vsh-2",
+  "feature": "verification-ships-to-hosts",
+  "title": "Render .bee/verify/ into every runtime skill home, create and update only",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "vsh-1"
+  ],
+  "decisions": [
+    "D3",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/render.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/verification-ships-to-hosts/plan.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard",
+  "action": "Give bee a COPY-ONLY render path from .bee/verify/ into every runtime skill home, so a generated verify-<app> skill reaches Claude, Codex and opencode from one source (per D3). It CREATES and UPDATES. It never removes anything, ever (per D6). Shape it on the vendored-expertise precedent at plan.rs:502-509 (copy_expertise) and its apply arm at apply.rs:313-326, NOT on the bee-* skill sync: emit a new plan item per (entry, target) pair whose apply arm writes the rendered bytes, and emit NO removal item of any kind. Resolve the three targets from templates.rs REPO_SKILL_TARGETS, never a hand-written list. Reuse walk_skill_tree and render_skill_bytes so per-runtime bee markers still render, but do NOT reuse list_bee_skill_entries — it filters on the bee- prefix. Handle the root honestly: .bee/verify/ missing, empty, or unreadable each produce zero items and must NEVER block bee's own skill sync; a malformed host-authored SKILL.md under .bee/verify/ reports only its own item and never triggers the whole-tree block_all at skills.rs:696-705. Refuse the root when it is a symlink or when it resolves onto or under a target skills root. The tests are the point of this cell, and the negative one most of all: write it as a HOST fixture — a repo whose runtime home already contains verify-payments/ that bee never generated — and assert it is byte-identical after onboard --apply. Do not write it from the guard's point of view, and do not mirror skills.rs:954.",
+  "must_haves": {
+    "truths": [
+      "A verify-* directory present in a runtime skill home and absent from .bee/verify/ is byte-identical before and after onboard --apply",
+      "No code path added by this cell can reach apply_remove_skill, remove_dir_all, remove_file or remove_dir",
+      "A missing, empty or unreadable .bee/verify/ yields zero plan items and leaves bee-* skill sync fully working",
+      "One source entry renders into all three REPO_SKILL_TARGETS homes",
+      "Running onboard --apply twice yields an identical tree and an identical plan"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "substantive": "a copy-only planner for .bee/verify/ emitting no removal item"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "substantive": "the apply arm writing rendered bytes, mirroring the copy_expertise arm"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "substantive": "the host-fixture negative test plus absence, idempotence, containment and three-home coverage"
+      }
+    ],
+    "key_links": [
+      "the three targets are read from templates.rs REPO_SKILL_TARGETS, not enumerated",
+      "the planner reuses walk_skill_tree and render_skill_bytes for per-runtime rendering"
+    ],
+    "prohibitions": [
+      "skills.rs is not modified — neither apply_remove_skill nor its test at skills.rs:954",
+      "the bee- literal at skills.rs:882 and render.rs:379 is not touched or generalised",
+      "no removal item, verb or code path is added for .bee/verify/ in this cell",
+      "no new bee door, gate or proof tier"
+    ]
+  },
+  "trace": {
+    "worker": "vsh-w2",
+    "outcome": "bee renders .bee/verify/ into all three runtime skill homes, copy-only: creates and updates, never removes",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T09:42:46.789Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722",
+    "claimed_at": "2026-09-01T09:29:04.809Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee renders .bee/verify/ into all three runtime skill homes, copy-only: creates and updates, never removes",
+      "commit": "4721ad4c59bb706020c1f60bdf02316e450cfc27",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard — green — 153 passed 0 failed; the cell verify over the onboard module I touched, all 10 new tests named in the output, negative test mutation-checked red against a prune",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

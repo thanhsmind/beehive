@@ -1,0 +1,97 @@
+{
+  "id": "vsh-3",
+  "feature": "verification-ships-to-hosts",
+  "title": "Offer bee-verifying when a repo declares no test command",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "vsh-2"
+  ],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "read_first": [
+    "docs/history/verification-ships-to-hosts/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml notices",
+  "action": "Make onboard actually OFFER the verification skill (per D5). Today it cannot: notices.rs:203 nests the whole no-test warning inside `if commands.contains_key(\"verify\")`, so a repo that never carried the legacy commands.verify key — every repo onboarded since 2.1.0, which is the entire population this offer aims at — receives no notice. Add ONE new notice, emitted whenever .bee/config.json declares no usable commands.test, independent of the retired-verify branch and never doubling it: when the legacy key IS present the existing RETIRED_VERIFY_KEY_NO_TEST_WARNING already covers that repo, so the new notice must not fire alongside it. Reuse the has_test predicate already written at notices.rs:205-207 (a non-empty string OR an array) rather than writing a second definition of 'declared'. The new notice tells the AGENT to offer bee-verifying to the user — it names the skill and says the offer is the user's to accept, never the agent's to assume. Write it in plain user-facing language, not bee mechanics: AGENTS.md forbids surfacing .bee/config.json, 'commands', or 'CI status gate' to a person, and notices are printed verbatim to stdout by onboard/mod.rs, so a lazy agent leaks whatever this string says. Do NOT generate anything, do NOT touch commands.test, and do NOT add a door or a gate — onboard offers, it never generates.",
+  "must_haves": {
+    "truths": [
+      "A repo with no commands.verify key and no commands.test receives the new notice",
+      "A repo with a legacy commands.verify key and no commands.test receives exactly one notice, the existing retired-verify one, never both",
+      "A repo that declares a usable commands.test receives neither notice",
+      "The new notice names bee-verifying and states the offer is the user's to accept",
+      "The new notice contains no .bee path, no config key name and no bee-internal term"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "substantive": "the new notice constant, plain language, no bee mechanics"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "substantive": "the emit condition, outside the retired-verify branch, reusing the existing has_test predicate"
+      }
+    ],
+    "key_links": [
+      "the new notice and RETIRED_VERIFY_KEY_NO_TEST_WARNING are mutually exclusive by construction"
+    ],
+    "prohibitions": [
+      "onboard generates nothing and runs no skill",
+      "commands.test is not read for writing, only for presence",
+      "no new door, gate, verb or proof tier",
+      "the existing retired-verify notices are not reworded or removed"
+    ]
+  },
+  "trace": {
+    "worker": "vsh-w3",
+    "outcome": "onboard now offers bee-verifying to any repo declaring no test command, mutually exclusive with the retired-verify warnings",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+    ],
+    "deviations": [
+      "Added five tests to notices.rs and isolated the existing stale_advisor_key_is_reported fixture by giving it a test command — the cell named no test work, but the retired-verify branch had zero coverage and the advisor test asserted a full notice list that the new notice legitimately joins — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T09:50:16.651Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722",
+    "claimed_at": "2026-09-01T09:44:49.782Z",
+    "mistakes": [
+      {
+        "wrong": "I ran the workspace-wide cargo fmt --check late and read its diff as a possible regression of mine, when no rustfmt.toml exists in the repo and the crate was never rustfmt-default-clean",
+        "better": "I should have checked for a rustfmt config and the declared test command first, before spending a run on a gate this repo does not have"
+      }
+    ],
+    "report": {
+      "outcome": "onboard now offers bee-verifying to any repo declaring no test command, mutually exclusive with the retired-verify warnings",
+      "commit": "25370f52",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml notices (plus the same filtered on onboard) — green, 15/15 notices and 158/158 onboard — the change is one notice emitted from onboard::notices, so its own module plus the onboard module that prints it is the whole blast radius",
+      "deviations": [
+        "Added five tests to notices.rs and isolated the existing stale_advisor_key_is_reported fixture by giving it a test command — the cell named no test work, but the retired-verify branch had zero coverage and the advisor test asserted a full notice list that the new notice legitimately joins — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "I ran the workspace-wide cargo fmt --check late and read its diff as a possible regression of mine, when no rustfmt.toml exists in the repo and the crate was never rustfmt-default-clean — I should have checked for a rustfmt config and the declared test command first, before spending a run on a gate this repo does not have"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

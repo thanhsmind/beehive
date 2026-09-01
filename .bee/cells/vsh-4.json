@@ -1,0 +1,113 @@
+{
+  "id": "vsh-4",
+  "feature": "verification-ships-to-hosts",
+  "title": "Give bee-verifying the two-consent split and the commands.test composition rule",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "vsh-3"
+  ],
+  "decisions": [
+    "D2",
+    "D7"
+  ],
+  "files": [
+    "skills/bee-verifying/SKILL.md",
+    ".claude-plugin/skills/",
+    ".codex-plugin/skills/",
+    ".claude/skills/",
+    ".agents/skills/",
+    ".opencode/skills/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/verification-ships-to-hosts/CONTEXT.md",
+    "docs/history/verification-ships-to-hosts/plan.md",
+    "skills/bee-verifying/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-verifying/SKILL.md"
+  ],
+  "affects_specs": [],
+  "verify": "bee dev regen && bee dev release-manifest --check",
+  "action": "Teach bee-verifying how the generated drive command reaches the project's declared test command, and make the user's consent two moments instead of one (per D2 and D7). Add a section to skills/bee-verifying/SKILL.md covering five things. (1) TWO MOMENTS. Moment one builds the skill and proves it by running it once: cheap, reversible, touches no configuration. Moment two comes AFTER that proof run and asks a separate question carrying the MEASURED wall-clock the run actually took, because that number is what the user is really agreeing to. Never bundle the two into one yes; a user who wanted proof their app works has not thereby agreed to permanently slower commits. On a no at moment two, the skill stays and stays manual, and that answer is recorded so the question is not asked again unprompted. (2) THE COMPOSITION. Append, never replace: an existing declared command becomes `<existing> && <drive>`; a project with none gets the drive alone. If the declared command is a JSON array rather than a string, append one element rather than string-concatenating. Appending twice is a defect - check for the drive already being present before writing. (3) THE bash PREFIX. The drive is always invoked as `bash <path> ...`, never as a bare path, because bee's renderer does not carry the executable bit into a rendered copy - a bare path fails with Permission denied on the first onboard of every host. State the reason in one line so a later reader does not 'fix' it back. (4) WHERE TO WRITE IT. `bee config set` is not built - it refuses with `command_unavailable` and its own FIX line says to read and edit .bee/config.json directly, so that is the sanctioned path here and the skill says so, naming the refusal as the reason. (5) THE FAST/FULL SPLIT. The generated skill must expose a fast scoped drive for the per-change loop and a full sweep for CI, and it is the FAST one that composes into the declared command; state that as the contract the generated control script has to satisfy. Do not touch any Rust file, and do not add a door, gate or proof tier. Finish with the regen chain so all five committed trees carry the new body.",
+  "must_haves": {
+    "truths": [
+      "skills/bee-verifying/SKILL.md describes two separate consent moments, with the second carrying the measured cost from the proof run",
+      "The skill states that composition appends and never replaces, and covers the JSON-array shape and the append-twice case",
+      "The skill states the bash prefix AND the reason for it in the same place",
+      "The skill names editing .bee/config.json as the sanctioned path and cites the config-verb refusal as why",
+      "The skill states the fast-drive / full-drive contract and says the fast one is what composes"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-verifying/SKILL.md",
+        "substantive": "the consent, composition, bash-prefix, write-path and fast/full sections, no placeholders"
+      }
+    ],
+    "key_links": [
+      "the second consent question quotes the wall-clock measured by the step-4 proof run"
+    ],
+    "prohibitions": [
+      "No Rust file is touched",
+      "No new bee door, gate, verb or proof tier",
+      "The skill never instructs replacing an existing declared test command",
+      "The skill never instructs writing configuration before the second question is answered yes"
+    ]
+  },
+  "trace": {
+    "worker": "vsh-w4",
+    "outcome": "bee-verifying gained the two-moment consent split, the append-never-replace composition rules, the bash-prefix reason, the .bee/config.json write path and the fast/full drive contract",
+    "files_changed": [
+      "skills/bee-verifying/SKILL.md",
+      ".claude/skills/bee-verifying/SKILL.md",
+      ".agents/skills/bee-verifying/SKILL.md",
+      ".opencode/skills/bee-verifying/SKILL.md",
+      ".claude-plugin/skills/bee-verifying/SKILL.md",
+      ".codex-plugin/skills/bee-verifying/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T09:56:47.226Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722",
+    "claimed_at": "2026-09-01T09:51:42.292Z",
+    "mistakes": [
+      {
+        "wrong": "The first draft of the section went into a scratchpad heredoc that the worktree write guard refused as too complex to verify",
+        "better": "writing straight into skills/bee-verifying/SKILL.md with the Edit tool would have skipped a wasted round trip"
+      }
+    ],
+    "report": {
+      "outcome": "bee-verifying gained the two-moment consent split, the composition rules, the bash-prefix reason, the config write path and the fast/full drive contract",
+      "commit": "228be6ff",
+      "files": [
+        "skills/bee-verifying/SKILL.md",
+        ".claude/skills/bee-verifying/SKILL.md",
+        ".agents/skills/bee-verifying/SKILL.md",
+        ".opencode/skills/bee-verifying/SKILL.md",
+        ".claude-plugin/skills/bee-verifying/SKILL.md",
+        ".codex-plugin/skills/bee-verifying/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bee dev regen && bee dev release-manifest --check, plus diff of the source SKILL.md against all five rendered copies — green (3/3 regen steps green; 292 files match stored manifest; all five copies byte-identical to source) — docs-only change to one skill body, so the proof is render parity across every runtime home plus the manifest hash check",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "The first draft of the section went into a scratchpad heredoc that the worktree write guard refused as too complex to verify — writing straight into skills/bee-verifying/SKILL.md with the Edit tool would have skipped a wasted round trip"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 674 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "feature": "verification-ships-to-hosts",
+  "mode": "standard",
+  "phase": "planning",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"verification-ships-to-hosts\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"verification-ships-to-hosts\" (lane).",
+  "created_at": "2026-09-01T08:47:00.182Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Theo quyết định `ci-owned-verify` (23/07), **vòng lặp dev không chạy full suite tại chỗ** — CI sở hữu việc đó. Nên tôi chạy đúng phần hợp nh",
+    "asked_at": "2026-09-01T09:58:06.978Z",
+    "session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "cross-platform",
+      "covered-contract-change",
+      "multi-domain",
+      "audit-security"
+    ],
+    "product_files": 5,
+    "rationale": "The bee-* prefix is not only the renderer walk filter (render.rs:379) but the deletion guard namespace bound (skills.rs:882, asserted at skills.rs:1002). D3 requires extending that bound to a second source root, so a mistake here deletes files inside a host repo. Public contract: what onboard installs and removes in someone else's checkout. Cross-platform: the render spans .claude/skills and .agents/skills.",
+    "updated_at": "2026-09-01T08:49:05.743Z",
+    "feature": "verification-ships-to-hosts"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-01T08:58:33.910Z",
+    "feature": "verification-ships-to-hosts",
+    "newest_decision_id": "b6dc0aee-703f-4a69-9840-9dae6969ae30",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave: 5 seats (facts-gaps, risks, alternatives, value, user-impact)",
+    "digest_head": "# Hat wave — verification-ships-to-hosts (2026-09-01, plan step)\n\nFive perspectives, dispatched via the one door. Synthesis held by the leader.\n\nVERDICT: the drafted shape is DEAD. The replacement is SMALLER — render, never prune.\n\n## What each seat returned\n\n- **facts-gaps** — the one invalidating fact: the renderer strips the executable\n  bit (source 0755, rendered 0644; `write_file_atomic_random` is `fs::write` +\n  rename, and the fingerprint hashes content only, so a `chmod` never drifts).\n "
+  },
+  "merge_ready": {
+    "since": "2026-09-01T09:20:18.921Z",
+    "branch": "wt/verification-ships-to-hosts",
+    "worktree_id": "beehive--wt--verification-ships-to-hosts",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

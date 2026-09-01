@@ -458,6 +458,14 @@
     "worktree-first",
     "install-target-dir",
     "cross-repo",
-    "notebook"
+    "notebook",
+    "provenance",
+    "pstack",
+    "onboard",
+    "commands-test",
+    "runtimes",
+    "render",
+    "deletion-domain",
+    "consent"
   ]
 }
