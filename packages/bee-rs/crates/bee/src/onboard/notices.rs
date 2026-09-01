@@ -7,8 +7,8 @@
 // detectCommands, which this script imports.
 
 use super::templates::{
-    COMMAND_KEYS, GITIGNORE_BLOCK_PATTERNS, RETIRED_VERIFY_KEY_NO_TEST_WARNING,
-    RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
+    COMMAND_KEYS, GITIGNORE_BLOCK_PATTERNS, NO_TEST_VERIFICATION_OFFER,
+    RETIRED_VERIFY_KEY_NO_TEST_WARNING, RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
 };
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
 use serde_json::Value;
@@ -199,19 +199,32 @@ pub fn stale_advisor_notices(repo_root: &Path) -> Vec<String> {
         notices.push(STALE_ADVISOR_KEY_WARNING.to_string());
     }
     let commands = obj.and_then(|o| o.get("commands")).and_then(Value::as_object);
-    if let Some(commands) = commands {
-        if commands.contains_key("verify") {
-            let has_test = commands
-                .get("test")
-                .is_some_and(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()) || v.is_array());
-            notices.push(if has_test {
-                RETIRED_VERIFY_KEY_WARNING.to_string()
-            } else {
-                RETIRED_VERIFY_KEY_NO_TEST_WARNING.to_string()
-            });
-        }
+    let has_test = declares_test(commands);
+    if commands.is_some_and(|c| c.contains_key("verify")) {
+        notices.push(if has_test {
+            RETIRED_VERIFY_KEY_WARNING.to_string()
+        } else {
+            RETIRED_VERIFY_KEY_NO_TEST_WARNING.to_string()
+        });
+    } else if !has_test {
+        // The verification offer (D5). Mutually exclusive with the two
+        // warnings above BY CONSTRUCTION, not by wording: a host carrying the
+        // legacy key took the branch above and already has its instruction,
+        // so this arm is unreachable for it. It is the only arm that reaches
+        // a repo onboarded after 2.1.0, which never had `commands.verify`.
+        notices.push(NO_TEST_VERIFICATION_OFFER.to_string());
     }
     notices
+}
+
+/// The ONE definition of "this repo declares a test command": a non-empty
+/// string, or an array (the multi-command list shape). The retired-verify
+/// warnings and the verification offer read it through this function so the
+/// two can never disagree about what "declared" means.
+fn declares_test(commands: Option<&serde_json::Map<String, Value>>) -> bool {
+    commands
+        .and_then(|c| c.get("test"))
+        .is_some_and(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()) || v.is_array())
 }
 
 /// trackedGitignorePaths (l. 2665): `git ls-files -z -- <patterns>` with an
@@ -396,16 +409,83 @@ mod tests {
 
     #[test]
     fn stale_advisor_key_is_reported() {
+        // The fixture declares a test command so this case stays about the
+        // advisor key alone; a no-test repo also draws the verification offer.
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
         std::fs::write(
             dir.path().join(".bee").join("config.json"),
-            json!({"advisor": {"mode": "x"}}).to_string(),
+            json!({"advisor": {"mode": "x"}, "commands": {"test": "cargo test"}}).to_string(),
         )
         .unwrap();
         assert_eq!(stale_advisor_notices(dir.path()), vec![STALE_ADVISOR_KEY_WARNING.to_string()]);
-        std::fs::write(dir.path().join(".bee").join("config.json"), json!({}).to_string()).unwrap();
+        std::fs::write(
+            dir.path().join(".bee").join("config.json"),
+            json!({"commands": {"test": "cargo test"}}).to_string(),
+        )
+        .unwrap();
         assert!(stale_advisor_notices(dir.path()).is_empty());
+    }
+
+    fn stale_notices_for(config: Value) -> Vec<String> {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".bee")).unwrap();
+        std::fs::write(dir.path().join(".bee").join("config.json"), config.to_string()).unwrap();
+        stale_advisor_notices(dir.path())
+    }
+
+    #[test]
+    fn a_repo_with_no_test_command_is_offered_the_verification_skill() {
+        let offer = vec![NO_TEST_VERIFICATION_OFFER.to_string()];
+        // The target population: onboarded after 2.1.0, so no legacy key.
+        assert_eq!(stale_notices_for(json!({"commands": {"start": "make run"}})), offer);
+        // No commands block at all is the same state — nothing is declared.
+        assert_eq!(stale_notices_for(json!({})), offer);
+        // Neither is a blank one.
+        assert_eq!(stale_notices_for(json!({"commands": {"test": "   "}})), offer);
+    }
+
+    #[test]
+    fn a_legacy_verify_key_without_a_test_gets_the_retirement_warning_alone() {
+        assert_eq!(
+            stale_notices_for(json!({"commands": {"verify": "make check"}})),
+            vec![RETIRED_VERIFY_KEY_NO_TEST_WARNING.to_string()],
+            "the retired-key host already has its instruction; two notices would contradict",
+        );
+    }
+
+    #[test]
+    fn a_legacy_verify_key_beside_a_test_gets_the_plain_retirement_warning() {
+        assert_eq!(
+            stale_notices_for(json!({"commands": {"verify": "make check", "test": "cargo test"}})),
+            vec![RETIRED_VERIFY_KEY_WARNING.to_string()],
+        );
+    }
+
+    #[test]
+    fn a_declared_test_command_draws_no_notice_in_any_shape() {
+        for declared in [json!("cargo test"), json!(["cargo test", "cargo clippy"])] {
+            assert!(
+                stale_notices_for(json!({"commands": {"test": declared}})).is_empty(),
+                "declared as {declared}",
+            );
+        }
+    }
+
+    #[test]
+    fn the_verification_offer_speaks_to_the_user_without_internal_terms() {
+        // It is printed verbatim, so whatever it says can reach a person.
+        for banned in [".bee", "commands.", "config.json", "gate", "cap ", "proof"] {
+            assert!(
+                !NO_TEST_VERIFICATION_OFFER.contains(banned),
+                "the offer must not say {banned}",
+            );
+        }
+        assert!(NO_TEST_VERIFICATION_OFFER.contains("bee-verifying"), "it names the skill");
+        assert!(
+            NO_TEST_VERIFICATION_OFFER.contains("user's to accept"),
+            "the offer is the user's to accept, never the agent's to assume",
+        );
     }
 
     #[test]

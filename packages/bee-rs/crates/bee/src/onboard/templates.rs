@@ -292,6 +292,17 @@ pub const RETIRED_VERIFY_KEY_WARNING: &str = "commands.verify was retired in 2.1
 
 pub const RETIRED_VERIFY_KEY_NO_TEST_WARNING: &str = "commands.verify was retired in 2.1.0 and .bee/config.json declares NO commands.test — this repo currently has no test gate at all. FIX: move your verify command to commands.test (a fast subset is better than nothing), or set commands.test to \"none\" if this repo is deliberately test-free. Note: \"none\" on commands.verify no longer declares a no-test repo.";
 
+/// The verification offer (D5, verification-ships-to-hosts). It fires for a
+/// repo that declares no test command and never carried the retired
+/// `commands.verify` key — the population the two warnings above cannot
+/// reach, which is every repo onboarded since 2.1.0.
+///
+/// Written in plain language on purpose: notices are printed verbatim, so an
+/// agent that pastes this line must not leak a config path, a key name or a
+/// bee term to the person reading it. It is an OFFER — onboard points at the
+/// skill and stops; it generates nothing and runs nothing.
+pub const NO_TEST_VERIFICATION_OFFER: &str = "This project has no command that proves it works. The bee-verifying skill can build one together with the user: it studies the project, writes a check that drives the real product, and leaves a single command anyone can run. Offer it — say what it does, then ask. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer.";
+
 /// onboard_bee.mjs HEADER_POINTER_CANDIDATES (l. 2194–2198).
 pub const HEADER_POINTER_CANDIDATES: &[&str] =
     &["README.md", "docs/specs/system-overview.md", "docs/specs/reading-map.md"];
