@@ -220,6 +220,9 @@ nothing in this section blocks anything.
 3. Name every source searched that came up EMPTY.
 4. End with anchors a reader can open — `path:line`, or the command that ran.
 
+Both flows have ONE home: `bee-researching/references/trace-and-provenance.md`
+— § "Trace" for step 2, § "Provenance sweep" for step 3.
+
 This is the investigation route (per D3, decision `f1ffa7bd`): the existing
 `research` class, no new route and no new lane. Nothing yet ENFORCES step 1 —
 read-only is craft here, not a guard (backlog `p-69bee217`).

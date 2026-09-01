@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "fc729a2a56ca42ccbe9115e0b00c96c6af31440915c6fb610aaaa7d534e1e633",
+      "sha256": "f878e9012892ad2005840475ec922749f82bb71c9990fffb840bf4c478ed322b",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -395,7 +395,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "0e5208b0ee8543de57864fa4ce237855d9af7f425683adec4554f35803d3294c",
+      "sha256": "f7ee81dcad8ec7f610792ed1c40a31ba453296e7bf329e9b96303c80eb4510b0",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/references/planning-reference.md"
@@ -436,8 +436,15 @@
       "packagePath": ".claude-plugin/skills/bee-researching/references/research-protocol.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md",
+      "sha256": "ec9a9ceb4e717d200c298ae48406abb516f55999a02090c169d27381e151bb29",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-researching/SKILL.md",
-      "sha256": "5ba3871519a6c1ee3cf71981ef64f0238b7e1aa2cf673a9eed0741d27b6e30e9",
+      "sha256": "0ce1fc37447987370fc68915ff555a30c1c98ac70e47d19238f894fafdfe04ae",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-researching/SKILL.md"
@@ -696,7 +703,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "e3d0bbcdc3a4c85890b7927f6a01bae32cd5f6cdb2a0c9f0d6264b22ccc7d1bf",
+      "sha256": "8ca0e98307f8334c12540a47728248a5bee32b898d8878049e42e4d966e33490",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -955,7 +962,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "0e5208b0ee8543de57864fa4ce237855d9af7f425683adec4554f35803d3294c",
+      "sha256": "f7ee81dcad8ec7f610792ed1c40a31ba453296e7bf329e9b96303c80eb4510b0",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/references/planning-reference.md"
@@ -996,8 +1003,15 @@
       "packagePath": ".codex-plugin/skills/bee-researching/references/research-protocol.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md",
+      "sha256": "ec9a9ceb4e717d200c298ae48406abb516f55999a02090c169d27381e151bb29",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-researching/SKILL.md",
-      "sha256": "5ba3871519a6c1ee3cf71981ef64f0238b7e1aa2cf673a9eed0741d27b6e30e9",
+      "sha256": "0ce1fc37447987370fc68915ff555a30c1c98ac70e47d19238f894fafdfe04ae",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-researching/SKILL.md"
@@ -1726,7 +1740,7 @@
     },
     {
       "path": "skills/bee-planning/references/planning-reference.md",
-      "sha256": "0e5208b0ee8543de57864fa4ce237855d9af7f425683adec4554f35803d3294c",
+      "sha256": "f7ee81dcad8ec7f610792ed1c40a31ba453296e7bf329e9b96303c80eb4510b0",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/references/planning-reference.md"
@@ -1767,8 +1781,15 @@
       "packagePath": "skills/bee-researching/references/research-protocol.md"
     },
     {
+      "path": "skills/bee-researching/references/trace-and-provenance.md",
+      "sha256": "ec9a9ceb4e717d200c298ae48406abb516f55999a02090c169d27381e151bb29",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-researching/references/trace-and-provenance.md"
+    },
+    {
       "path": "skills/bee-researching/SKILL.md",
-      "sha256": "5ba3871519a6c1ee3cf71981ef64f0238b7e1aa2cf673a9eed0741d27b6e30e9",
+      "sha256": "0ce1fc37447987370fc68915ff555a30c1c98ac70e47d19238f894fafdfe04ae",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-researching/SKILL.md"

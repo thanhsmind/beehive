@@ -97,3 +97,4 @@ only when paths differ materially in behavior, risk, or migration cost.
 | `references/research-protocol.md` | step rules in full, tool roles, ask-when-it-matters criteria |
 | `references/research-brief-template.md` | standalone brief structure |
 | `references/port-protocol.md` | the request names an external repo or source to distill (`xia`) or port — source manifest, dependency matrix, cross-cutting sweep, challenge framework |
+| `references/trace-and-provenance.md` | a how-does-this-run question (`Trace`) or a why-is-this-so question (`Provenance sweep`) |
