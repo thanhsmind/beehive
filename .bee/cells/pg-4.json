@@ -56,6 +56,36 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1-all-seven-rows-name-a-sweep",
+            "status": "PASS",
+            "evidence": "trace-and-provenance.md:47 row 5 carries `rg -n \"<symbol>\"`, :49 row 6 carries `rg -n \"<behavior>\" $(fd -t d tests)`, :51 row 7 carries `gh issue list --search` and `gh pr list --search`. Each is a runnable shape with a placeholder, not a bare tool name. Rows 1-4 unchanged at :39,:41,:43,:45. The judge ran all three live in this checkout: row 6's substitution returned real hits and exit 0, row 7 exited 0 against an authenticated gh."
+          },
+          {
+            "id": "t2-meaning-and-scope-preserved",
+            "status": "PASS",
+            "evidence": "git show 28f7b6f3 --stat touches 13 files: the source, its five rendered copies, five .bee-render.json hash files, .bee/onboarding.json and the release manifest. The source diff is one hunk @@ -44,12 +44,13 @@ entirely inside the Provenance sweep section; the Trace section is untouched and all three bold labels are byte-identical. Each row keeps its original sentence."
+          },
+          {
+            "id": "t3-rendered-copies-and-manifest",
+            "status": "PASS",
+            "evidence": "md5sum over all six copies (skills/, .claude/, .claude-plugin/, .codex-plugin/, .opencode/, .agents/) is 791387f44353a6945efe877135e13cc8 for every one. bee dev release-manifest --check printed '295 file(s) match stored manifest, 1 unhashed artifact(s) present', exit 0, and git status over skills/ and the render trees is empty."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T17:25:26.931Z"
+      }
+    ]
   }
 }

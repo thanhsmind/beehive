@@ -1,0 +1,61 @@
+{
+  "id": "pg-5",
+  "feature": "pstack-gaps",
+  "lane": "tiny",
+  "role": "docs",
+  "title": "Anchor the test-directory glob so the sweep stops reading history dirs",
+  "behavior_change": true,
+  "files": [
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "action": "The pg-4 goal-check judge raised one non-blocking advisory it proved by running the command: `fd -t d tests` in row 6 of the Provenance sweep matches any directory whose BASENAME contains 'tests', so it also returns docs/history/scripts-tests-move/ and docs/history/workflow-verb-tests/ — the sweep reads two history directories as test directories. In skills/bee-researching/references/trace-and-provenance.md, row 6 only, anchor the pattern so it matches a directory actually named tests. Change nothing else in the file. Then run the regen chain in order: bee dev render-skill-trees, then bee onboard --repo-root . --apply, then bee dev release-manifest --write.",
+  "verify": "The anchored command run in this repo returns only directories named exactly tests, and returns real hits against a known behavior term. bee dev release-manifest --check is clean and the rendered copies match the source.",
+  "affects_skills": [
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [
+    "pstack-gaps D3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "pg-worker-5",
+    "outcome": "The provenance sweep's test-directory glob is anchored, so it returns only directories named tests",
+    "files_changed": [
+      "skills/bee-researching/references/trace-and-provenance.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T17:26:37.785Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1",
+    "claimed_at": "2026-09-01T17:25:50.178Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The provenance sweep test-directory glob is anchored, so it returns only directories named tests",
+      "commit": "739852bc",
+      "files": [
+        "skills/bee-researching/references/trace-and-provenance.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "fd -t d anchored then rg over its three results, plus bee dev release-manifest --check — green:live — docs cell: the anchored glob returned only expertise/tests, crates/bee/tests and crates/fleet/tests, the rg over them returned real hits, and the five rendered copies are byte-identical to the source",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
