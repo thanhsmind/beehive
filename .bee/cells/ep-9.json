@@ -1,0 +1,66 @@
+{
+  "id": "ep-9",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Point the workflow surfaces at the principle index",
+  "action": "Close the loop so a reader arriving from the workflow side finds the principle set. THREE pointer edits, and NOT ONE of them names or lists a principle — the index's classes: lines are the single home of which principles a class gets, and bee orient derives the list from them. (1) skills/bee-planning/references/planning-reference.md, the '## Class playbooks' preamble (around line 176, beside the existing 'How a plan uses one' paragraph): one short paragraph saying the routed principles for a class are named by bee orient in the session preamble, read from the '## Principle homes' section of docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, and that a playbook never restates them. (2) skills/bee-planning/SKILL.md: one row in its References table pointing at the same section, with a 'When to load' that says: the routed principles for this class, and what each one's spoken line is. (3) skills/bee-hive/SKILL.md: one row in its '## References' table (line 121 onward) pointing at the same section, so the router itself names where the principle set lives. Keep every addition SHORT — these are pointers, not a second copy of the layer. Do NOT edit any file under expertise/ (CONTEXT.md D1 and decision 'Slice 3 does NOT touch expertise/'); the guides carry a portability law at expertise/README.md:7-9 that forbids them referencing skills. After the edits run .bee/bin/bee dev regen so the changed skills reach both plugin trees.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test principle_index_parity && .bee/bin/bee knowledge check && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "No pointer names a principle or lists a class's principle set — the index classes: lines stay the single home and bee orient stays the only deriver (bee-principle-single-source-of-truth).",
+      "No file under expertise/ is edited — the guides' portability law at expertise/README.md:7-9 forbids a guide referencing a skill.",
+      "Every added path resolves; pointer_integrity stays green.",
+      "The additions are pointers, a few lines each — a second copy of the layer inside a playbook is the failure this cell exists to avoid.",
+      "bee dev regen runs so the three changed skill files reach both plugin trees."
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-11",
+    "outcome": "Three short pointers route workflow readers to the Principle homes index; no principle named",
+    "files_changed": [
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-hive/SKILL.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T19:11:01.156Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T19:09:11.935Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Three short pointers route workflow readers to the Principle homes index; no principle named",
+      "commit": "b776dd84103e31b4767ba058a03b57ef755324c6",
+      "files": [
+        "skills/bee-planning/references/planning-reference.md",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-hive/SKILL.md"
+      ],
+      "tests": "cargo test --release --test pointer_integrity --test principle_index_parity; bee knowledge check; bee dev release-manifest --check — green:unit — pointer and principle-index parity plus manifest parity cover a docs-pointer change",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
