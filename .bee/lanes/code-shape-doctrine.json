@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "code-shape-doctrine",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"code-shape-doctrine\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 151c0a1; capture what settled, then bee close --feature code-shape-doctrine.",
+  "next_action": "bee close finished \"code-shape-doctrine\" — feature is closed.",
   "created_at": "2026-09-01T14:50:57.130Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-01T15:04:26.029Z",
+    "session": "c021e309-e77a-4956-a752-9611003c58bd"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
