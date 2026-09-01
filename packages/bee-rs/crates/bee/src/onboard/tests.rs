@@ -1035,3 +1035,316 @@ fn no_engine_message_names_the_invocation_root_and_the_missing_template_path() {
         "must name the missing template path: {message}"
     );
 }
+
+// ── .bee/verify/ → the runtime skill homes (verification-ships-to-hosts D3) ──
+//
+// The negative case is the point of this block, so it is written from the HOST
+// repository's point of view: a team hand-wrote `verify-payments/` into their
+// Claude skill home, bee never generated it, and a routine `bee onboard
+// --apply` must leave those bytes exactly as it found them. It is deliberately
+// NOT written from the guard's point of view — a "foreign verify skill is
+// removed" test would certify the hazard as intended behavior, and the
+// fixture bytes are identical whether the directory is a stale render or a
+// person's work.
+
+/// Every file under `dir` as `(POSIX relative path, bytes)`, sorted. Two of
+/// these compared is BYTE identity, not "the directory is still there".
+fn snapshot(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    fn walk(dir: &Path, prefix: &str, out: &mut Vec<(String, Vec<u8>)>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        let mut names: Vec<String> =
+            rd.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        names.sort();
+        for name in names {
+            let p = dir.join(&name);
+            let rel = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
+            if p.is_dir() {
+                out.push((format!("{rel}/"), Vec::new()));
+                walk(&p, &rel, out);
+            } else {
+                out.push((rel, std::fs::read(&p).unwrap_or_default()));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, "", &mut out);
+    out
+}
+
+/// The runtime skill homes, read from `REPO_SKILL_TARGETS` through the same
+/// helper the planner uses — never a hand-written list, so a fourth runtime
+/// joining that table widens these assertions on its own.
+fn skill_homes(repo: &Path) -> Vec<(String, PathBuf)> {
+    super::plan::verify_render_targets(repo).into_iter().map(|(_, root, rel)| (rel, root)).collect()
+}
+
+fn verify_actions(payload: &Value, key: &str, action: &str) -> Vec<Value> {
+    payload[key].as_array().unwrap().iter().filter(|i| i["action"] == action).cloned().collect()
+}
+
+#[test]
+fn a_host_authored_verify_skill_is_byte_identical_after_apply() {
+    let fx = fixture();
+
+    // The host repo, described the way its owner would: someone on this team
+    // wrote a verification skill for the payments service and committed it
+    // into the Claude skill home. bee did not generate it, and it is not
+    // under `.bee/verify/`.
+    let host = fx.repo.join(".claude").join("skills").join("verify-payments");
+    write(&host.join("SKILL.md"), "---\nname: verify-payments\n---\n\ndrive payments\n");
+    write(&host.join("control-payments"), "#!/usr/bin/env bash\necho payments\n");
+    write(&host.join("references").join("feature-map.md"), "checkout -> tests/checkout\n");
+    let before = snapshot(&host);
+    assert_eq!(before.len(), 4, "fixture must have three files and one directory");
+
+    // The render path is LIVE during this apply, not dormant: the repo also
+    // carries a generated skill bee really does render.
+    write(
+        &fx.repo.join(".bee").join("verify").join("verify-bee").join("SKILL.md"),
+        "drive bee\n",
+    );
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert!(
+        fx.repo.join(".claude").join("skills").join("verify-bee").join("SKILL.md").exists(),
+        "the generated skill must really have been rendered"
+    );
+
+    assert_eq!(snapshot(&host), before, "host-authored verify-payments must be untouched");
+    // No item in the whole applied plan even NAMES it — not to write it, and
+    // above all not to remove it.
+    for item in a["applied"].as_array().unwrap() {
+        assert!(
+            !item.to_string().contains("verify-payments"),
+            "no plan item may name a host-authored skill: {item}"
+        );
+    }
+}
+
+#[test]
+fn an_absent_verify_root_plans_nothing_and_never_blocks_bee_skill_sync() {
+    let fx = fixture();
+    assert!(!fx.repo.join(".bee").join("verify").exists());
+
+    let p = plan(&fx, &[]);
+    assert!(super::plan::compute_verify_skill_items(&fx.repo).is_empty());
+    assert!(!actions(&p, "plan").contains(&"copy_verify_skill".to_string()));
+    assert!(actions(&p, "plan").contains(&"sync_skill".to_string()), "bee's own sync is untouched");
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert_eq!(a["recheck"], "up_to_date");
+    assert!(fx.repo.join(".claude").join("skills").join("bee-hive").join("SKILL.md").exists());
+}
+
+#[test]
+fn an_empty_or_non_directory_verify_root_plans_nothing_and_bee_still_syncs() {
+    let fx = fixture();
+    let root = fx.repo.join(".bee").join("verify");
+
+    std::fs::create_dir_all(&root).unwrap();
+    assert!(super::plan::compute_verify_skill_items(&fx.repo).is_empty(), "empty root");
+    assert!(actions(&plan(&fx, &[]), "plan").contains(&"sync_skill".to_string()));
+
+    std::fs::remove_dir(&root).unwrap();
+    write(&root, "someone put a file here\n");
+    assert!(super::plan::compute_verify_skill_items(&fx.repo).is_empty(), "root is a file");
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert!(fx.repo.join(".claude").join("skills").join("bee-hive").join("SKILL.md").exists());
+    assert_eq!(
+        std::fs::read_to_string(&root).unwrap(),
+        "someone put a file here\n",
+        "the refused root is never rewritten either"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unreadable_verify_root_plans_nothing_and_bee_still_syncs() {
+    use std::os::unix::fs::PermissionsExt;
+    let fx = fixture();
+    let root = fx.repo.join(".bee").join("verify");
+    write(&root.join("verify-app").join("SKILL.md"), "drive app\n");
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read_dir(&root).is_ok() {
+        // Running as root: mode 0 is not a real denial here, so the case this
+        // test exists for cannot be staged. Restore and stop.
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+
+    assert!(super::plan::compute_verify_skill_items(&fx.repo).is_empty());
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert!(fx.repo.join(".claude").join("skills").join("bee-hive").join("SKILL.md").exists());
+
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[test]
+fn one_generated_skill_renders_into_every_runtime_skill_home() {
+    let fx = fixture();
+    let src = fx.repo.join(".bee").join("verify").join("verify-app");
+    write(
+        &src.join("SKILL.md"),
+        "drive app\n<!-- bee:only claude -->\nclaude only\n<!-- bee:end -->\ntail\n",
+    );
+    write(&src.join("scripts").join("control-app"), "#!/usr/bin/env bash\necho app\n");
+
+    let homes = skill_homes(&fx.repo);
+    let p = plan(&fx, &[]);
+    let planned = paths_for(&p, "plan", "copy_verify_skill");
+    assert_eq!(planned.len(), homes.len(), "one item per runtime home: {planned:?}");
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    for (rel_root, root) in &homes {
+        let dir = root.join("verify-app");
+        assert!(dir.join("scripts").join("control-app").exists(), "{rel_root}");
+        let body = std::fs::read_to_string(dir.join("SKILL.md")).unwrap();
+        assert!(!body.contains("bee:only"), "marker lines are stripped in {rel_root}");
+        assert!(body.contains("drive app") && body.contains("tail"), "{rel_root}");
+        if rel_root == ".claude/skills" {
+            assert!(body.contains("claude only"), "the claude home keeps its block");
+        } else {
+            assert!(!body.contains("claude only"), "{rel_root} must drop the claude-only block");
+        }
+    }
+}
+
+#[test]
+fn rendering_a_generated_skill_twice_yields_an_identical_tree_and_plan() {
+    let fx = fixture();
+    write(
+        &fx.repo.join(".bee").join("verify").join("verify-app").join("SKILL.md"),
+        "drive app\n",
+    );
+
+    let first = apply(&fx, &[]);
+    assert_eq!(first["status"], "applied");
+    let homes = skill_homes(&fx.repo);
+    let after_first: Vec<Vec<(String, Vec<u8>)>> =
+        homes.iter().map(|(_, root)| snapshot(&root.join("verify-app"))).collect();
+
+    let again = plan(&fx, &[]);
+    assert!(
+        paths_for(&again, "plan", "copy_verify_skill").is_empty(),
+        "a settled render plans nothing: {:?}",
+        again["plan"]
+    );
+
+    let second = apply(&fx, &[]);
+    assert_eq!(second["status"], "applied");
+    assert!(verify_actions(&second, "applied", "copy_verify_skill").is_empty());
+    let after_second: Vec<Vec<(String, Vec<u8>)>> =
+        homes.iter().map(|(_, root)| snapshot(&root.join("verify-app"))).collect();
+    assert_eq!(after_first, after_second, "the second apply changed the tree");
+}
+
+#[test]
+fn an_updated_source_rewrites_the_render_and_never_deletes_what_it_did_not_write() {
+    let fx = fixture();
+    let src = fx.repo.join(".bee").join("verify").join("verify-app");
+    write(&src.join("SKILL.md"), "drive app v1\n");
+    apply(&fx, &[]);
+
+    // The host drops a file INSIDE a rendered skill. Nothing prunes it: it is
+    // not drift, and the next apply must not plan a write because of it.
+    let rendered = fx.repo.join(".claude").join("skills").join("verify-app");
+    write(&rendered.join("NOTES.md"), "my notes\n");
+    assert!(paths_for(&plan(&fx, &[]), "plan", "copy_verify_skill").is_empty());
+
+    // Now the source really changes.
+    write(&src.join("SKILL.md"), "drive app v2\n");
+    let planned = paths_for(&plan(&fx, &[]), "plan", "copy_verify_skill");
+    assert_eq!(planned.len(), skill_homes(&fx.repo).len());
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    for (rel_root, root) in skill_homes(&fx.repo) {
+        assert_eq!(
+            std::fs::read_to_string(root.join("verify-app").join("SKILL.md")).unwrap(),
+            "drive app v2\n",
+            "{rel_root}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(rendered.join("NOTES.md")).unwrap(),
+        "my notes\n",
+        "an update never removes a file bee did not write"
+    );
+}
+
+#[test]
+fn a_malformed_generated_skill_reports_only_its_own_item_and_bee_still_syncs() {
+    let fx = fixture();
+    let root = fx.repo.join(".bee").join("verify");
+    write(&root.join("verify-bad").join("SKILL.md"), "text\n<!-- bee:only claude -->\nunclosed\n");
+    write(&root.join("verify-good").join("SKILL.md"), "good\n");
+
+    let p = plan(&fx, &[]);
+    // Host bytes can never raise bee's whole-tree refusal: that gate reads the
+    // ENGINE's skill tree, and this one reports one item and moves on.
+    assert_ne!(p["skills"]["status"], "blocked_render");
+    assert!(actions(&p, "plan").contains(&"sync_skill".to_string()));
+
+    let blocked = verify_actions(&p, "plan", "blocked_verify_skill");
+    assert_eq!(blocked.len(), 1, "only the malformed skill is reported: {blocked:?}");
+    assert_eq!(blocked[0]["skill"], "verify-bad");
+    assert!(blocked[0]["reason"].as_str().unwrap().contains("malformed bee:only markers"));
+    assert_eq!(
+        paths_for(&p, "plan", "copy_verify_skill").len(),
+        skill_homes(&fx.repo).len(),
+        "the healthy sibling still renders"
+    );
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert!(fx.repo.join(".claude").join("skills").join("bee-hive").join("SKILL.md").exists());
+    assert!(fx.repo.join(".claude").join("skills").join("verify-good").exists());
+    assert!(!fx.repo.join(".claude").join("skills").join("verify-bad").exists());
+    let skipped = a["skills"]["skipped"].as_array().unwrap();
+    assert!(
+        skipped.iter().any(|s| s["skill"] == "verify-bad"),
+        "the skip is reported loudly: {skipped:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_verify_root_is_refused_and_never_followed() {
+    let fx = fixture();
+    let elsewhere = fx.repo.join("elsewhere");
+    write(&elsewhere.join("verify-app").join("SKILL.md"), "drive app\n");
+    std::fs::create_dir_all(fx.repo.join(".bee")).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, fx.repo.join(".bee").join("verify")).unwrap();
+
+    let refusal = super::plan::verify_root_refusal(&fx.repo).unwrap();
+    assert!(refusal.contains("symlink"), "{refusal}");
+    assert!(super::plan::compute_verify_skill_items(&fx.repo).is_empty());
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    for (rel_root, root) in skill_homes(&fx.repo) {
+        assert!(!root.join("verify-app").exists(), "{rel_root} must stay clean");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_verify_root_that_resolves_onto_a_skill_home_is_refused() {
+    let fx = fixture();
+    let verify = fx.repo.join(".bee").join("verify");
+    write(&verify.join("verify-app").join("SKILL.md"), "drive app\n");
+    // The Claude skill home IS the verify root: source and target would be
+    // one tree, and every apply would render a skill into itself.
+    std::fs::create_dir_all(fx.repo.join(".claude")).unwrap();
+    std::os::unix::fs::symlink(&verify, fx.repo.join(".claude").join("skills")).unwrap();
+
+    let refusal = super::plan::verify_root_refusal(&fx.repo).unwrap();
+    assert!(refusal.contains(".claude/skills"), "the refusal names the home: {refusal}");
+    assert!(super::plan::compute_verify_skill_items(&fx.repo).is_empty());
+}
