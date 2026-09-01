@@ -164,6 +164,66 @@ capability or risk areas explain the work more honestly than a timeline —
 the high-risk default, with feasibility proof named per epic. Never force
 2–4 phases onto work that is really one slice.
 
+## Class playbooks
+
+Each playbook binds one **route class** — the value `bee route --set --class`
+records (`bee-hive/references/scout-and-ticks.md` ("Route record")). It does
+NOT bind the cell-level `change_class` enum
+(`packages/bee-rs/crates/bee/src/verbs/cells/validate.rs:123`), which is a
+different taxonomy that overlaps this one on `bugfix` and `refactor` only — a
+cell's `change_class` never selects a playbook.
+
+**How a plan uses one (per D1, decision `132551fb`).** The plan **cites** its
+class's playbook by name and anchor — this file, `("Class playbooks")`, plus
+the playbook name — and never transcribes the steps into `plan.md`. The steps
+live here, in one home, and are read here; a copied list goes stale and can be
+satisfied by transcription. A step that does not apply stays VISIBLE and
+carries its recorded reason — "named deviation is the system working"
+(`AGENTS.md` ("Judgment and deviation")). A skipped step is never a refusal:
+nothing in this section blocks anything.
+
+### perf
+
+1. Capture a baseline with the real command or trace, and record the number.
+2. State the hypothesis — what is slow, and why you believe it.
+3. Change ONE thing.
+4. Re-measure the same way, with the same command.
+5. Keep the win, discard the loss, and record BOTH numbers.
+
+"It feels faster" is not a result (per D2, decision `1593e365`).
+
+### bugfix
+
+1. Reproduce the symptom on the real interface.
+2. Watch that reproduction FAIL before the fix. This step's rule already has a
+   home — `bee-swarming/references/worker-details.md:33-35`
+   ("red-before-green is craft, applied by judgment and enforced by review,
+   not by flags"). Read it there; it is deliberately not copied here, so a
+   cold execution worker never has to open a planning reference.
+3. Find the mechanism, not the symptom.
+4. Fix the mechanism.
+5. Re-run the same reproduction, on the same interface.
+
+### refactor
+
+1. Record existing behavior FIRST — a characterization test, a snapshot, or an
+   equivalence script.
+2. Prove that record green on the UNCHANGED tree.
+3. Change structure in small steps.
+4. The record stays green at every step.
+5. A behavior change is not a refactor — it is a separate cell.
+
+### research
+
+1. Read-only: the outcome is an account, never a diff.
+2. Trace the runtime path, not just the file list.
+3. Name every source searched that came up EMPTY.
+4. End with anchors a reader can open — `path:line`, or the command that ran.
+
+This is the investigation route (per D3, decision `f1ffa7bd`): the existing
+`research` class, no new route and no new lane. Nothing yet ENFORCES step 1 —
+read-only is craft here, not a guard (backlog `p-69bee217`).
+
 ## Cell quality rules
 
 A cell is an executable prompt a cold worker can pick up with zero session
