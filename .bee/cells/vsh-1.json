@@ -126,6 +126,45 @@
     "warnings": [
       "advisory: this cap's commit changes 2377 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "both skills carry disable-model-invocation: true",
+            "status": "PASS",
+            "evidence": "rg -> 12 hits, 2 sources + 10 rendered, all line 5",
+            "id": "both-skills-carry-disable-model-invocation-true"
+          },
+          {
+            "name": "no .cursor paths or old skill names remain",
+            "status": "PASS",
+            "evidence": "rg over both skill dirs -> rc=1, zero hits",
+            "id": "no-cursor-paths-or-old-skill-names-remain"
+          },
+          {
+            "name": "release-manifest --check passes",
+            "status": "PASS",
+            "evidence": "ran: 292 files match stored manifest, exit 0",
+            "id": "release-manifest-check-passes"
+          },
+          {
+            "name": "no Rust file touched",
+            "status": "PASS",
+            "evidence": "git show --stat 55b9c9ea -> 37 files, no packages/ path",
+            "id": "no-rust-file-touched"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T10:13:29.678Z"
+      }
+    ]
   }
 }

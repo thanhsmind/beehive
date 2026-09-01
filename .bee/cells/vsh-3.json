@@ -92,6 +92,45 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "mutual exclusion is structural",
+            "status": "PASS",
+            "evidence": "if contains_key(verify) {..} else if !has_test {..} - the offer arm is unreachable when the legacy key is present",
+            "id": "mutual-exclusion-is-structural"
+          },
+          {
+            "name": "a declared test command draws neither notice",
+            "status": "PASS",
+            "evidence": "a_declared_test_command_draws_no_notice_in_any_shape, string and array shapes",
+            "id": "a-declared-test-command-draws-neither-notice"
+          },
+          {
+            "name": "the offer leaks no internals",
+            "status": "PASS",
+            "evidence": "templates.rs:303 read verbatim: no .bee path, no key name, no bee term but the skill's own name",
+            "id": "the-offer-leaks-no-internals"
+          },
+          {
+            "name": "one shared declares_test predicate",
+            "status": "PASS",
+            "evidence": "notices.rs:222-227 read by both arms",
+            "id": "one-shared-declares-test-predicate"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T10:13:29.688Z"
+      }
+    ]
   }
 }

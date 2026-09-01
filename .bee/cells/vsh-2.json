@@ -96,6 +96,57 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "host-authored verify-* is byte-identical after apply",
+            "status": "PASS",
+            "evidence": "reviewer injected a prune arm into a scratch copy; the negative test was the ONLY one to go red (37 passed, 1 failed)",
+            "id": "host-authored-verify-is-byte-identical-after-app"
+          },
+          {
+            "name": "no added path reaches a removal call",
+            "status": "PASS",
+            "evidence": "apply_copy_verify_skill apply.rs:110-180 holds only create_dir_all and write_file_atomic; every deletion site in onboard/ is pre-existing",
+            "id": "no-added-path-reaches-a-removal-call"
+          },
+          {
+            "name": "skills.rs untouched, :882 literal and :954 test intact",
+            "status": "PASS",
+            "evidence": "git diff --name-only 55b9c9ea~1 228be6ff | rg skills.rs -> exit 1, no output",
+            "id": "skills-rs-untouched-882-literal-and-954-test-int"
+          },
+          {
+            "name": "absent, empty and unreadable roots all covered",
+            "status": "PASS",
+            "evidence": "three named tests, not one; read_dir_sorted_checked separates cannot-open from opened-and-empty",
+            "id": "absent-empty-and-unreadable-roots-all-covered"
+          },
+          {
+            "name": "one source renders into all three homes",
+            "status": "PASS",
+            "evidence": "homes read via REPO_SKILL_TARGETS, never a literal list",
+            "id": "one-source-renders-into-all-three-homes"
+          },
+          {
+            "name": "apply twice is identical",
+            "status": "PASS",
+            "evidence": "rendering_a_generated_skill_twice_yields_an_identical_tree_and_plan green",
+            "id": "apply-twice-is-identical"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T10:13:29.683Z"
+      }
+    ]
   }
 }

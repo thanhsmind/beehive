@@ -1,0 +1,11 @@
+{
+  "id": "the-three-deferred-siblings-of-this-feat__0d3e4f89",
+  "decision": "0d3e4f89",
+  "condition": "The three deferred siblings of this feature are picked up: a progress test for bee herding control-loop, narrowing the two cockpit panes' CLI wildcard per herding-adopt D7-FINAL, and .bee/expertise/changes.md. All three are specified in docs/history/research/autopilot-harness-roadmap.md and bee-unattended-hardening.md.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-01T10:03:28.687Z",
+  "updated_at": "2026-09-01T10:03:28.687Z",
+  "outcome": null
+}

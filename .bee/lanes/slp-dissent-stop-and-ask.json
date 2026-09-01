@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Six surfaces read. No dead lead: both `recovery.candidates` (compound-release-knowledge, slp-lead-recovery) are `run_state: awaiting-approva",
-    "asked_at": "2026-09-01T09:52:41.394Z",
-    "session": "a42eda77-9a0d-4dc8-9158-371a2f25c93f"
+    "subject": "Let me check the most recent supervisor records and verify the recovery candidates' run_state before judging.",
+    "asked_at": "2026-09-01T10:09:30.359Z",
+    "session": "8682923f-1890-4ad7-95e5-96bd6d7976f9"
   },
   "route": {
     "class": "feature",

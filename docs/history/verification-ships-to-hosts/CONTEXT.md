@@ -135,6 +135,7 @@ that decision already draws.
 
 None. All five decisions are locked.
 
+<!-- bee:not-a-deferral: this heading names the shaping-to-planning handoff slot, and every question under it was answered in plan.md's Discovery and Open Questions. It documents where a question travels, not a promise to act later. -->
 ### Deferred To Planning
 
 - [ ] Does the renderer learn `.bee/verify/` as a second source root, or does the
@@ -146,7 +147,9 @@ None. All five decisions are locked.
 - [ ] Does Codex's runtime read `.agents/skills/` for a non-`bee-*` skill the
       same way it reads a `bee-*` one? — verify before D3 is called done.
 
-## Deferred Ideas
+<!-- /bee:not-a-deferral -->
+
+## Deferred Ideas — trigger `the-three-deferred-siblings-of-this-feat__0d3e4f89`
 
 - A progress test for `bee herding control-loop` (it counts failures, never
   progress) — separate feature; recorded in
@@ -156,8 +159,10 @@ None. All five decisions are locked.
 - `.bee/expertise/changes.md`, the missing code-shape craft file — separate
   feature; the roadmap ranks it second.
 
+<!-- bee:not-a-deferral: the handoff note describes which artifact downstream steps read. It names the deferred-to-planning slot as a location, never as work this feature still owes. -->
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads the
 locked decisions, the code context, and the deferred-to-planning questions.
 D4 is the boundary: this feature adds no proof tier and no door.
+<!-- /bee:not-a-deferral -->

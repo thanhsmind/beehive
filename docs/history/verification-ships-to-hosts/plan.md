@@ -93,9 +93,9 @@ Rejected, one line each:
   namespace — still routes a host-authored, unversioned source through an
   identity anchor and a three-version preflight that only have meaning for an
   engine-side source.
-- **Ledger-derived prune** (claim 9) — the only safe prune shape, and correct;
-  deferred, because render-only needs it only if staleness proves to be a real
-  problem, and D1 already assigns staleness to a skill.
+- **Ledger-derived prune** (claim 9) — the only safe prune shape, and correct; deferred under trigger `staleness-in-a-host-repo-s-rendered-veri__0d3e4f89`.
+  Render-only needs it only if staleness proves to be a real problem, and D1
+  already assigns staleness to a skill.
 - **Write straight into the runtime homes at generation time** — three
   hand-maintained duplicates with no anchored source, and no drift repair on a
   teammate's fresh clone.

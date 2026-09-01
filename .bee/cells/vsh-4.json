@@ -108,6 +108,51 @@
     "warnings": [
       "advisory: this cap's commit changes 674 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "two consent moments with the measured wall clock",
+            "status": "PASS",
+            "evidence": "SKILL.md:141-158 fed by :132",
+            "id": "two-consent-moments-with-the-measured-wall-clock"
+          },
+          {
+            "name": "append never replace, array case, append-twice guard",
+            "status": "PASS",
+            "evidence": "SKILL.md:166-181",
+            "id": "append-never-replace-array-case-append-twice-gua"
+          },
+          {
+            "name": "bash prefix with its reason in the same block",
+            "status": "PASS",
+            "evidence": "SKILL.md:183-195; write_file_atomic is fs::write + rename, so no exec bit",
+            "id": "bash-prefix-with-its-reason-in-the-same-block"
+          },
+          {
+            "name": "config.json path cites the real refusal",
+            "status": "PASS",
+            "evidence": "registry_payload.json config.set unavailable.fix matches the quoted sentence",
+            "id": "config-json-path-cites-the-real-refusal"
+          },
+          {
+            "name": "five rendered copies byte-identical to source",
+            "status": "PASS",
+            "evidence": "10/10 IDENTICAL across all five trees",
+            "id": "five-rendered-copies-byte-identical-to-source"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T10:13:29.693Z"
+      }
+    ]
   }
 }
