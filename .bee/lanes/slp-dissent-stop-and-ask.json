@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Let me check the most recent supervisor records and verify the recovery candidates' run_state before judging.",
-    "asked_at": "2026-09-01T10:09:30.359Z",
-    "session": "8682923f-1890-4ad7-95e5-96bd6d7976f9"
+    "subject": "All six surfaces read clean: one live worker (cell pcs-2, ~5 minutes into a small-lane cell, fresh heartbeat, not stalled), two recovery can",
+    "asked_at": "2026-09-01T13:32:49.181Z",
+    "session": "c0056449-069d-4e20-b3f7-43c47a2e1659"
   },
   "route": {
     "class": "feature",

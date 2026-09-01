@@ -1,0 +1,73 @@
+{
+  "id": "pcs-1",
+  "feature": "plan-conflicts-scope",
+  "lane": "small",
+  "role": "test",
+  "title": "Prove derive floods a large decision store, red-first",
+  "action": "Add a red-first test beside the existing plan-conflicts tests in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs. Build a synthetic store of at least 200 active decisions whose text uses ordinary bee vocabulary (route, class, state, name, write, tests, planning, release ...), plus a feature whose cells produce a term set of roughly 30 such terms. Assert that derive_candidates returns a PROPORTIONATE list — pick the assertion so it FAILS on today's code (which returns hundreds) and passes once pcs-2 lands. Also assert the small-store case is untouched: with a two-decision fixture, derive returns exactly what it returns today. Read the existing fixtures (write_matching_cell, write_decisions_fixture, write_rule_home_fixture, around tests.rs:2521-2625) and reuse their shape rather than inventing a new one.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast -p bee --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "The new test exists and FAILS on the unmodified tree, with a message naming the candidate count it saw. The pre-existing derive tests still pass untouched.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [
+    "99b8003a-8ad4-4b58-b0ad-45fb3d14714b"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+    "docs/history/plan-conflicts-scope/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "run on the tree BEFORE pcs-2, the new test fails and its message names the candidate count",
+      "every pre-existing test in state_group/tests.rs still passes",
+      "the synthetic store has at least 200 active decisions, so it exercises D3's floor rather than sitting under it"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pcs-1",
+    "outcome": "Red-first row pins derive to a proportionate candidate list on a 241-decision store; it fails today naming 241, and two green rows guard the fixture premise and D3 small-store floor",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: Test-only cell: it adds rows to state_group/tests.rs and changes no behavior, so no owned skill of area workflow-state has anything to restate. The behavior change, and any skill sync it earns, belongs to pcs-2."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T13:27:46.619Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T13:20:24.700Z",
+    "sync_ack": "Test-only cell: it adds rows to state_group/tests.rs and changes no behavior, so no owned skill of area workflow-state has anything to restate. The behavior change, and any skill sync it earns, belongs to pcs-2.",
+    "mistakes": [
+      {
+        "wrong": "Composed the bee cells finish flags before reading bee cells finish --help, and the first call died on an opaque unsupported argument shape refusal",
+        "better": "reading the help for the completion verb first would have saved the round trip"
+      }
+    ],
+    "report": {
+      "outcome": "Red-first row pins derive to a proportionate candidate list on a 241-decision store; it fails today naming 241, and two green rows guard the fixture premise and D3 small-store floor",
+      "commit": "95b67001054ff9607693d950690612c9c7f46f63",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast -p bee --manifest-path packages/bee-rs/Cargo.toml — green: 3292 passed, 1 failed, every integration binary ok; the single failure is the new derive_stays_proportionate_against_a_large_decision_store, red BY DESIGN pending pcs-2, panicking with derive returned 241 candidates — the whole -p bee suite is the scope because the change adds rows to a shared test module and the acceptance requires proving every pre-existing row untouched",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "Composed the bee cells finish flags before reading bee cells finish --help, and the first call died on an opaque unsupported argument shape refusal — reading the help for the completion verb first would have saved the round trip"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

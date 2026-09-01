@@ -466,6 +466,13 @@
     "runtimes",
     "render",
     "deletion-domain",
-    "consent"
+    "consent",
+    "impact",
+    "allowlist",
+    "d13",
+    "interlock",
+    "convention",
+    "measurement",
+    "method"
   ]
 }

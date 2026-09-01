@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "feature": "cockpit-enumerated-surface",
+  "mode": "high-risk",
+  "phase": "planning",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"cockpit-enumerated-surface\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"cockpit-enumerated-surface\" (lane).",
+  "created_at": "2026-09-01T10:31:44.680Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Guard đúng: tôi ghi ba quyết định **sau** consult, nên consult thành cũ. Cập nhật digest cho khớp trạng thái cuối rồi ghi lại.",
+    "asked_at": "2026-09-01T12:33:27.919Z",
+    "session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "high-risk",
+    "flags": [
+      "audit-security",
+      "covered-contract-change",
+      "public-contracts"
+    ],
+    "product_files": 1,
+    "rationale": "Narrowing the tool surface of two autonomous cockpit panes that run with bypassPermissions inside a host repo. audit-security is a hard-gate flag, so the lane is high-risk by rule even though the code change is one function. The live risk is the inverse of the usual one: too narrow a list refuses the dispatch pane at 3am with no human present to widen it, which is bee's own arm-the-remedy-first pattern.",
+    "updated_at": "2026-09-01T10:31:52.908Z",
+    "feature": "cockpit-enumerated-surface"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-01T12:32:44.566Z",
+    "feature": "cockpit-enumerated-surface",
+    "newest_decision_id": "b1b377fc-200e-47ec-8410-fa2065db3866",
+    "plan_sha256": "absent",
+    "advisor": "plan-step consult, 2 seats + user resolution + measured grammar",
+    "digest_head": "# Plan-step consult — cockpit-enumerated-surface (2026-09-01)\n\nTwo seats, a recorded deviation from the five-seat wave: the question is bounded\nby a locked decision, so value/alternatives/user-impact have no purchase.\nBoth seats overturned the drafted shape.\n\n## THE SHAPE-INVALIDATING FACT (facts-gaps)\n\n`herding-orchestration D13` requires the herdr cockpit arms to stay\n**byte-identical** to the deleted `control-loop.sh`, pinned by two tests\n(`control_loop.rs:827` `default_argv_is_byte_identical"
+  }
+}

@@ -29,10 +29,10 @@
     "feature": "pstack-adoption"
   },
   "advisor_ref": {
-    "consulted_at": "2026-09-01T12:42:08.790Z",
+    "consulted_at": "2026-09-01T12:53:44.151Z",
     "feature": "pstack-adoption",
-    "newest_decision_id": "b2a5d44e-7573-4efd-be9b-5b708eb41f89",
-    "plan_sha256": "a126ca580eda8bfde31df91bec2d7f2fb028dbfecc9e3b1dbbbba908e5ad0cd2",
+    "newest_decision_id": "2872b041-5575-488e-b594-09e6e8f57074",
+    "plan_sha256": "5ad52a11ca05ffdd6d52564f97b7976538f1a840d9775f5be8a388acffaec001",
     "advisor": "hat-wave-3seat (opus,opus,sonnet)",
     "digest_head": "# pstack-adoption — plan-step hat wave synthesis (3 seats)\n\nSeats: hat-facts-gaps (opus), hat-alternatives (opus), hat-user-impact (sonnet).\nSix blockers raised; all folded into plan revision 2. Three changed the shape.\n\n## Shape-changing\n\n1. CONCURRENCY WAS FALSE. Revision 1 said phases 3/4 share no files with\n   phase 2. Every skill file has five generated copies and `bee dev regen`\n   rewrites one shared release manifest\n   (release_manifest.rs:94). Skill-touching cells are SERIAL.\n2. \"class "
   }

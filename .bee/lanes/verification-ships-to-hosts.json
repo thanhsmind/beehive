@@ -13,8 +13,13 @@
   "summary": "Feature \"verification-ships-to-hosts\" started at phase \"planning\" (lane).",
   "next_action": "bee close finished \"verification-ships-to-hosts\" — feature is closed.",
   "created_at": "2026-09-01T08:47:00.182Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Cơ chế cần đúng **thẻ** `impact-deferral`, không phải thẻ tôi đặt. Ghi lại cho đúng cửa, và nói thật trong nội dung.",
+    "asked_at": "2026-09-01T10:19:00.995Z",
+    "session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
