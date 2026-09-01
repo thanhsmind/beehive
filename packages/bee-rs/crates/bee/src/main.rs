@@ -23,6 +23,7 @@ mod lock;
 mod nested_checkout;
 mod onboard;
 mod path_identity;
+mod principles;
 mod registry;
 mod roots;
 mod router;
