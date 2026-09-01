@@ -19,8 +19,8 @@ as the recipe.
 
 ## Driving conventions
 
-- Invoke `control-bee` by its literal absolute path
-  (`/home/thanhsmind/Projects/goglbe/beehive/.claude/skills/verify-bee/control-bee`).
+- Invoke `control-bee` by its literal path from the repo root
+  (`.claude/skills/verify-bee/control-bee`).
   A shell variable in command position is refused by bee's write guard.
 - Every recipe starts from a freshly launched sandbox unless it says otherwise.
 - Run bee commands through `control-bee cli -- <args>`; run git and other tools

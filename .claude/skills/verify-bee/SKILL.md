@@ -21,8 +21,10 @@ Everything below runs through one script:
 .claude/skills/verify-bee/control-bee
 ```
 
-Run it by its **literal absolute path**, never through a shell variable
-(`"$C" put ...` is refused — see Gotchas).
+Run it by that **literal path**, from the repo root (the real checkout or a
+worktree of it — the script resolves the repo from its own location, so cwd only
+has to make the path above resolve). Never put it in a shell variable:
+`"$C" put ...` is refused — see Gotchas.
 
 ## Launch
 
@@ -31,8 +33,8 @@ no server to keep alive. "Launch" therefore means *build the binary once, then
 create one disposable sandbox repo per run*.
 
 ```bash
-/home/thanhsmind/Projects/goglbe/beehive/.claude/skills/verify-bee/control-bee build
-/home/thanhsmind/Projects/goglbe/beehive/.claude/skills/verify-bee/control-bee launch
+.claude/skills/verify-bee/control-bee build
+.claude/skills/verify-bee/control-bee launch
 ```
 
 `build` runs `cargo build --release --manifest-path packages/bee-rs/Cargo.toml`
@@ -64,7 +66,7 @@ Teardown is `control-bee cleanup` (see Cleanup).
 Run this first, and again after anything surprising:
 
 ```bash
-/home/thanhsmind/Projects/goglbe/beehive/.claude/skills/verify-bee/control-bee doctor
+.claude/skills/verify-bee/control-bee doctor
 ```
 
 It is read-only and answers "is this instance worth driving?" — it checks that
@@ -153,7 +155,7 @@ Proof standards:
 ## Cleanup
 
 ```bash
-/home/thanhsmind/Projects/goglbe/beehive/.claude/skills/verify-bee/control-bee cleanup
+.claude/skills/verify-bee/control-bee cleanup
 ```
 
 It removes `$VERIFY_HOME/run/<run-id>` — the sandbox *and* any sibling worktrees
@@ -174,7 +176,7 @@ or registered worktree behind.
   refuses a Bash command whose write target still carries an unexpanded `$VAR`,
   refuses a write that follows a `cd` in the same compound command, and refuses
   a redirect to an absolute path outside the worktree. That is why `control-bee`
-  exists and why you must call it by its literal absolute path — `"$C" put x`
+  exists and why you must call it by its literal path — `"$C" put x`
   gets refused on the `$C`. Use `control-bee put` instead of `> file`.
 - **`bee cells cap --no-mistakes` does not work in either form.** Bare, it is
   refused as `unsupported_argument_shape`; with a value, the cap succeeds and
@@ -207,7 +209,7 @@ or registered worktree behind.
 `control-bee` is the only script. It is executable and self-documenting:
 
 ```bash
-/home/thanhsmind/Projects/goglbe/beehive/.claude/skills/verify-bee/control-bee --help
+.claude/skills/verify-bee/control-bee --help
 ```
 
 Subcommands: `build`, `bin`, `paths`, `launch`, `doctor`, `cli`, `sh`, `put`,
