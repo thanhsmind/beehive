@@ -233,6 +233,56 @@ This is the investigation route (per D3, decision `f1ffa7bd`): the existing
 `research` class, no new route and no new lane. Nothing yet ENFORCES step 1 —
 read-only is craft here, not a guard (backlog `p-69bee217`).
 
+### feature
+
+1. Name the DATA shape first — the record the feature turns on, before any
+   verb, flag or screen reads it.
+2. Build a walking skeleton end to end, with no stub left on that path.
+3. Build the CURRENT slice only; headline the rest and leave it out of the
+   cells.
+4. Prove the user-visible path, not only the unit sitting under it.
+5. Sync `docs/knowledge/` in the SAME change when behavior moves — it is the
+   state layer, not a write-up.
+
+A green unit behind a path nobody can walk is not a result.
+
+### docs
+
+1. Read what the bundle already holds for the area before writing a line.
+2. Extend the document that owns the area; a near-duplicate filed beside it
+   splits one truth into two that drift apart.
+3. Decide which side is wrong — the doc or the code — and fix THAT one.
+4. Resolve every path and command you write: open it, or run it.
+5. Prove with parity and pointer checks, not with tests.
+6. Name what is still uncovered.
+
+A second document saying the same thing is not coverage.
+
+### release
+
+1. Run the repo's release script end to end — in bee, `scripts/release.sh
+   <VERSION>`. The script IS the release; a hand-walked checklist is a step
+   that gets skipped.
+2. Let the declared suite run BEFORE anything is tagged. Skipping it is a flag
+   you own out loud, never a quiet shortcut.
+3. Wait for the script's final `OK` line — tag pushed, release CI green,
+   published assets verified.
+4. Re-run the same version when a run dies mid-flight; the script is
+   idempotent and picks the release back up.
+
+A release commit without that `OK` line is not a release.
+
+### spike
+
+1. Write the question as a YES/NO before you start.
+2. Timebox it, and say the box out loud.
+3. Keep the throwaway under `.bee/spikes/<feature>/` — the ANSWER is the
+   deliverable, the code is not (the shape body is named above, under "Shape
+   bodies by mode").
+4. Record the answer with `bee decisions log`, then DELETE the spike.
+
+A spike that becomes the implementation was never a spike.
+
 ## Cell quality rules
 
 A cell is an executable prompt a cold worker can pick up with zero session
