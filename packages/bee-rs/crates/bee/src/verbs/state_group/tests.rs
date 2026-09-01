@@ -2754,6 +2754,197 @@ use std::time::Instant;
         assert_eq!(CONFLICT_VERDICTS, ["compatible", "conflicts", "retires-prior"]);
     }
 
+    // ── plan-conflicts-scope: derive must stay PROPORTIONATE ───────────────
+    //
+    // Red-first for the derive flood (feature plan-conflicts-scope). Measured
+    // on this repo's live store — 2589 active decisions, the 31 terms one
+    // 9-file feature's cells produce — today's `hits >= 2` rule returns 694
+    // candidates, each of which needs its own `verdict` call before
+    // `gate --merge` opens. The defect is a FIXED >= 2 threshold meeting an
+    // UNBOUNDED term set: 30 moderately common words produce hundreds of
+    // meaningless two-hit coincidences, so a bigger plan buys more noise, not
+    // more precision.
+    //
+    // The fix (locked D2/D3/D4) lands in the TERM SET, never in the scorer:
+    // a term whose document frequency across the active store exceeds 3% is
+    // dropped, the filter arms only from 200 decisions up, and the surviving
+    // list is ranked by hit count and capped at 50.
+
+    /// Ordinary bee vocabulary — every word here is one this repo's own
+    /// decisions use constantly, and every one is >= 4 characters, so each
+    /// survives `normalize_term`'s length-and-stopword filter and reaches the
+    /// scorer. Thirty of them is the size of a real 9-file feature's term set.
+    const FLOOD_TERMS: [&str; 30] = [
+        "route", "class", "state", "name", "write", "tests", "planning", "release", "cells",
+        "gate", "worker", "lane", "record", "verdict", "store", "active", "session", "review",
+        "scope", "plan", "terms", "decision", "phase", "docs", "branch", "commit", "merge",
+        "hooks", "check", "reserve",
+    ];
+
+    /// The rare words this plan ALSO carries — none of them appears anywhere
+    /// in the flooded store below, so the one decision that does share them is
+    /// a real conflict rather than a coincidence.
+    const NEEDLE_TERMS: [&str; 4] = ["backpressure", "quarantine", "derive", "queue"];
+
+    /// A synthetic store of `n` active decisions plus one needle. Each row
+    /// takes a rotating six-word window of `FLOOD_TERMS`, so every term lands
+    /// in a fifth of the store and NO single term dominates — the same shape
+    /// the live store has, where the worst term is only 15.9%.
+    fn write_flooded_decision_store(root: &Path, n: usize) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let mut lines: Vec<String> = Vec::new();
+        for i in 0..n {
+            let words: Vec<&str> =
+                (0..6).map(|k| FLOOD_TERMS[(i * 7 + k) % FLOOD_TERMS.len()]).collect();
+            lines.push(
+                serde_json::to_string(&json!({
+                    "type": "decide",
+                    "id": format!("flood-{i:04}"),
+                    "date": "2026-07-01",
+                    "decision": format!(
+                        "The {} owns the {}; the {} follows the {}, {} and {}.",
+                        words[0], words[1], words[2], words[3], words[4], words[5]
+                    ),
+                    "tags": []
+                }))
+                .unwrap(),
+            );
+        }
+        lines.push(
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-needle",
+                "date": "2026-07-02",
+                "decision": "Quarantine a flooded candidate list behind backpressure, never behind a longer queue.",
+                "tags": []
+            }))
+            .unwrap(),
+        );
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+    }
+
+    /// The plan surface: three cells whose titles carry the thirty ordinary
+    /// terms, plus one whose title and path carry the four rare ones.
+    fn write_flood_plan_cells(root: &Path) {
+        for (n, chunk) in FLOOD_TERMS.chunks(10).enumerate() {
+            let id = format!("pcs-flood-{n}");
+            write_plan_cell(
+                root,
+                &id,
+                json!({
+                    "id": id.clone(), "feature": "flooded", "status": "open",
+                    "title": chunk.join(" "),
+                    "files": [], "affects_skills": [], "affects_specs": []
+                }),
+            );
+        }
+        write_plan_cell(
+            root,
+            "pcs-flood-rare",
+            json!({
+                "id": "pcs-flood-rare", "feature": "flooded", "status": "open",
+                "title": "Add backpressure to the derive queue",
+                "files": ["packages/bee-rs/crates/bee/src/verbs/state_group/quarantine.rs"],
+                "affects_skills": [], "affects_specs": []
+            }),
+        );
+    }
+
+    /// The premise of the flood test, pinned so a later edit to the fixtures
+    /// cannot quietly make the flood test trivial: the plan really does
+    /// produce ~34 ordinary terms, and the store really is over D3's floor.
+    #[test]
+    fn the_flood_fixture_is_a_large_store_and_an_ordinary_term_set() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_flooded_decision_store(root, 240);
+        write_flood_plan_cells(root);
+
+        let active = ok(crate::verbs::decisions::active_decisions(root, false));
+        assert!(
+            active.len() >= 200,
+            "the fixture must sit ABOVE D3's 200-decision floor, not under it: {} active",
+            active.len()
+        );
+
+        let terms = plan_terms(&ok(plan_cells(root, "flooded")));
+        for t in FLOOD_TERMS {
+            assert!(terms.contains(&t.to_string()), "the plan must carry the ordinary term {t}");
+        }
+        for t in NEEDLE_TERMS {
+            assert!(terms.contains(&t.to_string()), "the plan must carry the rare term {t}");
+        }
+        assert!(
+            (30..=40).contains(&terms.len()),
+            "roughly thirty terms, the size of a real feature's plan: {terms:?}"
+        );
+    }
+
+    /// RED until the term set learns document frequency (D2/D3/D4). A 34-term
+    /// plan against a 241-decision store must not hand the user hundreds of
+    /// candidates to verdict one CLI call at a time.
+    #[test]
+    fn derive_stays_proportionate_against_a_large_decision_store() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_flooded_decision_store(root, 240);
+        write_flood_plan_cells(root);
+
+        let candidates = ok(derive_candidates(root, "flooded"));
+        assert!(
+            candidates.len() <= 50,
+            "derive returned {} candidates for a 34-term plan over 241 active decisions — \
+             every one of them needs its own verdict before gate --merge opens. D2 drops any \
+             term over 3% document frequency and D4 caps the ranked list at 50.",
+            candidates.len()
+        );
+
+        // Proportionate is not empty: the ONE decision that shares the plan's
+        // own rare terms must survive the cut, or the fix traded a flood for
+        // a blind spot.
+        let ids: Vec<String> = candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert!(
+            ids.contains(&"dec-needle".to_string()),
+            "the real conflict must survive the narrowing: {ids:?}"
+        );
+    }
+
+    /// D3's floor, from the other side: with the two-decision fixture the
+    /// older rows already use, derive returns exactly what it returns today.
+    /// Document frequency is noise at that size — one hit in two decisions is
+    /// 50% — so a small store, and a freshly onboarded host repo, must not
+    /// move at all.
+    #[test]
+    fn derive_leaves_a_small_decision_store_exactly_as_it_is_today() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        assert_eq!(ok(crate::verbs::decisions::active_decisions(root, false)).len(), 2, "far under D3's 200 floor");
+
+        let candidates = ok(derive_candidates(root, "f1"));
+        let ids: Vec<String> = candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert_eq!(
+            ids,
+            vec!["dec-match".to_string(), "koh-plan-conflicts".to_string()],
+            "a small store keeps today's list byte for byte: {}",
+            jsjson::stringify(&Value::Array(candidates.clone()))
+        );
+        assert_eq!(candidates[0]["kind"], json!("decision"));
+        assert_eq!(
+            candidates[0]["title"],
+            json!("Conflict candidates are derived at plan time, never first at cap."),
+            "the decision title is untouched by any narrowing"
+        );
+        assert_eq!(candidates[1]["kind"], json!("rule"));
+        for c in &candidates {
+            assert_eq!(c["verdict"], Value::Null);
+            assert_eq!(c["note"], Value::Null);
+        }
+    }
+
     // ── merge-ready-fact D2: the uat gate flips the stored fact ────────────
     //
     // `bee gate --name uat` is the ONE writer of `merge_ready.uat`. It flips
