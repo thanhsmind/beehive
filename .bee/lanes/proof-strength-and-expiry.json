@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"proof-strength-and-expiry\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"proof-strength-and-expiry\" (lane).",
+  "next_action": "Merged into main at 9cd49b6; reload the product and test \"proof-strength-and-expiry\", then either approve uat (\"bee gate --name uat --approved true --lane proof-strength-and-expiry\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-01T15:05:30.274Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: proof-strength-and-expiry",
+    "asked_at": "2026-09-01T15:55:44.303Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -35,12 +40,5 @@
     "plan_sha256": "57f9d1412a924c54fe612fc21f2059b9165eb5851a08580e4a16c7c3956b9f4d",
     "advisor": "hat-wave-2seat (opus,opus)",
     "digest_head": "---\nartifact_contract: bee-plan/v1\nmode: standard\n# approved_gate2: <unset>\n---\n\n# Plan: Proof strength and expiry\n\nMode: `standard` — 3 risk flags: public-contracts, covered-contract-change, multi-domain\nWhy this is the least workflow that protects the work: the vocabulary is ~10\nlines in ONE function that already does exactly this job for `red`. Everything\nexpensive is teaching cost, and the plan's shape is chosen to pay that bill\nprecisely rather than broadly.\n\n**Revision 2.** A two-seat hat "
-  },
-  "merge_ready": {
-    "since": "2026-09-01T15:52:29.229Z",
-    "branch": "wt/proof-strength-and-expiry",
-    "worktree_id": "beehive--wt--proof-strength-and-expiry",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
