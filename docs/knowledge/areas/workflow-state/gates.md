@@ -473,6 +473,30 @@ a malformed record has earned none.
   two preconditions in `set_gate.rs`, runs AFTER them in the merged path,
   and takes a single pre-lock call site — a plan-file read has no
   peek/lock record race (named deviation from the twins' two-site shape).
+- R140 — The plan-conflict term set drops terms that saturate the decision
+  store, so the derived candidate list stays proportionate to the plan
+  (plan-conflicts-scope D1/D2/D3/D4/D5, cells pcs-1 and pcs-2, 2026-09-01).
+  R136's `>= 2 term hits` rule is a FIXED threshold meeting an UNBOUNDED term
+  set: a four-cell plan produces ~31 terms, and 31 moderately common terms
+  yield hundreds of meaningless two-hit coincidences. Measured on bee's own
+  store — 2589 active decisions — the rule returned 694 candidates, each
+  needing its own `plan-conflicts verdict` call before the merged gate (R138)
+  would open. It scaled the wrong way: a bigger plan got more noise, not more
+  precision. The fix lands in the TERM SET, never in the scorer, which is the
+  seam `plan_conflicts.rs` already named for the older length-and-stopword
+  filter: `count_term_hits` and `conflict_candidates` are untouched, so
+  `decisions log`'s own hints are unchanged. A term whose document frequency
+  exceeds `TERM_DF_MAX_PERCENT` (3) of the active store is dropped — 694
+  candidates became 36 — and the cut applies only from
+  `TERM_DF_MIN_DECISIONS` (200) rows up, because document frequency is
+  meaningless at N=2 and a freshly onboarded host repo, like the small
+  fixtures, must behave exactly as before. `MAX_DECISION_CANDIDATES` (50)
+  is the rail above that for a store ten times this size; a list the cap
+  truncates SAYS so in the verb's own output rather than truncating silently,
+  and the ranking is applied only when the cap actually bites, so an under-cap
+  list keeps its previous order. The stored `conflict_review` shape is
+  unchanged. Proven end to end: the same lane that derived 753 candidates
+  before the fix derived 15 after it.
 - R104 — An approvals map merges over the gate defaults only when it is stored as
   an object; every other shape yields the defaults untouched, and no shape is
   read partially or refused (js-parity-cleanup D2, cell jp-4, 2026-08-04).
