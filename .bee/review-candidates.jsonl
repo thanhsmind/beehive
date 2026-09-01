@@ -155,3 +155,4 @@
 {"id":"40e5806f-5a3e-4688-847f-f4361e31ba38","type":"candidate","date":"2026-08-28T14:51:13.740Z","feature":"slp-blind-lanes-procedure","head":"4edd9ac9c98bab745a8175eb3ce46b563290fb80","mode":"high-risk","baseline":"e546dcc3","cells":[]}
 {"id":"259f0941-fe90-4f4e-aa78-8f9d7ca033f7","type":"candidate","date":"2026-08-31T00:24:37.197Z","feature":"dispatch-one-door","head":"b6b5259b","mode":"standard","baseline":null,"cells":["dod-1","dod-2","dod-3","dod-4","dod-5","dod-6"]}
 {"id":"8a4e12f5-d3ea-4fd6-a578-562653527646","type":"candidate","date":"2026-09-01T16:02:59.430Z","feature":"proof-strength-and-expiry","head":"8aed841df4b647461c2a571cf62f69e9b6ef3493","mode":"standard","baseline":"e2072df5e0c4a37956406148f9d2b43c307be35a","cells":[]}
+{"id":"a7f2c537-33d5-4e26-b474-059084e131e7","type":"candidate","date":"2026-09-01T17:33:10.804Z","feature":"pstack-gaps","head":"f06a33863a215a83a4c76ceeef450fcdeec18e6e","mode":"standard","baseline":null,"cells":[]}
