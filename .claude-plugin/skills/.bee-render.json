@@ -31,6 +31,62 @@
       "sha256": "4c7bd1bc99c8de5346093ab8bd62b01da06feb42a5416ec89c9678ee24a32359"
     },
     {
+      "name": "bee-principle-chestertons-fence",
+      "sha256": "0c03bd95e29187e2366d70bffadca677ce234bdcfbd8bde7e9accf76f5c21876"
+    },
+    {
+      "name": "bee-principle-crash-site-versus-fault-site",
+      "sha256": "3b8b56a75c26e576559021e1fe1c55b58e0f45513940d1981df7e95aa79fc4b3"
+    },
+    {
+      "name": "bee-principle-never-invent-behavior-neither-side-has",
+      "sha256": "4230d8c46673ee72bfed1242239c1ddcb45ac5b6b0841e6f6138138c30ee74b3"
+    },
+    {
+      "name": "bee-principle-one-fact-one-home",
+      "sha256": "0720eda6b4cbcc3359b89e42e385c08b57960919f1d1ea39884ea50683037da9"
+    },
+    {
+      "name": "bee-principle-record-at-the-moment-of-settlement",
+      "sha256": "c6b386a5675f78f5b93dcdcce45a9ade008d15a018ba08e7f1ecc81a78f1a1b8"
+    },
+    {
+      "name": "bee-principle-red-before-green",
+      "sha256": "1053809e40c678dc427c330a3f547d1b3c73d3bc452d98f7f7ae70f6170dc406"
+    },
+    {
+      "name": "bee-principle-reproduce-first",
+      "sha256": "6c8aa15ceb4dc075f19899c2222df9ad0d92114204d0fd6656bced7c11324811"
+    },
+    {
+      "name": "bee-principle-single-source-of-truth",
+      "sha256": "945e94e078d5cd6a432abffb937eb799108edc12fa6af0a247f087ea426036d4"
+    },
+    {
+      "name": "bee-principle-smallest-honest-shape",
+      "sha256": "54bd3a41fb00cfc2f56c3c459823493cbb029aec52e7e0688f4389ac32eaf669"
+    },
+    {
+      "name": "bee-principle-split-never-shrink",
+      "sha256": "57645a2ca90bb64bf69409c3ce56ce7997bc7264571795b96774a1b9e46bea66"
+    },
+    {
+      "name": "bee-principle-test-behavior-not-structure",
+      "sha256": "def43e3acdf2da92eca87c353fff4bcc787081b24e2e940f2618dc98e06aae38"
+    },
+    {
+      "name": "bee-principle-the-deletion-test",
+      "sha256": "25b2806b4d7fb75b59d5f2f42194530884e6c06a06f2c81e73ff85e85a550cb1"
+    },
+    {
+      "name": "bee-principle-the-rebuild-test",
+      "sha256": "baf2815aeb208bf3a44aae9513e25cec6eaecb83baa47da7e15b5b2cb949307c"
+    },
+    {
+      "name": "bee-principle-verify-before-reporting",
+      "sha256": "8e04a461970c6ac700a257d978ad16d1b2953857b72aa87705c365c76650e74e"
+    },
+    {
       "name": "bee-researching",
       "sha256": "b0441832a4e689dd70f289125a1b5e1eab2398a865f88c86876ad7adacc06d01"
     },

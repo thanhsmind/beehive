@@ -1,5 +1,5 @@
 ---
-name: principle-red-before-green
+name: bee-principle-red-before-green
 description: "Apply when you fix a reported bug or a failing behavior, before you write the fix. Reproduce the bug as a test, watch it fail for the reported reason, then fix — and write 'green' only beside fresh output."
 ---
 

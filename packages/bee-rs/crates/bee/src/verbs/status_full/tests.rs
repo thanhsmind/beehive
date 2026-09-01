@@ -382,8 +382,8 @@ use crate::version::BEE_VERSION;
             packet.get("principles"),
             Some(&json!([
                 "- Principles (class=refactor) — name each one you apply and the decision it changed:",
-                "  - `principle-red-before-green` — watch it fail for the reported reason before you fix it",
-                "  - `principle-one-home` — a rule lives in one place and every other surface points at it",
+                "  - `bee-principle-red-before-green` — watch it fail for the reported reason before you fix it",
+                "  - `bee-principle-one-home` — a rule lives in one place and every other surface points at it",
             ]))
         );
         let text = render_orient_text(&packet);
@@ -392,7 +392,7 @@ use crate::version::BEE_VERSION;
             .iter()
             .position(|l| l.starts_with("- Principles (class=refactor)"))
             .expect("principles block in the orient text");
-        assert!(lines[at + 1].starts_with("  - `principle-red-before-green`"));
+        assert!(lines[at + 1].starts_with("  - `bee-principle-red-before-green`"));
         assert!(lines[at + 3].starts_with("skill: "));
     }
 
