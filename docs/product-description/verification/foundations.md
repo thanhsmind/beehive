@@ -4,6 +4,7 @@ How to run this file: `bee` in every Steps cell means the pinned binary — beeh
 
 ## foundations/invocation.md
 
+<!-- bee:not-a-deferral: a verification-probe table; "later" describes what a probe observes next, not work put off -->
 | ID | P | Needs | Claim | Setup | Steps | Expected | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | INVO-01 | P1 | scratch | Every argv shape gets an answer — served, refused, or unknown — never silence and never a zero exit with no output ([Summary](../foundations/invocation.md#summary)). | Scratch host repo, cwd inside it. | 1. Run `bee`, `bee frobnicate`, `bee capture bogus`, `bee capture add extra`, `bee capture count --bogus`, each followed by `echo $?`. | Every one of the five prints at least one line and exits non-zero, or prints an answer and exits 0. No invocation is silent; no invocation exits 0 with empty stdout and empty stderr. | — |
@@ -38,6 +39,7 @@ How to run this file: `bee` in every Steps cell means the pinned binary — beeh
 | INVO-30 | P2 | scratch | A torn JSONL line is skipped fail-open by every later read ([Cancel and interrupt](../foundations/invocation.md#cancel-and-interrupt)). | Scratch host repo with at least one capture stub queued. | 1. Append a truncated line to `.bee/capture-queue.jsonl` (`printf '{"partial"' >> .bee/capture-queue.jsonl`).<br>2. Run `bee capture count`. | The count answers on stdout (the intact lines are counted), a per-line warning appears on stderr, and the exit code is 0. The command does not crash and does not exit 1. | — |
 | INVO-31 | P2 | two sessions | A sibling change is detected at the verb's read, and the refusal names the sibling ([Cancel and interrupt](../foundations/invocation.md#cancel-and-interrupt)). | Two live hooked sessions in one checkout; session A holds a cell claim. | 1. From session B, run `bee cells claim --id <the cell A holds>`. | A refusal naming session A as the holder, with a `FIX:` clause; exit 1. Nothing is written; A's claim is untouched. | — |
 | INVO-32 | P2 | codex | The Codex runtime runs the same binary with the same contract; only hook events differ ([Cancel and interrupt](../foundations/invocation.md#cancel-and-interrupt)). | A Codex runtime with bee wired. | 1. Run INVO-02, INVO-04, and INVO-13 from the Codex runtime. | Identical output text, streams, and exit codes to the Claude Code runs. Expected `blocked` until a Codex runtime is available. | — |
+<!-- /bee:not-a-deferral -->
 
 Not checkable by hand:
 
@@ -138,6 +140,7 @@ Not checkable by hand:
 
 ## foundations/gates.md
 
+<!-- bee:not-a-deferral: a verification-probe table; "later" describes what a probe observes next, not work put off -->
 | ID | P | Needs | Claim | Setup | Steps | Expected | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | GATE-01 | P1 | scratch | `bee gate --merge --approved true` sets both halves in one call and answers `Gates "shape" and "execution" set to true.` ([The simple case](../foundations/gates.md#the-simple-case)). | Scratch host repo with a lane fixture; both gates false. | 1. Run `bee gate --merge --approved true`.<br>2. Run `bee status --json 2>/dev/null`. | The exact answer line on stdout; exit 0; `approved_gates.shape` and `approved_gates.execution` both true. No other gate changed. | — |
@@ -174,6 +177,7 @@ Not checkable by hand:
 | GATE-32 | P2 | scratch | Killed before the approval is recorded, nothing is recorded; after, the stamp is atomic with the record write ([Cancel and interrupt](../foundations/gates.md#cancel-and-interrupt)). | Scratch host repo, gates false; record `approved_gates`. | 1. Launch `bee gate --merge --approved true` and `kill -9` it immediately, repeating until it dies mid-run.<br>2. Read `approved_gates` and the workflow record. | Either nothing changed at all, or both the booleans and the stamps are present — never a boolean without its stamp. | — |
 | GATE-33 | P2 | two sessions | Two sessions racing the same lane's gate serialize on the store lock; last write wins and both are stamped ([Cancel and interrupt](../foundations/gates.md#cancel-and-interrupt)). | Two live sessions on one lane, gates false. | 1. From both sessions, run `bee gate --name shape --approved true` and `--approved false` at the same moment.<br>2. Read `approved_gates` and the workflow record's stamps. | The boolean holds one of the two values (the later write); the workflow record carries a stamp for each of the two calls. No torn record. | — |
 | GATE-34 | P2 | scratch | Approvals never expire, and a pending gate outlives the session ([Cancel and interrupt](../foundations/gates.md#cancel-and-interrupt)). | Scratch host repo with `shape` approved and a second gate pending; end the session. | 1. End the session and start a new one.<br>2. Read `approved_gates` and the pending gate. | The approval is still true and the pending gate is still pending — no expiry on either side. | — |
+<!-- /bee:not-a-deferral -->
 
 Not checkable by hand:
 

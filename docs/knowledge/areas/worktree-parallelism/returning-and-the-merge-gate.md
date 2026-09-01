@@ -108,6 +108,28 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   The door therefore **calls the close door's own two dissent helpers** rather than re-deriving the
   question — one recorded deferral clears both doors, and the two can never drift into disagreeing
   about the same dissent.
+- **A third reading of the same recorded proof, and the first that refuses nothing: the
+  `proof-stale` advisory (proof-strength-and-expiry D4, decision `d1cce18d` superseding
+  `e77c93d6`; cell pse-2, commit 5c90f37c, 2026-09-01).** A cap records the commit it was taken
+  at. Nothing ever compared that commit to anything, so a proof taken before the tree moved
+  read exactly like one taken after it. `ProofCheck` now carries the commit per capped cell, and
+  the merge names the cells whose proof predates the tree being merged. It is an **advisory**:
+  it prints, and the merge lands. That is deliberate — the doors' standing contract is that they
+  CHECK recorded proof and never run tests, and an advisory keeps that contract while making the
+  staleness visible; a refusal would be a new door.
+  **The ancestry runs one way only, and the obvious direction is the wrong one.** Stale means the
+  merge base is NOT an ancestor of the cap's commit. The first wording had it inverted — stale
+  when the cap commit is not an ancestor of the merge base — which flags every cap ever taken on
+  a branch, because a branch commit descends from the base rather than preceding it. Measured on
+  this feature's own merge: base `e2072df5`, cap commit `9ad04c73`, and the literal rule flagged
+  all three of its own clean caps. The shipped direction is silent on an ordinary merge and fires
+  exactly on the event the decision names — main merged in, or history rewritten, after the proof
+  was taken. Fail-open on both edges: a cap whose commit is the `none` sentinel, and an
+  unreadable git result, are silent rather than reported stale.
+  The advisory is emitted from `phases.rs`, where the merge door actually reads proof, with its
+  own `git merge-base` call — `merge.rs`'s base is a local inside a helper whose only caller runs
+  ~150 lines after the proof read — and rendered in `handlers.rs`, the one place a merge prints,
+  so it is visible in the word output and not only under `--json`.
 - **Keeping the worktree is the default outcome now; teardown is the opt-in
   (worktree-keep-on-merge D1, supersedes worktree-reclaim D1).** On a merge that stages and
   commits something, the worktree, its branch, and its registration all stay in place, and the

@@ -173,6 +173,52 @@ govern the working residue of a cell rather than its content.
   economics retired (412e9b3a, 2026-07-31, docs/specs/test-simple.md); the
   cap-time suite run retired in turn (decisions 58ec9664 and 1f534837,
   2026-08-18).
+
+  **R16c-a — the proof line's result segment is a closed vocabulary, on the
+  write path only (proof-strength-and-expiry D1/D2/D3/D5/D6, decision
+  `cb7b14b7`, 2026-09-01; cells pse-1 and pse-3, commits 9ad04c73 and
+  d6119e49).** The recorded proof is `<command> — <result> — <scope reason>`,
+  and the middle segment used to be free text that refused only the literal
+  word `red` — so a live product run and a type-check recorded the same
+  string, which is the gap the whole rule exists to close. The segment is now
+  exactly three values, and a bare `green` is refused by name (D1):
+
+  - `green:live` — the real product or command was driven and its observable
+    result inspected.
+  - `green:unit` — automated tests passed.
+  - `green:static` — it compiled, type-checked, linted, or a parity/pointer
+    check passed; nothing was executed. Deliberately the weakest and
+    deliberately legal: a docs cell has nothing stronger to offer honestly
+    (D3).
+
+  **The write path closes; the read path stays tolerant (D2).** `bee cells
+  finish` refuses a bare `green` on a NEW cap. `feature_proof_check` — the
+  same reader `bee close` and `bee worktree merge` use — still accepts a
+  historical bare `green` on an already-capped cell, and roughly 200 archived
+  caps carry one. That split is not engineered: the check sits in
+  `parse_report_flag`, beside the existing `red` arm, over the tuple the
+  shared parser returns, and the parser itself is untouched. Closing the
+  parser instead would have closed both paths in one edit and made every past
+  feature uncloseable — a migration wearing a validation's clothes. The
+  untouched parser carries a comment saying so, and two read-path fixtures
+  carry a comment marking them as that decision's own evidence, so a later
+  sweep cannot quietly kill the proof.
+  **An example that shows the refused form teaches the refused form (D5).**
+  Every prompt, skill, product-description page, guide page and display string
+  that showed `— green —` moved to a qualified value, the worker brief states
+  the three meanings where a worker writes the line, and an allowlist fence in
+  `tests/proof_gate.rs` reads the vocabulary constant out of the source and
+  fails when a listed site loses its qualified value or drops its anchor.
+  Untouched by design (D6): the line's three-segment shape, `commands.test`,
+  what any door RUNS, and the `red` rule.
+  **Editing `packages/bee/prompts/*.md` is a binary change.** The prompt is
+  embedded in the compiled engine and compared against disk at dispatch time;
+  a skew makes `bee dispatch prepare --kind cell` refuse EVERY worker with a
+  misleading `unsupported argument shape`, because the skew arm delegates to a
+  Node fallback that no longer exists. Rebuild and reinstall the vendored
+  binary in the same breath as the prompt edit — the same reinstall discipline
+  `docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md`
+  already names, reaching one file further than anyone had noticed.
 - **R17** — There is one canonical scratch home (`f21efe6e`): every ephemeral
   file bee writes for its own working purposes — judge payloads, evidence/
   deviation files, batch inputs, digests, verify logs, probe/debug scripts,

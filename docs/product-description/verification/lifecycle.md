@@ -107,6 +107,7 @@ Not checkable by hand:
 
 ## lifecycle/planning.md
 
+<!-- bee:not-a-deferral: a verification-probe table; "later" describes what a probe observes next, not work put off -->
 | ID | P | Needs | Claim | Setup | Steps | Expected | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | PLAN-01 | P1 | scratch | `bee route --set` records `{class, lane, flags, product_files}` on the active feature ([the simple case](../lifecycle/planning.md#the-simple-case)). | fixture L-bare, session bound to lane `demo`. | 1. Run `bee route --set --class feature --lane standard --flags multi-domain --files 7`.<br>2. Run `bee route --show --json`.<br>3. `cat .bee/lanes/demo.json`. | Exit 0; the route holds `class: feature`, `lane: standard`, `flags: ["multi-domain"]`, `product_files: 7`, and lives on the lane record, not `state.json`. | — |
@@ -138,6 +139,7 @@ Not checkable by hand:
 | PLAN-27 | P2 | scratch | The slice is exactly the set of cells that exist; `bee cells ready` reads it back and `bee cells schedule` orders it into waves, with the diagnostics ([finish](../lifecycle/planning.md#finish), [edge cases](../lifecycle/planning.md#edge-cases)). | fixture L, then add three cells in one array: `demo-1` (files `a.txt`), `demo-2` (files `a.txt`), `demo-3` (deps `["demo-1"]`, files `b.txt`), plus one cell with `"files": []`. | 1. Run `bee cells ready`.<br>2. Run `bee cells schedule --feature demo`.<br>3. Read the diagnostics section. | `ready` lists only the dep-free cells. `schedule` prints `Wave 1: …` lines, puts `demo-1` and `demo-2` in different waves (shared file `a.txt`), places `demo-3` after `demo-1`, and reports the empty-files cell as a diagnostic. Exit 0. | — |
 | PLAN-28 | P3 | scratch | `--json` is standard on every planning verb; `plan-conflicts derive --json` returns the candidate list ([modifiers](../lifecycle/planning.md#modifiers)). | fixture L. | 1. Run `bee route --show --json`, `bee state plan-conflicts derive --lane demo --json`, `bee state plan-rev bump --lane demo --json`, `bee state gate --merge --approved true --lane demo --json`.<br>2. Parse each. | All four parse as JSON and exit 0; the derive payload carries `candidates` as an array. | — |
 | PLAN-29 | P1 | scratch | The bypass level decides whether Gate 2 stops for the human — `normal` covers tiny/small/standard, high-risk always stops ([modifiers](../lifecycle/planning.md#modifiers)). | Two fixtures with `gate_bypass` set to `normal` in `.bee/config.json`: one started `--mode standard`, one `--mode high-risk`, both with a review derived. | 1. In the standard fixture run `bee state gate --merge --approved true --lane demo --actor auto --bypass-level normal --reason "standard lane, covered"`.<br>2. In the high-risk fixture run the same command.<br>3. Read both stamps. | The standard lane approves, exit 0, stamped `actor: auto` with the level and reason. Record what the high-risk lane does — `normal` must not cover it, and the advisor precondition still binds either way. | — |
+<!-- /bee:not-a-deferral -->
 
 Not checkable by hand:
 
@@ -188,6 +190,7 @@ Not checkable by hand:
 
 ## lifecycle/execution.md
 
+<!-- bee:not-a-deferral: a verification-probe table; "later" describes what a probe observes next, not work put off -->
 | ID | P | Needs | Claim | Setup | Steps | Expected | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EXEC-01 | P1 | scratch | `claim` publishes `.bee/claims/<id>.json` by exclusive create with `{cell, session, ttl_seconds, claimed_at, fence_epoch}`, and the cell flips to `claimed` ([claiming](../lifecycle/execution.md#claiming)). | fixture L+cell. | 1. Run `bee cells claim --id demo-1 --worker w1 --session-id s1`.<br>2. `cat .bee/claims/demo-1.json` and `cat .bee/cells/demo-1.json`. | Exit 0. The claim file carries all five fields with `ttl_seconds: 3600`. The cell status is `claimed` with the worker and session on its trace. | — |
@@ -220,6 +223,7 @@ Not checkable by hand:
 | EXEC-28 | P2 | hooked | The reservation guard hard-blocks conflicting writes only in the `swarming` phase ([modifiers](../lifecycle/execution.md#modifiers)). | A hooked session with a reservation on `notes.txt` held by another agent, first in `planning` phase, then in `swarming`. | 1. In `planning`, try to write `notes.txt`.<br>2. Move the lane to `swarming` and try again. | Step 2 is denied and the deny names the holder and the remedy; step 1 is not hard-blocked (record what it does). Never write through the deny. | — |
 | EXEC-29 | P2 | worktree | The worker inherits its session's working directory — dispatching from main for a worktree'd feature dies on the write guard ([modifiers](../lifecycle/execution.md#modifiers)). | A hooked session in main, with a granted worktree for `demo`. | 1. Dispatch an execution worker for a `demo` cell from the main-cwd session.<br>2. Read the failure. | The worker's first write into the worktree's files is denied by the write guard; the deny names the containment remedy (move the session into the worktree). No file is written in main. | — |
 | EXEC-30 | P2 | codex | A worker on Codex runs the same verbs; its subagent audit rides different hook events ([cancel and interrupt](../lifecycle/execution.md#cancel-and-interrupt)). | A Codex runtime with bee wired. | 1. Run claim, proof, and cap for one cell from a Codex worker.<br>2. Compare the store writes with the Claude Code run. | The same claim file, trace, and cap output; only the hook events behind the audit differ. Expected `blocked` until a Codex runtime is available. | — |
+<!-- /bee:not-a-deferral -->
 
 Not checkable by hand:
 
@@ -264,6 +268,8 @@ Not checkable by hand:
 
 Not checkable by hand:
 
+<!-- bee:not-a-deferral: names the doc-deferral door's own block-and-defer shape; it defers nothing -->
 - The exact populations of the knowledge-freshness, impact, routing, and doc-deferral doors — what each reads to decide ([open questions](../lifecycle/close.md#open-questions-and-verification)). CLOS-11 checks their block-and-defer shape, which is the observable part; the inputs are a source question.
+<!-- /bee:not-a-deferral -->
 - The judge-debt door's tie to the goal-check tier table — which lanes owe which verdicts ([open questions](../lifecycle/close.md#open-questions-and-verification)) — the mapping lives in the skill layer, not the CLI.
 - Whether the promote proposal's *content* is the right proposal — a judgment about mined patterns, not a pass/fail observation.
