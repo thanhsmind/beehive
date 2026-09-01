@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pstack-adoption\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming for slice 1 (psa-0..psa-3).",
+  "next_action": "Merged into main at 1815948; reload the product and test \"pstack-adoption\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-adoption\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-01T10:48:43.673Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pstack-adoption",
+    "asked_at": "2026-09-01T14:13:26.619Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -35,12 +40,5 @@
     "plan_sha256": "5ad52a11ca05ffdd6d52564f97b7976538f1a840d9775f5be8a388acffaec001",
     "advisor": "hat-wave-3seat (opus,opus,sonnet)",
     "digest_head": "# pstack-adoption — plan-step hat wave synthesis (3 seats)\n\nSeats: hat-facts-gaps (opus), hat-alternatives (opus), hat-user-impact (sonnet).\nSix blockers raised; all folded into plan revision 2. Three changed the shape.\n\n## Shape-changing\n\n1. CONCURRENCY WAS FALSE. Revision 1 said phases 3/4 share no files with\n   phase 2. Every skill file has five generated copies and `bee dev regen`\n   rewrites one shared release manifest\n   (release_manifest.rs:94). Skill-touching cells are SERIAL.\n2. \"class "
-  },
-  "merge_ready": {
-    "since": "2026-09-01T14:11:29.481Z",
-    "branch": "wt/pstack-adoption",
-    "worktree_id": "beehive--wt--pstack-adoption",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
