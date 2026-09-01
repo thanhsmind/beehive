@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "plan-conflicts-scope",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"plan-conflicts-scope\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 3cc595e; capture what settled, then bee close --feature plan-conflicts-scope.",
+  "next_action": "bee close finished \"plan-conflicts-scope\" — feature is closed.",
   "created_at": "2026-09-01T13:18:53.423Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "`.bee/bin/bee` is gitignored — a local vendored artifact. Refreshing it atomically is what makes the fix real.",
+    "asked_at": "2026-09-01T13:43:26.368Z",
+    "session": "c021e309-e77a-4956-a752-9611003c58bd"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",

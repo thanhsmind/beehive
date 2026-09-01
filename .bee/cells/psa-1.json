@@ -13,9 +13,7 @@
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "deps": [
-    "psa-0"
-  ],
+  "deps": [],
   "decisions": [
     "1593e365-d911-4cd0-9c9b-8cee78bc61a3"
   ],
@@ -32,18 +30,49 @@
       "no value in ROUTE_CLASS_VALUES also appears in ROUTE_LANE_VALUES beyond the pre-existing docs and spike"
     ]
   },
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "w-psa-1",
+    "outcome": "perf added as the eighth route class value, with its pinned refusal updated and a happy-path test",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [
+      "placed the safety-argument comment BELOW both consts instead of above them — close.rs:393-403 and uat.rs:139-171 cite ROUTE_CLASS_VALUES / ROUTE_LANE_VALUES by line number (287-288 / 289-290), and a comment above would have shifted every one of those citations — found a better route",
+      "sync-ack: the class enum change ships without a skill edit by cell design: psa-3 owns the four skill and doc sites that name the class values, and psa-2 writes the parity test that pins them; editing a skill here would collide with a sibling cell"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-01T13:56:40.457Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T13:48:30.723Z",
+    "sync_ack": "the class enum change ships without a skill edit by cell design: psa-3 owns the four skill and doc sites that name the class values, and psa-2 writes the parity test that pins them; editing a skill here would collide with a sibling cell",
+    "mistakes": [
+      {
+        "wrong": "my new test asserted !message.contains(\"--class\") in state_group/tests.rs, but every route refusal ends with an Example line that spells --class, so the test went red on its first run",
+        "better": "probe the exact invalid-class clause (--class \"perf\") instead of the bare flag name"
+      }
+    ],
+    "report": {
+      "outcome": "perf is the eighth ROUTE_CLASS_VALUES entry; the pinned refusal now pins the full legal set and a new test drives --set/--show for class perf",
+      "commit": "c98eb1cf26181000131341cad07c1a8412d97e59",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --no-fail-fast -p bee --manifest-path packages/bee-rs/Cargo.toml — green — the cell's own verify: the whole bee crate, which owns both touched files and every route test",
+      "deviations": [
+        "placed the safety-argument comment BELOW both consts instead of above them — close.rs:393-403 and uat.rs:139-171 cite ROUTE_CLASS_VALUES / ROUTE_LANE_VALUES by line number (287-288 / 289-290), and a comment above would have shifted every one of those citations — found a better route"
+      ],
+      "mistakes": [
+        "my new test asserted !message.contains(\"--class\") in state_group/tests.rs, but every route refusal ends with an Example line that spells --class, so the test went red on its first run — probe the exact invalid-class clause (--class \"perf\") instead of the bare flag name"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

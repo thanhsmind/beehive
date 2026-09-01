@@ -30,18 +30,47 @@
       "the assertion that no class value is also a lane value passes"
     ]
   },
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "w-psa-2",
+    "outcome": "New pure-filesystem fence pins the route-class vocabulary across all four source documents and freezes the class/lane collision set, reading both lists out of workflows.rs as text",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/route_class_parity.rs"
+    ],
+    "deviations": [
+      "Assertion 2 is implemented as no class value is a lane value BEYOND the pair workflows.rs itself grandfathers, with that pair parsed out of the source safety comment — taken literally the assertion is already false, because docs and spike sit in both vocabularies today, so a literal version could never pass as the acceptance requires — the plan was wrong about a fact",
+      "All FOUR documented sites list seven values, not three of four — scout-and-ticks.md:34 is stale too, matching the dispatch STATE OF THE TREE note rather than the acceptance wording — the plan was wrong about a fact"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-01T14:04:59.656Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T13:57:07.341Z",
+    "mistakes": [
+      {
+        "wrong": "Looked for workflows.rs at packages/bee-rs/crates/bee/src/workflows.rs from the cell shorthand and burned two failed sed calls",
+        "better": "should have run fd workflows.rs first, since the file lives at src/verbs/state_group/workflows.rs"
+      }
+    ],
+    "report": {
+      "outcome": "New pure-filesystem fence pins the route-class vocabulary across all four source documents and freezes the class/lane collision set, reading both lists out of workflows.rs as text",
+      "commit": "fdadf3fec6806216d819148125c82c9adcbb2a10",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/route_class_parity.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast -p bee --manifest-path packages/bee-rs/Cargo.toml — green — every pre-existing target reports 0 failed (3294 lib tests plus 16 integration targets); the only red is this cell own new route_class_parity::every_document_naming_the_class_enum_lists_exactly_its_values, which is red by design pending psa-3 doc updates, and its sibling no_class_value_is_also_a_lane_value passes",
+      "deviations": [
+        "Assertion 2 is implemented as no class value is a lane value BEYOND the pair workflows.rs itself grandfathers, with that pair parsed out of the source safety comment — taken literally the assertion is already false, because docs and spike sit in both vocabularies today, so a literal version could never pass as the acceptance requires — the plan was wrong about a fact",
+        "All FOUR documented sites list seven values, not three of four — scout-and-ticks.md:34 is stale too, matching the dispatch STATE OF THE TREE note rather than the acceptance wording — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Looked for workflows.rs at packages/bee-rs/crates/bee/src/workflows.rs from the cell shorthand and burned two failed sed calls — should have run fd workflows.rs first, since the file lives at src/verbs/state_group/workflows.rs"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
