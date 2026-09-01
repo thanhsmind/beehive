@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"class-playbooks\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"class-playbooks\" (lane).",
+  "next_action": "Merged into main at 1059811; capture what settled, then bee close --feature class-playbooks.",
   "created_at": "2026-09-01T19:21:09.004Z",
   "run_state": "done",
   "waiting_on": null,
@@ -23,12 +23,5 @@
     "rationale": "Two product files: skills/bee-planning/references/planning-reference.md gains four ### sections, and a new tests/class_playbook_parity.rs fences the set. Additive instruction text plus its first fence; no runtime behavior changes, no existing playbook reworded.",
     "updated_at": "2026-09-01T19:21:27.035Z",
     "feature": "class-playbooks"
-  },
-  "merge_ready": {
-    "since": "2026-09-01T19:26:49.336Z",
-    "branch": "wt/class-playbooks",
-    "worktree_id": "beehive--wt--class-playbooks",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
