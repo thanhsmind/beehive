@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pstack-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "pg-4: fix the three prose-only provenance rows the judge failed",
+  "next_action": "Merged into main at 0f2300e; reload the product and test \"pstack-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-gaps\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-01T16:12:37.383Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pstack-gaps",
+    "asked_at": "2026-09-01T17:23:28.292Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
