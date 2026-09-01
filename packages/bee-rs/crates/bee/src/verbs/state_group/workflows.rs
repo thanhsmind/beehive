@@ -284,10 +284,19 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
 // over grant state anymore; `--show`, `--set`, and every lane are native in
 // every repo.
 
-pub(crate) const ROUTE_CLASS_VALUES: [&str; 7] =
-    ["feature", "bugfix", "docs", "refactor", "research", "release", "spike"];
+pub(crate) const ROUTE_CLASS_VALUES: [&str; 8] =
+    ["feature", "bugfix", "docs", "refactor", "research", "release", "spike", "perf"];
 const ROUTE_LANE_VALUES: [&str; 6] =
     ["docs", "tiny", "small", "spike", "standard", "high-risk"];
+// psa-1 (D2, decision 1593e365) added "perf" as the eighth class. SAFETY
+// ARGUMENT — a lane record's `mode` field usually carries a WORKFLOW class,
+// and two readers (verbs/drivers/close.rs:393-403, uat.rs:139-171) fall back
+// to `mode` as a LANE only when the value it holds is itself a lane value.
+// Adding "perf" is safe because "perf" is absent from ROUTE_LANE_VALUES, so a
+// `mode: perf` record can never be misread as a lane. "docs" and "spike"
+// already sit in both vocabularies; "perf" adds no new collision. NEVER add a
+// class value that is also a lane value. Both consts keep their line numbers
+// (287-288 / 289-290) because those two readers cite them by line.
 pub(crate) const ROUTE_FLAG_VALUES: [&str; 10] = [
     "auth",
     "authorization",
