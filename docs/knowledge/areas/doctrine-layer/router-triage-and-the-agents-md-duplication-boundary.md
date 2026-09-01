@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md, areas/verify-pipeline/skill-reference-pointer-integrity.md]
-  decisions: [router-cost D5, router-cost D6, router-cost D7, "pstack-gaps D4/D5 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — every rule id gains a spoken line here and a spoken rule obliges the reply to name what it changed)"]
+  decisions: [router-cost D5, router-cost D6, router-cost D7, "pstack-gaps D4/D5 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — every rule id gains a spoken line here and a spoken rule obliges the reply to name what it changed)", "pstack-gaps D6 (docs/history/pstack-gaps/CONTEXT.md, 2026-09-01 — tests/rule_index_parity.rs pins the markers, the index rows and the spoken lines against each other)"]
   sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cells rc-3, rc-4, capped)"]
   authoritative_for: "doctrine-layer: router triage and the duplication boundary"
 ---
@@ -104,8 +104,8 @@ rule never disappears — only its elaboration moves.
   sanctioned path. Semantic every-turn rules (where no enforcement is possible), and any sentence
   that is the canonical home other documents cite, keep their full text (block-lean L1a-L1d,
   `docs/history/block-lean/CONTEXT.md`).
-- **R10.** **Every rule id is speakable, and a spoken rule owes an answer** (pstack-gaps D4, D5; cell
-  pg-2, 2026-09-01). The § AGENTS.md rule homes section below is the rule index, and each row now
+- **R10.** **Every rule id is speakable, and a spoken rule owes an answer** (pstack-gaps D4, D5, D6;
+  cells pg-2, pg-3, 2026-09-01). The § AGENTS.md rule homes section below is the rule index, and each row now
   carries an indented `spoken:` line — the sentence a person would actually say. A user may invoke a
   rule mid-run by name ("apply never-build-on-red"); the agent resolves the id here, applies the rule
   to the work in hand, and names in the reply the decision or step it changed — or says plainly that
