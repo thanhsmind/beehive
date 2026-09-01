@@ -87,6 +87,51 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1-ten-rows-carry-spoken",
+            "status": "PASS",
+            "evidence": "Ten spoken lines at router-triage-and-the-agents-md-duplication-boundary.md:185,197,206,211,217,227,234,238,246,251, each placed after its row bullet and before that row's applied_at line. rg -c '^  spoken: ' returns 10 and rg -c '^- `agents-' returns 10."
+          },
+          {
+            "id": "t2-indented-not-a-sibling-bullet",
+            "status": "PASS",
+            "evidence": "Every spoken line matches ^  spoken: ; none opens with '- ' or '* ' at column 0 inside the section (lines 181-265). Against ownership.rs:172-177 a new rule row needs one of three dash branches, none of which a two-space-indented line matches. Confirmed live: cargo test --test rule_index_parity, 3 passed 0 failed."
+          },
+          {
+            "id": "t3-knowledge-check-unchanged",
+            "status": "PASS",
+            "evidence": ".bee/bin/bee knowledge check --json printed okf.errors 0, profile.errors 0, profile.warnings 124 (not_canonical 78, dangling_source 34, invalid_evidence_state 12). Zero duplicate_rule_home and zero unknown_rule_ref — both are profile errors and that bucket is empty."
+          },
+          {
+            "id": "t4-derived-from-the-section-not-the-id",
+            "status": "PASS",
+            "evidence": "All ten checked one by one against their named AGENTS.md sections (agents-proof-at-cap :111-119, never-build-on-red :120-127, never-zero-execution-workers :159-164, capture-line-at-close :194-202, context-handoff-65 :257-261, gates-never-self-approved :35-43, one-commit-per-cell :262-267, review-user-invoked :25-28, one-next-action :206-222, worktree-first :49-62). Two are weaker — never-build-on-red opens with the id in words and worktree-first drops the docs-lane exemption — but both still carry section content beyond the id, so neither is a bare gloss."
+          },
+          {
+            "id": "t5-invocation-law-stated-once",
+            "status": "PASS",
+            "evidence": "packages/bee/AGENTS.block.md:74-79 states it once, names the index path and the section, and requires the reply to name the decision or step it changed or say plainly it changed nothing, with 'a bare acknowledgement is not an answer'. rg -i 'invoke|spoken' over the file found no second statement."
+          },
+          {
+            "id": "t6-agents-md-reached-it-by-regen",
+            "status": "PASS",
+            "evidence": "git show 1db0606b --stat lists the five files including both regen artifacts; AGENTS.md:81-86 diffed against AGENTS.block.md:74-79 is IDENTICAL; the manifest's new sha256 2510a9ce... equals sha256sum of packages/bee/AGENTS.block.md, which a hand edit of AGENTS.md would not have produced."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T17:21:38.094Z"
+      }
+    ]
   }
 }

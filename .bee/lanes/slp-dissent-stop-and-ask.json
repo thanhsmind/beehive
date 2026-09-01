@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces check out clean. Writing the tick record now.",
-    "asked_at": "2026-09-01T16:29:09.015Z",
-    "session": "b9363e1b-0e5e-4446-99f3-2ed671c923e3"
+    "subject": "All six surfaces check out clean. No signal fires this tick — the one open cell (pg-1) was just reopened by a routine automatic-fixability r",
+    "asked_at": "2026-09-01T17:22:01.836Z",
+    "session": "4d6d1bc0-055b-406c-88bc-1069f3915abd"
   },
   "route": {
     "class": "feature",

@@ -41,9 +41,9 @@
       "No procedure steps were transcribed into either citing surface."
     ]
   },
-  "status": "capped",
+  "status": "open",
   "trace": {
-    "worker": "pg-worker-1",
+    "worker": null,
     "outcome": "Trace and Provenance sweep live in one bee-researching reference; SKILL.md table and the research playbook point at it",
     "files_changed": [
       "skills/bee-researching/references/trace-and-provenance.md",
@@ -60,8 +60,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1",
-    "claimed_at": "2026-09-01T16:22:30.928Z",
+    "claim_session": null,
+    "claimed_at": null,
     "mistakes": [
       {
         "wrong": "a bash heredoc writing prose that quoted the bee dispatch prepare command was parsed by the CLI-shape write-guard as a real bee call and refused",
@@ -88,6 +88,57 @@
     "warnings": [
       "advisory: this cap's commit changes 455 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "t1-one-home-two-sections",
+            "status": "PASS",
+            "evidence": "skills/bee-researching/references/trace-and-provenance.md holds exactly three headings: 1:# Trace And Provenance, 7:## Trace, 34:## Provenance sweep. All five rendered plugin trees carry the file byte-identical (same md5sum), so it reaches hosts."
+          },
+          {
+            "id": "t2-trace-ceiling-and-door",
+            "status": "PASS",
+            "evidence": "trace-and-provenance.md:14 'Two is the FLOOR and four is the CEILING' with disjointness at :15-16; :17-18 names 'bee dispatch prepare --runtime <rt> --kind gather --json' as the ONE door plus the never-hand-pick clause at :20-21; :22-24 states a one-entry-point trace runs inline and says so."
+          },
+          {
+            "id": "t3-seven-categories-each-with-its-sweep",
+            "status": "FAIL",
+            "evidence": "Seven numbered categories exist (trace-and-provenance.md:39-52) and both report rules hold (:56 empty by name, :57 unswept). But only 4 of 7 carry the command or path that sweeps it here: :39 bee decisions search, :41 git log -S / --follow, :43 docs/history/<feature>/, :45 bee knowledge search. Categories 5 (:47-48 code comments), 6 (:49-50 tests) and 7 (:51-52 external tracker) are prose-only. The truth says EACH."
+          },
+          {
+            "id": "t4-skill-table-one-row",
+            "status": "PASS",
+            "evidence": "git show --numstat d36eeab8 prints '1  0  skills/bee-researching/SKILL.md' — one line added, zero deleted, so no existing row changed. New row at skills/bee-researching/SKILL.md:100."
+          },
+          {
+            "id": "t5-playbook-pointer-only",
+            "status": "PASS",
+            "evidence": "git show d36eeab8 --word-diff over the playbook shows additions only, no deletions: the four numbered steps at planning-reference.md:216-219 are unchanged, unrenumbered and unreworded; the addition is one pointer sentence wrapped over :223-224."
+          },
+          {
+            "id": "t6-no-transcription",
+            "status": "PASS",
+            "evidence": "SKILL.md:100 names the file and the two question kinds only; planning-reference.md:223-224 names the file and maps its two sections onto steps 2 and 3, carrying no procedure content."
+          }
+        ],
+        "failure_signature": "skills/bee-researching/references/trace-and-provenance.md:47-52 — provenance categories 5 (code comments), 6 (tests) and 7 (external tracker) name no sweep command or path, while categories 1-4 each do",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T16:46:05.161Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-09-01T16:46:05.161Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

@@ -1,0 +1,61 @@
+{
+  "id": "pg-4",
+  "feature": "pstack-gaps",
+  "lane": "tiny",
+  "role": "docs",
+  "title": "Give provenance categories 5, 6 and 7 the command that sweeps them",
+  "behavior_change": true,
+  "files": [
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "action": "Fix the goal-check judge's one FAIL on pg-1 (recorded on that cell's trace.semantic_judge). D3 requires each of the seven provenance categories to name the concrete command or path that sweeps it in THIS repo. Categories 1-4 do; categories 5, 6 and 7 are prose-only. In skills/bee-researching/references/trace-and-provenance.md, section Provenance sweep, add the missing sweep to each of those three rows and change nothing else: row 5 (Code comments) gets an rg over the owning source file, row 6 (Tests) gets an rg over the test paths that name the behavior, row 7 (External tracker) gets the gh command plus the existing note that it is often absent here. Keep each row's existing wording and its bold label; add the command, do not rewrite the sentence. Keep the file under 90 lines. Then run the regen chain in order: bee dev render-skill-trees, then bee onboard --repo-root . --apply, then bee dev release-manifest --write.",
+  "verify": "All seven numbered rows in the Provenance sweep section name a command or a path. `bee dev release-manifest --check` is clean and the five rendered plugin copies match the source file.",
+  "affects_skills": [
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [
+    "pstack-gaps D3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "pg-worker-4",
+    "outcome": "Provenance categories 5, 6 and 7 now name the command that sweeps them",
+    "files_changed": [
+      "skills/bee-researching/references/trace-and-provenance.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T17:23:17.894Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1",
+    "claimed_at": "2026-09-01T17:22:15.659Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Provenance categories 5, 6 and 7 now name the command that sweeps them",
+      "commit": "28f7b6f3",
+      "files": [
+        "skills/bee-researching/references/trace-and-provenance.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bee dev release-manifest --check plus md5sum across the rendered copies — green:static — docs cell: all seven rows now name a command or path, and the five plugin copies are byte-identical to the source",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
