@@ -1098,5 +1098,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-09-01T17:32:56.387Z"
+  },
+  "expertise-principles": {
+    "capped": 9,
+    "dropped": 0,
+    "archived_at": "2026-09-01T19:16:31.813Z"
   }
 }

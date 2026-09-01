@@ -5,13 +5,13 @@
   "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": true,
-    "execution": true,
+    "shape": false,
+    "execution": false,
     "review": false,
     "uat": true
   },
   "summary": "Feature \"expertise-principles\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c6fa883; capture what settled, then bee close --feature expertise-principles.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-09-01T17:44:45.673Z",
   "run_state": "done",
   "waiting_on": null,
