@@ -44,12 +44,13 @@ never by memory. Sweep all seven categories, in this order.
    locked decisions, `plan.md` for the approach, `reports/` for what shipped.
 4. **Knowledge bundle** — `bee knowledge search --text "<term>"`, then open
    the matching files under `docs/knowledge/`.
-5. **Code comments** — the comments and doc-comments in the OWNING source
-   file, read at the site itself, not from a search snippet.
-6. **Tests** — the tests that name the behavior. A test name is often the
+5. **Code comments** — `rg -n "<symbol>"` to find the OWNING source file, then
+   read its comments and doc-comments at the site, not from the snippet.
+6. **Tests** — `rg -n "<behavior>" $(fd -t d tests)`. A test name is often the
    plainest statement of intent this repo holds.
-7. **External tracker** — issues and pull requests. This one is often absent
-   here; report it as absent rather than dropping the row.
+7. **External tracker** — `gh issue list --search "<term>"` and `gh pr list
+   --search "<term>"`. Often absent here; report it as absent rather than
+   dropping the row.
 
 Report rules, which are the point of the procedure:
 
