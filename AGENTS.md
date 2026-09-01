@@ -78,6 +78,13 @@ presupposes an environment fact (a CI, a git history, a runnable regen
 chain) checks that fact first — absent, it names the gap and takes its
 recorded fallback instead of demanding the ritual.
 
+Every rule id here can be spoken: the user may say "apply
+never-build-on-red" mid-run. Resolve the id in the rule index
+(`docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md`,
+§ AGENTS.md rule homes), apply the rule to the work in hand, and name in
+the reply the decision or step it changed — or say plainly that it
+changed nothing. A bare acknowledgement is not an answer.
+
 ## Start a session
 
 Read the injected preamble instead of re-fetching state. One ritual, one

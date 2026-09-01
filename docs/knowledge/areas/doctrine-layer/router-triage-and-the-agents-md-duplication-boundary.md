@@ -170,6 +170,7 @@ rule never disappears — only its elaboration moves.
 Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_at` records are tracked here:
 
 - `agents-proof-at-cap` (AGENTS.md § Prove, then say so):
+  spoken: run the proof your change type needs, then record it on the cap as command, result, and why that scope
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
     - `docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md`
@@ -180,6 +181,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-shaping/references/implement-plan-template.md`
     - `skills/bee-swarming/references/swarming-reference.md`
 - `agents-never-build-on-red` (AGENTS.md § Prove, then say so):
+  spoken: never build on a red base — the red is the work now: fix it first, then carry on
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
     - `docs/knowledge/areas/doctrine-layer/unenforced-obedience.md`
@@ -188,15 +190,18 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-swarming/SKILL.md`
     - `skills/bee-swarming/references/swarming-reference.md`
 - `agents-never-zero-execution-workers` (AGENTS.md § Work in parallel, coordinate through the store):
+  spoken: from a small lane up, hand every cell to a dispatched worker — only a tiny cell may run inline
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
 - `agents-capture-line-at-close` (AGENTS.md § Capture what settles):
+  spoken: write it down the moment it settles, and close every task with a capture line or a plain 'nothing settled'
   - applied_at:
     - `skills/bee-capturing/SKILL.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-context-handoff-65` (AGENTS.md § Care for the session):
+  spoken: at about 65% context, write the handoff and stop cleanly — this holds mid-wave too
   - applied_at:
     - `docs/knowledge/areas/onboarding/status-display-vendoring.md`
     - `skills/bee-hive/SKILL.md`
@@ -206,15 +211,18 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-swarming/references/swarming-reference.md`
     - `skills/bee-swarming/references/worker-details.md`
 - `agents-gates-never-self-approved` (AGENTS.md § Bee workflow):
+  spoken: never approve your own gate — gates, decision answers and privacy calls belong to the user
   - applied_at:
     - `skills/bee-herding/README.md`
     - `skills/bee-herding/references/role-dispatch.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
 - `agents-one-commit-per-cell` (AGENTS.md § Care for the session):
+  spoken: one commit per cell — imperative subject, and the cell id on the last line of the body
   - applied_at:
     - `skills/bee-swarming/references/worker-details.md`
 - `agents-review-user-invoked` (AGENTS.md § Bee workflow):
+  spoken: ask for a review when you want one — it never runs by itself as a step of the flow
   - applied_at:
     - `docs/knowledge/areas/workflow-state/review-sessions.md`
     - `skills/bee-hive/SKILL.md`
@@ -222,10 +230,12 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-hive/references/go-mode.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-one-next-action` (AGENTS.md § Communication):
+  spoken: close on exactly one next action — your own next move or the one call only the user can make
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/the-communication-contract.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-worktree-first` (AGENTS.md § Bee workflow):
+  spoken: start code-touching feature work in its own worktree; main takes integration, release and a solo tiny fix
   - applied_at:
     - `docs/knowledge/areas/workflow-state/worktree-isolation.md`
     - `docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md`
