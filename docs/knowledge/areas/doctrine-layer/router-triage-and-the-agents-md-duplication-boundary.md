@@ -105,7 +105,7 @@ rule never disappears — only its elaboration moves.
   that is the canonical home other documents cite, keep their full text (block-lean L1a-L1d,
   `docs/history/block-lean/CONTEXT.md`).
 - **R10.** **Every rule id is speakable, and a spoken rule owes an answer** (pstack-gaps D4, D5; cell
-  pg-2, 2026-09-01). The `## AGENTS.md rule homes` section below is the rule index, and each row now
+  pg-2, 2026-09-01). The § AGENTS.md rule homes section below is the rule index, and each row now
   carries an indented `spoken:` line — the sentence a person would actually say. A user may invoke a
   rule mid-run by name ("apply never-build-on-red"); the agent resolves the id here, applies the rule
   to the work in hand, and names in the reply the decision or step it changed — or says plainly that
