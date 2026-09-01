@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pstack-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "pg-4: fix the three prose-only provenance rows the judge failed",
+  "next_action": "Merged into main at 9be088c; reload the product and test \"pstack-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-gaps\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-01T16:12:37.383Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "▸ Đang chạy: bộ test đầy đủ trên `main` cuối cùng, và giám định `pg-4`.",
-    "asked_at": "2026-09-01T17:24:24.075Z",
-    "session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1"
+    "kind": "gate",
+    "subject": "uat: pstack-gaps",
+    "asked_at": "2026-09-01T17:26:44.376Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
