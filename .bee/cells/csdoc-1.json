@@ -1,0 +1,91 @@
+{
+  "id": "csdoc-1",
+  "feature": "code-shape-doctrine",
+  "lane": "small",
+  "role": "docs",
+  "title": "Put four code-shape rules in the worker brief",
+  "action": "Per D1-D5 in docs/history/code-shape-doctrine/CONTEXT.md. Add ONE short block to the `Contract:` list in packages/bee/prompts/worker-cell.md (the SOURCE — D4; never .bee/bin/prompts/worker-cell.md, which bee onboard --apply regenerates and would silently discard).\n\nThe four rules, and nothing beyond them (D2):\n- Prefer deletion before addition.\n- The smallest diff that solves it.\n- A signal threaded through several layers means stop and find the direct path.\n- Leave the base simpler than you found it.\n\nWrite them as a worker reads them at the moment it writes code — imperative, concrete, no theory. Keep the block SHORT: this prompt is inlined into every dispatched worker's first message, so every line is paid for on every cell in every host repo. Match the surrounding contract bullets' voice.\n\nD3: nothing refuses. Say so in the block itself, in the same posture as the existing red-before-green rule at skills/bee-swarming/references/worker-details.md:33-35 — 'craft, applied by judgment and enforced by review, not by flags'. Do NOT edit worker-details.md; cite it if a pointer helps, the way the class playbooks already point at it.\n\nThen read packages/bee/agents/bee-build.md.tmpl:9, which carries its own `Contract:` block, and answer the CONTEXT.md execution question: if that block already duplicates the brief's contract bullets, add the same block there; if it points at the brief instead, add a pointer. Match what the file already does — do not invent a new split. Say in the cap which it was and why.\n\nRun the full `bee dev regen` chain (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) so the installed copy under .bee/bin/prompts/ picks the change up, and verify both copies carry it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check",
+  "acceptance": "packages/bee/prompts/worker-cell.md carries the four rules in its Contract block, stating they are judgment-and-review, never a refusal. .bee/bin/prompts/worker-cell.md carries the same text after onboard --apply. bee-build.md.tmpl was read and handled to match its existing pattern, with the choice named in the cap. worker-details.md is unedited. The suite is green and onboard reports up_to_date.",
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee/agents/bee-build.md.tmpl",
+    ".bee/bin/prompts/worker-cell.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [
+    "20e8f684-7c42-44a7-964b-3c078ad7af81"
+  ],
+  "read_first": [
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee/agents/bee-build.md.tmpl",
+    "docs/history/code-shape-doctrine/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "the four rules appear in packages/bee/prompts/worker-cell.md's Contract block, and nowhere does the block add a fifth rule or a types/domain-modelling rule",
+      "the block states plainly that nothing refuses — it is judgment, surfaced at review",
+      "the SOURCE was edited, and .bee/bin/prompts/worker-cell.md carries the same text only because onboard --apply installed it",
+      "skills/bee-swarming/references/worker-details.md is unedited",
+      "bee-build.md.tmpl was read and the cap names whether it got the block or a pointer, and why that matches what the file already does",
+      "cargo test is green and bee onboard --repo-root . --json reports up_to_date"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-csdoc-1",
+    "outcome": "Added the four code-shape rules as one contract bullet in the worker brief source and the bee-build agent template, stated as judgment-and-review with no refusal",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee/agents/bee-build.md.tmpl",
+      ".bee/bin/prompts/worker-cell.md",
+      ".claude/agents/bee-build.md",
+      ".opencode/agent/bee-build.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T14:56:37.064Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c021e309-e77a-4956-a752-9611003c58bd",
+    "claimed_at": "2026-09-01T14:52:52.311Z",
+    "mistakes": [
+      {
+        "wrong": "ran bee onboard --repo-root . --apply before reserving .claude/agents/bee-build.md and .opencode/agent/bee-build.md, which the regen wrote but the cell files list did not name",
+        "better": "list the regen chain own outputs and reserve them before running the chain, not after seeing them in git status"
+      }
+    ],
+    "report": {
+      "outcome": "Added the four code-shape rules as one contract bullet in the worker brief source and the bee-build agent template, stated as judgment-and-review with no refusal",
+      "commit": "b64e4767",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee/agents/bee-build.md.tmpl",
+        ".bee/bin/prompts/worker-cell.md",
+        ".claude/agents/bee-build.md",
+        ".opencode/agent/bee-build.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && bee onboard --repo-root . --json && bee dev release-manifest --check — green — the cell's own verify, all three halves: suite 0 failed across every target, onboard status up_to_date with 0 pending items, manifest 292 files match; bee-build.md.tmpl DUPLICATES the brief's contract bullets today rather than pointing at it, so it got the same block, matching what the file already does",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "ran bee onboard --repo-root . --apply before reserving .claude/agents/bee-build.md and .opencode/agent/bee-build.md, which the regen wrote but the cell files list did not name — list the regen chain own outputs and reserve them before running the chain, not after seeing them in git status"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

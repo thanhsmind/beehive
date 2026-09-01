@@ -13,8 +13,13 @@
   "summary": "Feature \"pstack-adoption\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"pstack-adoption\" — feature is closed.",
   "created_at": "2026-09-01T10:48:43.673Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-01T14:49:18.133Z",
+    "session": "c021e309-e77a-4956-a752-9611003c58bd"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",

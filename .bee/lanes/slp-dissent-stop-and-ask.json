@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces read; nothing new since the last several ticks. Writing the silence record.",
-    "asked_at": "2026-09-01T14:37:33.265Z",
-    "session": "ba72bbc5-57f0-427d-bc42-856d73e8cd8f"
+    "subject": "All six surfaces check out clean: cell csdoc-1 is claimed and reserved seconds ago (in-TTL), pane w1:pX is doing fresh real work (wrote CONT",
+    "asked_at": "2026-09-01T14:53:53.878Z",
+    "session": "3084b4a6-b8fc-4aa4-951b-49ff44e72958"
   },
   "route": {
     "class": "feature",
