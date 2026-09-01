@@ -1722,8 +1722,12 @@ use std::time::Instant;
             Ok(_) => panic!("expected a refusal"),
         };
         assert!(message.starts_with(
-            "route --set: invalid flag(s): --class \"nope\" (must be one of feature, bugfix, docs"
+            "route --set: invalid flag(s): --class \"nope\" (must be one of feature, bugfix, docs, refactor, research, release, spike, perf)"
         ));
+        // psa-1: the line above is pinned on the FULL legal set, ending in the
+        // eighth class "perf". The refusal message is the contract a caller
+        // reads, so a class added without editing this line is a silent
+        // contract change. Update it with the enum; never delete it.
         assert!(message.contains(
             "--lane \"weird\" (must be one of docs, tiny, small, spike, standard, high-risk)"
         ));
@@ -1764,6 +1768,63 @@ use std::time::Instant;
         assert_eq!(js_number_full("7px").ok().unwrap(), None);
         assert!(js_number_full("0x10").is_err()); // modeled by Node only
         assert!(js_number_full("Infinity").is_err());
+    }
+
+    /// psa-1 (D2, decision 1593e365): "perf" is the eighth class. Happy path
+    /// end to end — `--set` accepts it, and the record `--show` reads back
+    /// carries class=perf. (run_route's CLI entry is cwd-rooted and
+    /// untestable in-process; this drives the same functions it calls, the
+    /// pattern route_set_end_to_end_* already uses.)
+    #[test]
+    fn route_set_accepts_perf_as_the_eighth_class() {
+        assert_eq!(ROUTE_CLASS_VALUES.len(), 8);
+        assert_eq!(ROUTE_CLASS_VALUES[7], "perf");
+
+        let tmp = tmp_root();
+        let root = tmp.path();
+        ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+        let target = ok(resolve_mutation_target(root, None, "route", true));
+
+        let f = route_flags(&[("class", "perf"), ("lane", "standard"), ("flags", ""), ("files", "1")]);
+        let mut route = match ok(validate_route_set_flags(&f)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(route.get("class"), Some(&json!("perf")));
+        assert_eq!(route.get("lane"), Some(&json!("standard")));
+
+        let feature = target.record().get("feature").cloned().unwrap();
+        route.insert("feature".into(), feature);
+        let mut record = target.record().clone();
+        record.insert("route".into(), Value::Object(route));
+        ok(write_state(root, &record));
+
+        // The read `route --show` performs, on the stored record.
+        let shown = ok(resolve_mutation_target(root, None, "route show", true));
+        let stored = shown.record().get("route").cloned().unwrap();
+        assert_eq!(jget(&stored, "class"), Some(&json!("perf")));
+
+        // The SAFETY ARGUMENT, pinned: "perf" is a class and NOT a lane, so a
+        // record whose `mode` spells "perf" can never be misread as a lane
+        // (verbs/drivers/close.rs:393-403, uat.rs:139-171 read `mode` as a
+        // lane only when it names a lane value). Never add a class value that
+        // is also a lane value.
+        let as_lane = route_flags(&[("class", "perf"), ("lane", "perf"), ("flags", ""), ("files", "1")]);
+        let message = match ok(validate_route_set_flags(&as_lane)) {
+            Err(m) => m,
+            Ok(_) => panic!("expected a refusal: perf must never be a legal lane"),
+        };
+        assert!(
+            message.contains("--lane \"perf\" (must be one of docs, tiny, small, spike, standard, high-risk)"),
+            "message: {message}"
+        );
+        // Only the LANE is refused: the message carries no invalid-class
+        // clause. (A bare "--class" probe would hit the trailing Example
+        // line, which always spells one.)
+        assert!(
+            !message.contains("--class \"perf\""),
+            "class perf must be accepted: {message}"
+        );
     }
 
     #[test]
