@@ -281,6 +281,36 @@ block after `applied_at:` is read as paths.
   - applied_at:
     - `skills/principle-red-before-green/SKILL.md`
 
+- `principle-chestertons-fence` (expertise/thinking.md § Chesterton's Fence):
+  spoken: find out why it was put there before you take it down — "I don't see why this is here" is the argument for investigating, never for removing
+  classes: refactor, bugfix, feature
+  - applied_at:
+    - `skills/principle-chestertons-fence/SKILL.md`
+
+- `principle-smallest-honest-shape` (expertise/planning.md § The smallest honest shape):
+  spoken: size the work from what it endangers, not from how the request sounds — the smallest shape that is still honest, then escalate on evidence
+  classes: feature, refactor, research, spike
+  - applied_at:
+    - `skills/principle-smallest-honest-shape/SKILL.md`
+
+- `principle-split-never-shrink` (expertise/planning.md § Scope integrity: split, never shrink):
+  spoken: work that will not fit gets split into slices or renegotiated with its owner — never quietly delivered smaller than what was agreed
+  classes: feature, refactor, release
+  - applied_at:
+    - `skills/principle-split-never-shrink/SKILL.md`
+
+- `principle-the-deletion-test` (expertise/architecture.md § The Deletion Test):
+  spoken: delete the module in your head and inline it at every call site — if the complexity vanishes it was a pass-through, if it reappears N times it earned its keep
+  classes: refactor, feature
+  - applied_at:
+    - `skills/principle-the-deletion-test/SKILL.md`
+
+- `principle-single-source-of-truth` (expertise/architecture.md § Single Source of Truth):
+  spoken: every fact gets one authoritative home and everything else derives from it — when copies already disagree, elect the owner instead of syncing them
+  classes: feature, refactor, docs
+  - applied_at:
+    - `skills/principle-single-source-of-truth/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens

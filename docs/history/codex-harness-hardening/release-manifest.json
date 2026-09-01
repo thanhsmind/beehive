@@ -2040,11 +2040,46 @@
       "packagePath": "skills/bee-writing-skills/SKILL.md"
     },
     {
+      "path": "skills/principle-chestertons-fence/SKILL.md",
+      "sha256": "9d9fed7764be1eda3ee59fa2686cc94ae7cc1613e485a65824568431f4f6b4ae",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-chestertons-fence/SKILL.md"
+    },
+    {
       "path": "skills/principle-red-before-green/SKILL.md",
       "sha256": "61de60403121aefeca060314402d944f6b45a97e4c1e059a8bbfc3f14dfc7e92",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/principle-red-before-green/SKILL.md"
+    },
+    {
+      "path": "skills/principle-single-source-of-truth/SKILL.md",
+      "sha256": "7b3d931437cc120da6a34d652405b7e0cf93bcbb75cd6f72248fa533ff2b77fc",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-single-source-of-truth/SKILL.md"
+    },
+    {
+      "path": "skills/principle-smallest-honest-shape/SKILL.md",
+      "sha256": "da75add728aa0e0d76f886b2951f97558b1898ffecb3ea4ba37c243e9c83aa85",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-smallest-honest-shape/SKILL.md"
+    },
+    {
+      "path": "skills/principle-split-never-shrink/SKILL.md",
+      "sha256": "4dec185b716cb136bd6f18202876ce4b4f427aebb92e4e295fa7eeb5477763f3",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-split-never-shrink/SKILL.md"
+    },
+    {
+      "path": "skills/principle-the-deletion-test/SKILL.md",
+      "sha256": "4613604107513b38befe50646c780899a234b2f1734cbbb37f7b7baf2038ee60",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-the-deletion-test/SKILL.md"
     }
   ]
 }
