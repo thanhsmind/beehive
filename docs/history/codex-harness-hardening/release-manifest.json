@@ -2047,6 +2047,20 @@
       "packagePath": "skills/principle-chestertons-fence/SKILL.md"
     },
     {
+      "path": "skills/principle-one-fact-one-home/SKILL.md",
+      "sha256": "5beb461caa1b2d900bb6183a166b13ead904cec72d8e39be61c8c20cdae890ea",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-one-fact-one-home/SKILL.md"
+    },
+    {
+      "path": "skills/principle-record-at-the-moment-of-settlement/SKILL.md",
+      "sha256": "623a58e32d335a3bf0d9df5c57c003ec8e74d260ab92b6822db92c4e23590144",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-record-at-the-moment-of-settlement/SKILL.md"
+    },
+    {
       "path": "skills/principle-red-before-green/SKILL.md",
       "sha256": "61de60403121aefeca060314402d944f6b45a97e4c1e059a8bbfc3f14dfc7e92",
       "mode": "644",
@@ -2075,11 +2089,32 @@
       "packagePath": "skills/principle-split-never-shrink/SKILL.md"
     },
     {
+      "path": "skills/principle-test-behavior-not-structure/SKILL.md",
+      "sha256": "4dd1623862e856cefc50af8cdf9e74f647257feb45789bf61c8f7687fdaa464d",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-test-behavior-not-structure/SKILL.md"
+    },
+    {
       "path": "skills/principle-the-deletion-test/SKILL.md",
       "sha256": "4613604107513b38befe50646c780899a234b2f1734cbbb37f7b7baf2038ee60",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/principle-the-deletion-test/SKILL.md"
+    },
+    {
+      "path": "skills/principle-the-rebuild-test/SKILL.md",
+      "sha256": "45feb39d245c94d4ed95113e7db4f5eff6503afd7cd024b19993a9077feed92c",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-the-rebuild-test/SKILL.md"
+    },
+    {
+      "path": "skills/principle-verify-before-reporting/SKILL.md",
+      "sha256": "86c5027ef418f246303251580503dba59d4c6756e9f5c7c076c867b2b2c67604",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-verify-before-reporting/SKILL.md"
     }
   ]
 }

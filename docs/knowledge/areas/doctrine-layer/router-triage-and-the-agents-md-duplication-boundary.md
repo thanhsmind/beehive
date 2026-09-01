@@ -311,6 +311,36 @@ block after `applied_at:` is read as paths.
   - applied_at:
     - `skills/principle-single-source-of-truth/SKILL.md`
 
+- `principle-record-at-the-moment-of-settlement` (expertise/decisions.md § Record at the moment of settlement):
+  spoken: write the record when the decision lands — "okay, so we'll do X" is the trigger, and a cleanup pass at the end reconstructs from memory and loses the boundaries
+  classes: feature, research, docs
+  - applied_at:
+    - `skills/principle-record-at-the-moment-of-settlement/SKILL.md`
+
+- `principle-test-behavior-not-structure` (expertise/tests.md § Test behavior, not structure):
+  spoken: assert what the code observably does, never its choreography — a refactor that preserves behavior must not turn the suite red
+  classes: feature, bugfix, refactor
+  - applied_at:
+    - `skills/principle-test-behavior-not-structure/SKILL.md`
+
+- `principle-verify-before-reporting` (expertise/review.md § Verify before reporting):
+  spoken: reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently
+  classes: feature, bugfix, refactor, docs, release, perf
+  - applied_at:
+    - `skills/principle-verify-before-reporting/SKILL.md`
+
+- `principle-the-rebuild-test` (expertise/documentation.md § The rebuild test):
+  spoken: a spec is good when a stranger could rebuild the behavior on a different stack from it alone — every question they would have to ask you is a hole
+  classes: docs
+  - applied_at:
+    - `skills/principle-the-rebuild-test/SKILL.md`
+
+- `principle-one-fact-one-home` (expertise/knowledge.md § One fact, one home):
+  spoken: read what the base already holds before writing, then extend the existing entry instead of filing a near-duplicate beside it
+  classes: docs, feature, refactor
+  - applied_at:
+    - `skills/principle-one-fact-one-home/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens
