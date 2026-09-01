@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pstack-adoption\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 7f3fcaf; reload the product and test \"pstack-adoption\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-adoption\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming for slice 1 (psa-0..psa-3).",
   "created_at": "2026-09-01T10:48:43.673Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pstack-adoption",
-    "asked_at": "2026-09-01T14:32:45.468Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
