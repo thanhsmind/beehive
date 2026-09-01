@@ -1,0 +1,47 @@
+{
+  "id": "psa-2",
+  "feature": "pstack-adoption",
+  "lane": "standard",
+  "role": "test",
+  "title": "Pin the route-class vocabulary across all four documents that name it",
+  "action": "Write a NEW integration test file under packages/bee-rs/crates/bee/tests/, following the pure-filesystem shape of specs_fence.rs:17-18 (std only, no crate import). ROUTE_CLASS_VALUES is pub(crate) and CANNOT be imported from an integration test — read workflows.rs as TEXT to extract both ROUTE_CLASS_VALUES and ROUTE_LANE_VALUES. Do NOT re-declare either list in the test: close.rs:403-406 already did that once (const FEATURE_ROUTE_LANE_CLASSES) and duplication is the defect this whole feature exists to remove. The test asserts two things: (1) each of the four source documents naming the enum lists exactly the class values — skills/bee-hive/references/scout-and-ticks.md:34, docs/product-description/goal.md:48, docs/product-description/lifecycle/planning.md:35, docs/product-description/verification/lifecycle.md:114; (2) no class value is also a lane value, so the `mode`-carries-a-class leak stays harmless for every future class. Read SOURCE files only — the rendered plugin copies under .claude-plugin/ etc are regen output, not a second truth. Write the test red-first: it must fail before the doc sites are updated in psa-3.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast -p bee --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "The new test exists, imports nothing from the bee crate, and re-declares neither constant. It fails on the pre-psa-3 tree (three doc sites still list seven values) and the failure names which document is stale. The no-class-is-a-lane assertion passes.",
+  "files": [
+    "packages/bee-rs/crates/bee/tests/route_class_parity.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "psa-1"
+  ],
+  "decisions": [
+    "1593e365-d911-4cd0-9c9b-8cee78bc61a3"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/specs_fence.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "a new test file exists under packages/bee-rs/crates/bee/tests/ that uses only std and imports nothing from the bee crate",
+      "the test contains no literal list of class or lane values — it reads both out of workflows.rs as text",
+      "run red-first on the tree before psa-3, the test FAILS and its message names which document is stale",
+      "the assertion that no class value is also a lane value passes"
+    ]
+  },
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

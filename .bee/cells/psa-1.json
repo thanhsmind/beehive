@@ -1,0 +1,49 @@
+{
+  "id": "psa-1",
+  "feature": "pstack-adoption",
+  "lane": "standard",
+  "role": "code",
+  "title": "Add perf as the eighth route class value",
+  "action": "Per D2 (store 1593e365). In packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:287-288, extend ROUTE_CLASS_VALUES from [&str; 7] to [&str; 8] by appending \"perf\". The arity lives in the type, so a miscount will not compile. Then update the PINNED refusal assertion at packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs:1725 so it still matches the emitted message — update it deliberately, never delete it: a deleted assertion is proof-weakening, not a fix. Add a happy-path test beside the existing route tests asserting that --class perf is accepted and reads back as class=perf. SAFETY ARGUMENT to preserve: a lane record's `mode` field usually carries a workflow class (close.rs:395-397, uat.rs:139), and adding perf is safe only because perf is absent from ROUTE_LANE_VALUES (workflows.rs:289-290). Do not add any class value that is also a lane value.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast -p bee --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "ROUTE_CLASS_VALUES has 8 entries ending in perf. `bee route --set --class perf --lane standard --flags \"\" --files 1` exits 0 and `bee route --show` reports class=perf. `--class nope` still refuses with a typed message that now lists perf. The pinned assertion at tests.rs:1725 was updated, not removed.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "psa-0"
+  ],
+  "decisions": [
+    "1593e365-d911-4cd0-9c9b-8cee78bc61a3"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "ROUTE_CLASS_VALUES is [&str; 8] and its last entry is \"perf\"",
+      "bee route --set --class perf --lane standard --flags \"\" --files 1 exits 0, and bee route --show reports class=perf",
+      "bee route --set --class nope refuses with a typed message whose legal set now includes perf",
+      "the assertion at state_group/tests.rs:1725 still exists and was edited, not deleted",
+      "no value in ROUTE_CLASS_VALUES also appears in ROUTE_LANE_VALUES beyond the pre-existing docs and spike"
+    ]
+  },
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

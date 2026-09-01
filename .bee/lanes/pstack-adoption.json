@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature": "pstack-adoption",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pstack-adoption\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming for slice 1 (psa-0..psa-3).",
+  "created_at": "2026-09-01T10:48:43.673Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain",
+      "covered-contract-change"
+    ],
+    "product_files": 9,
+    "rationale": "CLI enum change (perf) plus four skill surfaces. The enum's typed refusal message is asserted by state_group/tests.rs, so the contract change is covered. No hard-gate flag: no auth, data loss, audit/security, external provider, or validation removal.",
+    "updated_at": "2026-09-01T12:30:55.681Z",
+    "feature": "pstack-adoption"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-01T12:42:08.790Z",
+    "feature": "pstack-adoption",
+    "newest_decision_id": "b2a5d44e-7573-4efd-be9b-5b708eb41f89",
+    "plan_sha256": "a126ca580eda8bfde31df91bec2d7f2fb028dbfecc9e3b1dbbbba908e5ad0cd2",
+    "advisor": "hat-wave-3seat (opus,opus,sonnet)",
+    "digest_head": "# pstack-adoption — plan-step hat wave synthesis (3 seats)\n\nSeats: hat-facts-gaps (opus), hat-alternatives (opus), hat-user-impact (sonnet).\nSix blockers raised; all folded into plan revision 2. Three changed the shape.\n\n## Shape-changing\n\n1. CONCURRENCY WAS FALSE. Revision 1 said phases 3/4 share no files with\n   phase 2. Every skill file has five generated copies and `bee dev regen`\n   rewrites one shared release manifest\n   (release_manifest.rs:94). Skill-touching cells are SERIAL.\n2. \"class "
+  }
+}

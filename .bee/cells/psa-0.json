@@ -1,0 +1,45 @@
+{
+  "id": "psa-0",
+  "feature": "pstack-adoption",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Move the pstack source article out of the fenced docs/specs surface",
+  "action": "The base tree is red: docs/specs/pstack.md trips crates/bee/tests/specs_fence.rs, which fences docs/specs as a read-only compatibility surface once a knowledge bundle exists. The article is an external source document, not this repo's area truth, so the fence's own remedy (migrate to a knowledge concept, leave a pointer stub) does not apply. Move it: git mv docs/specs/pstack.md docs/history/research/pstack-source.md. Then repoint every citation of the old path — docs/history/research/pstack-distill.md and docs/history/pstack-adoption/CONTEXT.md both name docs/specs/pstack.md.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release -p bee --test specs_fence --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "specs_fence passes. No file remains under docs/specs/ that the fence names as new area truth. rg -n 'docs/specs/pstack' over docs/ returns nothing.",
+  "files": [
+    "docs/specs/pstack.md",
+    "docs/history/research/pstack-source.md",
+    "docs/history/research/pstack-distill.md",
+    "docs/history/pstack-adoption/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/specs_fence.rs"
+  ],
+  "must_haves": {
+    "truths": [
+      "cargo test -p bee --test specs_fence passes on the working tree",
+      "docs/specs/pstack.md no longer exists; docs/history/research/pstack-source.md does",
+      "rg -n 'docs/specs/pstack' over docs/ returns no hits"
+    ]
+  },
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "Not a feature cell. docs/specs/pstack.md was UNTRACKED in the main checkout only — the worktree at the branch commit never had it, so the red never reached this feature or CI. Fixed as main-checkout housekeeping instead: moved to docs/history/research/pstack-source.md."
+  }
+}
