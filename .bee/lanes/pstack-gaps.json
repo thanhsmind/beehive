@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-gaps",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pstack-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 9be088c; reload the product and test \"pstack-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-gaps\") or fix it in the worktree and merge again.",
+  "next_action": "bee close pstack-gaps, then the user's uat on main",
   "created_at": "2026-09-01T16:12:37.383Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: pstack-gaps",
-    "asked_at": "2026-09-01T17:26:44.376Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for pstack-gaps: the three pstack gaps are on main — test bee, then approve or send it back",
+    "asked_at": "2026-09-01T17:32:03.922Z",
+    "session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1"
   },
   "route": {
     "class": "feature",
@@ -35,10 +35,17 @@
   "last_scribing_run": {
     "feature": "pstack-gaps",
     "date": "2026-09-01",
-    "at": "2026-09-01T16:44:08.239Z",
+    "at": "2026-09-01T17:31:51.253Z",
     "areas_synced": [
       "doctrine-layer"
     ],
     "next_action": "bee close pstack-gaps, then the user's uat on main"
+  },
+  "merge_ready": {
+    "since": "2026-09-01T17:31:22.726Z",
+    "branch": "wt/pstack-gaps",
+    "worktree_id": "beehive--wt--pstack-gaps",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

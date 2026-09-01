@@ -56,6 +56,41 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1-anchored-glob-returns-only-test-dirs",
+            "status": "PASS",
+            "evidence": "fd -t d '^tests$' in this repo returns exactly expertise/tests/, packages/bee-rs/crates/bee/tests/ and packages/bee-rs/crates/fleet/tests/. The old unanchored pattern also returned docs/history/scripts-tests-move/ and docs/history/workflow-verb-tests/; both are gone."
+          },
+          {
+            "id": "t2-row-6-command-still-returns-hits",
+            "status": "PASS",
+            "evidence": "bash -c with the row-6 command over a real term printed 39 hits, e.g. packages/bee-rs/crates/bee/tests/concurrency.rs:579 and tests/session_release.rs:5, rg exit 0. The unquoted substitution word-splits correctly under a plain bash -c, checked both inline and by running the row's verbatim text."
+          },
+          {
+            "id": "t3-nothing-else-changed",
+            "status": "PASS",
+            "evidence": "git show 739852bc --stat: 13 files, 17 insertions / 17 deletions. The source diff is the single row-6 line. The other twelve are the five rendered copies (same one line), five .bee-render.json hash files, .bee/onboarding.json and the release manifest, whose diffs carry only sha256 values and one timestamp. md5sum on the source and all five copies is 230b202fdf6eea5c27172aec1490bf8c, and bee dev release-manifest --check reports 295 files matching, exit 0."
+          },
+          {
+            "id": "t4-anchors-are-regex-under-the-installed-fd",
+            "status": "PASS",
+            "evidence": "fd 10.4.2 at /usr/bin/fd treats the pattern as a regex by default and matches the base name. Proved by differential test rather than by docs: fd -t d --glob '^tests$' returns 0 results (glob mode reads the anchors literally), fd -t d '^tests$' returns 3, fd -t d '^test$' returns 0, and fd -t d '^tests?$' returns 3."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-01T17:28:12.572Z"
+      }
+    ]
   }
 }
