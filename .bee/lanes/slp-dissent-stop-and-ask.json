@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces read. Same pattern as the last several dozen ticks: no open work, one live worker doing real fresh work, no new signal. Wri",
-    "asked_at": "2026-09-01T19:13:53.480Z",
-    "session": "109ae407-f152-4294-b3e0-8d6a76eb52cb"
+    "subject": "(turn ended)",
+    "asked_at": "2026-09-01T19:29:38.009Z",
+    "session": "328ecf98-f48b-41ed-b029-d196e5b359c6"
   },
   "route": {
     "class": "feature",

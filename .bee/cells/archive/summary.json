@@ -1103,5 +1103,10 @@
     "capped": 9,
     "dropped": 0,
     "archived_at": "2026-09-01T19:16:31.813Z"
+  },
+  "class-playbooks": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-01T19:30:08.245Z"
   }
 }
