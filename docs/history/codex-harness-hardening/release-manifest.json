@@ -2038,6 +2038,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-writing-skills/SKILL.md"
+    },
+    {
+      "path": "skills/principle-red-before-green/SKILL.md",
+      "sha256": "61de60403121aefeca060314402d944f6b45a97e4c1e059a8bbfc3f14dfc7e92",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/principle-red-before-green/SKILL.md"
     }
   ]
 }

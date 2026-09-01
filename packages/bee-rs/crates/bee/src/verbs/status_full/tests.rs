@@ -349,6 +349,53 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[4], "next: 1 ready cell(s): c-1 — orchestrator assigns them.");
     }
 
+    /// expertise-principles D2: orient's second caller of the ONE shared
+    /// reader. The packet key is omitted outright when nothing is selected, so
+    /// `bee orient` never grows an empty header — and the text block sits
+    /// between the worktree line and `skill:`.
+    #[test]
+    fn orient_names_the_routed_principles_and_stays_silent_without_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        let route = |class: Option<&str>| match class {
+            Some(c) => format!(
+                r#"{{"phase":"swarming","feature":"f1","route":{{"class":"{c}","lane":"standard"}}}}"#
+            ),
+            None => r#"{"phase":"swarming","feature":"f1"}"#.to_string(),
+        };
+
+        // No recorded route: no key, no line.
+        write(root, ".bee/state.json", &route(None));
+        assert!(!build_orient(&mut ctx_for(root)).unwrap().contains_key("principles"));
+
+        // A class no row claims: same silence.
+        write(root, ".bee/state.json", &route(Some("docs")));
+        assert!(!build_orient(&mut ctx_for(root)).unwrap().contains_key("principles"));
+
+        // A matching class: the packet carries the block and the text shows it
+        // ahead of `skill:`.
+        write(root, ".bee/state.json", &route(Some("refactor")));
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        assert_eq!(
+            packet.get("principles"),
+            Some(&json!([
+                "- Principles (class=refactor) — name each one you apply and the decision it changed:",
+                "  - `principle-red-before-green` — watch it fail for the reported reason before you fix it",
+                "  - `principle-one-home` — a rule lives in one place and every other surface points at it",
+            ]))
+        );
+        let text = render_orient_text(&packet);
+        let lines: Vec<&str> = text.split('\n').collect();
+        let at = lines
+            .iter()
+            .position(|l| l.starts_with("- Principles (class=refactor)"))
+            .expect("principles block in the orient text");
+        assert!(lines[at + 1].starts_with("  - `principle-red-before-green`"));
+        assert!(lines[at + 3].starts_with("skill: "));
+    }
+
     #[test]
     fn status_text_renderer_minimal_repo() {
         let tmp = tempfile::tempdir().unwrap();

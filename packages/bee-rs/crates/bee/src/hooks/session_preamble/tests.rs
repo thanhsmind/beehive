@@ -134,6 +134,51 @@ use crate::version::BEE_VERSION;
             .contains("- Route: class=feature | lane=small | flags=2 [x,y] | files=4"));
     }
 
+    /// expertise-principles D2: the routed principles ride BESIDE the Route
+    /// line, through the same shared reader `bee orient` calls. Three silences
+    /// are pinned here because each one is a real repo: no recorded route, no
+    /// vendored index (every host repo today), and a class no row claims.
+    #[test]
+    fn routed_principles_ride_beside_the_route_line() {
+        let tmp = minimal_repo();
+        write(tmp.path(), crate::principles::PRINCIPLE_INDEX, crate::principles::TEST_INDEX);
+        // No recorded route: the index is on disk and still nothing renders.
+        assert!(!render(tmp.path()).contains("Principles"));
+
+        let route = |class: &str| {
+            format!(r#"{{"phase":"planning","route":{{"class":"{class}","lane":"small","flags":[],"product_files":0}}}}"#)
+        };
+        write(tmp.path(), ".bee/state.json", &route("feature"));
+        let text = render(tmp.path());
+        assert!(text.contains("- Route: class=feature"), "{text}");
+        assert!(
+            text.contains(
+                "- Principles (class=feature) — name each one you apply and the decision it changed:"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "  - `principle-red-before-green` — watch it fail for the reported reason before you fix it"
+            ),
+            "{text}"
+        );
+        // The Route line is untouched by any of it — the block is added beside
+        // it, never in place of it.
+        assert!(text.contains("- Route: class=feature | lane=small | flags=0 [] | files=0"));
+
+        // A class no row claims keeps the Route line and drops the block.
+        write(tmp.path(), ".bee/state.json", &route("docs"));
+        let text = render(tmp.path());
+        assert!(text.contains("- Route: class=docs"), "{text}");
+        assert!(!text.contains("Principles"), "{text}");
+
+        // No index on disk: a matching class still renders nothing.
+        std::fs::remove_file(tmp.path().join(crate::principles::PRINCIPLE_INDEX)).unwrap();
+        write(tmp.path(), ".bee/state.json", &route("feature"));
+        assert!(!render(tmp.path()).contains("Principles"));
+    }
+
     #[test]
     fn the_standard_commands_block_is_omitted_with_no_recorded_commands() {
         let tmp = minimal_repo();

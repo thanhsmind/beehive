@@ -547,6 +547,15 @@ pub fn build_session_preamble(
             tpl(vget(route, "lane")),
             tpl(vget(route, "product_files")),
         ));
+        // expertise-principles D2: the routed principles sit BESIDE the Route
+        // line they are selected by — same recorded route, one line further
+        // down. The class filter lives in `crate::principles`, shared with
+        // `bee orient`; here we only push what it returns, and it returns
+        // nothing when the class matches no row or the index is absent.
+        lines.extend(crate::principles::principle_lines(
+            root,
+            vget(route, "class").and_then(Value::as_str),
+        ));
     }
     if handoff_outcome.map(|o| o.ok).unwrap_or(false) {
         // fsh-10 (D1): adoption succeeded — start-now, no confirmation needed.

@@ -532,6 +532,22 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     if let Some(worktree) = &worktree {
         packet.insert("worktree".into(), Value::Object(worktree.clone()));
     }
+    // expertise-principles D2: the routed principles, read from the SAME
+    // recorded route `orient_worktree_context` takes its lane from. The class
+    // filter lives in `crate::principles`, shared with the session preamble.
+    // The key is OMITTED when nothing matches — no recorded route, a class no
+    // row claims, or an absent index — so neither the JSON packet nor
+    // `render_orient_text` ever carries an empty header.
+    {
+        let class = match status.get("route") {
+            Some(route) if truthy(route) => vget(route, "class").and_then(Value::as_str),
+            _ => None,
+        };
+        let principles = crate::principles::principle_lines(&ctx.root, class);
+        if !principles.is_empty() {
+            packet.insert("principles".into(), json!(principles));
+        }
+    }
     {
         // D5: idle + an open map with frontier tickets overrides the
         // ORIENT_PHASE_SKILL lookup below deterministically — this is the
@@ -655,6 +671,11 @@ pub(crate) fn render_orient_text(packet: &JMap) -> String {
     }
     if let Some(line) = worktree_line {
         lines.push(line);
+    }
+    // Present only when the route selected something — the packet omits the
+    // key otherwise, so there is no empty-block branch to write here.
+    if let Some(Value::Array(principles)) = packet.get("principles") {
+        lines.extend(principles.iter().filter_map(Value::as_str).map(str::to_string));
     }
     lines.push(format!("skill: {}", tpl(vget(&next, "skill"))));
     lines.push(format!("next: {}", tpl(vget(&next, "action"))));
