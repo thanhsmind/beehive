@@ -1,0 +1,63 @@
+{
+  "id": "cp-1",
+  "feature": "class-playbooks",
+  "lane": "small",
+  "role": "code",
+  "title": "Fence the class-playbook set, then write the four missing playbooks",
+  "action": "RED FIRST, then green — one commit. (1) Add packages/bee-rs/crates/bee/tests/class_playbook_parity.rs, modelled on packages/bee-rs/crates/bee/tests/route_class_parity.rs: pure filesystem, std only, nothing imported from the bee crate, and NO private copy of the class list. Read ROUTE_CLASS_VALUES as TEXT from packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs (it is pub(crate), so an integration test cannot see the symbol — route_class_parity.rs shows the technique, including its declared-arity check so a misparse says so instead of guarding half a list). Pin BOTH directions: every class value has exactly one '### <class>' section under the '## Class playbooks' heading of skills/bee-planning/references/planning-reference.md, and every '### ' section under that heading names a real class value. Bound the section at the next '\\n## ' the way the sibling fences do. (2) RUN IT AND WATCH IT FAIL. It must name feature, docs, release and spike as the classes with no playbook. Keep that output — it is the cell's red evidence. (3) Write those four playbooks, and ONLY those four: do not reword perf, bugfix, refactor or research. Match their voice and shape exactly — a short numbered list where each step is an ACTION, then a closing line naming the thing that is NOT a result (the perf playbook ends '\"It feels faster\" is not a result'). Read all four existing sections before writing a word. Ground each new playbook in bee's own doctrine, not in generic advice: `feature` — name the data shape first, walking skeleton end-to-end with no stubs, build the current slice and headline the rest, prove the user-visible path not just the unit, sync the knowledge layer when behavior changes. `docs` — read what the bundle already holds for the area and extend it rather than filing a near-duplicate beside it, decide which side is wrong (the doc or the code) and fix that one, resolve every path and command written, prove with parity and pointer checks rather than tests, and name what is still uncovered. `release` — never hand-walk the steps (scripts/release.sh IS the release), green before anything is tagged, the release is done only at the final OK line, and a release commit without that OK is not a release. `spike` — write the question as a yes/no before starting, timebox it, the ANSWER is the deliverable and the code is not, keep the throwaway under .bee/spikes/, record the answer as a decision and delete the spike; a spike that becomes the implementation was never a spike. (4) Run the fence green. (5) Run .bee/bin/bee dev regen so the changed skill reaches every plugin tree.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [
+    "skills/bee-planning/references/planning-reference.md"
+  ],
+  "affects_specs": [],
+  "must_haves": {
+    "truths": [
+      "The fence was RUN RED before the playbooks were written, and its failure output named exactly feature, docs, release and spike.",
+      "The fence declares no class list of its own — ROUTE_CLASS_VALUES is read from workflows.rs as text.",
+      "Both directions are pinned: a class with no section, and a section naming no class, each go red.",
+      "The four existing playbooks are untouched — this cell fills holes, it does not edit what is already written.",
+      "Each new playbook matches the existing voice: numbered ACTION steps and a closing line naming what is not a result.",
+      "bee dev regen runs so the changed skill file reaches every plugin tree."
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "cp-worker-1",
+    "outcome": "Added the class-playbook parity fence and wrote the feature, docs, release and spike playbooks",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs",
+      "skills/bee-planning/references/planning-reference.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T19:26:49.283Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T19:22:00.628Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added the class-playbook parity fence (red first, naming feature docs release spike) and wrote those four playbooks",
+      "commit": "8bf2a354",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs",
+        "skills/bee-planning/references/planning-reference.md"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity --test route_class_parity --test pointer_integrity; bee dev release-manifest --check — green:unit — the new fence plus the two fences over the same class vocabulary and the same skill file",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
