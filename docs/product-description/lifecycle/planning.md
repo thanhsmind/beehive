@@ -32,7 +32,7 @@ stateDiagram-v2
 
 ### Invoke
 
-The route record validates on write: `class` from `feature|bugfix|docs|refactor|research|release|spike`; `lane` from `docs|tiny|small|spike|standard|high-risk`; flags from a fixed ten-value list. The record carries a rationale and timestamps.
+The route record validates on write: `class` from `feature|bugfix|docs|refactor|research|release|spike|perf`; `lane` from `docs|tiny|small|spike|standard|high-risk`; flags from a fixed ten-value list. The record carries a rationale and timestamps.
 
 ### Ends at once
 
