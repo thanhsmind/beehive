@@ -869,7 +869,7 @@ parameters (see `bee cells show --help --json`)."
 
     #[test]
     fn a_well_formed_binary_call_is_allowed() {
-        allow(".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green — touched close.rs\"");
+        allow(".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green:unit — touched close.rs\"");
         allow("bee status --json");
         allow("bee cells ready --json");
         allow("bee state worker add --nickname w1 --cell c1 --json");

@@ -318,8 +318,8 @@ use std::process::ExitCode;
     fn a_well_formed_bee_cli_call_reaches_the_ordinary_verdict() {
         let fx = build_fixture("swarming", true);
         for command in [
-            "node .bee/bin/bee.mjs cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green — touched close.rs\"",
-            ".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green — touched close.rs\"",
+            "node .bee/bin/bee.mjs cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green:unit — touched close.rs\"",
+            ".bee/bin/bee cells cap --id demo-1 --outcome done --report \"cargo test -p bee — green:unit — touched close.rs\"",
             "bee status --json",
         ] {
             let e = expect_done(bash(command), &fx.root);

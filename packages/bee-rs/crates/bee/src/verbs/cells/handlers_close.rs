@@ -1739,7 +1739,7 @@ pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Op
 mod tests {
     use super::*;
 
-    const PROOF: &str = "cargo test -p bee — green — the cap hook only";
+    const PROOF: &str = "cargo test -p bee — green:unit — the cap hook only";
 
     fn mailbox_cell(root: &Path, id: &str) {
         let dir = root.join(".bee").join("cells");

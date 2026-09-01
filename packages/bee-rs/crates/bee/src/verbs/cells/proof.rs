@@ -82,6 +82,12 @@ mod tests {
         std::fs::write(&file, body).unwrap();
     }
 
+    /// D2 (docs/history/proof-strength-and-expiry/CONTEXT.md) — this is the
+    /// write/read split's own evidence. The fixture's bare `green` is the
+    /// form `parse_report_flag` now REFUSES on a new cap, and it still reads
+    /// as proven here, because `feature_proof_check` checks shape only. Keep
+    /// the bare `green`: qualifying it would delete the assertion that ~200
+    /// historical caps stay closeable.
     #[test]
     fn a_capped_cell_with_a_valid_proof_line_is_proven_not_blocking() {
         let tmp = tempfile::tempdir().unwrap();
@@ -206,6 +212,8 @@ mod tests {
                         "outcome": "o",
                         "commit": "c",
                         "files": [],
+                        // D2 evidence, like the fixture above: a historical
+                        // bare `green` still reads as proven. Never qualify it.
                         "tests": "cargo test -p bee — green — touched x.rs",
                         "deviations": []
                     }
