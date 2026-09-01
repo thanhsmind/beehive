@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"verification-ships-to-hosts\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"verification-ships-to-hosts\" (lane).",
+  "next_action": "Merged into main at 46ec146; capture what settled, then bee close --feature verification-ships-to-hosts.",
   "created_at": "2026-09-01T08:47:00.182Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**Bằng chứng thật, không phải test.**",
-    "asked_at": "2026-09-01T10:10:29.770Z",
-    "session": "6e15dde7-f4f0-4e62-81fc-a10e3d955722"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
