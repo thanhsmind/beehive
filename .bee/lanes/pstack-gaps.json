@@ -13,8 +13,13 @@
   "summary": "Feature \"pstack-gaps\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"pstack-gaps\" — feature is closed.",
   "created_at": "2026-09-01T16:12:37.383Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Thử xong, báo tôi một câu — tôi duyệt `uat` và đóng feature.",
+    "asked_at": "2026-09-01T17:33:43.926Z",
+    "session": "c10117b2-3ab5-438e-9e1f-2dfcbe0e68f1"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",

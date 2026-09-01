@@ -1,0 +1,70 @@
+{
+  "id": "ep-4",
+  "feature": "expertise-principles",
+  "lane": "standard",
+  "role": "docs",
+  "title": "State the applied-principle naming law as an eleventh AGENTS rule",
+  "action": "Add rule agents-name-applied-principles to packages/bee/AGENTS.block.md, placed beside the existing rule-invocation law it extends (decision f051746e), with its own <!-- rule: agents-name-applied-principles --> marker. The law: on a multi-step task the reply names each principle it applied and the decision that principle changed, or states plainly that it changed nothing (CONTEXT.md D3). Add the matching row to the '## AGENTS.md rule homes' section with its spoken: line. Then run bee dev regen so AGENTS.md carries the eleventh marker too, and confirm rule_index_parity goes from ten markers to eleven on BOTH surfaces.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "The law extends decision f051746e's invocation law; it does not restate or duplicate it.",
+      "bee dev regen runs so AGENTS.md and packages/bee/AGENTS.block.md carry the same eleven markers — a half-done regen turns rule_index_parity red.",
+      "The new row carries a non-empty spoken: line before its applied_at: line."
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "ep-1"
+  ],
+  "status": "capped",
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ep-worker-5",
+    "outcome": "AGENTS gains an eleventh rule obliging the reply to name each applied principle and what it changed",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Rewrote two stale counts in the index doc (\"these ten are homed\", \"twenty rules where there are ten\") into count-free wording — the eleventh rule made both sentences false, and a count restated in prose goes stale on every new rule — something else had to be fixed first",
+      "sync-ack: The AGENTS.md edit adds a new rule id; no existing rule's text changed, so no applied_at restatement of agents-capture-line-at-close or any sibling rule is stale."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-01T18:23:06.143Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd",
+    "claimed_at": "2026-09-01T18:18:55.467Z",
+    "sync_ack": "The AGENTS.md edit adds a new rule id; no existing rule's text changed, so no applied_at restatement of agents-capture-line-at-close or any sibling rule is stale.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "AGENTS gains an eleventh rule obliging the reply to name each applied principle and what it changed",
+      "commit": "973a5f46",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && bee dev release-manifest --check — green:unit — the cell verify; rule_index_parity 3/3 green at eleven markers on both surfaces",
+      "deviations": [
+        "Rewrote two stale counts in the index doc (\"these ten are homed\", \"twenty rules where there are ten\") into count-free wording — the eleventh rule made both sentences false, and a count restated in prose goes stale on every new rule — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
