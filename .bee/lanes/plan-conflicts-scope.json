@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"plan-conflicts-scope\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"plan-conflicts-scope\" (lane).",
+  "next_action": "Merged into main at 3cc595e; capture what settled, then bee close --feature plan-conflicts-scope.",
   "created_at": "2026-09-01T13:18:53.423Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,14 +25,5 @@
     "rationale": "Two product files: plan_conflicts.rs and its tests. Existing derive tests use tiny fixtures that D3's 200-decision floor keeps untouched, but the flag is honest — derive's output shape is asserted by tests and read by the gate.",
     "updated_at": "2026-09-01T13:19:39.186Z",
     "feature": "plan-conflicts-scope"
-  },
-  "merge_ready": {
-    "since": "2026-09-01T13:37:06.466Z",
-    "branch": "wt/plan-conflicts-scope",
-    "worktree_id": "beehive--wt--plan-conflicts-scope",
-    "uat": "pending",
-    "blocked_by": [
-      "routing"
-    ]
   }
 }
