@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-adoption",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pstack-adoption\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming for slice 1 (psa-0..psa-3).",
+  "next_action": "bee close finished \"pstack-adoption\" — feature is closed.",
   "created_at": "2026-09-01T10:48:43.673Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
