@@ -884,6 +884,115 @@ use std::time::Instant;
         assert_eq!(answer.result["verify"], json!("proven (1 cell(s))"));
     }
 
+    /// D4 (docs/history/proof-strength-and-expiry/CONTEXT.md): a cap whose
+    /// recorded proof was taken before the merge base — main moved and the
+    /// branch took it in afterwards — is NAMED by the `proof-stale`
+    /// advisory, in the JSON result and in the printed text, and the merge
+    /// lands anyway. The two silent shapes ride the same setup, because
+    /// they are only meaningful beside a row that DID fire: a cap recording
+    /// the `"none"` commit sentinel, and one recording a sha this repo does
+    /// not have (a git call that cannot answer). Fail open: a warning that
+    /// is wrong is worse than no warning.
+    #[test]
+    fn a_proof_taken_before_the_merge_base_is_named_and_the_merge_still_lands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "aged", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+        let proved_at = head_sha(&wt);
+
+        // Main moves on, and the branch takes main in — which is what walks
+        // the merge base forward, past the commit the cap was proven at.
+        std::fs::write(main.join("m.txt"), "m").unwrap();
+        git_ok(&main, &["add", "m.txt"]);
+        git_ok(&main, &["commit", "-qm", "main moves"]);
+        git_ok(&wt, &["merge", "--no-edit", "main"]);
+
+        let report_at = |commit: &str| {
+            json!({
+                "outcome": "did the thing",
+                "commit": commit,
+                "files": ["src/a.rs"],
+                "tests": "cargo test -p bee — green:unit — touched a.rs",
+                "deviations": [],
+            })
+        };
+        write_capped_cell(&main, "aged-1", "aged", Some(report_at(&proved_at)));
+        write_capped_cell(&main, "aged-2", "aged", Some(report_at("none")));
+        write_capped_cell(&main, "aged-3", "aged", Some(report_at("abc123")));
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the advisory must never refuse a merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true), "the merge lands anyway");
+        let stale = &answer.result["proof_stale"];
+        assert_eq!(stale["cells"], json!(["aged-1"]), "{:?}", answer.result);
+        assert!(
+            jsjson::js_to_string(&stale["message"]).contains("aged-1"),
+            "the advisory names the cell: {stale:?}"
+        );
+        // It is PRINTED, not just carried in the JSON result.
+        let printed = merge_text_lines(&created.id, &main, &answer).join("\n");
+        assert!(printed.contains("proof-stale: "), "{printed}");
+        assert!(printed.contains("aged-1"), "{printed}");
+    }
+
+    /// D4: the ordinary merge — every cap was proven on the line that
+    /// descends from the merge base — says nothing at all. An advisory that
+    /// fires on a clean merge is noise, so this is the case that matters
+    /// most: no key in the result, no line in the text.
+    #[test]
+    fn a_proof_that_descends_from_the_merge_base_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "fresh", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        write_capped_cell(
+            &main,
+            "fresh-1",
+            "fresh",
+            Some(json!({
+                "outcome": "did the thing",
+                "commit": head_sha(&wt),
+                "files": ["src/a.rs"],
+                "tests": "cargo test -p bee — green:unit — touched a.rs",
+                "deviations": [],
+            })),
+        );
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert!(
+            answer.result.get("proof_stale").is_none(),
+            "a fresh proof must say nothing: {:?}",
+            answer.result
+        );
+        let printed = merge_text_lines(&created.id, &main, &answer).join("\n");
+        assert!(!printed.contains("proof-stale"), "{printed}");
+    }
+
     /// D7/D8: a capped cell that carries a `trace.report` but no VALID D8
     /// proof line (here: an empty `tests` string) refuses the merge —
     /// zero-mutation, naming the cell — before `git merge` ever runs.

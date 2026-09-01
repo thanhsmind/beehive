@@ -683,6 +683,16 @@ pub(crate) fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer)
                 }
             });
         }
+        // D4 (proof-strength-and-expiry): the `proof-stale` advisory, on the
+        // line after the `verify` field it qualifies. It names an age, not a
+        // fault — the merge above it already landed (phases.rs writes this
+        // key only on a merge that committed).
+        if let Some(stale) = r.get("proof_stale") {
+            lines.push(format!(
+                "  proof-stale: {}",
+                stale.get("message").map(jsjson::js_to_string).unwrap_or_default()
+            ));
+        }
         if let Some(warning) = r.get("warning") {
             lines.push(format!(
                 "  WARNING ({}): {}",

@@ -36,6 +36,15 @@ pub(crate) struct ProofCheck {
     pub(crate) bad_ids: Vec<String>,
     pub(crate) proven_count: usize,
     pub(crate) legacy_count: usize,
+    /// D4 (docs/history/proof-strength-and-expiry/CONTEXT.md): `(cell id,
+    /// the commit that cap's report recorded)` for every PROVEN cap that
+    /// recorded a real one. Read exactly the way `handlers_close.rs` reads
+    /// the same key — the `"none"` sentinel (and an empty string) is dropped
+    /// HERE, so a cap that never recorded a commit is absent rather than
+    /// carrying an uncomparable value that a caller could measure as stale.
+    /// Store data only: whether a commit is old is a git question, and this
+    /// module runs no git.
+    pub(crate) commits: Vec<(String, String)>,
 }
 
 /// The D8 proof-check itself: every `status: "capped"` cell for `feature`
@@ -50,6 +59,7 @@ pub(crate) fn feature_proof_check(
     feature: &str,
 ) -> Result<ProofCheck, crate::verbs::drivers::Delegate> {
     let mut bad_ids: Vec<String> = Vec::new();
+    let mut commits: Vec<(String, String)> = Vec::new();
     let mut proven_count = 0usize;
     let mut legacy_count = 0usize;
     for cell in crate::verbs::drivers::list_cells_including_archive(root, feature, Some("capped"))? {
@@ -59,16 +69,25 @@ pub(crate) fn feature_proof_check(
             continue;
         };
         let valid = matches!(report.get("tests"), Some(Value::String(s)) if parse_tests_proof(s).is_some());
+        let id = cell.get("id").and_then(Value::as_str).unwrap_or("").to_string();
         if valid {
             proven_count += 1;
+            let commit = report
+                .get("commit")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if !id.is_empty() && !commit.is_empty() && commit != "none" {
+                commits.push((id, commit));
+            }
             continue;
         }
-        let id = cell.get("id").and_then(Value::as_str).unwrap_or("").to_string();
         if !id.is_empty() {
             bad_ids.push(id);
         }
     }
-    Ok(ProofCheck { blocking: !bad_ids.is_empty(), bad_ids, proven_count, legacy_count })
+    Ok(ProofCheck { blocking: !bad_ids.is_empty(), bad_ids, proven_count, legacy_count, commits })
 }
 
 #[cfg(test)]
@@ -250,6 +269,40 @@ mod tests {
         assert_eq!(check.proven_count, 0);
         assert_eq!(check.legacy_count, 0);
         assert!(check.bad_ids.is_empty());
+    }
+
+    /// D4: the commit-carrying read the merge door's staleness advisory
+    /// measures. A recorded sha is carried with its cell id; the `"none"`
+    /// sentinel `bee cells finish` writes when a cap has no commit is
+    /// dropped here, so no caller can ever measure it as an old commit.
+    #[test]
+    fn a_recorded_commit_is_carried_and_the_none_sentinel_is_dropped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let report = |commit: &str| {
+            json!({
+                "outcome": "o",
+                "commit": commit,
+                "files": [],
+                "tests": "cargo test -p bee — green:unit — touched a.rs",
+                "deviations": []
+            })
+        };
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            &json!({"id": "demo-1", "feature": "demo", "status": "capped", "trace": {"report": report("abc123")}})
+                .to_string(),
+        );
+        w(
+            root,
+            ".bee/cells/demo-2.json",
+            &json!({"id": "demo-2", "feature": "demo", "status": "capped", "trace": {"report": report("none")}})
+                .to_string(),
+        );
+        let check = feature_proof_check(root, "demo").unwrap();
+        assert_eq!(check.proven_count, 2, "both caps are proven — only the COMMIT differs");
+        assert_eq!(check.commits, vec![("demo-1".to_string(), "abc123".to_string())]);
     }
 
     /// dda-1 parity: an archived-only capped cell still counts, same as
