@@ -9,7 +9,7 @@ Execution is the worker's arc: take exactly one cell, do exactly its work, prove
 The orchestrator dispatches a worker with one claimed cell (or the worker claims next). The worker reserves the cell's files, reads what the cell names, writes the code, runs the proof it chose for the change type, commits once with the trailer, and caps:
 
 ```
-bee cells finish --id lrl-2 --report '{"outcome":"lockout after 5 failures","commit":"a1b2c3d","files":["src/auth/limit.rs"],"tests":"cargo test -p auth — green — rate-limit tests cover the change","deviations":[]}'
+bee cells finish --id lrl-2 --report '{"outcome":"lockout after 5 failures","commit":"a1b2c3d","files":["src/auth/limit.rs"],"tests":"cargo test -p auth — green:unit — rate-limit tests cover the change","deviations":[]}'
 ```
 
 bee answers `Capped lrl-2 at <ts> (tests: boundary).`, releases the worker's reservations, and prints the worker's exit line: `next: reply [DONE] with the one-line outcome, files touched, and the commit hash.` The worker reports `[DONE] …` and is finished — it executes exactly the one cell it was handed.
@@ -94,7 +94,7 @@ Columns: before and after the cap.
 - `cap` versus `finish`: same checks, but only `finish` releases reservations, requires the commit trailer, and prints the worker's exit line — `cap` is the orchestrator's narrow bookkeeping door.
 - A `fix-first` claim (fixing a red base) rides the claim's trace flag; the red it fixes was never capped.
 - `--override-judge` and `--commit-pending` both leave loud trace records; they are recorded exceptions, not quiet flags.
-- The proof line's result segment is free text apart from red: `green` is conventional, but the check is "not red and not a retired enum", so `passing`/`ok` cap fine — a looseness worth knowing when grepping proofs.
+- The proof line's result segment is a closed vocabulary — `green:live`, `green:unit`, `green:static` — checked on the write path only: an unqualified `green`, a `passing` or an `ok` all refuse by name, while `red` refuses as it always did. Already-capped cells keep whatever they recorded, so a proof grep still meets historical unqualified values.
 - An adopted claim (from a `planned-next` handoff) carries `adopted` on the claim file; the sweep's self-exclusion still protects it.
 
 ## Open questions and verification

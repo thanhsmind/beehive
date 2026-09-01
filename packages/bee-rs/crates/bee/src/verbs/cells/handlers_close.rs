@@ -227,7 +227,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         Some(raw) => parse_report_flag(raw)?,
         None => {
             return Err(Fail::Thrown(format!(
-                "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green — touched close.rs\").",
+                "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green:unit — touched close.rs\").",
                 REPORT_KEYS.join(", ")
             )))
         }

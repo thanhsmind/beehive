@@ -161,7 +161,7 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(
             text.contains(
-                "- Test gates disabled by repo declaration (commands.test: none) — every cap still records a proof line (command segment `none`, reason naming the parity/docs proof used, e.g. `none — green — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
+                "- Test gates disabled by repo declaration (commands.test: none) — every cap still records a proof line (command segment `none`, reason naming the parity/docs proof used, e.g. `none — green:static — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
             ),
             "{text}"
         );

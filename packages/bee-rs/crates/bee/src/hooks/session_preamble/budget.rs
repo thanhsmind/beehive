@@ -603,7 +603,7 @@ pub fn build_session_preamble(
             // line; a sentinel repo's proof line names its command segment
             // `none` and points the reason at the parity/docs check used.
             lines.push(format!(
-                "- Test gates disabled by repo declaration (commands.test: {NO_TEST_SENTINEL}) — every cap still records a proof line (command segment `{NO_TEST_SENTINEL}`, reason naming the parity/docs proof used, e.g. `{NO_TEST_SENTINEL} — green — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
+                "- Test gates disabled by repo declaration (commands.test: {NO_TEST_SENTINEL}) — every cap still records a proof line (command segment `{NO_TEST_SENTINEL}`, reason naming the parity/docs proof used, e.g. `{NO_TEST_SENTINEL} — green:static — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
             ));
         } else if opt_truthy(commands.get("test")) {
             lines.push(
