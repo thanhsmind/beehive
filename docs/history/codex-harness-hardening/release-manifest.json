@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "106689f302c0b41a9418811d81cee584dc61807204054c2f6c9b160c0b4137ca",
+      "sha256": "bd4b7cd40499993fbf94fc8efc1179de50aa504153bba363f3a7b432736fe1ba",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -437,7 +437,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md",
-      "sha256": "7fb9230a02d52e92d54fbed4c9c680ede189353e4b798de645c0d2ad418493f5",
+      "sha256": "a041f15f0f0554ead67825d386e1dd3f35a1b0b453dc7c9d782a09611298f51b",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-researching/references/trace-and-provenance.md"
@@ -703,7 +703,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "21f7c5247efb5938cbe4d6e84352292ad0f5847f54fb8fa57ac8d7ec448278a2",
+      "sha256": "b3d58821b535ed9e890db60b7962ead8c4a8be0c98807886a077012a722a4c07",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1004,7 +1004,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md",
-      "sha256": "7fb9230a02d52e92d54fbed4c9c680ede189353e4b798de645c0d2ad418493f5",
+      "sha256": "a041f15f0f0554ead67825d386e1dd3f35a1b0b453dc7c9d782a09611298f51b",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-researching/references/trace-and-provenance.md"
@@ -1782,7 +1782,7 @@
     },
     {
       "path": "skills/bee-researching/references/trace-and-provenance.md",
-      "sha256": "7fb9230a02d52e92d54fbed4c9c680ede189353e4b798de645c0d2ad418493f5",
+      "sha256": "a041f15f0f0554ead67825d386e1dd3f35a1b0b453dc7c9d782a09611298f51b",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-researching/references/trace-and-provenance.md"

@@ -46,7 +46,7 @@ never by memory. Sweep all seven categories, in this order.
    the matching files under `docs/knowledge/`.
 5. **Code comments** — `rg -n "<symbol>"` to find the OWNING source file, then
    read its comments and doc-comments at the site, not from the snippet.
-6. **Tests** — `rg -n "<behavior>" $(fd -t d tests)`. A test name is often the
+6. **Tests** — `rg -n "<behavior>" $(fd -t d '^tests$')`. A test name is often the
    plainest statement of intent this repo holds.
 7. **External tracker** — `gh issue list --search "<term>"` and `gh pr list
    --search "<term>"`. Often absent here; report it as absent rather than
