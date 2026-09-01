@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "proactive-leader-intake D3/D4 (423e1664, b34fdea9 — the plan check is the plan-step hat wave on advisor-kind seats; 2026-08-30)", "pstack-adoption D1/D2/D3/D4/D5 (docs/history/pstack-adoption/CONTEXT.md, 2026-09-01 — the route class gets a procedure: four cited playbooks, the perf class, the checkable-CoS refusal, and the dismissed-findings duty)", "code-shape-doctrine D1/D2/D3/D4/D5 (docs/history/code-shape-doctrine/CONTEXT.md, 2026-09-01 — four code-shape rules placed in the worker brief rather than the always-loaded contract)"]
   sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
 ---
@@ -44,6 +44,27 @@ govern the working residue of a cell rather than its content.
   that does not apply stays VISIBLE with its recorded reason — the existing
   named-deviation rule — and is never a refusal. The playbook binds the ROUTE
   class only; the cell-level `change_class` enum is a different taxonomy.
+- **R20** — The worker brief carries four code-shape rules, and they refuse
+  nothing (code-shape-doctrine D1-D5, cell csdoc-1, 2026-09-01). Every other
+  bee rule governs PROCESS; none governed what a change leaves behind, so a
+  worker threading a flag through five layers, keeping a compatibility shim and
+  adding a fourth boolean passed every gate on green tests and an honest cap.
+  Measured, not assumed: `AGENTS.md` plus `CLAUDE.md` returned ONE hit across
+  `delet|smallest|simpler|duplicat|shim|dead code`, and it was about evidence,
+  not shape. The rules — prefer deletion to addition, the smallest diff that
+  solves it, leave the base simpler than found, and a signal threaded through
+  several layers means stop and find the direct path — live in the DISPATCH
+  BRIEF (`packages/bee/prompts/worker-cell.md`, mirrored in
+  `packages/bee/agents/bee-build.md.tmpl`, which duplicates the brief's
+  contract rather than pointing at it), never in the always-loaded contract.
+  That placement is the point: `docs/history/research/pstack-xia.md` proposed
+  `AGENTS.md` but its own ranking puts context-proximal placement above the
+  contract middle, which decays over a long session, and a contract line is a
+  tax on every session including those that dispatch no worker. They carry no
+  teeth, matching the existing red-before-green rule's posture — craft, applied
+  by judgment and surfaced at review, "not by flags". Types, domain modelling
+  and reader load were deliberately left out as too large for a brief, and no
+  `expertise/rust.md` was created behind a four-line change.
 - **R19** — Two duties keep an agent's own judgment auditable (pstack-adoption
   D4, D5; cells psa-5, psa-6, 2026-09-01). The herding dispatch role refuses a
   candidate whose Condition of Satisfaction names no command, path, or state it
