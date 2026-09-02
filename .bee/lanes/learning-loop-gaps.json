@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"learning-loop-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"learning-loop-gaps\" (lane).",
+  "next_action": "Merged into main at bc9cf20; reload the product and test \"learning-loop-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane learning-loop-gaps\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-02T07:55:52.287Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: learning-loop-gaps",
+    "asked_at": "2026-09-02T08:44:36.253Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -34,14 +39,5 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave:hat-facts-gaps(opus)+hat-alternatives(opus)+hat-user-impact(sonnet)",
     "digest_head": "# Hat wave — learning-loop-gaps (plan step)\n\nThree seats: `hat-facts-gaps` (opus), `hat-alternatives` (opus),\n`hat-user-impact` (sonnet). Opened 2026-09-02 at the plan step. Synthesis by the\nleader. The wave **rejected the first draft** and the shape was rebuilt before\nplan.md reached its gate-ready bytes.\n\n## The draft the hats critiqued\n\nThree cells: (1) build `bee recovery window --session <id> [--purpose\nrecover|reflect]`, superseding `sweep-recovery-door` D3; (2) widen\n`scout-and-ticks.md` "
-  },
-  "merge_ready": {
-    "since": "2026-09-02T08:27:22.485Z",
-    "branch": "wt/learning-loop-gaps",
-    "worktree_id": "beehive--wt--learning-loop-gaps",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt"
-    ]
   }
 }
