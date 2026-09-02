@@ -292,16 +292,39 @@ pub const RETIRED_VERIFY_KEY_WARNING: &str = "commands.verify was retired in 2.1
 
 pub const RETIRED_VERIFY_KEY_NO_TEST_WARNING: &str = "commands.verify was retired in 2.1.0 and .bee/config.json declares NO commands.test — this repo currently has no test gate at all. FIX: move your verify command to commands.test (a fast subset is better than nothing), or set commands.test to \"none\" if this repo is deliberately test-free. Note: \"none\" on commands.verify no longer declares a no-test repo.";
 
-/// The verification offer (D5, verification-ships-to-hosts). It fires for a
-/// repo that declares no test command and never carried the retired
-/// `commands.verify` key — the population the two warnings above cannot
-/// reach, which is every repo onboarded since 2.1.0.
+/// The ONE name a generated verification skill carries, in every repo,
+/// forever (verification-in-the-flow D1). Content differs per project; the
+/// name never does, which is what lets every bee surface name the skill in
+/// literal text and lets onboard check its existence at one fixed path. It is
+/// deliberately NOT `bee-`prefixed: the `bee-*` skill sync prunes any
+/// bee-named target directory absent from bee's own source, so a
+/// `bee-verify-app` would be deleted from every runtime skill home on the
+/// next `--apply`.
+pub const VERIFY_APP_SKILL_NAME: &str = "verify-app";
+
+/// The two verification OFFERS and the one upkeep POINTER — the three shapes
+/// onboard's verification arm can print (verification-in-the-flow D3).
 ///
-/// Written in plain language on purpose: notices are printed verbatim, so an
-/// agent that pastes this line must not leak a config path, a key name or a
-/// bee term to the person reading it. It is an OFFER — onboard points at the
-/// skill and stops; it generates nothing and runs nothing.
-pub const NO_TEST_VERIFICATION_OFFER: &str = "This project has no command that proves it works. The bee-verifying skill can build one together with the user: it studies the project, writes a check that drives the real product, and leaves a single command anyone can run. Offer it — say what it does, then ask. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer.";
+/// All three are written in plain language on purpose: notices are printed
+/// verbatim, so an agent that pastes one must not leak a config path, a key
+/// name or a bee term to the person reading it. Onboard only points at a
+/// skill; it generates nothing, updates nothing and runs nothing.
+///
+/// The two offers carry different FIRST sentences because they answer
+/// different states: a repo with no test command has nothing at all, while a
+/// tested repo has plenty — just nothing that drives the product. One wording
+/// for both would open with a sentence that is false for half its readers.
+/// Both close on the same anti-nag instruction: onboard re-runs on every
+/// version mismatch, so an offer already refused must not be made again.
+pub const NO_TEST_VERIFICATION_OFFER: &str = "This project has no command that proves it works. The bee-verifying skill can build one together with the user: it studies the project, writes a check that drives the real product, and leaves a single command anyone can run. Offer it — say what it does, then ask, but first look through the project's recorded decisions for an earlier refusal: if the user already said no to this, say nothing. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer.";
+
+/// The second offer: this repo tests its code but nothing drives its product.
+pub const TESTED_REPO_VERIFICATION_OFFER: &str = "This project's tests check that its code is correct, but nothing starts the real product and looks at what a user would see. The bee-verifying skill can build that second check together with the user: it studies the project, writes a check that drives the product itself, and leaves a single command anyone can run. The tests stay exactly as they are — this is a separate command beside them. Offer it — say what it does, then ask, but first look through the project's recorded decisions for an earlier refusal: if the user already said no to this, say nothing. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer.";
+
+/// The pointer, for a repo that already HAS the verification skill. A pointer,
+/// never a prompt: it names the skill that maintains the check and stops.
+/// There is nothing here for the user to accept — the skill exists already.
+pub const VERIFICATION_UPKEEP_POINTER: &str = "This project already carries its own verification skill — the one that drives the real product. The bee-verify-upkeep skill keeps it true: it re-reads what the product does now, refreshes the checks that have drifted behind it, and reports whatever it cannot repair on its own.";
 
 /// onboard_bee.mjs HEADER_POINTER_CANDIDATES (l. 2194–2198).
 pub const HEADER_POINTER_CANDIDATES: &[&str] =
