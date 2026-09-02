@@ -23,7 +23,9 @@ Slice 1 alone is reversible — it is Rust behind unit tests with no host consum
 
 ## Recommendation taken
 
+<!-- bee:not-a-deferral: this sentence states what was NOT deferred; it is the absence of a deferral, not one -->
 Approve. Every locked decision has a work item and a proof row; the one open question was answered by the user at this gate; the claims table's blocker and three drifted anchors are fixed; and the wave's ten remaining findings were folded in as settled planning decisions rather than deferred.
+<!-- /bee:not-a-deferral -->
 
 ## Carried forward, not resolved by this gate
 

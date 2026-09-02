@@ -30,12 +30,16 @@ ran. Lock originated nothing.
 
 ## Recommendation taken
 
+<!-- bee:not-a-deferral: a gate report records what was presented at that moment; both questions it names were answered at the plan step and CONTEXT.md now marks them so -->
 Approve. The decisions are the user's own words from this session, every one
 carries its rationale, and the two reversals each cite verifiable evidence
 rather than preference. Two questions are deferred to planning and neither
 blocks shaping.
+<!-- /bee:not-a-deferral -->
 
 ## Known limit recorded, not resolved
 
+<!-- bee:not-a-deferral: the condition is registered as trigger `a-host-repo-needs-a-second-verification-s__9f4f90f0`; this line is the gate-time record of it -->
 A host repo with two separate products cannot carry two `verify-app`. Recorded
 in CONTEXT.md § Known Constraints as a later decision, not a blocker.
+<!-- /bee:not-a-deferral -->

@@ -75,13 +75,15 @@ Rejected alternatives:
 - *Two slices (merge doctrine and dogfood)* — viable, but the live drive then serves as proof for both and neither gets its own.
 - *Keep D6's composition and add the drive to the proof line too* — the drive runs twice per cap and the red-result ambiguity D6 exists to remove survives.
 
-## Decisions taken at this step (CONTEXT's deferred questions and the wave's open ends)
+## Decisions taken at this step (CONTEXT's two open questions, and the wave's open ends)
 
 These were planning's to settle. Each is settled here, not carried to the gate.
 
 1. **The existence check reads SOURCE, not a rendered home** — `.bee/verify/verify-app/SKILL.md`. **[wave: G2]** A fresh clone before any `--apply` has the source but may have no rendered copy; reading a rendered home would flip the branch on clone state rather than on whether the repo has a verification skill.
+<!-- bee:not-a-deferral: this line ANSWERS the question it names; the word deferred identifies which CONTEXT question was settled here, it promises nothing -->
 2. **No preamble verification line.** **[wave: G5 — CONTEXT deferred Q2]** D1 makes the name a constant, so a preamble field would restate a constant every session. The doctrine lines name it directly instead.
-3. **A composed host is left alone, recorded.** **[wave: R3]** bee never edits `commands.test`, and claim 9 says the population is zero. `bee-verify-upkeep` gains one line: a test command containing a drive path is reported to the user with the reason, never rewritten.
+<!-- /bee:not-a-deferral -->
+3. **A composed host is left alone, recorded.** **[wave: R3]** bee never edits `commands.test`, and claim 9 says the population is zero. `bee-verify-upkeep` gains one line: a test command containing a drive path is reported to the user with the reason, never rewritten. Removing it is the user's call — bee states the fact and stops.
 4. **State A and state B carry different first sentences.** **[wave: hat-user-impact]** The existing constant opens "This project has no command that proves it works" — false for a repo that declares a test command. Two constants, both passing the hygiene test of claim 6 (which bans the string `.bee`, so neither notice may name the path).
 5. **Anti-nag: the generate offer is not re-offered blind.** **[wave: impact 1]** Onboard re-runs on every version mismatch, and bee tags several releases a day. The generate notice therefore instructs the agent to search the decision log for a recorded refusal before offering, the way `bee-verifying` already instructs for its own second question. The upkeep notice is a pointer, not a prompt: it names the skill and stops.
 6. **D4 is recorded as an unproven theory with a named falsifier.** **[wave: hat-value]** No evidence in this repo shows an agent failing for want of a feature map. The falsifier: after two mapped features, check whether plan risk maps actually cite feature-file gotchas. If they do not, D4's shaping tier is reverted.
@@ -141,7 +143,7 @@ Five seats, one draft, `84485816`. What each changed:
 - **alternatives** — the slice boundary reshuffle (§ Approach), D3's minimum shape (reword one constant, add one), D5 as a fourth parenthesised case rather than a new bullet, D7 scoped as a move. Verdict on Q: option (a).
 - **user-impact** — the four-state SEE mock, from which decisions 4 and 5 come; the mapless-repo case (decision 7); the nag exposure. Verdict on Q: indifferent.
 - **risks** — R1 through R6, of which R2 became § Named constraint and R4 became the risk map's new HIGH row. Also cleared the biggest fear outright: every deletion path in bee was traced, and a non-`bee-` named `verify-app` source tree is read-only to bee in all of them. Verdict on Q: (b) creates a real old-binary skew hazard.
-- **value** — D2 is ceremony with negative value; D4 is a theory (decision 6); D5 needs the step-proximal pointer (decision 8); the supersede must name `bbedc1d2` (decision 9). Named the 80/20 subset as D1+D3+D6+D5, with D4's shaping tier and D7 as the first things to defer under pressure.
+- **value** — D2 is ceremony with negative value; D4 is a theory (decision 6); D5 needs the step-proximal pointer (decision 8); the supersede must name `bbedc1d2` (decision 9). Named the 80/20 subset as D1+D3+D6+D5, ranking D4's shaping tier and D7 lowest.
 
 Cutting D2 also deletes the plan's only original HIGH-risk component — the renderer rewrite — and both remaining HIGH rows (regen drift, release timing) are ones the wave added.
 

@@ -12,8 +12,10 @@ renders `features/` as a phantom skill nothing in bee can prune.
 ## facts-gaps
 One BLOCKER: claim 12's anchor named `pstack-adoption/CONTEXT.md`; the bytes live at
 `pstack-gaps/CONTEXT.md:69`. Three drifted line numbers. Three prose-only load-bearing
+<!-- bee:not-a-deferral: a wave digest records what the seats found at that moment; every gap it names was answered in the plan revision that followed -->
 claims. Gaps: the 8-cell truth table filled 4 ways; where the existence check reads;
 CONTEXT's deferred preamble question never answered; no test row pinning D4/D5 text.
+<!-- /bee:not-a-deferral -->
 One seat claim corrected by the leader: `bee-verifying` has NOT shipped in a release.
 
 ## alternatives

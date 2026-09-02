@@ -148,22 +148,25 @@ From the session's scout. Downstream agents read these before planning.
 - The rendered skill copies have their executable bit stripped, so every
   invocation a skill body shows is written `bash <path> …`.
 - A repo with two separate products cannot have two `verify-app`. The feature
-  map indexes multiple features inside one skill; a genuine two-product host is
-  a later decision, recorded here as a known limit, not a blocker.
+  map indexes multiple features inside one skill. Registered as a condition, not
+  left as prose: trigger `a-host-repo-needs-a-second-verification-s__9f4f90f0`
+  fires when a real two-product host appears.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+**None. Both questions this section opened were answered at the plan step.**
 
-- [ ] Does any host repo outside this one already carry `.bee/verify/<name>/`?
-      If none, D2 needs no migration path at all — only D7's regeneration.
-- [ ] Does the preamble earn a verification line once the name is a constant?
-      Decide from what a cold worker actually lacks, not from symmetry with
-      other preamble fields.
+- [x] Does any host repo already carry `.bee/verify/<name>/`? **No** —
+      `fd -t d -H --glob '.bee/verify' ~/Projects` returned zero matches, twice,
+      and `git tag --contains` on `bee-verifying`'s introducing commit is empty,
+      so the skill has never shipped in a release. No migration is owed.
+- [x] Does the preamble earn a verification line? **No** — D1 makes the name a
+      constant, so a preamble field would restate a constant every session. The
+      doctrine lines name the path directly instead.
 
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable and are bee
-decision-log ids. Planning reads the locked decisions, the code context, and
-the deferred-to-planning questions. D6 retires `verification-ships-to-hosts`
+decision-log ids. Planning reads the locked decisions and the code context;
+both open questions above are answered. D6 retires `verification-ships-to-hosts`
 D2 (`d79baa77`) in the active decision set — cite D6, never the retired one.
