@@ -515,6 +515,29 @@ fn pi_belt_names_the_exclusion(rule: &str) -> bool {
     PI_PLUGIN_SOURCE.lines().any(|line| line.contains(rule) && line.contains("NAMED EXCLUSION"))
 }
 
+/// Every ADVISORY hook name the Pi belt wires, parsed from its own
+/// `runAdvisoryHook(directory, "<name>", ...)` call sites — same derivation
+/// as `opencode_advisory_hooks`.
+fn pi_advisory_hooks() -> BTreeSet<String> {
+    const MARKER: &str = "runAdvisoryHook(directory, \"";
+    let mut set = BTreeSet::new();
+    let mut idx = 0usize;
+    while let Some(pos) = PI_PLUGIN_SOURCE[idx..].find(MARKER) {
+        let start = idx + pos + MARKER.len();
+        let rest = &PI_PLUGIN_SOURCE[start..];
+        let end = rest
+            .find('"')
+            .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal");
+        set.insert(rest[..end].to_string());
+        idx = start + end;
+    }
+    assert!(
+        !set.is_empty(),
+        ".pi/extensions/bee-guard.ts: found zero runAdvisoryHook call sites — advisory derivation broke"
+    );
+    set
+}
+
 // ─── node availability (named, non-fatal skip) ─────────────────────────────
 //
 // "Node is absent" is not the only way this belt is unrunnable — a `node`
@@ -1160,6 +1183,7 @@ fn run_helper_hook(hook: &str, stdin: &[u8], cwd: &Path) -> Output {
         .args(["hook", hook])
         .current_dir(cwd)
         .env("BEE_HOOK_NO_DELEGATE", "1")
+        .env_remove("BEE_HERDING_WORKER")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1573,12 +1597,12 @@ fn discovery_doc_names_as_a_gap(name: &str, markers: &[&str]) -> bool {
 }
 
 /// The parity test above only requires BLOCKING rules to hit all three
-/// belts. ADVISORY rules the OpenCode plugin does not wire
+/// belts. ADVISORY rules the OpenCode plugin and Pi extension do not wire
 /// (`codex-subagent-audit`, `chain-nudge`) are allowed to be missing — but
 /// ONLY if that gap is already a NAMED, documented exclusion, never a
 /// silent one. This is the coverage-gate half of the contract: any future
-/// ADVISORY hook the catalog gains that the plugin does not wire, and that
-/// discovery.md does not name (on that rule's own line — F5), fails here
+/// ADVISORY hook the catalog gains that a belt does not wire, and that
+/// is not named as a gap (on that rule's own line — F5), fails here
 /// rather than shipping silently.
 #[test]
 fn advisory_gaps_the_plugin_does_not_wire_are_named_not_silent() {
@@ -1589,27 +1613,38 @@ fn advisory_gaps_the_plugin_does_not_wire_are_named_not_silent() {
         "derived catalog found too few ADVISORY rules to be a meaningful check: {advisory_rules:?}"
     );
 
-    let wired = opencode_advisory_hooks();
+    let opencode_wired = opencode_advisory_hooks();
+    let pi_wired = pi_advisory_hooks();
     let mut unnamed_gaps: Vec<String> = Vec::new();
     for rule in advisory_rules {
-        if wired.contains(rule) {
-            continue; // covered live by `advisory_surfaces_never_throw_regardless_of_the_bee_binarys_behavior`
+        if !opencode_wired.contains(rule) {
+            // Not wired — must be named in discovery.md ON ITS OWN LINE (F5),
+            // not silently dropped and not merely co-mentioned with an unrelated
+            // gap's marker elsewhere in the document.
+            if !discovery_doc_names_as_a_gap(rule, &["NAMED EXCLUSION", "Deferred"]) {
+                unnamed_gaps.push(format!(
+                    "{rule} / opencode belt: not wired by bee-guard.ts's runAdvisoryHook AND not documented on its own \
+                     line as a named gap in docs/history/opencode-support/discovery.md"
+                ));
+            }
         }
-        // Not wired — must be named in discovery.md ON ITS OWN LINE (F5),
-        // not silently dropped and not merely co-mentioned with an unrelated
-        // gap's marker elsewhere in the document.
-        if !discovery_doc_names_as_a_gap(rule, &["NAMED EXCLUSION", "Deferred"]) {
-            unnamed_gaps.push(format!(
-                "{rule}: not wired by bee-guard.ts's runAdvisoryHook AND not documented on its own \
-                 line as a named gap in docs/history/opencode-support/discovery.md"
-            ));
+
+        if !pi_wired.contains(rule) {
+            // Not wired — must be named in .pi/extensions/bee-guard.ts ON ITS OWN LINE,
+            // not silently dropped.
+            if !pi_belt_names_the_exclusion(rule) {
+                unnamed_gaps.push(format!(
+                    "{rule} / pi belt: not wired by .pi/extensions/bee-guard.ts's runAdvisoryHook AND not documented \
+                     on its own line as a NAMED EXCLUSION"
+                ));
+            }
         }
     }
 
     assert!(
         unnamed_gaps.is_empty(),
-        "silent ADVISORY coverage gap(s) — every hook the opencode belt does not wire must be a \
-         NAMED exclusion in discovery.md:\n{}",
+        "silent ADVISORY coverage gap(s) — every hook an enforcement belt does not wire must be a \
+         NAMED exclusion:\n{}",
         unnamed_gaps.join("\n")
     );
 }

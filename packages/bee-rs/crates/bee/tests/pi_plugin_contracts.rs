@@ -210,16 +210,61 @@ fn pi_default_arm_source() -> &'static str {
     &body[arm_start..]
 }
 
+/// Strips single-line (`// ...`) and block (`/* ... */`) JavaScript/TypeScript
+/// comments from `source`, preserving string literal contents intact.
+fn strip_js_comments(source: &str) -> String {
+    let mut out = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    let mut in_string: Option<char> = None;
+    let mut escaped = false;
+
+    while let Some(c) = chars.next() {
+        if let Some(quote) = in_string {
+            out.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == quote {
+                in_string = None;
+            }
+        } else if c == '"' || c == '\'' || c == '`' {
+            in_string = Some(c);
+            out.push(c);
+        } else if c == '/' && chars.peek() == Some(&'/') {
+            chars.next();
+            for nc in chars.by_ref() {
+                if nc == '\n' {
+                    out.push('\n');
+                    break;
+                }
+            }
+        } else if c == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            while let Some(nc) = chars.next() {
+                if nc == '*' && chars.peek() == Some(&'/') {
+                    chars.next();
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Every ADVISORY hook name the belt wires, parsed from its own
 /// `runAdvisoryHook(directory, "<name>", ...)` call sites — same derivation
 /// the OpenCode suite uses for its belt.
 fn pi_advisory_hooks() -> BTreeSet<String> {
+    let stripped = strip_js_comments(PI_PLUGIN_SOURCE);
     const MARKER: &str = "runAdvisoryHook(directory, \"";
     let mut set = BTreeSet::new();
     let mut idx = 0usize;
-    while let Some(pos) = PI_PLUGIN_SOURCE[idx..].find(MARKER) {
+    while let Some(pos) = stripped[idx..].find(MARKER) {
         let start = idx + pos + MARKER.len();
-        let rest = &PI_PLUGIN_SOURCE[start..];
+        let rest = &stripped[start..];
         let end = rest
             .find('"')
             .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal");
@@ -233,26 +278,107 @@ fn pi_advisory_hooks() -> BTreeSet<String> {
     set
 }
 
+fn pi_registered_events_from(source: &str) -> BTreeSet<String> {
+    let stripped = strip_js_comments(source);
+    const MARKER: &str = "pi.on(\"";
+    let mut set = BTreeSet::new();
+    let mut idx = 0usize;
+    while let Some(pos) = stripped[idx..].find(MARKER) {
+        let start = idx + pos + MARKER.len();
+        let rest = &stripped[start..];
+        let end = rest.find('"').expect(".pi/extensions/bee-guard.ts: unterminated pi.on event name literal");
+        set.insert(rest[..end].to_string());
+        idx = start + end;
+    }
+    set
+}
+
 /// Every event name the belt registers a handler for, parsed from its own
 /// `pi.on("<event>"` call sites. This is the ground truth the never-throw
 /// fixture list is gated against: an event wired without a row here would
 /// otherwise be an advisory surface nothing ever proved swallows its failures.
 fn pi_registered_events() -> BTreeSet<String> {
-    const MARKER: &str = "pi.on(\"";
-    let mut set = BTreeSet::new();
-    let mut idx = 0usize;
-    while let Some(pos) = PI_PLUGIN_SOURCE[idx..].find(MARKER) {
-        let start = idx + pos + MARKER.len();
-        let rest = &PI_PLUGIN_SOURCE[start..];
-        let end = rest.find('"').expect(".pi/extensions/bee-guard.ts: unterminated pi.on event name literal");
-        set.insert(rest[..end].to_string());
-        idx = start + end;
-    }
+    let set = pi_registered_events_from(PI_PLUGIN_SOURCE);
     assert!(
         !set.is_empty(),
         ".pi/extensions/bee-guard.ts: found zero `pi.on(\"…\"` registrations — event derivation broke"
     );
     set
+}
+
+/// Rules the Claude hook manifest (`packages/bee/hooks/claude-hooks.json`)
+/// fires on its turn-end event (`Stop`). Derived directly from the manifest
+/// rather than a hand list so this expectation tracks changes to the catalog
+/// of record automatically.
+fn claude_turn_end_rules() -> BTreeSet<String> {
+    let manifest_path = repo_root().join("packages/bee/hooks/claude-hooks.json");
+    let text = std::fs::read_to_string(&manifest_path)
+        .unwrap_or_else(|e| panic!("{}: {e}", manifest_path.display()));
+    let v: Value = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("{}: not valid JSON: {e}", manifest_path.display()));
+
+    let mut rules = BTreeSet::new();
+    if let Some(stop_groups) = v.get("hooks").and_then(|h| h.get("Stop")).and_then(Value::as_array) {
+        for group in stop_groups {
+            if let Some(hooks) = group.get("hooks").and_then(Value::as_array) {
+                for hook in hooks {
+                    if let Some(cmd) = hook.get("command").and_then(Value::as_str) {
+                        if let Some(idx) = cmd.find(" hook ") {
+                            let rest = &cmd[idx + " hook ".len()..];
+                            let end = rest.find(|c: char| c == ';' || c.is_whitespace()).unwrap_or(rest.len());
+                            rules.insert(rest[..end].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        !rules.is_empty(),
+        "packages/bee/hooks/claude-hooks.json: found zero rules under Stop — manifest derivation broke"
+    );
+    rules
+}
+
+/// The body of the `pi.on("agent_settled", ...)` handler in `.pi/extensions/bee-guard.ts`.
+fn pi_agent_settled_handler_body() -> &'static str {
+    let start = PI_PLUGIN_SOURCE.find("pi.on(\"agent_settled\"").expect(
+        ".pi/extensions/bee-guard.ts: pi.on(\"agent_settled\" not found — turn-end handler renamed?",
+    );
+    let body = &PI_PLUGIN_SOURCE[start..];
+    let end = body
+        .find("pi.on(\"session_before_compact\"")
+        .expect(".pi/extensions/bee-guard.ts: could not find the end of agent_settled handler");
+    &body[..end]
+}
+
+/// Hook names called inside a given snippet or handler body.
+fn pi_turn_end_rules_from(body: &str) -> BTreeSet<String> {
+    let stripped = strip_js_comments(body);
+    let mut rules = BTreeSet::new();
+    const MARKER: &str = "runAdvisoryHook(directory, \"";
+    let mut idx = 0usize;
+    while let Some(pos) = stripped[idx..].find(MARKER) {
+        let start = idx + pos + MARKER.len();
+        let rest = &stripped[start..];
+        let end = rest
+            .find('"')
+            .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal in agent_settled");
+        rules.insert(rest[..end].to_string());
+        idx = start + end;
+    }
+    rules
+}
+
+/// Every hook name called inside Pi's `agent_settled` (turn-end) handler.
+fn pi_turn_end_rules() -> BTreeSet<String> {
+    let body = pi_agent_settled_handler_body();
+    let rules = pi_turn_end_rules_from(body);
+    assert!(
+        !rules.is_empty(),
+        ".pi/extensions/bee-guard.ts: found zero runAdvisoryHook call sites in agent_settled"
+    );
+    rules
 }
 
 /// `renderResultInjection`'s own source, sliced at the function's closing
@@ -603,10 +729,19 @@ fn run_harness(harness: &Path, calls: Vec<Value>) -> HarnessRun {
 }
 
 fn run_harness_spec(harness: &Path, spec: Value) -> HarnessRun {
+    run_harness_spec_with_env(harness, spec, &[])
+}
+
+fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &str)]) -> HarnessRun {
     let extension = pi_extension_path();
-    let mut child = Command::new("node")
-        .arg(harness)
-        .arg(&extension)
+    let mut cmd = Command::new("node");
+    cmd.arg(harness).arg(&extension);
+    cmd.env_remove("BEE_HERDING_WORKER");
+    cmd.env_remove("BEE_HERDING_JOB_ID");
+    for (k, v) in env_vars {
+        cmd.env(k, v);
+    }
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -837,6 +972,10 @@ enum StubBehavior {
     /// exit 0, emitting a per-hook marker on stdout so the ADVISORY tests can
     /// tell the session-init preamble apart from the prompt-context delta.
     AdvisoryMarks,
+    /// Epic C / pib-3: exit-0 block verdict emitted by session-close on Stop.
+    SessionCloseBlock(String),
+    /// Epic C / pib-3: exit-0 advisory verdict (systemMessage) emitted by session-close.
+    SessionCloseAdvisory(String),
 }
 
 const PREAMBLE_MARK: &str = "PREAMBLE-MARK";
@@ -886,6 +1025,14 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
         StubBehavior::AdvisoryMarks => format!(
             "case \"$2\" in\n  session-init) printf '%s' '{PREAMBLE_MARK}' ;;\n  prompt-context) printf '%s' '{DELTA_MARK}' ;;\nesac\nexit 0\n"
         ),
+        StubBehavior::SessionCloseBlock(reason) => {
+            let stdout = json!({"decision": "block", "reason": reason}).to_string();
+            format!("printf '%s' '{stdout}'\nexit 0\n")
+        }
+        StubBehavior::SessionCloseAdvisory(msg) => {
+            let stdout = json!({"systemMessage": msg}).to_string();
+            format!("printf '%s' '{stdout}'\nexit 0\n")
+        }
         StubBehavior::NoStore | StubBehavior::StorePresentNoBinary => unreachable!(),
     };
     let path = bin_dir.join("bee");
@@ -1141,7 +1288,7 @@ fn the_unknown_tool_route_is_fail_safe_never_a_typescript_side_allow() {
 #[test]
 fn the_belt_wires_every_advisory_surface_the_event_map_promises() {
     let wired = pi_advisory_hooks();
-    for expected in ["session-init", "prompt-context", "state-sync", "session-close"] {
+    for expected in ["session-init", "prompt-context", "state-sync", "session-close", "activity", "tools-logger"] {
         assert!(
             wired.contains(expected),
             "expected .pi/extensions/bee-guard.ts to wire \"{expected}\" via runAdvisoryHook (D2's event map), \
@@ -1176,6 +1323,50 @@ fn the_injected_fence_carries_a_fixed_info_tag() {
         "the fence info tag is part of the contract: the receiving model recognises a bee result \
          block by shape, so it is fixed rather than free-form"
     );
+}
+
+#[test]
+fn pi_turn_end_handler_covers_every_rule_the_claude_manifest_fires_on_stop() {
+    let claude_rules = claude_turn_end_rules();
+    let pi_rules = pi_turn_end_rules();
+
+    let mut gaps: Vec<String> = Vec::new();
+    for rule in &claude_rules {
+        if !pi_rules.contains(rule) {
+            gaps.push(format!(
+                "rule \"{rule}\" is fired by Claude on its turn-end event (Stop) in packages/bee/hooks/claude-hooks.json, \
+                 but is not called in Pi's turn-end handler (agent_settled) in .pi/extensions/bee-guard.ts"
+            ));
+        }
+    }
+    assert!(
+        gaps.is_empty(),
+        "Pi turn-end (agent_settled) parity gap(s) against Claude manifest Stop rules:\n{}\n\
+         (derived Claude Stop rules: {claude_rules:?}; derived Pi agent_settled rules: {pi_rules:?})",
+        gaps.join("\n")
+    );
+}
+
+#[test]
+fn comment_stripping_ignores_commented_out_hook_calls_and_events() {
+    let snippet = r#"
+        // runAdvisoryHook(directory, "commented-line-hook", {})
+        /* runAdvisoryHook(directory, "commented-block-hook", {}) */
+        runAdvisoryHook(directory, "live-hook", {})
+        // pi.on("commented_line_event", () => {})
+        /* pi.on("commented_block_event", () => {}) */
+        pi.on("live_event", () => {})
+        const msg = "string with // not a comment and /* not a comment */";
+    "#;
+    let rules = pi_turn_end_rules_from(snippet);
+    assert!(rules.contains("live-hook"));
+    assert!(!rules.contains("commented-line-hook"));
+    assert!(!rules.contains("commented-block-hook"));
+
+    let events = pi_registered_events_from(snippet);
+    assert!(events.contains("live_event"));
+    assert!(!events.contains("commented_line_event"));
+    assert!(!events.contains("commented_block_event"));
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -1595,6 +1786,9 @@ fn never_throw_event_rows() -> Vec<(&'static str, Value)> {
         ("tool_result", json!({"toolName": "write", "input": {"path": "/tmp/x", "content": "hi"}})),
         ("tool_result", json!({})),
         ("agent_settled", json!({})),
+        ("session_before_compact", json!({})),
+        ("session_shutdown", json!({"reason": "quit"})),
+        ("session_shutdown", json!({})),
     ]
 }
 
@@ -2132,6 +2326,794 @@ fn the_drain_never_throws_on_a_missing_inbox_or_a_malformed_marker_or_result() {
     }
 
     assert!(failures.is_empty(), "the result-inbox drain must never throw:\n{}", failures.join("\n"));
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART 4 — Epic A probes: activity, tools-logger, session_before_compact.
+// ═════════════════════════════════════════════════════════════════════════
+
+fn bee_bin() -> PathBuf {
+    assert_cmd::cargo::cargo_bin("bee")
+}
+
+fn write_real_bee(root: &Path) {
+    let bin_dir = root.join(".bee").join("bin");
+    std::fs::create_dir_all(&bin_dir).expect("failed to create .bee/bin");
+    let bee = bee_bin();
+    let target = bin_dir.join("bee");
+    std::fs::copy(&bee, &target).expect("failed to copy real bee binary to fixture");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).expect("chmod +x");
+    }
+    std::fs::create_dir_all(root.join(".bee").join("sessions")).expect("failed to create .bee/sessions");
+    std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").expect("onboarding.json");
+    std::fs::write(
+        root.join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "swarming",
+            "mode": "standard",
+            "feature": "demo",
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("state.json");
+}
+
+#[cfg(unix)]
+#[test]
+fn activity_state_transitions_per_mapped_event() {
+    node_or_skip!("activity_state_transitions_per_mapped_event");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const SESSION_ID: &str = "sess-act-probe";
+
+    // 1. UserPromptSubmit on before_agent_start -> transitions to working
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "before_agent_start",
+                dir.path(),
+                SESSION_ID,
+                json!({"prompt": "implement the feature", "systemPrompt": "BASE"}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "before_agent_start threw: {:?}", run.results[0].message);
+
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+    let content = std::fs::read_to_string(&session_file)
+        .unwrap_or_else(|e| panic!("session file not created at {}: {e}", session_file.display()));
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON in session file");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("working"),
+        "UserPromptSubmit must transition activity state to working"
+    );
+    assert_eq!(
+        session_json["activity"]["event"].as_str(),
+        Some("UserPromptSubmit"),
+        "activity must receive the Claude event name UserPromptSubmit"
+    );
+    assert!(
+        session_json["work"]["text"].as_str().is_some_and(|t| t.contains("implement the feature")),
+        "prompt text must be recorded in work"
+    );
+
+    // 2. PostToolUse on tool_result (not an error) -> state remains working
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "tool_result",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "toolName": "write",
+                    "toolCallId": "call-1",
+                    "input": {"path": "/tmp/test.txt", "content": "hello"},
+                    "isError": false,
+                }),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "tool_result threw: {:?}", run.results[0].message);
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(session_json["activity"]["state"].as_str(), Some("working"));
+    assert_eq!(session_json["activity"]["event"].as_str(), Some("PostToolUse"));
+    assert_eq!(session_json["activity"]["tool_name"].as_str(), Some("Write"));
+    assert_eq!(session_json["activity"]["tool_use_id"].as_str(), Some("call-1"));
+
+    // 3. PostToolUseFailure on tool_result (isError: true) -> state working
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "tool_result",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "toolName": "write",
+                    "toolCallId": "call-2",
+                    "input": {"path": "/tmp/test.txt", "content": "hello"},
+                    "isError": true,
+                }),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "tool_result with isError threw: {:?}", run.results[0].message);
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(session_json["activity"]["state"].as_str(), Some("working"));
+    assert_eq!(session_json["activity"]["event"].as_str(), Some("PostToolUseFailure"));
+    assert_eq!(session_json["activity"]["tool_name"].as_str(), Some("Write"));
+    assert_eq!(session_json["activity"]["tool_use_id"].as_str(), Some("call-2"));
+
+    // 4. Stop on agent_settled -> transitions to idle
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "agent_settled",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "agent_settled threw: {:?}", run.results[0].message);
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("idle"),
+        "Stop must transition activity state to idle"
+    );
+    assert_eq!(
+        session_json["activity"]["event"].as_str(),
+        Some("Stop"),
+        "activity must receive the Claude event name Stop"
+    );
+
+    // 5. SessionEnd on session_shutdown -> transitions to exited
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "session_shutdown",
+                dir.path(),
+                SESSION_ID,
+                json!({"reason": "quit"}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "session_shutdown threw: {:?}", run.results[0].message);
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("exited"),
+        "SessionEnd must transition activity state to exited"
+    );
+    assert_eq!(
+        session_json["activity"]["event"].as_str(),
+        Some("SessionEnd"),
+        "activity must receive the Claude event name SessionEnd"
+    );
+
+    // Transitions file (.activity.jsonl) check
+    let transitions_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.activity.jsonl"));
+    let t_content = std::fs::read_to_string(&transitions_file).expect("read transitions file");
+    let t_lines: Vec<Value> = t_content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("valid transition JSON"))
+        .collect();
+    assert_eq!(t_lines.len(), 3, "expected exactly 3 transitions (working, idle, exited), got {:?}", t_lines);
+    assert_eq!(t_lines[0]["state"].as_str(), Some("working"));
+    assert_eq!(t_lines[0]["event"].as_str(), Some("UserPromptSubmit"));
+    assert_eq!(t_lines[1]["state"].as_str(), Some("idle"));
+    assert_eq!(t_lines[1]["event"].as_str(), Some("Stop"));
+    assert_eq!(t_lines[2]["state"].as_str(), Some("exited"));
+    assert_eq!(t_lines[2]["event"].as_str(), Some("SessionEnd"));
+}
+
+#[cfg(unix)]
+#[test]
+fn tools_logger_appends_well_formed_line_with_only_pi_fields() {
+    node_or_skip!("tools_logger_appends_well_formed_line_with_only_pi_fields");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const SESSION_ID: &str = "sess-tools-logger";
+
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "tool_result",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "toolName": "write",
+                    "toolCallId": "call-write-1",
+                    "input": {"path": "/tmp/target.txt", "content": "hello world"},
+                    "content": [{"type": "text", "text": "ok"}],
+                    "details": {},
+                    "isError": false,
+                    "usage": {"totalTokens": 42},
+                }),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "tool_result threw: {:?}", run.results[0].message);
+
+    let log_file = dir.path().join(".bee").join("logs").join("tools.jsonl");
+    let content = std::fs::read_to_string(&log_file)
+        .unwrap_or_else(|e| panic!("tools.jsonl not found at {}: {e}", log_file.display()));
+    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(lines.len(), 1, "expected exactly one log line in tools.jsonl, got: {:?}", lines);
+
+    let parsed: Value = serde_json::from_str(lines[0]).expect("valid JSON line in tools.jsonl");
+    assert_eq!(parsed["tool_name"].as_str(), Some("Write"));
+    assert!(parsed["ts"].as_str().is_some_and(|ts| !ts.is_empty()));
+    assert!(parsed["agent_id"].is_null(), "agent_id must be null for Pi (not invented)");
+    assert!(parsed["agent_type"].is_null(), "agent_type must be null for Pi (not invented)");
+    assert!(
+        parsed.get("duration_ms").is_none(),
+        "duration_ms must be omitted (not carried by Pi tool_result)"
+    );
+    assert!(
+        parsed.get("status").is_none(),
+        "status must be omitted (not carried by Pi tool_result)"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn session_before_compact_handler_returns_nothing_and_never_cancels() {
+    node_or_skip!("session_before_compact_handler_returns_nothing_and_never_cancels");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+
+    for behavior in [
+        StubBehavior::Allow,
+        StubBehavior::Deny("stub-deny-compact".to_string()),
+        StubBehavior::Crash,
+        StubBehavior::Ask("stub-ask-compact".to_string()),
+        StubBehavior::Repair,
+        StubBehavior::UnparseableVerdict,
+    ] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_stub_bee(dir.path(), &behavior);
+
+        let run = run_harness(
+            &harness,
+            vec![
+                advisory_call(
+                    "session_before_compact",
+                    dir.path(),
+                    "sess-compact",
+                    json!({}),
+                ),
+            ],
+        );
+
+        let r = &run.results[0];
+        assert!(!r.threw, "session_before_compact must never throw: {:?}", r.message);
+        assert!(
+            r.result.is_none(),
+            "session_before_compact MUST return undefined / nothing — returning any value (like {{cancel: true}}) \
+             would cancel or corrupt Pi compaction; got {:?}",
+            r.result
+        );
+        assert_eq!(
+            count_invocations(dir.path(), "session-close"),
+            1,
+            "session_before_compact must invoke session-close"
+        );
+        let captured = read_captured_stdin(dir.path());
+        assert_eq!(
+            captured["hook_event_name"].as_str(),
+            Some("PreCompact"),
+            "session_before_compact must pass hook_event_name PreCompact to session-close"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn under_bee_herding_worker_activity_runs_and_other_belt_calls_short_circuit() {
+    node_or_skip!("under_bee_herding_worker_activity_runs_and_other_belt_calls_short_circuit");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const JOB_ID: &str = "job-herded-probe";
+    let mailbox = job_mailbox(dir.path(), JOB_ID);
+    std::fs::write(mailbox.join("brief-1.txt"), "# brief").expect("write brief");
+
+    let spec = json!({
+        "calls": [
+            session_start(dir.path(), "sess-worker", "new"),
+            advisory_call(
+                "before_agent_start",
+                dir.path(),
+                "sess-worker",
+                json!({"prompt": "worker task", "systemPrompt": "BASE"}),
+            ),
+            advisory_call(
+                "tool_result",
+                dir.path(),
+                "sess-worker",
+                json!({
+                    "toolName": "write",
+                    "toolCallId": "call-1",
+                    "input": {"path": "/tmp/x.txt", "content": "data"},
+                    "isError": false,
+                }),
+            ),
+            advisory_call(
+                "agent_settled",
+                dir.path(),
+                "sess-worker",
+                json!({}),
+            ),
+        ]
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        spec,
+        &[("BEE_HERDING_WORKER", "1"), ("BEE_HERDING_JOB_ID", JOB_ID)],
+    );
+
+    assert!(run.results.iter().all(|r| !r.threw), "no call should throw under herded worker: {:?}", run.results);
+
+    // 1. activity DID run: mailbox activity.json exists and recorded the final state
+    let activity_file = mailbox.join("activity.json");
+    assert!(
+        activity_file.is_file(),
+        "under BEE_HERDING_WORKER activity must write to mailbox activity.json at {}",
+        activity_file.display()
+    );
+    let act_content = std::fs::read_to_string(&activity_file).expect("read mailbox activity.json");
+    let act_json: Value = serde_json::from_str(&act_content).expect("valid JSON in mailbox activity.json");
+    assert_eq!(act_json["job_id"].as_str(), Some(JOB_ID));
+    assert_eq!(act_json["round"].as_u64(), Some(1));
+    assert_eq!(act_json["state"].as_str(), Some("idle"));
+    assert_eq!(act_json["event"].as_str(), Some("Stop"));
+    assert!(act_json["work"]["text"].as_str().is_some_and(|t| t.contains("worker task")));
+
+    // 2. tools-logger short-circuited: tools.jsonl was NOT created
+    let tools_log = dir.path().join(".bee").join("logs").join("tools.jsonl");
+    assert!(
+        !tools_log.exists(),
+        "tools-logger must short-circuit under BEE_HERDING_WORKER, but {} was created",
+        tools_log.display()
+    );
+
+    // 3. sessions dir has NO session file (herded worker writes to mailbox, not sessions sink)
+    let session_file = dir.path().join(".bee").join("sessions").join("sess-worker.json");
+    assert!(
+        !session_file.exists(),
+        "herded worker pane must not write to .bee/sessions/<id>.json"
+    );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART 5 — Epic B probes: session_shutdown and reason-filtered SessionEnd.
+// ═════════════════════════════════════════════════════════════════════════
+
+#[cfg(unix)]
+#[test]
+fn session_shutdown_closes_record_on_real_end_reasons_and_skips_reload() {
+    node_or_skip!("session_shutdown_closes_record_on_real_end_reasons_and_skips_reload");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    // Precedent:
+    // - "quit", "new", "resume", "fork" genuinely terminate the active session (Pi exits or switches) -> close record.
+    // - undefined/missing reason (clean quit default) -> close record.
+    // - "reload" keeps the SAME session running (treated as idempotent in session_start) -> deliberately does NOT close record.
+    let cases = [
+        ("quit", json!({"reason": "quit"}), true),
+        ("new", json!({"reason": "new"}), true),
+        ("resume", json!({"reason": "resume"}), true),
+        ("fork", json!({"reason": "fork"}), true),
+        ("default_no_reason", json!({}), true),
+        ("reload", json!({"reason": "reload"}), false),
+    ];
+
+    for (name, payload, should_close) in cases {
+        let session_id = format!("sess-shutdown-{name}");
+        let session_file = dir.path().join(".bee").join("sessions").join(format!("{session_id}.json"));
+        std::fs::write(
+            &session_file,
+            serde_json::to_string_pretty(&json!({
+                "id": session_id,
+                "status": "active",
+                "started_at": "2026-09-02T12:00:00.000Z",
+                "activity": {
+                    "state": "working",
+                    "event": "UserPromptSubmit",
+                    "at": "2026-09-02T12:00:00.000Z"
+                }
+            }))
+            .unwrap()
+                + "\n",
+        )
+        .expect("write initial session file");
+
+        let run = run_harness(
+            &harness,
+            vec![
+                advisory_call(
+                    "session_shutdown",
+                    dir.path(),
+                    &session_id,
+                    payload,
+                ),
+            ],
+        );
+        assert!(
+            !run.results[0].threw,
+            "session_shutdown on {name} threw: {:?}",
+            run.results[0].message
+        );
+
+        let content = std::fs::read_to_string(&session_file).expect("read session file");
+        let session_json: Value = serde_json::from_str(&content).expect("valid session JSON");
+
+        if should_close {
+            assert_eq!(
+                session_json["status"].as_str(),
+                Some("closed"),
+                "reason \"{name}\" genuinely ends the session and must mark status as closed"
+            );
+            assert!(
+                session_json["closed_at"].as_str().is_some_and(|ts| !ts.is_empty()),
+                "reason \"{name}\" must record closed_at timestamp"
+            );
+            assert_eq!(
+                session_json["activity"]["state"].as_str(),
+                Some("exited"),
+                "reason \"{name}\" genuinely ends the session and must transition activity state to exited"
+            );
+            assert_eq!(
+                session_json["activity"]["event"].as_str(),
+                Some("SessionEnd"),
+                "reason \"{name}\" must record SessionEnd event in activity"
+            );
+        } else {
+            assert_eq!(
+                session_json["status"].as_str(),
+                Some("active"),
+                "reason \"{name}\" keeps the same session alive and must NOT mark status as closed"
+            );
+            assert!(
+                session_json.get("closed_at").is_none(),
+                "reason \"{name}\" must not set closed_at"
+            );
+            assert_eq!(
+                session_json["activity"]["state"].as_str(),
+                Some("working"),
+                "reason \"{name}\" keeps the same session alive and must NOT transition activity to exited"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn session_close_firing_on_both_agent_settled_and_session_shutdown_is_safe() {
+    node_or_skip!("session_close_firing_on_both_agent_settled_and_session_shutdown_is_safe");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const SESSION_ID: &str = "sess-double-close";
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+    std::fs::write(
+        &session_file,
+        serde_json::to_string_pretty(&json!({
+            "id": SESSION_ID,
+            "status": "active",
+            "started_at": "2026-09-02T12:00:00.000Z"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write initial session file");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "agent_settled",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+            advisory_call(
+                "session_shutdown",
+                dir.path(),
+                SESSION_ID,
+                json!({"reason": "quit"}),
+            ),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "firing session-close on both agent_settled (Stop) and session_shutdown (SessionEnd) must never throw: {:?}",
+        run.results
+    );
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid session JSON");
+    assert_eq!(
+        session_json["status"].as_str(),
+        Some("closed"),
+        "session-close firing on both agent_settled and session_shutdown must leave the record closed"
+    );
+    assert!(
+        session_json["closed_at"].as_str().is_some_and(|ts| !ts.is_empty()),
+        "closed_at must be populated"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn session_shutdown_does_not_stall_quit() {
+    node_or_skip!("session_shutdown_does_not_stall_quit");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const SESSION_ID: &str = "sess-quit-stall";
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+    std::fs::write(
+        &session_file,
+        serde_json::to_string_pretty(&json!({
+            "id": SESSION_ID,
+            "status": "active",
+            "started_at": "2026-09-02T12:00:00.000Z"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write session file");
+
+    let start = Instant::now();
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "session_shutdown",
+                dir.path(),
+                SESSION_ID,
+                json!({"reason": "quit"}),
+            ),
+        ],
+    );
+    let elapsed = start.elapsed();
+
+    assert!(!run.results[0].threw, "session_shutdown must not throw: {:?}", run.results[0].message);
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "session_shutdown handler must execute promptly and not stall Pi's quit (took {elapsed:?})"
+    );
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid session JSON");
+    assert_eq!(session_json["status"].as_str(), Some("closed"));
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART 6 — Epic C probes: continuation nudge on agent_settled (pib-3).
+// ═════════════════════════════════════════════════════════════════════════
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_injected_on_block_verdict() {
+    node_or_skip!("continuation_nudge_injected_on_block_verdict");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    const NUDGE_REASON: &str = "Continue planning next steps";
+    write_stub_bee(dir.path(), &StubBehavior::SessionCloseBlock(NUDGE_REASON.to_string()));
+
+    const SESSION_ID: &str = "sess-nudge-block";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw on block verdict: {:?}",
+        run.results
+    );
+    assert_eq!(
+        run.messages.len(),
+        1,
+        "block verdict from session-close must trigger an injected user message"
+    );
+    assert_eq!(run.messages[0].text, NUDGE_REASON);
+}
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_skipped_on_advisory_verdict() {
+    node_or_skip!("continuation_nudge_skipped_on_advisory_verdict");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory("Consider logging decisions".to_string()),
+    );
+
+    const SESSION_ID: &str = "sess-nudge-advisory";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw on advisory verdict: {:?}",
+        run.results
+    );
+    assert!(
+        run.messages.is_empty(),
+        "advisory verdict from session-close must NOT trigger an injected message, got: {:?}",
+        run.messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_swallows_injection_failure_without_throwing() {
+    node_or_skip!("continuation_nudge_swallows_injection_failure_without_throwing");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseBlock("Continue with task".to_string()),
+    );
+
+    const SESSION_ID: &str = "sess-nudge-fail";
+    let spec = json!({
+        "calls": [
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+        "injection_fails": true,
+    });
+    let run = run_harness_spec(&harness, spec);
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must swallow sendUserMessage rejection without throwing: {:?}",
+        run.results
+    );
+    assert!(
+        run.stderr.contains("failed to inject continuation nudge into session"),
+        "rejection from sendUserMessage must be logged to stderr: {}",
+        run.stderr
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_real_binary_gate_bypass_triggers_block() {
+    node_or_skip!("continuation_nudge_real_binary_gate_bypass_triggers_block");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    // Configure gate_bypass: full, and planning phase with only context approved ->
+    // Stop hook will evaluate maybe_bypass_block and emit block verdict.
+    std::fs::write(
+        dir.path().join(".bee").join("config.json"),
+        serde_json::to_string_pretty(&json!({
+            "gate_bypass": "full"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write config.json");
+
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "planning",
+            "feature": "pib-test",
+            "approved_gates": {
+                "context": true,
+                "shape": false,
+                "execution": false,
+                "review": false,
+                "uat": false
+            }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    const SESSION_ID: &str = "sess-nudge-real";
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+    std::fs::write(
+        &session_file,
+        serde_json::to_string_pretty(&json!({
+            "id": SESSION_ID,
+            "status": "active",
+            "started_at": "2026-09-02T12:00:00.000Z"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write session file");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled against real binary must not throw: {:?}",
+        run.results
+    );
+    assert_eq!(
+        run.messages.len(),
+        1,
+        "real bee binary under gate_bypass=full must emit block verdict that triggers continuation injection"
+    );
+    assert!(
+        run.messages[0].text.contains("GATE BYPASS") || run.messages[0].text.contains("auto-approved Gate"),
+        "injected text must contain gate bypass continuation text, got: {}",
+        run.messages[0].text
+    );
 }
 
 #[cfg(not(unix))]

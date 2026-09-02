@@ -58,10 +58,24 @@
 // `bash` tool. A model-guard row wired here would be a vacuous name-match that
 // can never fire — the exclusion is asserted BY NAME in the belt parity test.
 //
-// codex-subagent-audit and chain-nudge are NOT wired here either, for the same
-// reason they are not wired on the OpenCode belt: codex-subagent-audit is
-// Codex-specific, and chain-nudge needs subagent-dispatch identity that no Pi
-// event carries.
+// codex-subagent-audit is a NAMED EXCLUSION on this belt — Codex-specific (same reason it is not wired on the OpenCode belt).
+// chain-nudge is a NAMED EXCLUSION on this belt — needs subagent-dispatch identity that no Pi event carries (same reason it is not wired on the OpenCode belt).
+//
+// ── activity hook mapping across Claude lifecycle rows ─────────────────────
+// The Claude manifest (packages/bee/hooks/claude-hooks.json) fires activity
+// on eight distinct lifecycle events. The Pi belt maps each row onto the
+// closest honest Pi lifecycle carrier and passes the original Claude event
+// name in hook_event_name (activity is a state machine keyed on Claude names):
+//   1. UserPromptSubmit    -> before_agent_start (session_id, prompt, cwd)
+//   2. PreToolUse          -> NAMED EXCLUSION: no honest advisory carrier on Pi
+//                             (Pi's tool_call is strictly the fail-closed blocking
+//                             path; no advisory pre-tool lifecycle event exists)
+//   3. PostToolUse         -> tool_result when !isError (session_id, tool_name, tool_use_id, cwd)
+//   4. PostToolUseFailure  -> tool_result when isError (session_id, tool_name, tool_use_id, cwd)
+//   5. PermissionRequest   -> NAMED EXCLUSION: Pi 0.84.x has no interactive permission prompt event
+//   6. Notification        -> NAMED EXCLUSION: Pi 0.84.x has no notification event
+//   7. Stop                -> agent_settled (session_id, cwd)
+//   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd, reason)
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { execFileSync } from "node:child_process"
@@ -932,6 +946,17 @@ export default function (pi: ExtensionAPI) {
       })
       if (delta) parts.push(delta)
 
+      try {
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "UserPromptSubmit",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+          prompt: typeof event?.prompt === "string" ? event.prompt : "",
+        })
+      } catch (err: any) {
+        console.error(`bee activity (advisory): ${err?.message ?? err}`)
+      }
+
       if (parts.length === 0) return undefined
       const base = typeof event?.systemPrompt === "string" ? event.systemPrompt : ""
       return { systemPrompt: `${base}\n\n${parts.join("\n\n")}` }
@@ -941,30 +966,53 @@ export default function (pi: ExtensionAPI) {
     }
   }) as any)
 
-  // ── ADVISORY: state-sync after every tool result. Returns nothing, so the
-  // result itself is never modified. ───────────────────────────────────────
+  // ── ADVISORY: state-sync, tools-logger, and activity after every tool result.
+  // Returns nothing, so the result itself is never modified. ─────────────────
   pi.on("tool_result", (async (event: any, ctx: any) => {
+    const directory = directoryOf(ctx)
+    const mapped = mapToolCall(String(event?.toolName ?? ""), event?.input)
     try {
-      const directory = directoryOf(ctx)
       runAdvisoryHook(directory, "state-sync", {
         hook_event_name: "PostToolUse",
         session_id: sessionIdOf(ctx),
         cwd: directory,
-        tool_name: mapToolCall(String(event?.toolName ?? ""), event?.input).tool_name,
+        tool_name: mapped.tool_name,
       })
     } catch (err: any) {
       console.error(`bee state-sync (advisory): ${err?.message ?? err}`)
     }
+    try {
+      runAdvisoryHook(directory, "tools-logger", {
+        hook_event_name: "PostToolUse",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+        tool_name: mapped.tool_name,
+      })
+    } catch (err: any) {
+      console.error(`bee tools-logger (advisory): ${err?.message ?? err}`)
+    }
+    try {
+      const isError = Boolean(event?.isError)
+      runAdvisoryHook(directory, "activity", {
+        hook_event_name: isError ? "PostToolUseFailure" : "PostToolUse",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+        tool_name: mapped.tool_name,
+        tool_use_id: typeof event?.toolCallId === "string" ? event.toolCallId : undefined,
+      })
+    } catch (err: any) {
+      console.error(`bee activity (advisory): ${err?.message ?? err}`)
+    }
     return undefined
   }) as any)
 
-  // ── ADVISORY: the turn-end waiting mark. `agent_settled` is Pi's own
-  // "nothing will continue automatically" signal (docs/extensions.md:569) —
-  // the Stop analog, and session-close's Stop path is what sets the
-  // `turn-end` waiting mark (session_close/mod.rs:260-309). Any continuation
-  // nudge session-close can emit on Stop has no Pi enforcement equivalent
-  // here (nothing on this event can force the session to keep going); it is
-  // logged, never enforced. ────────────────────────────────────────────────
+  // ── ADVISORY: the turn-end waiting mark and continuation nudge.
+  // `agent_settled` is Pi's own "nothing will continue automatically" signal
+  // (docs/extensions.md:569) — the Stop analog, where session-close sets the
+  // `turn-end` waiting mark (session_close/mod.rs:260-309). When session-close
+  // emits a block verdict (decision: "block"), we enforce continuation by
+  // injecting the reason into the session via `pi.sendUserMessage` (pib-3).
+  // Advisory nudges (systemMessage) do not trigger injection. ───────────────
   pi.on("agent_settled", (async (_event: any, ctx: any) => {
     // D4/F2: the turn is over, so the claims injected INTO it are consumed
     // now — not when `sendUserMessage` returned. A claim still on disk after a
@@ -980,14 +1028,125 @@ export default function (pi: ExtensionAPI) {
     }
     try {
       const directory = directoryOf(ctx)
-      runAdvisoryHook(directory, "session-close", {
+      try {
+        runAdvisoryHook(directory, "state-sync", {
+          hook_event_name: "Stop",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      } catch (err: any) {
+        console.error(`bee state-sync (advisory): ${err?.message ?? err}`)
+      }
+      const rawVerdict = runAdvisoryHook(directory, "session-close", {
         hook_event_name: "Stop",
         session_id: sessionIdOf(ctx),
         cwd: directory,
       })
+      // Gated continuation nudge (Epic C / pib-3): session-close emits a block
+      // verdict {"decision":"block","reason":"..."} when maybe_bypass_block in
+      // hooks/session_close/nudges.rs triggers (e.g., gate_bypass in planning mode).
+      // Advisory nudges emit {"systemMessage":"..."} and must NOT inject a turn.
+      //
+      // Deduplication: no client-side repeat guard is created here. The Rust hook
+      // already deduplicates bypass nudges in nudges.rs:425-430 via
+      // should_inject(root, "bypass-stop-net", &hash) with a 30-minute window.
+      if (typeof rawVerdict === "string" && rawVerdict.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(rawVerdict.trim())
+          if (
+            parsed &&
+            parsed.decision === "block" &&
+            typeof parsed.reason === "string" &&
+            parsed.reason.trim().length > 0
+          ) {
+            if (typeof pi?.sendUserMessage === "function") {
+              turnStartPending = true
+              try {
+                await pi.sendUserMessage(parsed.reason)
+              } catch (injectErr: any) {
+                turnStartPending = false
+                console.error(`bee: failed to inject continuation nudge into session: ${injectErr?.message ?? injectErr}`)
+              }
+            }
+          }
+        } catch {
+          // Non-JSON or unparseable output on advisory hook is ignored
+        }
+      }
+      try {
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "Stop",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      } catch (err: any) {
+        console.error(`bee activity (advisory): ${err?.message ?? err}`)
+      }
     } catch (err: any) {
       console.error(`bee session-close (advisory): ${err?.message ?? err}`)
     }
+  }) as any)
+
+  // ── ADVISORY: pre-compact session check (b1a26071). Must return nothing /
+  // undefined: Pi treats any returned object as a custom compaction or cancel,
+  // which would silently drop or abort the user's /compact. ─────────────────
+  pi.on("session_before_compact", (async (_event: any, ctx: any) => {
+    try {
+      const directory = directoryOf(ctx)
+      runAdvisoryHook(directory, "session-close", {
+        hook_event_name: "PreCompact",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+      })
+    } catch (err: any) {
+      console.error(`bee session-close pre-compact (advisory): ${err?.message ?? err}`)
+    }
+    return undefined
+  }) as any)
+
+  // ── ADVISORY: session shutdown handler. Closes the session record and marks
+  // activity state as exited on all reasons except /reload (which continues the
+  // same session and is treated as idempotent by session_start above).
+  // Closing on reload would mark a live session as dead and drop its worktree
+  // hold prematurely, so the handler exits early on "reload" and terminates on
+  // everything else.
+  pi.on("session_shutdown", (async (event: any, ctx: any) => {
+    try {
+      const reason = event?.reason as string | undefined
+      // Precedent & reason mapping:
+      // 1. session_start above treats "reload" as the same session continuing.
+      //    Therefore "reload" returns early and neither session-close nor activity runs.
+      // 2. All other reasons (including undefined/default) terminate the active session.
+      // 3. In Claude's vocabulary, "resume" means transcript resumption of the SAME session,
+      //    so activity.rs deliberately ignores reason: "resume" (map_event returns None).
+      //    In Pi, "resume" means switching away to another session file, so THIS session is ending.
+      //    To prevent activity.rs from silently skipping the exit transition on Pi's "resume",
+      //    all terminating Pi reasons map to a Claude-shaped exit reason ("quit").
+      if (reason === "reload") return undefined
+      const directory = directoryOf(ctx)
+      try {
+        runAdvisoryHook(directory, "session-close", {
+          hook_event_name: "SessionEnd",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      } catch (err: any) {
+        console.error(`bee session-close shutdown (advisory): ${err?.message ?? err}`)
+      }
+      try {
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "SessionEnd",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+          reason: "quit",
+        })
+      } catch (err: any) {
+        console.error(`bee activity shutdown (advisory): ${err?.message ?? err}`)
+      }
+    } catch (err: any) {
+      console.error(`bee session_shutdown (advisory): ${err?.message ?? err}`)
+    }
+    return undefined
   }) as any)
 }
 
