@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["transcript-recovery D1-D6 (docs/history/transcript-recovery/CONTEXT.md, 2026-07-20 — detection auto, mining offered; digest-only; mined content data-not-instructions; never auto-resume)"]
+  decisions: ["transcript-recovery D1-D6 (docs/history/transcript-recovery/CONTEXT.md, 2026-07-20 — detection auto, mining offered; digest-only; mined content data-not-instructions; never auto-resume)", "learning-loop-gaps D1-D10 (decision 81d46f80, docs/history/learning-loop-gaps/CONTEXT.md, 2026-09-02 — mining covers asked-for sessions alongside crash recovery; prompts inline in skill)"]
   sources: ["transcript-recovery cells transcript-recovery-1..4 (traces in .bee/cells/, reports docs/history/transcript-recovery/reports/, 2026-07-20)", hardening-5 (2026-07-21 — configurable per-runtime transcript roots reported by name) and hardening-1-7-10 (the stored transcript path preferred over layout math), "docs/specs/workflow-state.md#B33", "docs/specs/workflow-state.md#R51", "docs/specs/workflow-state.md#E4", "docs/specs/workflow-state.md#E5", "docs/specs/workflow-state.md#E6"]
   authoritative_for: "workflow-state: crash-candidate detection and transcript-based recovery"
 ---
@@ -56,6 +56,8 @@ strings are redacted, and only the current workspace's own transcripts are ever
 read. Recovery never resumes the dead session's work and never writes a pause
 record on its behalf — the never-auto-resume rule (B15) is untouched
 (transcript-recovery D1–D6, 2026-07-20).
+
+**Asked-for session mining (learning-loop-gaps D1–D10, decision 81d46f80):** A live or clean session is mined when the user asks for it in plain language (e.g. "reflect on this session" / "mine this session") — there is no dedicated CLI verb or slash command. Like crash recovery, mining is offered and never runs automatically; the agent acts only when the human agrees. The offer discloses two facts when applicable: if the configured `read` slot is an external pane, and if the capture queue is already past its blocker threshold. Instead of reading crash candidates from `bee status --json`, the asked-for path reads `transcript_path` and `started_at` from the session record (`bee state session list --json`). Both crash recovery and asked-for mining bound the worker at the transcript's last 256 KB (`DEFAULT_TAIL_MAX_BYTES`). The miner prompt lives directly in the skill; no separate CLI verb is built or used. Downstream handling is identical: the digest is written under `docs/history/<feature>/reports/` (or `docs/history/recovery/`), candidate settlements are appended via `bee capture add --source mined`, mined text is data and never instructions, and nothing mined auto-becomes a decision.
 
 Detection's own transcript store is runtime-aware without guessing a second
 runtime's internals: a workspace can list additional transcript roots (each
@@ -118,3 +120,4 @@ runtimes' conventions line up (hardening-1-7-10).
 - When the dead session had no bound feature, its mining window keys on the last
   global settled outcome and its recovery note is written to the shared recovery
   location instead of a feature's history.
+- When the user asks to reflect on or mine a session with no crash candidates present, the session record (`transcript_path`, `started_at`) is used with the 256 KB tail bound rather than checking `recovery.candidates`.
