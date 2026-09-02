@@ -1605,6 +1605,8 @@ fn never_throw_event_rows() -> Vec<(&'static str, Value)> {
         ("tool_result", json!({})),
         ("agent_settled", json!({})),
         ("session_before_compact", json!({})),
+        ("session_shutdown", json!({"reason": "quit"})),
+        ("session_shutdown", json!({})),
     ]
 }
 
@@ -2163,6 +2165,7 @@ fn write_real_bee(root: &Path) {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).expect("chmod +x");
     }
+    std::fs::create_dir_all(root.join(".bee").join("sessions")).expect("failed to create .bee/sessions");
     std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").expect("onboarding.json");
     std::fs::write(
         root.join(".bee").join("state.json"),
@@ -2504,6 +2507,202 @@ fn under_bee_herding_worker_activity_runs_and_other_belt_calls_short_circuit() {
         !session_file.exists(),
         "herded worker pane must not write to .bee/sessions/<id>.json"
     );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART 5 — Epic B probes: session_shutdown and reason-filtered SessionEnd.
+// ═════════════════════════════════════════════════════════════════════════
+
+#[cfg(unix)]
+#[test]
+fn session_shutdown_closes_record_on_real_end_reasons_and_skips_reload() {
+    node_or_skip!("session_shutdown_closes_record_on_real_end_reasons_and_skips_reload");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    // Precedent:
+    // - "quit", "new", "resume", "fork" genuinely terminate the active session (Pi exits or switches) -> close record.
+    // - undefined/missing reason (clean quit default) -> close record.
+    // - "reload" keeps the SAME session running (treated as idempotent in session_start) -> deliberately does NOT close record.
+    let cases = [
+        ("quit", json!({"reason": "quit"}), true),
+        ("new", json!({"reason": "new"}), true),
+        ("resume", json!({"reason": "resume"}), true),
+        ("fork", json!({"reason": "fork"}), true),
+        ("default_no_reason", json!({}), true),
+        ("reload", json!({"reason": "reload"}), false),
+    ];
+
+    for (name, payload, should_close) in cases {
+        let session_id = format!("sess-shutdown-{name}");
+        let session_file = dir.path().join(".bee").join("sessions").join(format!("{session_id}.json"));
+        std::fs::write(
+            &session_file,
+            serde_json::to_string_pretty(&json!({
+                "id": session_id,
+                "status": "active",
+                "started_at": "2026-09-02T12:00:00.000Z"
+            }))
+            .unwrap()
+                + "\n",
+        )
+        .expect("write initial session file");
+
+        let run = run_harness(
+            &harness,
+            vec![
+                advisory_call(
+                    "session_shutdown",
+                    dir.path(),
+                    &session_id,
+                    payload,
+                ),
+            ],
+        );
+        assert!(
+            !run.results[0].threw,
+            "session_shutdown on {name} threw: {:?}",
+            run.results[0].message
+        );
+
+        let content = std::fs::read_to_string(&session_file).expect("read session file");
+        let session_json: Value = serde_json::from_str(&content).expect("valid session JSON");
+
+        if should_close {
+            assert_eq!(
+                session_json["status"].as_str(),
+                Some("closed"),
+                "reason \"{name}\" genuinely ends the session and must mark status as closed"
+            );
+            assert!(
+                session_json["closed_at"].as_str().is_some_and(|ts| !ts.is_empty()),
+                "reason \"{name}\" must record closed_at timestamp"
+            );
+        } else {
+            assert_eq!(
+                session_json["status"].as_str(),
+                Some("active"),
+                "reason \"{name}\" keeps the same session alive and must NOT mark status as closed"
+            );
+            assert!(
+                session_json.get("closed_at").is_none(),
+                "reason \"{name}\" must not set closed_at"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn session_close_firing_on_both_agent_settled_and_session_shutdown_is_safe() {
+    node_or_skip!("session_close_firing_on_both_agent_settled_and_session_shutdown_is_safe");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const SESSION_ID: &str = "sess-double-close";
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+    std::fs::write(
+        &session_file,
+        serde_json::to_string_pretty(&json!({
+            "id": SESSION_ID,
+            "status": "active",
+            "started_at": "2026-09-02T12:00:00.000Z"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write initial session file");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "agent_settled",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+            advisory_call(
+                "session_shutdown",
+                dir.path(),
+                SESSION_ID,
+                json!({"reason": "quit"}),
+            ),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "firing session-close on both agent_settled (Stop) and session_shutdown (SessionEnd) must never throw: {:?}",
+        run.results
+    );
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid session JSON");
+    assert_eq!(
+        session_json["status"].as_str(),
+        Some("closed"),
+        "session-close firing on both agent_settled and session_shutdown must leave the record closed"
+    );
+    assert!(
+        session_json["closed_at"].as_str().is_some_and(|ts| !ts.is_empty()),
+        "closed_at must be populated"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn session_shutdown_does_not_stall_quit() {
+    node_or_skip!("session_shutdown_does_not_stall_quit");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const SESSION_ID: &str = "sess-quit-stall";
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+    std::fs::write(
+        &session_file,
+        serde_json::to_string_pretty(&json!({
+            "id": SESSION_ID,
+            "status": "active",
+            "started_at": "2026-09-02T12:00:00.000Z"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write session file");
+
+    let start = Instant::now();
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "session_shutdown",
+                dir.path(),
+                SESSION_ID,
+                json!({"reason": "quit"}),
+            ),
+        ],
+    );
+    let elapsed = start.elapsed();
+
+    assert!(!run.results[0].threw, "session_shutdown must not throw: {:?}", run.results[0].message);
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "session_shutdown handler must execute promptly and not stall Pi's quit (took {elapsed:?})"
+    );
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid session JSON");
+    assert_eq!(session_json["status"].as_str(), Some("closed"));
 }
 
 #[cfg(not(unix))]

@@ -77,7 +77,7 @@
 //   5. PermissionRequest   -> NAMED EXCLUSION: Pi 0.84.x has no interactive permission prompt event
 //   6. Notification        -> NAMED EXCLUSION: Pi 0.84.x has no notification event
 //   7. Stop                -> agent_settled (session_id, cwd)
-//   8. SessionEnd          -> NAMED EXCLUSION: session shutdown lifecycle is not wired in this advisory slice
+//   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd)
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { execFileSync } from "node:child_process"
@@ -1062,6 +1062,32 @@ export default function (pi: ExtensionAPI) {
       })
     } catch (err: any) {
       console.error(`bee session-close pre-compact (advisory): ${err?.message ?? err}`)
+    }
+    return undefined
+  }) as any)
+
+  // ── ADVISORY: session shutdown handler. Closes the session record only on
+  // reasons that genuinely terminate the session ("quit", "new", "resume", "fork").
+  // /reload is deliberately excluded: it continues the same session (treated as
+  // idempotent by session_start above), so closing on reload would mark a live
+  // session as dead and drop its worktree hold prematurely.
+  pi.on("session_shutdown", (async (event: any, ctx: any) => {
+    try {
+      const reason = event?.reason as string | undefined
+      // Precedent:
+      // 1. session_start above treats "reload" as the same session continuing.
+      // 2. activity.rs refuses to mark a session exited on transcript-ending reasons.
+      // "quit", "new", "resume", "fork" (and undefined/default) end the session;
+      // "reload" keeps it alive.
+      if (reason === "reload") return undefined
+      const directory = directoryOf(ctx)
+      runAdvisoryHook(directory, "session-close", {
+        hook_event_name: "SessionEnd",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+      })
+    } catch (err: any) {
+      console.error(`bee session-close shutdown (advisory): ${err?.message ?? err}`)
     }
     return undefined
   }) as any)
