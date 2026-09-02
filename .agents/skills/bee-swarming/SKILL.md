@@ -45,7 +45,7 @@ From two cells up, state the one-line concurrency plan before dispatching.
    bound how many cells of the wave are claimed). One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
-   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. The cell already declares the job that
+   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. A user-facing cell carries its mapped feature file that way — `.bee/verify/verify-app/features/<feature>.md` with its last-modified date, so the worker can judge a stale map. The cell already declares the job that
    selects its model (`role`, required at `cells add`) — escalate onto the
    session model only where the work earns it
    (`bee cells escalate --id <id>`; rubric:
@@ -164,11 +164,13 @@ included: add guidance beside those words, never over them.
    files, tests, deviations}`), which finish validates key-for-key onto
    the trace. `tests` is a proof line `<command> — <result> — <scope
    reason>`: pick the proof your change type needs (code → related tests
-   green; docs → parity/pointer checks; behavior → judge verdict), run it
-   yourself, and record it — a `red` result refuses the cap. `bee close`
-   and `bee worktree merge` check that recorded proof at the boundary;
-   they run nothing themselves. CI runs the full declared command on
-   every push — the one deterministic net.
+   green; docs → parity/pointer checks; behavior → judge verdict;
+   user-facing surface → drive its mapped feature and inspect the result,
+   evidence attached, `green:live`), run it yourself, and record it — a
+   `red` result refuses the cap. `bee close` and `bee worktree merge`
+   check that recorded proof at the boundary; they run nothing
+   themselves. CI runs the full declared command on every push — the
+   one deterministic net.
 6. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your

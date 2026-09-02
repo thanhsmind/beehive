@@ -56,6 +56,10 @@ Reading scales with the lane: tiny keeps its two targeted reads; small adds
 patterns, decisions, and prior learnings — precedent beats research. Remove
 uncertainty at the lowest cost: cite a pattern or verify one fact; unfamiliar
 territory or competing approaches dispatch `bee-researching`, findings merged in.
+When `.bee/verify/verify-app/features/` maps the ask, read the ONE matching
+feature file: its "How to get to it" seeds the cell file lists, its
+"Gotchas" seed the risk map. Note its last-modified date — a stale map is
+judged against the code, never trusted blind.
 
 **One reality touch per novel surface, every lane, before the gate.** A
 surface the plan leans on and nobody here has opened yet gets touched once,
