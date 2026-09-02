@@ -50,11 +50,21 @@ Two tests:
   The list of surfaces is derived, never hand-copied, so a sixth skill joining
   the set is covered without editing this test.
 - **Doctrine presence.** Assert `packages/bee/AGENTS.block.md` still carries the
-  feature map as a read-first state layer beside `docs/knowledge/`, and still
-  carries the user-facing-surface case with `green:live` inside the existing
+  user-facing-surface case with `green:live` inside the existing
   `agents-proof-at-cap` bullet. Assert on the load-bearing substance, not on a
   whole sentence — a test that pins prose verbatim breaks on every reword and
   gets deleted.
+
+**Corrected during execution (decision `29b853d8`).** This brief first also asked
+the test to assert D4's read-first feature-map mention. The claim guard refused
+that cell with `CONTRACT_UNSETTLED`, and it was right for a better reason than
+paperwork: D4 (`c93a6948`) carries its own named falsifier as trigger
+`two-features-have-been-planned-with-a-ma__c93a6948` — if two planned features do
+not cite gotchas from a mapped feature file, D4's shaping tier is REVERTED. A
+test asserting D4's line is present would turn that agreed revert into a test
+failure, defending a rule the repo has already agreed to drop on evidence.
+**Settled contracts get pinned; provisional ones do not.** The scope is one row
+smaller than this brief opened with, and the test's header says so in writing.
 
 ## Boundary
 
