@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces check out clean. Writing the tick record now.",
-    "asked_at": "2026-09-02T14:25:04.418Z",
-    "session": "07dd2b6a-6c2f-47cb-ba0b-8d6bd6c733d9"
+    "subject": "No open, claimed, or blocked cells. All three lane-bound recovery candidates confirm `awaiting-approval`, not dead. Writing the silence reco",
+    "asked_at": "2026-09-02T16:00:08.506Z",
+    "session": "0f4c76e0-5e96-4de4-abc0-99afe953f898"
   },
   "route": {
     "class": "feature",

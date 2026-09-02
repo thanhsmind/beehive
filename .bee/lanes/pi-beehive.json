@@ -13,8 +13,13 @@
   "summary": "Feature \"pi-beehive\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"pi-beehive\" — feature is closed.",
   "created_at": "2026-09-02T12:13:00.247Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "✓ **Feature đóng.** 6 cell lưu trữ.",
+    "asked_at": "2026-09-02T14:37:32.126Z",
+    "session": "b59cfe73-6f95-4182-b7f8-f8a2c362922d"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
