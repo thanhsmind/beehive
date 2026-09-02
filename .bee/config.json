@@ -20,7 +20,8 @@
   "models": {
     "claude": {
       "code": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
@@ -29,12 +30,18 @@
         "description": "multi-file gathers and codebase scans, read-only"
       },
       "test": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "author or repair tests, red-first"
       },
       "docs": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "doc edits and parity sweeps"
+      },
+      "plan": {
+        "model": "opus",
+        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
       },
       "extraction": {
         "kind": "herding",
