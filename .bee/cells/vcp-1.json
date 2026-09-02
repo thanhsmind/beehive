@@ -1,0 +1,66 @@
+{
+  "id": "vcp-1",
+  "feature": "verification-contract-parity",
+  "title": "Pin the verify-app name across every surface that states it, and pin the two doctrine additions",
+  "lane": "tiny",
+  "role": "test",
+  "status": "dropped",
+  "deps": [],
+  "decisions": [
+    "d0e3c3a0-233a-4396-94c2-b364f3f9abac",
+    "9f4f90f0-f1ed-4acf-8358-72cb390199d7",
+    "c93a6948-ca40-4a03-9693-4e2ad6f14489",
+    "036e8a79-3aa8-4e69-b1b5-6b43e6729447"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/verification_contract_parity.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs",
+    "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs",
+    "docs/history/verification-contract-parity/CONTEXT.md",
+    "docs/knowledge/patterns/20260826-a-rule-living-in-n-places-needs-one-test-that-reads-all-n.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Close two rows of a shipped feature's test matrix that no cell ever built (decision 87f9409b). ONE new file: `packages/bee-rs/crates/bee/tests/verification_contract_parity.rs`. Nothing else is edited.\n\nRead its two siblings FIRST — `rule_index_parity.rs` and `agents_block_render_parity.rs`. Match their shape exactly: repo text read as text, std only, no crate-internal import, and a header comment block that tells a reader six months from now what is pinned, what is deliberately NOT pinned, and why the file exists at all. Both siblings also word their assertion messages so the failure names the fix; do the same.\n\nTEST 1 — the name is one constant, stated identically everywhere.\n\nPer D1 (d0e3c3a0) `verify-app` is a fixed literal in every repo, and per D8 (9f4f90f0) the source path is `.bee/verify/verify-app/`. Today that literal is stated in eight source surfaces with nothing holding them together: rename the Rust constant and seven prose surfaces go stale in silence. This is the repo's own recorded pattern — read `docs/knowledge/patterns/20260826-a-rule-living-in-n-places-needs-one-test-that-reads-all-n.md` before you design the assertion.\n\nRead the VALUE of `VERIFY_APP_SKILL_NAME` out of `packages/bee-rs/crates/bee/src/onboard/templates.rs` as TEXT — it is not visible to an integration test as a symbol, and `rule_index_parity.rs` shows the technique for reading a constant out of source. Do not hardcode the string `verify-app` as the expected value anywhere except, at most, one clearly-labelled sanity assertion that the parse actually found something; a test that hardcodes both sides pins nothing.\n\nThen assert, over every surface that states a verification skill name:\n  - each uses that same parsed literal, and\n  - none still carries the retired per-project form `verify-<app>`.\n\nDERIVE the surface list, never hand-copy it. `rg -l 'verify-app'` over sources today returns `packages/bee/AGENTS.block.md` and the five skill bodies `bee-verifying`, `bee-verify-upkeep`, `bee-shaping`, `bee-planning`, `bee-swarming` (plus `templates.rs` itself and `onboard/tests.rs`). A derived walk means a sixth skill joining the set is covered without editing this test. Exclude the generated trees — `.claude/`, `.agents/`, `.opencode/`, `.claude-plugin/`, `.codex-plugin/` — and `docs/history/`, which is an immutable record and legitimately holds the old form. State that exclusion in a comment with its reason.\n\nTEST 2 — the doctrine additions are actually present.\n\n`agents_block_render_parity.rs` pins `AGENTS.md` byte-for-byte to `packages/bee/AGENTS.block.md`, which means it CANNOT catch a deletion: remove the read-first mention from the source, regenerate, and both files agree while the doctrine is gone. Say exactly that in your header comment — it is why this second test is not redundant with the fence.\n\nAssert against `packages/bee/AGENTS.block.md`:\n  - Per D4 (c93a6948), the feature map is named as a read-first state layer beside `docs/knowledge/` — the path `.bee/verify/verify-app/features/` appears in the same rule as the `docs/knowledge/` read-first sentence.\n  - Per D5 (036e8a79), the `agents-proof-at-cap` bullet carries a user-facing-surface case naming `green:live`, and it is INSIDE that existing bullet rather than a new one.\n\nAssert on load-bearing substance, not on whole sentences. A test that pins prose verbatim goes red on every reword and gets deleted by the next person; pick the few tokens that carry the meaning and say in a comment why those and not the sentence.\n\nPROVE BOTH TESTS CAN FAIL. A parity test never observed failing is not known to work. For each: make a scratch edit that should break it, run it, keep the red output, revert, run green. Both reds and the final green go in the cap proof. Revert by rewriting the file text, not by a tree-wide git checkout.\n\nIf a test goes red on the tree AS IT STANDS, that is a finding — report it as a deviation and return [BLOCKED] rather than editing the surface it caught. This cell writes one file and no others.",
+  "must_haves": {
+    "truths": [
+      "Renaming VERIFY_APP_SKILL_NAME in templates.rs without updating the skill bodies turns test 1 red",
+      "Deleting the read-first feature-map mention from packages/bee/AGENTS.block.md turns test 2 red even after a regen",
+      "Both tests pass on the tree as it stands today",
+      "The surface list is derived by walking the repo, not hand-copied into the test"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/verification_contract_parity.rs",
+        "substantive": "two named tests, a header comment stating what is pinned and what is not and why the fence does not already cover it, std only, no crate-internal import, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the expected name is parsed out of templates.rs, not hardcoded as the expected value",
+      "generated skill trees and docs/history are excluded with a stated reason"
+    ],
+    "prohibitions": [
+      "No file changed except the one new test",
+      "No edit to a surface a test catches - report it instead",
+      "No crate-internal import",
+      "No scratch proof edit left in the tree"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test verification_contract_parity --test agents_block_render_parity --test rule_index_parity",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "Mis-scoped: cited D4 (c93a6948) and D8 (9f4f90f0), both of which carry open revisit triggers. Re-added citing only the settled contracts D1 and D5, and no longer asserting D4's provisional read-first line — decision 29b853d8."
+  }
+}
