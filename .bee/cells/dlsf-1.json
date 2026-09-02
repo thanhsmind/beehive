@@ -1,0 +1,79 @@
+{
+  "id": "dlsf-1",
+  "feature": "dispatch-label-seat-first",
+  "title": "The dispatch label leads with the seat role when one is given",
+  "lane": "tiny",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/product-description/delegation/dispatch.md"
+  ],
+  "action": "In prepare.rs, the non-cell subject (`let subject = if kind == \"cell\" {` … `else { match purpose … Some(p) => format!(\"{kind}: {}\", …), None => kind.to_string() }`, rg hit prepare.rs:1587-1601) leads with the ASKED role when `--role` was given (the canonical `role: Option<&str>` local at prepare.rs:1323, config spelling), and with the kind otherwise: `hat-facts-gaps: hat wave … (opus)`, `extraction: … (haiku)`; no `--role` keeps today's bytes (`gather: … (sonnet)`, `gather (sonnet)`). Cell subjects unchanged. Extend the doc comment above (\"Every other kind: subject is …\") with the reason: an advisor-kind dispatch carrying a seat role read as 'advisor' in every UI even when the seat's own model ran — the label must name the slot that resolved. Red first: add a test in drivers/tests.rs that `--kind advisor --role hat-facts-gaps --purpose \"hat wave\"` on a host with `hat-facts-gaps: opus, advisor: fable` yields description `hat-facts-gaps: hat wave (opus)`; watch it fail with `advisor: hat wave (opus)`; then fix. Keep the existing no-role description tests green untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- drivers prepare",
+  "must_haves": {
+    "truths": [
+      "--kind advisor --role hat-facts-gaps --purpose X → description 'hat-facts-gaps: X (<seat model>)'",
+      "no --role → description bytes identical to today"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "role-led subject with its comment and a red-first test"
+      }
+    ],
+    "key_links": [
+      "the description reads the same canonical role local the resolver reads"
+    ],
+    "prohibitions": [
+      "No change to cell subjects",
+      "No change to marker, model, or subagent_type"
+    ]
+  },
+  "trace": {
+    "worker": "w-dlsf-1",
+    "outcome": "The dispatch label leads with the asked role when --role is given; role-less dispatches keep today's bytes",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "docs/product-description/delegation/dispatch.md"
+    ],
+    "deviations": [
+      "Edited docs/product-description/delegation/dispatch.md line 211 (the label rule) though the cell listed it only under affects_specs — the sentence named <kind>: <purpose> as the rule and became false the moment the lead changed — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T05:59:12.711Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f7f16c07-ef49-4e1b-8ef9-4f1206a75a38",
+    "claimed_at": "2026-09-02T05:55:52.877Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The dispatch label leads with the asked role when --role is given (hat-facts-gaps: hat wave (opus)); role-less dispatches keep today's bytes",
+      "commit": "20ede1f7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "docs/product-description/delegation/dispatch.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- drivers (336 passed), prepare (43 passed), model_guard (58 passed) — green:unit — red-first on a_seat_role_leads_the_description_instead_of_the_kind (left: advisor: hat wave (opus)), then every test that reads a description; no role-less description test changed",
+      "deviations": [
+        "Edited docs/product-description/delegation/dispatch.md line 211 (the label rule) though the cell listed it only under affects_specs — the sentence named <kind>: <purpose> as the rule and became false the moment the lead changed — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

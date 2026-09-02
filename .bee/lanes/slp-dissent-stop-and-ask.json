@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All quiet. I will write the silence record now.",
-    "asked_at": "2026-09-02T05:38:41.263Z",
-    "session": "d42c588a-72a5-4e61-8f5d-44c7128aec11"
+    "subject": "Both recovery candidates checked directly: `compound-release-knowledge` and `slp-lead-recovery` lane files both show `run_state: \"awaiting-a",
+    "asked_at": "2026-09-02T05:54:29.679Z",
+    "session": "1bdcca79-d34f-4ec3-95ac-3214db51a958"
   },
   "route": {
     "class": "feature",
