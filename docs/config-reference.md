@@ -238,12 +238,12 @@ Pi enforces bee rules through the extension [`.pi/extensions/bee-guard.ts`](../.
 | Rule | Pi Event | Policy | Description |
 |---|---|---|---|
 | `write-guard` | `tool_call` | Blocking | Validates tool executions (`bash`, `powershell`, `write`, `edit`, `read`, `grep`, `find`, `ls`, and custom tools). |
-| `session-init` | `session_start` | Advisory | Runs at session start or clear; caches the session preamble. |
+| `session-init` | `session_start` | Advisory | Runs every time Pi starts a session — a fresh start, a new session, a resume, a fork, or a reload — and caches the session preamble. A new session reports as a clear; a resume, fork, or reload reports as a resume; anything else reports as a startup. |
 | `prompt-context` | `before_agent_start` | Advisory | Generates the per-turn context delta appended to the system prompt. |
 | `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `agent_settled` (`Stop`), `session_shutdown` (`SessionEnd`) | Advisory | Records session state transitions across prompt submission, tool execution results, turn completion, and session shutdown. |
 | `state-sync` | `tool_result` (`PostToolUse`), `agent_settled` (`Stop`) | Advisory | Synchronizes session state after tool execution and on turn completion. |
-| `tools-logger` | `tool_result` (`PostToolUse`) | Advisory | Logs tool invocation metadata (`tool_name`, timestamp, agent identity) to the tools log; tool arguments and results are never logged. |
-| `session-close` | `agent_settled` (`Stop`), `session_before_compact` (`PreCompact`), `session_shutdown` (`SessionEnd`) | Advisory | Manages turn-end marks and continuation nudges on settle; the `PreCompact` arm returns undecidable (fail-open) today so the belt is ready when native `PreCompact` becomes real; marks session records closed on shutdown (`quit`, `new`, `resume`, `fork`). |
+| `tools-logger` | `tool_result` (`PostToolUse`) | Advisory | Appends one line per tool call to the tools log, carrying the timestamp and the tool name. Tool arguments and results are never logged. The agent-identity fields the rule can carry on other runtimes stay empty on Pi, because Pi's tool result does not carry them. |
+| `session-close` | `agent_settled` (`Stop`), `session_before_compact` (`PreCompact`), `session_shutdown` (`SessionEnd`) | Advisory | Manages turn-end marks and continuation nudges on settle; the `PreCompact` arm returns undecidable (fail-open) today so the belt is ready when native `PreCompact` becomes real; and marks the session record closed on shutdown for every reason except `reload`, which keeps the same session running. A shutdown that carries no reason at all also closes the record. |
 
 The extension also runs an advisory result inbox drain on `session_start` to poll for detached `bee herding run` background job results under `.bee/result-inbox/<token>/` and inject them into the session via `pi.sendUserMessage`.
 
