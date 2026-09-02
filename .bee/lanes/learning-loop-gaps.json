@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"learning-loop-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at bc9cf20; reload the product and test \"learning-loop-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane learning-loop-gaps\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"learning-loop-gaps\" (lane).",
   "created_at": "2026-09-02T07:55:52.287Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: learning-loop-gaps",
-    "asked_at": "2026-09-02T08:44:36.253Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

@@ -1128,5 +1128,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-02T06:00:15.229Z"
+  },
+  "learning-loop-gaps": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-02T09:30:43.124Z"
   }
 }

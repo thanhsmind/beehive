@@ -1,0 +1,11 @@
+{
+  "id": "a-user-s-asked-for-mining-request-is-mis__81d46f80",
+  "decision": "81d46f80",
+  "condition": "A user's asked-for mining request is missed or misread because the trigger is a plain sentence with no named gesture — then a slash command or bee verb for it becomes its own decision (learning-loop-gaps Known gaps)",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-02T09:29:36.470Z",
+  "updated_at": "2026-09-02T09:29:36.470Z",
+  "outcome": null
+}
