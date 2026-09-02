@@ -13,8 +13,13 @@
   "summary": "Feature \"learning-loop-gaps\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"learning-loop-gaps\" — feature is closed.",
   "created_at": "2026-09-02T07:55:52.287Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The release is running (buffered by the pipe — the full suite takes minutes). Waiting.",
+    "asked_at": "2026-09-02T09:37:18.732Z",
+    "session": "f7f16c07-ef49-4e1b-8ef9-4f1206a75a38"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",

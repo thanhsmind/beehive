@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-beehive",
+  "mode": "high-risk",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-beehive\" started at phase \"exploring\" (lane).",
+  "next_action": "Merge wt/pi-beehive into main, then hand the user main for uat.",
+  "created_at": "2026-09-02T12:13:00.247Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "authorization",
+      "audit-security",
+      "public-contracts",
+      "covered-contract-change",
+      "proof-weakening"
+    ],
+    "product_files": 3,
+    "rationale": "The Pi belt is bee's enforcement belt on Pi. D1 turns two fail-closed blocks into softer outcomes (an ask verdict becomes a ctx.ui.confirm dialog; an updatedInput repair becomes an in-place event.input mutation) — that is the proof-weakening hard-gate flag, so high-risk regardless of count. It also changes behavior pi_plugin_contracts.rs already asserts, and the belt's row set is documented in docs/config-reference.md.",
+    "updated_at": "2026-09-02T12:13:56.741Z",
+    "feature": "pi-beehive"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-02T12:43:18.746Z",
+    "feature": "pi-beehive",
+    "newest_decision_id": "663c642e-5c34-4402-8772-340d5daed33a",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave/5-seat (hat-facts-gaps, hat-alternatives, hat-user-impact, hat-risks, hat-value) + user resolution of Q1/Q2",
+    "digest_head": "PLAN CHECK — pi-beehive (5-seat hat wave, high-risk)\nWork: slice 1 (Epics A, B, C, D, F); Epic E out of scope per 8d8ac85f.\n\nSTRUCTURE\nBLOCKERS\n- claims-table/anchors: rows 12 and 20 anchored lines that do not contain the quoted bytes (521-522 vs 522-523; 220-221 vs 222). Evidence: extensions.md read at both ranges. FIXED in revision 2.\n- claims-table/verbatim: rows 6, 9, 10, 11 re-typed real leading whitespace as tabs. FIXED — evidence now quoted from the first non-whitespace byte.\n- decision-c"
+  },
+  "merge_ready": {
+    "since": "2026-09-02T14:22:37.388Z",
+    "branch": "wt/pi-beehive",
+    "worktree_id": "beehive--wt--pi-beehive",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "pi-beehive",
+    "date": "2026-09-02",
+    "at": "2026-09-02T14:30:27.993Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "Merge wt/pi-beehive into main, then hand the user main for uat."
+  }
+}

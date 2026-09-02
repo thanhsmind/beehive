@@ -1,0 +1,139 @@
+{
+  "id": "pib-2",
+  "feature": "pi-beehive",
+  "title": "Close the Pi session record on a real session end, filtered by reason",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "pib-1"
+  ],
+  "decisions": [
+    "1edd8a90"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-beehive/plan.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "No Pi event closes a bee session record today, so a Pi session that exits keeps holding its worktree against bee worktree prune for the full liveness window — read prune.rs for the constant and the status check before you start, so you know what you are fixing. Register pi.on(\"session_shutdown\") and call session-close with hook_event_name SessionEnd, ADVISORY and fail-open like every other non-tool_call row. The trap: Pi fires session_shutdown on more than a real ending. Read its documented reason values, then decide per reason whether the session actually ended, and pass the call through only for the ones that did. Two sources settle the judgment and you must read both — bee's own activity hook already refuses to mark a session exited on a reason that ends a transcript rather than a session, and this same belt already treats one of those reasons as the same session continuing in its session_start handler. Follow that precedent; do not invent a third policy. Record the per-reason decision as a comment beside the handler. Then extend the parity test with probes that assert WHICH reasons close the record and which deliberately do not — an at-most-once probe is not enough, because it passes an implementation that wrongly closes on a session that keeps living. Add a probe that firing session-close on both agent_settled and session_shutdown in one session is safe, and one that the shutdown handler does not stall the quit, since the advisory helper runs the binary synchronously and this event fires before Pi tears the runtime down.",
+  "must_haves": {
+    "truths": [
+      "A reason that genuinely ends the session closes the record; a reason that keeps the same session alive does not, and a probe asserts both directions by name",
+      "The per-reason policy matches the precedent already set by bee's activity hook and by this belt's own session_start handler",
+      "session-close firing on both agent_settled and session_shutdown in one session leaves the record correct",
+      "The shutdown handler does not stall Pi's quit",
+      "The handler is advisory and fail-open, and the blocking path is untouched"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "a pi.on session_shutdown handler with an explicit per-reason filter and a comment recording the policy and its precedent"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "per-reason close/no-close probes, the double-fire probe and the quit-stall probe"
+      }
+    ],
+    "key_links": [
+      "the parity test's derived event set sees the new pi.on registration"
+    ],
+    "prohibitions": [
+      "No unfiltered forwarding of every session_shutdown as SessionEnd",
+      "No change to the Rust session-close rule to make the filter work — the filter belongs in the belt",
+      "No change to any tool_call behavior"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts",
+  "trace": {
+    "worker": "w-pib-2",
+    "outcome": "Closed the Pi session record on session_shutdown for every reason that truly ends the session, and skipped reload, which keeps the same session alive",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T13:07:32.899Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b59cfe73-6f95-4182-b7f8-f8a2c362922d",
+    "claimed_at": "2026-09-02T12:59:25.862Z",
+    "mistakes": [
+      {
+        "wrong": "The worker committed but never ran cells finish, so the cell sat claimed and the orchestrator capped it by hand",
+        "better": "the same thing pib-1 did, so the herding worker brief, not the cell, is what needs fixing"
+      }
+    ],
+    "report": {
+      "outcome": "session_shutdown now closes the session record for quit, new, resume and fork, and returns early on reload",
+      "commit": "fe1b670d",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts — green:unit — the two suites that embed and derive from the belt source; re-run by the orchestrator rather than taken on the workers word: 28 passed pi + 6 passed opencode, 0 failed, up from 25 pi after pib-1",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "The worker committed but never ran cells finish, so the cell sat claimed and the orchestrator capped it by hand — the same thing pib-1 did, so the herding worker brief, not the cell, is what needs fixing"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "per-reason close and no-close asserted both directions",
+            "status": "PASS",
+            "evidence": "closed with a timestamp for quit, new, resume, fork and the default; active with no timestamp for reload"
+          },
+          {
+            "id": "policy matches the precedent in the belt and in activity.rs",
+            "status": "PASS",
+            "evidence": "reload is the one reason session_start already treats as the same session continuing"
+          },
+          {
+            "id": "double fire is safe",
+            "status": "PASS",
+            "evidence": "agent_settled then session_shutdown leaves the record closed and throws nothing"
+          },
+          {
+            "id": "the quit is not stalled",
+            "status": "PASS",
+            "evidence": "the handler is bounded against the real binary"
+          },
+          {
+            "id": "no Rust change and the blocking path is untouched",
+            "status": "PASS",
+            "evidence": "the slice has no commit under the Rust source or the hook manifests"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:47:01.454Z"
+      }
+    ]
+  }
+}

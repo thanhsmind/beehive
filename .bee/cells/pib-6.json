@@ -1,0 +1,302 @@
+{
+  "id": "pib-6",
+  "feature": "pi-beehive",
+  "title": "Close the state-sync parity gap on turn end and correct two false lines in the Pi config reference",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "pib-5"
+  ],
+  "decisions": [
+    "1edd8a90",
+    "b1a26071"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/pi-beehive/plan.md",
+    "docs/history/pi-beehive/CONTEXT.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee/hooks/claude-hooks.json",
+    "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "docs/config-reference.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "This is a fix-first cell for a gap the earlier cells left, found by the orchestrator while verifying pib-5. FIRST, the parity gap. Derive from packages/bee/hooks/claude-hooks.json which rules the Claude belt fires on its turn-end event, then read the Pi belt's turn-end handler and list which of those it actually calls. One of them is missing on Pi even though the Pi event is a perfectly good carrier for it — the belt calls that rule on tool results only. Wire it on the turn-end event too, passing the Claude event name the manifest pairs it with, ADVISORY and fail-open like its neighbours, inside the existing handler and without disturbing what already runs there. Read the rule's own implementation first so you know what it does with a payload that carries no tool fields, and pass only what that event honestly carries. SECOND, the two false lines in docs/config-reference.md, both in the Pi guard belt section that pib-5 wrote: one row claims session-close flushes state before compaction, but the rule's PreCompact arm returns the undecidable value and does nothing observable except a fail-open stderr line — rewrite that row to say what the code does, and say plainly that the row exists so the belt is ready when the rule's PreCompact arm becomes real. The other line lists the rule you are wiring as having no Pi carrier, which your own change makes false — move it into the wired table with the event you wired it on. While you are in that section, re-read every remaining row against the belt and correct any other row that does not match the code. THIRD, extend the parity test with a probe that the turn-end handler calls every rule the Claude manifest fires on its turn-end event, so this gap cannot reopen silently.",
+  "must_haves": {
+    "truths": [
+      "The Pi turn-end handler calls every rule the Claude manifest fires on its own turn-end event, and a probe asserts that set rather than a hand-written list",
+      "The newly wired rule receives the Claude event name the manifest pairs it with, and only the payload fields that event honestly carries",
+      "The config reference no longer claims the belt flushes state before compaction; it states what the PreCompact row actually does today and why it exists",
+      "No row in the Pi section of the config reference contradicts the belt source",
+      "The new call is advisory and fail-open, and the blocking path is untouched"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "the missing rule wired on the turn-end event beside the calls already there, with no change to the existing three"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "a probe deriving the Claude turn-end rule set and asserting the Pi turn-end handler covers it"
+      },
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "the compaction row corrected and the newly wired rule moved out of the no-carrier list"
+      }
+    ],
+    "key_links": [
+      "the probe derives its expectation from packages/bee/hooks/claude-hooks.json, not from a literal list in the test"
+    ],
+    "prohibitions": [
+      "No change to runBlockingHook, mapToolCall or any tool_call behavior",
+      "No change to the three calls already in the turn-end handler",
+      "No hand-written expected list where a derivation is available",
+      "No new user-facing Pi surface"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts",
+  "trace": {
+    "worker": "w-pib-6c",
+    "outcome": "state-sync fires on the Pi turn end, the contract derivations ignore commented-out code, and every row of the Pi config reference is anchored to the belt",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/config-reference.md"
+    ],
+    "deviations": [
+      "The last three documentation rows were corrected by the orchestrator rather than a worker, after the cell missed the same class of defect on three dispatches — hit an unforeseen obstacle",
+      "A shared comment-stripping helper was written once and applied to three derivations, rather than patching only the one the finding named — found a better route",
+      "The cell was reopened and capped a second time because an earlier cap was recorded by accident with placeholder values — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T14:22:37.342Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b59cfe73-6f95-4182-b7f8-f8a2c362922d",
+    "claimed_at": "2026-09-02T14:21:26.460Z",
+    "mistakes": [
+      {
+        "wrong": "Three briefs for this cell each named only the row already known to be wrong and asked for a re-read of the rest, so the worker fixed that row and treated the others as checked",
+        "better": "hand a list-auditing cell the whole enumeration and require a per-row verdict carrying its code anchor"
+      },
+      {
+        "wrong": "I rewrote the session-init row to claim a reload never re-runs it, one commit after naming enumeration-wider-than-the-branch as this cell's repeated defect, and in the same edit I dropped reload out of the source mapping it belongs in",
+        "better": "read the branch that implements a behaviour before writing the sentence that describes it, and check a correction in both directions, because too narrow is the same defect as too wide"
+      },
+      {
+        "wrong": "I ran cells finish with placeholder values purely to read its refusal text, and the call capped the cell for real with a one-letter outcome and a deviations line claiming the plan was followed",
+        "better": "never drive a mutating verb to inspect an error message, run the real payload instead, which either succeeds correctly or refuses safely"
+      }
+    ],
+    "report": {
+      "outcome": "Closed the turn-end parity gap, hardened the contract derivations against comments, and corrected every documentation row that did not match the belt",
+      "commit": "cd940171",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/config-reference.md"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts — green:unit — 34 passed pi and 6 passed opencode, 0 failed, re-run by the orchestrator and again by an independent judge that also compiled the comment-stripping helper and ran it against string-literal traps",
+      "deviations": [
+        "The last three documentation rows were corrected by the orchestrator rather than a worker, after the cell missed the same class of defect on three dispatches — hit an unforeseen obstacle",
+        "A shared comment-stripping helper was written once and applied to three derivations, rather than patching only the one the finding named — found a better route",
+        "The cell was reopened and capped a second time because an earlier cap was recorded by accident with placeholder values — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "Three briefs for this cell each named only the row already known to be wrong and asked for a re-read of the rest, so the worker fixed that row and treated the others as checked — hand a list-auditing cell the whole enumeration and require a per-row verdict carrying its code anchor",
+        "I rewrote the session-init row to claim a reload never re-runs it, one commit after naming enumeration-wider-than-the-branch as this cell's repeated defect, and in the same edit I dropped reload out of the source mapping it belongs in — read the branch that implements a behaviour before writing the sentence that describes it, and check a correction in both directions, because too narrow is the same defect as too wide",
+        "I ran cells finish with placeholder values purely to read its refusal text, and the call capped the cell for real with a one-letter outcome and a deviations line claiming the plan was followed — never drive a mutating verb to inspect an error message, run the real payload instead, which either succeeds correctly or refuses safely"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "the turn-end probe derives both sides",
+            "status": "PASS",
+            "evidence": "one side parses the Claude manifest, the other parses the handler body; neither is a literal list"
+          },
+          {
+            "id": "the derivation is immune to a commented-out call",
+            "status": "FAIL",
+            "evidence": "the body scan does not strip comments, so a commented-out call would still count as wired; none exists today and outright deletion does red the probe"
+          },
+          {
+            "id": "state-sync wired honestly on turn end",
+            "status": "PASS",
+            "evidence": "advisory, fail-open, additive, and carrying only the fields the event honestly has"
+          },
+          {
+            "id": "the existing turn-end calls are untouched",
+            "status": "PASS",
+            "evidence": "the belt diff is one additive hunk inside the handler"
+          },
+          {
+            "id": "the compaction row is corrected",
+            "status": "PASS",
+            "evidence": "the document now states that the PreCompact arm does nothing today and why the row exists"
+          },
+          {
+            "id": "no documented row contradicts the belt",
+            "status": "FAIL",
+            "evidence": "the tools-logger row claims arguments and results are logged, but the rule's own header says tool bodies are never logged and the belt passes only the tool name"
+          }
+        ],
+        "failure_signature": "the tools-logger row in the config reference overstates what the rule records, surviving the row-by-row re-read this cell was told to do",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:47:01.477Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "the turn-end probe derives both sides",
+            "status": "PASS",
+            "evidence": "one side parses the Claude manifest, the other parses the handler body; neither is a literal list"
+          },
+          {
+            "id": "the derivation is immune to a commented-out call",
+            "status": "FAIL",
+            "evidence": "the body scan does not strip comments, so a commented-out call would still count as wired; none exists today and outright deletion does red the probe"
+          },
+          {
+            "id": "state-sync wired honestly on turn end",
+            "status": "PASS",
+            "evidence": "advisory, fail-open, additive, and carrying only the fields the event honestly has"
+          },
+          {
+            "id": "the existing turn-end calls are untouched",
+            "status": "PASS",
+            "evidence": "the belt diff is one additive hunk inside the handler"
+          },
+          {
+            "id": "the compaction row is corrected",
+            "status": "PASS",
+            "evidence": "the document now states that the PreCompact arm does nothing today and why the row exists"
+          },
+          {
+            "id": "no documented row contradicts the belt",
+            "status": "FAIL",
+            "evidence": "the tools-logger row claims arguments and results are logged, but the rule's own header says tool bodies are never logged and the belt passes only the tool name"
+          }
+        ],
+        "failure_signature": "the tools-logger row in the config reference overstates what the rule records, surviving the row-by-row re-read this cell was told to do",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:47:15.156Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "tools-logger row matches the rule",
+            "status": "PASS",
+            "evidence": "the row now says metadata only and that tool bodies are never logged, matching the rule's own header and the fields the belt passes"
+          },
+          {
+            "id": "turn-end derivation is comment-immune",
+            "status": "PASS",
+            "evidence": "a shared comment-stripping helper is applied to the advisory-hook, registered-event and turn-end derivations"
+          },
+          {
+            "id": "the stripper preserves string literals",
+            "status": "PASS",
+            "evidence": "the judge compiled the helper and ran it: a URL, a // inside a string and a /* inside a string all survive; on the real belt every live call and registration survives and only doc comments are removed"
+          },
+          {
+            "id": "the new probe cannot pass on a reverted helper",
+            "status": "PASS",
+            "evidence": "it drives the same two shared functions the real derivations call, so a no-op helper makes the commented-out name appear and the negative assertion fires"
+          },
+          {
+            "id": "every row of the Pi section anchored to code",
+            "status": "PASS",
+            "evidence": "an exhaustive pass enumerated all seventeen items — two policies, seven wired rows, the drain paragraph, three exclusions and four no-carrier entries — and anchored each one; the no-carrier list was also checked for completeness against every row of the Claude manifest"
+          },
+          {
+            "id": "session-init row: trigger set",
+            "status": "PASS",
+            "evidence": "the handler runs for every session start with exactly one early return, and the row's closing default keeps unknown reasons inside the description"
+          },
+          {
+            "id": "session-init row: the reload gate is the code's gate",
+            "status": "PASS",
+            "evidence": "the skip is gated on the already-ran flag, not on the reason alone, and the row states the flag-unset case as running once"
+          },
+          {
+            "id": "session-init row: the fresh-copy claim is grounded",
+            "status": "PASS",
+            "evidence": "the belt's own comment says Pi's reload can hand the file a fresh module scope, which is what leaves the flag unset"
+          },
+          {
+            "id": "session-init row: the source-word mapping is complete",
+            "status": "PASS",
+            "evidence": "new to clear, resume and fork and reload to resume, everything else to startup — word for word against the helper, with reload back on the resume branch"
+          },
+          {
+            "id": "shutdown row: the close condition is not enumerated too tightly",
+            "status": "PASS",
+            "evidence": "the row now says every reason except reload, including a shutdown carrying none, which is the branch the belt has and the probe proves"
+          },
+          {
+            "id": "comment nits closed",
+            "status": "PASS",
+            "evidence": "the mapping row lists the reason field its call sends, and the shutdown comment describes the branch instead of an enumeration"
+          },
+          {
+            "id": "no regression in the blocking path",
+            "status": "PASS",
+            "evidence": "the belt changes across these commits are comment and documentation text; runBlockingHook, mapToolCall, PI_BUILTIN_TOOLS and the tool_call handler are unchanged, and no assertion was weakened"
+          },
+          {
+            "id": "verify command green",
+            "status": "PASS",
+            "evidence": "the cell's own verify command re-run by the orchestrator and again by the judge: 34 passed pi and 6 passed opencode, 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T14:20:22.017Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-09-02T13:47:01.477Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null,
+    "no_mistakes": true,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-09-02T14:21:17.726Z",
+    "reopened_reason": "The orchestrator ran cells finish with placeholder values as a diagnostic to read a refusal message, and the call capped the cell for real: the recorded outcome is a single letter, files_changed lists one of the three files touched, deviations claims the plan was followed when it was not, and the proof line is not the one that was actually run. Reopening to record the honest cap.",
+    "inline_reason": "The orchestrator corrected the last three documentation rows itself after the cell missed the same class of defect on three dispatches, and is capping from the main checkout without a registered pane worker"
+  }
+}

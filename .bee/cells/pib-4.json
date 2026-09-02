@@ -1,0 +1,135 @@
+{
+  "id": "pib-4",
+  "feature": "pi-beehive",
+  "title": "Make Pi's advisory gaps enforced by name instead of by prose",
+  "lane": "high-risk",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "pib-3"
+  ],
+  "decisions": [
+    "1edd8a90",
+    "8650ca7b",
+    "7f9c8518"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "read_first": [
+    "docs/history/pi-beehive/plan.md",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    ".pi/extensions/bee-guard.ts",
+    "docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-lists.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Nothing today forces a Pi advisory gap to be named: the Pi suite's advisory assertion is a hand-written expected list checked with contains, which can never catch a NEW catalog rule the belt fails to wire. OpenCode already has the gate this needs — a test that derives the rule catalog from the checked-in manifests and fails when a rule is neither wired nor named as an exclusion. Generalize that existing test over both belts rather than writing a second one in the Pi suite: read the cited coverage-gate pattern first, then note that the OpenCode test file already holds the catalog derivation, the embedded Pi belt source and the Pi naming predicate, while the Pi suite file embeds no manifest at all — building the gate there would mean deriving the same catalog twice. Add the Pi-side advisory-hook derivation beside the OpenCode one and run the same gap loop for both belts. Expect the gate to be RED the moment you write it, and treat that red as the point: only one rule in the belt currently carries the exclusion marker on its own line, while the others are described in prose without it, so the predicate returns false for them. Fix that by rewording those belt comments so each excluded rule's name and the marker sit on the SAME line — the predicate is line-scoped on purpose, so a marker on a neighbouring line does not count. Do not weaken the predicate to make the red go away. Keep every existing exclusion reason intact; you are moving words onto one line, not changing what is excluded or why.",
+  "must_haves": {
+    "truths": [
+      "A catalog advisory rule that the Pi belt neither wires nor names on one line fails the gate",
+      "The gate derives its ground truth once, from the manifests, and does not introduce a second catalog derivation",
+      "Every rule the Pi belt deliberately does not wire carries its name and the exclusion marker on the same line",
+      "No exclusion reason is changed or dropped — only reformatted onto one line",
+      "The gate is red before the belt comments are fixed and green after, and the cap records both observations"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+        "substantive": "the advisory-gap gate generalized over both belts with a Pi advisory-hook derivation; no second catalog derivation"
+      },
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "each excluded rule's name and the exclusion marker on the same line, reasons preserved"
+      }
+    ],
+    "key_links": [
+      "the generalized gate uses the existing Pi naming predicate and the existing catalog derivation"
+    ],
+    "prohibitions": [
+      "No second derivation of the rule catalog",
+      "No weakening of the naming predicate to turn the red green",
+      "No change to which rules are excluded or to their stated reasons",
+      "No new hand-maintained expected list"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts",
+  "trace": {
+    "worker": "w-pib-4",
+    "outcome": "The advisory-gap gate now covers both belts and derives the Pi side from source; the two unwired rules carry their name and the exclusion marker on their own line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      ".pi/extensions/bee-guard.ts"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T13:22:59.342Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b59cfe73-6f95-4182-b7f8-f8a2c362922d",
+    "claimed_at": "2026-09-02T13:17:41.786Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "advisory_gaps_the_plugin_does_not_wire_are_named_not_silent generalized over both belts, with the Pi advisory set derived from the belt source",
+      "commit": "7e831404",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+        ".pi/extensions/bee-guard.ts"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts — green:unit — the two suites that embed and derive from the belt source; re-run by the orchestrator rather than taken on the workers word: 32 passed pi + 6 passed opencode, 0 failed. The gate was RED first and named chain-nudge and codex-subagent-audit on the pi belt, which is the evidence it is not vacuous",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "ground truth derived once from the manifests",
+            "status": "PASS",
+            "evidence": "the existing catalog derivation is reused and the Pi suite adds no second one"
+          },
+          {
+            "id": "the gate covers the Pi belt and reds when a marker is removed",
+            "status": "PASS",
+            "evidence": "removing either exclusion line removes the only name-and-marker line for that rule"
+          },
+          {
+            "id": "the predicate cannot be satisfied by accident",
+            "status": "PASS",
+            "evidence": "the activity mapping comment lines carry the marker but no catalog rule name"
+          },
+          {
+            "id": "red-first evidence recorded",
+            "status": "PASS",
+            "evidence": "the cap records the gate red naming chain-nudge and codex-subagent-audit before the belt comments were reworded"
+          },
+          {
+            "id": "reasons preserved and the predicate not weakened",
+            "status": "PASS",
+            "evidence": "the old prose reasons moved verbatim onto single lines"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:47:01.469Z"
+      }
+    ]
+  }
+}

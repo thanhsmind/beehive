@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces read. State matches the last dozens of ticks: everything is idle, no new signal.",
-    "asked_at": "2026-09-02T09:20:02.554Z",
-    "session": "5aa06479-a029-4865-894e-9d9274bea807"
+    "subject": "All six surfaces check out clean. Writing the tick record now.",
+    "asked_at": "2026-09-02T14:25:04.418Z",
+    "session": "07dd2b6a-6c2f-47cb-ba0b-8d6bd6c733d9"
   },
   "route": {
     "class": "feature",

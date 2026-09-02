@@ -1,0 +1,143 @@
+{
+  "id": "pib-3",
+  "feature": "pi-beehive",
+  "title": "Enforce the continuation nudge on agent_settled, gated on the block verdict",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "pib-2"
+  ],
+  "decisions": [
+    "663c642e",
+    "1edd8a90"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-beehive/plan.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+    "packages/bee-rs/crates/bee/src/hooks/adapter.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "The belt calls session-close on agent_settled and throws its return value away, so the one verdict that is meant to force the session onward is dropped. Fix that. Capture the helper's stdout, parse it, and act ONLY on the block-decision shape — read adapter.rs to learn the two shapes the rule can emit, because the ordinary advisory shape is also non-empty and treating any non-empty output as a nudge would force a turn on every routine reminder for every user. That is the single highest-consequence mistake available in this cell. When and only when the block shape is present, inject its reason through pi.sendUserMessage per 663c642e — not pi.sendMessage, whose custom messages want a renderer that D2 forbids, and which the live test harness does not stub. Reuse the belt's existing injection discipline rather than inventing a second one: it already has a capability guard for that API and its own busy and in-flight latches. Await the call inside try/catch so no floating promise escapes as an unhandled rejection, and make sure nothing you start outlives the session. You do not need your own repeat guard — the Rust side already dedupes this verdict on a session-stable key inside a time window; read that code so you can say why, and cite it in the comment rather than adding a second latch. Then extend the live test harness with whatever you assert on: the stub Pi object and stub context must expose the surfaces your probes touch, and the stub bee must be able to return both emitted shapes, or the probes pass without proving anything. Add probes that an ordinary advisory nudge does NOT trigger a turn, that the block shape DOES, and that a failure in the injection is swallowed rather than thrown.",
+  "must_haves": {
+    "truths": [
+      "Only the block-decision shape triggers a turn; an ordinary advisory message never does, and a probe asserts that negative case",
+      "The injection uses pi.sendUserMessage per 663c642e and reuses the belt's existing capability guard and latches",
+      "No floating promise: a failed injection is caught and logged, never thrown",
+      "The test harness exposes every surface the new probes assert on, so no probe can pass vacuously",
+      "The handler stays advisory and fail-open; the blocking path is untouched"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "agent_settled captures and parses the session-close verdict, gates on the block shape, and injects via sendUserMessage with a comment citing the existing Rust-side dedupe"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "harness stubs extended, plus the positive, negative and failure-swallowed probes"
+      }
+    ],
+    "key_links": [
+      "the agent_settled handler consumes the value runAdvisoryHook returns instead of discarding it"
+    ],
+    "prohibitions": [
+      "No use of pi.sendMessage",
+      "No message renderer, command, dialog or widget (per D2)",
+      "No second repeat-guard latch duplicating the Rust-side dedupe",
+      "No treating any non-empty session-close output as a nudge"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts",
+  "trace": {
+    "worker": "w-pib-3",
+    "outcome": "agent_settled now parses the session-close verdict and injects only a block reason through sendUserMessage; an ordinary advisory nudge never opens a turn",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "A fourth probe was added beyond the three the cell asked for, driving the real bee binary under gate_bypass=full so the block verdict is proven end to end and not only against a stub — found a better route",
+      "The worker reused the belts existing turnStartPending latch instead of adding one, which is what the cell asked for; recorded because the cell named it as a prohibition rather than an instruction — followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T13:17:35.961Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b59cfe73-6f95-4182-b7f8-f8a2c362922d",
+    "claimed_at": "2026-09-02T13:07:38.309Z",
+    "mistakes": [
+      {
+        "wrong": "The worker wrote status ok instead of done in its result envelope, so herding reported malformed_result and left the pane open even though the commit had landed",
+        "better": "the envelope schema should have been read from the brief before writing the file"
+      }
+    ],
+    "report": {
+      "outcome": "The continuation nudge is enforced on agent_settled, gated on the block verdict shape and injected via sendUserMessage",
+      "commit": "860f07a5",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts — green:unit — the two suites that embed and derive from the belt source; re-run by the orchestrator rather than taken on the workers word: 32 passed pi + 6 passed opencode, 0 failed, up from 28 pi after pib-2",
+      "deviations": [
+        "A fourth probe was added beyond the three the cell asked for, driving the real bee binary under gate_bypass=full so the block verdict is proven end to end and not only against a stub — found a better route",
+        "The worker reused the belts existing turnStartPending latch instead of adding one, which is what the cell asked for; recorded because the cell named it as a prohibition rather than an instruction — followed the plan"
+      ],
+      "mistakes": [
+        "The worker wrote status ok instead of done in its result envelope, so herding reported malformed_result and left the pane open even though the commit had landed — the envelope schema should have been read from the brief before writing the file"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "the negative case drives the real advisory shape",
+            "status": "PASS",
+            "evidence": "the stub emits the exact systemMessage shape the adapter emits, and the probe asserts zero injected messages"
+          },
+          {
+            "id": "the positive case runs the real binary",
+            "status": "PASS",
+            "evidence": "a second probe drives the real bee under gate_bypass full and sees the block verdict injected"
+          },
+          {
+            "id": "an injection failure is swallowed",
+            "status": "PASS",
+            "evidence": "asserts no throw and the logged line"
+          },
+          {
+            "id": "sendUserMessage with the existing guard and latch, no second dedupe",
+            "status": "PASS",
+            "evidence": "the capability guard and turnStartPending are reused and the comment cites the Rust-side dedupe"
+          },
+          {
+            "id": "the verdict is consumed rather than discarded",
+            "status": "PASS",
+            "evidence": "agent_settled captures and parses the helper's return value"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-02T13:47:01.461Z"
+      }
+    ]
+  }
+}
