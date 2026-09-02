@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"dispatch-label-seat-first\" started at phase \"planning\" (lane).",
-  "next_action": "run dlsf-1 inline",
+  "next_action": "Merged into main at 2431147; capture what settled, then bee close --feature dispatch-label-seat-first.",
   "created_at": "2026-09-02T05:54:46.050Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": "description string only; the seat role leads the label",
     "updated_at": "2026-09-02T05:54:46.087Z",
     "feature": "dispatch-label-seat-first"
-  },
-  "merge_ready": {
-    "since": "2026-09-02T05:59:12.769Z",
-    "branch": "wt/dispatch-label-seat-first",
-    "worktree_id": "beehive--wt--dispatch-label-seat-first",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
