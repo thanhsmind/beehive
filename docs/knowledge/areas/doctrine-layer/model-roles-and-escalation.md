@@ -222,6 +222,25 @@ delivery with `job_id` as the dedupe key, a drain that needs a live Pi
 session, and header-only injection (the report body is never injected).
 See `docs/config-reference.md`, "Pi — models.pi is herding-only".
 
+**B17 — A gather asks for the read job** (gather-reads-the-read-slot D1/D3,
+store `295f3d03`). A `--kind gather` dispatched with no `--role` resolves the
+`read` slot, walking `[read, generation]` and taking the first name the host
+configures. `extraction` is NOT in that tail, and its absence is the decision:
+extraction was the tier era's cheapest slot and never the gather slot, so a
+legacy host that configures `extraction` + `generation` and no `read` keeps its
+gathers on `generation` byte for byte — a walk through extraction would move
+them onto the cheapest model silently, the exact downgrade B2's fall-through
+rule exists to prevent. The read-shaped CELL list is a different consumer with
+a different history (B8 backfilled `tier: extraction` cells to `role: read`)
+and stays `[read, extraction, generation]`; the two lists differ on purpose and
+each says why. The agent comes from the ASKED name and the kind, never from the
+winner: a role-less gather pins `bee-gather` whichever spelling of the read job
+won, while `--kind gather --role extraction` keeps B11's `bee-extract`. The
+name that won the walk is the name the dispatch travels under — `[bee-tier:
+<winner>]` and `economics.logical_tier` — on this path and on the cell-role
+path; every other path keeps its asked name, so a review-less host's reviewer
+is untouched.
+
 ## The one deliberate silent case
 
 Every rule above refuses or warns rather than resolving silently, with a single

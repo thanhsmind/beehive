@@ -6,14 +6,20 @@ bee ships four subagent definitions and one hook that stands behind them. The de
 
 ## The simple case
 
-The agent runs `bee dispatch prepare`, gets back `{"tool": "Agent", "payload": {"subagent_type": "bee-gather", "prompt": "[bee-tier: generation]…", "model": "sonnet"}}`, and makes exactly that call. The guard reads it: the marker names a configured role, the subagent type is the rendered agent for that role, the model parameter equals what the role resolves to. Nothing to correct. The guard appends one line to `.bee/logs/dispatch.jsonl` and exits 0 without printing anything. The subagent starts, reads only what the prompt handed it, and returns a digest.
+The agent runs `bee dispatch prepare` on a host that configures no `read` slot, gets back `{"tool": "Agent", "payload": {"subagent_type": "bee-gather", "prompt": "[bee-tier: generation]…", "model": "sonnet"}}` — the gather's `[read, generation]` walk found nothing at `read` and landed on `generation` — and makes exactly that call. The guard reads it: the marker names a configured role, the subagent type is the rendered agent for that role, the model parameter equals what the role resolves to. Nothing to correct. The guard appends one line to `.bee/logs/dispatch.jsonl` and exits 0 without printing anything. The subagent starts, reads only what the prompt handed it, and returns a digest.
 
 The failure case is just as short. The agent types an `Agent` call by hand with a prompt and nothing else:
 
 > bee-model-guard: every Agent/Task dispatch needs an explicit role — a rendered bee agent type, a `model` param, or a `[bee-tier: <role>]` marker opening the prompt/description (decision 0023). A bare dispatch would silently inherit the most expensive session model.
-> FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, bee-extract = extraction, bee-review = review) — that alone declares the role. Otherwise pass model: "sonnet" for the generation role, or open the prompt/description with [bee-tier: ceiling] (or any configured role: ceiling/code/extraction/generation/read/review).
 
-The dispatch never runs. The remedy is the door: `bee dispatch prepare`.
+The dispatch never runs, and the FIX printed under that line leads with the
+door: it opens with `bee dispatch prepare …` and only then offers the
+fallbacks — name one of bee's rendered agents in `subagent_type`
+(`bee-gather`, `bee-extract`, `bee-build`, `bee-review`), pass a `model` param,
+or open the prompt with a `[bee-tier: <role>]` marker naming a configured role.
+The agents are listed by what each one does, never paired with a role name: the
+role is the resolver's answer, and hand-naming an agent to reach a model is the
+habit the door exists to unteach.
 
 ## The four rendered agents
 
@@ -21,10 +27,16 @@ Each file is generated from a template at onboarding and kept current from then 
 
 | Agent | Role(s) it declares | Tools | What it does |
 | --- | --- | --- | --- |
-| `bee-gather` | `generation` | Read, Grep, Glob | Open-ended multi-file hunts. Reads and reports, never writes. |
+| `bee-gather` | `read`, then `generation` | Read, Grep, Glob | Open-ended multi-file hunts. Reads and reports, never writes. |
 | `bee-extract` | `extraction` | Read, Grep, Glob | One already-scoped fact out of a known location. Never widens the search itself — that is bee-gather's job. |
 | `bee-build` | `generation` | Read, Edit, Write, Grep, Glob, Bash | Executes exactly one already-claimed cell: reserve, write, commit, cap. The only one that writes. |
 | `bee-review` | `review`, then `generation` | Read, Grep, Glob, Bash | Checks a claim read-only. May run tests, linters, `git diff`; never edits. |
+
+Every one of those files opens its `description:` by naming the one door: the
+type is reached through `bee dispatch prepare` — which may hand back a herding
+pane instead of a subagent — and is never named by hand. That description is
+the line the Claude harness shows in its agent list, so the door is the first
+thing a reader of that list sees.
 
 Four contract clauses are common to all of them, and they are what makes a worker safe to dispatch cold:
 
