@@ -1,6 +1,6 @@
 ---
 name: bee-extract
-description: I/O-offload extraction worker for the bee Delegation contract (skills/bee-hive/references/routing-and-contracts.md). Dispatch for a narrow, already-scoped lookup — pull a specific fact, value, or short excerpt out of a known location — as distinct from bee-gather's open-ended multi-file search. Runs at the cheaper extraction tier. Returns paths read, the fact with a file:line anchor, and a verbatim quote only where asked. Never writes, never edits, never runs a mutating command.
+description: Reached only through `bee dispatch prepare` (it may return a pane command instead of this type) — never name this type by hand. I/O-offload extraction worker for the bee Delegation contract (skills/bee-hive/references/routing-and-contracts.md). Dispatch for a narrow, already-scoped lookup — pull a specific fact, value, or short excerpt out of a known location — as distinct from bee-gather's open-ended multi-file search. Runs at the cheaper extraction tier. Returns paths read, the fact with a file:line anchor, and a verbatim quote only where asked. Never writes, never edits, never runs a mutating command.
 tools: Read, Grep, Glob
 ---
 

@@ -379,11 +379,16 @@ pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] = &[
 /// spelled by hand. `bee-extract` deliberately does NOT fall through — a
 /// null extraction slot removes the file today and must keep removing it.
 pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
-    // Two agents share the generation role: bee-gather reads, bee-build
-    // writes. The role decides the model; what the agent may DO is the
-    // agent file's own contract.
+    // bee-gather asks for the READ job first and only falls through to
+    // generation, which bee-build owns outright: gather reads, build writes.
+    // The list is the same one `drivers::tier_role_list("read")` walks
+    // (gather-reads-the-read-slot D1/D4) — read, then generation, never
+    // extraction — so the opencode render pin, the sync record and the
+    // status drift check all reach it through the one shared resolver. The
+    // role decides the model; what the agent may DO is the agent file's own
+    // contract.
     ("bee-build", &["generation"]),
-    ("bee-gather", &["generation"]),
+    ("bee-gather", &["read", "generation"]),
     ("bee-extract", &["extraction"]),
     ("bee-review", &["review", "generation"]),
 ];

@@ -537,6 +537,20 @@ mod tests {
         .unwrap();
         assert!(compute_agent_file_plan(&engine, &repo).is_empty());
 
+        // gather-reads-the-read-slot D6: the same holds for the slot
+        // bee-gather now asks for FIRST. A herding-shaped `read` slot opens a
+        // pane instead of a subagent, and it still must not remove the
+        // rendered bee-gather file — that file carries the read-only tool
+        // permissions no bare general-purpose type can express.
+        std::fs::write(
+            repo.join(".bee").join("config.json"),
+            json!({"models":{"claude":{"read":{"kind":"herding","agent":"agy-flash"}}}})
+                .to_string(),
+        )
+        .unwrap();
+        assert!(compute_agent_file_plan(&engine, &repo).is_empty());
+        assert!(repo.join(".claude").join("agents").join("bee-gather.md").exists());
+
         // An unknown template (no AGENT_ROLES_BY_NAME entry) still renders
         // nothing, and a stale copy of it is still removed.
         std::fs::write(
@@ -601,6 +615,51 @@ mod tests {
         assert_eq!(resolve_opencode_agent_model(&repo, "bee-review").as_deref(), Some("opencode/x"));
         write(json!({"models":{"opencode":{"review":{"kind":"cli","command":"x"}}}}));
         assert_eq!(resolve_opencode_agent_model(&repo, "bee-review"), None);
+    }
+
+    /// gather-reads-the-read-slot D4: `bee-gather` declares `["read",
+    /// "generation"]`, so a host that configures a `read` slot sees it in the
+    /// rendered agent file, and a host that never heard of `read` renders
+    /// exactly the bytes it rendered before. The walk is the shared
+    /// resolver's — nothing here re-implements the fall-through.
+    #[test]
+    fn bee_gather_pins_the_read_slot_and_falls_through_to_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(repo.join(".bee")).unwrap();
+        let write = |cfg: Value| {
+            std::fs::write(repo.join(".bee").join("config.json"), cfg.to_string()).unwrap()
+        };
+
+        // (a) a configured read slot pins that model.
+        write(json!({"models":{"opencode":{"read":"opencode/reader","generation":"opencode/x"},
+                                "claude":{"read":"haiku-r","generation":"sonnet-x"}}}));
+        assert_eq!(
+            resolve_opencode_agent_model(&repo, "bee-gather").as_deref(),
+            Some("opencode/reader")
+        );
+        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("haiku-r"));
+        // bee-build is untouched by the read slot — it declares generation.
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-build").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-build").as_deref(), Some("sonnet-x"));
+
+        // (b) no `read` key at all — the legacy host — renders generation's
+        // model, byte for byte what it rendered before D4.
+        write(json!({"models":{"opencode":{"extraction":"opencode/tiny","generation":"opencode/x"},
+                                "claude":{"extraction":"haiku","generation":"sonnet-x"}}}));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather").as_deref(), Some("opencode/x"));
+        assert_eq!(resolve_agent_model(&repo, "bee-gather").as_deref(), Some("sonnet-x"));
+
+        // (c) an explicitly null read slot falls through the same way a null
+        // review slot does — it is a two-name list, not bee-extract's one.
+        write(json!({"models":{"opencode":{"read":null,"generation":"opencode/x"}}}));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather").as_deref(), Some("opencode/x"));
+
+        // (d) a read slot that names no model (cli) removes the opencode
+        // file, exactly as a cli generation slot does today.
+        write(json!({"models":{"opencode":{"read":{"kind":"cli","command":"x"},
+                                            "generation":"opencode/x"}}}));
+        assert_eq!(resolve_opencode_agent_model(&repo, "bee-gather"), None);
     }
 
     #[test]
