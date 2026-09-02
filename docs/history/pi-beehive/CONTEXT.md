@@ -132,7 +132,9 @@ as it stands in `.pi/extensions/bee-guard.ts`:
 
 None. D1-D7 are sufficient to plan against.
 
+<!-- bee:not-a-deferral: this is the CONTEXT.md template's own section heading for questions handed to planning, not a promise to act later; every question under it was answered during planning and is marked closed there -->
 ### Deferred To Planning
+<!-- /bee:not-a-deferral -->
 
 - [ ] Does Pi 0.84.4 emit any event that maps to Claude's `Notification` or
       `PermissionRequest`? Neither appears in Pi's documented lifecycle. Read the
@@ -150,9 +152,11 @@ None. D1-D7 are sufficient to plan against.
 - [ ] `tools-logger` on `tool_result` — confirm the payload bee's helper expects
       is reachable from Pi's `tool_result` event fields.
 
+<!-- bee:not-a-deferral: this is the CONTEXT.md template's own section heading for out-of-scope ideas; each entry below names the decision that put it out of scope, and the one that can come back (Epic E) carries a registered trigger on decision 8d8ac85f -->
 ## Deferred Ideas
 
 Out-of-scope ideas captured during shaping. Not lost, not planned.
+<!-- /bee:not-a-deferral -->
 
 - A Pi-native front: `/bee` slash commands, gate dialogs via `ctx.ui.select`, a bee
   status widget, a message renderer for bee's injected result headers — declined
@@ -164,6 +168,8 @@ Out-of-scope ideas captured during shaping. Not lost, not planned.
 
 ## Handoff Note
 
+<!-- bee:not-a-deferral: this paragraph is the template's own handoff wording describing which sections planning reads; it promises no future action -->
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->
