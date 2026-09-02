@@ -210,16 +210,61 @@ fn pi_default_arm_source() -> &'static str {
     &body[arm_start..]
 }
 
+/// Strips single-line (`// ...`) and block (`/* ... */`) JavaScript/TypeScript
+/// comments from `source`, preserving string literal contents intact.
+fn strip_js_comments(source: &str) -> String {
+    let mut out = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    let mut in_string: Option<char> = None;
+    let mut escaped = false;
+
+    while let Some(c) = chars.next() {
+        if let Some(quote) = in_string {
+            out.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == quote {
+                in_string = None;
+            }
+        } else if c == '"' || c == '\'' || c == '`' {
+            in_string = Some(c);
+            out.push(c);
+        } else if c == '/' && chars.peek() == Some(&'/') {
+            chars.next();
+            for nc in chars.by_ref() {
+                if nc == '\n' {
+                    out.push('\n');
+                    break;
+                }
+            }
+        } else if c == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            while let Some(nc) = chars.next() {
+                if nc == '*' && chars.peek() == Some(&'/') {
+                    chars.next();
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Every ADVISORY hook name the belt wires, parsed from its own
 /// `runAdvisoryHook(directory, "<name>", ...)` call sites — same derivation
 /// the OpenCode suite uses for its belt.
 fn pi_advisory_hooks() -> BTreeSet<String> {
+    let stripped = strip_js_comments(PI_PLUGIN_SOURCE);
     const MARKER: &str = "runAdvisoryHook(directory, \"";
     let mut set = BTreeSet::new();
     let mut idx = 0usize;
-    while let Some(pos) = PI_PLUGIN_SOURCE[idx..].find(MARKER) {
+    while let Some(pos) = stripped[idx..].find(MARKER) {
         let start = idx + pos + MARKER.len();
-        let rest = &PI_PLUGIN_SOURCE[start..];
+        let rest = &stripped[start..];
         let end = rest
             .find('"')
             .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal");
@@ -233,21 +278,27 @@ fn pi_advisory_hooks() -> BTreeSet<String> {
     set
 }
 
+fn pi_registered_events_from(source: &str) -> BTreeSet<String> {
+    let stripped = strip_js_comments(source);
+    const MARKER: &str = "pi.on(\"";
+    let mut set = BTreeSet::new();
+    let mut idx = 0usize;
+    while let Some(pos) = stripped[idx..].find(MARKER) {
+        let start = idx + pos + MARKER.len();
+        let rest = &stripped[start..];
+        let end = rest.find('"').expect(".pi/extensions/bee-guard.ts: unterminated pi.on event name literal");
+        set.insert(rest[..end].to_string());
+        idx = start + end;
+    }
+    set
+}
+
 /// Every event name the belt registers a handler for, parsed from its own
 /// `pi.on("<event>"` call sites. This is the ground truth the never-throw
 /// fixture list is gated against: an event wired without a row here would
 /// otherwise be an advisory surface nothing ever proved swallows its failures.
 fn pi_registered_events() -> BTreeSet<String> {
-    const MARKER: &str = "pi.on(\"";
-    let mut set = BTreeSet::new();
-    let mut idx = 0usize;
-    while let Some(pos) = PI_PLUGIN_SOURCE[idx..].find(MARKER) {
-        let start = idx + pos + MARKER.len();
-        let rest = &PI_PLUGIN_SOURCE[start..];
-        let end = rest.find('"').expect(".pi/extensions/bee-guard.ts: unterminated pi.on event name literal");
-        set.insert(rest[..end].to_string());
-        idx = start + end;
-    }
+    let set = pi_registered_events_from(PI_PLUGIN_SOURCE);
     assert!(
         !set.is_empty(),
         ".pi/extensions/bee-guard.ts: found zero `pi.on(\"…\"` registrations — event derivation broke"
@@ -301,21 +352,28 @@ fn pi_agent_settled_handler_body() -> &'static str {
     &body[..end]
 }
 
-/// Every hook name called inside Pi's `agent_settled` (turn-end) handler.
-fn pi_turn_end_rules() -> BTreeSet<String> {
-    let body = pi_agent_settled_handler_body();
+/// Hook names called inside a given snippet or handler body.
+fn pi_turn_end_rules_from(body: &str) -> BTreeSet<String> {
+    let stripped = strip_js_comments(body);
     let mut rules = BTreeSet::new();
     const MARKER: &str = "runAdvisoryHook(directory, \"";
     let mut idx = 0usize;
-    while let Some(pos) = body[idx..].find(MARKER) {
+    while let Some(pos) = stripped[idx..].find(MARKER) {
         let start = idx + pos + MARKER.len();
-        let rest = &body[start..];
+        let rest = &stripped[start..];
         let end = rest
             .find('"')
             .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal in agent_settled");
         rules.insert(rest[..end].to_string());
         idx = start + end;
     }
+    rules
+}
+
+/// Every hook name called inside Pi's `agent_settled` (turn-end) handler.
+fn pi_turn_end_rules() -> BTreeSet<String> {
+    let body = pi_agent_settled_handler_body();
+    let rules = pi_turn_end_rules_from(body);
     assert!(
         !rules.is_empty(),
         ".pi/extensions/bee-guard.ts: found zero runAdvisoryHook call sites in agent_settled"
@@ -1287,6 +1345,28 @@ fn pi_turn_end_handler_covers_every_rule_the_claude_manifest_fires_on_stop() {
          (derived Claude Stop rules: {claude_rules:?}; derived Pi agent_settled rules: {pi_rules:?})",
         gaps.join("\n")
     );
+}
+
+#[test]
+fn comment_stripping_ignores_commented_out_hook_calls_and_events() {
+    let snippet = r#"
+        // runAdvisoryHook(directory, "commented-line-hook", {})
+        /* runAdvisoryHook(directory, "commented-block-hook", {}) */
+        runAdvisoryHook(directory, "live-hook", {})
+        // pi.on("commented_line_event", () => {})
+        /* pi.on("commented_block_event", () => {}) */
+        pi.on("live_event", () => {})
+        const msg = "string with // not a comment and /* not a comment */";
+    "#;
+    let rules = pi_turn_end_rules_from(snippet);
+    assert!(rules.contains("live-hook"));
+    assert!(!rules.contains("commented-line-hook"));
+    assert!(!rules.contains("commented-block-hook"));
+
+    let events = pi_registered_events_from(snippet);
+    assert!(events.contains("live_event"));
+    assert!(!events.contains("commented_line_event"));
+    assert!(!events.contains("commented_block_event"));
 }
 
 // ═════════════════════════════════════════════════════════════════════════

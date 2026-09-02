@@ -75,7 +75,7 @@
 //   5. PermissionRequest   -> NAMED EXCLUSION: Pi 0.84.x has no interactive permission prompt event
 //   6. Notification        -> NAMED EXCLUSION: Pi 0.84.x has no notification event
 //   7. Stop                -> agent_settled (session_id, cwd)
-//   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd)
+//   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd, reason)
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { execFileSync } from "node:child_process"
@@ -1105,19 +1105,18 @@ export default function (pi: ExtensionAPI) {
   }) as any)
 
   // ── ADVISORY: session shutdown handler. Closes the session record and marks
-  // activity state as exited only on reasons that genuinely terminate the session
-  // ("quit", "new", "resume", "fork", or undefined).
-  // /reload is deliberately excluded: it continues the same session (treated as
-  // idempotent by session_start above), so closing on reload would mark a live
-  // session as dead and drop its worktree hold prematurely.
+  // activity state as exited on all reasons except /reload (which continues the
+  // same session and is treated as idempotent by session_start above).
+  // Closing on reload would mark a live session as dead and drop its worktree
+  // hold prematurely, so the handler exits early on "reload" and terminates on
+  // everything else.
   pi.on("session_shutdown", (async (event: any, ctx: any) => {
     try {
       const reason = event?.reason as string | undefined
       // Precedent & reason mapping:
       // 1. session_start above treats "reload" as the same session continuing.
       //    Therefore "reload" returns early and neither session-close nor activity runs.
-      // 2. Pi reasons "quit", "new", "resume", "fork" (and undefined/default) all
-      //    genuinely terminate the active session.
+      // 2. All other reasons (including undefined/default) terminate the active session.
       // 3. In Claude's vocabulary, "resume" means transcript resumption of the SAME session,
       //    so activity.rs deliberately ignores reason: "resume" (map_event returns None).
       //    In Pi, "resume" means switching away to another session file, so THIS session is ending.
