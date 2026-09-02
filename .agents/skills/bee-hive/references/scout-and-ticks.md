@@ -93,13 +93,13 @@ Then emit the re-lane tick (Progress ticks below) and continue on the new lane �
 ### Transcript recovery and session mining
 
 Mining runs on **two triggers (crashed or asked-for), under one discipline**:
-- **Crashed session**: `bee status --json` reports `recovery.candidates` (a stale-heartbeat session with a dirty transcript tail and no clean-end sequence).
+- **Crashed session**: `bee_status --json` reports `recovery.candidates` (a stale-heartbeat session with a dirty transcript tail and no clean-end trio).
 - **Asked-for mining**: the user asks to mine or reflect on a session in plain language (when asked, there is no dedicated CLI verb or slash command).
 
 **Discipline:** Never auto-run either trigger. Offer mining in one line, and act only when the human agrees — the same discipline the capture-queue flush uses. The offer must disclose two facts when applicable (D7): (1) that the transcript is read by the configured `read` slot (naming that it is an external pane when the slot is herding-shaped), and (2) that the capture queue is already past its blocker threshold when it is.
 
 **Inputs read per path (D3):**
-- *Crashed:* reads `transcript` and `since` from `recovery.candidates[]` in `bee status --json` (unchanged).
+- *Crashed:* reads `transcript` and `since` from `recovery.candidates[]` in `bee_status --json` (unchanged).
 - *Asked-for:* reads `transcript_path` and `started_at` from the session record (`bee state session list --json`).
 - *Bound:* both paths bound the worker at the transcript's last 256 KB (`DEFAULT_TAIL_MAX_BYTES`). No recovery CLI verb is built or used (D1) — prompts live inline below.
 
@@ -115,7 +115,7 @@ Mining runs on **two triggers (crashed or asked-for), under one discipline**:
 
 - **Asked-for session miner prompt:**
   ```
-  Open the transcript at <transcript_path> and inspect only activity since <started_at> (bounded at the last 256 KB). Read no other file. Return a concise digest with no verdict and no code edits, answering exactly three bounded questions:
+  Open the transcript at <transcript_path> and inspect only activity since <started_at> (bounded at the last 256 KB). Read no other file. Return a concise digest with no verdict and no edits, answering exactly three bounded questions:
   1. Candidate settlements: any rule, value, or behavior that settled in conversation and reached no record.
   2. Friction: any command, guard, or step that cost the run time more than once.
   3. Routing candidates: identify improvements scoped ONLY to skills the run actually opened — formatted as a body-edit target or `tune description: <skill path>`.

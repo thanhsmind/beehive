@@ -124,4 +124,4 @@ Tested against updated `skills/bee-capturing/references/promotion.md` and `skill
 - **3/3 Pressure Scenarios:** RED baseline recorded with verbatim rationalizations; GREEN post-edit verified.
 - **Three Bars Preserved:** Both `promotion.md:111` ("all three promotion criteria") and `SKILL.md:123` ("all three bars") remain untouched at count 3 (`rg -c 'all three' skills/bee-capturing/references/promotion.md skills/bee-capturing/SKILL.md`).
 - **Routing & Description Tuning:** `rg -q 'tune description' skills/bee-capturing/references/promotion.md` passes.
-- **Projections Synced:** `bee dev regen` leaves zero diff across all rendered skill projections.
+- **Projections Synced:** regen ran and its output is committed; a second regen leaves no diff.

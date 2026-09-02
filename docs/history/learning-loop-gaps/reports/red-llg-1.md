@@ -125,6 +125,6 @@ Tested against updated `skills/bee-hive/references/scout-and-ticks.md` and `docs
 ## 3. Summary of Verifications
 
 - **3/3 Pressure Scenarios:** RED baseline recorded with verbatim rationalizations; GREEN post-edit verified.
-- **Verification Rule:** `rg -q 'recovery window' skills/bee-hive/references/scout-and-ticks.md` passed (no unbuilt verb citation).
+- **Verification Rule:** `rg -q 'recovery window' skills/bee-hive/references/scout-and-ticks.md` produced no match (no unbuilt verb citation, which is the wanted result).
 - **Triggers & Prompts:** `rg -q 'asked' skills/bee-hive/references/scout-and-ticks.md` and `rg -q 'capture add --source mined'` passed.
-- **Projections Synced:** `bee dev regen` executed cleanly with zero diff.
+- **Projections Synced:** regen ran and its output is committed; a second regen leaves no diff.
