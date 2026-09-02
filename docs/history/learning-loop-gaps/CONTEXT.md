@@ -102,14 +102,16 @@ ship. **No code changes. No supersede.**
 - **The trigger is a sentence, not a command.** Nothing in bee names the words
   that start an asked-for mining. D2 makes the procedure recognise the ask; it
   adds no verb and no slash command. If that proves too soft to fire, a named
-  gesture is a separate, later decision.
+  gesture is a separate, later decision — trigger `a-user-s-asked-for-mining-request-is-mis__81d46f80`.
 - **No dedupe.** Two asked-for minings before a flush, or an ask followed by a
   crash, recompute an overlapping window and can file near-duplicate stubs.
-  Nothing in the shipped capture queue hashes stub content. Recorded, not solved.
+  Nothing in the shipped capture queue hashes stub content. Recorded, not solved —
+  trigger `two-asked-for-minings-before-a-capture-f__81d46f80`.
 - **The pane trust boundary.** On a host whose `read` slot is a herding pane,
   the miner is an external CLI, so transcript text leaves the Claude runtime.
   transcript-recovery D1–D6 were written when that helper was a Claude model.
-  D7 makes the offer say so; this feature adds no transport rule.
+  D7 makes the offer say so; this feature adds no transport rule —
+  trigger `transcript-text-reaches-an-external-cli-b__81d46f80`.
 - **`collect_feedback` still ignores mailbox reflections and capture stubs**, so
   mined findings reach the flush but never bee-evolving's ranked agenda
   (`reflect-xia.md`). Out of scope.

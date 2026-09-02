@@ -51,3 +51,4 @@ crates/target/
 .bee/bin/bee.exe
 .bee/bin/bee
 dist/
+.bee/bin/bee*.bak

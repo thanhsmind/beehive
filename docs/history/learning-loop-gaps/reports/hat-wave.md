@@ -89,15 +89,16 @@ its blocker threshold (`bee orient`: 50 pending, B50/R101 escalates at 10+).
 
 - **The trigger is a sentence, not a command** (*user-impact* Q1): nothing in bee
   names the words that start an asked-for mining, and no existing gesture fits.
-  Named in CONTEXT.md; a gesture is a later decision if the sentence proves soft.
+  Named in CONTEXT.md (trigger `a-user-s-asked-for-mining-request-is-mis__81d46f80`);
+  a gesture is a later decision if the sentence proves soft — trigger `a-user-s-asked-for-mining-request-is-mis__81d46f80`.
 - **No dedupe** (*user-impact* Q4): `capture.rs` stores a `source: "mined"`
   marker and no content hash, so two asks before a flush can file
-  near-duplicates.
+  near-duplicates — trigger `two-asked-for-minings-before-a-capture-f__81d46f80`.
 - **The pane trust boundary** (*user-impact* Q3): D7 discloses it; no transport
-  rule is added.
+  rule is added — trigger `transcript-text-reaches-an-external-cli-b__81d46f80`.
 - **The fourth-bar change is invisible at runtime** (*user-impact* Q6): it only
-  changes where a Compound promotion lands, and Compound is deferred by design.
-  Stated plainly rather than oversold.
+  changes where a Compound promotion lands, and Compound runs at the owner's own
+  pace by design (`bee-capturing` § Compound). Stated plainly rather than oversold.
 - **Partial duplication** (*alternatives* Q4): D5 already tells the miner to
   scope routing candidates, so D8 only adds value on the non-mined Compound path.
 - **`recovery` has no verify-app feature file** (*facts-gaps* GAP 13): this

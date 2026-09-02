@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "learning-loop-gaps",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"learning-loop-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"learning-loop-gaps\" (lane).",
+  "next_action": "bee close finished \"learning-loop-gaps\" — feature is closed.",
   "created_at": "2026-09-02T07:55:52.287Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
