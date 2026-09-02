@@ -52,9 +52,17 @@ pub(crate) const DISPATCH_KINDS: [&str; 4] = ["cell", "gather", "reviewer", "adv
 /// to the advisor model with nothing red to show for it. Every kind now names
 /// its slot EXPLICITLY; an unhandled kind returns `None` and its caller
 /// refuses (`unmapped_kind_refusal`).
+///
+/// gather-reads-the-read-slot D1 (decision 295f3d03) — `cell` and `gather` no
+/// longer share one arm. A gather dispatched with no `--role` asks for the
+/// READ job, which `tier_role_list("read")` walks as `[read, generation]`, so
+/// a host that never configured a `read` key keeps its gathers on the
+/// `generation` model byte for byte. `cell` keeps `generation` outright: a
+/// cell execution writes, and no config describes the read slot that way.
 pub(crate) fn slot_for_kind(kind: &str) -> Option<&'static str> {
     match kind {
-        "cell" | "gather" => Some("generation"),
+        "cell" => Some("generation"),
+        "gather" => Some("read"),
         "reviewer" => Some("review"),
         "advisor" => Some("advisor"),
         _ => None,
@@ -354,6 +362,13 @@ pub(crate) fn recorded_str<'a>(cell: Option<&'a Value>, field: &str) -> Option<&
 /// before resolution — never by appending `advisor` to an ordered list, here
 /// or anywhere. The advisor's tail is still its own floor-less one-name walk,
 /// and a cell declaring a seat role keeps this exact list, byte for byte.
+///
+/// gather-reads-the-read-slot D1: this read list and `tier_role_list`'s
+/// `[read, generation]` differ ON PURPOSE. A read-shaped CELL is a backfilled
+/// `tier: extraction` record (doctrine B8), so `extraction` is an honest
+/// waypoint in its tail; a read-shaped GATHER has no such history, and
+/// walking one through `extraction` would move every legacy host's gathers
+/// onto the cheapest model.
 pub(crate) fn cell_role_list(role: &str) -> Vec<&str> {
     // role-surface-cleanup D1: the tail names skip anything already in the
     // list — a duplicate made the fall-through warn fire twice for one
@@ -1353,10 +1368,19 @@ pub(crate) fn prepare_dispatch_with_brief(
     // <other>` does not: with no `--role` it is exactly `kind == "advisor"`,
     // because `slot_for_kind("advisor")` is the advisor slot.
     //
-    // Which name in the list actually WON. Set only on the cell-role path,
-    // because every other path asks for one name (or `[review, generation]`,
-    // whose fall-through predates this feature) and must keep stamping the
-    // exact token it always stamped.
+    // gather-reads-the-read-slot D2/D3 — a `--kind gather` with NO `--role`,
+    // the one dispatch whose asked name (`read`) is a name bee ships no
+    // built-in model for. It records the winner just below, and pins its
+    // agent by kind further down.
+    let default_gather = kind == "gather" && role.is_none();
+    // Which name in the list actually WON. Set on the cell-role path and on
+    // the DEFAULT-GATHER path (D2) — the two whose asked name may be one bee
+    // ships no built-in model for. `read` is not in `default_models("claude")`,
+    // so a marker saying `read` on a host with no `read` key names nothing the
+    // guard can resolve back, and the guard would refuse the dispatch bee
+    // itself prepared. Every other path asks for one name (or
+    // `[review, generation]`, whose fall-through predates this feature) and
+    // must keep stamping the exact token it always stamped.
     let mut resolved_role: Option<&str> = None;
     // D5 (store `97ce5225`) — ESCALATION, read off the cell's flag rather
     // than off a tier value. `ceiling` used to arrive here as `tier_token`
@@ -1451,7 +1475,7 @@ pub(crate) fn prepare_dispatch_with_brief(
         let roles =
             if from_role { cell_role_list(tier_token) } else { tier_role_list(tier_token) };
         let (winner, r) = resolve_role_named(&models, &roles, runtime, kind);
-        if from_role {
+        if from_role || default_gather {
             resolved_role = winner;
         }
         if let Resolved::Refused { slot } = &r {
@@ -1529,8 +1553,20 @@ pub(crate) fn prepare_dispatch_with_brief(
     // lookup, mirrored by hooks/model_guard.rs PINNED_AGENT_TYPE); `kind`
     // is the one signal that can, and only a --kind cell dispatch is a cell
     // execution (dp-2).
-    let pinned_type =
-        if kind == "cell" { "bee-build" } else { pinned_agent_type(marker_role) };
+    //
+    // gather-reads-the-read-slot D3: a DEFAULT gather pins `bee-gather`
+    // whichever spelling of the read job won. Without the pin a `read` winner
+    // would answer `bee-extract` through the read->extraction alias
+    // (`ROLE_ALIASES`), renaming an agent no decision moved. Every other
+    // dispatch still reads the ASKED token, so `--role extraction` keeps
+    // `bee-extract` (B11) and `--kind reviewer` keeps `bee-review`.
+    let pinned_type = if kind == "cell" {
+        "bee-build"
+    } else if default_gather {
+        "bee-gather"
+    } else {
+        pinned_agent_type(marker_role)
+    };
 
     // The dispatch SUBJECT — computed ONCE, here, before the transport match,
     // so every branch below (native override, native fallback, codex
@@ -2914,13 +2950,13 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
 mod slot_map_tests {
     use super::*;
 
-    /// The four live kinds keep exactly the slots they resolved before the
-    /// catch-all went away — cell/gather → generation, reviewer → review,
-    /// advisor → advisor.
+    /// Every live kind names its slot EXPLICITLY — cell → generation,
+    /// gather → read (gather-reads-the-read-slot D1, decision 295f3d03),
+    /// reviewer → review, advisor → advisor.
     #[test]
-    fn every_dispatch_kind_keeps_its_slot() {
+    fn every_dispatch_kind_names_its_slot_explicitly() {
         assert_eq!(slot_for_kind("cell"), Some("generation"));
-        assert_eq!(slot_for_kind("gather"), Some("generation"));
+        assert_eq!(slot_for_kind("gather"), Some("read"));
         assert_eq!(slot_for_kind("reviewer"), Some("review"));
         assert_eq!(slot_for_kind("advisor"), Some("advisor"));
         // Every declared kind has an arm: no member of DISPATCH_KINDS may
@@ -3116,6 +3152,135 @@ mod role_flag_tests {
         m.remove("dispatch_id");
         m.remove("ts");
         Value::Object(m)
+    }
+
+    const READ_SPLIT: &str =
+        r#"{"models":{"claude":{"read":"haiku","generation":"sonnet","review":"opus"}}}"#;
+
+    /// gather-reads-the-read-slot D1/D2/D3 (decision 295f3d03): a gather
+    /// dispatched with no `--role` asks for the READ job. On a host that
+    /// configures `read`, the default gather runs on the read slot's model,
+    /// travels under the name that WON the walk, and still names the
+    /// read-only gather agent.
+    #[test]
+    fn a_default_gather_resolves_the_read_slot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, READ_SPLIT);
+        let v = envelope(&root, "gather", None);
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("model"), Some(&json!("haiku")), "the read slot picked the model");
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-gather")));
+        let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: read]"), "{prompt}");
+        let e = v.get("economics").unwrap();
+        assert_eq!(e.get("logical_tier"), Some(&json!("read")));
+        assert_eq!(e.get("tier_source"), Some(&json!("default")));
+    }
+
+    /// D1: a herding-shaped `read` slot makes the DEFAULT gather a pane. The
+    /// winning slot's shape is obeyed exactly — the transport was always
+    /// dynamic; only which slot a gather asks for moved.
+    #[test]
+    fn a_herding_shaped_read_slot_makes_a_default_gather_a_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let command = v
+            .get("payload")
+            .and_then(|p| p.get("command"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(command.contains("--agent \"x\""), "{command}");
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("read"))
+        );
+    }
+
+    /// D1: an explicitly NULL read slot is one somebody turned off, so the
+    /// walk falls through to `generation` — and D2 makes the dispatch travel
+    /// under the name that won, never under the `read` the guard could not
+    /// resolve back.
+    #[test]
+    fn an_explicitly_null_read_slot_falls_through_to_generation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":null,"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("model"), Some(&json!("sonnet")));
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-gather")), "D3: the agent is pinned by kind");
+        let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: generation]"), "{prompt}");
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("generation"))
+        );
+    }
+
+    /// D2's boundary: the winner is recorded on the default-GATHER path and
+    /// nowhere else. A host that names no `review` key resolves its reviewer
+    /// exactly as it always did — `normalize_models` overlays claude's own
+    /// built-in `review: opus` — and still stamps `review`, the marker every
+    /// `bee-review` has travelled under since before this feature.
+    #[test]
+    fn a_review_less_host_keeps_its_reviewer_envelope_byte_for_byte() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"read":"haiku","generation":"sonnet"}}}"#);
+        let v = envelope(&root, "reviewer", None);
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-review")));
+        assert_eq!(p.get("model"), Some(&json!("opus")), "the built-in review default");
+        let prompt = p.get("prompt").and_then(Value::as_str).unwrap_or_default();
+        assert!(prompt.starts_with("[bee-tier: review]"), "the winner is NOT recorded here: {prompt}");
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("review"))
+        );
+    }
+
+    /// D8, prepare's half: the published fallback names a model bee ships a
+    /// built-in default for, and `read` is not one — exactly as `advisor` is
+    /// not. A read winner therefore publishes NO `fallback` field at all,
+    /// leaving the payload identical to a slot that named no fallback.
+    #[test]
+    fn a_read_winner_publishes_no_herding_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":{"kind":"herding","agent":"x","fallback":"default"},"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(v.get("payload").and_then(|p| p.get("fallback")), None);
+        assert_eq!(
+            v.get("economics").and_then(|e| e.get("logical_tier")),
+            Some(&json!("read"))
+        );
+    }
+
+    /// D8's other half: no `read` key, so `generation` wins the gather's walk
+    /// and the fallback is generation's own built-in default — the model the
+    /// guard's mirror has to keep admitting.
+    #[test]
+    fn a_generation_winner_still_publishes_the_herding_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding","fallback":"default"},"review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").and_then(|p| p.get("fallback")),
+            Some(&json!({"model": "sonnet", "fallback_when": "transport_ready is false"}))
+        );
     }
 
     /// An explicit role beats the cell's own recorded value: the caller

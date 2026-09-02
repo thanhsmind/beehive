@@ -1,5 +1,5 @@
 ---
-description: Review-class subagent for the bee Delegation contract (skills/bee-hive/references/routing-and-contracts.md) — plan-checking, cell review, exploring's fresh-eyes pass, and bee-reviewing's specialists. Dispatch when a mechanical step needs an independent read-only check against a claim, not a rewrite. May run commands read-only (tests, linters, git diff, the configured verify) to check evidence, but never edits the working tree. Runs at the review tier (falls back to generation when review is unconfigured).
+description: Reached only through `bee dispatch prepare` (it may return a pane command instead of this type) — never name this type by hand. Review-class subagent for the bee Delegation contract (skills/bee-hive/references/routing-and-contracts.md) — plan-checking, cell review, exploring's fresh-eyes pass, and bee-reviewing's specialists. Dispatch when a mechanical step needs an independent read-only check against a claim, not a rewrite. May run commands read-only (tests, linters, git diff, the configured verify) to check evidence, but never edits the working tree. Runs at the review tier (falls back to generation when review is unconfigured).
 mode: subagent
 model: opencode/nemotron-3-ultra-free
 permission:

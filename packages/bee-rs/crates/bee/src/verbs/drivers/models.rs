@@ -651,8 +651,20 @@ pub(crate) fn resolve_tier(
 /// names this list for the review consumer: `[review, generation]`. A second
 /// hand-written copy beside this one is exactly the drift D1 collapsed the
 /// two parsers to remove.
+///
+/// gather-reads-the-read-slot D1 (decision 295f3d03) adds the SECOND rule:
+/// `read` — the slot `--kind gather` resolves — walks `[read, generation]`.
+/// NOT through `extraction`. Extraction was the tier era's cheapest slot and
+/// never the gather slot, so a legacy host that configures `extraction` +
+/// `generation` and no `read` must keep its gathers on `generation` byte for
+/// byte; a walk through `extraction` would move every one of them onto the
+/// cheapest model silently — the exact defect 561e1bda's tail rule exists to
+/// prevent. The read-shaped CELL list (`prepare::cell_role_list("read")`) DOES
+/// pass through `extraction`, because a read-shaped cell is a backfilled
+/// `tier: extraction` record; the two lists differ on purpose and each says
+/// why at its own door.
 pub(crate) fn tier_role_list(slot: &str) -> Vec<&str> {
-    if slot == "review" {
+    if slot == "review" || slot == "read" {
         return vec![slot, "generation"];
     }
     vec![slot]

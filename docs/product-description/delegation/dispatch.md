@@ -38,6 +38,12 @@ bee prints an envelope:
 }
 ```
 
+That envelope is a host with **no `read` key**: the gather's `[read,
+generation]` walk finds nothing at `read` and lands on `generation`,
+byte-identical to what the door returned before the read slot existed. A host
+that configures `read` gets that slot's model instead, and the marker and
+`logical_tier` both read `read`.
+
 The agent then makes exactly that call: the Agent tool, with that payload, its own task text filled into the prompt's `Paths:` line. The model guard sees a dispatch that already names its role and its agent, has no opinion to act on, and logs it.
 
 For a cell, the door does more. `--claim` turns "cell chosen" into "worker prompt in hand" in one verb:
@@ -131,7 +137,7 @@ The envelope's keys: `tool`, `payload`, `dispatch_id`, `economics`, plus `worktr
 
 ## What the door decides
 
-**The kinds.** `cell` is the only execution purpose: it requires `--cell` and `--worker`, loads the cell record for prompt context, and checks the requesting worker against the cell's own claim. `gather` is the read-only default. `reviewer` resolves the review role, falling through to generation when review is unconfigured. `advisor` resolves the advisor slot alone — one name, no fall-through, so an unconfigured advisor refuses rather than quietly running on something else.
+**The kinds.** `cell` is the only execution purpose: it requires `--cell` and `--worker`, loads the cell record for prompt context, and checks the requesting worker against the cell's own claim. `gather` is the read-only default, and with no `--role` it asks for the read job: an ordered walk of `[read, generation]` that takes the first name the host configures. `extraction` is deliberately absent from that tail — it was the cheapest slot of the tier era and never the gather slot, so a host that configures `extraction` and `generation` but no `read` keeps its gathers on `generation` rather than sliding down to the cheap reader. The name that *won* the walk is the name the dispatch travels under: `[bee-tier: <winner>]` and `economics.logical_tier` both read `read` on a host that configures it and `generation` on one that does not, while the agent is pinned by the kind, so a role-less gather is `bee-gather` either way. `reviewer` resolves the review role, falling through to generation when review is unconfigured. `advisor` resolves the advisor slot alone — one name, no fall-through, so an unconfigured advisor refuses rather than quietly running on something else.
 
 **Roles are an open set.** A role is any name `models.<runtime>` carries; bee holds no fixed list, and a host can configure `test` or `design` and reach it. `--role <name>` names the slot outright — the kind's default is not consulted, and neither is the cell's own recorded role. That is how a read-shaped gather reaches the cheap reader: `--kind gather --role extraction` resolves the extraction slot and returns the `bee-extract` worker. A name nothing configures refuses by name rather than resolving onto something else.
 
@@ -185,7 +191,7 @@ Columns: before and after the first side effect — the `dispatch.jsonl` append 
 
 **Gates and approval.** Prepare itself asks for no approval. `--claim` and `wave` inherit the claim door's execution-gate refusal in full, which is the only gate in this area.
 
-**The store and history.** `.bee/logs/dispatch.jsonl` is the record: one `source: "prepare"` line per served dispatch, and later one line per dispatch the [model guard](workers.md) sees. Both write the same `logical_tier`/`requested_model`/`effective_model`/`effective_model_status`/`channel`/`enforcement` fields, deliberately, so the file reads as one schema.
+**The store and history.** `.bee/logs/dispatch.jsonl` is the record: one `source: "prepare"` line per served dispatch, then one line per dispatch the [model guard](workers.md) sees. Both write the same `logical_tier`/`requested_model`/`effective_model`/`effective_model_status`/`channel`/`enforcement` fields, deliberately, so the file reads as one schema.
 
 **Worktrees and containment.** The door runs in main and refuses in a granted worktree. When the cell's feature has one, the envelope carries `worktree_root` and `control_root` and the worker prompt carries a Location block instructing the worker to stop with `[BLOCKED]` if its working directory is not inside the worktree — because a subagent inherits the spawning session's working directory and cannot fix that itself ([worktrees](../foundations/worktrees.md)).
 

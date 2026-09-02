@@ -3024,7 +3024,9 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert_eq!(problems[0].agent, Some("bee-gather"));
-        assert_eq!(problems[0].slot.as_deref(), Some("generation"));
+        // The finding is filed under the FIRST role the agent declares —
+        // `read` since gather-reads-the-read-slot D4.
+        assert_eq!(problems[0].slot.as_deref(), Some("read"));
         assert!(problems[0].message.contains("still pins model: \"opus\""));
         assert!(problems[0].message.contains("bee onboard --apply"));
 
@@ -3160,6 +3162,31 @@ use crate::version::BEE_VERSION;
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
         assert!(problems[0].message.contains("is now a cli executor"));
+
+        // (f) gather-reads-the-read-slot D4: bee-gather declares
+        // `["read", "generation"]`, so a configured `read` slot is what the
+        // check expects of its file, and the finding is filed under `read`.
+        // The check reads that list from AGENT_ROLES_BY_NAME — it does not
+        // restate it — so this is the same walk onboarding renders from.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        let cfg = json!({"models": {"opencode": {
+            "read": "opencode/reader",
+            "generation": "opencode/big-pickle"
+        }}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert_eq!(problems[0].slot.as_deref(), Some("read"));
+        assert!(problems[0].message.contains("is \"opencode/reader\""));
+        // The file rendered from the read slot is clean.
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/reader");
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+        // A legacy host with no `read` key keeps expecting generation's
+        // model — byte for byte the pre-D4 verdict.
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        let legacy = json!({"models": {"opencode": {"generation": "opencode/big-pickle"}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&legacy)).is_empty());
     }
 
     /// The point of the cell (scripts/tests/test_config_validate.mjs header):
