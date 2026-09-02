@@ -19,9 +19,11 @@ as the recipe.
 
 ## Driving conventions
 
-- Invoke `control-bee` by its literal path from the repo root
-  (`.claude/skills/verify-bee/control-bee`).
-  A shell variable in command position is refused by bee's write guard.
+- `control-bee` below is short for `bash .bee/verify/verify-app/control-bee`.
+  Invoke it by that literal path, with the `bash` prefix, from the repo root:
+  bee renders `0644` copies of this tree into every runtime skill home, so a
+  bare path fails there with `Permission denied`. A shell variable in command
+  position is refused by bee's write guard.
 - Every recipe starts from a freshly launched sandbox unless it says otherwise.
 - Run bee commands through `control-bee cli -- <args>`; run git and other tools
   through `control-bee sh -- <cmd>`; create files with `control-bee put <path>`.

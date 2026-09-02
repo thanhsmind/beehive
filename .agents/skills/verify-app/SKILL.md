@@ -1,5 +1,5 @@
 ---
-name: verify-bee
+name: verify-app
 description: "Drive the real `bee` CLI end to end against a throwaway onboarded sandbox repo and capture evidence. Use to prove a change to the bee binary, its verbs, gates, cells, worktrees or onboarding actually works for a user — not just that cargo tests pass."
 ---
 
@@ -17,14 +17,22 @@ because it needs real agent processes; see `bee-herdr` instead.
 
 Everything below runs through one script:
 
-```
-.claude/skills/verify-bee/control-bee
+```bash
+bash .bee/verify/verify-app/control-bee
 ```
 
-Run it by that **literal path**, from the repo root (the real checkout or a
-worktree of it — the script resolves the repo from its own location, so cwd only
-has to make the path above resolve). Never put it in a shell variable:
+Run it by that **literal path**, with the `bash` prefix, from the repo root (the
+real checkout or a worktree of it — the script resolves the repo from its own
+location, so cwd only has to make the path above resolve). The prefix is not
+decoration: this source copy is executable, but bee renders `0644` copies of it
+into `.claude/skills/verify-app/`, `.agents/skills/verify-app/` and
+`.opencode/skills/verify-app/`, where a bare path fails with `Permission
+denied`. `bash <path>` runs from either. Never put the path in a shell variable:
 `"$C" put ...` is refused — see Gotchas.
+
+Edit only this source tree. The rendered copies are bee's output and a hand edit
+there is lost at the next `bee onboard --apply`; after any edit here, re-run
+`bee onboard --apply` so every runtime sees the same bytes.
 
 ## Launch
 
@@ -33,8 +41,8 @@ no server to keep alive. "Launch" therefore means *build the binary once, then
 create one disposable sandbox repo per run*.
 
 ```bash
-.claude/skills/verify-bee/control-bee build
-.claude/skills/verify-bee/control-bee launch
+bash .bee/verify/verify-app/control-bee build
+bash .bee/verify/verify-app/control-bee launch
 ```
 
 `build` runs `cargo build --release --manifest-path packages/bee-rs/Cargo.toml`
@@ -66,7 +74,7 @@ Teardown is `control-bee cleanup` (see Cleanup).
 Run this first, and again after anything surprising:
 
 ```bash
-.claude/skills/verify-bee/control-bee doctor
+bash .bee/verify/verify-app/control-bee doctor
 ```
 
 It is read-only and answers "is this instance worth driving?" — it checks that
@@ -84,24 +92,24 @@ Two verbs, plus one file-writing door:
 
 ```bash
 # run a bee command inside the sandbox
-.../control-bee cli -- <bee args...>
+bash .../control-bee cli -- <bee args...>
 
 # run any other command inside the sandbox (git, ls, cat)
-.../control-bee sh  -- <cmd...>
+bash .../control-bee sh  -- <cmd...>
 
 # write stdin to a file inside the sandbox
-printf 'body\n' | .../control-bee put path/in/sandbox.md
+printf 'body\n' | bash .../control-bee put path/in/sandbox.md
 
 # make a second, NOT-onboarded repo (the onboard recipe's target)
-.../control-bee newrepo target
+bash .../control-bee newrepo target
 
 # run with cwd = the real checkout; only for `bee onboard`, and only when the
 # command names a --repo-root under $VERIFY_HOME/run
-.../control-bee host -- <binary> onboard --repo-root <target> --json
+bash .../control-bee host -- <binary> onboard --repo-root <target> --json
 ```
 
 Aim any of them at a worktree bee created by setting `VERIFY_CWD` on the call:
-`VERIFY_CWD=repo--wt--<feature> control-bee sh -- git status`.
+`VERIFY_CWD=repo--wt--<feature> bash .../control-bee sh -- git status`.
 
 `cli` and `sh` both `cd` into the sandbox, pin `BEE_SESSION_ID` and
 `CLAUDE_CODE_SESSION_ID` to `verify-<run-id>` so the sandbox never inherits the
@@ -112,7 +120,7 @@ recorded `.exit` file, not on the shell's status.
 `cli` passes stdin through, so the pipe-a-cell form works:
 
 ```bash
-printf '{"id":"demo-1", ...}' | .../control-bee cli -- cells add --stdin --json
+printf '{"id":"demo-1", ...}' | bash .../control-bee cli -- cells add --stdin --json
 ```
 
 Prefer stable handles: the `--json` payload keys and the `error` / `kind` strings
@@ -155,7 +163,7 @@ Proof standards:
 ## Cleanup
 
 ```bash
-.claude/skills/verify-bee/control-bee cleanup
+bash .bee/verify/verify-app/control-bee cleanup
 ```
 
 It removes `$VERIFY_HOME/run/<run-id>` — the sandbox *and* any sibling worktrees
@@ -206,10 +214,11 @@ or registered worktree behind.
 
 ## Helpers
 
-`control-bee` is the only script. It is executable and self-documenting:
+`control-bee` is the only script. It is executable in this source tree and
+self-documenting:
 
 ```bash
-.claude/skills/verify-bee/control-bee --help
+bash .bee/verify/verify-app/control-bee --help
 ```
 
 Subcommands: `build`, `bin`, `paths`, `launch`, `doctor`, `cli`, `sh`, `put`,
@@ -217,6 +226,6 @@ Subcommands: `build`, `bin`, `paths`, `launch`, `doctor`, `cli`, `sh`, `put`,
 
 ## Keeping this honest
 
-The feature map rots as bee changes. Run `/maintain-verification-skill` to audit
+The feature map rots as bee changes. Load the `bee-verify-upkeep` skill to audit
 it: it reads each feature from source, drives every feature live, and ships one
 PR of proven corrections.
