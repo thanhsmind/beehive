@@ -241,9 +241,9 @@ Pi enforces bee rules through the extension [`.pi/extensions/bee-guard.ts`](../.
 | `session-init` | `session_start` | Advisory | Runs at session start or clear; caches the session preamble. |
 | `prompt-context` | `before_agent_start` | Advisory | Generates the per-turn context delta appended to the system prompt. |
 | `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `agent_settled` (`Stop`) | Advisory | Records session state transitions across prompt submission, tool execution results, and turn completion. |
-| `state-sync` | `tool_result` (`PostToolUse`) | Advisory | Synchronizes session state after tool execution. |
+| `state-sync` | `tool_result` (`PostToolUse`), `agent_settled` (`Stop`) | Advisory | Synchronizes session state after tool execution and on turn completion. |
 | `tools-logger` | `tool_result` (`PostToolUse`) | Advisory | Logs tool call arguments and results to the session log. |
-| `session-close` | `agent_settled` (`Stop`), `session_before_compact` (`PreCompact`), `session_shutdown` (`SessionEnd`) | Advisory | Manages turn-end marks and continuation nudges on settle, flushes state before compaction, and marks session records closed on shutdown (`quit`, `new`, `resume`, `fork`). |
+| `session-close` | `agent_settled` (`Stop`), `session_before_compact` (`PreCompact`), `session_shutdown` (`SessionEnd`) | Advisory | Manages turn-end marks and continuation nudges on settle; the `PreCompact` arm returns undecidable (fail-open) today so the belt is ready when native `PreCompact` becomes real; marks session records closed on shutdown (`quit`, `new`, `resume`, `fork`). |
 
 The extension also runs an advisory result inbox drain on `session_start` to poll for detached `bee herding run` background job results under `.bee/result-inbox/<token>/` and inject them into the session via `pi.sendUserMessage`.
 
@@ -262,7 +262,7 @@ The Claude hook manifest (`packages/bee/hooks/claude-hooks.json`) fires some rul
 - **`activity` on `PreToolUse`:** Pi's `tool_call` event is strictly the fail-closed blocking path; Pi has no separate advisory pre-tool event.
 - **`activity` on `PermissionRequest`:** Pi 0.84.x provides no interactive permission request event.
 - **`activity` on `Notification`:** Pi 0.84.x provides no notification event.
-- **`state-sync` on `SubagentStop` and `Stop`:** Pi has no `SubagentStop` event (state synchronization runs on `tool_result`), and turn settlement on `agent_settled` is handled by `session-close` and `activity`.
+- **`state-sync` on `SubagentStop`:** Pi has no `SubagentStop` event (state synchronization runs on `tool_result` and `agent_settled`).
 
 
 ## `retry.fallbackChains` — a chain bee PUBLISHES, never one it runs

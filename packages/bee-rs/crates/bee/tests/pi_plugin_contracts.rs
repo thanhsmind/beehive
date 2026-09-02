@@ -255,6 +255,74 @@ fn pi_registered_events() -> BTreeSet<String> {
     set
 }
 
+/// Rules the Claude hook manifest (`packages/bee/hooks/claude-hooks.json`)
+/// fires on its turn-end event (`Stop`). Derived directly from the manifest
+/// rather than a hand list so this expectation tracks changes to the catalog
+/// of record automatically.
+fn claude_turn_end_rules() -> BTreeSet<String> {
+    let manifest_path = repo_root().join("packages/bee/hooks/claude-hooks.json");
+    let text = std::fs::read_to_string(&manifest_path)
+        .unwrap_or_else(|e| panic!("{}: {e}", manifest_path.display()));
+    let v: Value = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("{}: not valid JSON: {e}", manifest_path.display()));
+
+    let mut rules = BTreeSet::new();
+    if let Some(stop_groups) = v.get("hooks").and_then(|h| h.get("Stop")).and_then(Value::as_array) {
+        for group in stop_groups {
+            if let Some(hooks) = group.get("hooks").and_then(Value::as_array) {
+                for hook in hooks {
+                    if let Some(cmd) = hook.get("command").and_then(Value::as_str) {
+                        if let Some(idx) = cmd.find(" hook ") {
+                            let rest = &cmd[idx + " hook ".len()..];
+                            let end = rest.find(|c: char| c == ';' || c.is_whitespace()).unwrap_or(rest.len());
+                            rules.insert(rest[..end].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        !rules.is_empty(),
+        "packages/bee/hooks/claude-hooks.json: found zero rules under Stop — manifest derivation broke"
+    );
+    rules
+}
+
+/// The body of the `pi.on("agent_settled", ...)` handler in `.pi/extensions/bee-guard.ts`.
+fn pi_agent_settled_handler_body() -> &'static str {
+    let start = PI_PLUGIN_SOURCE.find("pi.on(\"agent_settled\"").expect(
+        ".pi/extensions/bee-guard.ts: pi.on(\"agent_settled\" not found — turn-end handler renamed?",
+    );
+    let body = &PI_PLUGIN_SOURCE[start..];
+    let end = body
+        .find("pi.on(\"session_before_compact\"")
+        .expect(".pi/extensions/bee-guard.ts: could not find the end of agent_settled handler");
+    &body[..end]
+}
+
+/// Every hook name called inside Pi's `agent_settled` (turn-end) handler.
+fn pi_turn_end_rules() -> BTreeSet<String> {
+    let body = pi_agent_settled_handler_body();
+    let mut rules = BTreeSet::new();
+    const MARKER: &str = "runAdvisoryHook(directory, \"";
+    let mut idx = 0usize;
+    while let Some(pos) = body[idx..].find(MARKER) {
+        let start = idx + pos + MARKER.len();
+        let rest = &body[start..];
+        let end = rest
+            .find('"')
+            .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal in agent_settled");
+        rules.insert(rest[..end].to_string());
+        idx = start + end;
+    }
+    assert!(
+        !rules.is_empty(),
+        ".pi/extensions/bee-guard.ts: found zero runAdvisoryHook call sites in agent_settled"
+    );
+    rules
+}
+
 /// `renderResultInjection`'s own source, sliced at the function's closing
 /// brace — the same column-0 bound `map_tool_call_body` uses.
 fn render_result_injection_body() -> &'static str {
@@ -1196,6 +1264,28 @@ fn the_injected_fence_carries_a_fixed_info_tag() {
         "bee-result",
         "the fence info tag is part of the contract: the receiving model recognises a bee result \
          block by shape, so it is fixed rather than free-form"
+    );
+}
+
+#[test]
+fn pi_turn_end_handler_covers_every_rule_the_claude_manifest_fires_on_stop() {
+    let claude_rules = claude_turn_end_rules();
+    let pi_rules = pi_turn_end_rules();
+
+    let mut gaps: Vec<String> = Vec::new();
+    for rule in &claude_rules {
+        if !pi_rules.contains(rule) {
+            gaps.push(format!(
+                "rule \"{rule}\" is fired by Claude on its turn-end event (Stop) in packages/bee/hooks/claude-hooks.json, \
+                 but is not called in Pi's turn-end handler (agent_settled) in .pi/extensions/bee-guard.ts"
+            ));
+        }
+    }
+    assert!(
+        gaps.is_empty(),
+        "Pi turn-end (agent_settled) parity gap(s) against Claude manifest Stop rules:\n{}\n\
+         (derived Claude Stop rules: {claude_rules:?}; derived Pi agent_settled rules: {pi_rules:?})",
+        gaps.join("\n")
     );
 }
 

@@ -1028,6 +1028,15 @@ export default function (pi: ExtensionAPI) {
     }
     try {
       const directory = directoryOf(ctx)
+      try {
+        runAdvisoryHook(directory, "state-sync", {
+          hook_event_name: "Stop",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      } catch (err: any) {
+        console.error(`bee state-sync (advisory): ${err?.message ?? err}`)
+      }
       const rawVerdict = runAdvisoryHook(directory, "session-close", {
         hook_event_name: "Stop",
         session_id: sessionIdOf(ctx),
