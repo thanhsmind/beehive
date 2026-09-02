@@ -129,7 +129,7 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "d01df8fb4787c54c4adea161fd32db434191faaa04e95cfd21deb27a02d619f4",
+      "sha256": "37fd0697809fef93d0aa41c6a598a7d4a6ed9b8238d57d360a7fc5cfd5423ce3",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
@@ -794,7 +794,7 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "27c65d5b95738f4d18008aa414532a5db03fccaca3ece306be98583638ce9803",
+      "sha256": "c1a29737e3804f9d225ecef59c0a9ad69f236a1aa1edf60c70b8db27fc5ae23d",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
@@ -1466,7 +1466,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard.ts",
-      "sha256": "0fe1e144e11bdc20f12bebede184842b3aeec0663bfc41aec1e6ad952981b15e",
+      "sha256": "668b36bd0713a6f174880b07484bfa47853cf094f9f85a44814d973dfbc30325",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard.ts"
