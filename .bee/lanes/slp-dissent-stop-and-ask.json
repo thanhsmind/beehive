@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces read; no signal found. Writing the required silence record.",
-    "asked_at": "2026-09-02T06:10:11.534Z",
-    "session": "15472ec9-6ff8-4bef-bbeb-4fb0852dff38"
+    "subject": "All six checks look clean. Two recovery candidates (compound-release-knowledge, slp-lead-recovery) are confirmed `awaiting-approval` by dire",
+    "asked_at": "2026-09-02T08:32:58.726Z",
+    "session": "0f01b3f4-35ff-4bf3-99a2-689ef82a4569"
   },
   "route": {
     "class": "feature",

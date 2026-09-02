@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "feature": "learning-loop-gaps",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"learning-loop-gaps\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"learning-loop-gaps\" (lane).",
+  "created_at": "2026-09-02T07:55:52.287Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 6,
+    "rationale": "a declared-unbuilt verb is built (registry contract + tripwire), and two bee skills change",
+    "updated_at": "2026-09-02T07:57:34.113Z",
+    "feature": "learning-loop-gaps"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-02T08:14:36.373Z",
+    "feature": "learning-loop-gaps",
+    "newest_decision_id": "81d46f80-e5c8-4387-80ca-107ca789bb07",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave:hat-facts-gaps(opus)+hat-alternatives(opus)+hat-user-impact(sonnet)",
+    "digest_head": "# Hat wave — learning-loop-gaps (plan step)\n\nThree seats: `hat-facts-gaps` (opus), `hat-alternatives` (opus),\n`hat-user-impact` (sonnet). Opened 2026-09-02 at the plan step. Synthesis by the\nleader. The wave **rejected the first draft** and the shape was rebuilt before\nplan.md reached its gate-ready bytes.\n\n## The draft the hats critiqued\n\nThree cells: (1) build `bee recovery window --session <id> [--purpose\nrecover|reflect]`, superseding `sweep-recovery-door` D3; (2) widen\n`scout-and-ticks.md` "
+  },
+  "merge_ready": {
+    "since": "2026-09-02T08:27:22.485Z",
+    "branch": "wt/learning-loop-gaps",
+    "worktree_id": "beehive--wt--learning-loop-gaps",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt"
+    ]
+  }
+}
