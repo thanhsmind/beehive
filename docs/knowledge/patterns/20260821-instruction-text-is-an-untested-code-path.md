@@ -8,7 +8,7 @@ bee:
   id: pattern-20260821-instruction-text-is-an-untested-code-path
   lifecycle: active
   areas: [rust-runtime, workflow-state, doctrine-layer]
-  sources: ["capture stub 10712761 (worker-proof-line-skew, cell wpls-1)", docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md, docs/knowledge/areas/rust-runtime/prompt-files-and-learned-context.md]
+  sources: ["capture stub 10712761 (worker-proof-line-skew, cell wpls-1)", docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md, docs/knowledge/areas/rust-runtime/prompt-files-and-learned-context.md, "first bee-verify-upkeep run, 2026-09-02 — the feature map taught a cap command the CLI refuses"]
   polarity: pitfall
   critical: true
 ---
@@ -60,3 +60,28 @@ A related but distinct failure is a correct instruction that is not
 running at all, because the artifact carrying it was never
 rebuilt — see [[pattern-20260821-a-vendored-binary-is-a-second-place-the-feature-must-land]].
 That one is absent-but-right; this one is present-and-wrong.
+
+**Recurrence, 2026-09-02 — and what finally owns it.**
+
+The first `bee-verify-upkeep` run found the same failure in a place
+built to prevent it. `.bee/verify/verify-app/features/cells-and-proof.md`
+told a driver to cap with a bare `green` result. That form had been
+correct; `proof-strength-and-expiry` later closed the result segment over
+`green:live` / `green:unit` / `green:static` and made a bare `green` a
+refusal on write. The sentence stayed. Driving it returned exit 1.
+
+Two details make this recurrence worth its lines. The map is a
+*verification* artifact — the thing whose whole job is to be executed —
+and it still rotted, because nobody executed it. And one of its stale
+line citations had been moved by the very feature that shipped that same
+week: a doc goes stale fastest against the change that touches it.
+
+The escalation this pattern asks for is now partly paid. Where a claim
+is about a constant or a rendered surface, a text-reading test owns it
+(`verification_contract_parity.rs`, `agents_block_render_parity.rs`).
+Where the claim is a RECIPE, no test can own it — only running it can.
+That is what the upkeep skill's live pass is for, and it is a human-run
+skill, so the durable owner here is a cadence, not a check. Prose stays
+because nothing else can hold it: **a recipe is proven by being run, and
+a verification map that has never been driven is documentation, not
+verification.**
