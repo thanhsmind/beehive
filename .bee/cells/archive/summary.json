@@ -1113,5 +1113,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-09-02T02:33:50.385Z"
+  },
+  "verification-contract-parity": {
+    "capped": 1,
+    "dropped": 1,
+    "archived_at": "2026-09-02T02:52:30.045Z"
   }
 }

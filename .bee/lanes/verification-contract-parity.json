@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"verification-contract-parity\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 1a86022; capture what settled, then bee close --feature verification-contract-parity.",
   "created_at": "2026-09-02T02:36:02.274Z",
-  "run_state": null,
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",
