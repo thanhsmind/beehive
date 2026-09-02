@@ -1003,6 +1003,54 @@ use std::time::Instant;
         assert_eq!(d("c-5"), "c-5: first line second line (sonnet)");
     }
 
+    /// dispatch-label-seat-first: a seat dispatched through the advisor kind
+    /// (`--kind advisor --role hat-facts-gaps`) ran on its own seat model,
+    /// but the label read `advisor: …` — the kind — so every UI showed the
+    /// hats as the advisor even when the seat's model ran (observed live on
+    /// 2026-09-02: three hats on opus/opus/sonnet, all labelled `advisor:`).
+    /// The label leads with the ASKED role when one is given; the kind only
+    /// when none is.
+    #[test]
+    fn a_seat_role_leads_the_description_instead_of_the_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"fable","hat-facts-gaps":"opus"}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root,
+            "claude",
+            "advisor",
+            Some("hat-facts-gaps"),
+            None,
+            None,
+            false,
+            None,
+            Some("hat wave"),
+            false,
+            None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("model"), Some(&json!("opus")));
+        assert_eq!(p.get("description"), Some(&json!("hat-facts-gaps: hat wave (opus)")));
+
+        // An explicit role on a gather leads the same way — the label names
+        // the slot that resolved, never the kind that asked.
+        let Prepared::Value(v) = prepare_dispatch_with_role(
+            &root, "claude", "gather", Some("hat-facts-gaps"), None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            v.get("payload").unwrap().get("description"),
+            Some(&json!("hat-facts-gaps (opus)"))
+        );
+    }
+
     /// Gap 2 of the audit (dispatch-label-chokepoint plan.md): a non-cell
     /// kind (`gather`/`reviewer`/`advisor`) had no way to say what it was FOR
     /// — `--purpose` is that way. Given, it renders; omitted, today's exact
