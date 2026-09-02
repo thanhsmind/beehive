@@ -104,11 +104,11 @@
     },
     {
       "name": "bee-verify-upkeep",
-      "sha256": "97c66132fe8980a15bfe91fc7f6af31828d960a3237e7eaa569e495b5db5cc9f"
+      "sha256": "c5c36955fcf9a43a2fe488273f88fefbc64074e54147130cd40cd45db7ca7606"
     },
     {
       "name": "bee-verifying",
-      "sha256": "973c7bece365228675d1c8f96cb50afb7e46e9ff9cbf250cfa0301d75e6319fc"
+      "sha256": "c43e020d4a38abbd2fafd86e92ba22fb2f73ba49dd4a59b75aff1322e61a262c"
     },
     {
       "name": "bee-wayfinding",
