@@ -1,7 +1,7 @@
 {
   "schema": "bee-usage/v1",
   "feature": "gather-reads-the-read-slot",
-  "closed_at": "2026-09-02T05:53:44.436Z",
+  "closed_at": "2026-09-02T05:53:50.877Z",
   "sessions": [],
   "skipped": 1,
   "totals": {

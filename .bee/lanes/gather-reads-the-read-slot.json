@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "gather-reads-the-read-slot",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"gather-reads-the-read-slot\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "bee close finished \"gather-reads-the-read-slot\" — feature is closed.",
   "created_at": "2026-09-02T03:55:51.996Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
