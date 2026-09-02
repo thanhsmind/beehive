@@ -1,0 +1,69 @@
+{
+  "id": "vif-1",
+  "feature": "verification-in-the-flow",
+  "title": "Branch the onboard verification notice on the skill's existence, not on a missing test command",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "65592f3f-abe2-49b8-99f4-30614d11bb33",
+    "d0e3c3a0-233a-4396-94c2-b364f3f9abac",
+    "9f4f90f0-f1ed-4acf-8358-72cb390199d7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "docs/history/verification-in-the-flow/CONTEXT.md",
+    "docs/history/verification-in-the-flow/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "RED FIRST. Write the failing tests before any production edit, run them, and keep the red output — it is the cap proof's first half.\n\nToday `stale_advisor_notices` in notices.rs decides the verification notice from whether the repo declares a test command. Find it with `rg -n 'else if !has_test' packages/bee-rs/crates/bee/src/onboard/notices.rs` — one hit, the line reads `    } else if !has_test {`. Above it sits `    if commands.is_some_and(|c| c.contains_key(\"verify\"))`, the retired-key arm. Below, `fn declares_test` is the one definition of 'this repo declares a test command'; find it with `rg -n 'fn declares_test'`.\n\nThe existing test that pins today's behavior is `fn a_declared_test_command_draws_no_notice_in_any_shape()` — find it with `rg -n 'a_declared_test_command_draws_no_notice_in_any_shape'`. It asserts a repo with a declared test gets NO notice. Under this cell that repo MUST get one, so this test flips red on its own. Rewrite it to assert the new truth; do not delete it.\n\nWhat to build, per D3 (65592f3f):\n\n1. The notice now keys off whether this repo HAS a verification skill, read from the SOURCE tree, never from a rendered skill home (plan.md, Decisions taken 1 — a fresh clone before any `--apply` has the source but may have no rendered copy). Per D8 (9f4f90f0) the source path is `.bee/verify/verify-app/SKILL.md`, relative to the repo root already passed into `stale_advisor_notices`.\n2. Per D1 (d0e3c3a0), `verify-app` is a CONSTANT, identical in every repo. Add it to templates.rs beside the other constants as a `pub const`, and build the probe path from it. Never write the literal string twice.\n3. Skill ABSENT -> a generate notice naming the `bee-verifying` skill. Skill PRESENT -> a new upkeep notice naming the `bee-verify-upkeep` skill. Nothing in the codebase names `bee-verify-upkeep` in a notice today.\n4. Per plan.md Decisions taken 4, the generate notice needs TWO wordings, because the existing constant opens 'This project has no command that proves it works' — true for a repo with no test command, FALSE for one that declares tests. A repo with tests still has nothing that drives the real product; say that instead. Keep the existing constant for the no-test case; author a second for the has-test case.\n5. Per plan.md Decisions taken 5, the generate notice must not nag. Onboard re-runs on every bee version mismatch and bee tags several releases a day, so the notice text instructs the reading agent to search the decision log for a recorded refusal before offering again. The upkeep notice is a pointer, not a prompt: it names the skill and stops.\n6. Per plan.md Decisions taken 3, the upkeep notice is where a composed test command gets REPORTED, never rewritten — but that line belongs to the bee-verify-upkeep skill body in slice 2, not to this cell. Do not edit any skill file here.\n7. The retired `commands.verify` arm keeps precedence and its warnings are unchanged. Decide the arm order explicitly and state it in a comment, because the existing comment 'Mutually exclusive BY CONSTRUCTION' describes the OLD order and will be wrong after this change.\n\nTests, red first, all six states of the truth table (skill absent/present x test declared/absent x legacy verify key present):\n  - skill absent + no test command -> the existing generate notice\n  - skill absent + test declared -> the second generate notice, and assert its first sentence DIFFERS from the first one\n  - skill present + no test command -> the upkeep notice\n  - skill present + test declared -> the upkeep notice\n  - legacy `commands.verify` key + skill absent -> the retirement warning still wins\n  - legacy `commands.verify` key + skill present -> the arm order you chose, asserted, with no double notice\n\nThe existing fixture is `fn stale_notices_for` — find it with `rg -n 'fn stale_notices_for'`. It takes config JSON only, so it needs a repo root or a skill-present flag to reach the new states; extend it rather than writing a second fixture.\n\nAlso extend the hygiene test `fn the_verification_offer_speaks_to_the_user_without_internal_terms` (find it by name) to cover BOTH new constants. Note its banned list includes the literal `.bee` — so no notice may name the source path. Two more of its assertions matter: a notice names its skill, and the offer stays the user's to accept.\n\nSTAY IN RUST. This cell touches exactly the two files in `files`. No skill file, no doc, no config, no `bee dev regen`.",
+  "must_haves": {
+    "truths": [
+      "A repo that declares commands.test and has no verification skill now receives a generate notice; before this cell it received none",
+      "A repo that has .bee/verify/verify-app/SKILL.md receives an upkeep notice naming bee-verify-upkeep, whether or not it declares a test command",
+      "A repo carrying the retired commands.verify key still receives its retirement warning",
+      "The two generate notices have different first sentences"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "substantive": "a pub const for the verify-app skill name, a second generate-notice constant, and one upkeep-notice constant; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "substantive": "the branch reads the source skill path; six state tests plus the extended hygiene test, all named and asserting"
+      }
+    ],
+    "key_links": [
+      "notices.rs builds its probe path from the templates.rs verify-app constant, never from a repeated string literal",
+      "a_declared_test_command_draws_no_notice_in_any_shape is rewritten to the new truth, not deleted"
+    ],
+    "prohibitions": [
+      "No file outside the two in files",
+      "No literal verify-app string written twice",
+      "No notice text containing the string .bee, commands., config.json, gate, cap or proof",
+      "The existence check never reads .claude/skills, .agents/skills or .opencode/skills"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard::notices",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

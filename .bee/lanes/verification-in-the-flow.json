@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "feature": "verification-in-the-flow",
+  "mode": "high-risk",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"verification-in-the-flow\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming for slice 1 (vif-1, vif-2) inside the worktree.",
+  "created_at": "2026-09-02T00:57:25.519Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "proof-weakening",
+      "multi-domain"
+    ],
+    "product_files": 12,
+    "rationale": "public-contracts: verify-app's name and .bee/verify/ layout are a contract every host repo inherits. covered-contract-change: onboard notice tests and bee-verifying step 5 assert the behavior D3/D6 change. proof-weakening: D6 REMOVES the product drive from commands.test, deleting proof that door currently runs. multi-domain: Rust onboarding + five skills + AGENTS.block.md doctrine + bee's own verify-bee regeneration.",
+    "updated_at": "2026-09-02T00:58:48.913Z",
+    "feature": "verification-in-the-flow"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-02T01:48:37.961Z",
+    "feature": "verification-in-the-flow",
+    "newest_decision_id": "9f4f90f0-f1ed-4acf-8358-72cb390199d7",
+    "plan_sha256": "8d0e336c2d163db6322cc64764800c8c33f3f8f7ac74278edbd2afcc1c018895",
+    "advisor": "hat wave, 5 seats (fable) — facts-gaps, alternatives, user-impact, risks, value",
+    "digest_head": "# Hat wave digest — verification-in-the-flow (plan step, 5 seats)\n\nOpened `84485816`; synthesis `1fb5dc3e`. Anchored on `plan.md` rev 0.\n\n**Unanimous verdict on the plan's open question:** retire D2 (flatten `.bee/verify/`),\nkeep the nested `.bee/verify/verify-app/`. Four independent grounds — no observable\nbehavior change (D1 already gives one constant path), loss of a deliberately-commented\nrenderer design and of multi-skill support, a one-product limit pinned into the format\nrather than the n"
+  }
+}

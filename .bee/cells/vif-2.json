@@ -1,0 +1,60 @@
+{
+  "id": "vif-2",
+  "feature": "verification-in-the-flow",
+  "title": "Pin AGENTS.md byte-identical to its rendered source block before slice 2 edits it",
+  "lane": "high-risk",
+  "role": "test",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "c93a6948-ca40-4a03-9693-4e2ad6f14489",
+    "036e8a79-3aa8-4e69-b1b5-6b43e6729447"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/rule_index_parity.rs",
+    "packages/bee-rs/crates/bee/src/onboard/merge.rs",
+    "packages/bee-rs/crates/bee/src/onboard/source.rs",
+    "docs/history/verification-in-the-flow/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Build the net BEFORE the work it nets. Slice 2 edits `packages/bee/AGENTS.block.md` to add the D4 read-first mention and the D5 proof case. That block is rendered into `AGENTS.md`, the file agents actually load. Today nothing catches an edit to the block that was never regenerated: `rule_index_parity.rs` compares marker SETS only, so a body edit with identical markers passes, and CI has no regen-then-diff step (`rg -n regen .github/workflows/` returns nothing).\n\nWrite a new text-reading test file, `packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs`, that pins the two surfaces byte for byte.\n\nCopy the shape of `rule_index_parity.rs` — a sibling in the same directory. It reads repo files as TEXT, imports no crate internals, and opens with a comment block explaining what is pinned and why. Match that: a reader six months from now must learn from the file itself why it exists.\n\nWhat to pin: `AGENTS.md` carries a bee-owned block delimited by `<!-- BEE:START -->` and `<!-- BEE:END -->` (find them with `rg -n 'BEE:START|BEE:END' AGENTS.md` — two hits). The bytes between those markers must equal the rendered content of `packages/bee/AGENTS.block.md`. Read `onboard/merge.rs` for `fn merge_agents_content` and its marker grammar before you assume how the block is delimited — the marker match is whole-line anchored and there is a deliberate decoy case in its tests. Read `onboard/source.rs` for how the block template is located.\n\nIf rendering is not a plain copy — check whether bee:only markers or any runtime-specific render applies to this template — pin what IS deterministic and say in a comment exactly what is pinned and what is not. A test that over-claims is worse than one with a stated boundary.\n\nThe test must FAIL if someone edits `packages/bee/AGENTS.block.md` and does not run `bee dev regen`. Prove that: make a scratch edit to the block file, run the test, keep the red output, then revert the edit and run it green. Both outputs go in the cap proof. A parity test never observed failing is not known to work.\n\nThe failure message must name the fix — `bee dev regen` — not just report a mismatch. Follow how `rule_index_parity.rs` words its assertions.\n\nThis cell writes exactly one new file and edits nothing else. Do not touch AGENTS.md, AGENTS.block.md, or any skill.",
+  "must_haves": {
+    "truths": [
+      "Editing packages/bee/AGENTS.block.md without running bee dev regen turns this test red",
+      "The test passes on the tree as it stands today",
+      "The failure message names bee dev regen as the fix"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs",
+        "substantive": "a text-reading parity test with a header comment stating what is pinned and what is deliberately not; no crate-internal imports; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the test locates the BEE:START/BEE:END block the same way merge.rs does, not by an ad-hoc string search"
+    ],
+    "prohibitions": [
+      "No edit to AGENTS.md or packages/bee/AGENTS.block.md is committed",
+      "No crate-internal import - this file reads repo text, like its sibling parity tests",
+      "The scratch edit used to prove the red is reverted before cap"
+    ]
+  },
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test agents_block_render_parity",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
