@@ -191,7 +191,7 @@ Columns: before and after the first side effect — the `dispatch.jsonl` append 
 
 **Gates and approval.** Prepare itself asks for no approval. `--claim` and `wave` inherit the claim door's execution-gate refusal in full, which is the only gate in this area.
 
-**The store and history.** `.bee/logs/dispatch.jsonl` is the record: one `source: "prepare"` line per served dispatch, and later one line per dispatch the [model guard](workers.md) sees. Both write the same `logical_tier`/`requested_model`/`effective_model`/`effective_model_status`/`channel`/`enforcement` fields, deliberately, so the file reads as one schema.
+**The store and history.** `.bee/logs/dispatch.jsonl` is the record: one `source: "prepare"` line per served dispatch, then one line per dispatch the [model guard](workers.md) sees. Both write the same `logical_tier`/`requested_model`/`effective_model`/`effective_model_status`/`channel`/`enforcement` fields, deliberately, so the file reads as one schema.
 
 **Worktrees and containment.** The door runs in main and refuses in a granted worktree. When the cell's feature has one, the envelope carries `worktree_root` and `control_root` and the worker prompt carries a Location block instructing the worker to stop with `[BLOCKED]` if its working directory is not inside the worktree — because a subagent inherits the spawning session's working directory and cannot fix that itself ([worktrees](../foundations/worktrees.md)).
 
