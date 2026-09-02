@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"gather-reads-the-read-slot\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at ba9dd87; reload the product and test \"gather-reads-the-read-slot\", then either approve uat (\"bee gate --name uat --approved true --lane gather-reads-the-read-slot\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-02T03:55:51.996Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: gather-reads-the-read-slot",
+    "asked_at": "2026-09-02T05:03:24.240Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -34,14 +39,5 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave:hat-facts-gaps(opus)+hat-alternatives(opus)+hat-user-impact(sonnet)",
     "digest_head": "# Hat wave — gather-reads-the-read-slot (plan step)\n\nThree seats, standard lane: `hat-facts-gaps` (opus), `hat-alternatives`\n(opus), `hat-user-impact` (sonnet). Wave opened 2026-09-02 (decision\nfd19a0ee). Synthesis by the leader; findings landed in plan.md and\nCONTEXT.md before this record was written.\n\n## What the wave changed in the plan\n\n1. **Tail without `extraction`** (leader finding, confirmed by user-impact's\n   codex/legacy walk): the gather walk is `[read, generation]`. A walk\n   throug"
-  },
-  "merge_ready": {
-    "since": "2026-09-02T04:49:31.753Z",
-    "branch": "wt/gather-reads-the-read-slot",
-    "worktree_id": "beehive--wt--gather-reads-the-read-slot",
-    "uat": "pending",
-    "blocked_by": [
-      "doc-deferral"
-    ]
   }
 }
