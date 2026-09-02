@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"verification-contract-parity\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"verification-contract-parity\" (lane).",
+  "next_action": "Merged into main at 1a86022; capture what settled, then bee close --feature verification-contract-parity.",
   "created_at": "2026-09-02T02:36:02.274Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "One new integration test file, no product code, zero risk flags. It closes two rows of verification-in-the-flow's own test matrix that no cell built. class=feature because the enum has no test value and this adds a net that did not exist, rather than fixing a defect in shipped behavior.",
     "updated_at": "2026-09-02T02:36:10.879Z",
     "feature": "verification-contract-parity"
-  },
-  "merge_ready": {
-    "since": "2026-09-02T02:50:08.874Z",
-    "branch": "wt/verification-contract-parity",
-    "worktree_id": "beehive--wt--verification-contract-parity",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
