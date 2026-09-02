@@ -122,10 +122,11 @@ runs it.
    evidence means a thin file, never an invented finding.
 4. Promote a learning only when it clears all three bars:
    multi-feature relevance, meaningful waste prevented, generalizable.
-   Prefer an executable check over prose, and when an already-promoted
-   pattern recurs, escalate it to a durable owner — hook, guard,
-   doctor check, or test — or record the one-line reason prose stays
-   (`references/promotion.md` ("Promotion Decision Tree")).
+   Prefer an executable check over prose (which routes only into a
+   skill the run actually opened or tunes its description), and when an
+   already-promoted pattern recurs, escalate it to a durable owner —
+   hook, guard, doctor check, or test — or record the one-line reason
+   prose stays (`references/promotion.md` ("Promotion Decision Tree")).
 5. Log the decisions future planning must honor; supersede outdated
    ones, never edit them. File unresolved friction with
    `bee backlog add` so grooming can hunt it later.
