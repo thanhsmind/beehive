@@ -238,7 +238,7 @@ Pi enforces bee rules through the extension [`.pi/extensions/bee-guard.ts`](../.
 | Rule | Pi Event | Policy | Description |
 |---|---|---|---|
 | `write-guard` | `tool_call` | Blocking | Validates tool executions (`bash`, `powershell`, `write`, `edit`, `read`, `grep`, `find`, `ls`, and custom tools). |
-| `session-init` | `session_start` | Advisory | Runs once per real session boundary — a fresh start, a new session, a resume, or a fork — and caches the session preamble. A `/reload` does not run it again: the session keeps the preamble it already has. It reports a new session as a clear, a resume or a fork as a resume, and anything else as a startup. |
+| `session-init` | `session_start` | Advisory | Runs at every real session boundary — a fresh start, a new session, a resume, or a fork — and caches the session preamble. A `/reload` does not run it a second time: the session keeps the preamble it already has. A reload that arrives before it has ever run does run it once, because Pi can hand the extension a fresh copy of itself. It reports a new session as a clear; a resume, a fork, or a reload as a resume; and anything else as a startup. |
 | `prompt-context` | `before_agent_start` | Advisory | Generates the per-turn context delta appended to the system prompt. |
 | `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `agent_settled` (`Stop`), `session_shutdown` (`SessionEnd`) | Advisory | Records session state transitions across prompt submission, tool execution results, turn completion, and session shutdown. |
 | `state-sync` | `tool_result` (`PostToolUse`), `agent_settled` (`Stop`) | Advisory | Synchronizes session state after tool execution and on turn completion. |
