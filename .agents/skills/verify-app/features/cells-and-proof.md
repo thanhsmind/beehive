@@ -12,7 +12,15 @@ refused outright, so "done" can never mean "I said so".
 - `cell-claim` claims an open cell for a named worker.
 - `cell-claim-gated` refuses a claim while the execution gate is unapproved.
 - `cell-cap-red` refuses a cap whose proof line result is `red`.
-- `cell-cap-green` caps the cell and stores the proof line on its trace.
+- `cell-cap-green` caps the cell and stores the proof line on its trace. The
+  result segment is a CLOSED set — `green:live`, `green:unit`, `green:static`
+  (`cells/finish_support.rs:81-89`). A bare `green` is refused on write; the
+  read path stays tolerant of caps recorded before that rule.
+- `cell-claim-contract` refuses a claim on contract grounds
+  (`cells/handlers_write.rs:1248-1436`): `CONTRACT_UNCITED` when a test-writing
+  cell cites no `contract:<name>` decision, `CONTRACT_UNSETTLED` when a cited
+  decision carries an open revisit trigger, and `CONTRACT_RETIRED` when one has
+  left the active set.
 
 ## How to get to it (user POV)
 
@@ -58,8 +66,13 @@ Preconditions:
   `control-bee cli -- cells show --id demo-note-1 --json` still reports
   `status: "claimed"`.
 - **A green proof line caps it.** Re-run the same command with the result segment
-  changed to `green`. The payload reports `status: "capped"` and
+  changed to `green:unit`. The payload reports `status: "capped"` and
   `trace.report.tests` holding the proof line verbatim.
+- **A bare `green` is NOT accepted.** Run it once with the result segment as
+  plain `green`. The `.exit` file holds `1` and the payload's `error` reads
+  `result segment is "green" — a cap records HOW the change was shown to work`,
+  naming the three legal values. Drive this: the older form is still written
+  from memory, and this is the check that catches it.
 - **Proof.** Run `control-bee snapshot capped`. The snapshot's
   `cells/demo-note-1.json` shows `status: "capped"` with the green proof line on
   `trace.report.tests`, `git-log.txt` shows the commit the report names, and the

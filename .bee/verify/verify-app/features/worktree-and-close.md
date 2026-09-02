@@ -53,10 +53,34 @@ Preconditions:
   sandbox and the log's newest entry is a merge commit naming the worktree and
   the branch. `control-bee cli -- worktree list --json` now reports
   `merged_pending` `true` for that id.
+- **The worktree is KEPT by default.** Teardown runs only when `--cleanup` is
+  passed for that merge, or the repo sets `worktree_cleanup_on_merge: true`;
+  `--no-cleanup` is an explicit keep and beats both
+  (`worktree/handlers.rs:413-437`, where an absent config key reads `false`).
+  A non-boolean config value refuses the merge rather than guessing.
+- **A merge refuses on recorded debt, before git runs.** Three zero-mutation
+  checks fire ahead of `git merge` (`worktree/phases.rs`):
+  `WORKTREE_MERGE_PROOF_DEBT` when a capped cell carries no proof line
+  (`:219-226`), `WORKTREE_MERGE_DISSENT_DEBT` (`:260-267`), and
+  `WORKTREE_MERGE_ADVISOR_NUDGE_DEBT` (`:296-303`). A `standard`/`high-risk`
+  feature with an unapproved uat gate refuses too (`:478-488`) unless
+  `--skip-uat` is passed or config `uat_before_merge` is `false`.
+- **Reclaim dead worktrees.** `control-bee cli -- worktree prune --json` removes
+  worktrees whose branch is fully merged and whose tree holds nothing precious;
+  every probe fails CLOSED, so an unreadable file keeps the worktree
+  (`worktree/prune.rs:769-805`). It must run from MAIN.
 - **Close reports its doors without running anything.** Run
   `control-bee cli -- close --feature demo-note --dry-run --json`. The payload is
   a `doors[]` array; each entry has `door`, `blocking` and `detail`. Snapshot
   before and after and confirm the state is unchanged.
+- **Count the doors, do not assume them.** A dry run reports TWELVE on a `tiny`
+  lane: `tests`, `scribing-debt`, `capture-queue`, `mistakes`, `dissent-debt`,
+  `advisor-nudge-debt`, `uat`, `pattern-check`, `knowledge-freshness`, `impact`,
+  `routing`, `doc-deferral`. `judge-debt` is a thirteenth, lane-gated to
+  `standard`/`high-risk` (`drivers/close.rs:1594`). The builder is
+  `build_close_report_doors` (`close.rs:1495-1786`); the remaining doors are
+  added by `close_handler` (`close.rs:2403-2413`). A recipe that names only the
+  door it cares about goes stale the next time one is added — read the array.
 - **A blocking door names its remedy.** With one capped cell and no reflection,
   the `mistakes` door reports `blocking: true` and a `detail` naming
   `bee mailbox reflect`. The `tests` door reports `blocking: false` with

@@ -39,6 +39,22 @@ Preconditions:
   the `git status` call. The payload carries `"status": "changes_needed"`, a
   non-empty `plan[]`, `repo_root`, `source`, `bee_version`, `skills` and
   `notices`. The two `git status` outputs are identical.
+- **The verification notice says which of five states the repo is in.** Read the
+  `notices` array, not just its presence. `stale_advisor_notices` picks ONE
+  verification line in strict priority order
+  (`onboard/notices.rs:196-233`, constants at `onboard/templates.rs:286-328`):
+  1. a legacy `commands.verify` key wins outright — the retirement warning, in
+     its with-test or no-test form;
+  2. else the skill file `.bee/verify/verify-app/SKILL.md` EXISTS — the upkeep
+     pointer, whether or not a test command is declared;
+  3. else a test command is declared — the tested-repo offer, which opens by
+     saying the tests check the code but nothing drives the product;
+  4. else — the no-test offer, which opens "This project has no command that
+     proves it works".
+  A top-level `advisor` key adds its own stale-key warning independently.
+  Drive the states by creating or removing that one skill file and by editing
+  `commands.test`; the branch reads the SOURCE path only, never a rendered
+  skill home.
 - **Apply installs the frame.** Run
   `control-bee host -- <binary> onboard --repo-root <target> --apply --json`. The
   payload carries `"status": "applied"`, `"bee_version"` equal to the version in
@@ -76,15 +92,16 @@ Preconditions:
   exists.
 - A `blocked_*` status means zero mutations happened. The set is
   `blocked_no_engine`, `blocked_no_source`, `blocked_downgrade`,
-  `blocked_render`, `blocked_hooks_merge`, `blocked_worktree_migration_conflict`
-  and a bare `blocked`. `versions` is present for the version and downgrade
+  `blocked_render`, `blocked_hooks_merge`, `blocked_worktree_migration_conflict`,
+  `blocked_codex_hook_write` (`onboard/apply.rs:215-225`) and a bare `blocked`. `versions` is present for the version and downgrade
   blocks only, not for migration or hook-merge conflicts. Do not retry with
   `--force-downgrade` unless that is the behavior under test.
 - The plan/apply split is the only dry-run here. Prove it by diffing
   `git status --porcelain` before and after, not by trusting the missing
   `--apply`.
 - Hook wiring is **not** written by default. It lands only when `--repo-hooks` is
-  passed or a previous run already recorded it (`onboard/plan.rs:361`). When it
+  passed or a previous run already recorded it (resolved at
+  `onboard/mod.rs:361-365`, applied at `onboard/plan.rs:908`). When it
   does land, those hooks fire for an agent session opened inside that repo, never
   for this harness, so they cannot be verified from here.
 - Installing over an existing store preserves state. A test that expects a

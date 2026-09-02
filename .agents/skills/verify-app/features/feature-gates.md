@@ -46,8 +46,17 @@ Preconditions:
   returns the same four values.
 - **Approve the merged gate.** Run
   `control-bee cli -- gate --merge --approved true --json`. The payload's
-  `approved_gates` now has `shape: true` and `execution: true`, with `context`,
-  `review` and `uat` still `false`.
+  `approved_gates` now has `shape: true` and `execution: true`, with `context`
+  and `review` still `false`. There is NO `uat` key: `default_gates()` mints
+  exactly four (`state_group/store.rs:42-49`), and `uat` appears only once
+  `--name uat` sets it.
+- **An approval can refuse before it writes.** Three preconditions guard it, each
+  zero-mutation (`state_group/set_gate.rs`): a `high-risk` lane refuses an
+  execution or merged approval while `advisor_ref` is missing or stale
+  (`:587-621`); a LANE target refuses while the plan-time conflict review is
+  absent or was derived against a different `plan_rev` (`:623-737`); and a plan
+  carrying unresolved load-bearing claims refuses (`:748-775`). Drive at least
+  the conflict one — it fires on any lane whose review has never run.
 - **Approve one named gate.** Run
   `control-bee cli -- gate --name uat --approved true --json`. Only
   `approved_gates.uat` flips.
