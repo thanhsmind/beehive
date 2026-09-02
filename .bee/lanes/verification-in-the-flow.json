@@ -13,8 +13,13 @@
   "summary": "Feature \"verification-in-the-flow\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"verification-in-the-flow\" — feature is closed.",
   "created_at": "2026-09-02T00:57:25.519Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "No blocking doors. Recording the one defect I hit, then closing.",
+    "asked_at": "2026-09-02T02:34:15.890Z",
+    "session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
