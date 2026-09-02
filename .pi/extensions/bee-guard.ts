@@ -1008,13 +1008,13 @@ export default function (pi: ExtensionAPI) {
     return undefined
   }) as any)
 
-  // ── ADVISORY: the turn-end waiting mark. `agent_settled` is Pi's own
-  // "nothing will continue automatically" signal (docs/extensions.md:569) —
-  // the Stop analog, and session-close's Stop path is what sets the
-  // `turn-end` waiting mark (session_close/mod.rs:260-309). Any continuation
-  // nudge session-close can emit on Stop has no Pi enforcement equivalent
-  // here (nothing on this event can force the session to keep going); it is
-  // logged, never enforced. ────────────────────────────────────────────────
+  // ── ADVISORY: the turn-end waiting mark and continuation nudge.
+  // `agent_settled` is Pi's own "nothing will continue automatically" signal
+  // (docs/extensions.md:569) — the Stop analog, where session-close sets the
+  // `turn-end` waiting mark (session_close/mod.rs:260-309). When session-close
+  // emits a block verdict (decision: "block"), we enforce continuation by
+  // injecting the reason into the session via `pi.sendUserMessage` (pib-3).
+  // Advisory nudges (systemMessage) do not trigger injection. ───────────────
   pi.on("agent_settled", (async (_event: any, ctx: any) => {
     // D4/F2: the turn is over, so the claims injected INTO it are consumed
     // now — not when `sendUserMessage` returned. A claim still on disk after a
@@ -1030,11 +1030,42 @@ export default function (pi: ExtensionAPI) {
     }
     try {
       const directory = directoryOf(ctx)
-      runAdvisoryHook(directory, "session-close", {
+      const rawVerdict = runAdvisoryHook(directory, "session-close", {
         hook_event_name: "Stop",
         session_id: sessionIdOf(ctx),
         cwd: directory,
       })
+      // Gated continuation nudge (Epic C / pib-3): session-close emits a block
+      // verdict {"decision":"block","reason":"..."} when maybe_bypass_block in
+      // hooks/session_close/nudges.rs triggers (e.g., gate_bypass in planning mode).
+      // Advisory nudges emit {"systemMessage":"..."} and must NOT inject a turn.
+      //
+      // Deduplication: no client-side repeat guard is created here. The Rust hook
+      // already deduplicates bypass nudges in nudges.rs:425-430 via
+      // should_inject(root, "bypass-stop-net", &hash) with a 30-minute window.
+      if (typeof rawVerdict === "string" && rawVerdict.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(rawVerdict.trim())
+          if (
+            parsed &&
+            parsed.decision === "block" &&
+            typeof parsed.reason === "string" &&
+            parsed.reason.trim().length > 0
+          ) {
+            if (typeof pi?.sendUserMessage === "function") {
+              turnStartPending = true
+              try {
+                await pi.sendUserMessage(parsed.reason)
+              } catch (injectErr: any) {
+                turnStartPending = false
+                console.error(`bee: failed to inject continuation nudge into session: ${injectErr?.message ?? injectErr}`)
+              }
+            }
+          }
+        } catch {
+          // Non-JSON or unparseable output on advisory hook is ignored
+        }
+      }
       try {
         runAdvisoryHook(directory, "activity", {
           hook_event_name: "Stop",

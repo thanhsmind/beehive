@@ -846,6 +846,10 @@ enum StubBehavior {
     /// exit 0, emitting a per-hook marker on stdout so the ADVISORY tests can
     /// tell the session-init preamble apart from the prompt-context delta.
     AdvisoryMarks,
+    /// Epic C / pib-3: exit-0 block verdict emitted by session-close on Stop.
+    SessionCloseBlock(String),
+    /// Epic C / pib-3: exit-0 advisory verdict (systemMessage) emitted by session-close.
+    SessionCloseAdvisory(String),
 }
 
 const PREAMBLE_MARK: &str = "PREAMBLE-MARK";
@@ -895,6 +899,14 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
         StubBehavior::AdvisoryMarks => format!(
             "case \"$2\" in\n  session-init) printf '%s' '{PREAMBLE_MARK}' ;;\n  prompt-context) printf '%s' '{DELTA_MARK}' ;;\nesac\nexit 0\n"
         ),
+        StubBehavior::SessionCloseBlock(reason) => {
+            let stdout = json!({"decision": "block", "reason": reason}).to_string();
+            format!("printf '%s' '{stdout}'\nexit 0\n")
+        }
+        StubBehavior::SessionCloseAdvisory(msg) => {
+            let stdout = json!({"systemMessage": msg}).to_string();
+            format!("printf '%s' '{stdout}'\nexit 0\n")
+        }
         StubBehavior::NoStore | StubBehavior::StorePresentNoBinary => unreachable!(),
     };
     let path = bin_dir.join("bee");
@@ -2699,10 +2711,190 @@ fn session_shutdown_does_not_stall_quit() {
         elapsed < Duration::from_secs(5),
         "session_shutdown handler must execute promptly and not stall Pi's quit (took {elapsed:?})"
     );
-
     let content = std::fs::read_to_string(&session_file).expect("read session file");
     let session_json: Value = serde_json::from_str(&content).expect("valid session JSON");
     assert_eq!(session_json["status"].as_str(), Some("closed"));
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART 6 — Epic C probes: continuation nudge on agent_settled (pib-3).
+// ═════════════════════════════════════════════════════════════════════════
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_injected_on_block_verdict() {
+    node_or_skip!("continuation_nudge_injected_on_block_verdict");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    const NUDGE_REASON: &str = "Continue planning next steps";
+    write_stub_bee(dir.path(), &StubBehavior::SessionCloseBlock(NUDGE_REASON.to_string()));
+
+    const SESSION_ID: &str = "sess-nudge-block";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw on block verdict: {:?}",
+        run.results
+    );
+    assert_eq!(
+        run.messages.len(),
+        1,
+        "block verdict from session-close must trigger an injected user message"
+    );
+    assert_eq!(run.messages[0].text, NUDGE_REASON);
+}
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_skipped_on_advisory_verdict() {
+    node_or_skip!("continuation_nudge_skipped_on_advisory_verdict");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory("Consider logging decisions".to_string()),
+    );
+
+    const SESSION_ID: &str = "sess-nudge-advisory";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw on advisory verdict: {:?}",
+        run.results
+    );
+    assert!(
+        run.messages.is_empty(),
+        "advisory verdict from session-close must NOT trigger an injected message, got: {:?}",
+        run.messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_swallows_injection_failure_without_throwing() {
+    node_or_skip!("continuation_nudge_swallows_injection_failure_without_throwing");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseBlock("Continue with task".to_string()),
+    );
+
+    const SESSION_ID: &str = "sess-nudge-fail";
+    let spec = json!({
+        "calls": [
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+        "injection_fails": true,
+    });
+    let run = run_harness_spec(&harness, spec);
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must swallow sendUserMessage rejection without throwing: {:?}",
+        run.results
+    );
+    assert!(
+        run.stderr.contains("failed to inject continuation nudge into session"),
+        "rejection from sendUserMessage must be logged to stderr: {}",
+        run.stderr
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn continuation_nudge_real_binary_gate_bypass_triggers_block() {
+    node_or_skip!("continuation_nudge_real_binary_gate_bypass_triggers_block");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    // Configure gate_bypass: full, and planning phase with only context approved ->
+    // Stop hook will evaluate maybe_bypass_block and emit block verdict.
+    std::fs::write(
+        dir.path().join(".bee").join("config.json"),
+        serde_json::to_string_pretty(&json!({
+            "gate_bypass": "full"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write config.json");
+
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "planning",
+            "feature": "pib-test",
+            "approved_gates": {
+                "context": true,
+                "shape": false,
+                "execution": false,
+                "review": false,
+                "uat": false
+            }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    const SESSION_ID: &str = "sess-nudge-real";
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+    std::fs::write(
+        &session_file,
+        serde_json::to_string_pretty(&json!({
+            "id": SESSION_ID,
+            "status": "active",
+            "started_at": "2026-09-02T12:00:00.000Z"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write session file");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled against real binary must not throw: {:?}",
+        run.results
+    );
+    assert_eq!(
+        run.messages.len(),
+        1,
+        "real bee binary under gate_bypass=full must emit block verdict that triggers continuation injection"
+    );
+    assert!(
+        run.messages[0].text.contains("GATE BYPASS") || run.messages[0].text.contains("auto-approved Gate"),
+        "injected text must contain gate bypass continuation text, got: {}",
+        run.messages[0].text
+    );
 }
 
 #[cfg(not(unix))]
