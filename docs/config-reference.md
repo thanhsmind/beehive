@@ -227,6 +227,44 @@ The refusals fire at both doors (`prepare` and `wave`), and **seat roles ride al
 
 An `agent` name that is not in `herding.agents` refuses and lists every registry key — the same rule every herding slot follows. The full block, annotated, is in [`.bee/config-sample.json`](../.bee/config-sample.json); the `herding.*` contract is [bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md). Every dispatch this table serves returns its result through `bee herding run`'s own output — that is the path to plan on; add `--inbox-session <token>` only for a job you have detached, and take the async limits with it: at-least-once delivery with `job_id` as the dedupe key, and a drain that needs a live Pi session.
 
+#### Pi guard belt (`.pi/extensions/bee-guard.ts`)
+
+Pi enforces bee rules through the extension [`.pi/extensions/bee-guard.ts`](../.pi/extensions/bee-guard.ts), which `bee onboard` copies into the project. The extension uses two failure policies:
+- **Blocking (fail closed):** `write-guard` on `tool_call`. If the check fails, the binary is missing, or the hook returns exit code 2 (`DENY`), `ask`, or invalid JSON, tool execution is blocked.
+- **Advisory (fail open):** All other lifecycle events. Errors, crashes, or missing binaries are logged to stderr and swallowed so the session continues.
+
+##### Wired rules
+
+| Rule | Pi Event | Policy | Description |
+|---|---|---|---|
+| `write-guard` | `tool_call` | Blocking | Validates tool executions (`bash`, `powershell`, `write`, `edit`, `read`, `grep`, `find`, `ls`, and custom tools). |
+| `session-init` | `session_start` | Advisory | Runs at session start or clear; caches the session preamble. |
+| `prompt-context` | `before_agent_start` | Advisory | Generates the per-turn context delta appended to the system prompt. |
+| `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `agent_settled` (`Stop`) | Advisory | Records session state transitions across prompt submission, tool execution results, and turn completion. |
+| `state-sync` | `tool_result` (`PostToolUse`) | Advisory | Synchronizes session state after tool execution. |
+| `tools-logger` | `tool_result` (`PostToolUse`) | Advisory | Logs tool call arguments and results to the session log. |
+| `session-close` | `agent_settled` (`Stop`), `session_before_compact` (`PreCompact`), `session_shutdown` (`SessionEnd`) | Advisory | Manages turn-end marks and continuation nudges on settle, flushes state before compaction, and marks session records closed on shutdown (`quit`, `new`, `resume`, `fork`). |
+
+The extension also runs an advisory result inbox drain on `session_start` to poll for detached `bee herding run` background job results under `.bee/result-inbox/<token>/` and inject them into the session via `pi.sendUserMessage`.
+
+##### Excluded rules
+
+The following rules from the bee catalog are not wired on Pi:
+
+- **`model-guard`:** Pi has no built-in subagent tool surface (`Agent` or `Task` tools). Worker dispatches run via external herding commands (`bee herding run`) through `bash`, which `write-guard` intercepts.
+- **`chain-nudge`:** Requires in-process subagent lifecycle events (such as `SubagentStop`) that Pi does not provide.
+- **`codex-subagent-audit`:** Codex-specific audit hook for OpenAI subagent lifecycle events (`SubagentStart` / `SubagentStop`); not applicable to Pi.
+
+##### Rules on the Claude belt without a Pi carrier
+
+The Claude hook manifest (`packages/bee/hooks/claude-hooks.json`) fires some rules on lifecycle events that have no equivalent in Pi:
+
+- **`activity` on `PreToolUse`:** Pi's `tool_call` event is strictly the fail-closed blocking path; Pi has no separate advisory pre-tool event.
+- **`activity` on `PermissionRequest`:** Pi 0.84.x provides no interactive permission request event.
+- **`activity` on `Notification`:** Pi 0.84.x provides no notification event.
+- **`state-sync` on `SubagentStop` and `Stop`:** Pi has no `SubagentStop` event (state synchronization runs on `tool_result`), and turn settlement on `agent_settled` is handled by `session-close` and `activity`.
+
+
 ## `retry.fallbackChains` — a chain bee PUBLISHES, never one it runs
 
 A fallback chain is an ordered list of model selectors a dispatch **may** move along after a *transient* provider failure (D10/D11, store `50808d48`).
