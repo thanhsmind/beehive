@@ -1118,5 +1118,10 @@
     "capped": 1,
     "dropped": 1,
     "archived_at": "2026-09-02T02:52:30.045Z"
+  },
+  "gather-reads-the-read-slot": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-02T05:53:44.428Z"
   }
 }

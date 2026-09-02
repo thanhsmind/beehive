@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Trimming the note to fit the 500-character cap.",
-    "asked_at": "2026-09-02T04:51:08.727Z",
-    "session": "5f207ed9-5d59-48ee-8546-08bd83c55efa"
+    "subject": "All quiet. I will write the silence record now.",
+    "asked_at": "2026-09-02T05:38:41.263Z",
+    "session": "d42c588a-72a5-4e61-8f5d-44c7128aec11"
   },
   "route": {
     "class": "feature",

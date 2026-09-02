@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"gather-reads-the-read-slot\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at ba9dd87; reload the product and test \"gather-reads-the-read-slot\", then either approve uat (\"bee gate --name uat --approved true --lane gather-reads-the-read-slot\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-09-02T03:55:51.996Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: gather-reads-the-read-slot",
-    "asked_at": "2026-09-02T05:03:24.240Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",
