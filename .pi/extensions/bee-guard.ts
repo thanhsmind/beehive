@@ -58,10 +58,8 @@
 // `bash` tool. A model-guard row wired here would be a vacuous name-match that
 // can never fire — the exclusion is asserted BY NAME in the belt parity test.
 //
-// codex-subagent-audit and chain-nudge are NOT wired here either, for the same
-// reason they are not wired on the OpenCode belt: codex-subagent-audit is
-// Codex-specific, and chain-nudge needs subagent-dispatch identity that no Pi
-// event carries.
+// codex-subagent-audit is a NAMED EXCLUSION on this belt — Codex-specific (same reason it is not wired on the OpenCode belt).
+// chain-nudge is a NAMED EXCLUSION on this belt — needs subagent-dispatch identity that no Pi event carries (same reason it is not wired on the OpenCode belt).
 //
 // ── activity hook mapping across Claude lifecycle rows ─────────────────────
 // The Claude manifest (packages/bee/hooks/claude-hooks.json) fires activity
