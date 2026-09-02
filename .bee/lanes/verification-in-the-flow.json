@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "verification-in-the-flow",
   "mode": "high-risk",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"verification-in-the-flow\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming for slice 1 (vif-1, vif-2) inside the worktree.",
+  "next_action": "bee close finished \"verification-in-the-flow\" — feature is closed.",
   "created_at": "2026-09-02T00:57:25.519Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
