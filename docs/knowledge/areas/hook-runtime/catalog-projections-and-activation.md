@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-hook-state-parity D1-D3, D8-D13", "codex-runtime-parity D1, D2", d91a8398-2d63-426b-a133-341568453200, "opencode-support D1, D2, D5, D6", "pi-support D1, D2, D3, D4 (named deviation), D5"]
-  sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "codex-native-runtime-v2 cnr2-2 (state-sync trigger extended at the generator sources to both runtimes' plan tools)", "opencode-support cells oc-2, oc-3, oc-6, oc-8, oc-9, oc-10 (OpenCode's own guard belt: live-proved throw-blocking, the apply_patch/lsp/list coverage-gate closures, and exit-0 repair/ask verdict honoring; capped traces in .bee/cells/, evidence in docs/history/opencode-support/discovery.md, 2026-08-11)", "opencode-support cell oc-12 (live nested-dispatch proof: the belt engaged correctly on a real cross-session hold and a real concurrent-worker git guard, and surfaced the session-identity gap named below; trace .bee/cells/oc-12.json)", "opencode-support cell oc-13 (bee onboard --apply installs the belt; this concept's own Pointers correction landed in passing; trace .bee/cells/oc-13.json)", "docs/specs/hook-runtime.md#B5", "docs/specs/hook-runtime.md#B6", "docs/specs/hook-runtime.md#R1", "docs/specs/hook-runtime.md#R6", "docs/specs/hook-runtime.md#E4", "docs/specs/hook-runtime.md#E5", "docs/specs/hook-runtime.md#E7", "docs/specs/hook-runtime.md#P3", "pi-support cell pis-1 (the Pi belt itself: .pi/extensions/bee-guard.ts, enumerated tool map with fail-safe unknown-tool routing, per-call passivity, model-guard named exclusion; commit 9a36fe28, 2026-08-29)", "pi-support cell pis-2 (the pi dispatch door: DISPATCH_RUNTIMES/RUNTIMES widened, the pi_requires_herding refusal helper, the \"pi\" => None label arm, the hook_manifests.rs named exclusion extended to Pi, onboard copy_pi_extension; commit 954e6d3c, 2026-08-29)"]
+  decisions: ["codex-hook-state-parity D1-D3, D8-D13", "codex-runtime-parity D1, D2", d91a8398-2d63-426b-a133-341568453200, "opencode-support D1, D2, D5, D6", "pi-support D1, D2, D3, D4 (named deviation), D5", "pi-beehive D1, D2, D6, D7", 1edd8a90, b1a26071, 663c642e, 8d8ac85f]
+  sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "codex-native-runtime-v2 cnr2-2 (state-sync trigger extended at the generator sources to both runtimes' plan tools)", "opencode-support cells oc-2, oc-3, oc-6, oc-8, oc-9, oc-10 (OpenCode's own guard belt: live-proved throw-blocking, the apply_patch/lsp/list coverage-gate closures, and exit-0 repair/ask verdict honoring; capped traces in .bee/cells/, evidence in docs/history/opencode-support/discovery.md, 2026-08-11)", "opencode-support cell oc-12 (live nested-dispatch proof: the belt engaged correctly on a real cross-session hold and a real concurrent-worker git guard, and surfaced the session-identity gap named below; trace .bee/cells/oc-12.json)", "opencode-support cell oc-13 (bee onboard --apply installs the belt; this concept's own Pointers correction landed in passing; trace .bee/cells/oc-13.json)", "docs/specs/hook-runtime.md#B5", "docs/specs/hook-runtime.md#B6", "docs/specs/hook-runtime.md#R1", "docs/specs/hook-runtime.md#R6", "docs/specs/hook-runtime.md#E4", "docs/specs/hook-runtime.md#E5", "docs/specs/hook-runtime.md#E7", "docs/specs/hook-runtime.md#P3", "pi-support cell pis-1 (the Pi belt itself: .pi/extensions/bee-guard.ts, enumerated tool map with fail-safe unknown-tool routing, per-call passivity, model-guard named exclusion; commit 9a36fe28, 2026-08-29)", "pi-support cell pis-2 (the pi dispatch door: DISPATCH_RUNTIMES/RUNTIMES widened, the pi_requires_herding refusal helper, the \"pi\" => None label arm, the hook_manifests.rs named exclusion extended to Pi, onboard copy_pi_extension; commit 954e6d3c, 2026-08-29)", "pi-beehive cells pib-1..pib-4, pib-6 (the Pi belt reaches per-event parity: the two passive measurement checkpoints wired, session-close fired at turn end, compaction boundary and shutdown with a reason filter, the continuation verdict enforced behind a shape gate, and the advisory-gap coverage gate generalised over both hand-authored belts with comment-stripped derivations; commits 5bb29c38, fe1b670d, 860f07a5, 7e831404, 8276f6cb, cd940171, 2026-09-02)"]
   authoritative_for: "hook-runtime: the catalog of record, projection parity, and checkpoint activation"
 ---
 
@@ -156,6 +156,49 @@ proof and the report PATH, with the report body itself never riding the
 injection (pi-result-mailbox D5). The lift of the old not-production caveat
 and this replacement text are themselves the recorded act
 (pi-result-mailbox D7).
+
+**B10 — A belt reaches parity per checkpoint AND per lifecycle moment, not per
+checkpoint alone.** Pi's belt shipped firing four checkpoints while the catalog
+fires seven, and the gap stayed invisible because the coverage proof asked only
+whether each checkpoint was wired somewhere. It now fires the two passive
+measurement checkpoints — the one that records what a session is doing, and the
+one that appends a line per tool call — and the session-close checkpoint at
+three moments rather than one: turn end, the compaction boundary, and session
+shutdown. The compaction row does nothing observable today, because the
+checkpoint's own compaction arm reports itself undecidable; the row exists so
+the belt is already in step when that arm becomes real, and its handler returns
+nothing, since this runtime reads any returned value there as a request to
+cancel or replace the user's compaction.
+
+Shutdown is filtered by reason: every reason closes the session record except a
+reload, which keeps the same session running. That filter matters beyond
+tidiness — an unclosed record keeps holding its worktree against the reclaim
+sweep for the whole liveness window, so a session that quits and is never
+marked closed blocks reuse of the tree it left behind.
+
+**B11 — One word, two runtimes, opposite meanings.** The passive
+session-state checkpoint decides what a shutdown means by reading its reason,
+and deliberately ignores the reasons that end a transcript rather than a
+session. One reason word — a resume — appears in both vocabularies with
+opposite meanings: for the rendered runtimes it means the same session
+continuing, and for this runtime it means leaving this session for another one,
+which genuinely ends it. A belt that forwards its runtime's own reason word
+unchanged therefore skips the very transition it was wired to record, silently
+and while looking correct. The belt normalises instead: every reason it treats
+as terminating is reported in the catalog's own vocabulary, and the two
+checkpoints firing at that moment partition the reason space identically, so one
+of them can never close a record the other leaves alive.
+
+**B12 — An unwired checkpoint is named on its own line, and a gate enforces
+it.** Both hand-authored belts are now held to the same coverage gate: it
+derives the catalog from the checked-in projections, derives what each belt
+actually calls from the belt itself, and fails when a checkpoint is neither
+called nor named as an exclusion on a single line of that belt. The gate reads
+one line at a time on purpose — a name and the exclusion marker on neighbouring
+lines do not count — so an exclusion is granted deliberately or not at all.
+Because the derivations read the belt as text, they first strip its comments:
+without that, commenting a call out would leave the gate green while the
+behavior disappeared.
 
 ## Business Rules
 
