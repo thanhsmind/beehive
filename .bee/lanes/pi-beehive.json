@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-beehive",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pi-beehive\" started at phase \"exploring\" (lane).",
-  "next_action": "Merge wt/pi-beehive into main, then hand the user main for uat.",
+  "next_action": "bee close finished \"pi-beehive\" — feature is closed.",
   "created_at": "2026-09-02T12:13:00.247Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
