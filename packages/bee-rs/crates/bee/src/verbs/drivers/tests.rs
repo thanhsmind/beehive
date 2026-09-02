@@ -6440,9 +6440,15 @@ use std::time::Instant;
     /// shape of chain config that matches NOTHING (absent, empty, unmatched,
     /// junk, and the refused `default` key) leaves all four kinds on those
     /// same bytes.
+    ///
+    /// gather-reads-the-read-slot D1 (decision 295f3d03) re-cut the GATHER
+    /// golden ONCE, on purpose: `CHAIN_MODELS` configures `read: "haiku"`, and
+    /// a default gather now asks for the read job. The other three goldens are
+    /// untouched, which is the half of D1 that matters here — moving the
+    /// gather kind's slot moved nothing else.
     #[test]
     fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
-        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: generation]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (sonnet)","model":"sonnet"}"#;
+        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
         const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
         const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"advisor (fable)","model":"fable"}"#;
 

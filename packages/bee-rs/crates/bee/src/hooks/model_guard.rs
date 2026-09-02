@@ -603,23 +603,40 @@ fn configured_model_set(models: &Map<String, Value>) -> BTreeSet<String> {
     // `slot_for_kind` can reach the extraction role, this loop admits it in
     // the same commit, with no edit here and no chance of the two doors
     // disagreeing again. Until then `prepare` still publishes only
-    // generation/review/advisor, so admitting haiku today would make the
+    // read/generation/review/advisor, so admitting haiku today would make the
     // guard wider than the door — the exact defect a2f85972 was logged for.
+    //
+    // gather-reads-the-read-slot D8 — the WALK, not the head. Each kind's
+    // slot is the HEAD of an ordered list (`tier_role_list`), and the name
+    // that WINS that walk is the one prepare's fallback is keyed on. A
+    // head-only lookup broke the moment `--kind gather` moved to `read`: on a
+    // host with no `read` key and `generation: {kind:"herding",
+    // fallback:"default"}`, prepare publishes sonnet while the head `read`
+    // has no `default_models` entry at all, so the guard would have stopped
+    // admitting the very model it just told the orchestrator to re-dispatch
+    // with.
     for kind in crate::verbs::drivers::DISPATCH_KINDS {
         let Some(slot) = crate::verbs::drivers::slot_for_kind(kind) else { continue };
+        let roles = crate::verbs::drivers::tier_role_list(slot);
         // The shared parser carries the flag on the resolved value itself
         // (`Resolved::Herding { fallback }` mirrors the normalized
         // `"fallback": "default"` verbatim), so the raw-slot peek the deleted
         // private enum forced — its Herding was a unit variant — is gone. The
         // review-falls-back-to-generation rule for an explicitly null or
-        // absent review slot rides along inside resolve_tier, the same rule
-        // applied at the same moment as before.
-        if matches!(
-            resolve_tier(models, slot, "claude", GUARD_PURPOSE),
-            Resolved::Herding { fallback: Some(ref f), .. } if f == "default"
-        ) {
+        // absent review slot IS this walk, the same rule applied at the same
+        // moment as before.
+        let (winner, resolved) =
+            crate::verbs::drivers::resolve_role_named(models, &roles, "claude", GUARD_PURPOSE);
+        // The name prepare TRAVELS under, which is what it keys the published
+        // fallback on: the winner on the default-gather path, and the asked
+        // head everywhere else (D2 — a reviewer keeps stamping `review` even
+        // when the walk fell through to generation, and
+        // `an_explicitly_null_review_slot_inherits_the_generation_herding_fallback`
+        // pins that prepare publishes opus there).
+        let published = if kind == "gather" { winner.unwrap_or(slot) } else { slot };
+        if matches!(resolved, Resolved::Herding { fallback: Some(ref f), .. } if f == "default") {
             if let Some(Value::String(m)) =
-                crate::verbs::drivers::default_models("claude").get(slot)
+                crate::verbs::drivers::default_models("claude").get(published)
             {
                 if !m.trim().is_empty() {
                     set.insert(m.trim().to_string());
@@ -775,11 +792,23 @@ FIX: begin the spawn message with the marker, e.g. \
 /// will, because a job role is not published as a dispatch kind. A FIX for
 /// such a role names the refused slot's OWN transport, and says nothing about
 /// a `--kind` that is not coming.
+///
+/// gather-reads-the-read-slot D1/D8: the match is against the kind's whole
+/// ordered list, never its head alone. `--kind gather` resolves
+/// `[read, generation]`, so both names answer `gather` — a head-only match
+/// would have left `generation` with no door the day the gather kind moved.
+/// `generation` sits in the reviewer list too; `DISPATCH_KINDS` order (`cell`
+/// filtered, then `gather` before `reviewer`) is what makes it answer
+/// `gather`, and the test pins that order. `extraction` is in no list and
+/// still answers `None`.
 fn dispatch_kind_for_role(role: &str) -> Option<&'static str> {
     crate::verbs::drivers::DISPATCH_KINDS
         .into_iter()
         .filter(|kind| *kind != "cell")
-        .find(|kind| crate::verbs::drivers::slot_for_kind(kind) == Some(role))
+        .find(|kind| {
+            crate::verbs::drivers::slot_for_kind(kind)
+                .is_some_and(|slot| crate::verbs::drivers::tier_role_list(slot).contains(&role))
+        })
 }
 
 fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
@@ -936,8 +965,8 @@ model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
         // at "you intended." instead, exactly as it did before dod-1.
         let door: Option<String> = match dispatch_kind_for_role(t) {
             Some(kind) => Some(format!(
-                "run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" \
-for the {t} role's own transport"
+                "run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" for the {t} role's own transport"
             )),
             None => match resolved {
                 Resolved::Herding { .. } => Some(format!(
@@ -996,7 +1025,8 @@ prompt/description; or add this model to a configured tier slot in .bee/config.j
         if matches!(resolved, Resolved::Refused { .. }) {
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" — it \
 reads .bee/config.json for this slot and returns the tool and exact payload to run \
 (here, a Bash call running the configured command verbatim with the prompt on \
 stdin). Do not attach a model param; the cli command names its own model."
@@ -1021,7 +1051,8 @@ not a spawned subagent.\n\
             // slot spawns.
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" — it \
 reads .bee/config.json for this slot and returns the tool and exact payload to run \
 (here, a Bash call running \".bee/bin/bee herding run --task-file - --json\", plus \
 --cwd for a granted worktree, with the prompt on stdin). Do not attach a model \
@@ -1059,7 +1090,8 @@ external agent in its own pane, not a spawned subagent.\n\
         if matches!(resolved, Resolved::Refused { .. }) {
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" (it \
 reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
 running the configured command verbatim with the prompt on stdin), or name a role \
 whose slot is a model."
@@ -1084,7 +1116,8 @@ to a cli executor — an in-family Agent/Task subagent cannot be an external pro
             // tier instead of an explicit marker.
             let fix = match dispatch_kind_for_role(t) {
                 Some(kind) => format!(
-                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} \
+--role {t} --json\" (it \
 reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
 running \".bee/bin/bee herding run --task-file - --json\" with the prompt on stdin), \
 or name a role whose slot is a model."
@@ -1115,12 +1148,41 @@ pane worker.\n\
     // moment of the refusal — naming a fixed three here would send a caller
     // whose config carries other roles to a shorter list than bee accepts.
     let roles = role_list(models, "claude");
+    // gather-reads-the-read-slot D7: the ONE door leads. This FIX is the text
+    // the caller in the reported failure read, and it used to teach
+    // hand-naming as the FIRST move — the exact habit D5 exists to unteach.
+    // The rendered-agent sentence that follows is DERIVED from `ROLE_AGENTS`
+    // and described by `agent_job_summary` (keyed on the agent, so it cannot
+    // drift): the retyped `bee-gather = generation` pairs went stale the day
+    // the gather kind changed slots, and a pair a reader copies is a pair
+    // that outranks the door.
+    let kinds = crate::verbs::drivers::DISPATCH_KINDS.join("|");
+    let door = format!(
+        "run \".bee/bin/bee dispatch prepare --runtime claude --kind <{kinds}> --json\" — it \
+reads .bee/config.json and returns the tool and exact payload to run"
+    );
+    let agents = {
+        let mut named: Vec<&str> = Vec::new();
+        for (_, agent) in crate::verbs::drivers::ROLE_AGENTS {
+            if !named.contains(&agent) {
+                named.push(agent);
+            }
+        }
+        named
+            .iter()
+            .map(|a| match crate::verbs::drivers::agent_job_summary(a) {
+                Some(job) => format!("{a} {job}"),
+                None => (*a).to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
     let bare_fix = if let Resolved::Model { model: gen_model, .. } = &gen_resolved {
         format!(
-            "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
-bee-extract = extraction, bee-review = review) — that alone declares the role. \
-Otherwise pass model: \"{gen_model}\" for the generation role, or open the \
-prompt/description with [bee-tier: ceiling] (or any configured role: {roles})."
+            "FIX: {door}. Otherwise name one of bee's rendered agents in subagent_type \
+({agents}) — that alone declares the role; or pass model: \"{gen_model}\" for the \
+generation role, or open the prompt/description with [bee-tier: ceiling] (or any \
+configured role: {roles})."
         )
     } else {
         let slot_kind = match gen_resolved {
@@ -1129,13 +1191,11 @@ prompt/description with [bee-tier: ceiling] (or any configured role: {roles})."
             _ => "unconfigured",
         };
         format!(
-            "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
-bee-extract = extraction, bee-review = review) — that alone declares the role. \
-Otherwise open the prompt/description with [bee-tier: ceiling] (or any configured \
-role: {roles}). The generation role is {slot_kind}: run \
-\".bee/bin/bee dispatch prepare --runtime claude --kind gather --json\" — it reads \
-.bee/config.json and returns the tool and exact payload to run (a Bash call, either \
-the configured cli command or a herding-pane invocation) rather than a model param."
+            "FIX: {door} — the generation role is {slot_kind}, so what comes back is a Bash \
+call (either the configured cli command or a herding-pane invocation) rather than a \
+model param. Otherwise name one of bee's rendered agents in subagent_type \
+({agents}) — that alone declares the role; or open the prompt/description with \
+[bee-tier: ceiling] (or any configured role: {roles})."
         )
     };
     let reason = format!(
@@ -1791,7 +1851,19 @@ mod tests {
         // Additive only: an unknown agent type is still bare, still refused.
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "some-other-agent", "prompt": "go"}}));
         assert_eq!(code, 2);
-        assert!(stderr.contains("bee-gather = generation"), "the FIX teaches the new route");
+        // gather-reads-the-read-slot D7: the FIX leads with the ONE door and
+        // no longer retypes an agent-to-slot pair (`bee-gather = generation`
+        // was already stale the moment the gather kind changed slots, and a
+        // pair a reader copies outranks the door it sits beside).
+        assert!(
+            stderr.contains("FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind <"),
+            "the FIX opens with the one door: {stderr}"
+        );
+        assert!(stderr.contains("bee-gather"), "the FIX still names the agent: {stderr}");
+        assert!(
+            !stderr.contains("bee-gather = generation"),
+            "the FIX no longer pairs an agent with a slot: {stderr}"
+        );
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "bare-denied");
         // An explicit param still wins the read — inference never overrides a
@@ -2026,6 +2098,35 @@ mod tests {
         let (code, stderr) = run_payload(
             fx.path(),
             json!({"tool_name": "Agent", "tool_input": {"model": "opus", "prompt": "re-review after a failed herding run"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+    }
+
+    #[test]
+    fn a_read_less_host_still_admits_the_generation_herding_fallback() {
+        // gather-reads-the-read-slot D8: `--kind gather` resolves `read`
+        // first, and `read` has no `default_models` entry at all. Keying the
+        // lookup on the kind's HEAD slot would have dropped sonnet from the
+        // member set while prepare still published it as the gather's
+        // fallback — the guard narrower than the door it mirrors, which is
+        // a2f85972's rule broken in the other direction.
+        let raw = json!({"claude": {
+            "extraction": "haiku",
+            "generation": {"kind": "herding", "agent": "agy-flash", "fallback": "default"},
+            "review": "opus"
+        }});
+        let models = normalize_models(Some(&raw));
+        assert!(
+            configured_model_set(&models).contains("sonnet"),
+            "{:?}",
+            configured_model_set(&models)
+        );
+        let fx = fixture(&json!({"models": raw}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "sonnet", "prompt": "re-dispatch after a failed herding gather"}}),
         );
         assert_eq!(code, 0, "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
@@ -2682,6 +2783,12 @@ mod tests {
         // advisor` existed and resolved exactly that slot. Derived from
         // `slot_for_kind`, the FIX cannot be wrong about the door.
         assert_eq!(dispatch_kind_for_role("generation"), Some("gather"));
+        // gather-reads-the-read-slot D1: `read` HEADS the gather list and
+        // `generation` is its tail, so both answer `gather`. `generation`
+        // sits in the reviewer list too — DISPATCH_KINDS order (`cell`
+        // filtered, then `gather` before `reviewer`) is what decides it, and
+        // this pair is what pins that order.
+        assert_eq!(dispatch_kind_for_role("read"), Some("gather"));
         assert_eq!(dispatch_kind_for_role("review"), Some("reviewer"));
         assert_eq!(dispatch_kind_for_role("advisor"), Some("advisor"));
         // A role no kind resolves — the shipped extraction slot, and any job
