@@ -62,6 +62,22 @@
 // reason they are not wired on the OpenCode belt: codex-subagent-audit is
 // Codex-specific, and chain-nudge needs subagent-dispatch identity that no Pi
 // event carries.
+//
+// ── activity hook mapping across Claude lifecycle rows ─────────────────────
+// The Claude manifest (packages/bee/hooks/claude-hooks.json) fires activity
+// on eight distinct lifecycle events. The Pi belt maps each row onto the
+// closest honest Pi lifecycle carrier and passes the original Claude event
+// name in hook_event_name (activity is a state machine keyed on Claude names):
+//   1. UserPromptSubmit    -> before_agent_start (session_id, prompt, cwd)
+//   2. PreToolUse          -> NAMED EXCLUSION: no honest advisory carrier on Pi
+//                             (Pi's tool_call is strictly the fail-closed blocking
+//                             path; no advisory pre-tool lifecycle event exists)
+//   3. PostToolUse         -> tool_result when !isError (session_id, tool_name, tool_use_id, cwd)
+//   4. PostToolUseFailure  -> tool_result when isError (session_id, tool_name, tool_use_id, cwd)
+//   5. PermissionRequest   -> NAMED EXCLUSION: Pi 0.84.x has no interactive permission prompt event
+//   6. Notification        -> NAMED EXCLUSION: Pi 0.84.x has no notification event
+//   7. Stop                -> agent_settled (session_id, cwd)
+//   8. SessionEnd          -> NAMED EXCLUSION: session shutdown lifecycle is not wired in this advisory slice
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { execFileSync } from "node:child_process"
@@ -932,6 +948,17 @@ export default function (pi: ExtensionAPI) {
       })
       if (delta) parts.push(delta)
 
+      try {
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "UserPromptSubmit",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+          prompt: typeof event?.prompt === "string" ? event.prompt : "",
+        })
+      } catch (err: any) {
+        console.error(`bee activity (advisory): ${err?.message ?? err}`)
+      }
+
       if (parts.length === 0) return undefined
       const base = typeof event?.systemPrompt === "string" ? event.systemPrompt : ""
       return { systemPrompt: `${base}\n\n${parts.join("\n\n")}` }
@@ -941,19 +968,42 @@ export default function (pi: ExtensionAPI) {
     }
   }) as any)
 
-  // ── ADVISORY: state-sync after every tool result. Returns nothing, so the
-  // result itself is never modified. ───────────────────────────────────────
+  // ── ADVISORY: state-sync, tools-logger, and activity after every tool result.
+  // Returns nothing, so the result itself is never modified. ─────────────────
   pi.on("tool_result", (async (event: any, ctx: any) => {
+    const directory = directoryOf(ctx)
+    const mapped = mapToolCall(String(event?.toolName ?? ""), event?.input)
     try {
-      const directory = directoryOf(ctx)
       runAdvisoryHook(directory, "state-sync", {
         hook_event_name: "PostToolUse",
         session_id: sessionIdOf(ctx),
         cwd: directory,
-        tool_name: mapToolCall(String(event?.toolName ?? ""), event?.input).tool_name,
+        tool_name: mapped.tool_name,
       })
     } catch (err: any) {
       console.error(`bee state-sync (advisory): ${err?.message ?? err}`)
+    }
+    try {
+      runAdvisoryHook(directory, "tools-logger", {
+        hook_event_name: "PostToolUse",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+        tool_name: mapped.tool_name,
+      })
+    } catch (err: any) {
+      console.error(`bee tools-logger (advisory): ${err?.message ?? err}`)
+    }
+    try {
+      const isError = Boolean(event?.isError)
+      runAdvisoryHook(directory, "activity", {
+        hook_event_name: isError ? "PostToolUseFailure" : "PostToolUse",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+        tool_name: mapped.tool_name,
+        tool_use_id: typeof event?.toolCallId === "string" ? event.toolCallId : undefined,
+      })
+    } catch (err: any) {
+      console.error(`bee activity (advisory): ${err?.message ?? err}`)
     }
     return undefined
   }) as any)
@@ -985,9 +1035,35 @@ export default function (pi: ExtensionAPI) {
         session_id: sessionIdOf(ctx),
         cwd: directory,
       })
+      try {
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "Stop",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      } catch (err: any) {
+        console.error(`bee activity (advisory): ${err?.message ?? err}`)
+      }
     } catch (err: any) {
       console.error(`bee session-close (advisory): ${err?.message ?? err}`)
     }
+  }) as any)
+
+  // ── ADVISORY: pre-compact session check (b1a26071). Must return nothing /
+  // undefined: Pi treats any returned object as a custom compaction or cancel,
+  // which would silently drop or abort the user's /compact. ─────────────────
+  pi.on("session_before_compact", (async (_event: any, ctx: any) => {
+    try {
+      const directory = directoryOf(ctx)
+      runAdvisoryHook(directory, "session-close", {
+        hook_event_name: "PreCompact",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+      })
+    } catch (err: any) {
+      console.error(`bee session-close pre-compact (advisory): ${err?.message ?? err}`)
+    }
+    return undefined
   }) as any)
 }
 
