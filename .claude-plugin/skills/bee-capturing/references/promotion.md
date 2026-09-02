@@ -116,7 +116,18 @@ the root cause, the check that would have caught it earlier).
    learnings file, done. File the check as a tiny/small cell if it
    cannot ship in-feature.
 3. Not mechanizable (judgment, taste, product intent) → promote as
-   prose per the format below.
+   prose per the format below, routed to where it will be read:
+   prose lands in a skill the run ACTUALLY OPENED (judged from the
+   run's own record: the skill's SKILL.md read, a dispatch naming it,
+   or a command the skill documents); a skill that exists and should
+   have fired but was never opened earns `tune description: <skill path>`
+   — a description edit so it triggers next time — never a body edit
+   (text added to a skill nobody opens changes nothing). A finding
+   routing to neither is filed as a learning rather than forced into
+   a skill. (Reason prose survives without a mechanical owner: nothing
+   in `hooks/` records a Skill invocation, and the cell field
+   `affects_skills` records which skills the work EDITS, a different
+   fact — so no mechanical owner exists today.)
 4. Recurrence escalation: an ALREADY-promoted pattern whose violation
    happens again despite the doc never takes another doc line as the
    answer. Re-ask question 2 against the fresh evidence — can this
