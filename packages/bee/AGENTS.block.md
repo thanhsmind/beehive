@@ -111,11 +111,12 @@ context before planning or executing.
 <!-- rule: agents-proof-at-cap -->
 - The agent owns test scope: pick the proof your change type needs
   (code → related tests green; docs → parity/pointer checks; behavior
-  → judge verdict), run it yourself, and record it on the cap as a
-  proof line `<command> — <result> — <scope reason>`. `bee close` and
-  `bee worktree merge` check that recorded proof; they run nothing
-  themselves — CI runs the full declared command on every push, the
-  one deterministic net.
+  → judge verdict; a user-facing surface → its mapped feature driven,
+  evidence attached — `green:live`), run it yourself, and record it on
+  the cap as a proof line `<command> — <result> — <scope reason>`.
+  `bee close` and `bee worktree merge` check that recorded proof; they
+  run nothing themselves — CI runs the full declared command on every
+  push, the one deterministic net.
 <!-- /rule -->
 <!-- rule: agents-never-build-on-red -->
 - A red proof refuses the cap — never build on a red base, in every
@@ -198,7 +199,14 @@ close every task with a capture line or an explicit "nothing settled".
 A close with neither is not a close, in every lane, the docs lane and
 non-cell quick work included.
 `docs/knowledge/` is the state layer: read it first, sync it when
-behavior changes.
+behavior changes. `.bee/verify/verify-app/features/` is the second — a
+README index plus one file per user-facing feature: what it is, how a
+user reaches it, how to drive it, its gotchas. Read the index at
+shaping, the ONE matching feature file at planning, and carry that file
+into the execution worker's brief with its last-modified date — a stale
+map is judged, never trusted blind. Absent or empty path is the
+environment-fact check of § Judgment and deviation: proceed silently,
+treating the ask as new.
 <!-- /rule -->
 
 ## Communication

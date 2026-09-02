@@ -31,7 +31,10 @@ The craft is interviewing, not writing. Scout lightly, then triage the
 request. With a bundle, the scout starts at the touched area's
 `docs/knowledge/areas/<area>/index.md` and its Open Gaps (no bundle:
 `docs/specs/<area>.md` when present): settled rules get cited, never
-re-asked, and Open Gaps are ready-made interview questions. Default:
+re-asked, and Open Gaps are ready-made interview questions. Read
+`.bee/verify/verify-app/features/README.md` when that index exists, for one
+question: is this ask a new feature, or a change to one already mapped? A
+mapped feature is a change — never a second door to the same room. Default:
 effort follows the signal, not a fixed script:
 
 | Request | Signal | Next step |

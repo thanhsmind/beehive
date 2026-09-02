@@ -1,7 +1,7 @@
 ---
 name: bee-verify-upkeep
 description: >-
-  Periodic audit that keeps a project-local `verify-<app>` skill and its feature map honest: parallel source readers per feature, one live session driving every feature, at most one PR of proven corrections. Use PERIODICALLY, when a repo already carries a verification skill and its map may have drifted — after a release, after user-facing churn, when a drive recipe stops matching the app, or when the user asks to audit the verify skill. Not for creating one where none exists — that is bee-verifying.
+  Periodic audit that keeps a project-local `verify-app` skill and its feature map honest: parallel source readers per feature, one live session driving every feature, at most one PR of proven corrections. Use PERIODICALLY, when a repo already carries a verification skill and its map may have drifted — after a release, after user-facing churn, when a drive recipe stops matching the app, or when the user asks to audit the verify skill. Not for creating one where none exists — that is bee-verifying.
 disable-model-invocation: true
 metadata:
   version: '0.1'
@@ -35,21 +35,23 @@ Pick one, and say which:
 ## Edit scope
 
 Only edit the verification skill's own **source** directory — its SKILL.md,
-`features/`, and any harness scripts it owns — under
-`.bee/verify/verify-<app>/`. The copies under `.claude/skills/`, `.agents/skills/`
-and `.opencode/skills/` are bee's render output: never hand-edit them, and run
-`bee onboard --apply` after the source changes so every runtime sees the fix.
+`features/`, and any harness scripts it owns — under `.bee/verify/verify-app/`.
+The copies under `.claude/skills/`, `.agents/skills/` and `.opencode/skills/`
+are bee's render output: never hand-edit them, and run `bee onboard --apply`
+after the source changes so every runtime sees the fix.
 
 Never edit product code during a run: a behavior the map describes that the app
 no longer does is either doc drift (fix the map) or a product regression (report
 it, don't paper over it in docs).
 
-## Pass
+Never edit the project's declared test command either. A repo whose
+`commands.test` still contains a drive path was composed under older guidance;
+leave it exactly as it is and report it to the user with the reason — a test
+asks whether the code stayed correct, a drive asks whether the product works, so
+one command for both makes a red result ambiguous. Removing it is the user's
+call, not yours.
 
-0. **Locate the target.** Find the verification skill to maintain: the
-   project-local skill whose body has launch/drive sections and a feature map
-   (its source is `.bee/verify/verify-*/`). Several candidates → ask which one;
-   none → stop and point at `bee-verifying` instead of inventing a target.
+## Pass
 
 1. **Index hygiene.** Read the feature map README and glob its sibling files. Fix
    missing, extra, duplicate, or dead entries. Lightweight; no generated

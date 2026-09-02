@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# control-bee — the one driver for the verify-bee skill.
+# control-bee — the one driver for the verify-app skill.
 #
 # Every verification action goes through this script. It exists for two
 # reasons that are specific to this repo:
@@ -142,7 +142,7 @@ cmd_launch() {
   git -C "$sb" init -q .
   git -C "$sb" config user.email verify@bee.local
   git -C "$sb" config user.name  "bee verification"
-  printf '# sandbox\n\nVerification sandbox for verify-bee. Disposable.\n' > "$sb/README.md"
+  printf '# sandbox\n\nVerification sandbox for verify-app. Disposable.\n' > "$sb/README.md"
   git -C "$sb" add -A
   git -C "$sb" commit -qm "seed the sandbox"
 
