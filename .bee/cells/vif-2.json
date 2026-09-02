@@ -4,7 +4,7 @@
   "title": "Pin AGENTS.md byte-identical to its rendered source block before slice 2 edits it",
   "lane": "high-risk",
   "role": "test",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "c93a6948-ca40-4a03-9693-4e2ad6f14489",
@@ -45,16 +45,48 @@
   },
   "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test agents_block_render_parity",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "w-vif-2",
+    "outcome": "AGENTS.md's bee block is now pinned byte-for-byte to its rendered source; an unregenerated AGENTS.block.md edit turns the fence red and the message names bee dev regen",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-02T02:00:13.360Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3",
+    "claimed_at": "2026-09-02T01:54:01.865Z",
+    "mistakes": [
+      {
+        "wrong": "git checkout -- packages/bee/AGENTS.block.md was refused by the concurrent-worker git guard while a sibling worker held modified files in the same worktree",
+        "better": "revert a scratch proof edit path-scoped by rewriting the file text instead"
+      },
+      {
+        "wrong": "export BEE_AGENT_NAME=w-vif-2; git add -N ... was refused by the write guard because the hook reads the command string and the export was invisible to it",
+        "better": "prefix the write command itself: BEE_AGENT_NAME=w-vif-2 git add -N <path>"
+      }
+    ],
+    "report": {
+      "outcome": "AGENTS.md bee block pinned byte-for-byte to packages/bee/AGENTS.block.md by a std-only text fence; red proven by scratch edit, then reverted",
+      "commit": "77376302c617766fd384d590e1bc004a3a5782a3",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test agents_block_render_parity — green:unit — the cell's own verify; the fence was first observed RED with a scratch line added to packages/bee/AGENTS.block.md, then green after the revert",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "git checkout -- packages/bee/AGENTS.block.md was refused by the concurrent-worker git guard while a sibling worker held modified files in the same worktree — revert a scratch proof edit path-scoped by rewriting the file text instead",
+        "export BEE_AGENT_NAME=w-vif-2; git add -N ... was refused by the write guard because the hook reads the command string and the export was invisible to it — prefix the write command itself: BEE_AGENT_NAME=w-vif-2 git add -N <path>"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

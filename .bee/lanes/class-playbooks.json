@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "class-playbooks",
   "mode": "small",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"class-playbooks\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 1059811; capture what settled, then bee close --feature class-playbooks.",
+  "next_action": "bee close finished \"class-playbooks\" — feature is closed.",
   "created_at": "2026-09-01T19:21:09.004Z",
-  "run_state": "done",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "✓ **cp-1 green** — commit `8bf2a35`. The fence went red first and named exactly the four holes.",
+    "asked_at": "2026-09-01T19:30:33.112Z",
+    "session": "cfa9a377-fd2d-48a9-a52f-62e556caa5cd"
+  },
   "route": {
     "class": "docs",
     "lane": "small",

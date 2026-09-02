@@ -36,5 +36,14 @@
     "plan_sha256": "8d0e336c2d163db6322cc64764800c8c33f3f8f7ac74278edbd2afcc1c018895",
     "advisor": "hat wave, 5 seats (fable) — facts-gaps, alternatives, user-impact, risks, value",
     "digest_head": "# Hat wave digest — verification-in-the-flow (plan step, 5 seats)\n\nOpened `84485816`; synthesis `1fb5dc3e`. Anchored on `plan.md` rev 0.\n\n**Unanimous verdict on the plan's open question:** retire D2 (flatten `.bee/verify/`),\nkeep the nested `.bee/verify/verify-app/`. Four independent grounds — no observable\nbehavior change (D1 already gives one constant path), loss of a deliberately-commented\nrenderer design and of multi-skill support, a one-product limit pinned into the format\nrather than the n"
+  },
+  "merge_ready": {
+    "since": "2026-09-02T02:04:44.129Z",
+    "branch": "wt/verification-in-the-flow",
+    "worktree_id": "beehive--wt--verification-in-the-flow",
+    "uat": "pending",
+    "blocked_by": [
+      "doc-deferral"
+    ]
   }
 }

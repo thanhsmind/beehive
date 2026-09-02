@@ -4,7 +4,7 @@
   "title": "Branch the onboard verification notice on the skill's existence, not on a missing test command",
   "lane": "high-risk",
   "role": "code",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "65592f3f-abe2-49b8-99f4-30614d11bb33",
@@ -54,16 +54,46 @@
   },
   "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard::notices",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "w-vif-1",
+    "outcome": "Onboard verification notice branches on the verify-app source skill: absent draws one of two bee-verifying offers, present draws a bee-verify-upkeep pointer, legacy commands.verify still wins",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+    ],
+    "deviations": [
+      "Also rewrote stale_advisor_key_is_reported in the same file — it asserted an empty notice list for a tested repo, a premise this change deletes, and the cell named only a_declared_test_command_draws_no_notice_in_any_shape as flipping red — something else had to be fixed first",
+      "Renamed a_declared_test_command_draws_no_notice_in_any_shape to a_declared_test_command_now_draws_the_undriven_product_offer — the old name states the old truth as a fact and would be a lie in the file, and the cell asked for a rewrite to the new truth — found a better route",
+      "Built the probe path from the existing pub verify_source_root helper in plan.rs instead of joining the path segments again in notices.rs — those segments already have one home — found a better route",
+      "Added the anti-nag sentence to BOTH generate notices, not only the new one — the existing constant is a generate offer too, and plan.md decision 5 binds every offer onboard can re-print on a version mismatch — found a better route"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-02T02:04:44.075Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3",
+    "claimed_at": "2026-09-02T01:54:01.625Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Onboard verification notice branches on the verify-app source skill: absent draws one of two bee-verifying offers, present draws a bee-verify-upkeep pointer, legacy commands.verify still wins",
+      "commit": "0f5a4c89874dab1a4e8e71fd65243a38c83eca20",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard:: — green:unit — 157 onboard tests, the whole module that reads the changed notice branch and its constants; red first at 3 failures on the three new states",
+      "deviations": [
+        "Also rewrote stale_advisor_key_is_reported in the same file — it asserted an empty notice list for a tested repo, a premise this change deletes, and the cell named only a_declared_test_command_draws_no_notice_in_any_shape as flipping red — something else had to be fixed first",
+        "Renamed a_declared_test_command_draws_no_notice_in_any_shape to a_declared_test_command_now_draws_the_undriven_product_offer — the old name states the old truth as a fact and would be a lie in the file, and the cell asked for a rewrite to the new truth — found a better route",
+        "Built the probe path from the existing pub verify_source_root helper in plan.rs instead of joining the path segments again in notices.rs — those segments already have one home — found a better route",
+        "Added the anti-nag sentence to BOTH generate notices, not only the new one — the existing constant is a generate offer too, and plan.md decision 5 binds every offer onboard can re-print on a version mismatch — found a better route"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 198 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }

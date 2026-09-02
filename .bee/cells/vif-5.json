@@ -1,0 +1,132 @@
+{
+  "id": "vif-5",
+  "feature": "verification-in-the-flow",
+  "title": "Move bee's own verification skill into the source shape and prove it by driving one mapped feature",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "vif-4"
+  ],
+  "decisions": [
+    "2effbe54-b440-4682-82ce-d1de50472c94",
+    "d0e3c3a0-233a-4396-94c2-b364f3f9abac",
+    "9f4f90f0-f1ed-4acf-8358-72cb390199d7"
+  ],
+  "files": [
+    ".bee/verify/verify-app/SKILL.md",
+    ".bee/verify/verify-app/control-bee",
+    ".bee/verify/verify-app/features/*"
+  ],
+  "read_first": [
+    ".claude/skills/verify-bee/SKILL.md",
+    ".claude/skills/verify-bee/features/README.md",
+    "skills/bee-verifying/SKILL.md",
+    "docs/history/verification-in-the-flow/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "The dogfood. bee ships a mechanism it does not itself use: its own verification skill sits hand-written at `.claude/skills/verify-bee/`, visible to Claude only, so a Codex or opencode agent in this very repo cannot see it. This cell puts bee in the shape every host now gets (per D7 2effbe54, D1 d0e3c3a0, D8 9f4f90f0).\n\nThis is mostly a MOVE, not authorship. The tree is `.claude/skills/verify-bee/` holding `SKILL.md`, an executable `control-bee`, and `features/` with a README index plus five feature files. Read `skills/bee-verifying/SKILL.md` FIRST — vif-3 rewrote it, and it is now the spec this tree must match.\n\n1. Move the tree to `.bee/verify/verify-app/`, preserving `control-bee`'s executable bit (a git move keeps the mode; confirm with `ls -l`). Keep the control script named `control-bee` — the skill NAME is the constant, the script keeps the app's name, which is the form `skills/bee-verifying/SKILL.md` now shows.\n\n2. The frontmatter `name:` becomes the literal `verify-app`. bee's identity moves into the `description`, which is what routing actually reads — the existing description already opens by naming the `bee` CLI, so check whether it needs anything at all before touching it.\n\n3. Repoint every self-reference. `rg -n '\\.claude/skills/verify-bee' .bee/verify/verify-app/` finds them — 6 in `SKILL.md`, 1 in `features/README.md` at the time of writing. `features/README.md` currently tells the reader to invoke the script by its literal path from the repo root; that path is now `.bee/verify/verify-app/control-bee`. Per the rule vif-3 moved into `bee-verifying`'s step-2 Helpers bullet, a RENDERED copy is `0644` and cannot be executed directly, so every invocation a skill body shows is written `bash <path> ...`; the source copy under `.bee/verify/` keeps its `0755` and runs either way. Make the shown form the one that works from both.\n\n4. Delete the old tree at `.claude/skills/verify-bee` in the SAME commit, through git so the removal is staged. This is a must-have, not a tidy-up: `verify-bee` is not `bee-` prefixed, so bee's skill sync will never prune it (`packages/bee-rs/crates/bee/src/onboard/skills.rs` refuses outside the bee namespace) and the verify render path has no removal verb at all. Leave it and this repo carries two verification skills whose feature maps drift apart in silence.\n\n5. Run `.bee/bin/bee onboard --apply` so the source renders into every runtime skill home as `verify-app`. Confirm all three exist and match source. If onboard refuses inside a granted worktree, record that as a deviation and render by whatever path the refusal names; if there is none, return [BLOCKED] with the refusal text. Never hand-copy a rendered tree.\n\n6. PROVE IT LIVE. This is the only `green:live` in the whole feature and the only evidence the render path works on a real instance rather than in unit tests. Follow the skill's own instructions: build, launch a sandbox, run its doctor and require every line `ok`, drive ONE mapped feature end to end, capture the evidence, then run its cleanup. Confirm the evidence still exists at its named location after cleanup — a cleanup that eats the proof fails this step. Name the feature you drove and where the evidence landed in your outcome line.",
+  "must_haves": {
+    "truths": [
+      "The verification skill source lives at .bee/verify/verify-app/ and its frontmatter name is the literal verify-app",
+      "The old .claude/skills/verify-bee/ tree no longer exists",
+      "All three runtime skill homes carry a rendered verify-app matching source",
+      "One mapped feature was driven end to end against a real sandbox and its evidence survived cleanup"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/SKILL.md",
+        "substantive": "frontmatter name verify-app, every self-reference repointed, invocation forms that work from a rendered 0644 copy"
+      },
+      {
+        "path": ".bee/verify/verify-app/control-bee",
+        "substantive": "moved with its executable bit intact, unchanged in behavior"
+      }
+    ],
+    "key_links": [
+      "features/README.md points at the new control script path",
+      "the old tree is removed in the same commit as the move"
+    ],
+    "prohibitions": [
+      "No rewrite of control-bee's behavior - this is a move",
+      "No bee- prefix on the skill name",
+      "No hand-copied rendered trees - onboard renders them",
+      "No change to commands.test"
+    ]
+  },
+  "verify": "bash .bee/verify/verify-app/control-bee doctor",
+  "trace": {
+    "worker": "w-vif-5",
+    "outcome": "Moved bee's verification skill to .bee/verify/verify-app (name verify-app, control-bee 0755 kept), removed the old .claude/skills/verify-bee tree in the same commit, rendered into all three runtime homes via onboard --apply, and drove the onboard feature end to end; evidence kept at /tmp/bee-verify/evidence/20260902-092442-728577",
+    "files_changed": [
+      ".bee/verify/verify-app/SKILL.md",
+      ".bee/verify/verify-app/control-bee",
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/verify/verify-app/features/cells-and-proof.md",
+      ".bee/verify/verify-app/features/feature-gates.md",
+      ".bee/verify/verify-app/features/onboard.md",
+      ".bee/verify/verify-app/features/orient-and-status.md",
+      ".bee/verify/verify-app/features/worktree-and-close.md",
+      ".claude/skills/verify-app",
+      ".agents/skills/verify-app",
+      ".opencode/skills/verify-app"
+    ],
+    "deviations": [
+      "Added the bash prefix to the .../control-bee shorthand forms in SKILL.md's Drive fence and to the VERIFY_CWD example, beyond the 7 literal-path refs the cell counted — a rendered 0644 copy refuses a bare path, and the cell asked for the shown form to be the one that works from both copies — found a better route",
+      "Repointed the Keeping this honest pointer from /maintain-verification-skill to the bee-verify-upkeep skill — that slash command exists only under .claude, and the tree is now rendered into three runtimes where it does not — hit an unforeseen obstacle",
+      "Fixed two stale verify-bee strings inside control-bee (a header comment and the sandbox README text it writes) — the prohibition is on rewriting behavior and neither string is behavior — something else had to be fixed first",
+      "Reverted the timestamp-only churn onboard --apply left in .bee/onboarding.json instead of committing it — it is bookkeeping noise, not part of this cell — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T02:27:13.313Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3",
+    "claimed_at": "2026-09-02T02:20:00.359Z",
+    "mistakes": [
+      {
+        "wrong": "Ran cd <main> && for p in ...; do bee reservations reserve ...; done and the worktree isolation guard refused it as too complex to verify",
+        "better": "I should have run one plain reserve command per path from the start"
+      },
+      {
+        "wrong": "Guessed the evidence filenames 005-ls-a-.out and 007-cli-status-json.out and cat failed twice",
+        "better": "control-bee prints the exact evidence path on every call, so I should have read the printed path instead of reconstructing the slug"
+      }
+    ],
+    "report": {
+      "outcome": "Moved bee's verification skill to .bee/verify/verify-app, deleted the old verify-bee tree in the same commit, rendered it into all three runtime skill homes, and proved it by driving the onboard feature end to end against a real sandbox",
+      "commit": "90ef499c4106351bbc5a2748ae91a206106f221c",
+      "files": [
+        ".bee/verify/verify-app/SKILL.md",
+        ".bee/verify/verify-app/control-bee",
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/verify/verify-app/features/cells-and-proof.md",
+        ".bee/verify/verify-app/features/feature-gates.md",
+        ".bee/verify/verify-app/features/onboard.md",
+        ".bee/verify/verify-app/features/orient-and-status.md",
+        ".bee/verify/verify-app/features/worktree-and-close.md",
+        ".claude/skills/verify-app",
+        ".agents/skills/verify-app",
+        ".opencode/skills/verify-app"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee doctor, then the onboard feature driven end to end — green:live — doctor reported ok on all 7 lines; the moved skill drove the real bee CLI against a throwaway sandbox (plan mutated nothing, apply landed 145 items with recheck up_to_date, re-run up_to_date with empty plan, harness refused a repo-root outside VERIFY_HOME) and its evidence at /tmp/bee-verify/evidence/20260902-092442-728577 survived cleanup",
+      "deviations": [
+        "Added the bash prefix to the .../control-bee shorthand forms in SKILL.md's Drive fence and to the VERIFY_CWD example, beyond the 7 literal-path refs the cell counted — a rendered 0644 copy refuses a bare path, and the cell asked for the shown form to be the one that works from both copies — found a better route",
+        "Repointed the Keeping this honest pointer from /maintain-verification-skill to the bee-verify-upkeep skill — that slash command exists only under .claude, and the tree is now rendered into three runtimes where it does not — hit an unforeseen obstacle",
+        "Fixed two stale verify-bee strings inside control-bee (a header comment and the sandbox README text it writes) — the prohibition is on rewriting behavior and neither string is behavior — something else had to be fixed first",
+        "Reverted the timestamp-only churn onboard --apply left in .bee/onboarding.json instead of committing it — it is bookkeeping noise, not part of this cell — found a better route"
+      ],
+      "mistakes": [
+        "Ran cd <main> && for p in ...; do bee reservations reserve ...; done and the worktree isolation guard refused it as too complex to verify — I should have run one plain reserve command per path from the start",
+        "Guessed the evidence filenames 005-ls-a-.out and 007-cli-status-json.out and cat failed twice — control-bee prints the exact evidence path on every call, so I should have read the printed path instead of reconstructing the slug"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 3427 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

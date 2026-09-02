@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-09-01T19:29:38.009Z",
-    "session": "328ecf98-f48b-41ed-b029-d196e5b359c6"
+    "subject": "I will read the six required state surfaces now, then judge and record one finding.",
+    "asked_at": "2026-09-02T02:27:24.059Z",
+    "session": "731c47ef-0982-4120-93c5-211d3164fdbc"
   },
   "route": {
     "class": "feature",

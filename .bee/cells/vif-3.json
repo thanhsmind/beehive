@@ -1,0 +1,94 @@
+{
+  "id": "vif-3",
+  "feature": "verification-in-the-flow",
+  "title": "Fix the verification skills to the verify-app constant and cut the compose-into-the-test-command step",
+  "lane": "high-risk",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "d0e3c3a0-233a-4396-94c2-b364f3f9abac",
+    "9f4f90f0-f1ed-4acf-8358-72cb390199d7",
+    "2a8eac15-d2ac-4a18-a79a-45a6f390fdfb",
+    "2effbe54-b440-4682-82ce-d1de50472c94"
+  ],
+  "files": [],
+  "read_first": [
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md",
+    "docs/history/verification-in-the-flow/CONTEXT.md",
+    "docs/history/verification-in-the-flow/plan.md"
+  ],
+  "affects_skills": [
+    "skills/bee-verifying/SKILL.md",
+    "skills/bee-verify-upkeep/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Two skill bodies, one serial pass, one `bee dev regen` at the end. Edit ONLY the sources under `skills/`; the rendered copies under `.claude/`, `.agents/`, `.opencode/`, `.claude-plugin/` and `.codex-plugin/` are written by regen and are never hand-edited.\n\nPART A — the constant name and path (per D1 d0e3c3a0 and D8 9f4f90f0).\n\n`verify-<app>` becomes the literal `verify-app`, identical in every repo, and the source path becomes `.bee/verify/verify-app/`. Find every site with `rg -n 'verify-<app>|verify-\\$|\\.bee/verify' skills/bee-verifying/SKILL.md skills/bee-verify-upkeep/SKILL.md` — 9 hits in bee-verifying, 4 in bee-verify-upkeep at the time of writing. The generated skill's frontmatter `name:` becomes `verify-app`; the app's identity moves into its `description`, which is what routing actually reads. Do NOT prefix it `bee-`: `packages/bee-rs/crates/bee/src/onboard/skills.rs:954` proves the bee-* sync emits `remove_skill` for any bee-named target directory absent from bee's own source, so a `bee-verify-app` would be deleted from every runtime skill home on the next `bee onboard --apply`.\n\nIn `bee-verify-upkeep`, step 0 'Locate the target' now has nothing to locate — the path is a constant. Find it with `rg -n 'Locate the target'` and delete the step, renumbering the rest.\n\nPART B — remove the composition (per D6 2a8eac15).\n\n`commands.test` stays pure tests. The drive no longer composes into it. Section headings in `bee-verifying` at the time of writing, found with `rg -n '^#+ ' skills/bee-verifying/SKILL.md`:\n\n  - `## 5. Ask the second question, then compose the drive into the test command` — its premise is gone; retitle it for what survives.\n  - `### Two moments, never one yes` — DELETE. It exists only to gate the config write.\n  - `### Compose: append, never replace` — DELETE.\n  - `### Always \\`bash <path>\\`, never a bare path` — DELETE THE SECTION, KEEP THE FACT. It records why a rendered copy is invoked as `bash <path>`: bee's render leaves source `0755` and every rendered copy `0644`, so a bare path fails with `Permission denied` on a host's first onboard. That reason must survive somewhere a reader still reaches — it is now needed wherever the drive is invoked for a cap proof. Choose the home and say so.\n  - `### Where to write it` — DELETE. It is the hand-edit procedure for `commands.test`.\n  - `### Fast and full: the contract the control script must satisfy` — KEEP the two drive scopes; they still matter. REWRITE its claim that 'The FAST drive is what composes into the declared test command'. Per D5 (036e8a79) the fast drive is what a worker runs for a user-facing cell's cap proof, recorded as `green:live`; the full drive is the periodic sweep. Nothing is written into `commands.test`.\n\nRead `## 6. Offer the maintenance loop` and anything after it for surviving references to composition, the second consent moment, or a measured-cost question — remove what the deletion orphans.\n\nPART C — the composed-host line (per plan.md Decisions taken 3).\n\nA host that already composed a drive into its test command is LEFT ALONE. bee never edits `commands.test`. Add one line to `bee-verify-upkeep`: when the declared test command contains a drive path, REPORT it to the user with the reason, never rewrite it. State plainly that removing it is the user's call.\n\nFINALLY: run `.bee/bin/bee dev regen` so every rendered copy matches its source, then `.bee/bin/bee dev release-manifest --check`. A source edit without the regen leaves five stale copies.",
+  "must_haves": {
+    "truths": [
+      "No occurrence of verify-<app> or a per-project verify name survives in either skill body",
+      "Neither skill instructs anyone to write, append to, or hand-edit commands.test",
+      "The 0755-to-0644 reason for invoking a rendered copy as bash <path> still exists somewhere a reader reaches",
+      "bee-verify-upkeep tells the reader to report a composed test command, never to rewrite it"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-verifying/SKILL.md",
+        "substantive": "verify-app as a literal constant, the composition sections gone, the two drive scopes kept with their claim rewritten; no TODO stubs"
+      },
+      {
+        "path": "skills/bee-verify-upkeep/SKILL.md",
+        "substantive": "the constant path, no locate-the-target step, and the composed-host report line"
+      }
+    ],
+    "key_links": [
+      "the generated skill's frontmatter name is the literal verify-app and the app's identity lives in its description",
+      "every rendered copy under .claude/, .agents/, .opencode/, .claude-plugin/ and .codex-plugin/ matches its source after regen"
+    ],
+    "prohibitions": [
+      "No hand edit to any rendered skill copy - only sources under skills/, then regen",
+      "No bee- prefix on the generated skill name",
+      "No edit to packages/bee/AGENTS.block.md or AGENTS.md - that is vif-4",
+      "No edit to .bee/config.json"
+    ]
+  },
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test specs_fence --test agents_block_render_parity && .bee/bin/bee dev release-manifest --check",
+  "trace": {
+    "worker": "w-vif-3",
+    "outcome": "verify-app is a constant in both verification skills, the commands.test composition is gone, and all five rendered trees match source",
+    "files_changed": [
+      "skills/bee-verifying/SKILL.md",
+      "skills/bee-verify-upkeep/SKILL.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T02:12:43.343Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3",
+    "claimed_at": "2026-09-02T02:08:25.271Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "verify-app is a constant in both verification skills, the commands.test composition is gone, and all five rendered trees match source",
+      "commit": "fffd0e0e",
+      "files": [
+        "skills/bee-verifying/SKILL.md",
+        "skills/bee-verify-upkeep/SKILL.md"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test specs_fence --test agents_block_render_parity && .bee/bin/bee dev release-manifest --check — green:static — docs-only cell: the pointer, fence and block-parity checks plus the 337-file manifest check are what a skill-body edit plus regen can break",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1118 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
