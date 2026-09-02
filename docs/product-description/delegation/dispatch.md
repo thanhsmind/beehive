@@ -208,7 +208,7 @@ Columns: before and after the first side effect — the `dispatch.jsonl` append 
 ## Edge cases
 
 - `--session-id` without `--claim` is documented as ignored, and this binary declines that argv shape rather than serving it — so passing it produces a shape refusal, not a silent ignore.
-- `--purpose` is folded into the label as `<kind>: <purpose>` on every transport, and is ignored for `--kind cell`, whose label is always `<cell id>: <cell title>`. Omitted, the label is the bare kind — which reads as a column of `gather` rows in the agent list, and is exactly why the flag exists.
+- `--purpose` is folded into the label as `<lead>: <purpose>` on every transport, where the lead is the `--role` when one is given (its config spelling — a hat seat reads `hat-facts-gaps: …`, never `advisor: …`) and the kind otherwise; it is ignored for `--kind cell`, whose label is always `<cell id>: <cell title>`. Omitted, the label is the bare lead — which reads as a column of `gather` rows in the agent list, and is exactly why the flag exists.
 - A cli-exec payload carries `{command, stdin}` and no label field at all. There is nowhere on an external executor call to put a subject; the limit is recorded, not overlooked.
 - `--force-ownership` never transfers the claim. It appends an audited `ownership_override` entry whose own note says the actual claim owner was *not* transferred — an advisory bypass, and the payload says so.
 - A cell whose title is blank falls back to the bare kind as the label rather than emitting a dangling `id: `.

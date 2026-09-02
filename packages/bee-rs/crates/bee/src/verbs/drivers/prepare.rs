@@ -1580,10 +1580,20 @@ pub(crate) fn prepare_dispatch_with_brief(
     // is FOR. A whitespace-only or absent title is no title: the bare kind,
     // never a dangling "id: ".
     //
-    // Every other kind: subject is "<kind>: <purpose>" when the caller passes
-    // `--purpose`, and the bare kind otherwise — today's exact bytes when no
-    // `--purpose` is given, so this stays back-compatible by construction.
-    // Their purpose is the caller's to state; prepare never invents one.
+    // Every other kind: subject is "<lead>: <purpose>" when the caller passes
+    // `--purpose`, and the bare lead otherwise. The LEAD is the asked role
+    // when `--role` was given (its config spelling), and the kind when none
+    // was — today's exact bytes for every role-less dispatch, so this stays
+    // back-compatible by construction. Their purpose is the caller's to
+    // state; prepare never invents one.
+    //
+    // dispatch-label-seat-first: the lead used to be the kind always. A seat
+    // dispatched through the advisor kind (`--kind advisor --role
+    // hat-facts-gaps`) ran on its own seat model and still read `advisor:`
+    // in every UI that shows the description — three hats on opus/opus/
+    // sonnet, all labelled advisor (2026-09-02). The label names the slot
+    // that resolved, never the kind that asked; the audit line already
+    // carried the role, the human-facing string did not.
     let subject = if kind == "cell" {
         cell.as_ref()
             .map(|c| (tpl(vget(c, "id")), one_line(vget(c, "title"), DESCRIPTION_TITLE_MAX)))
@@ -1591,12 +1601,13 @@ pub(crate) fn prepare_dispatch_with_brief(
             .map(|(id, title)| format!("{id}: {title}"))
             .unwrap_or_else(|| kind.to_string())
     } else {
+        let lead = role.unwrap_or(kind);
         match purpose.map(js_trim).filter(|p| !p.is_empty()) {
             Some(p) => format!(
-                "{kind}: {}",
+                "{lead}: {}",
                 one_line(Some(&Value::String(p.to_string())), DESCRIPTION_TITLE_MAX)
             ),
-            None => kind.to_string(),
+            None => lead.to_string(),
         }
     };
 
