@@ -2407,6 +2407,33 @@ fn activity_state_transitions_per_mapped_event() {
         "activity must receive the Claude event name Stop"
     );
 
+    // 5. SessionEnd on session_shutdown -> transitions to exited
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "session_shutdown",
+                dir.path(),
+                SESSION_ID,
+                json!({"reason": "quit"}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "session_shutdown threw: {:?}", run.results[0].message);
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("exited"),
+        "SessionEnd must transition activity state to exited"
+    );
+    assert_eq!(
+        session_json["activity"]["event"].as_str(),
+        Some("SessionEnd"),
+        "activity must receive the Claude event name SessionEnd"
+    );
+
     // Transitions file (.activity.jsonl) check
     let transitions_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.activity.jsonl"));
     let t_content = std::fs::read_to_string(&transitions_file).expect("read transitions file");
@@ -2415,11 +2442,13 @@ fn activity_state_transitions_per_mapped_event() {
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).expect("valid transition JSON"))
         .collect();
-    assert_eq!(t_lines.len(), 2, "expected exactly 2 transitions (working, then idle), got {:?}", t_lines);
+    assert_eq!(t_lines.len(), 3, "expected exactly 3 transitions (working, idle, exited), got {:?}", t_lines);
     assert_eq!(t_lines[0]["state"].as_str(), Some("working"));
     assert_eq!(t_lines[0]["event"].as_str(), Some("UserPromptSubmit"));
     assert_eq!(t_lines[1]["state"].as_str(), Some("idle"));
     assert_eq!(t_lines[1]["event"].as_str(), Some("Stop"));
+    assert_eq!(t_lines[2]["state"].as_str(), Some("exited"));
+    assert_eq!(t_lines[2]["event"].as_str(), Some("SessionEnd"));
 }
 
 #[cfg(unix)]
@@ -2646,7 +2675,12 @@ fn session_shutdown_closes_record_on_real_end_reasons_and_skips_reload() {
             serde_json::to_string_pretty(&json!({
                 "id": session_id,
                 "status": "active",
-                "started_at": "2026-09-02T12:00:00.000Z"
+                "started_at": "2026-09-02T12:00:00.000Z",
+                "activity": {
+                    "state": "working",
+                    "event": "UserPromptSubmit",
+                    "at": "2026-09-02T12:00:00.000Z"
+                }
             }))
             .unwrap()
                 + "\n",
@@ -2683,6 +2717,16 @@ fn session_shutdown_closes_record_on_real_end_reasons_and_skips_reload() {
                 session_json["closed_at"].as_str().is_some_and(|ts| !ts.is_empty()),
                 "reason \"{name}\" must record closed_at timestamp"
             );
+            assert_eq!(
+                session_json["activity"]["state"].as_str(),
+                Some("exited"),
+                "reason \"{name}\" genuinely ends the session and must transition activity state to exited"
+            );
+            assert_eq!(
+                session_json["activity"]["event"].as_str(),
+                Some("SessionEnd"),
+                "reason \"{name}\" must record SessionEnd event in activity"
+            );
         } else {
             assert_eq!(
                 session_json["status"].as_str(),
@@ -2692,6 +2736,11 @@ fn session_shutdown_closes_record_on_real_end_reasons_and_skips_reload() {
             assert!(
                 session_json.get("closed_at").is_none(),
                 "reason \"{name}\" must not set closed_at"
+            );
+            assert_eq!(
+                session_json["activity"]["state"].as_str(),
+                Some("working"),
+                "reason \"{name}\" keeps the same session alive and must NOT transition activity to exited"
             );
         }
     }

@@ -1104,28 +1104,48 @@ export default function (pi: ExtensionAPI) {
     return undefined
   }) as any)
 
-  // ── ADVISORY: session shutdown handler. Closes the session record only on
-  // reasons that genuinely terminate the session ("quit", "new", "resume", "fork").
+  // ── ADVISORY: session shutdown handler. Closes the session record and marks
+  // activity state as exited only on reasons that genuinely terminate the session
+  // ("quit", "new", "resume", "fork", or undefined).
   // /reload is deliberately excluded: it continues the same session (treated as
   // idempotent by session_start above), so closing on reload would mark a live
   // session as dead and drop its worktree hold prematurely.
   pi.on("session_shutdown", (async (event: any, ctx: any) => {
     try {
       const reason = event?.reason as string | undefined
-      // Precedent:
+      // Precedent & reason mapping:
       // 1. session_start above treats "reload" as the same session continuing.
-      // 2. activity.rs refuses to mark a session exited on transcript-ending reasons.
-      // "quit", "new", "resume", "fork" (and undefined/default) end the session;
-      // "reload" keeps it alive.
+      //    Therefore "reload" returns early and neither session-close nor activity runs.
+      // 2. Pi reasons "quit", "new", "resume", "fork" (and undefined/default) all
+      //    genuinely terminate the active session.
+      // 3. In Claude's vocabulary, "resume" means transcript resumption of the SAME session,
+      //    so activity.rs deliberately ignores reason: "resume" (map_event returns None).
+      //    In Pi, "resume" means switching away to another session file, so THIS session is ending.
+      //    To prevent activity.rs from silently skipping the exit transition on Pi's "resume",
+      //    all terminating Pi reasons map to a Claude-shaped exit reason ("quit").
       if (reason === "reload") return undefined
       const directory = directoryOf(ctx)
-      runAdvisoryHook(directory, "session-close", {
-        hook_event_name: "SessionEnd",
-        session_id: sessionIdOf(ctx),
-        cwd: directory,
-      })
+      try {
+        runAdvisoryHook(directory, "session-close", {
+          hook_event_name: "SessionEnd",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      } catch (err: any) {
+        console.error(`bee session-close shutdown (advisory): ${err?.message ?? err}`)
+      }
+      try {
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "SessionEnd",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+          reason: "quit",
+        })
+      } catch (err: any) {
+        console.error(`bee activity shutdown (advisory): ${err?.message ?? err}`)
+      }
     } catch (err: any) {
-      console.error(`bee session-close shutdown (advisory): ${err?.message ?? err}`)
+      console.error(`bee session_shutdown (advisory): ${err?.message ?? err}`)
     }
     return undefined
   }) as any)
