@@ -13,8 +13,13 @@
   "summary": "Feature \"verification-contract-parity\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"verification-contract-parity\" — feature is closed.",
   "created_at": "2026-09-02T02:36:02.274Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Nói \"go\" là tôi chạy. Nợ ghi chép để sau cũng được.",
+    "asked_at": "2026-09-02T03:00:34.727Z",
+    "session": "e2b06a7d-ba76-42eb-848e-bd3b0cd118c3"
+  },
   "route": {
     "class": "feature",
     "lane": "tiny",

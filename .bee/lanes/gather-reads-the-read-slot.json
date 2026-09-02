@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "feature": "gather-reads-the-read-slot",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"gather-reads-the-read-slot\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-09-02T03:55:51.996Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "public-contracts"
+    ],
+    "product_files": 6,
+    "rationale": "gather kind resolves the read job instead of the tier-era generation slot; agent surface follows",
+    "updated_at": "2026-09-02T03:59:53.426Z",
+    "feature": "gather-reads-the-read-slot"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-02T04:18:09.497Z",
+    "feature": "gather-reads-the-read-slot",
+    "newest_decision_id": "dd4c22d3-4bbc-4db1-afa4-68a86b291e77",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave:hat-facts-gaps(opus)+hat-alternatives(opus)+hat-user-impact(sonnet)",
+    "digest_head": "# Hat wave — gather-reads-the-read-slot (plan step)\n\nThree seats, standard lane: `hat-facts-gaps` (opus), `hat-alternatives`\n(opus), `hat-user-impact` (sonnet). Wave opened 2026-09-02 (decision\nfd19a0ee). Synthesis by the leader; findings landed in plan.md and\nCONTEXT.md before this record was written.\n\n## What the wave changed in the plan\n\n1. **Tail without `extraction`** (leader finding, confirmed by user-impact's\n   codex/legacy walk): the gather walk is `[read, generation]`. A walk\n   throug"
+  },
+  "merge_ready": {
+    "since": "2026-09-02T04:49:31.753Z",
+    "branch": "wt/gather-reads-the-read-slot",
+    "worktree_id": "beehive--wt--gather-reads-the-read-slot",
+    "uat": "pending",
+    "blocked_by": [
+      "doc-deferral"
+    ]
+  }
+}

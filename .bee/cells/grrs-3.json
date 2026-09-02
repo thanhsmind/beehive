@@ -1,0 +1,103 @@
+{
+  "id": "grrs-3",
+  "feature": "gather-reads-the-read-slot",
+  "title": "Docs say a gather resolves the read slot",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D3",
+    "D4",
+    "D5",
+    "D7"
+  ],
+  "files": [
+    "docs/product-description/delegation/dispatch.md",
+    "docs/product-description/delegation/workers.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "docs/knowledge/index.md"
+  ],
+  "read_first": [
+    "docs/history/gather-reads-the-read-slot/CONTEXT.md",
+    "docs/product-description/delegation/dispatch.md",
+    "docs/product-description/delegation/workers.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/product-description/delegation/dispatch.md",
+    "docs/product-description/delegation/workers.md"
+  ],
+  "action": "Bring the three docs to parity with grrs-1/grrs-2, editing only the sentences the change falsifies:\n\n- dispatch.md — the kinds paragraph (rg hit dispatch.md:134 `**The kinds.** ... `gather` is the read-only default.`) says a gather with no --role resolves `[read, generation]` and travels under the name that won; the example envelope at dispatch.md:24 (`\"prompt\": \"[bee-tier: generation]\\nGather: …`) stays true only for a host with no `read` key — say which host it shows.\n- workers.md — the agent table row `| `bee-gather` | `generation` | Read, Grep, Glob | …` (rg hit workers.md:24) becomes `read`, then `generation`; the opening walkthrough at workers.md:9 (`\"prompt\": \"[bee-tier: generation]…\", \"model\": \"sonnet\"`) names the host shape it assumes; the quoted FIX at workers.md:14 (`> FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, …`) is rewritten to the D7 shape — leads with `bee dispatch prepare`, no `bee-gather = generation` pairing (grrs-1 owns the exact bytes; describe the shape, do not quote bytes that cell has not yet produced — say 'opens with `bee dispatch prepare …`' and name the agents without role pairings); add one line under the agent table that every description opens by naming `bee dispatch prepare` (D5). Do NOT touch line 38's `model:` prose (out of scope, named in CONTEXT.md).\n- This cell has no deps and runs concurrently with grrs-1 (file-disjoint: docs/** vs src/**).\n- model-roles-and-escalation.md — append **B14 — A gather asks for the read job** after B13, in the same voice: the gather kind resolves `[read, generation]` (decision 295f3d03), why `extraction` is not in that tail, and that the default gather pins `bee-gather` by kind while `--role extraction` keeps B11's `bee-extract`. Update docs/knowledge/index.md only if it lists B-entries by name.\n\nProof: `rg -n \"bee-gather.*generation|gather.*generation\" docs/product-description docs/knowledge` shows only lines that describe the no-`read` host or history; every anchor cited in the three files still exists (`rg` each). Record that pointer check as the proof line.",
+  "verify": "rg -n 'B14 — A gather asks for the read job' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md && rg -n 'read' docs/product-description/delegation/workers.md | rg -q 'bee-gather'",
+  "must_haves": {
+    "truths": [
+      "dispatch.md states the gather walk [read, generation] and the winner-travels rule",
+      "workers.md's agent table gives bee-gather the read role first",
+      "doctrine B14 exists and cites decision 295f3d03"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        "substantive": "B14 entry, same voice as B11-B13"
+      }
+    ],
+    "key_links": [
+      "workers.md and dispatch.md agree with each other on the gather walk"
+    ],
+    "prohibitions": [
+      "No edit to workers.md line 38's model: prose",
+      "No new doc file"
+    ]
+  },
+  "trace": {
+    "worker": "w-grrs-3",
+    "outcome": "dispatch.md, workers.md and doctrine now say a role-less gather resolves [read, generation] and travels under the winner",
+    "files_changed": [
+      "docs/product-description/delegation/dispatch.md",
+      "docs/product-description/delegation/workers.md",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+    ],
+    "deviations": [
+      "The doctrine entry is B17, not the B14 the cell named — B14, B15/B15a and B16 already exist in model-roles-and-escalation.md (agent-model-unpin, lane-model-diversity, pi-support), and those numbers are cited from other docs, so renumbering was worse than taking the next free number; the cell verify string was adapted to B17 — the plan was wrong about a fact",
+      "workers.md line 14 moved OUT of the blockquote instead of staying a quoted FIX line — grrs-1 owns the new guard bytes and this cell must not quote text that does not exist yet, so the FIX is described by shape — found a better route",
+      "docs/knowledge/index.md was left untouched: it is a GENERATED file (bee knowledge index) and lists no B-entries by name, so the cell's conditional did not fire — followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T04:24:32.017Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f7f16c07-ef49-4e1b-8ef9-4f1206a75a38",
+    "claimed_at": "2026-09-02T04:18:57.426Z",
+    "mistakes": [
+      {
+        "wrong": "The first workers.md edit put the new FIX paragraph directly under the blockquote with no blank line, which markdown reads as lazy continuation of the quote",
+        "better": "I should have checked the rendered block boundary in the same edit that removed the quoted FIX line"
+      }
+    ],
+    "report": {
+      "outcome": "dispatch.md, workers.md and doctrine now say a role-less gather resolves [read, generation] and travels under the winner",
+      "commit": "9a25b42bc856e473ee5a938b04b59b3446517e99",
+      "files": [
+        "docs/product-description/delegation/dispatch.md",
+        "docs/product-description/delegation/workers.md",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+      ],
+      "tests": "rg -n \"bee-gather.*generation|gather.*generation\" docs/product-description docs/knowledge — green:static — docs parity/pointer check: every remaining hit describes the no-read host, the untouched ROLE_AGENTS guard table, or dated history; the adapted verify (B17 entry + bee-gather read row) passes",
+      "deviations": [
+        "The doctrine entry is B17, not the B14 the cell named — B14, B15/B15a and B16 already exist in model-roles-and-escalation.md (agent-model-unpin, lane-model-diversity, pi-support), and those numbers are cited from other docs, so renumbering was worse than taking the next free number; the cell verify string was adapted to B17 — the plan was wrong about a fact",
+        "workers.md line 14 moved OUT of the blockquote instead of staying a quoted FIX line — grrs-1 owns the new guard bytes and this cell must not quote text that does not exist yet, so the FIX is described by shape — found a better route",
+        "docs/knowledge/index.md was left untouched: it is a GENERATED file (bee knowledge index) and lists no B-entries by name, so the cell's conditional did not fire — followed the plan"
+      ],
+      "mistakes": [
+        "The first workers.md edit put the new FIX paragraph directly under the blockquote with no blank line, which markdown reads as lazy continuation of the quote — I should have checked the rendered block boundary in the same edit that removed the quoted FIX line"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

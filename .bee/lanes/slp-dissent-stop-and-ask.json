@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "Both SLP features are closed; an independent review is the user's call",
+  "next_action": "40 older capture stubs remain",
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All six surfaces read. No new signal: the only live work is a fresh bee-build cell (vcp-2) on verification-contract-parity, 1 minute into a",
-    "asked_at": "2026-09-02T02:43:27.370Z",
-    "session": "ad9fcdc0-c4e4-4246-886f-b0e2772dff16"
+    "subject": "Trimming the note to fit the 500-character cap.",
+    "asked_at": "2026-09-02T04:51:08.727Z",
+    "session": "5f207ed9-5d59-48ee-8546-08bd83c55efa"
   },
   "route": {
     "class": "feature",

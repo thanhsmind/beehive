@@ -1,0 +1,214 @@
+{
+  "id": "grrs-2",
+  "feature": "gather-reads-the-read-slot",
+  "title": "bee-gather declares the read job and every agent description names the door",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "grrs-1"
+  ],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee/agents/bee-gather.md.tmpl",
+    "packages/bee/agents/bee-extract.md.tmpl",
+    "packages/bee/agents/bee-build.md.tmpl",
+    "packages/bee/agents/bee-review.md.tmpl",
+    ".claude/agents/*",
+    ".opencode/agent/*",
+    ".claude-plugin/*",
+    ".codex-plugin/*",
+    ".opencode/*",
+    ".claude/skills/*",
+    ".bee/onboarding.json",
+    "packages/bee/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/gather-reads-the-read-slot/CONTEXT.md",
+    "docs/history/agent-model-unpin/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/product-description/delegation/workers.md"
+  ],
+  "action": "Per D4: in templates.rs change the row `(\"bee-gather\", &[\"generation\"]),` (rg hit templates.rs:386) to `(\"bee-gather\", &[\"read\", \"generation\"])` — the SAME list grrs-1 gave `tier_role_list(\"read\")` (read first, then generation; never extraction), so the opencode render pin (`resolve_opencode_agent_model` in agents.rs), the Claude sync record's `rendered_from`, and `validate_agent_files_drift` (status_full/store.rs) all walk it through the shared resolver with no further edit; update the comment above the table (\"Two agents share the generation role…\") to say bee-gather asks for the read job first. Add/adjust tests in agents.rs and status_full/tests.rs: an opencode host with `models.opencode.read` set pins that model into `.opencode/agent/bee-gather.md`; with no `read` key it pins `generation`'s exactly as today; the Claude plan still renders every known agent unconditionally under a herding-shaped `read` slot (D6 — extend `plan_renders_unconditionally_and_never_removes_a_known_agent`).\n\nIn `packages/bee/agents/bee-gather.md.tmpl` line 7, replace `You run at the **generation** tier` with wording that says the read role, falling through to generation when the host configures no `read` — one sentence, no tier word.\n\nPer D5: in all four templates the `description:` line (rg hits `^description:` at line 3 of bee-gather, bee-extract, bee-build, bee-review .md.tmpl) OPENS with one plain sentence naming the door — e.g. `Reached only through \\`bee dispatch prepare\\` (it may return a pane command instead of this type) — never name this type by hand.` — then the existing text. Keep each description on ONE line (the frontmatter reader is single-line). AGENT_DESCRIPTIONS-style tables in guard.rs are keyed on agent and quote no description bytes, so nothing else restates them — confirm with `rg -n \"I/O-offload gather worker\" packages/` before and after.\n\nThen run the regen chain: `.bee/bin/bee dev regen` (renders skill trees, re-onboards this checkout with --apply, rewrites the release manifest). Commit everything it touched. `cargo test ... agents_block_render_parity onboard status_full` must be green; `bee dev release-manifest --check` clean; `git status` shows no unstaged regen output.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard status_full agents_block_render_parity && .bee/bin/bee dev release-manifest --check",
+  "regen_obligation_ack": "regen run inside the cell via bee dev regen",
+  "must_haves": {
+    "truths": [
+      "AGENT_ROLES_BY_NAME lists bee-gather as [read, generation]",
+      "Every rendered .claude/agents/bee-*.md and .opencode/agent/bee-*.md description opens by naming bee dispatch prepare",
+      "bee dev regen leaves no diff after the cell's commit",
+      "A herding-shaped read slot does not remove .claude/agents/bee-gather.md (D6)"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/agents/bee-gather.md.tmpl",
+        "substantive": "description opens with the door sentence; body names the read role"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "substantive": "bee-gather row = [read, generation] with its comment"
+      }
+    ],
+    "key_links": [
+      "resolve_opencode_agent_model(bee-gather) walks [read, generation] via the shared resolver",
+      "validate_agent_files_drift on opencode expects the read slot's model when set"
+    ],
+    "prohibitions": [
+      "No change to ROLE_AGENTS or ROLE_ALIASES in guard.rs (D4)",
+      "No conditional removal of Claude agent files (D6)",
+      "No model: line reintroduced into a Claude agent file"
+    ]
+  },
+  "trace": {
+    "worker": "w-grrs-2",
+    "outcome": "bee-gather declares [read, generation]; every rendered agent description opens by naming bee dispatch prepare",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee/agents/bee-gather.md.tmpl",
+      "packages/bee/agents/bee-extract.md.tmpl",
+      "packages/bee/agents/bee-build.md.tmpl",
+      "packages/bee/agents/bee-review.md.tmpl",
+      ".claude/agents/bee-gather.md",
+      ".claude/agents/bee-extract.md",
+      ".claude/agents/bee-build.md",
+      ".claude/agents/bee-review.md",
+      ".opencode/agent/bee-gather.md",
+      ".opencode/agent/bee-extract.md",
+      ".opencode/agent/bee-build.md",
+      ".opencode/agent/bee-review.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      ".bee/onboarding.json was applied with the binary built from this source (/home/thanhsmind/.cache/cargo-target/release/bee onboard --apply) instead of the vendored .bee/bin/bee — the vendored binary is a symlink to main's pre-change build, so its regen writes the old opencode rendered_from map with no `read` key; running it would have committed a record that disagrees with the source of truth — hit an unforeseen obstacle",
+      "Trimmed `at the same tier` out of bee-build's description clause about bee-gather — the cell's own change makes that claim false the moment bee-gather asks for the read slot first — something else had to be fixed first",
+      "The regen chain rewrites docs/history/codex-harness-hardening/release-manifest.json, not the cell's listed packages/bee/release-manifest.json (no such file exists); reserved the real path under w-grrs-2 before the write — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-02T04:49:31.703Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f7f16c07-ef49-4e1b-8ef9-4f1206a75a38",
+    "claimed_at": "2026-09-02T04:39:20.649Z",
+    "mistakes": [
+      {
+        "wrong": "The first cargo test run went red on verbs::status_full::tests::agent_file_drift_findings, which pins the bee-gather finding's slot as Some(\"generation\")",
+        "better": "a rename I had just made on purpose one file over — better would have been to rg for `slot.as_deref(), Some(\"generation\")` across status_full/tests.rs in the same step as the AGENT_ROLES_BY_NAME edit, instead of letting the compiler-blind assertion find it"
+      }
+    ],
+    "report": {
+      "outcome": "bee-gather declares [read, generation] and every rendered agent description opens by naming bee dispatch prepare",
+      "commit": "72e677d75354b5f08828f76c242703f223ecff9c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee/agents/bee-gather.md.tmpl",
+        "packages/bee/agents/bee-extract.md.tmpl",
+        "packages/bee/agents/bee-build.md.tmpl",
+        "packages/bee/agents/bee-review.md.tmpl",
+        ".claude/agents/bee-gather.md",
+        ".claude/agents/bee-extract.md",
+        ".claude/agents/bee-build.md",
+        ".claude/agents/bee-review.md",
+        ".opencode/agent/bee-gather.md",
+        ".opencode/agent/bee-extract.md",
+        ".opencode/agent/bee-build.md",
+        ".opencode/agent/bee-review.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- onboard status_full (273 passed, 0 failed) plus --test agents_block_render_parity (1 passed) and bee dev release-manifest --check (337 files match) — green:unit — the onboard role table, its opencode render pin, the status drift check and the committed agent-file projections are exactly the surfaces this cell touched",
+      "deviations": [
+        ".bee/onboarding.json was applied with the binary built from this source (/home/thanhsmind/.cache/cargo-target/release/bee onboard --apply) instead of the vendored .bee/bin/bee — the vendored binary is a symlink to main's pre-change build, so its regen writes the old opencode rendered_from map with no `read` key; running it would have committed a record that disagrees with the source of truth — hit an unforeseen obstacle",
+        "Trimmed `at the same tier` out of bee-build's description clause about bee-gather — the cell's own change makes that claim false the moment bee-gather asks for the read slot first — something else had to be fixed first",
+        "The regen chain rewrites docs/history/codex-harness-hardening/release-manifest.json, not the cell's listed packages/bee/release-manifest.json (no such file exists); reserved the real path under w-grrs-2 before the write — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "The first cargo test run went red on verbs::status_full::tests::agent_file_drift_findings, which pins the bee-gather finding's slot as Some(\"generation\") — a rename I had just made on purpose one file over — better would have been to rg for `slot.as_deref(), Some(\"generation\")` across status_full/tests.rs in the same step as the AGENT_ROLES_BY_NAME edit, instead of letting the compiler-blind assertion find it"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/templates.rs:391 `(\"bee-gather\", &[\"read\", \"generation\"])`; comment at :382-389 names the D1/D4 reason and \"never extraction\""
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "rg '^description:' on the four .claude/agents/bee-*.md: each is line 3, single line, opening `Reached only through \\`bee dispatch prepare\\` ...`; line 4 is `tools:`"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "rg '^description:|^model:' — all four .opencode/agent/bee-*.md open the same way at line 2 and keep `model:` at line 4; `rg '^model:' .claude/agents/*` returns nothing"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "packages/bee/agents/bee-gather.md.tmpl:7 — only 'generation' hit is 'You serve the **read** job, falling through to the generation model...'; no 'generation tier'"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "rg TIER_MODEL packages/bee/agents/ -> none; `diff <tmpl> <.claude/agents/*.md>` exit 0 for all four; `git status --short` printed nothing"
+          },
+          {
+            "id": "c6",
+            "status": "PASS",
+            "evidence": "agents.rs:224-252 compute_agent_file_plan unchanged (mod tests starts :341; both diff hunks are at :537 and :617); herding `read` case at :537-551 sits inside plan_renders_unconditionally_and_never_removes_a_known_agent (:486-569)"
+          },
+          {
+            "id": "c7",
+            "status": "PASS",
+            "evidence": "`diff` of `git show 3282f786:.../drivers/guard.rs` vs worktree copy exit 0 (whole file identical); ROLE_AGENTS :179-184, ROLE_ALIASES :239-240 unchanged"
+          },
+          {
+            "id": "c8",
+            "status": "PASS",
+            "evidence": "agents.rs:626 bee_gather_pins_the_read_slot_and_falls_through_to_generation cases (a)-(d); status_full/tests.rs:3026 and :3162-3186 assert slot == \"read\"; all three ran ok"
+          },
+          {
+            "id": "c9",
+            "status": "PASS",
+            "evidence": ".bee/onboarding.json:72 `\"read\": \"opencode/big-pickle\"` inside opencode rendered_from"
+          },
+          {
+            "id": "c10",
+            "status": "PASS",
+            "evidence": "cargo test --release -- onboard status_full: 273 passed; 0 failed; 1 ignored. --test agents_block_render_parity: 1 passed; 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-02T05:01:36.939Z"
+      }
+    ]
+  }
+}
