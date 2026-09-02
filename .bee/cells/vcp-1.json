@@ -4,7 +4,7 @@
   "title": "Pin the verify-app name across every surface that states it, and pin the two doctrine additions",
   "lane": "tiny",
   "role": "test",
-  "status": "open",
+  "status": "dropped",
   "deps": [],
   "decisions": [
     "d0e3c3a0-233a-4396-94c2-b364f3f9abac",
@@ -60,6 +60,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "dropped_reason": "Mis-scoped: cited D4 (c93a6948) and D8 (9f4f90f0), both of which carry open revisit triggers. Re-added citing only the settled contracts D1 and D5, and no longer asserting D4's provisional read-first line — decision 29b853d8."
   }
 }
