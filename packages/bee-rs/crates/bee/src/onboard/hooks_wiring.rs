@@ -579,6 +579,82 @@ pub fn codex_statusline_next_text(text: &str) -> String {
 
 // ── statusline opt-in ──────────────────────────────────────────────────────
 
+/// The canonical statusLine command onboarding writes to .claude/settings.json.
+/// Guarded with `[ -f … ] &&` so a teammate's fresh clone or a linked worktree
+/// without the vendored script gets silence rather than a shell error on every prompt.
+pub const STATUSLINE_COMMAND: &str =
+    "[ -f \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\" ] && bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\"";
+
+/// True ONLY when `<repo>/.claude/settings.json` is missing, empty/whitespace,
+/// or parses as a JSON object carrying no `statusLine` key.
+/// Returns false when the file exists but does not parse, or parses to something
+/// that is not an object at the top level, or when `statusLine` is already present
+/// in any shape (user preference).
+pub fn statusline_settings_absent(repo_root: &Path) -> bool {
+    let settings_path = repo_root.join(".claude").join("settings.json");
+    if !exists(&settings_path) {
+        return true;
+    }
+    let text = read_text_if_exists(&settings_path);
+    if text.trim().is_empty() {
+        return true;
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    match parsed {
+        Value::Object(m) => !m.contains_key("statusLine"),
+        _ => false,
+    }
+}
+
+/// Add-only statusLine settings writer: adds the canonical entry if `statusLine`
+/// is absent. Preserves every foreign top-level key and their order.
+/// If `statusLine` is already present, returns the file unchanged with changed=false.
+/// On a file that does not parse or is not an object, returns unchanged with changed=false.
+/// On a missing/empty file, produces a fresh object holding just `statusLine`.
+pub fn merge_statusline_settings(settings_path: &Path) -> Merged {
+    let text = read_text_if_exists(settings_path);
+    if text.trim().is_empty() {
+        let mut out = Map::new();
+        out.insert(
+            "statusLine".into(),
+            json!({
+                "type": "command",
+                "command": STATUSLINE_COMMAND,
+            }),
+        );
+        return Merged {
+            text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))),
+            changed: true,
+        };
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return Merged { text, changed: false },
+    };
+    let existing = match parsed {
+        Value::Object(m) => m,
+        _ => return Merged { text, changed: false },
+    };
+    if existing.contains_key("statusLine") {
+        return Merged { text, changed: false };
+    }
+    let mut out = existing;
+    out.insert(
+        "statusLine".into(),
+        json!({
+            "type": "command",
+            "command": STATUSLINE_COMMAND,
+        }),
+    );
+    Merged {
+        text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))),
+        changed: true,
+    }
+}
+
 /// statuslineOptIn (l. 1883): a repo opts in by ALREADY pointing its
 /// .claude/settings.json statusLine at the project-level script.
 pub fn statusline_opt_in(repo_root: &Path) -> bool {
@@ -1060,6 +1136,169 @@ mod tests {
         std::fs::write(&settings, r#"{"statusLine":"a string"}"#).unwrap();
         assert!(!statusline_opt_in(dir.path()));
     }
+
+    #[test]
+    fn statusline_opt_in_round_trips_canonical_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings,
+            serde_json::to_string(&json!({
+                "statusLine": {
+                    "type": "command",
+                    "command": STATUSLINE_COMMAND
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(statusline_opt_in(dir.path()));
+    }
+
+    #[test]
+    fn statusline_settings_absent_detection() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        // absent file -> absent == true
+        assert!(statusline_settings_absent(dir.path()));
+
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // empty file -> absent == true
+        std::fs::write(&settings, "").unwrap();
+        assert!(statusline_settings_absent(dir.path()));
+
+        // whitespace-only file -> absent == true
+        std::fs::write(&settings, "   \n  \t ").unwrap();
+        assert!(statusline_settings_absent(dir.path()));
+
+        // object-without-the-key -> absent == true
+        std::fs::write(&settings, r#"{"model": "opus"}"#).unwrap();
+        assert!(statusline_settings_absent(dir.path()));
+
+        // unparseable text -> absent == false
+        std::fs::write(&settings, "{not json").unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // top-level array -> absent == false
+        std::fs::write(&settings, "[1, 2, 3]").unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // top-level string -> absent == false
+        std::fs::write(&settings, r#""just a string""#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as an object -> absent == false
+        std::fs::write(
+            &settings,
+            r#"{"statusLine": {"type": "command", "command": "echo hi"}}"#,
+        )
+        .unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as a string -> absent == false
+        std::fs::write(&settings, r#"{"statusLine": "echo hi"}"#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as null -> absent == false
+        std::fs::write(&settings, r#"{"statusLine": null}"#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+
+        // statusLine present as false -> absent == false
+        std::fs::write(&settings, r#"{"statusLine": false}"#).unwrap();
+        assert!(!statusline_settings_absent(dir.path()));
+    }
+
+    #[test]
+    fn merge_statusline_settings_preserves_foreign_keys_and_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // merge on a file carrying "model" and "hooks" -> those keys and their values survive byte-for-byte, exactly one key is added
+        let original = "{\n  \"model\": \"opus\",\n  \"hooks\": {\n    \"UserPromptSubmit\": []\n  }\n}\n";
+        std::fs::write(&settings, original).unwrap();
+
+        let merged = merge_statusline_settings(&settings);
+        assert!(merged.changed);
+
+        let parsed: Value = serde_json::from_str(&merged.text).unwrap();
+        let obj = parsed.as_object().unwrap();
+        assert_eq!(obj.len(), 3);
+        assert_eq!(obj.get("model").unwrap(), "opus");
+        assert_eq!(
+            obj.get("hooks").unwrap(),
+            &json!({"UserPromptSubmit": []})
+        );
+        assert_eq!(
+            obj.get("statusLine").unwrap(),
+            &json!({
+                "type": "command",
+                "command": STATUSLINE_COMMAND
+            })
+        );
+
+        let keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+        assert_eq!(keys, vec!["model", "hooks", "statusLine"]);
+
+        // Idempotent: merging twice changes nothing the second time (changed == false)
+        std::fs::write(&settings, &merged.text).unwrap();
+        let again = merge_statusline_settings(&settings);
+        assert!(!again.changed);
+        assert_eq!(again.text, merged.text);
+    }
+
+    #[test]
+    fn merge_statusline_settings_broken_or_non_object_returns_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // merge on a broken file returns changed == false and text equal to the input
+        let broken = "{\"model\": broken";
+        std::fs::write(&settings, broken).unwrap();
+        let res = merge_statusline_settings(&settings);
+        assert!(!res.changed);
+        assert_eq!(res.text, broken);
+
+        // top-level array returns changed == false and text equal to the input
+        let non_obj = "[1, 2, 3]";
+        std::fs::write(&settings, non_obj).unwrap();
+        let res = merge_statusline_settings(&settings);
+        assert!(!res.changed);
+        assert_eq!(res.text, non_obj);
+    }
+
+    #[test]
+    fn merge_statusline_settings_absent_or_empty_produces_fresh_statusline_object() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        // absent file produces fresh object holding just statusLine
+        let res = merge_statusline_settings(&settings);
+        assert!(res.changed);
+        let expected = format!(
+            "{}\n",
+            jsjson::stringify_pretty(&json!({
+                "statusLine": {
+                    "type": "command",
+                    "command": STATUSLINE_COMMAND
+                }
+            }))
+        );
+        assert_eq!(res.text, expected);
+
+        // empty file produces fresh object holding just statusLine
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(&settings, "   \n\t").unwrap();
+        let res = merge_statusline_settings(&settings);
+        assert!(res.changed);
+        assert_eq!(res.text, expected);
+    }
+
+
 
     #[test]
     fn codex_statusline_insertion_respects_an_existing_tui_section() {
