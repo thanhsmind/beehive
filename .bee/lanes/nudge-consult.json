@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"nudge-consult\" started at phase \"exploring\" (lane).",
-  "next_action": "Dispatch nc-1, then nc-2.",
+  "next_action": "Merged into main at a6da2a9; capture what settled, then bee close --feature nudge-consult.",
   "created_at": "2026-09-04T09:22:33.815Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "Read",
-    "asked_at": "2026-09-04T10:04:32.307Z",
-    "session": "34a24bf4-5655-4cff-84e1-d02eaf823966"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "small",
@@ -30,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-09-04T09:24:47.022Z",
     "feature": "nudge-consult"
-  },
-  "merge_ready": {
-    "since": "2026-09-04T10:14:43.272Z",
-    "branch": "wt/nudge-consult",
-    "worktree_id": "beehive--wt--nudge-consult",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
