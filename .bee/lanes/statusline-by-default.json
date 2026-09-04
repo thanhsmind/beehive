@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"statusline-by-default\" started at phase \"exploring\" (lane).",
-  "next_action": "Wave A: sbd-1, sbd-2, sbd-6",
+  "next_action": "Merged into main at 5d4af78; reload the product and test \"statusline-by-default\", then either approve uat (\"bee gate --name uat --approved true --lane statusline-by-default\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-04T10:09:00.365Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: statusline-by-default",
+    "asked_at": "2026-09-04T10:59:04.859Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -34,12 +39,5 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave: blast-radius + contracts (fable)",
     "digest_head": "# statusline-by-default — advisor digest (plan-step hat wave)\n\nTwo seats, dispatched `--kind advisor` at the plan step: **blast radius** and\n**contracts & proof**. Synthesis and the three tie-break calls are in\n`../plan.md` (\"Settled design points\"); this file is the evidence they rest on.\n\n## Seat 1 — blast radius\n\n1. **No data collision between the two settings writers.** The apply loop runs\n   items in plan order (`apply.rs:321`) and `merge_repo_settings` reads the file\n   fresh at apply time"
-  },
-  "merge_ready": {
-    "since": "2026-09-04T10:54:27.905Z",
-    "branch": "wt/statusline-by-default",
-    "worktree_id": "beehive--wt--statusline-by-default",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
