@@ -250,11 +250,28 @@ fail 1 -> consult 1 -> advised retry
 
 A re-dispatched cell (rescue rung) starts a **fresh** budget — the 2-consult cap is per claim, not per cell lifetime. Consulting after `[BLOCKED]` has already been returned for the current claim is never permitted.
 
-**Evidence bundle — two shapes:**
+**Evidence bundle — three shapes:**
 - **On-failure consult (this loop):** the exact failing command, the failing excerpt from the test record, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path — the advisor is debugging with you, it needs the evidence.
 - **Gate-time consult (the unconditional high-risk/hard-gate pre-cap consult, bee-swarming "Execute", before the cap):** a COMPACT DIGEST only — cell id, one-paragraph change summary, file list with a one-liner per file, the `CONTEXT.md` path. Never full file excerpts: nothing failed, the advisor is sanity-checking shape and risk, and the semantic judge plus the close-time test run independently backstop correctness.
+- **Lead-run nudge consult:** carries the gate-time compact-digest bundle shape (not the on-failure bundle — nothing failed) plus the supervisor's nudge row verbatim and the in-flight diff.
 
-Either shape passes **inline in the consult prompt or via stdin — never a `/tmp` path**. Never include secrets or env values.
+All three shapes pass **inline in the consult prompt or via stdin — never a `/tmp` path**. Never include secrets or env values.
+
+The **nudge consult** is lead-owned, triggered by a supervisor `advisor-nudge` row rather than a red verify. It reuses the configured `advisor` slot via `bee dispatch prepare --kind advisor --purpose "nudge <row-id>: <cell-id>"`. It carries the gate-time compact-digest bundle shape (not the on-failure bundle — nothing failed) plus the nudge row verbatim and the in-flight diff, and its budget is one consult per nudge row because the mailbox point key already forbids a second nudge on the same point. The bundle rides the prompt body, never `--brief-file`. The return form is fixed:
+
+```text
+verdict: on-track|redirect|stop
+finding: <scenario with file:line> | none
+next: <one line>
+```
+
+`on-track / none` is the expected majority answer. Rules for this trigger (omitting what the section already forbids):
+- never answer a question the nudge row did not ask;
+- never treat green as suspect without a scenario at file:line;
+- never re-plan or propose a new cell;
+- never reinterpret a locked decision (a conflict is `stop` citing the D-id);
+- never grade diff size or ambition.
+
 
 **Transport** — the `Advisor` line names the advisor and how to consult it:
 - **Model-shaped advisor:** consult via Codex-native subagent dispatch at the named advisor model, recording the same `advisor-consult <cell-id>: <advisor-model>` attribution that bee-swarming's goal-check reads from `.bee/logs/dispatch.jsonl`. The transport stays runtime-native: a model-shaped transport that is unavailable or rejected surfaces in the Consults section (spending at most one budget slot, per the transport-error rule below) — never a silent fallback to a cross-vendor CLI, unless the advisor slot itself is configured as that CLI (a cli-shaped advisor, next).

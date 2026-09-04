@@ -180,24 +180,21 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    Full resolution semantics, marker anchoring, and dispatch economics:
    "Model Roles — Config-Driven, Runtime-Keyed" below.
 
-   **After the role resolves, resolve the advisor slot for this dispatch**:
-   `resolveAdvisor(root, runtime)`. The configured advisor IS the
-   advisor — no family test, no strength test, no self-judged skip;
-   the orchestrator's only judgment is the one honest no-op below, never a
-   hardcoded strength ladder. Add an `Advisor` line to the dispatch
-   (template below) **only** when the advisor resolves AND passes that
-   check:
-   - No advisor configured → skip, no `Advisor` line.
-   - The advisor resolves to **literally the same model name** as the
-     worker's resolved model → skip (the one honest no-op; a `cli`-shaped
-     advisor is never the same model, so it is always consulted).
-   - Otherwise → **always** add the `Advisor` line, escalated workers
-     included — config is the authority, the orchestrator does not
-     second-guess it.
-   - When it passes, the `Advisor` line names the advisor identity and
-     states its proven transport verbatim (model-shaped vs cli-shaped, per
-     the Worker Prompt Template below) — this must match what
-     the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run.
+    **The `Advisor` line is rendered by the dispatch door, not added by hand.**
+    `bee dispatch prepare --kind cell` resolves the advisor slot and renders
+    the `Advisor:` line into the dispatch payload automatically (applying the
+    one honest no-op inside the verb):
+    - No advisor configured → skip, no `Advisor` line.
+    - The advisor resolves to **literally the same model name** as the
+      worker's resolved model → skip (the one honest no-op; a `cli`-shaped
+      advisor is never the same model, so it is always consulted).
+    - Otherwise → **always** render the `Advisor` line, escalated workers
+      included — config is the authority, and resolution does not
+      second-guess it.
+    - When rendered, the `Advisor` line names the advisor identity and
+      states its proven transport verbatim (model-shaped vs cli-shaped, per
+      the Worker Prompt Template below) — this must match what
+      the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run.
 5. **Record workers** before results arrive. `bee dispatch prepare --kind
    cell` registers its worker automatically — with `--claim`, on the fresh
    claim it just took (cell dpr-1); without it, on a cell `--worker`

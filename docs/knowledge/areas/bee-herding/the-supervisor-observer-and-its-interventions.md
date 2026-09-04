@@ -123,6 +123,11 @@ on the same point twice escalates into the human's report rather than
 repeating. The consent sweep never auto-proceeds an unanswered nudge — an
 unknown intervention kind falls through to no action, the safe direction.
 
+The execution-altitude consult that the lead runs is defined in
+`skills/bee-swarming/references/worker-details.md` (§ "Advisor consult in full"
+/ "The nudge consult (lead-owned)"). Its dispatch verb, compact-digest bundle
+shape, return form, and rules live there — one fact, one home.
+
 ## The urgent class
 
 One class breaks that quiet: a **danger-class** alert. It is exempt from the

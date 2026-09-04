@@ -75,7 +75,13 @@ unwound and nothing is left half-done),
 - **An advisor nudge owes an answer too.** A supervisor `advisor-nudge`
   intervention aimed at the feature arms response debt — cap, close, and merge
   each refuse while it stands; it clears only through a decision tagged
-  `advisor-nudge` that names the nudge row's id.
+  `advisor-nudge` that names the nudge row's id. The decision text follows the
+  clearing form:
+  `advisor-nudge <row-id>: <on-track|redirect|stop|declined> — <reason> [-> <follow-up id>]`
+  Next action depends on the verdict:
+  `on-track` / `declined`: decision only, cap proceeds;
+  `redirect`: re-dispatch or `bee cells reopen`;
+  `stop`: a Blocker-class finding is a red base, so `bee cells block` and back to planning.
 - **Slice clean is a door set, not a feeling**: `bee close --feature <slug>
   --dry-run` names every remaining door with the command that settles it;
   proof is checked, never re-run — the final slice runs `bee close --feature
