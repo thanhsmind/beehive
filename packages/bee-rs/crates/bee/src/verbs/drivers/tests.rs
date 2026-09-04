@@ -8837,3 +8837,58 @@ advance_on — falling to another model there hides the defect (D11)"
             );
         }
     }
+
+    /// The nudge consult lives in instruction text, and instruction text is an
+    /// untested code path unless something pins it (pattern
+    /// `20260821-instruction-text-is-an-untested-code-path`). The prose tells a
+    /// lead which dispatch kind to run and which supervisor signals earn a
+    /// nudge; both are closed sets owned by code. Widen either set, or rename
+    /// the verb the prose names, and this test demands the document learn it —
+    /// the same tie `the_shipped_prompt_pins_the_record_verbs_own_closed_sets`
+    /// holds over the supervisor prompt.
+    #[test]
+    fn worker_details_nudge_consult_pins_the_kinds_and_signals_code_owns() {
+        use crate::verbs::supervisor::{ADVISOR_NUDGE_KIND, KNOWN_SIGNALS};
+
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("..");
+        let doc = repo_root.join("skills/bee-swarming/references/worker-details.md");
+        let body = std::fs::read_to_string(&doc)
+            .unwrap_or_else(|e| panic!("worker-details.md reads at {}: {e}", doc.display()));
+
+        // The dispatch kind the prose tells the lead to run must be one the
+        // verb actually accepts.
+        assert!(
+            DISPATCH_KINDS.contains(&"advisor"),
+            "the nudge consult's documented door disappeared from DISPATCH_KINDS"
+        );
+        assert!(
+            body.contains("bee dispatch prepare --kind advisor"),
+            "worker-details.md no longer names the nudge consult's dispatch verb"
+        );
+        assert!(
+            body.contains(ADVISOR_NUDGE_KIND),
+            "worker-details.md never names the {ADVISOR_NUDGE_KIND:?} record that triggers the consult"
+        );
+
+        // Only the three poor-work signals earn a nudge; the other four are
+        // observations, and the prose must not advertise them as triggers.
+        for signal in ["struggling-loop", "budget-overrun", "same-region-resubmit"] {
+            assert!(
+                KNOWN_SIGNALS.contains(&signal),
+                "{signal:?} is documented as a nudge trigger but is not a signal the verb knows"
+            );
+        }
+
+        // The fixed return form: a verdict the lead can put straight into the
+        // decision text that clears the debt.
+        for needle in ["verdict:", "on-track", "redirect", "stop", "finding:", "next:"] {
+            assert!(
+                body.contains(needle),
+                "worker-details.md's nudge consult is missing the return-form token {needle:?}"
+            );
+        }
+    }
