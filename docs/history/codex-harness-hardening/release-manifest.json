@@ -1665,20 +1665,20 @@
     },
     {
       "path": "packages/bee/statusline/statusline-command.sh",
-      "sha256": "2b74f863a261598c95d4bfcdc5a7de8b67b2e965b9232846d4b91d92412b1165",
+      "sha256": "8d08e709c818639afd7821fb74c51e31a0bc29ceeb96a8d6cb5be0fe7241e8d1",
       "mode": "755",
       "role": "package_payload",
       "packagePath": "packages/bee/statusline/statusline-command.sh"
     },
     {
       "path": "scripts/install.ps1",
-      "sha256": "116afed92cb66588675d69d91bd97d7846cd9ba7536fd6693fd7fe23de866fa7",
+      "sha256": "c983c0108c38413fcf5d7855761012ff839847e5c4f9faa4d1244d7bc1bbac9d",
       "mode": "644",
       "role": "distribution_tool"
     },
     {
       "path": "scripts/install.sh",
-      "sha256": "afbef6f31114fd7471558a88e901ea84b8a57b783c2e0cdb60c7610346221865",
+      "sha256": "5e3861d713263e8a2488c9b48651d362cc1caea1119f20c8f8a32da265644e73",
       "mode": "644",
       "role": "distribution_tool"
     },

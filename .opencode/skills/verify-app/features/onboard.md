@@ -66,6 +66,8 @@ Preconditions:
   `.pi/` and `docs/`. `.bee/` holds `onboarding.json`, `config.json`,
   `state.json`, `reservations.json`, `decisions.jsonl`, `backlog.jsonl`,
   `config-sample.json`, `cells/`, `logs/`, `expertise/` and `bin/`.
+  `.claude/` holds `settings.json` (with `statusLine` present) and
+  `statusline-command.sh`.
 - **Confirm the store agrees.** Run
   `VERIFY_CWD=target control-bee cli -- status --json`. It reports
   `onboarding.installed: true`, `onboarding.bee_version` equal to the manifest
@@ -104,5 +106,11 @@ Preconditions:
   `onboard/mod.rs:361-365`, applied at `onboard/plan.rs:908`). When it
   does land, those hooks fire for an agent session opened inside that repo, never
   for this harness, so they cannot be verified from here.
+- Status display is **written by default**, the opposite of hook wiring: when
+  `.claude/settings.json` has no `statusLine` key, onboarding adds the canonical
+  project-level entry and vendors `.claude/statusline-command.sh`. A target repo
+  already carrying its own `statusLine` is never rewritten (treated as
+  preference), and `--no-statusline` (or `.bee/config.json` `"statusline": false`)
+  skips the step.
 - Installing over an existing store preserves state. A test that expects a
   pristine `state.json` must launch a new sandbox, not re-onboard an old one.
