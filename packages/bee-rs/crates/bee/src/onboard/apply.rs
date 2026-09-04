@@ -313,6 +313,24 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
     let mut applied: Vec<Value> = Vec::new();
     let mut skipped_skills: Vec<Value> = Vec::new();
 
+    // BACKUP ONCE PER FILE PER RUN (4cac0774).
+    //
+    // `.claude/settings.json` now has two writers — the hooks merge and the
+    // statusline entry — and each takes a `<file>.bak` before writing. A second
+    // backup would copy the ALREADY-MODIFIED file over the pristine one, in
+    // either order, and `scripts/install.sh` promises that `.bak` restores the
+    // pre-bee state. Whichever writer reaches a file first takes its backup;
+    // the rest find it taken.
+    let mut backed_up: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+        if !exists(path) || !taken.insert(path.to_path_buf()) {
+            return;
+        }
+        let mut bak = path.to_path_buf().into_os_string();
+        bak.push(".bak");
+        let _ = std::fs::copy(path, PathBuf::from(bak));
+    };
+
     // Compose the header BEFORE any mergeAgentsContent call (decision D4).
     let propose_header = plan.iter().any(|i| i["action"] == "propose_agents_header");
     let header_text = if propose_header { compose_agents_header(repo_root) } else { String::new() };
@@ -508,21 +526,27 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                 // started; this Ok-only branch is a defensive fallback for a
                 // plan-to-apply race, not the primary refusal path.
                 if let Ok(merged) = hw::merge_repo_settings(&target) {
-                    if exists(&target) {
-                        let mut bak = target.clone().into_os_string();
-                        bak.push(".bak");
-                        let _ = std::fs::copy(&target, PathBuf::from(bak));
-                    }
+                    backup_once(&target, &mut backed_up);
                     let _ = write_file_atomic(&target, merged.text.as_bytes());
+                }
+            }
+            "merge_statusline_settings" => {
+                // Add-only, and no Err path by design: a settings file that does
+                // not parse is left alone rather than refused, so a broken host
+                // file never turns a default into a blocked install. Re-check
+                // the condition here for the plan-to-apply race, the same way
+                // `ensure_codex_statusline` below does.
+                if hw::statusline_settings_absent(repo_root) {
+                    let merged = hw::merge_statusline_settings(&target);
+                    if merged.changed {
+                        backup_once(&target, &mut backed_up);
+                        let _ = write_file_atomic(&target, merged.text.as_bytes());
+                    }
                 }
             }
             "merge_codex_hooks" => {
                 if let Ok(merged) = hw::merge_codex_hooks(&target) {
-                    if exists(&target) {
-                        let mut bak = target.clone().into_os_string();
-                        bak.push(".bak");
-                        let _ = std::fs::copy(&target, PathBuf::from(bak));
-                    }
+                    backup_once(&target, &mut backed_up);
                     let _ = write_file_atomic(&target, merged.text.as_bytes());
                 }
             }

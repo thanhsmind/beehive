@@ -349,9 +349,21 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     assert_eq!(ledger["bee_version"], VERSION);
     let managed_keys: Vec<&str> =
         ledger["managed"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    // 4cac0774: a fresh host declares no `statusLine`, so onboarding writes the
+    // entry, vendors the script, and therefore OWNS the pair — the managed
+    // ledger records its hashes from the first apply. Under the old opt-in this
+    // key was absent here.
     assert_eq!(
         managed_keys,
-        vec!["agents_block", "gitignore_block", "helpers", "lib", "expertise", "prompts"]
+        vec![
+            "agents_block",
+            "gitignore_block",
+            "helpers",
+            "lib",
+            "expertise",
+            "prompts",
+            "statusline"
+        ]
     );
     // The managed hash is of the file's UTF-8 STRING content (hashFile).
     assert_eq!(
