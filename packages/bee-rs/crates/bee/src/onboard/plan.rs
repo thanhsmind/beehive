@@ -42,6 +42,11 @@ pub struct Options {
     pub sync_skills: bool,
     pub force_downgrade: bool,
     pub plugin_source: bool,
+    /// 4cac0774: install the status display unless this run or the project
+    /// opted out. Never gated on `repo_hooks` or `plugin_source` — a Claude
+    /// plugin cannot supply a `statusLine`, so a plugin-first host gets the
+    /// display only if onboarding writes it.
+    pub statusline: bool,
     pub runtime: String,
 }
 
@@ -580,6 +585,16 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     let mut plan: Vec<Value> = Vec::new();
     let codex_hybrid = opts.plugin_source && hw::runtime_covers_codex(&opts.runtime);
 
+    // 4cac0774: ONE value per run, meaning "bee owns this host's status entry".
+    // It gates stage 3b, the settings write in stage 5c, AND the managed
+    // manifest — computed once, on purpose. Feeding the manifest the PRE-apply
+    // `statusline_opt_in` instead would leave a freshly written host with an
+    // entry but no recorded hashes, so the post-apply recheck would report
+    // `changes_needed` for ever and `scripts/install.sh` would fail the install.
+    let statusline_settings_absent = hw::statusline_settings_absent(repo_root);
+    let statusline =
+        opts.statusline && (hw::statusline_opt_in(repo_root) || statusline_settings_absent);
+
     // 0. worktree-local coordination migration (msn-18d).
     let worktree_migration = detect_worktree_migration(repo_root);
     if worktree_migration.applicable
@@ -781,8 +796,8 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
-    // 3b. statusline pair (opt-in sync)
-    if hw::statusline_opt_in(repo_root) {
+    // 3b. statusline script (default sync — 4cac0774)
+    if statusline {
         for name in list_template_statusline(engine) {
             let source = read_text_if_exists(&engine.templates_statusline_dir.join(&name));
             let target = repo_root.join(".claude").join(&name);
@@ -940,6 +955,16 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
+    // 5b-statusline. The host's own status entry (4cac0774), add-only.
+    //
+    // Ordered AFTER stage 5's `merge_repo_hook_settings` on purpose: both write
+    // `.claude/settings.json`, each re-reads it fresh at apply time, and the
+    // apply loop backs the file up exactly once — whichever writer reaches it
+    // first. Nothing here is gated on `repo_hooks` or `plugin_source`.
+    if statusline && statusline_settings_absent {
+        plan.push(plan_item("merge_statusline_settings", ".claude/settings.json"));
+    }
+
     // 5c. Codex user-config status line (machine-level, add-only)
     if hw::codex_statusline_missing() {
         plan.push(plan_item("ensure_codex_statusline", "~/.codex/config.toml"));
@@ -962,8 +987,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     // shape (opencode-support oc-14, D4).
     plan.extend(compute_opencode_agent_file_plan(engine, repo_root));
 
-    // 6. onboarding.json drift (managed versions)
-    let statusline = hw::statusline_opt_in(repo_root);
+    // 6. onboarding.json drift (managed versions) — `statusline` is the single
+    // post-plan value computed at the top of this function, never a fresh
+    // `statusline_opt_in` read (see its comment: that is the one-pass
+    // convergence the installer's recheck depends on).
     let desired_managed = build_managed_versions(
         engine,
         &rendered_block,
