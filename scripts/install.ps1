@@ -47,6 +47,7 @@ param(
   [switch]$GlobalSkills,
   [switch]$NoClaudeMd,
   [switch]$ClaudeMd,
+  [switch]$NoStatusline,
   [switch]$NoGitInit,
   [switch]$Yes,
   [switch]$DryRun
@@ -535,6 +536,7 @@ try {
   elseif (-not $NoHooks) { $onboardFlags += '--repo-hooks' }
   if ($NoClaudeMd) { $onboardFlags += '--no-claude-md' }
   if ($ClaudeMd) { $onboardFlags += '--claude-md' }
+  if ($NoStatusline) { $onboardFlags += '--no-statusline' }
   if ($GlobalSkills) { $onboardFlags += '--global-skills' }
 
   if ($PluginStateFile -and -not (Test-Path $PluginStateFile)) { Fail "-PluginStateFile not found: $PluginStateFile" }

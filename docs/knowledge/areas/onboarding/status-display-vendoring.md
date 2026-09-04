@@ -1,25 +1,25 @@
 ---
 type: bee.area
-title: Onboarding — the opt-in status display
-description: "How onboarding detects a project's status-display opt-in, vendors and heals the pair, stays entirely out of projects that never opted in, what the line renders, and the second runtime's machine-level status block."
+title: Onboarding — the default status display
+description: "How onboarding detects a project's status display, vendors it by default, respects preference and --no-statusline, what the line renders, and the second runtime's machine-level status block."
 timestamp: 2026-07-22
 bee:
   id: onboarding-status-display-vendoring
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: [102efe08 (opt-in statusline vendor shape), "c6ee6b6e (Gate 4 onboard-statusline: anchored detection, sweep opt-in)", b7af1bf9 (full compatible Codex lifecycle-hook parity)]
+  decisions: ["4cac0774 (default statusline install; supersedes 102efe08)", 102efe08 (superseded: opt-in statusline vendor shape), "c6ee6b6e (Gate 4 onboard-statusline: anchored detection, sweep opt-in)", b7af1bf9 (full compatible Codex lifecycle-hook parity)]
   sources: ["cell onboard-statusline-1 (verification_evidence, 2026-07-11)", docs/history/onboard-statusline/reports/review-correctness.md, "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "docs/specs/onboarding.md#R1", "docs/specs/onboarding.md#R2", "docs/specs/onboarding.md#R3", "docs/specs/onboarding.md#R4", "docs/specs/onboarding.md#E2", "docs/specs/onboarding.md#E3", "docs/specs/onboarding.md#E4", "docs/specs/onboarding.md#E5", "docs/specs/onboarding.md#E7", "docs/specs/onboarding.md#P7", "docs/specs/onboarding.md#P8", "docs/specs/onboarding.md#P9", "docs/specs/onboarding.md#P10", "docs/specs/onboarding.md#P11", "docs/specs/onboarding.md#P12"]
-  authoritative_for: "onboarding: the opt-in status display"
+  authoritative_for: "onboarding: the default status display"
 ---
 
-# Onboarding — The Opt-In Status Display
+# Onboarding — The Default Status Display
 
 This concept owns one mechanism end to end: the script that renders the assistant's
-per-session status line, which onboarding vendors **only** into projects that already
-opted in. The defining property is restraint — onboarding never creates the opt-in,
-never edits the settings file that declares it, and a project that never opted in is
-untouched by this mechanism's existence.
+per-session status line, which onboarding vendors by default. The defining property is
+restraint — onboarding adds the key when it is absent and never rewrites one that is
+present. A project whose settings file already declares a status line is treated as
+preference and left byte-for-byte alone.
 
 The vendored script is the whole of what this mechanism copies. It was one half of a
 two-file pair until the R6 cutover; the other half, a Node usage aggregator, is now
@@ -31,38 +31,42 @@ that resolves none simply renders the first line without the token/cost line.
 
 | Element | Meaning |
 |---|---|
-| status-display script | The script that renders the assistant's per-session status line. It draws the session facts itself and asks `bee dev statusline` for the optional token/cost line. The canonical copy lives with bee's source; each opted-in project holds a vendored copy. |
-| opt-in signal | The project's assistant-settings file declares a status-display command that points at the **project's own** copy of the display script — either anchored by the project-directory variable or written as a bare project-relative path. A reference to a user-level (home-directory) copy is NOT an opt-in. |
-| managed status-display record | A fingerprint per vendored file, stored in the project's onboarding record **only when the project opts in**, so later runs can tell current from drifted. Projects that never opted in carry no such record. |
+| status-display script | The script that renders the assistant's per-session status line. It draws the session facts itself and asks `bee dev statusline` for the optional token/cost line. The canonical copy lives with bee's source; each managed project holds a vendored copy. |
+| absent status entry | The project's assistant-settings file is missing or contains no `statusLine` key. This is the trigger for the default install. |
+| project-level status entry | The project's assistant-settings file declares a status-display command that points at the **project's own** copy of the display script — either anchored by the project-directory variable or written as a bare project-relative path. A reference to a user-level (home-directory) copy is NOT a project-level entry. |
+| managed status-display record | A fingerprint per vendored file, stored in the project's onboarding record whenever the project-level entry is present, so later runs can tell current from drifted. Projects without a project-level entry carry no such record. |
 
 ## Behaviors & Operations
 
-**Detect (every run).** Onboarding reads the project's assistant-settings file and
-derives the opt-in signal. What blocks it: nothing — an absent, unreadable,
-unparseable, or unexpectedly-shaped settings file simply means "not opted in";
-detection never fails a run. What the agent observes: opted-in projects with a
-missing or altered vendored file see one planned copy action per affected file;
-non-opted projects see zero status-display actions, always.
+**Detect (every run).** Onboarding reads the project's assistant-settings file.
+Detection produces one of three outcomes:
+1. Absent key or absent file: plans a settings write to add the canonical entry plus a copy of the script.
+2. Project-level entry present: plans a copy or drift heal of the script only (settings file is not touched).
+3. Anything else (user-level path, non-object, unparseable file): plans zero status-display actions.
+Detection is fail-safe and never fails or blocks a run.
 
-**Vendor (apply run, opted-in projects only).** Each planned file is written from
-the canonical copy, whole-file, atomically. The plan walks the canonical directory,
-so the count follows that directory rather than a fixed number. Side effects: none
-beyond the files it copies — the settings file is never created, modified, or backed
-up by this behavior. Afterwards the project's status display renders with the canonical
-behavior, and an immediate re-check reports up to date.
+**Vendor (apply run).** Each planned file is written from the canonical copy,
+whole-file, atomically. The plan walks the canonical directory, so the count
+follows that directory rather than a fixed number. When the settings key was
+absent, the settings file is created or gains the canonical `statusLine` key,
+with a `.bak` backup taken if the file already existed — and exactly one backup
+per run even when the hooks merge writes the same file. Afterwards the project's
+status display renders with the canonical behavior, and an immediate re-check
+reports up to date.
 
 **Heal drift.** A locally edited vendored file is treated as drift, not preference:
 the next apply overwrites it with the canonical copy (same contract as every vendored
 helper — the canonical source is bee's tree). A project that wants local
 status-display behavior keeps its settings pointing at a user-level copy instead.
 
-**Stay out (non-opted projects).** Projects without the opt-in signal never receive
-the vendored file, never gain a managed status-display record, and their up-to-date
-status is entirely unaffected by this mechanism's existence. Such a project still
-shows a status line if the human's user-level settings name a user-level copy — but
-that copy is outside onboarding's reach and may be arbitrarily stale. Keeping it
-current is a manual copy from the canonical source, and nothing in bee detects or
-reports its drift.
+**Stay out (--no-statusline, .bee/config.json statusline:false, or a present foreign entry).**
+When `--no-statusline` is passed, `.bee/config.json` sets `"statusline": false`, or the
+host shell is PowerShell (`host_shell_is_powershell`), onboarding skips the statusline
+steps entirely. Similarly, a project that already declares a foreign or user-level
+`statusLine` is treated as user preference and left alone: it never receives the
+vendored file, never gains a managed status-display record, and its up-to-date status
+is unaffected. Keeping a user-level copy current is a manual copy from the canonical
+source; nothing in bee detects or reports its drift.
 
 ### What the status display renders
 
@@ -112,44 +116,50 @@ the first; a re-run plans nothing.
 
 ## Business Rules
 
-- **R1** — Onboarding syncs the status-display script only into projects already
-  opted in; it never creates the opt-in and never touches the settings file in
-  this stage (decision 102efe08).
-- **R2** — Detection is fail-safe: any settings shape it does not positively
-  recognize means "not opted in"; it never aborts or throws (decision 102efe08).
-- **R3** — Only project-level references count as opt-in: the project-directory
-  variable must anchor the script path itself, and bare relative references must
-  not be preceded by another path segment. A user-level path containing the same
-  script name, or the project-directory variable appearing elsewhere in the
-  command, is not an opt-in (decision c6ee6b6e, review finding P2-1).
-- **R4** — The canonical script and an opted-in project's vendored copy must be
+- **R1** — Onboarding writes the project-level entry when the key is absent,
+  creating the settings file if needed; a present key is preference and is left
+  byte-for-byte alone; `--no-statusline` and `.bee/config.json` `"statusline": false`
+  suppress both the settings write and the script copy (decision 4cac0774,
+  supersedes 102efe08).
+- **R2** — Detection is fail-safe: an unrecognized settings shape means leave
+  alone; it never aborts, throws, or blocks the run (decision 102efe08).
+- **R3** — Only project-level references count as a project-level status entry:
+  the project-directory variable must anchor the script path itself, and bare
+  relative references must not be preceded by another path segment. A user-level
+  path containing the same script name is a present key and therefore preference,
+  not a project-level entry (decision c6ee6b6e, review finding P2-1).
+- **R4** — The canonical script and a project's vendored copy must be
   byte-identical; a one-sided edit anywhere (including deleting the vendored copy
-  while still opted in) is drift and fails the standing guard
+  while carrying the project-level entry) is drift and fails the standing guard
   (`packages/bee-rs/crates/bee/tests/statusline_contract.rs`) (decision c6ee6b6e,
   review finding P2-3).
+- **R5** — The command bee writes must satisfy R3's own detector, pinned by a
+  test — otherwise a host silently un-adopts on the next run.
 
 ## Edge Cases Settled
 
-- Settings file unparseable → not opted in, run proceeds normally.
-- Status-display command present but not a text value → not opted in.
+- Settings file unparseable → not absent, treated as broken, zero status-display actions, run proceeds normally.
+- Status-display command present but not a text value → not absent, treated as foreign shape, zero status-display actions.
 - Project-directory variable used elsewhere in the command while the script path
-  is user-level → not opted in (the review's adversarial case).
+  is user-level → treated as preference (foreign value), zero status-display actions.
 - Exactly one vendored file drifted → exactly that file is re-planned, any other
   untouched.
-- Opting out after having been opted in → the stale managed record is inert but
-  currently survives; recorded as a known gap (backlog, paired with the
-  equivalent behavior in the hook-vendoring mechanism). Now sharper than when it
-  was filed: the remembered opt-in is what keeps guardrails current, so it is
-  also what a genuine opt-out would have to clear. (The remembered opt-in itself
-  is owned by [`repo-local-guardrails.md`](repo-local-guardrails.md).)
+- Opting out after having been opted in → this is now the ordinary path, and it
+  splits: a hand-deleted key in `settings.json` is re-added on the next run
+  (the durable opt-out is `.bee/config.json` `"statusline": false` or a foreign
+  value), while `--no-statusline` on a host that already carries the record leaves
+  a stale managed record and an orphaned vendored script (recorded as a known gap;
+  paired with the equivalent behavior in the hook-vendoring mechanism).
 
 ## Open Gaps
 
 - Opt-out manifest cleanup (see Edge Cases) — backlog item filed 2026-07-11.
-- The vendoring path itself (plan stage 3b and the `copy_statusline` apply case)
-  has no live test. The Node sandbox cases that covered it were deleted at the R6
-  cutover and never ported; only opt-in detection and canonical/vendored
-  byte-equality are guarded today.
+  Includes the sub-case where `--no-statusline` leaves a stale managed record
+  and an orphaned vendored script on an existing host.
+- `LEDGER_GROUPS` mismatch: `plan.rs:239` maps `statusline` to
+  `.bee/bin/statusline` while the vendor target is `.claude/` (`plan.rs:788`),
+  so the regen obligation (`verbs/cells/obligation.rs:112`) guards a directory
+  that does not exist.
 
 ## Pointers (implementation)
 
@@ -169,8 +179,8 @@ All Rust paths below are relative to `packages/bee-rs/crates/bee/`.
   script appends when it resolves a bee binary.
 - `tests/statusline_contract.rs` — the standing guard: canonical/vendored
   byte-equality plus the script's binary lookup.
-- `src/onboard/hooks_wiring.rs:1023` — the opt-in detection cases. The vendoring
-  plan/apply path has no live test (see Open Gaps).
+- `src/onboard/hooks_wiring.rs:1023` — statusline detection test cases;
+  `src/onboard/tests.rs` covers the full vendoring plan, apply, and convergence lifecycle.
 - Host-side settings contract: `.claude/settings.json` → `statusLine.command`.
 - Second runtime, machine-level: `src/onboard/templates.rs:179`
   (`CODEX_STATUS_LINE_BLOCK`), `src/onboard/hooks_wiring.rs:521-546`

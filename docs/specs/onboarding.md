@@ -10,7 +10,7 @@ This area's current truth now lives in the knowledge bundle:
 [`docs/knowledge/areas/onboarding/`](../knowledge/areas/onboarding/index.md)
 (okf-foundation D20/D29/D37). Eight concepts, split by TOPIC rather than the old spec's
 headings: `overview.md` owns what onboarding is, its check/apply run modes and its actors;
-`status-display-vendoring.md` owns the opt-in status-display script — detecting the opt-in,
+`status-display-vendoring.md` owns the default status-display script — detecting the settings entry,
 vendoring it, healing drift, staying out otherwise, what the line renders, and the second
 runtime's machine-level status block; `managed-ignore-section.md` owns the delimited block
 onboarding owns inside the project's ignore list; `distribution-source-exclusivity.md` owns

@@ -66,6 +66,9 @@ Options:
       --claude-md         Accepted for compatibility; a no-op alias of the
                           default (CLAUDE.md is written unless --no-claude-md
                           is passed).
+      --no-statusline     Skip vendoring the status-display script and adding
+                          the project-level statusLine entry to .claude/settings.json.
+                          By default onboarding writes both when the key is absent.
       --no-git-init       Greenfield: do not run `git init` in a non-git target.
   -y, --yes               Non-interactive; accept defaults, skip prompts.
       --dry-run           Show the runtime copies and the exact onboarding plan
@@ -78,6 +81,9 @@ Safety (brownfield):
   - .bee/state.json, decisions.jsonl, cells/ are never overwritten.
   - .claude/settings.json hook merge creates a .bak backup; re-runs never
     duplicate entries.
+  - Status display: vendored by default with the project-level statusLine entry
+    in .claude/settings.json; add-only and never overwrites a present entry.
+    Pass --no-statusline to skip it.
   - Skills: onboarding syncs the bee skills per-project by default into
     <repo>/.claude/skills (Claude Code) and <repo>/.agents/skills (Codex);
     these trees are committed, not gitignored. Pass --global-skills to also
@@ -124,6 +130,7 @@ BUILD_FROM_SOURCE=0
 REPO_HOOKS=1
 GLOBAL_SKILLS=0
 NO_CLAUDE_MD=0
+NO_STATUSLINE=0
 GIT_INIT=1
 ASSUME_YES=0
 DRY_RUN=0
@@ -142,6 +149,7 @@ while [ $# -gt 0 ]; do
     --global-skills) GLOBAL_SKILLS=1; shift ;;
     --no-claude-md) NO_CLAUDE_MD=1; shift ;;
     --claude-md)    shift ;;
+    --no-statusline) NO_STATUSLINE=1; shift ;;
     --no-git-init)  GIT_INIT=0; shift ;;
     -y|--yes)       ASSUME_YES=1; shift ;;
     --dry-run)      DRY_RUN=1; shift ;;
@@ -385,6 +393,9 @@ elif [ "$REPO_HOOKS" -eq 1 ]; then
 fi
 if [ "$NO_CLAUDE_MD" -eq 1 ]; then
   ONBOARD_FLAGS+=("--no-claude-md")
+fi
+if [ "$NO_STATUSLINE" -eq 1 ]; then
+  ONBOARD_FLAGS+=("--no-statusline")
 fi
 if [ "$GLOBAL_SKILLS" -eq 1 ]; then
   ONBOARD_FLAGS+=("--global-skills")

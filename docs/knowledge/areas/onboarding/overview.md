@@ -19,7 +19,7 @@ bee:
 
 Onboarding installs and keeps current everything bee manages inside a host project:
 the agent-instructions block, the runtime state files, the vendored helper commands,
-and — for projects that opted in — the workspace status-display scripts. Re-running it
+and — by default — the workspace status-display script. Re-running it
 is always safe: it reports what would change before changing anything, and an
 up-to-date project reports "nothing to do".
 
@@ -49,7 +49,7 @@ run installs from, and are owned by
 
 | Concept | What it owns |
 |---|---|
-| [`status-display-vendoring.md`](status-display-vendoring.md) | The opt-in status-display pair: detecting the opt-in, vendoring the pair, healing drift, staying out otherwise, what the line renders, and the second runtime's machine-level status block |
+| [`status-display-vendoring.md`](status-display-vendoring.md) | The default status display: detecting the settings entry, vendoring by default, respecting preference and --no-statusline, what the line renders, and the second runtime's machine-level status block |
 | [`managed-ignore-section.md`](managed-ignore-section.md) | The delimited block onboarding owns inside the project's ignore list: what it silences, what it must never silence, and how it is created, appended, or rewritten |
 | [`distribution-source-exclusivity.md`](distribution-source-exclusivity.md) | Selecting and proving exactly one distribution source, the fenced cleanup in both directions, and the whole-run snapshot revalidated before the first mutation |
 | [`installer-entrypoints-and-source-staging.md`](installer-entrypoints-and-source-staging.md) | The installer entry points themselves: fetching the source without a full working tree, staging the complete release identity, and tolerating a runtime whose tool is present but broken |

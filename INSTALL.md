@@ -32,6 +32,7 @@ Useful flags (same semantics in both scripts):
 | `--global-skills`             | `-GlobalSkills` | Also copy skills into the legacy global runtime dirs (`~/.claude/skills`, `~/.codex/skills`). Off by default — see "two layers" below |
 | `--no-claude-md`              | `-NoClaudeMd`   | Skip writing/extending CLAUDE.md with the`@AGENTS.md` import (written by default)                                                        |
 | `--claude-md`                 | `-ClaudeMd`     | Accepted for compatibility; a no-op alias of the default (CLAUDE.md is written unless`--no-claude-md`/`-NoClaudeMd` is passed)         |
+| `--no-statusline`             | `-NoStatusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                            |
 | `--no-hooks`                  | `-NoHooks`      | Skip repo-local hook wiring for Claude Code                                                                                                |
 | `--no-git-init`               | `-NoGitInit`    | Greenfield: don't offer`git init`                                                                                                        |
 | `--source <path>`             | `-Source …`    | Use a local bee checkout instead of cloning                                                                                                |
@@ -174,6 +175,7 @@ Flags:
 | `--repo-hooks`    | Additionally copy hooks into`.bee/bin/hooks/` and merge them into `<repo>/.claude/settings.json` (Claude Code fallback when not using the plugin manager)                         |
 | `--no-claude-md`  | Skip writing/extending CLAUDE.md's`@AGENTS.md` import (written by default)                                                                                                          |
 | `--claude-md`     | Accepted for compatibility; a no-op alias of the default                                                                                                                              |
+| `--no-statusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                                                                        |
 | `--global-skills` | Also sync the legacy global`~/.claude/skills` root (Claude Code only — Codex's `~/.codex/skills` global copy is handled by the install scripts, not this script). Off by default |
 | `--json`          | Machine-readable output                                                                                                                                                               |
 
@@ -182,6 +184,8 @@ What onboarding installs:
 ```
 <repo>/AGENTS.md          ← BEE block between <!-- BEE:START --> / <!-- BEE:END --> (content outside markers untouched)
 <repo>/CLAUDE.md          ← @AGENTS.md import, appended once (default; opt out with --no-claude-md)
+<repo>/.claude/settings.json ← statusLine entry, add-only (default; opt out with --no-statusline)
+<repo>/.claude/statusline-command.sh ← status-display script (default; opt out with --no-statusline)
 <repo>/.bee/              ← onboarding.json, state.json, config.json (+ empty cells/, logs/)
 <repo>/.bee/bin/          ← bee[.exe] (the binary, machine-local) + prompts/
 <repo>/.claude/skills/    ← bee-* skills, per-project copy for Claude Code (committed to the repo)
