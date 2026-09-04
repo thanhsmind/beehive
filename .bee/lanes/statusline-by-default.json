@@ -14,7 +14,12 @@
   "next_action": "Continue bee-exploring for \"statusline-by-default\" (lane).",
   "created_at": "2026-09-04T10:09:00.365Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "shape+execution gate for statusline-by-default",
+    "asked_at": "2026-09-04T10:16:02.193Z",
+    "session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -26,5 +31,13 @@
     "rationale": null,
     "updated_at": "2026-09-04T10:10:00.451Z",
     "feature": "statusline-by-default"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-04T10:15:20.752Z",
+    "feature": "statusline-by-default",
+    "newest_decision_id": "4cac0774-9639-4311-8636-ce460ebfae80",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave: blast-radius + contracts (fable)",
+    "digest_head": "# statusline-by-default — advisor digest (plan-step hat wave)\n\nTwo seats, dispatched `--kind advisor` at the plan step: **blast radius** and\n**contracts & proof**. Synthesis and the three tie-break calls are in\n`../plan.md` (\"Settled design points\"); this file is the evidence they rest on.\n\n## Seat 1 — blast radius\n\n1. **No data collision between the two settings writers.** The apply loop runs\n   items in plan order (`apply.rs:321`) and `merge_repo_settings` reads the file\n   fresh at apply time"
   }
 }
