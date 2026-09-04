@@ -157,6 +157,11 @@ fn parse_args_mirrors_the_engine_flag_set() {
     // --claude-md is a no-op alias of the default.
     assert!(ok(&["--no-claude-md", "--claude-md"]).claude_md);
     assert!(ok(&["--plugin-source", "--force-downgrade"]).plugin_source);
+
+    // 4cac0774: the status display is a default artifact; --no-statusline opts
+    // this run out.
+    assert!(ok(&["--repo-root", "/x"]).statusline, "on by default");
+    assert!(!ok(&["--no-statusline"]).statusline);
 }
 
 #[test]
@@ -218,6 +223,10 @@ fn plan_on_an_empty_repo_lists_the_whole_install() {
     assert!(acts.contains(&"create_claude_md".to_string()));
     assert!(acts.contains(&"write_onboarding".to_string()));
     assert!(acts.contains(&"sync_skill".to_string()));
+    // 4cac0774: a virgin host declares no statusLine, so the whole install now
+    // includes writing the entry and vendoring the script.
+    assert!(acts.contains(&"merge_statusline_settings".to_string()));
+    assert!(acts.contains(&"copy_statusline".to_string()));
 
     // The nested expertise pattern file is planned by its POSIX-relative name.
     let expertise = paths_for(&p, "plan", "copy_expertise");
@@ -1359,4 +1368,350 @@ fn a_verify_root_that_resolves_onto_a_skill_home_is_refused() {
     let refusal = super::plan::verify_root_refusal(&fx.repo).unwrap();
     assert!(refusal.contains(".claude/skills"), "the refusal names the home: {refusal}");
     assert!(super::plan::compute_verify_skill_items(&fx.repo).is_empty());
+}
+
+// ── the default status display (4cac0774) ──────────────────────────────────
+//
+// This whole section is new coverage. Under the old opt-in shape the vendoring
+// path had NO live test at all — the knowledge doc carried it as an Open Gap —
+// so the cases below close that gap AND cover the reversal to opt-out. What
+// they hold, in one line: bee writes the entry when the host declares none,
+// never touches one the host already declares, never rewrites a settings file
+// it cannot parse, and converges in a single apply.
+
+fn written_command(fx: &Fixture) -> String {
+    let settings: Value = serde_json::from_str(
+        &std::fs::read_to_string(fx.repo.join(".claude").join("settings.json")).unwrap(),
+    )
+    .unwrap();
+    settings["statusLine"]["command"].as_str().unwrap().to_string()
+}
+
+fn vendored(fx: &Fixture) -> PathBuf {
+    fx.repo.join(".claude").join("statusline-command.sh")
+}
+
+fn settings_path(fx: &Fixture) -> PathBuf {
+    fx.repo.join(".claude").join("settings.json")
+}
+
+/// The canonical bytes this fixture's source ships.
+const FIXTURE_SCRIPT: &str = "#!/bin/sh\necho hi\n";
+
+/// A host settings file declaring the project-level entry by hand — the shape
+/// that WAS the only way in before 4cac0774.
+fn write_project_level_entry(fx: &Fixture) {
+    write(
+        &settings_path(fx),
+        &format!(
+            "{}\n",
+            jsjson::stringify_pretty(&json!({
+                "statusLine": {
+                    "type": "command",
+                    "command": hooks_wiring::STATUSLINE_COMMAND
+                }
+            }))
+        ),
+    );
+}
+
+// ── the pre-existing gap: vendoring, drift, healing ────────────────────────
+
+#[test]
+fn a_project_level_entry_plans_the_copy_and_apply_lands_the_canonical_bytes() {
+    let fx = fixture();
+    write_project_level_entry(&fx);
+
+    let p = plan(&fx, &[]);
+    assert_eq!(
+        paths_for(&p, "plan", "copy_statusline"),
+        vec![".claude/statusline-command.sh".to_string()]
+    );
+    // The host already declares the entry, so nothing writes to settings.json.
+    assert!(!actions(&p, "plan").contains(&"merge_statusline_settings".to_string()));
+
+    apply(&fx, &[]);
+    assert_eq!(std::fs::read_to_string(vendored(&fx)).unwrap(), FIXTURE_SCRIPT);
+}
+
+#[test]
+fn a_drifted_vendored_script_is_replanned_and_healed() {
+    let fx = fixture();
+    write_project_level_entry(&fx);
+    apply(&fx, &[]);
+
+    write(&vendored(&fx), "#!/bin/sh\necho LOCAL EDIT\n");
+    assert_eq!(
+        paths_for(&plan(&fx, &[]), "plan", "copy_statusline"),
+        vec![".claude/statusline-command.sh".to_string()]
+    );
+
+    apply(&fx, &[]);
+    assert_eq!(std::fs::read_to_string(vendored(&fx)).unwrap(), FIXTURE_SCRIPT);
+}
+
+#[test]
+fn a_deleted_vendored_script_with_the_entry_present_is_replanned() {
+    let fx = fixture();
+    write_project_level_entry(&fx);
+    apply(&fx, &[]);
+
+    std::fs::remove_file(vendored(&fx)).unwrap();
+    assert_eq!(
+        paths_for(&plan(&fx, &[]), "plan", "copy_statusline"),
+        vec![".claude/statusline-command.sh".to_string()]
+    );
+    apply(&fx, &[]);
+    assert!(vendored(&fx).exists());
+}
+
+#[test]
+fn the_managed_ledger_carries_the_statusline_hash_only_when_bee_owns_the_entry() {
+    let owned = fixture();
+    apply(&owned, &[]);
+    let ledger: Value = serde_json::from_str(
+        &std::fs::read_to_string(owned.repo.join(".bee").join("onboarding.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(ledger["managed"]["statusline"]["statusline-command.sh"].is_string());
+
+    let disowned = fixture();
+    apply(&disowned, &["--no-statusline"]);
+    let ledger: Value = serde_json::from_str(
+        &std::fs::read_to_string(disowned.repo.join(".bee").join("onboarding.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(ledger["managed"].get("statusline").is_none());
+}
+
+// ── new to opt-out: the write itself ───────────────────────────────────────
+
+#[test]
+fn an_absent_settings_file_is_created_with_the_canonical_entry_and_the_script() {
+    let fx = fixture();
+    assert!(!settings_path(&fx).exists());
+
+    let acts = actions(&plan(&fx, &[]), "plan");
+    assert!(acts.contains(&"merge_statusline_settings".to_string()));
+    assert!(acts.contains(&"copy_statusline".to_string()));
+
+    apply(&fx, &[]);
+    assert_eq!(written_command(&fx), hooks_wiring::STATUSLINE_COMMAND);
+    assert_eq!(std::fs::read_to_string(vendored(&fx)).unwrap(), FIXTURE_SCRIPT);
+    // Nothing to back up: there was no file before.
+    assert!(!fx.repo.join(".claude").join("settings.json.bak").exists());
+}
+
+/// THE ROUND TRIP. If the command bee writes does not read back as a
+/// project-level entry, the host silently un-adopts on the very next run: no
+/// re-vendoring, the managed key dropped, and nothing anywhere says so.
+#[test]
+fn the_entry_bee_writes_reads_back_as_a_project_level_entry() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    assert!(
+        hooks_wiring::statusline_opt_in(&fx.repo),
+        "the written command must satisfy the detector: {}",
+        written_command(&fx)
+    );
+    assert!(!hooks_wiring::statusline_settings_absent(&fx.repo));
+}
+
+#[test]
+fn a_settings_file_without_the_key_gains_exactly_one_key_and_keeps_the_rest() {
+    let fx = fixture();
+    write(
+        &settings_path(&fx),
+        "{\n  \"model\": \"opus\",\n  \"permissions\": { \"allow\": [\"Bash(ls:*)\"] }\n}\n",
+    );
+    let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+
+    apply(&fx, &[]);
+
+    let settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    let keys: Vec<&str> = settings.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    assert_eq!(keys, vec!["model", "permissions", "statusLine"], "one key added, in place");
+    assert_eq!(settings["model"], "opus");
+    assert_eq!(settings["permissions"]["allow"][0], "Bash(ls:*)");
+    // The file existed, so a backup was taken — and it holds the ORIGINAL.
+    let bak = std::fs::read_to_string(fx.repo.join(".claude").join("settings.json.bak")).unwrap();
+    assert_eq!(bak, original);
+    // 2-space JSON with a trailing newline, like every other settings write.
+    assert!(std::fs::read_to_string(settings_path(&fx)).unwrap().ends_with("}\n"));
+}
+
+#[test]
+fn apply_then_replan_is_a_no_op_which_is_what_the_installer_recheck_asserts() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    let p = plan(&fx, &[]);
+    assert_eq!(p["status"], "up_to_date");
+    assert_eq!(p["plan"].as_array().unwrap().len(), 0);
+}
+
+// ── new to opt-out: everything that must NOT happen ────────────────────────
+
+#[test]
+fn an_existing_project_level_entry_is_left_byte_for_byte() {
+    let fx = fixture();
+    write_project_level_entry(&fx);
+    let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+
+    apply(&fx, &[]);
+
+    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
+    assert!(!fx.repo.join(".claude").join("settings.json.bak").exists());
+    // The script IS still vendored — the host asked for it.
+    assert!(vendored(&fx).exists());
+}
+
+#[test]
+fn an_existing_user_level_entry_is_preference_and_nothing_is_vendored() {
+    let fx = fixture();
+    write(
+        &settings_path(&fx),
+        "{\n  \"statusLine\": { \"type\": \"command\", \"command\": \"bash ~/.claude/mine.sh\" }\n}\n",
+    );
+    let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+
+    let acts = actions(&plan(&fx, &[]), "plan");
+    assert!(!acts.contains(&"merge_statusline_settings".to_string()));
+    assert!(!acts.contains(&"copy_statusline".to_string()));
+
+    apply(&fx, &[]);
+    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
+    assert!(!vendored(&fx).exists());
+}
+
+#[test]
+fn a_non_object_statusline_value_is_preference_too() {
+    // A present key of ANY shape is a declared preference.
+    for body in [
+        "{\n  \"statusLine\": \"my-line\"\n}\n",
+        "{\n  \"statusLine\": null\n}\n",
+        "{\n  \"statusLine\": false\n}\n",
+    ] {
+        let fx = fixture();
+        write(&settings_path(&fx), body);
+        let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+        apply(&fx, &[]);
+        assert_eq!(
+            std::fs::read_to_string(settings_path(&fx)).unwrap(),
+            original,
+            "left alone: {body}"
+        );
+        assert!(!vendored(&fx).exists(), "nothing vendored: {body}");
+    }
+}
+
+/// The case that decides whether a default is safe to ship: a host whose
+/// settings file does not parse is left alone AND the run still succeeds.
+/// A refusal here would turn one broken file into a blocked install.
+#[test]
+fn an_unparseable_settings_file_is_left_alone_and_never_blocks_the_run() {
+    let fx = fixture();
+    let broken = "{ this is not json";
+    write(&settings_path(&fx), broken);
+
+    let acts = actions(&plan(&fx, &[]), "plan");
+    assert!(!acts.contains(&"merge_statusline_settings".to_string()));
+    assert!(!acts.contains(&"copy_statusline".to_string()));
+
+    let a = apply(&fx, &[]);
+    assert_ne!(a["status"], "blocked_hooks_merge", "a broken host file must not block a default");
+    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), broken);
+    assert!(!vendored(&fx).exists());
+}
+
+#[test]
+fn a_settings_file_whose_root_is_not_an_object_is_left_alone() {
+    let fx = fixture();
+    write(&settings_path(&fx), "[]\n");
+
+    let acts = actions(&plan(&fx, &[]), "plan");
+    assert!(!acts.contains(&"merge_statusline_settings".to_string()));
+    assert!(!acts.contains(&"copy_statusline".to_string()));
+
+    apply(&fx, &[]);
+    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), "[]\n");
+}
+
+// ── the two ways out ───────────────────────────────────────────────────────
+
+#[test]
+fn no_statusline_writes_nothing_vendors_nothing_and_still_converges() {
+    let fx = fixture();
+    let a = apply(&fx, &["--no-statusline"]);
+    assert_ne!(a["status"], "blocked_hooks_merge");
+    assert!(!settings_path(&fx).exists());
+    assert!(!vendored(&fx).exists());
+
+    let p = plan(&fx, &["--no-statusline"]);
+    assert_eq!(p["status"], "up_to_date");
+    assert_eq!(p["plan"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn no_statusline_on_a_host_that_already_carries_the_entry_touches_neither_file() {
+    let fx = fixture();
+    write_project_level_entry(&fx);
+    let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+
+    apply(&fx, &["--no-statusline"]);
+
+    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
+    assert!(!vendored(&fx).exists());
+    assert_eq!(plan(&fx, &["--no-statusline"])["status"], "up_to_date");
+}
+
+#[test]
+fn the_project_config_opt_out_behaves_exactly_like_the_flag() {
+    let fx = fixture();
+    write(&fx.repo.join(".bee").join("config.json"), "{\n  \"statusline\": false\n}\n");
+
+    apply(&fx, &[]);
+
+    assert!(!settings_path(&fx).exists());
+    assert!(!vendored(&fx).exists());
+    let ledger: Value = serde_json::from_str(
+        &std::fs::read_to_string(fx.repo.join(".bee").join("onboarding.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(ledger["managed"].get("statusline").is_none());
+}
+
+// ── the two writers of one file ────────────────────────────────────────────
+
+/// Backup-of-a-backup. Both the hooks merge and the statusline write target
+/// `.claude/settings.json`; if each takes its own `.bak`, the second copies the
+/// already-modified file over the pristine one and `scripts/install.sh`'s
+/// promise that `.bak` restores the pre-bee state is quietly broken.
+#[test]
+fn repo_hooks_and_the_statusline_default_share_one_backup_holding_the_original() {
+    let fx = fixture();
+    let original = "{\n  \"model\": \"opus\"\n}\n";
+    write(&settings_path(&fx), original);
+
+    apply(&fx, &["--repo-hooks"]);
+
+    let bak = std::fs::read_to_string(fx.repo.join(".claude").join("settings.json.bak")).unwrap();
+    assert_eq!(bak, original, ".bak must hold the PRE-BEE file, not an intermediate one");
+
+    let settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    let keys: Vec<&str> = settings.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    assert_eq!(keys, vec!["model", "hooks", "statusLine"], "both writers landed");
+}
+
+#[test]
+fn a_malformed_settings_file_blocks_the_hooks_merge_without_vendoring_anything() {
+    let fx = fixture();
+    write(&settings_path(&fx), r#"{"model": "opus", "hooks": {"#);
+
+    let a = apply(&fx, &["--repo-hooks"]);
+    assert_eq!(a["status"], "blocked_hooks_merge");
+    // Zero mutations means the script too — the statusline step must not have
+    // slipped a file in before the refusal.
+    assert!(!vendored(&fx).exists());
 }
