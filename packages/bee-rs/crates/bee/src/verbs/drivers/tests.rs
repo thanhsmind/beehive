@@ -8352,6 +8352,7 @@ advance_on — falling to another model there hides the defect (D11)"
                     ("cell_json", ""),
                     ("learned_context", ""),
                     ("expertise", ""),
+                    ("advisor", ""),
                     ("prior_rounds", ""),
                     ("worktree_root", ""),
                     ("control_root", ""),
@@ -8671,4 +8672,168 @@ advance_on — falling to another model there hides the defect (D11)"
             body.contains("unwind_wave_claim"),
             "and unwind the claim it took for a cell it cannot dispatch"
         );
+    }
+
+    // ── nc-1: advisor consult prompt line ─────────────────────────────────
+
+    #[test]
+    fn cell_dispatch_renders_advisor_line_when_distinct_or_cli() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Claude runtime with distinct advisor
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body = dispatched_body(&v);
+        assert!(
+            body.contains("Advisor: opus — consult via your own Agent tool, model param opus, description starting exactly \"advisor-consult c-1: opus\" (fallback: headless claude -p --model opus)"),
+            "expected advisor line in claude cell prompt, got:\n{body}"
+        );
+
+        // Codex runtime with distinct advisor
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = repo(
+            &tmp2,
+            r#"{"models":{"codex":{"generation":"gpt-4o","advisor":"o3-mini"}}}"#,
+        );
+        w(
+            &root2,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v2) =
+            prepare_dispatch(&root2, "codex", "cell", Some("c-2"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body2 = dispatched_body(&v2);
+        assert!(
+            body2.contains("Advisor: o3-mini — consult via Codex-native subagent dispatch at model o3-mini, description starting exactly \"advisor-consult c-2: o3-mini\""),
+            "expected advisor line in codex cell prompt, got:\n{body2}"
+        );
+
+        // CLI advisor
+        let tmp3 = tempfile::tempdir().unwrap();
+        let root3 = repo(
+            &tmp3,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":{"kind":"cli","command":"bee-advisor"}}}}"#,
+        );
+        w(
+            &root3,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v3) =
+            prepare_dispatch(&root3, "claude", "cell", Some("c-3"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body3 = dispatched_body(&v3);
+        assert!(
+            body3.contains("Advisor: bee-advisor — consult via bee-advisor, evidence bundle on stdin"),
+            "expected cli advisor line, got:\n{body3}"
+        );
+    }
+
+    #[test]
+    fn cell_dispatch_skips_advisor_line_when_same_model_or_unconfigured() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Same model (honest no-op)
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"sonnet"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-same.json",
+            r#"{"id":"c-same","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-same"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body = dispatched_body(&v);
+        assert!(!body.contains("Advisor:"), "same-model advisor must not render Advisor line, got:\n{body}");
+
+        // Unconfigured advisor
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = repo(
+            &tmp2,
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+        );
+        w(
+            &root2,
+            ".bee/cells/c-none.json",
+            r#"{"id":"c-none","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v2) =
+            prepare_dispatch(&root2, "claude", "cell", Some("c-none"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body2 = dispatched_body(&v2);
+        assert!(!body2.contains("Advisor:"), "unconfigured advisor must not render Advisor line, got:\n{body2}");
+    }
+
+    #[test]
+    fn escalated_cell_renders_advisor_line_when_configured() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-esc.json",
+            r#"{"id":"c-esc","feature":"f","tier":"ceiling","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-esc"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let body = dispatched_body(&v);
+        assert!(
+            body.contains("Advisor: opus — consult via your own Agent tool"),
+            "escalated cell must render configured advisor line, got:\n{body}"
+        );
+    }
+
+    #[test]
+    fn non_cell_kinds_never_render_advisor_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#,
+        );
+        for kind in ["gather", "reviewer", "advisor"] {
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", kind, None, None, false, None, None, false, None)
+                    .unwrap()
+            else {
+                panic!("expected envelope for kind {kind}")
+            };
+            let body = dispatched_body(&v);
+            assert!(
+                !body.contains("Advisor:"),
+                "{kind} kind must never render Advisor line, got:\n{body}"
+            );
+        }
     }

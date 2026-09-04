@@ -34,6 +34,10 @@ Learned context (machine-assembled — read before implementing; prefer it over 
 Expertise — dispatcher-picked; read/load before implementing:
 {{expertise}}
 {{/if}}
+{{#if advisor}}
+
+Advisor: {{advisor}}
+{{/if}}
 
 Contract:
 - Load the bee-swarming skill (Execute section) for the full worker contract.

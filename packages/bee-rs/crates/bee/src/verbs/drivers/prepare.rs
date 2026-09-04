@@ -842,6 +842,61 @@ pub(crate) fn original_request_block(root: &Path, feature: Option<&str>) -> Stri
 }
 
 /// provenance: dispatch-prepare.mjs cellPromptBody / promptBodyFor.
+/// nc-1: resolve the advisor slot for cell dispatches and render the advisor line value.
+///
+/// Returns None when:
+/// - no advisor is configured (decision 4faf1de9: one name, no fall-through)
+/// - the advisor resolves to literally the same model name as the worker's resolved model
+///   (the one honest no-op; a cli-shaped advisor is never the same model, so it is always consulted)
+///
+/// Otherwise returns the advisor identity AND its transport verbatim (model-shaped vs cli-shaped)
+/// matching skills/bee-swarming/references/worker-details.md.
+pub(crate) fn resolve_cell_advisor(
+    models: &Map<String, Value>,
+    runtime: &str,
+    cell_id: &str,
+    worker_resolved: &Resolved,
+    is_escalated: bool,
+) -> Option<String> {
+    let advisor = resolve_advisor(models, runtime)?;
+
+    let worker_model_name = match worker_resolved {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } if !is_escalated => {
+            Some(model.as_str())
+        }
+        _ => None,
+    };
+
+    let (advisor_identity, is_cli) = match &advisor {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => (model.as_str(), false),
+        Resolved::Cli { command } => (command.as_str(), true),
+        Resolved::Herding { agent, .. } => (agent.as_deref().unwrap_or("herding"), true),
+        _ => return None,
+    };
+
+    if !is_cli {
+        if let Some(w_model) = worker_model_name {
+            if w_model == advisor_identity {
+                return None;
+            }
+        }
+    }
+
+    let line = if is_cli {
+        format!("{advisor_identity} — consult via {advisor_identity}, evidence bundle on stdin")
+    } else if runtime == "codex" {
+        format!(
+            "{advisor_identity} — consult via Codex-native subagent dispatch at model {advisor_identity}, description starting exactly \"advisor-consult {cell_id}: {advisor_identity}\""
+        )
+    } else {
+        format!(
+            "{advisor_identity} — consult via your own Agent tool, model param {advisor_identity}, description starting exactly \"advisor-consult {cell_id}: {advisor_identity}\" (fallback: headless claude -p --model {advisor_identity})"
+        )
+    };
+
+    Some(line)
+}
+
 pub(crate) fn prompt_body_for(
     root: &Path,
     kind: &str,
@@ -858,6 +913,7 @@ pub(crate) fn prompt_body_for(
     // The carried LaneBrief, already resolved and trimmed by
     // `resolve_brief_file` (advisor kind only; `None` everywhere else).
     brief: Option<&str>,
+    advisor: Option<&str>,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
@@ -917,6 +973,7 @@ pub(crate) fn prompt_body_for(
             ("cell_json", &cell_json),
             ("learned_context", &learned),
             ("expertise", expertise.unwrap_or("")),
+            ("advisor", advisor.unwrap_or("")),
             ("prior_rounds", &prior),
             ("worktree_root", worktree_root),
             ("control_root", control_root),
@@ -1530,6 +1587,16 @@ pub(crate) fn prepare_dispatch_with_brief(
         )));
     }
 
+    let advisor = if kind == "cell" {
+        let cell_id = cell
+            .as_ref()
+            .and_then(|c| recorded_str(Some(c), "id"))
+            .unwrap_or("");
+        resolve_cell_advisor(&models, runtime, cell_id, &resolved, is_escalated)
+    } else {
+        None
+    };
+
     let prompt_body = match prompt_body_for(
         root,
         kind,
@@ -1538,6 +1605,7 @@ pub(crate) fn prepare_dispatch_with_brief(
         worktree_location.as_ref().map(|(w, c)| (w.as_str(), c.as_str())),
         expertise,
         brief,
+        advisor.as_deref(),
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
