@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "feature": "statusline-by-default",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"statusline-by-default\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"statusline-by-default\" (lane).",
+  "created_at": "2026-09-04T10:09:00.365Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "cross-platform"
+    ],
+    "product_files": 5,
+    "rationale": null,
+    "updated_at": "2026-09-04T10:10:00.451Z",
+    "feature": "statusline-by-default"
+  }
+}

@@ -15,10 +15,10 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Tests passed. Commit `Release 2.33.0` is made and tag `v2.33.0` is created. The script is now on the push and CI-wait steps.",
-    "asked_at": "2026-09-02T16:03:19.338Z",
-    "session": "b701cc91-cd95-4543-bd50-ac9f298d0b1d"
+    "kind": "gate",
+    "subject": "EnterWorktree",
+    "asked_at": "2026-09-04T10:07:58.522Z",
+    "session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b"
   },
   "route": {
     "class": "feature",
