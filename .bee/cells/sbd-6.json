@@ -1,0 +1,96 @@
+{
+  "id": "sbd-6",
+  "feature": "statusline-by-default",
+  "lane": "standard",
+  "tier": "generation",
+  "role": "docs",
+  "title": "Rewrite the status-display record for the default install and list --no-statusline everywhere",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+    "docs/knowledge/areas/onboarding/overview.md",
+    "docs/knowledge/areas/onboarding/index.md",
+    "docs/specs/onboarding.md",
+    "docs/product-description/maintenance/onboarding.md",
+    "INSTALL.md",
+    "README.md",
+    "scripts/install.sh",
+    "scripts/install.ps1",
+    ".bee/verify/verify-app/features/onboard.md"
+  ],
+  "read_first": [
+    "docs/history/statusline-by-default/plan.md",
+    "docs/history/statusline-by-default/reports/advisor-digest.md",
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md"
+  ],
+  "action": "SLICE 2 — the written record. The row-by-row edit list with current text quoted is in docs/history/statusline-by-default/reports/advisor-digest.md, section 'Seat 2'. Follow it; it was produced by reading these files.\n\nA. docs/knowledge/areas/onboarding/status-display-vendoring.md — the authoritative home. Retitle from 'the opt-in status display' to 'the default status display' (l.3, l.13, l.16), rewrite the description (l.4), prepend decision 4cac0774 to the frontmatter list keeping 102efe08 as superseded history (l.11), and rewrite the opening paragraph (l.18-22): restraint now means bee ADDS the key when it is absent and never rewrites one that is present.\n  - Data Dictionary (l.35-36): rename 'opt-in signal' to 'project-level status entry' and add a row for the ABSENT entry, the trigger for the default install; the managed-record row now says the record exists whenever the project-level entry is present.\n  - Detect (l.40-45) now has THREE outcomes: absent key or absent file -> settings write + copy; project-level entry -> copy/heal only; anything else (user-level path, non-object, unparseable file) -> zero actions.\n  - Vendor (l.47-52): the settings file IS now created or gains one key, with a backup when it existed — and exactly one backup per run even when the hooks merge writes the same file.\n  - Stay out (l.59-65): retitle to '--no-statusline, .bee/config.json statusline:false, or a present foreign entry'. Add the PowerShell skip.\n  - R1 (l.115-117) is REPLACED: onboarding writes the project-level entry when the key is absent, creating the file if needed; a present key is preference; --no-statusline and .bee/config.json statusline:false suppress both (decision 4cac0774, supersedes 102efe08). R2 (l.118-119) is REWORDED keeping its soul — an unrecognised shape means LEAVE ALONE, and it must never abort or block the run. R3 and R4 survive in substance; rename 'opt-in' to 'project-level reference' and note that a user-level path is now a PRESENT key and therefore preference.\n  - Add R5: the command bee writes must satisfy R3's own detector, pinned by a test — otherwise a host silently un-adopts on the next run.\n  - Edge Cases (l.133-136) keep their outcome but change their reason. Rewrite 'Opting out after having been opted in' (l.139-144): it is now the ORDINARY path, and it splits — a hand-deleted key is re-added on the next run (the durable opt-out is .bee/config.json or a foreign value), while --no-statusline on a host that already carries the record leaves a stale managed record AND an orphaned vendored script.\n  - Open Gaps: DELETE the 'vendoring path has no live test' bullet (l.149-152) — sbd-5 closed it — and update the Pointers section (l.172-173) to the new tests. Keep the manifest-cleanup gap and attach the new sub-case. Add a gap for the pre-existing LEDGER_GROUPS mismatch: plan.rs:239 maps `statusline` to `.bee/bin/statusline` while the vendor target is `.claude/`, so the regen obligation guards a directory that does not exist.\n\nB. Mirror the new wording in docs/knowledge/areas/onboarding/overview.md (l.22, l.52) and index.md (l.21). docs/specs/onboarding.md: change the prose at l.13 only — the 'Was' column is historical by design and stays. docs/product-description/maintenance/onboarding.md: l.172, l.183, l.197.\n\nC. The flag, everywhere a user could look for it:\n  - scripts/install.sh — help block (~l.63-68, after --claude-md), the arg parser (~l.143, beside --no-claude-md), ONBOARD_FLAGS (~l.386-387), and a Safety line near l.85-87 saying the statusLine entry is add-only and never overwrites a present one.\n  - scripts/install.ps1 — [switch]$NoStatusline beside [switch]$NoClaudeMd (l.48) and the pass-through beside l.536.\n  - INSTALL.md — a row in each flag table (l.33-34 installer, l.175-176 bee onboard) and the on-disk tree at l.184 gaining .claude/settings.json (statusLine entry, add-only) and .claude/statusline-command.sh.\n  - README.md — the flag list at l.546 and the usage line at l.616.\n\nD. .bee/verify/verify-app/features/onboard.md — add a 'Confirm what landed' line for .claude/settings.json (statusLine present) and .claude/statusline-command.sh, and a Gotchas line beside the existing --repo-hooks row stating the OPPOSITE default: the statusline IS written by default, a target repo carrying its own statusLine is never rewritten, and --no-statusline skips the step.\n\nDo not restate the same fact in two homes — each file gets the wording its own altitude needs, pointing at the knowledge doc for the rest.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib onboard && bash -n scripts/install.sh",
+  "must_haves": {
+    "truths": [
+      "R1 replaced, R2 reworded, R3/R4 renamed only, R5 added; the 'no live test' Open Gap deleted.",
+      "--no-statusline appears in install.sh help+parser+ONBOARD_FLAGS, install.ps1, INSTALL.md, README.md.",
+      "The verify-app onboard feature file names both .claude files and the new default."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/onboarding.md"
+  ],
+  "decisions": [
+    "4cac0774"
+  ],
+  "deps": [],
+  "status": "capped",
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "leader-sbd-6",
+    "outcome": "Docs, specs, installers and the verify-app feature file all state the default status display",
+    "files_changed": [
+      "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+      "docs/knowledge/areas/onboarding/overview.md",
+      "docs/knowledge/areas/onboarding/index.md",
+      "docs/specs/onboarding.md",
+      "docs/product-description/maintenance/onboarding.md",
+      "INSTALL.md",
+      "README.md",
+      "scripts/install.sh",
+      "scripts/install.ps1",
+      ".bee/verify/verify-app/features/onboard.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:33:11.697Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b",
+    "claimed_at": "2026-09-04T10:20:56.950Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The status-display record now states the default install, and --no-statusline is listed on every installer surface",
+      "commit": "52be766f",
+      "files": [
+        "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+        "docs/knowledge/areas/onboarding/overview.md",
+        "docs/knowledge/areas/onboarding/index.md",
+        "docs/specs/onboarding.md",
+        "docs/product-description/maintenance/onboarding.md",
+        "INSTALL.md",
+        "README.md",
+        "scripts/install.sh",
+        "scripts/install.ps1",
+        ".bee/verify/verify-app/features/onboard.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee onboard && bash -n scripts/install.sh — green:unit — 167/167 onboard plus a syntax check of the installer; the rest is a docs parity sweep against the advisor digest edit list",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

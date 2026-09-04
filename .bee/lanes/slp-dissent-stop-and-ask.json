@@ -15,10 +15,10 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "EnterWorktree",
-    "asked_at": "2026-09-04T10:07:58.522Z",
-    "session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b"
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-09-04T10:33:14.246Z",
+    "session": "433744f8-193d-4b60-9f4b-c0e3aed9cc72"
   },
   "route": {
     "class": "feature",

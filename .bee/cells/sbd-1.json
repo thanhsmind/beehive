@@ -1,0 +1,74 @@
+{
+  "id": "sbd-1",
+  "feature": "statusline-by-default",
+  "lane": "standard",
+  "tier": "generation",
+  "role": "code",
+  "title": "Make the status line safe to install by default: silent without jq, silent without the script",
+  "behavior_change": true,
+  "files": [
+    "packages/bee/statusline/statusline-command.sh",
+    ".claude/statusline-command.sh",
+    "packages/bee-rs/crates/bee/tests/statusline_contract.rs"
+  ],
+  "read_first": [
+    "docs/history/statusline-by-default/plan.md",
+    "docs/history/statusline-by-default/reports/advisor-digest.md",
+    "packages/bee-rs/crates/bee/tests/statusline_contract.rs",
+    "packages/bee/statusline/statusline-command.sh"
+  ],
+  "action": "SLICE 0 — the precondition for turning this display on by default.\n\nDEFECT 1, already located. packages/bee/statusline/statusline-command.sh line 13 reads:\n\n    [ -z \"$JQ\" ] && { printf '%b\\n' '\\033[31mstatusline: jq not found\\033[0m'; exit 0; }\n\nWith no jq on PATH this prints a RED ERROR ON EVERY PROMPT. macOS and stock Ubuntu ship no jq. Under the old opt-in that was the user's own choice; decision 4cac0774 makes onboarding install this display by default, so it becomes bee's fault. Change it to render NOTHING and exit 0 — the same rule the rest of the script already follows (docs/knowledge/areas/onboarding/status-display-vendoring.md: 'Every segment is omitted when its fact is unavailable, and an unavailable fact never fails the line'). Keep the PATH-fallback probe above it exactly as it is; only the empty-JQ arm changes.\n\nDEFECT 2, same class. The script must survive being run with a payload it cannot parse or an empty stdin without emitting an error line. Read the script end to end and make sure no path can write to stderr or print a diagnostic; a status line is never allowed to be why a prompt renders badly.\n\nR4 IS A HARD RULE. packages/bee/statusline/statusline-command.sh is canonical and .claude/statusline-command.sh is this checkout's vendored copy; tests/statusline_contract.rs::canonical_and_vendored_statusline_are_byte_identical compares them as BYTES. Apply the identical edit to both files, or that test goes red.\n\nTESTS. tests/statusline_contract.rs already runs the real script in fixture hosts (mod runs). Add cases in that same style, not text probes:\n  - the script with NO jq resolvable on PATH prints nothing at all and exits 0 (build the fixture with a PATH that contains no jq and with the three hardcoded candidate paths unreachable — read how `fixture()` and the existing run cases set PATH before you invent a mechanism);\n  - the script fed empty stdin exits 0 and writes nothing to stderr.\nDo not weaken or delete canonical_and_vendored_statusline_are_byte_identical.\n\nRED FIRST. Write the no-jq case, run it, watch it fail with the red 'statusline: jq not found' text for that exact reason, and only then change the script.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test statusline_contract",
+  "must_haves": {
+    "truths": [
+      "The no-jq path prints nothing and exits 0 — proven by a test that was red before the change for the documented reason.",
+      "packages/bee/statusline/statusline-command.sh and .claude/statusline-command.sh stay byte-identical.",
+      "canonical_and_vendored_statusline_are_byte_identical and every existing run case stay green and unmodified in intent."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4cac0774"
+  ],
+  "deps": [],
+  "status": "capped",
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "leader-sbd-1",
+    "outcome": "Status line is silent without jq, with empty stdin, or with an unparseable payload",
+    "files_changed": [
+      "packages/bee/statusline/statusline-command.sh",
+      ".claude/statusline-command.sh",
+      "packages/bee-rs/crates/bee/tests/statusline_contract.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:32:51.411Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b",
+    "claimed_at": "2026-09-04T10:20:53.071Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Status line renders nothing and exits 0 on every unavailable-fact path",
+      "commit": "8fcb8435",
+      "files": [
+        "packages/bee/statusline/statusline-command.sh",
+        ".claude/statusline-command.sh",
+        "packages/bee-rs/crates/bee/tests/statusline_contract.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test statusline_contract — green:unit — 7/7, including the new no-jq, empty-stdin and unparseable-payload cases and the canonical/vendored byte-equality guard",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

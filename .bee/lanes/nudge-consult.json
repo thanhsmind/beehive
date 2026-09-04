@@ -15,9 +15,9 @@
   "created_at": "2026-09-04T09:22:33.815Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "Read",
-    "asked_at": "2026-09-04T10:04:32.307Z",
+    "kind": "turn-end",
+    "subject": "Updating the memory that cost me failed calls this session.",
+    "asked_at": "2026-09-04T10:17:13.322Z",
     "session": "34a24bf4-5655-4cff-84e1-d02eaf823966"
   },
   "route": {

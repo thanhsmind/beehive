@@ -1,0 +1,81 @@
+{
+  "id": "sbd-4",
+  "feature": "statusline-by-default",
+  "lane": "standard",
+  "tier": "generation",
+  "role": "code",
+  "title": "Apply the statusLine settings write, backing up the host file exactly once per run",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "read_first": [
+    "docs/history/statusline-by-default/plan.md",
+    "docs/history/statusline-by-default/reports/advisor-digest.md",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "action": "SLICE 1, part 3 of 4. Depends on sbd-2 (hooks_wiring API) and sbd-3 (the plan item exists). Touch NO other file.\n\nA. New apply case `merge_statusline_settings` in the apply loop, beside merge_repo_hook_settings (l.506-518):\n  - re-check its own condition at apply time and skip if the key appeared meanwhile — the plan-to-apply race pattern ensure_codex_statusline already uses at l.532-535;\n  - call hw::merge_statusline_settings on the target, write with write_file_atomic.\n  - Add NO row to the 2b preflight at l.230-253: this writer has no Err path by design (a broken settings file is left alone, never refused), so there is nothing to preflight.\n\nB. BACKUP EXACTLY ONCE PER FILE PER RUN. merge_repo_hook_settings copies the target to <target>.bak before writing (l.511-515). If a second writer of the SAME .claude/settings.json takes its own .bak, the backup then holds an already-modified file and the pristine pre-bee copy is gone — in either order. scripts/install.sh:79 promises that .bak restores the pre-bee state, so this is a real broken promise, not a cosmetic one. Introduce one backed-up set (e.g. a HashSet<PathBuf> local to the apply run) consulted by BOTH cases: whichever writer reaches the file first takes the backup, the second finds it already taken and skips. Do not solve this by deleting the hooks-merge backup, and do not solve it by giving the statusline writer no backup at all — a plugin-first host has no hooks merge and would then get no backup either.\n\nC. Check whether anything else in this file needs the new managed key carried forward. managed.repo_hooks has a special plugin-source carry-forward arm around l.694-700; managed.statusline needs NO such arm because it is rebuilt from the flag on every run — confirm that by reading the code rather than assuming it, and say what you found in the cap.\n\nNo new tests in this cell — sbd-5 owns onboard/tests.rs. Keep the crate compiling and every existing test green, including malformed_settings_json_refuses_the_hooks_merge_with_zero_mutations.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib onboard",
+  "must_haves": {
+    "truths": [
+      "A .claude/settings.json touched by both writers in one run has exactly one .bak, holding the ORIGINAL file.",
+      "The statusline apply case re-checks its condition and adds no blocked_* path.",
+      "Existing zero-mutation refusal tests stay green."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4cac0774"
+  ],
+  "deps": [
+    "sbd-2",
+    "sbd-3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "leader-sbd-4",
+    "outcome": "Add-only statusLine apply case; one .bak per settings file per run",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [
+      "Touched onboard/tests.rs line 352 as well as apply.rs: the sbd-3+sbd-4 pair changes the managed-key set an empty repo records, and leaving that expectation red would have violated never-build-on-red. The remaining tests.rs work stays with sbd-5 — something else had to be fixed first",
+      "Confirmed by reading apply.rs that managed.statusline needs no plugin-source carry-forward arm like managed.repo_hooks has: it is rebuilt from the per-run flag every time — followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:45:21.532Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b",
+    "claimed_at": "2026-09-04T10:44:50.871Z",
+    "mistakes": [
+      {
+        "wrong": "backup_once was written as a closure taking the HashSet as a parameter because a plain capture would have borrowed it mutably for the whole loop",
+        "better": "a small free function would have read better than threading the set through every call site"
+      }
+    ],
+    "inline_reason": "The dispatched sbd-3 worker read for ~50 minutes without a single edit; the leader closed its pane and took sbd-3 and sbd-4 inline rather than spend another cycle. Executed from the feature worktree by the orchestrator session itself.",
+    "report": {
+      "outcome": "The statusLine entry is written add-only at apply time, and .claude/settings.json is backed up exactly once per run",
+      "commit": "17ca39c0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee onboard — green:unit — 167/167, including apply_on_an_empty_repo_then_reapply_is_a_no_op, which is the one-pass convergence the installer recheck depends on",
+      "deviations": [
+        "Touched onboard/tests.rs line 352 as well as apply.rs: the sbd-3+sbd-4 pair changes the managed-key set an empty repo records, and leaving that expectation red would have violated never-build-on-red. The remaining tests.rs work stays with sbd-5 — something else had to be fixed first",
+        "Confirmed by reading apply.rs that managed.statusline needs no plugin-source carry-forward arm like managed.repo_hooks has: it is rebuilt from the per-run flag every time — followed the plan"
+      ],
+      "mistakes": [
+        "backup_once was written as a closure taking the HashSet as a parameter because a plain capture would have borrowed it mutably for the whole loop — a small free function would have read better than threading the set through every call site"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

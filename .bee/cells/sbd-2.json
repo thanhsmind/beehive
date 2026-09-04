@@ -1,0 +1,69 @@
+{
+  "id": "sbd-2",
+  "feature": "statusline-by-default",
+  "lane": "standard",
+  "tier": "generation",
+  "role": "code",
+  "title": "Add the add-only statusLine settings writer to hooks_wiring",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+  ],
+  "read_first": [
+    "docs/history/statusline-by-default/plan.md",
+    "docs/history/statusline-by-default/reports/advisor-digest.md",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee-rs/crates/bee/src/onboard/util.rs",
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md"
+  ],
+  "action": "SLICE 1, part 1 of 4. Add three public items to src/onboard/hooks_wiring.rs, in the existing '── statusline opt-in ──' section. Touch NO other file — plan.rs, apply.rs and mod.rs are other cells.\n\n1. `pub const STATUSLINE_COMMAND: &str` — the exact command string onboarding writes:\n\n    [ -f \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\" ] && bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\"\n\n   The `[ -f … ] &&` guard is load-bearing, not decoration: .claude/settings.json is a TRACKED, team-shared file and the vendored .sh is not in GITIGNORE_BLOCK_PATTERNS, so a teammate's fresh clone or a linked worktree has the pointer without the file and would get a shell error on every prompt.\n\n2. `pub fn statusline_settings_absent(repo_root: &Path) -> bool` — true ONLY when <repo>/.claude/settings.json is missing, or its text is empty/whitespace, or it parses as a JSON OBJECT carrying no `statusLine` key. It MUST answer FALSE when the file exists but does not parse, or parses to something that is not an object at the top level. Do NOT reuse `read_json_if_exists` (util.rs:55-61) — it collapses broken and missing into the same None, and a naive 'no key -> write' would rewrite a host's settings file as bare {\"statusLine\": …}, the exact bug merge_hooks_file was hardened against (see this file's own l.197-229 and the tests at l.752-789). Read the raw text and parse it yourself. A present `statusLine` of ANY shape — object, string, null, false — counts as declared and answers false: a present value is the user's preference.\n\n3. `pub fn merge_statusline_settings(settings_path: &Path) -> Merged` — returns the whole-file text with the canonical entry added, plus `changed`. It preserves EVERY foreign top-level key and their order (mirror how merge_hooks_file builds `out` at l.261-262 and serialises with jsjson::stringify_pretty + a trailing newline). Add-only: if `statusLine` is already present, return the file unchanged with changed=false. On a file that does not parse or is not an object, return unchanged with changed=false — this writer has NO failure mode and must never produce an Err, because a refusal would turn a default into a blocker for every host with a broken settings file. On a missing/empty file, produce a fresh object holding just `statusLine`.\n\nTESTS, in this file's existing `mod tests`, beside statusline_opt_in_only_for_project_level_references (l.1023):\n  - THE ROUND TRIP, the most important case: statusline_opt_in() returns TRUE for a settings file whose statusLine.command is STATUSLINE_COMMAND. Get this wrong and every host silently un-adopts on the next run — no re-vendoring, managed.statusline dropped, and nothing says so. The oracle at l.1039-1049 already shows that `bash \"$CLAUDE_PROJECT_DIR\"/.claude/statusline-command.sh` does NOT match while the `${CLAUDE_PROJECT_DIR:-.}` form does; pin it rather than trusting the reading.\n  - absent file, empty file, object-without-the-key -> absent == true\n  - unparseable text, top-level array, top-level string -> absent == false\n  - statusLine present as an object / a string / null / false -> absent == false\n  - merge on a file carrying \"model\" and \"hooks\" -> those keys and their values survive byte-for-byte, exactly one key is added\n  - merge is idempotent: merging twice changes nothing the second time (changed == false)\n  - merge on a broken file returns changed == false and text equal to the input\n\nRED FIRST: write the round-trip case first and watch it fail to compile / fail for the documented reason before the const exists.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --lib onboard::hooks_wiring",
+  "must_haves": {
+    "truths": [
+      "statusline_opt_in() is proven TRUE against STATUSLINE_COMMAND by a test.",
+      "A settings file that does not parse is never rewritten and never blocks: absent==false, merge returns changed==false.",
+      "Foreign top-level keys and their order survive the merge byte-for-byte.",
+      "merge_statusline_settings has no Err path."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "4cac0774"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "leader-sbd-2",
+    "outcome": "Add-only statusLine settings writer, with the opt-in round trip pinned by a test",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-04T10:33:11.618Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b7be54a6-0f13-43f3-a048-b70a8ca9de2b",
+    "claimed_at": "2026-09-04T10:20:55.205Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "hooks_wiring gained STATUSLINE_COMMAND, statusline_settings_absent and the add-only merge_statusline_settings",
+      "commit": "1669bde6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee onboard — green:unit — 167/167 in the onboard module, including the new hooks_wiring cases and the statusline_opt_in round trip against STATUSLINE_COMMAND",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
