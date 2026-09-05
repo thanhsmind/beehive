@@ -1,0 +1,69 @@
+{
+  "id": "wer-1",
+  "feature": "worktree-entry-routing",
+  "lane": "tiny",
+  "role": "docs",
+  "title": "Separate native vs external transport in routing instructions",
+  "action": "Update routing instructions to distinguish native inherited-cwd workers (need worktree-rooted leader) from external herding workers (can specify cwd at start)",
+  "summary": "Fix instruction conflation between native and external worker transport",
+  "verify": "grep -q 'external.*cwd' skills/bee-hive/references/routing-and-contracts.md || grep -q 'herding.*cwd' skills/bee-hive/references/routing-and-contracts.md",
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "must_haves": [
+    "Native inherited-cwd workers require leader session rooted in worktree",
+    "External herding workers can specify cwd at process start - no manual entry needed",
+    "Lane binding is control-plane routing, never a process cwd transition",
+    "Write guard containment preserved - main never writes across worktree boundary"
+  ],
+  "deps": [],
+  "read_first": [
+    "docs/history/worktree-entry-routing/CONTEXT.md"
+  ],
+  "regen_obligation_ack": "tiny docs-only instruction fix, no skill tree or manifest changes needed",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "inline-main",
+    "outcome": "Separated native vs external transport in worktree dispatch instructions",
+    "files_changed": [
+      "AGENTS.md",
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "deviations": [
+      "Edited AGENTS.md instead of routing-and-contracts.md — the problematic instruction was in AGENTS.md, routing-and-contracts.md had no such content — found a better route",
+      "sync-ack: Cell predicted routing-and-contracts.md but actual fix was in AGENTS.md where the instruction lived"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-05T15:06:23.336Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "24d10ef7-b153-4dfe-9b14-6fde0f3108bc",
+    "claimed_at": "2026-09-05T15:05:00.274Z",
+    "sync_ack": "Cell predicted routing-and-contracts.md but actual fix was in AGENTS.md where the instruction lived",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Separated native vs external transport in dispatch instructions",
+      "commit": "204440a3",
+      "files": [
+        "AGENTS.md",
+        "skills/bee-swarming/SKILL.md"
+      ],
+      "tests": "grep External herding — green:static — pattern present in both files",
+      "deviations": [
+        "Edited AGENTS.md instead of routing-and-contracts.md — the problematic instruction was in AGENTS.md, routing-and-contracts.md had no such content — found a better route"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

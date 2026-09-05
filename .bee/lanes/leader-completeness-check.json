@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Shape and execution approved with actor auto/full. Execution not started: feature CONTEXT write was explicitly denied from current main-session cwd. No cell claimed; no source edits. Prior pause handoff carries pressure baseline and scope; gate-pending statement in that handoff is now resolved.",
-  "next_action": "Merged into main at be9e460; capture what settled, then bee close --feature leader-completeness-check.",
+  "next_action": "bee close finished \"leader-completeness-check\" — feature is closed.",
   "created_at": "2026-09-05T11:17:12.643Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Bạn muốn tiếp tục feature này không? Nó đang ở phase planning, chưa có gates approved.",
+    "asked_at": "2026-09-05T15:03:22.309Z",
+    "session": "24d10ef7-b153-4dfe-9b14-6fde0f3108bc"
+  },
   "route": {
     "class": "feature",
     "lane": "small",

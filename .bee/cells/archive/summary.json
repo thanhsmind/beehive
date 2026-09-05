@@ -1143,5 +1143,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-05T14:46:02.172Z"
+  },
+  "worktree-entry-routing": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-05T15:06:29.309Z"
   }
 }
