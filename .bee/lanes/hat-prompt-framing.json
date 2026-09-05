@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The guidance: hats see the problem + constraints, never the leader's draft answer. Three bad→good examples in a table. Pushed to main.",
-    "asked_at": "2026-09-05T15:57:03.311Z",
+    "subject": "Which one?",
+    "asked_at": "2026-09-05T16:04:13.876Z",
     "session": "5acf3646-dee3-4db3-8a5b-8263e009586a"
   }
 }
