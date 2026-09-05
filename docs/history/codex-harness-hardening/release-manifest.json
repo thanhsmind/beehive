@@ -129,14 +129,14 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "a0c659f100687d15f1a45e936bc947eecf12efb5202783c7dbabdc7ddc2d79ef",
+      "sha256": "3c6c588ef418c832a5808a69ec43cb7e2d01535c2332ec27383d71548d5cd28e",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "61bdfa62c9e941ac263c1feac2ced99036f2d52d67116726a7e4871a6f8eb38f",
+      "sha256": "ccfa7a9baa7b92cba64a43dc8db3e55471e220a8af6f0897a1a581e552f41fe2",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -339,7 +339,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "e3e979b4a79030631642e0f18e9acf15ebacd25c1a292748074eb05c3c9283d9",
+      "sha256": "1f79b9d51ca2d512b8bbf6096b23afdb82c35d76faceb0a7398e3e6a6ee8c625",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -794,14 +794,14 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "3611ef3883a675d4e35bc00701842435d6f498a10291b413467af4ca8eb5fe94",
+      "sha256": "24b22a3d7015f957d78177e760a78dba3ea7d9453d4cb3c3f2fa03f16b01474b",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "bbd1761de2dc2559769d001f0c31d06960bb9323dcf293259a64b0afb7cda064",
+      "sha256": "8fae88c529c7b67270eee0f90e06bc749944099f5963a48a3525298b7d29e32f",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1004,7 +1004,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "987d567948d1c648e2bd6318154784303571b9cbebfcfc45e05a83b1b7ee772d",
+      "sha256": "dbec22a309c9f64a348b2f3072656423c365b7228b98362fe5357354056dc4b6",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -1880,7 +1880,7 @@
     },
     {
       "path": "skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "5b690d0a4db1323c5113c3365af04a1b0dc9382a9e01ee613f61dc7362ef4904",
+      "sha256": "fc615b5f20bbd57d4fbf91f034b40d7e13b163979c68361506655de7ddd2aaee",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/gates-and-delegation.md"
