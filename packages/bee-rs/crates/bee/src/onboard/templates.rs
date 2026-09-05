@@ -127,117 +127,121 @@ pub fn default_state() -> Value {
 
 /// onboard_bee.mjs DEFAULT_CONFIG (l. 261–287).
 ///
-/// `lanes: {}` and `capabilities: {}` were dropped here (2026-08-02). Every
-/// new repo was seeded with both and `config-sample.json` documented them as
-/// "reserved … leave {} unless a bee release documents a key" — but NOTHING
-/// has ever read either one. A config key with no reader is not a reserved
-/// extension point, it is a promise the code does not keep: it invites a host
-/// to configure something that cannot take effect. Removing them is
-/// behaviour-neutral for the same reason it is safe — an existing config that
-/// still carries them keeps working, because bee ignores unknown top-level
-/// keys.
+/// The full bee workflow structure, seeded with safe defaults. New repos
+/// start with the complete role table, workflow settings, and herding
+/// skeleton — ready to configure, not a blank slate.
 ///
-/// # What `models` ships, and why exactly these names
+/// # Safe defaults
 ///
-/// model-role-split D3 (store `3c9d6262`), the PUBLISHING half. bee ships a
-/// config default only for a role name bee's own dispatch sites ask for, and
-/// a published default is a name bee CONSUMES — never a suggestion nobody
-/// reads. Asking and publishing are different acts (store `561e1bda`): a name
-/// bee asks for still resolves by fall-through without being written here, so
-/// most asked-for names do not belong in a fresh file. The test each
-/// candidate had to pass is the sharpest one this codebase can state:
+/// - `gate_bypass: false` — every gate stops for the human until they opt in.
+/// - `ship_visibility: "off"` — no automatic PR drafts.
+/// - `worktree_first: "on"` — feature work lives in worktrees.
+/// - `uat_stop: "close"` — UAT gate at close, not merge.
+/// - No `commands.test` — project-specific, user fills it in.
 ///
-/// > Ship a default only for a name a host's own `models.<runtime>` must
-/// > carry for bee's own dispatch door to accept it.
+/// # Models
 ///
-/// `verbs::drivers::guard::known_roles` is that door — the keys of
-/// `models.<runtime>` that DECLARE a role (`role_is_declarable`: every key
-/// there, except an `advisor` whose own floor-less resolver answers nothing),
-/// union `ceiling` — and `bee dispatch prepare` REFUSES
-/// (`role_not_configured`) any role outside it. The union over every
-/// `slot_for_kind` answer that used to sit in that derivation is gone
-/// (`c2ef2f9f`), and with it the reachability it lent `advisor`. Note what
-/// `models.<runtime>`'s keys already include after `normalize_models`:
-/// everything `drivers::default_models` seeds for that runtime, which is why
-/// three of the six names below are reachable with no config key at all. The
-/// six names bee asks for, run through it:
+/// The full role table ships described, so `bee models show` is self-teaching
+/// from the first run. Each `{model, description}` normalizes to `{model}` at
+/// resolution time — descriptions are display-only.
 ///
-/// | role | who asks for it | reachable with no config key? | shipped |
-/// |---|---|---|---|
-/// | `code` | the execution default in every cell dispatch's list; D9 backfills 504 of 506 cells onto it | **no** — `drivers::default_models` has no entry on any runtime | **added** |
-/// | `read` | the head of the read dispatch's list; D9's `role` for the extraction cells | **no** — same | **added** |
-/// | `review` | `slot_for_kind("reviewer")`, `bee-review`'s role list | yes — `default_models` seeds it | no |
-/// | `advisor` | `slot_for_kind("advisor")`, `resolve_advisor` | **no** — nothing seeds it, and a null-valued key is OFF rather than a configuration | no |
-/// | `generation` | the tail every ordered list ends with; `slot_for_kind("cell")` today | yes — `default_models` seeds it | kept |
-/// | `extraction` | `bee-extract`'s sole role; the read list's middle entry | yes — `default_models` seeds it | kept |
+/// Codex stays all-null by design (`CODEX_AGENTS_NOTE`): codex has no
+/// per-agent model selection.
 ///
-/// Two names are added; none is removed. Dropping `extraction` or
-/// `generation` was considered and refused: both are what the historical role
-/// lists END on (`cell_role_list`, `tier_role_list`), and a file that
-/// publishes the job names without the tail they fall through to teaches half
-/// the resolution. Neither would become UNREACHABLE by being dropped —
-/// `default_models` seeds both on every runtime — which corrects an earlier
-/// version of this note rather than changing the call.
+/// # Herding
 ///
-/// `review` and `advisor` are asked for and deliberately NOT shipped:
-/// - `review` already resolves without a key, and the documented unset-review
-///   -> generation fall-through is a deliberate cost posture. Writing
-///   `"review": "opus"` here would silently move every new host's reviews onto
-///   the expensive model — a product call, not a publishing one.
-/// - `advisor` has NO fall-through (decision `4faf1de9`): unconfigured means
-///   "no advisor", and since `role_is_declarable` an explicit `null` means the
-///   same thing at every door rather than only at some of them. A value would
-///   switch the advisor on for every new host; a `null` would publish an
-///   off-switch for something that is already off. Neither is shippable, so
-///   the key stays out.
-///
-/// The two added values are today's models on purpose, so nothing moves:
-/// `code` takes what cell execution runs on now (`generation` -> sonnet) and
-/// `read` takes what a read runs on now (`extraction` -> haiku). `models.codex`
-/// stays all-null by design (`CODEX_AGENTS_NOTE`: codex has no per-agent model
-/// selection). And this function seeds a NEW `.bee/config.json` only —
-/// `apply.rs`'s `create_runtime_file` arm is create-if-missing — so no existing
-/// host's config changes meaning.
-///
-/// models-show-verb D3: each seeded claude role carries a `description`, so a
-/// fresh install ships the SELF-TEACHING table rather than four bare model
-/// names an agent has to guess the meaning of. The shape moves from a bare
-/// string to `{model, description}` — a documented leaf that
-/// `normalize_tier_value` already accepted for years, and one it normalizes to
-/// `{model}` by dropping the description, so resolution answers exactly the
-/// models the bare strings answered. `bee models show` is what reads the
-/// descriptions back (the raw table, description intact); the normalized view
-/// the dispatcher resolves against never sees them, which is what keeps
-/// resolution blind. Codex stays all-null: a description on a slot that
-/// selects no model would document a lever codex does not have.
+/// Ships a working skeleton: `agent_command` names a registry entry, and
+/// `agents` defines four common configurations. A repo without herdr/tmux
+/// can ignore this block — it only activates when a slot resolves to
+/// `{kind: "herding"}`.
 pub fn default_config() -> Value {
     json!({
         "hooks": {
             "session-init": true,
             "prompt-context": true,
-            "write-guard": true,
             "state-sync": true,
             "chain-nudge": true,
-            "session-close": true
+            "session-close": true,
+            "write-guard": true
         },
+        "commands": {},
         "gate_bypass": false,
-        // Job names first — the two a host actually edits — then the
-        // historical tail every ordered role list ends with. Each claude slot
-        // is `{model, description}` (D3): the description is the ONE place a
-        // role's meaning is written down, and `bee models show` is how it is
-        // read back.
+        "ship_visibility": "off",
+        "worktree_first": "on",
+        "worktree_cleanup_on_merge": false,
+        "uat_stop": "close",
+        "uat_before_merge": false,
+        "staging_before_merge": false,
         "models": {
             "claude": {
                 "code": { "model": "sonnet", "description": "write the cell's code and its tests" },
-                "read": { "model": "haiku", "description": "multi-file gathers and scans, read-only" },
+                "read": { "model": "haiku", "description": "multi-file gathers and codebase scans, read-only" },
+                "test": { "model": "sonnet", "description": "author or repair tests, red-first" },
+                "docs": { "model": "sonnet", "description": "doc edits and parity sweeps" },
+                "plan": { "model": "opus", "description": "planning-shaped work — shaping, drafting cells, plan checks" },
                 "extraction": { "model": "haiku", "description": "narrow fact lookups from known locations" },
-                "generation": { "model": "sonnet", "description": "fall-through tail, the default writer role" }
+                "generation": { "model": "sonnet", "description": "fall-through tail: default writer role" },
+                "review": { "model": "opus", "description": "independent read-only check of a claim or diff" },
+                "advisor": { "model": "fable", "description": "session-class consult for high-risk gates" },
+                "supervisor": { "model": "haiku", "description": "cold observer tick — structured observation, decides nothing" },
+                "lane-1": { "model": "fable", "description": "blind-lane seat 1 — isolated design proposal" },
+                "lane-2": { "model": "opus", "description": "blind-lane seat 2 — isolated design proposal" },
+                "lane-3": { "model": "sonnet", "description": "blind-lane seat 3 — isolated design proposal" },
+                "hat-facts-gaps": { "model": "opus", "description": "hat: what the spec cannot answer" },
+                "hat-risks": { "model": "fable", "description": "hat: what breaks, and can it be undone" },
+                "hat-value": { "model": "sonnet", "description": "hat: is this worth its cost" },
+                "hat-alternatives": { "model": "opus", "description": "hat: is there a cheaper shape" },
+                "hat-user-impact": { "model": "sonnet", "description": "hat: what the user sees and feels" }
             },
             "codex": {
                 "code": Value::Null,
                 "read": Value::Null,
                 "extraction": Value::Null,
                 "generation": Value::Null
+            }
+        },
+        "herding": {
+            "agent_command": "claude-sonnet",
+            "control_command": [
+                "claude",
+                "-p",
+                "{PROMPT}",
+                "--model",
+                "sonnet",
+                "--max-turns",
+                "{MAX_TURNS}",
+                "--allowedTools",
+                "{ALLOWED_TOOLS}"
+            ],
+            "agents": {
+                "claude-sonnet": [
+                    "claude",
+                    "--model",
+                    "sonnet",
+                    "--permission-mode",
+                    "bypassPermissions"
+                ],
+                "claude-opus": [
+                    "claude",
+                    "--model",
+                    "opus",
+                    "--permission-mode",
+                    "bypassPermissions"
+                ],
+                "claude-fable": [
+                    "claude",
+                    "--model",
+                    "fable",
+                    "--permission-mode",
+                    "bypassPermissions"
+                ],
+                "claude-haiku": [
+                    "claude",
+                    "--model",
+                    "haiku",
+                    "--permission-mode",
+                    "bypassPermissions"
+                ]
             }
         }
     })
@@ -471,113 +475,92 @@ mod tests {
     fn default_config_keeps_literal_order_and_nulls() {
         let v = default_config();
         let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-        // Every key here must have a reader. `lanes`/`capabilities` were
-        // seeded for years with none — see default_config's note.
-        assert_eq!(keys, vec!["hooks", "gate_bypass", "models"]);
+        // The full workflow structure: hooks, commands, workflow settings, models, herding.
+        assert_eq!(
+            keys,
+            vec![
+                "hooks",
+                "commands",
+                "gate_bypass",
+                "ship_visibility",
+                "worktree_first",
+                "worktree_cleanup_on_merge",
+                "uat_stop",
+                "uat_before_merge",
+                "staging_before_merge",
+                "models",
+                "herding"
+            ]
+        );
         assert!(v["models"]["codex"]["extraction"].is_null());
+        // Herding skeleton is present.
+        assert!(v["herding"]["agent_command"].as_str().is_some());
+        assert!(v["herding"]["agents"].as_object().is_some());
     }
 
-    /// model-role-split D3 (store `3c9d6262`, `561e1bda`): the published set
-    /// is exactly the role names a host's own `models.<runtime>` must carry
-    /// for `known_roles` to accept them, plus the historical tail. See
-    /// `default_config`'s table for the per-name reasoning.
+    /// The full role table is now shipped — all roles bee asks for, plus the
+    /// lanes and hats. Each claude role carries a description.
     #[test]
-    fn default_config_publishes_only_the_roles_bee_asks_for() {
+    fn default_config_publishes_the_full_role_table() {
         let v = default_config();
-        for runtime in ["claude", "codex"] {
-            let table = v["models"][runtime].as_object().unwrap();
-            let names: Vec<&str> = table.keys().map(|k| k.as_str()).collect();
-            // The job names lead; the historical tail follows and is never
-            // dropped (`561e1bda`: a list that ends before it would skip an
-            // existing host's configured model).
-            assert_eq!(names, vec!["code", "read", "extraction", "generation"], "{runtime}");
-            // Asked for, deliberately unshipped: both already resolve without
-            // a key, and writing either one would decide something that is
-            // not this function's to decide.
-            assert!(!table.contains_key("review"), "{runtime} must not ship a review default");
-            assert!(!table.contains_key("advisor"), "{runtime} must not ship an advisor default");
-        }
-        // Nothing moves for a fresh host: the added job names carry the very
-        // models the tail already resolved to. Read through `model`, because
-        // models-show-verb D3 made each claude slot a `{model, description}`
-        // object — the descriptions differ on purpose, the models must not.
+
+        // Claude ships the full table.
+        let claude_table = v["models"]["claude"].as_object().unwrap();
+        let claude_names: Vec<&str> = claude_table.keys().map(|k| k.as_str()).collect();
         assert_eq!(
-            v["models"]["claude"]["code"]["model"],
-            v["models"]["claude"]["generation"]["model"]
+            claude_names,
+            vec![
+                "code",
+                "read",
+                "test",
+                "docs",
+                "plan",
+                "extraction",
+                "generation",
+                "review",
+                "advisor",
+                "supervisor",
+                "lane-1",
+                "lane-2",
+                "lane-3",
+                "hat-facts-gaps",
+                "hat-risks",
+                "hat-value",
+                "hat-alternatives",
+                "hat-user-impact"
+            ],
+            "claude"
         );
-        assert_eq!(
-            v["models"]["claude"]["read"]["model"],
-            v["models"]["claude"]["extraction"]["model"]
-        );
-        // codex stays all-null by design (CODEX_AGENTS_NOTE).
+
+        // Codex stays minimal — all null by design (CODEX_AGENTS_NOTE).
+        let codex_table = v["models"]["codex"].as_object().unwrap();
+        let codex_names: Vec<&str> = codex_table.keys().map(|k| k.as_str()).collect();
+        assert_eq!(codex_names, vec!["code", "read", "extraction", "generation"], "codex");
         for name in ["code", "read", "extraction", "generation"] {
             assert!(v["models"]["codex"][name].is_null(), "codex.{name} must stay null");
         }
     }
 
-    /// models-show-verb D3 (CONTEXT.md): a fresh install ships the role table
-    /// already explained. Two halves, and BOTH have to hold at once — a
-    /// description that cost the host its models would be a worse trade than
-    /// no description at all.
+    /// Every claude role ships with a description so `bee models show` is
+    /// self-teaching from the first run.
     #[test]
-    fn a_fresh_seed_explains_every_claude_role_and_still_resolves_to_the_same_models() {
+    fn every_claude_role_has_a_description() {
         let v = default_config();
+        let claude_table = v["models"]["claude"].as_object().unwrap();
 
-        // Half one: every claude role bee publishes carries a non-empty
-        // description, and it is a `{model, description}` object rather than
-        // a bare string.
-        for name in ["code", "read", "extraction", "generation"] {
-            let slot = v["models"]["claude"][name]
+        for (name, slot) in claude_table {
+            let obj = slot
                 .as_object()
                 .unwrap_or_else(|| panic!("claude.{name} must be a {{model, description}} object"));
             assert!(
-                slot.get("model").and_then(Value::as_str).is_some_and(|m| !m.is_empty()),
+                obj.get("model").and_then(Value::as_str).is_some_and(|m| !m.is_empty()),
                 "claude.{name} lost its model"
             );
             assert!(
-                slot.get("description").and_then(Value::as_str).is_some_and(|d| !d.is_empty()),
-                "claude.{name} ships no description — the fresh host cannot read what the role means"
+                obj.get("description").and_then(Value::as_str).is_some_and(|d| !d.is_empty()),
+                "claude.{name} ships no description"
             );
         }
-        // Codex stays null: no per-agent model selection, so nothing to
-        // describe (CODEX_AGENTS_NOTE, and D3 says so in as many words).
-        for name in ["code", "read", "extraction", "generation"] {
-            assert!(v["models"]["codex"][name].is_null(), "codex.{name} must stay null");
-        }
-
-        // Half two: resolution is BLIND to the change. Asked at the door a
-        // dispatch actually uses, every seeded role must resolve to exactly
-        // the model the bare-string seed resolved to. (The normalized MAPS
-        // differ in leaf shape — `{model}` where a string stood — which is
-        // why the comparison is the resolver's answer, not the map.)
-        let described = crate::verbs::drivers::normalize_models(Some(&v["models"]));
-        let bare = crate::verbs::drivers::normalize_models(Some(&json!({
-            "claude": {
-                "code": "sonnet",
-                "read": "haiku",
-                "extraction": "haiku",
-                "generation": "sonnet"
-            },
-            "codex": {
-                "code": Value::Null,
-                "read": Value::Null,
-                "extraction": Value::Null,
-                "generation": Value::Null
-            }
-        })));
-        for name in ["code", "read", "extraction", "generation"] {
-            let now = crate::verbs::drivers::resolve_role(&described, &[name], "claude", "cell");
-            let before = crate::verbs::drivers::resolve_role(&bare, &[name], "claude", "cell");
-            assert_eq!(
-                now, before,
-                "the seeded description changed what role {name} resolves to"
-            );
-        }
-        // And the description itself never reaches the resolved answer.
-        assert_eq!(
-            crate::verbs::drivers::resolve_role(&described, &["code"], "claude", "cell"),
-            crate::verbs::drivers::Resolved::Model { model: "sonnet".into(), effort: None }
-        );
     }
 
     #[test]
