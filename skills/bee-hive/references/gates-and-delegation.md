@@ -295,6 +295,21 @@ a brief whose leaning IS its job. Hats never see each other. The
 orchestrator is the synthesizing BLUE hat — synthesis is decide-altitude and
 never delegates.
 
+**Prompt framing — open questions, not validation.** A hat prompt presents
+the PROBLEM and CONSTRAINTS, never the leader's draft solution. Frame each
+dispatch as an open question that invites the hat's own exploration:
+
+| Validation-seeking (avoid) | Open-ended (use) |
+|---|---|
+| "Does this plan look right?" | "Given [context], what approaches would you explore?" |
+| "Any concerns with X?" | "What risks do you see in this space?" |
+| "I'm thinking Y because Z — agree?" | "Here's the constraint. What would you check before picking a direction?" |
+
+The hat sees the spec, the constraints, and enough context to form its own
+view — never the leader's preferred answer. Advisors who react to a proposal
+circle the leader's framing; advisors who explore from the problem bring back
+what the leader could not see.
+
 **The hat seat roles carry a description.** The five `hat-*` names are
 `models.<runtime>` roles like any other, and the constant of record is the same
 `SEAT_ROLES` in `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs` the
