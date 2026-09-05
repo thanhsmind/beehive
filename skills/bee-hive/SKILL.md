@@ -45,7 +45,7 @@ current stop. Out-of-band requests, by flow:
 | `bee-wayfinding` | Discovery | A fog-state idea, no nameable outcome yet, or an open discovery map with frontier tickets — chart or resume `docs/discovery/<effort>/MAP.md` before shaping. |
 | `bee-shaping` | Main | Gray areas or unlocked decisions — lock them (also backlog triage, parking, the implement-plan brief). |
 | `bee-planning` | Main | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (rule: agents-worktree-first). |
-| `bee-swarming` | Main | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. A `tiny` cell may run inline; `small` and up runs through a dispatched execution worker. |
+| `bee-swarming` | Main | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. A `tiny` cell may run inline; `small` and up runs through a dispatched execution worker. On cap, leader verifies completeness against actual artifacts (worker reports are navigation aids, not completion evidence). |
 | `bee-capturing` | Main | Execution done, an area needs documenting, or something just settled — sync specs, record learnings. |
 | `bee-reviewing` | Main | Only on an explicit review request — never automatic (rule: agents-review-user-invoked). Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
 | `bee-researching` | Both | Research a topic, library, or approach — standalone, or from planning discovery. |
@@ -109,6 +109,7 @@ Full contract: `references/gates-and-delegation.md` ("Headless mode").
 
 - P1 review findings always block; never build on a red base (rule: agents-never-build-on-red).
 - Locked decisions (cite, never reinterpret), the pre-execution-gate edit boundary, and the 65%-context handoff hold as written (rule: agents-context-handoff-65).
+- When a worker caps a cell, the leader compares every approved requirement against actual artifacts before accepting — worker reports are navigation aids, not completion evidence ("Leader completeness check").
 - "done/green/fixed" only beside fresh command output in the same message; every close carries a capture line or an explicit "nothing settled" (rule: agents-capture-line-at-close).
 - The agent runs every bee command ("The agent runs the machinery"); work language only, one tick line per visible step ("Progress ticks", "Communication contract"); a red line is never silenced.
 - Form rules bend out loud with a recorded reason; boundary rules never bend ("Judgment contract"). Lanes scale ceremony, never memory ("Re-lane checkpoint", "Capture discipline").
@@ -120,7 +121,7 @@ that names the contract is the one to open.
 
 | File | When to load |
 |---|---|
-| `references/routing-and-contracts.md` | The default: skill catalog, first-skill routing, state bootstrap, resume logic, lane ceremony, chaining, communication contract, question format, file and CLI quick reference |
+| `references/routing-and-contracts.md` | The default: skill catalog, first-skill routing, state bootstrap, resume logic, lane ceremony, leader completeness check, chaining, communication contract, question format, file and CLI quick reference |
 | `references/gates-and-delegation.md` | A gate is about to be presented, a bypass level set, work fanned out, or a rule bent — gate presentation, bypass levels, headless, delegation, judgment contract, judge tier, verify scope, Codex tending |
 | `references/scout-and-ticks.md` | Deciding how much to read before acting, re-judging a lane against evidence, or writing a tick / ship-visibility / route-record line exactly |
 | `references/onboarding.md` | ONLY when onboarding is in question — `.bee/onboarding.json` missing or stale, an install/upgrade request, or a `blocked_*` result. Never on a session that is already `up_to_date` |
