@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Shape and execution approved with actor auto/full. Execution not started: feature CONTEXT write was explicitly denied from current main-session cwd. No cell claimed; no source edits. Prior pause handoff carries pressure baseline and scope; gate-pending statement in that handoff is now resolved.",
-  "next_action": "bee close finished \"leader-completeness-check\" — feature is closed.",
+  "next_action": "Merged into main at be9e460; capture what settled, then bee close --feature leader-completeness-check.",
   "created_at": "2026-09-05T11:17:12.643Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "Additive instruction contract in three source files, no Rust or schema changes, existing evidence reused; pressure tests prove behavior.",
     "updated_at": "2026-09-05T11:18:39.660Z",
     "feature": "leader-completeness-check"
-  },
-  "merge_ready": {
-    "since": "2026-09-05T14:44:48.578Z",
-    "branch": "wt/leader-completeness-check",
-    "worktree_id": "beehive--wt--leader-completeness-check",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
