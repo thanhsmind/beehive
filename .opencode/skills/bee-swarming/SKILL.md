@@ -22,11 +22,15 @@ is the **orchestrator**. `bee orient` shows where the work stands either way.
 
 You launch workers and tend results; you do not implement. The wave runs
 inside the feature's worktree (rule: agents-worktree-first). Claiming from
-main is control-plane and fine; a Task-tool worker inherits the session's
-OS cwd, so dispatching an execution worker while cwd is main cannot write
-into the worktree and dies on the write guard — enter the worktree first
-(EnterWorktree on Claude Code, or a session/pane opened at the worktree
-path) and dispatch from there. A `tiny` cell may run inline in this
+main is control-plane and fine; execution depends on transport:
+
+- **Native subagents** (Agent tool, Task tool) inherit the session's OS
+  cwd. From main they cannot write into the worktree — the write guard
+  refuses. Enter the worktree first (EnterWorktree, or a session/pane
+  opened at the worktree path) and dispatch from there.
+- **External herding workers** (bee herding run with --cwd) receive an
+  explicit cwd at process start. The leader can stay in main while the
+  worker writes in the worktree — no manual entry required. A `tiny` cell may run inline in this
 session; `small` and up always dispatches — one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),
 parallel by default: disjoint cells fan out concurrently (reservations

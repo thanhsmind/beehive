@@ -184,7 +184,7 @@ git commit -m "<Imperative summary matching the cap outcome>" -m "Cell: <cell-id
 
 ## Result Field Spec
 
-Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), the test result from the finish run, and the parent's next action. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) and the test record (`.bee/logs/test-results.json`) — never a second copy of either.
+Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), the test result from the finish run, and the parent's next action. Worker reports are navigation aids, not completion evidence: the leader independently compares approved requirements against actual artifacts and execution evidence before accepting. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) and the test record (`.bee/logs/test-results.json`) — never a second copy of either.
 
 When dispatched with native worktree isolation, also report the observed working
 directory, symbolic ref (or detached state), and resulting commit. These values
@@ -201,6 +201,15 @@ authority, and do not ask the orchestrator to trust a worker-supplied value.
 - `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
 
 Ambiguities you deferred go in an `Outstanding Questions` section of the report.
+
+## Leader Completeness Check (Acceptance Boundary)
+
+When a worker caps a cell, the leader must verify completion before accepting the result. Worker reports are navigation aids, not completion evidence.
+
+- **Check artifacts, not prose**: For every worker completion, compare every approved requirement (from cell and plan) against actual artifacts, wiring, and execution evidence. Never accept a cell solely on the worker's report or status token.
+- **Reuse existing requirements**: Reuse existing `must_haves`, acceptance criteria, and proof lines from the cell and plan. Do not invent new report schemas.
+- **No new report schema or mandatory full-suite rerun**: This check introduces no new report schema. It requires no mandatory full-suite test rerun.
+- **Risk-based depth**: Verification depth stays risk-based. Deeper checks (reading full diffs, tracing wiring, inspecting runtime outputs) apply to high risk, missing evidence, or contradictions. Low-risk mechanical changes need only direct artifact spot-checks.
 
 ## Evidence Report Budget
 
