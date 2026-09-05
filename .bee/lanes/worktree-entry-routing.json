@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worktree-entry-routing",
   "mode": "build",
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"worktree-entry-routing\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"worktree-entry-routing\" (lane).",
+  "next_action": "bee close finished \"worktree-entry-routing\" — feature is closed.",
   "created_at": "2026-09-05T11:38:45.264Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,

@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Bạn muốn tiếp tục feature này không? Nó đang ở phase planning, chưa có gates approved.",
-    "asked_at": "2026-09-05T15:03:22.309Z",
-    "session": "24d10ef7-b153-4dfe-9b14-6fde0f3108bc"
+    "subject": "I'd go **A** with sanitization — new repos get the full structure, but with safe starting values (gate_bypass: false, no test command, neutr",
+    "asked_at": "2026-09-05T15:10:07.925Z",
+    "session": "e165f1db-cc5c-409f-9bf9-00d5eef2f74e"
   },
   "route": {
     "class": "feature",
