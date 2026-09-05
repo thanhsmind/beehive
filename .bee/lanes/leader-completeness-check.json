@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "leader-completeness-check",
   "mode": "build",
-  "phase": "scribing",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Shape and execution approved with actor auto/full. Execution not started: feature CONTEXT write was explicitly denied from current main-session cwd. No cell claimed; no source edits. Prior pause handoff carries pressure baseline and scope; gate-pending statement in that handoff is now resolved.",
-  "next_action": "Gate 2 approved under full bypass. Open leader session at D:/projects/goglbe/beehive--wt--leader-completeness-check to write CONTEXT from f5e3c084, prepare and dispatch the approved small cell. Main session cannot write feature artifacts.",
+  "next_action": "bee close finished \"leader-completeness-check\" — feature is closed.",
   "created_at": "2026-09-05T11:17:12.643Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
