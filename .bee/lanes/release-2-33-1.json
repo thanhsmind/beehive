@@ -14,5 +14,10 @@
   "next_action": "Continue bee-swarming for \"release-2-33-1\" (lane).",
   "created_at": "2026-09-05T15:18:25.040Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Installers now serve v2.33.1.",
+    "asked_at": "2026-09-05T15:22:30.877Z",
+    "session": "e165f1db-cc5c-409f-9bf9-00d5eef2f74e"
+  }
 }
