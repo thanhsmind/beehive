@@ -1901,7 +1901,7 @@
     },
     {
       "path": "skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "2dbe5b7b98ad66d3912b810657c5ff0655f3134b98ecafa9f231848a651feab3",
+      "sha256": "924261a119f1afee7bde35ebd274a076aa79d5075adfafa13fce5ad2a438079b",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/routing-and-contracts.md"
@@ -1915,7 +1915,7 @@
     },
     {
       "path": "skills/bee-hive/SKILL.md",
-      "sha256": "97c6b835fedff47d3cce379606cf744e190636192371a023c9e56de005aaf3f3",
+      "sha256": "5926aa19244c64898cae89a700a8f0b0cad5fcf8a1728f9bbbe1f406bff1919c",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/SKILL.md"
@@ -2181,7 +2181,7 @@
     },
     {
       "path": "skills/bee-swarming/references/worker-details.md",
-      "sha256": "13568be7db7aa9fd98f4f56fd55790d82a6a87f7c55364051dd6c3ef2e2352b7",
+      "sha256": "fd12bb96963b216c3925cfe97f2ee50820a0ccfaa888940069e97db3e9a871f0",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/worker-details.md"
