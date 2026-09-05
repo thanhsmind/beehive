@@ -1138,5 +1138,10 @@
     "capped": 6,
     "dropped": 0,
     "archived_at": "2026-09-02T14:36:52.722Z"
+  },
+  "leader-completeness-check": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-05T14:46:02.172Z"
   }
 }

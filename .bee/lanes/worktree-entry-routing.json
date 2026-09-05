@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "worktree-entry-routing",
+  "mode": "build",
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"worktree-entry-routing\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"worktree-entry-routing\" (lane).",
+  "created_at": "2026-09-05T11:38:45.264Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "Solo tiny instruction fix: distinguish native inherited-cwd workers from external explicit-cwd transport; keep guard unchanged. Original feature remains paused in its worktree. Only one live session and no reservations.",
+    "updated_at": "2026-09-05T11:38:45.330Z",
+    "feature": "worktree-entry-routing"
+  }
+}

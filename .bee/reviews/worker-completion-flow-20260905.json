@@ -1,0 +1,96 @@
+{
+  "id": "worker-completion-flow-20260905",
+  "requested_by": "user",
+  "requested_at": "2026-09-05T10:07:24.412Z",
+  "scope_description": "Read-only current-snapshot review at 51cb1950a4af6d3936c85bba91fbb85543f3ede1 of worker DONE -> leader goal-check -> finish/judge-record -> merge/close. Bound to skills/bee-swarming, skills/bee-hive goal-check rules, workflow-state completion knowledge and corresponding Rust cells, close and worktree proof implementation. This is a flow audit, not a release diff; baseline empty tree denotes current snapshot. Excludes uncommitted AGENTS.md, onboarding state, install-bee.ps1 and unrelated features.",
+  "included": [
+    {
+      "type": "commit",
+      "id": "51cb1950a4af6d3936c85bba91fbb85543f3ede1"
+    }
+  ],
+  "excluded": [],
+  "baseline": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "head": "51cb1950a4af6d3936c85bba91fbb85543f3ede1",
+  "reviewer_manifest": {
+    "mode": "current-snapshot-flow-audit",
+    "status": "blocked",
+    "reviewers": [
+      {
+        "role": "correctness",
+        "dispatch_ids": [
+          "b8178f6c-3d26-49e3-ad1e-4ebc6b9ff373",
+          "af6bcae1-aa17-426d-a9bc-29232a360315"
+        ],
+        "status": "spawn_failed",
+        "jobs": [
+          "job-1788602873858",
+          "job-1788602972646"
+        ],
+        "reason": "herdr agent startup timed out twice"
+      }
+    ],
+    "local_inspection": "source-traced; not independently corroborated",
+    "tests": {
+      "command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml judge_debt",
+      "result": "build failed before tests: Git Bash link.exe selected instead of MSVC linker"
+    },
+    "deviation": "Current flow snapshot, not release diff. Local source findings recorded without claiming completed independent review. No source changes or UAT/merge requested."
+  },
+  "verification_preflight": {
+    "checked_at": "2026-09-05T10:07:24.412Z",
+    "cells_checked": [],
+    "passed": true
+  },
+  "findings": [
+    {
+      "id": "completion-1",
+      "severity": "P2",
+      "axis": "standards",
+      "autofix_class": "manual",
+      "title": "Default leader evidence read does not establish requirement completeness",
+      "status": "source-traced-local",
+      "file": "skills/bee-swarming/references/swarming-reference.md",
+      "line": 225,
+      "evidence": "Read the recorded proof; re-run only on smell. parse_report_flag in packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs:133-254 validates caller JSON and a qualified proof string; feature_proof_check in proof.rs:57-91 reads that string. Neither verifies command execution or output.",
+      "scenario": "A small code cell implements only one of two required paths and supplies a plausible green:unit proof line for the implemented path. There is no mandatory independent requirement-to-diff-and-output checklist in this path. Shape validation cannot distinguish that incomplete result from complete work.",
+      "recommendation": "Require leader-owned per-requirement artifact and wiring inspection, linked to actual command evidence at the reviewed commit. Keep test scope risk-based; do not blindly rerun the full suite.",
+      "qualification": "Reliability gap relative to complete-work assurance, not a claim that no-auto-test boundary code violates test-doctrine D7/D8. No specific historical worker is accused."
+    },
+    {
+      "id": "completion-2",
+      "severity": "P2",
+      "axis": "standards",
+      "autofix_class": "manual",
+      "title": "Judge PASS schema is not bound to required checks or reviewed revision",
+      "status": "source-traced-local",
+      "file": "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs",
+      "line": 244,
+      "evidence": "validate_judge_verdict accepts any nonempty checks array with nonempty id/evidence; handlers_meta.rs:183-260 records it without a cell requirement-set comparison, inspected commit hash, or dispatch receipt binding. close.rs:457-475 counts a nonempty semantic_judge array as judged.",
+      "scenario": "A two-requirement cell receives a PASS record containing only one arbitrary PASS check. The verdict validator accepts it and the close judge-debt count treats the cell as judged, although the second requirement was never checked.",
+      "recommendation": "Derive required check IDs from the approved cell contract; reject missing IDs. Bind verdicts to the cell, reviewed commit and judge dispatch evidence, with explicit invalidation after relevant changes.",
+      "qualification": "Traced validator/record/debt path; not an end-to-end merge reproduction. Model independence is preferred by existing policy, not mandatory."
+    },
+    {
+      "id": "completion-3",
+      "severity": "P2",
+      "axis": "spec",
+      "autofix_class": "manual",
+      "title": "Selective standard-lane judging conflicts with mandatory close debt",
+      "status": "source-traced-local",
+      "file": "skills/bee-hive/references/gates-and-delegation.md",
+      "line": 356,
+      "evidence": "The tier table permits selective standard-lane judging, repeated in skills/bee-swarming/references/swarming-reference.md:243-254. drivers/close.rs:457-475 and 1560-1620 require every post-cutoff capped behavior_change cell in standard/high-risk lanes to have a judge record unless a logged deferral exists. Existing tests.rs:2693-2720 asserts blocking then clearing.",
+      "scenario": "A later standard-lane slice has no smell, is not the worker first slice and is not sampled. The leader follows the skill and skips semantic judging. At close its otherwise valid capped behavior-change cell blocks on judge-debt.",
+      "recommendation": "Choose one policy explicitly and update the canonical rule, skill instructions and tests together. For the requested complete-work assurance, prefer mandatory requirement coverage rather than silently treating a skipped review as PASS.",
+      "qualification": "Policy mismatch confirmed by source trace and existing test assertions; test execution was blocked by the linker environment."
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-09-05T10:07:24.412Z",
+  "updated_at": "2026-09-05T10:11:47.796Z"
+}
