@@ -183,12 +183,17 @@ never by browsing for open cells. On a hold or reservation deny, pick
 other work and report the conflict — the guard is never worked around
 or waited out in silence.
 
-Claiming a cell from main is control-plane work and fine. Executing it is
-not: a Task-tool subagent inherits the session's OS cwd, so dispatching an
-execution worker while cwd is main cannot write into the feature's
-worktree and dies on the write guard. Move the session into the worktree
-(EnterWorktree, or a session/pane opened at the worktree path) before
-dispatching execution workers.
+Claiming a cell from main is control-plane work and fine. Executing it
+depends on the transport:
+
+- **Native subagents** (Agent tool, Task tool) inherit the session's OS
+  cwd. From main they cannot write into the feature's worktree — the
+  write guard refuses. Move the session into the worktree
+  (EnterWorktree, or a session/pane opened at the worktree path) before
+  dispatching native execution workers.
+- **External herding workers** (bee herding run with --cwd) receive an
+  explicit cwd at process start. The leader can stay in main while the
+  worker writes in the worktree — no manual entry required.
 
 File overlap with an in-flight cell or live worktree is triage data,
 never a user question: take disjoint items first, split scope to the
