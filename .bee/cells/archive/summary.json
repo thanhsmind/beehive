@@ -1153,5 +1153,10 @@
     "capped": 10,
     "dropped": 0,
     "archived_at": "2026-09-06T12:54:04.461Z"
+  },
+  "agents-parity-host-shell": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-06T14:31:30.594Z"
   }
 }

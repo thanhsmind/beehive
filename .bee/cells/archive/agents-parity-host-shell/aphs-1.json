@@ -20,20 +20,38 @@
   "role": "code",
   "affects_skills": [],
   "affects_specs": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "leader-inline",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "host_shell powershell declared; parity fence honours the declared shell; test green on Windows",
+    "files_changed": [
+      ".bee/config.json",
+      "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-06T14:31:17.332Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "4c61cbaa-ebcd-4628-9732-8846563595e4",
     "claimed_at": "2026-09-06T14:28:52.793Z",
-    "fix_first": "main CI red on agents_block_render_parity; this cell is the fix"
+    "fix_first": "main CI red on agents_block_render_parity; this cell is the fix",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "host_shell powershell declared in .bee/config.json; agents_block_render_parity reads the declared shell and appends the Windows tail only then; committed AGENTS.md unchanged",
+      "commit": "c2f15810",
+      "files": [
+        ".bee/config.json",
+        "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test agents_block_render_parity; cargo test -p bee --bin bee onboard::merge — green:unit — 1 passed + 12 passed, 0 failed; the fence and the renderer it mirrors are the only code this cell touches",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
