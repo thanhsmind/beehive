@@ -1015,6 +1015,36 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         }
     }
 
+    // ── orphan concepts: an area or pattern concept nobody links to is found by
+    // search and the index alone. Area overviews are roots and the
+    // feature-history types (work-item, plan, delivery, ...) only link out, so
+    // the scan grades the two authored kinds only. Informational, never a
+    // warning: measured 207 of 351 concepts unlinked on 2026-09-06, so a
+    // warning would drown --strict; the list is for the author of a NEW file.
+    let mut orphans: Vec<String> = Vec::new();
+    for concept in parsed_concepts.iter() {
+        let kind = str_field(&concept.data, "type").unwrap_or("");
+        if kind != "bee.area" && kind != "bee.pattern" {
+            continue;
+        }
+        if concept.path.rsplit('/').next() == Some("overview.md") {
+            continue;
+        }
+        let linked = parsed_concepts
+            .iter()
+            .zip(concept_bodies.iter())
+            .any(|(other, body)| other.path != concept.path && links_to(&other.path, &other.data, body, &concept.path));
+        if !linked {
+            orphans.push(concept.path.clone());
+        }
+    }
+    if !orphans.is_empty() {
+        notes.push(format!(
+            "orphan_concept: {} area/pattern concept(s) have no inbound link from another concept (--json lists them under profile.orphans); a NEW concept must not be one of them — link it from its area or a sibling pattern",
+            orphans.len()
+        ));
+    }
+
     let ok = errors.is_empty() && profile_errors.is_empty() && (!strict || warnings.is_empty());
     Some(CheckReport {
         okf_errors: errors,
@@ -1024,5 +1054,6 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         concepts: concept_count,
         ok,
         notes,
+        orphans,
     })
 }

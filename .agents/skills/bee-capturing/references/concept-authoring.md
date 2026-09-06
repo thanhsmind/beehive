@@ -8,8 +8,9 @@ into a canonical, linked, validated file — and nothing else.
 
 Five steps, always in this order: **search → decide → write → relate →
 validate**. Skipping the first produces a duplicate; skipping the fourth
-produces an orphan; skipping the last ships a file `knowledge check`
-will refuse next session.
+produces an orphan (`knowledge check` names it in `profile.orphans`);
+skipping the last ships a file `knowledge check` will refuse next
+session.
 
 ## 1. Search before you write
 
@@ -112,8 +113,10 @@ close:
    pattern *to* the new file — a relative `.md` link in the sentence
    where the fact belongs, never a bare "see also" list.
 3. Verify: `bee knowledge show --id <new id> --json` — `links_in`
-   must be non-empty. `knowledge check` does not test for orphans;
-   this read is the only guard.
+   must be non-empty. `bee knowledge check --json` lists every unlinked
+   area/pattern concept under `profile.orphans` (a note, never a
+   failure — the bundle carries old link debt); the new file must not
+   be in that list.
 
 A pattern that generalizes an area rule links both ways: the area
 concept names the pattern where the rule is stated, the pattern's
