@@ -956,6 +956,7 @@ mod tests {
     #[derive(Default)]
     struct FakeCockpit {
         calls: RefCell<Vec<String>>,
+        send_key_calls: RefCell<Vec<(String, String)>>,
         panes: Vec<PaneRow>,
         tabs: Vec<TabRow>,
         context: Option<PaneContext>,
@@ -979,6 +980,9 @@ mod tests {
         }
         fn calls(&self) -> Vec<String> {
             self.calls.borrow().clone()
+        }
+        fn send_key_calls(&self) -> Vec<(String, String)> {
+            self.send_key_calls.borrow().clone()
         }
     }
 
@@ -1026,6 +1030,11 @@ mod tests {
         }
         fn pane_close(&self, pane_id: &str) -> Result<(), String> {
             self.log(format!("pane_close {pane_id}"));
+            Ok(())
+        }
+        fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
+            self.log(format!("pane_send_key {pane_id} {key}"));
+            self.send_key_calls.borrow_mut().push((pane_id.to_string(), key.to_string()));
             Ok(())
         }
         fn agent_prompt(
@@ -1419,6 +1428,14 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0], vec!["send-keys", "-t", "%4", "-l", "dispatch: picking p-12"]);
         assert_eq!(calls[1], vec!["send-keys", "-t", "%4", "Enter"]);
+    }
+
+    #[test]
+    fn fake_cockpit_records_pane_send_key_calls() {
+        let f = FakeCockpit::new();
+        f.pane_send_key("%5", "Escape").unwrap();
+        assert_eq!(f.calls(), vec!["pane_send_key %5 Escape"]);
+        assert_eq!(f.send_key_calls(), vec![("%5".to_string(), "Escape".to_string())]);
     }
 
     #[test]

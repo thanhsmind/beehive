@@ -489,6 +489,9 @@ pub(crate) trait PaneTransport {
     /// `herdr pane close <id>` — best-effort; a failure here is reported,
     /// never allowed to hide the run's own result.
     fn pane_close(&self, pane_id: &str) -> Result<(), String>;
+    /// `herdr pane send-keys <id> <key>` — sends a named key (such as `esc`
+    /// for Escape) to the pane.
+    fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String>;
     /// `herdr agent prompt <job_id> <prompt> --wait --until <state>
     /// --timeout <ms>` (D3 `--continue`; herding-prompt-stall D1) — sends
     /// the round N+1 brief (or the initial pointer) to an ALREADY-RUNNING
@@ -630,6 +633,13 @@ fn tab_create_argv<'a>(workspace: &'a str, cwd: &'a str, label: &'a str) -> [&'a
     ["tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label, "--no-focus"]
 }
 
+/// `pane_send_key`'s argv, pure: herdr accepts `esc` as the canonical Escape
+/// key name (`herdr pane send-keys <pane_id> <key>`). Split out so a test can
+/// pin the argv shape with no spawned process.
+fn pane_send_key_argv<'a>(pane_id: &'a str, key: &'a str) -> [&'a str; 4] {
+    ["pane", "send-keys", pane_id, key]
+}
+
 impl PaneTransport for RealHerdr {
     fn pane_current(&self) -> Result<String, String> {
         let v = self.call(&["pane", "current", "--current"])?;
@@ -716,6 +726,10 @@ impl PaneTransport for RealHerdr {
 
     fn pane_close(&self, pane_id: &str) -> Result<(), String> {
         self.call(&["pane", "close", pane_id]).map(|_| ())
+    }
+
+    fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
+        self.call(&pane_send_key_argv(pane_id, key)).map(|_| ())
     }
 
     fn agent_prompt(&self, job_id: &str, prompt: &str, until: &str, timeout_ms: u64) -> Result<(), String> {
@@ -3266,6 +3280,21 @@ mod tests {
     }
 
     #[test]
+    fn herdr_pane_send_key_argv_shape() {
+        assert_eq!(
+            pane_send_key_argv("w1:p1", "esc"),
+            ["pane", "send-keys", "w1:p1", "esc"]
+        );
+    }
+
+    #[test]
+    fn fake_herdr_records_pane_send_key_calls() {
+        let fake = FakeHerdr::new();
+        fake.pane_send_key("w1:p2", "esc").unwrap();
+        assert_eq!(fake.send_key_calls(), vec![("w1:p2".to_string(), "esc".to_string())]);
+    }
+
+    #[test]
     fn pane_workspace_splits_at_the_first_colon() {
         assert_eq!(pane_workspace("w4:p31"), "w4");
         assert_eq!(pane_workspace("no-colon"), "no-colon");
@@ -3582,6 +3611,7 @@ mod tests {
         prompt_result: Result<(), String>,
         status: RefCell<Option<String>>,
         closed: RefCell<Vec<String>>,
+        send_key_calls: RefCell<Vec<(String, String)>>,
         /// Pane ids `pane_alive` answers `true` for — the FakeHerdr's
         /// stand-in for `herdr pane list`'s membership set.
         alive_panes: RefCell<Vec<String>>,
@@ -3649,6 +3679,7 @@ mod tests {
                 prompt_result: Ok(()),
                 status: RefCell::new(Some("idle".to_string())),
                 closed: RefCell::new(Vec::new()),
+                send_key_calls: RefCell::new(Vec::new()),
                 alive_panes: RefCell::new(vec!["w1:p2".to_string()]),
                 prompt_calls: RefCell::new(Vec::new()),
                 start_calls: RefCell::new(Vec::new()),
@@ -3666,6 +3697,10 @@ mod tests {
                 probe_path: RefCell::new(None),
                 probe_seen: RefCell::new(None),
             }
+        }
+
+        pub(crate) fn send_key_calls(&self) -> Vec<(String, String)> {
+            self.send_key_calls.borrow().clone()
         }
     }
 
@@ -3715,6 +3750,10 @@ mod tests {
         }
         fn pane_close(&self, pane_id: &str) -> Result<(), String> {
             self.closed.borrow_mut().push(pane_id.to_string());
+            Ok(())
+        }
+        fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
+            self.send_key_calls.borrow_mut().push((pane_id.to_string(), key.to_string()));
             Ok(())
         }
         fn agent_prompt(&self, job_id: &str, prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
@@ -3877,6 +3916,9 @@ mod tests {
         }
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
             unreachable!("split_worker_pane never closes a pane")
+        }
+        fn pane_send_key(&self, _pane_id: &str, _key: &str) -> Result<(), String> {
+            Ok(())
         }
         fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             unreachable!("split_worker_pane never prompts")
@@ -4076,6 +4118,9 @@ mod tests {
         }
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
             panic!("dry-run must never call PaneTransport::pane_close")
+        }
+        fn pane_send_key(&self, _pane_id: &str, _key: &str) -> Result<(), String> {
+            panic!("dry-run must never call PaneTransport::pane_send_key")
         }
         fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             panic!("dry-run must never call PaneTransport::agent_prompt")
