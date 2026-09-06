@@ -61,8 +61,13 @@ From two cells up, state the one-line concurrency plan before dispatching.
    `{outcome, commit, files, tests, deviations}` block its prompt
    requires), never its prose. Silence is not failure — inspect
    `bee cells list` and `bee reservations list` before assuming stuck.
-5. On `[DONE]`: the worker's word is never the evidence. Goal-check on
-   smell; `bee cells judge` for undeclared-file hits. At
+5. On `[DONE]`: the worker's word is never the evidence. Run the leader
+   completeness check before accepting — compare every approved
+   requirement (the cell's `must_haves`, the plan's acceptance criteria)
+   against the actual artifacts, wiring, and recorded proof; the worker's
+   report only tells you where to look (`bee-hive` →
+   `references/routing-and-contracts.md`, "Leader completeness check").
+   A test re-run stays on smell; `bee cells judge` for undeclared-file hits. At
    `standard`/`high-risk`, every `behavior_change` cell owes a
    `bee cells judge-record` verdict or `bee close` refuses (`judge-debt`) —
    run the slice judge before you reach for close.

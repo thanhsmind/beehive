@@ -186,13 +186,28 @@ steps for its single worker — never wave analysis or multi-cell assignment.
 7. **Goal-check every `[DONE]` yourself — miss reruns, hit ships.** A
    worker's word is never the evidence; the orchestrator
    measures before the cell counts:
-   - **Read the recorded proof; re-run only on smell.** The worker's cap
-     carries the proof line it chose and ran (`<command> — <result> —
+   - **Leader completeness check — the routine step, every cap, every
+     lane.** Before accepting, compare every approved requirement (the
+     cell's `must_haves`, the plan's acceptance criteria, the locked
+     decisions it cites) against the actual artifacts: the diff, the
+     wiring it claims, and the recorded proof. The worker's Result form
+     is a navigation aid — it names where each requirement landed so you
+     can look, and is never the evidence that it did. A requirement with
+     no artifact behind it → the cell is NOT done. Depth is risk-based:
+     a low-risk mechanical cell needs direct artifact spot-checks; high
+     risk, missing evidence, or a contradiction between report and diff
+     earns the full diff read and wiring trace. No new report schema, no
+     mandatory full-suite rerun — the single home of this rule is
+     `bee-hive` → `references/routing-and-contracts.md` ("Leader
+     completeness check").
+   - **Read the recorded proof; re-run tests only on smell.** The worker's
+     cap carries the proof line it chose and ran (`<command> — <result> —
      <scope reason>`); reading it satisfies the fresh-output rule. Re-run
      `bee test` yourself on a smell — a missing/garbled report, a
      `[DONE]` with no diff, a `high-risk`/hard-gate cell, or a proof scope
-     that looks too narrow for the diff. Orchestrator judgment, not a
-     routine step. Failure on a spot-check → the cell is NOT done:
+     that looks too narrow for the diff. The re-run is orchestrator
+     judgment; the completeness check above is not. Failure on a
+     spot-check → the cell is NOT done:
      re-dispatch on the same role with the failing excerpt (a task miss is
      a rerun, never a silent escalation onto the session model — provider
      errors, not task errors, are what the rescue ladder's escalation rung
