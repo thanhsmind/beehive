@@ -60,3 +60,15 @@ lifecycle.
 - Test runner invocation: `packages/bee-rs/crates/bee/src/verbs/test_runner.rs`.
 - Proof gate tests: `packages/bee-rs/crates/bee/tests/proof_gate.rs`.
 - Concurrency tests: `packages/bee-rs/crates/bee/tests/concurrency.rs`.
+
+## Concepts in this area
+
+- [Verify Pipeline — concurrency safety and hermetic runs](concurrency-and-hermetic-runs.md) — Keeping whole-tree regeneration lock-serialized and atomic-swapped, keeping every child suite hermetic to session identity, and the deterministic race/isolation proofs that back both claims.
+
+## Patterns in this area
+
+- [A test can assert, as intended behavior, the very escape a fix is dispatched to remove](../../patterns/20260806-a-test-can-assert-the-very-escape-a-fix-is-dispatched-to-remove.md) — A guard scoped to one departure path had a test asserting it never fires on any other path — the escape itself, written down as a promise — so closing the hole meant inverting that test's assertion, and a worker that treats a green test as a specification would have concluded the fix was wrong.
+- [A platform job red on a build error is an unknown number of failures](../../patterns/20260821-a-platform-job-red-on-a-build-error-is-an-unknown-number-of-failures.md) — A compile error on one platform hides every test behind it, so the visible failure count is one and the real one is unknown until the build is green
+- [A guard deleted with its runtime is a guard removed](../../patterns/20260825-a-guard-deleted-with-its-runtime-is-a-guard-removed.md) — A guard deleted with its runtime is a guard removed
+- [A rule living in N places needs one test that reads all N](../../patterns/20260826-a-rule-living-in-n-places-needs-one-test-that-reads-all-n.md) — When one command or value must be identical in several files, discipline and docs will not keep them synced — one test that reads every copy and diffs them will, and it catches the drift before it exists.
+- [A wrapper on PATH is not the binary a derivation reads](../../patterns/20260826-a-wrapper-on-path-is-not-the-binary-a-derivation-reads.md) — A test that derives facts from an installed binary's own bytes silently derives nothing when PATH resolves to a wrapper script or a versionless shim

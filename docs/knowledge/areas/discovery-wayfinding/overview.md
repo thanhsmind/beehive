@@ -138,3 +138,7 @@ flowchart TD
   `references/wayfinding-reference.md`.
 - `skills/bee-shaping/SKILL.md` — entry check, park-to-stub, Lock
   consumption.
+
+## Patterns in this area
+
+- [A locked decision can make one side of an open question structurally impossible](../../patterns/20260819-a-locked-decision-can-make-one-side-of-an-open-question-structurally-impossible.md) — When a discovery ticket presents two options, an already-locked decision may have made one of them structurally impossible, and answering the ticket as written then produces a decision that only restates the constraint — two framing corrections of this shape were the whole value of a ten-ticket discovery map: 'core or bee records results' was no choice at all under the genericness boundary, and 'Rust API or recipe file' hid the real fork of wave-as-sequence versus wave-as-value.

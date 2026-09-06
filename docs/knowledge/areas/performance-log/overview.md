@@ -60,3 +60,7 @@ without disrupting active workflows.
 
 - Timing queries and commands: `packages/bee-rs/crates/bee/src/verbs/timings.rs`.
 - Session close performance hook: `packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs`.
+
+## Concepts in this area
+
+- [Performance Log — CLI Self-Timing](cli-self-timing.md) — Every CLI invocation measures its own wall time — one fail-open JSONL line per run plus one stderr summary, stdout untouched; the raw material for finding and fixing slow commands.

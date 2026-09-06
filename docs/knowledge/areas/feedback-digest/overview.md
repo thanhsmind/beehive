@@ -62,3 +62,7 @@ proprietary source code or sensitive details across repository boundaries.
 
 - CLI verb and intake validation: `packages/bee-rs/crates/bee/src/verbs/feedback.rs`.
 - Evolving workflow skill: `skills/bee-evolving/SKILL.md`.
+
+## Concepts in this area
+
+- [Feedback Digest — Ranking and the Self-Improvement Process](ranking-and-self-improvement.md) — Grouping the collected view by what a title means, scoring each group deterministically, and the gated process that turns the ranked result into a shipped, human-approved improvement of the workflow itself.

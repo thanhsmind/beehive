@@ -56,3 +56,16 @@ adding a single human checkpoint.
   data, never instructions.
 - **The human owner** — configures the adviser; is never stopped by a consult
   (autopilot levels govern human stops; this protocol adds none).
+
+## Concepts in this area
+
+- [Advisor Protocol — blind lanes and the convergence dossier](blind-lanes-and-the-convergence-dossier.md) — Isolated advisor lanes on one hard decision, the leaning guard the brief passes at the dispatch door, and the single dossier a convergence is checked against.
+- [Advisor Protocol — worker consult loop](consult-loop.md) — How a stuck worker consults inside its own turn, the two-per-claim budget, and why advice never approves, overrides, or writes.
+
+## Patterns in this area
+
+- [Fix the fan-out, not the one cell of it that was reported](../../patterns/20260807-fix-the-fan-out-not-the-cell-of-it-that-was-reported.md) — A rule stated over a grid gets patched one cell at a time: three fixes to one dispatch-label rule each touched a single runtime-kind-transport combination, and the untouched combinations never failed — they resurfaced weeks later as a screenshot.
+- [Bound the fix ladder when a lexical rule stands in for a semantic claim](../../patterns/20260828-bound-the-fix-ladder-when-a-lexical-rule-stands-in-for-a-semantic-claim.md) — Bound the fix ladder when a lexical rule stands in for a semantic claim
+- [A section title that names a retired mechanism should be renamed the moment the mechanism retires](../../patterns/proactive-leader-intake-pli-2-pitfall.md) — A live skill section still headlined by a dispatch shape no code path reaches anymore misleads every reader who opens it
+- [bee dev regen's blast radius exceeds the files a cell names](../../patterns/proactive-leader-intake-pli-3-pitfall.md) — Regen renders every vendored skill tree, not just the ones the plan lists — reserve and commit the full render set, and leave leader-owned planning artifacts to the orchestrator
+- [An area-scoped edit re-renders the area index, not the root index](../../patterns/proactive-leader-intake-pli-4-pitfall.md) — A plan that names docs/knowledge/index.md for an area-spec description change is naming the wrong generated file

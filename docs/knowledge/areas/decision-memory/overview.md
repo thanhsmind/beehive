@@ -305,3 +305,13 @@ Three field failures (reported against a host repo, fixed generically):
   cost is invisible, so nothing was built; it is stated here rather than
   discovered as a slow log verb once the bundle grows (koh-7,
   knowledge-one-home D1).
+
+## Concepts in this area
+
+- [Decision Memory — which feature a decision belongs to](attribution.md) — How a decision event gets its feature stamp: a lane-resolved name or an explicitly named one, never the shared default record's; why an absent stamp beats a borrowed one; and the narrow correction verb for records whose stamp already contradicts their own text.
+- [Decision Memory — the unified backlog store (event-sourced PBI records)](backlog-store.md) — How a product backlog item lives as an append-only event record in the same stream as machine friction/grooming events, how its current state is derived by folding those events, how id generation stays collision-safe under concurrent writers, and why docs/backlog.md is a generated view no session ever hand-edits.
+
+## Patterns in this area
+
+- [A required field added to a shared params struct ripples to every literal call site — pinned counts included](../../patterns/20260817-a-required-field-added-to-a-shared-params-struct-ripples-to-every-literal-call-site.md) — Adding a required field to a params struct that call sites construct literally forces a repo-wide sweep: every literal construction (tests included) fails to compile until updated, and pinned-count or allow-list assertions (flag catalogs, CLI-shape guards) shift too. Scope the cell for the sweep up front — the fallout is mechanical but it is not free, and it lands in files the cell never named.
+- [Pin a settled contract with a test, never a provisional one](../../patterns/20260902-pin-a-settled-contract-with-a-test-never-a-provisional-one.md) — A test asserting a rule is present turns that rule's own agreed revert condition into a build failure. Before pinning a rule, check whether the team already agreed on what would retire it.
