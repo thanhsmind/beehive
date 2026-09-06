@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "knowledge-authoring-ref",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-authoring-ref\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"knowledge-authoring-ref\" (lane).",
+  "next_action": "bee close finished \"knowledge-authoring-ref\" — feature is closed.",
   "created_at": "2026-09-06T15:28:35.913Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
