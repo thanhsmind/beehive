@@ -1,3 +1,4 @@
+<!-- bee:not-a-deferral: gather worker report of a pressure-test scenario exercise, quoting scenario prose; it promises no later work -->
 # Baseline Decision Exercise Digest
 
 This document records the choices, verbatim rationalizations, and concrete next actions for Scenarios 1 through 4 under currently shipped instructions in `skills/bee-swarming/SKILL.md` and `skills/bee-swarming/references/swarming-reference.md` (specifically Step 7, lines 222–258).
@@ -103,3 +104,4 @@ In Scenario 4:
 
 ### Concrete Next Action
 Accept the cell without routine rerun and proceed.
+<!-- /bee:not-a-deferral -->

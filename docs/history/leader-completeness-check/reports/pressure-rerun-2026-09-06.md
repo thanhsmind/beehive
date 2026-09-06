@@ -1,3 +1,4 @@
+<!-- bee:not-a-deferral: gather worker report of the pressure-test rerun, quoting scenario prose; it promises no later work -->
 # Baseline Decision Exercise Report
 
 ## Paths Read
@@ -82,3 +83,4 @@
   - Option B is rejected because demanding a full suite is explicitly forbidden without smell.
   - Option C is rejected because reviewer panels are user-invoked, not automatic step gates.
 - **Concrete Next Action:** Accept the cell on the verified proof and caller connections and advance to the next step.
+<!-- /bee:not-a-deferral -->
