@@ -479,6 +479,7 @@
     "pi-beehive",
     "pi",
     "worker-brief",
-    "memory"
+    "memory",
+    "knowledge-freshness-deferral"
   ]
 }
