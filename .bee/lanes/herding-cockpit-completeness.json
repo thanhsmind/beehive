@@ -11,13 +11,13 @@
     "uat": false
   },
   "summary": "Shaped: six herding cockpit signals from pi-herdr-agents xia; CONTEXT.md committed on wt/herding-cockpit-completeness; Gate 1 auto-approved under bypass full.",
-  "next_action": "Merged into main at 4a3d10d; reload the product and test \"herding-cockpit-completeness\", then either approve uat (\"bee gate --name uat --approved true --lane herding-cockpit-completeness\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at d08b8d2; reload the product and test \"herding-cockpit-completeness\", then either approve uat (\"bee gate --name uat --approved true --lane herding-cockpit-completeness\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-06T03:45:21.482Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: herding-cockpit-completeness",
-    "asked_at": "2026-09-06T11:23:26.465Z",
+    "asked_at": "2026-09-06T11:27:44.512Z",
     "session": "bee-worktree-merge-sessionless"
   },
   "route": {
