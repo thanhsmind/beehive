@@ -130,3 +130,14 @@ under:
   `docs/history/okf-foundation/CONTEXT.md`.
 - Normative OKF v0.1 spec: `https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md`.
   Profile-as-open-proposal: `https://github.com/GoogleCloudPlatform/knowledge-catalog/issues/212`.
+
+## Concepts in this area
+
+- [Bee OKF Profile — the bee.critical bar and the selective pool it grades](critical-bar.md) — The three-leg bar a pattern must clear to carry bee.critical (recurrence-prone, cross-feature, costly-when-missed — failing any leg disqualifies it), why the label needed a bar at all, and how the pool is kept selective as new patterns are authored.
+- [Bee OKF Profile — the instruction-layer fence](the-instruction-layer-fence.md) — Content guards protect where truth is written; nothing tested the prose that TELLS an agent where truth lives. This fence grades every instruction line, on the line, so a migration cannot leave its own instructions teaching the retired model.
+
+## Patterns in this area
+
+- [A derived field that is empty for a whole class of inputs makes its whole output section silently blank](../../patterns/20260805-a-derived-field-empty-for-a-whole-class-of-inputs-makes-its-output-section-silently-blank.md) — A section whose content is keyed on a derived field renders silently empty for every input the field never gets set for, and two independent empty-derivations can stack behind the very same always-empty render.
+- [A golden test that byte-compares only one of several copies makes drift invisible](../../patterns/20260805-a-golden-test-that-byte-compares-only-one-of-several-copies-makes-drift-invisible.md) — A golden test that byte-compares only one of several duplicated copies of a function lets the other copies drift underneath it while every run stays green — proven when `build_context_manifest` existed in three places and the only byte golden read one of them.
+- [An invitation keyed on the old precondition survives the machinery that removed it](../../patterns/20260805-an-invitation-keyed-on-the-old-precondition-survives-the-machinery-that-removed-it.md) — Widening what a resolver accepts does not widen the invitation built on the resolver's old precondition unless every caller of that precondition is re-checked — the session preamble kept gating its knowledge-context invitation on has_work_item after the resolver stopped requiring one.

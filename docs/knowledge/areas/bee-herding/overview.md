@@ -267,3 +267,10 @@ inside the bee repo and died with "prompt file not found" in every host project.
   the mailbox file straight in fails with "herdr response missing result.status" — unwrap first) —
   is a dedicated skill, `skills/bee-herdr/SKILL.md`, built RED-first with its baselines recorded in
   `docs/history/herdr-skill/CREATION-LOG.md`.
+
+## Patterns in this area
+
+- [A symmetric probe value cannot tell two opposite readings of a parameter apart](../../patterns/20260821-a-symmetric-probe-value-cannot-tell-two-opposite-readings-apart.md) — A share parameter was only ever exercised at 0.5, where "the share the parent keeps" and "the share the child gets" produce identical output, so the reading was assumed — and the assumption was backwards
+- [An allowlist that names a client grants every subcommand it has](../../patterns/20260828-an-allowlist-that-names-a-client-grants-every-subcommand-it-has.md) — An allowlist that names a client grants every subcommand it has
+- [bee herding run completes the worker but drops the gather digest when transport is not ready](../../patterns/20260829-herding-run-loses-its-gather-digest-when-transport-is-not-ready.md) — bee herding run --task-file - dispatched from a session with transport_ready=false completes the worker but returns ONLY the job-summary JSON — the gather digest dies with the closed pane
+- [A test that inherits the session's HERDR env can block on a real socket outside CI](../../patterns/20260830-a-test-inheriting-the-session-s-herdr-env-hangs-outside-ci.md) — hooks::tests::without_the_marker_the_same_invocation_reaches_dispatch inherited the session's HERDR_ENV/HERDR_SOCKET_PATH and blocked reading the real herdr socket, hanging a release test run for 45 minutes; CI has no HERDR env so it passes there

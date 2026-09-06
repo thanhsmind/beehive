@@ -66,3 +66,7 @@ run installs from, and are owned by
   broader force-override reporting and per-skill-target sync details remain to
   harvest. Until then the authoritative description of the unspecced parts is the
   code and its test suites.
+
+## Concepts in this area
+
+- [Onboarding — hook vendoring import-closure completeness](hook-vendoring-import-closure-completeness-for-repo-local-gu.md) — Why a fresh repo-hooks onboard must vendor every module a vendored hook imports, transitively, not merely the hook entrypoints themselves, and the regression suite that guards the class of bug rather than the one instance.

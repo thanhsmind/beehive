@@ -240,3 +240,10 @@ scheduler being introduced to watch for this.
   (letter-reflection, 2026-08-30).
 - Letters and entries live under `.bee/human-mailbox/`, git-ignored as runtime state.
 - The locked decisions: `docs/history/human-mailbox/CONTEXT.md`. The plan and its four phases: `docs/history/human-mailbox/plan.md`.
+
+## Patterns in this area
+
+- [A non-event written into a mined stream teaches a lesson out of silence](../../patterns/20260826-a-non-event-in-a-mined-stream-teaches-a-lesson-out-of-silence.md) — A non-event written into a mined stream teaches a lesson out of silence
+- [A truncated identifier is not an identifier](../../patterns/20260826-a-truncated-identifier-is-not-an-identifier.md) — A truncated identifier is not an identifier
+- [Two stores both read as "the human inbox" — a not-found answer needs a knowledge search first](../../patterns/20260830-two-stores-both-read-as-the-human-inbox.md) — Supervisor mailbox/WakeReport (.bee/supervisor/) and human-mailbox letters (.bee/human-mailbox/) both read as "the inbox"; asked whether a summary was sent, a session checked only one store and answered "nothing was sent" while a filed letter existed
+- [A shipped verb with no doctrine home is unreachable — 104 of 191 bee commands are named nowhere an agent reads](../../patterns/20260831-a-shipped-verb-with-no-doctrine-home-is-unreachable.md) — letter-reflection shipped `bee mailbox reflect` with doctrine as its only trigger, the doctrine line was never written, and the verb recorded zero entries; a sweep of the whole command surface shows it was one of 104 orphans

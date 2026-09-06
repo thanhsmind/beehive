@@ -104,3 +104,16 @@ The split follows what each rule *governs*, not the section it was written in:
   placed on the standing sheet that *should* have been a procedure reference
   (bloat), as opposed to one wrongly buried in a reference (silence). Only the
   silence direction is guarded.
+
+## Concepts in this area
+
+- [Doctrine Layer — agent-facing state query CLI surface](agent-facing-state-query-cli-surface.md) — The three read-only query verbs bee exposes over its own state store, so agents stop grepping .bee/*.jsonl or importing internals — decisions active/search --cell/--feature, backlog findings --feature, and state scribing-run --show — plus the word-boundary discipline that makes the text-matching verbs correct.
+- [Doctrine Layer — model roles, fall-through, and escalation](model-roles-and-escalation.md) — How work says which model should run it: an open set of job-named roles resolved through one parser, an ordered fall-through that warns instead of failing, cost held apart as an explicit escalation flag, and an explicit-only retry chain that never fires on a semantic failure.
+- [Doctrine Layer — native Codex wait discipline](native-wait-discipline.md) — What an empty wait means, the mandatory progress interval before another bounded wait, and why a timeout never changes worker or ownership state.
+- [Doctrine Layer — the prompt-writing standard](prompt-writing-standard.md) — The standard every edit to bee's instruction text is judged by: the four-question line filter, add-on-failure, one rule one home, verifiable-imperative style, the deterministic-backstop preference, and the standing record that no size ceiling exists or may be introduced.
+- [Doctrine Layer — report shape and counted numbers](report-shape-and-counted-numbers.md) — The shape a report-shaped skill's output takes: one required closing count line with its empty case written verbatim, a one-line stamp over a closed tag vocabulary for countable findings, a Boundaries block that routes every concern it refuses, and the rule that a skill printing numbers must name the figure it may never invent.
+
+## Patterns in this area
+
+- [A hit list is only as complete as the search that produced it](../../patterns/20260819-a-hit-list-is-only-as-complete-as-the-search-that-produced-it.md) — A cell scoped by a guessed grep inherits the guess: naming the list complete makes the worker stop looking, so the worker is right by its instructions while the result is wrong. Measured on herding-orchestration cell ho-14: a four-file grep left nine live references standing — seven in the very document that describes the permission posture and the runtime adapter seam the feature's riskiest decision protects — while the full-tree sweep in ho-15 found 43 files, most of them mirrors and several of them history that must not be rewritten.
+- [A two-sided parity fence is blind to a change made on both sides](../../patterns/20260902-a-two-sided-parity-fence-is-blind-to-a-change-made-on-both-sides.md) — A test that pins file A to file B proves they agree, never that either says anything. Delete the same line from both and the fence stays green while the rule it guarded is gone.
