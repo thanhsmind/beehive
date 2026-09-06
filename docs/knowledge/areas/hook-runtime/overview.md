@@ -98,6 +98,15 @@ ending the turn.
 - Native (non-shell) file reads and the incomplete unified-shell path on the
   second runtime cannot be intercepted — governed by the durable instructions
   and helper checks; logged as coverage gaps at runtime.
+- **Pi-to-Claude workflow equivalence is unproven on Windows.** The evaluation
+  of 2026-09-06 ran the full Rust suite and the sandbox record probes; one
+  render-parity target failed and the Pi runtime fixtures are excluded on
+  Windows, so the second runtime's parity there rests on the Unix lane only.
+  Record: `.bee/mailbox/pi-workflow-eval-20260906.md`.
+- **A bare session release does not resolve the current Pi session.** Under the
+  Pi session variable the release verb reports no session id and needs an
+  explicit `--session-id`; Claude resolves its own. The identity-resolution
+  gap between the two runtimes is kept open for verification.
 
 (The other named gaps live with the concept whose topic they belong to:
 [`delivery-targets-and-the-fallback-command.md`](delivery-targets-and-the-fallback-command.md)

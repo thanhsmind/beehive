@@ -233,6 +233,19 @@ inside the bee repo and died with "prompt file not found" in every host project.
   description, never opening the feature's own context. Reading the real work is the honest form of
   the safety check and is not yet built — the interlock (R3) is the compensating control meanwhile.
 - **The supervised acceptance cycle (R7) is owner-run and outstanding** for this repo.
+- **The pi-herdr-agents 1.5.1 distill is a brief, not behavior.** Its dependency
+  matrix and ranked candidates live in
+  [`docs/history/research/pi-herdr-agents-xia.md`](../../../history/research/pi-herdr-agents-xia.md)
+  (8ab31189, inside 9f5c6d17: Pi dispatch stays herding-only, design rules
+  only). The candidates that survived shaping became herding-cockpit-completeness
+  D1–D8 — interrupted and cancelled outcomes, stalled/recovered, the retryable
+  bit, fail-closed cancel, the orphan sweep, the git handoff block, no automatic
+  behavior, the new-words list
+  ([`docs/history/herding-cockpit-completeness/CONTEXT.md`](../../../history/herding-cockpit-completeness/CONTEXT.md))
+  and are stated in the concept files above. Agent fallback and review
+  discipline stayed parked as backlog proposals; the two research briefs
+  (pi-herdr-agents-xia, pi-workflows-xia) and the pi-beehive context are
+  history that cites 9f5c6d17 as written and is not rewritten.
 
 ## Pointers (implementation)
 

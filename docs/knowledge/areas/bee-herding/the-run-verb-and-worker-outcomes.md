@@ -547,6 +547,23 @@ evidence.
   spinner advances the log. Picking a real discriminator needs calibration traces
   from healthy-but-blocked workers against genuinely hung ones, and the question
   is parked against a registered trigger until those exist.
+- **A caller that waits in the foreground and times out loses the worker's
+  cleanup.** Seen live 2026-09-06: the caller's own tool timeout (120 s) ended
+  the wait first, the worker later finished with a valid result, and the pane
+  sat idle with nothing to retire it — closed by hand. The correction on record
+  is orchestration, not code: the foreground wait now runs without a premature
+  caller timeout, and a rerun returned a done outcome with the pane closed.
+  Whether the verb should refuse a foreground wait it cannot outlast, and
+  recovery from abrupt process death, are both untested and open.
+- **A valid result closes the pane before a promised report is checked.**
+  Completion is read from the result file, never console text; a declared
+  report that is missing, empty, unreadable, a directory, or stale becomes a
+  note on the envelope while the result stays eligible to close the pane.
+  "Report first, result last" is a worker instruction, not a hard
+  report-completeness check. The repair requested 2026-09-06 — a promised
+  report is validated before the result authorizes pane closure, with the
+  legacy no-report worker still legal — is scoped in the planning lane
+  herding-late-cleanup and not built.
 
 ## Pointers (implementation)
 

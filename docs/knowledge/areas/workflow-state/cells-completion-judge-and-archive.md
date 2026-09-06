@@ -658,6 +658,15 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   semantics, deliberately untouched by this feature; the two exemptions
   (waiver vs marker) read the two declarations differently on purpose, and the
   seam ships named rather than reconciled (worker-conformance, wc-1).
+- **The leader's completeness check is approved and not yet built.** On a cap the
+  leader compares every approved requirement against the actual artifacts before
+  accepting; worker reports are navigation aids, never completion evidence. That
+  is a low-overhead requirement-to-artifact check with risk-based deep
+  verification — no new worker report, no mandatory full-suite rerun
+  (f5e3c084, touching 565e68d0: independent review stays user-invoked). The
+  docs and history that cite 565e68d0 keep reading as written; nothing they
+  state is contradicted, because the check adds a leader step and removes
+  nothing. Implementation home: feature leader-completeness-check.
 
 ## Pointers (implementation)
 
