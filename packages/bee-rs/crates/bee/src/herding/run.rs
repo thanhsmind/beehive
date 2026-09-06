@@ -2081,6 +2081,7 @@ fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) 
         task: opts.task.clone(),
         outcome: None,
         evidence: None,
+        retryable: None,
     };
     let row = WaveRow {
         wave_id: opts.job_id.clone(),

@@ -489,6 +489,19 @@ fn classify_outcome(result: &WaveResult, canonical_name: &str) -> Option<&'stati
     }
 }
 
+// Outcome -> retryable rule from herding::run / CONTEXT.md D3 (1ef811f7):
+// true only when the worker did no work (send_failed, flipped_before_send,
+// spawn_failed / resolution_failed); false for timed_out,
+// unverifiable_after_send, unsafe_at_preflight; None for done / succeeded.
+fn outcome_retryable(outcome: &str) -> Option<bool> {
+    match outcome {
+        "send_failed" | "flipped_before_send" | "spawn_failed" | "resolution_failed" => Some(true),
+        "timed_out" | "unverifiable_after_send" => Some(false),
+        "succeeded" | "done" => None,
+        _ => Some(false),
+    }
+}
+
 /// Runs `wave` on `backend`, then appends EXACTLY ONE row to the wave
 /// ledger (D10) — this call, not the choreography, owns the ledger write,
 /// so `run_wave` itself stays memoryless (D5). Generic over `WorkerBackend`
@@ -512,6 +525,7 @@ pub(crate) fn run_wave_and_record<B: WorkerBackend + Sync + ?Sized>(
             // dispatch.
             let pane_id = backend.canonical_id(&w.name);
             let outcome = classify_outcome(&result, &pane_id).map(str::to_string);
+            let retryable = outcome.as_deref().and_then(outcome_retryable);
             wave_ledger::WorkerRow {
                 name: w.name.clone(),
                 pane_id,
@@ -519,6 +533,7 @@ pub(crate) fn run_wave_and_record<B: WorkerBackend + Sync + ?Sized>(
                 task: w.task.clone(),
                 outcome,
                 evidence: None,
+                retryable,
             }
         })
         .collect();
@@ -664,18 +679,32 @@ fn run_wave_for_transport(
     }
 }
 
+fn wave_bucket_rows(names: &[String], retryable: Option<bool>) -> Vec<Value> {
+    names
+        .iter()
+        .map(|name| {
+            let mut m = serde_json::Map::new();
+            m.insert("name".into(), Value::String(name.clone()));
+            if let Some(r) = retryable {
+                m.insert("retryable".into(), Value::Bool(r));
+            }
+            Value::Object(m)
+        })
+        .collect()
+}
+
 fn emit_wave_result(wave_id: &str, result: &WaveResult, json: bool) {
     if json {
         let obj = serde_json::json!({
             "wave_id": wave_id,
             "success": result.is_success(),
-            "succeeded": result.succeeded,
-            "resolution_failed": result.resolution_failed,
-            "unsafe_at_preflight": result.unsafe_at_preflight,
-            "flipped_before_send": result.flipped_before_send,
-            "send_failed": result.send_failed,
-            "timed_out": result.timed_out,
-            "unverifiable_after_send": result.unverifiable_after_send,
+            "succeeded": wave_bucket_rows(&result.succeeded, outcome_retryable("succeeded")),
+            "resolution_failed": wave_bucket_rows(&result.resolution_failed, outcome_retryable("resolution_failed")),
+            "unsafe_at_preflight": wave_bucket_rows(&result.unsafe_at_preflight, outcome_retryable("unsafe_at_preflight")),
+            "flipped_before_send": wave_bucket_rows(&result.flipped_before_send, outcome_retryable("flipped_before_send")),
+            "send_failed": wave_bucket_rows(&result.send_failed, outcome_retryable("send_failed")),
+            "timed_out": wave_bucket_rows(&result.timed_out, outcome_retryable("timed_out")),
+            "unverifiable_after_send": wave_bucket_rows(&result.unverifiable_after_send, outcome_retryable("unverifiable_after_send")),
         });
         println!("{obj}");
         return;
@@ -1063,6 +1092,7 @@ fn append_worker_row(
             task,
             outcome: None,
             evidence: None,
+            retryable: None,
         }],
     };
     wave_ledger::append_wave(root, &row)?;
@@ -1984,6 +2014,7 @@ mod tests {
                     task: "do it".to_string(),
                     outcome: None,
                     evidence: None,
+                    retryable: None,
                 }],
             },
         )
@@ -2308,5 +2339,153 @@ mod tests {
 
         assert_eq!(crate::herding::mailbox::read_mark(&bee_dir, "job-result"), None);
         assert_eq!(crate::herding::mailbox::read_mark(&bee_dir, "job-live"), None);
+    }
+
+    // ─── D3 (1ef811f7): retryable bit on wave buckets and ledger rows ────────
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_set_retryable_true_for_send_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_send_result("alpha", Err("broken pipe".to_string()));
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "do it".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(50), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-send-fail".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(!result.is_success());
+        assert_eq!(result.send_failed, vec!["alpha".to_string()]);
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("send_failed"));
+        assert_eq!(waves[0].workers[0].retryable, Some(true), "send_failed worker row in ledger must have retryable: Some(true)");
+
+        let bucket = wave_bucket_rows(&result.send_failed, outcome_retryable("send_failed"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert_eq!(bucket[0]["retryable"], true, "send_failed bucket row must carry retryable: true");
+    }
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_set_retryable_false_for_unverifiable_after_send() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        ready_worker(&backend, "alpha", "MARKER-alpha");
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::LookupFailed);
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "MARKER-alpha".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(50), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-unverif".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(!result.is_success());
+        assert_eq!(result.unverifiable_after_send, vec!["alpha".to_string()]);
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("unverifiable_after_send"));
+        assert_eq!(waves[0].workers[0].retryable, Some(false), "unverifiable_after_send worker row in ledger must have retryable: Some(false)");
+
+        let bucket = wave_bucket_rows(&result.unverifiable_after_send, outcome_retryable("unverifiable_after_send"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert_eq!(bucket[0]["retryable"], false, "unverifiable_after_send bucket row must carry retryable: false");
+    }
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_omit_retryable_for_succeeded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        ready_worker(&backend, "alpha", "MARKER-alpha");
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "MARKER-alpha".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(500), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-succ".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(result.is_success());
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("succeeded"));
+        assert_eq!(waves[0].workers[0].retryable, None, "succeeded worker row in ledger must have retryable: None");
+
+        let bucket = wave_bucket_rows(&result.succeeded, outcome_retryable("succeeded"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert!(bucket[0].get("retryable").is_none(), "succeeded bucket row must carry no retryable key");
+    }
+
+    #[test]
+    fn wave_ledger_and_bucket_rows_set_retryable_true_for_flipped_before_send() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let backend = FakeBackend::new();
+        // Phase 2 ready, but before send it flips to Blocked
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Ready));
+        backend.schedule_status("alpha", RawStatus::Value(WorkerStatus::Blocked));
+
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "do it".to_string(),
+            worktree: "/tmp/wt-alpha".to_string(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(50), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let result = run_wave_and_record(&backend, root, "w-flipped".to_string(), "2026-08-18T00:00:00Z".to_string(), &inputs, &wave_value);
+        assert!(!result.is_success());
+        assert_eq!(result.flipped_before_send, vec!["alpha".to_string()]);
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("flipped_before_send"));
+        assert_eq!(waves[0].workers[0].retryable, Some(true), "flipped_before_send worker row in ledger must have retryable: Some(true)");
+
+        let bucket = wave_bucket_rows(&result.flipped_before_send, outcome_retryable("flipped_before_send"));
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0]["name"], "alpha");
+        assert_eq!(bucket[0]["retryable"], true, "flipped_before_send bucket row must carry retryable: true");
     }
 }

@@ -1821,6 +1821,7 @@ mod tests {
             task: "do task".to_string(),
             outcome: None,
             evidence: None,
+            retryable: None,
         };
         let row = super::super::wave_ledger::WaveRow {
             wave_id: "job-paused-1".to_string(),
