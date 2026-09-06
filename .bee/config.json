@@ -10,6 +10,7 @@
   "commands": {
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml"
   },
+  "host_shell": "powershell",
   "gate_bypass": "full",
   "ship_visibility": "off",
   "worktree_first": "on",

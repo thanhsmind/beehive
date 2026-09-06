@@ -14,13 +14,17 @@
 // trimmed, marker line, trailing newline. That is the same equality
 // `onboard::plan` tests to decide `update_agents_block`.
 //
-// What is deliberately NOT pinned: the PowerShell tail. On a host whose shell
-// resolves to PowerShell, `render_agents_block` appends
-// `packages/bee/AGENTS.windows.md` INSIDE the same block. This repo declares no
-// `host_shell` in `.bee/config.json` and its committed `AGENTS.md` is the posix
-// render, so the fence pins that render and nothing else. A regen on a
-// PowerShell host turns it red — correctly: that tail does not belong in this
-// repo's committed doctrine.
+// The PowerShell tail follows the REPOSITORY, never the machine. When the
+// resolved host shell is PowerShell, `render_agents_block` appends
+// `packages/bee/AGENTS.windows.md` INSIDE the same block. The fence reads only
+// the repo half of that resolution — `host_shell` in `.bee/config.json`
+// (decision f05e6583: the repository decides before the machine does): declared
+// `"powershell"` pins the render WITH the tail; declared `"posix"`, absent, or
+// unrecognised pins the posix render. `cfg!(windows)` is deliberately not
+// consulted, so the pinned bytes are the same on a Windows workstation and on
+// Linux CI. A repo whose maintainers regen on PowerShell declares `powershell`;
+// leaving the key absent and regenerating on Windows turns this red —
+// correctly: the committed doctrine would then depend on who last ran regen.
 //
 // Two marker details, taken from `merge.rs` rather than assumed. The AGENTS
 // markers are matched by plain `find` — FIRST occurrence, not whole-line
@@ -37,6 +41,10 @@ use std::path::PathBuf;
 /// The generated file, and the source it is rendered from.
 const AGENTS_MD: &str = "AGENTS.md";
 const AGENTS_BLOCK: &str = "packages/bee/AGENTS.block.md";
+/// The PowerShell tail, appended inside the block only when `host_shell` is
+/// declared `"powershell"` (`onboard::merge::host_shell_is_powershell`).
+const AGENTS_WINDOWS: &str = "packages/bee/AGENTS.windows.md";
+const BEE_CONFIG: &str = ".bee/config.json";
 
 /// `onboard::templates::MARKER_START` / `MARKER_END`.
 const MARKER_START: &str = "<!-- BEE:START -->";
@@ -64,9 +72,30 @@ fn extract_block(text: &str) -> Option<String> {
     Some(format!("{}\n", &text[start..end + MARKER_END.len()]))
 }
 
-/// `render_agents_block(block, None)` — the posix render.
-fn render_block(body: &str) -> String {
-    format!("{MARKER_START}\n{}\n{MARKER_END}\n", body.trim_end())
+/// `render_agents_block(block, tail)` — body, then the tail after one blank
+/// line when it is `Some` and non-blank, both with trailing whitespace trimmed.
+fn render_block(body: &str, tail: Option<&str>) -> String {
+    let extra = match tail.map(str::trim_end).unwrap_or_default() {
+        s if s.trim().is_empty() => String::new(),
+        s => format!("\n\n{s}"),
+    };
+    format!("{MARKER_START}\n{}{extra}\n{MARKER_END}\n", body.trim_end())
+}
+
+/// The repo half of `host_shell_is_powershell`: `"host_shell": "powershell"`
+/// declared in `.bee/config.json`. No JSON crate — a std-only fence must not
+/// agree with a broken parser either — so this is a plain key/value scan of a
+/// flat, hand-written config: a top-level key on its own line is what it reads.
+fn repo_declares_powershell() -> bool {
+    let Ok(text) = std::fs::read_to_string(repo_root().join(BEE_CONFIG)) else {
+        return false;
+    };
+    text.lines().any(|line| {
+        let Some((key, value)) = line.trim().trim_end_matches(',').split_once(':') else {
+            return false;
+        };
+        key.trim() == "\"host_shell\"" && value.trim() == "\"powershell\""
+    })
 }
 
 /// Line number and both texts' lines at the first place they differ. Lines are
@@ -117,16 +146,18 @@ fn agents_md_block_is_the_rendered_source_byte_for_byte() {
              `{REGEN}`."
         )
     });
-    let expected = render_block(&source);
+    let tail = repo_declares_powershell().then(|| read(AGENTS_WINDOWS));
+    let expected = render_block(&source, tail.as_deref());
 
     assert!(
         actual == expected,
         "the bee block in {AGENTS_MD} is not the render of {AGENTS_BLOCK}.\n\n{}\n\n{AGENTS_MD} \
          is GENERATED: {AGENTS_BLOCK} is the only place to edit, and the rendered copy must be \
          regenerated after every edit to it. FIX: run `{REGEN}` and commit the resulting \
-         {AGENTS_MD}; never hand-edit the block inside {AGENTS_MD}.\n\n(If you regenerated on a \
-         PowerShell host, the extra `packages/bee/AGENTS.windows.md` tail is the difference — \
-         that tail is not part of this repo's committed doctrine.)",
+         {AGENTS_MD}; never hand-edit the block inside {AGENTS_MD}.\n\n(The `{AGENTS_WINDOWS}` tail is expected \
+         only when {BEE_CONFIG} declares \"host_shell\": \"powershell\" — a regen on a \
+         PowerShell host without that key, or on a posix host with it, is the usual \
+         difference.)",
         first_difference(&actual, &expected),
     );
 }
