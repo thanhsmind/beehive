@@ -63,8 +63,9 @@ semantic-judge verdict (`trace.semantic_judge`, written by
 `cells judge-record`); missing verdicts make a BLOCKING `judge-debt` door
 naming the offending cell ids, remedy `bee cells judge` /
 `bee cells judge-record`. Tiny/small routes never grow the door —
-judge-on-smell stays their rule. Judgment moved from instructed to enforced
-for the lanes where a missed smell costs most. The closing feature's route
+the semantic judge stays on smell there. The leader completeness check is
+separate and runs on every cap in every lane (R102). Judgment moved from
+instructed to enforced for the lanes where a missed smell costs most. The closing feature's route
 is read `route.lane` first from its own lane record, then — ONLY when that
 default-state route names THIS feature (`route.feature`, the same identity
 check `gated_add_refusal` already uses) — from the global default-state
@@ -564,7 +565,6 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   worker its capping record names is not registered for that unit; an
   explicit inline reason recorded on the unit's own trace is the sanctioned
   escape, and the `tiny` lane is exempt by contract (worker-proof, wp-1).
-
 - R100 — Completing a unit with recorded file changes requires a commit in the
   feature checkout's recent history whose message carries a line naming that
   unit; a missing line refuses the completion, a declared commit-pending reason
@@ -581,6 +581,20 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   visible `trace.deviations` line only when the touched set actually
   carried a `skills/**` path. This door refuses; it does not warn
   (knowledge-one-home D3/D4).
+- R102 — Accepting a worker's completion is a leader step, every cap, every
+  lane: before the cell counts, the leader compares every approved
+  requirement (the unit's must-haves, the plan's acceptance criteria, the
+  locked decisions it cites) against the actual artifacts — the diff, the
+  wiring claimed, the recorded proof. The worker's report is a navigation
+  aid that names where each requirement landed, never the evidence that it
+  did; a requirement with no artifact behind it means the unit is not done.
+  The check reuses existing requirements and proof lines — no new report
+  schema, no mandatory full-suite rerun; a test re-run stays smell-only,
+  and depth is risk-based (spot-check a low-risk mechanical unit, read the
+  full diff and trace wiring on high risk, missing evidence, or a
+  report-versus-diff contradiction). Instruction-only: no door enforces it
+  (f5e3c084, touching 565e68d0 — independent review stays user-invoked;
+  feature leader-completeness-check).
 
 ## Edge Cases Settled
 
@@ -658,15 +672,6 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   semantics, deliberately untouched by this feature; the two exemptions
   (waiver vs marker) read the two declarations differently on purpose, and the
   seam ships named rather than reconciled (worker-conformance, wc-1).
-- **The leader's completeness check is approved and not yet built.** On a cap the
-  leader compares every approved requirement against the actual artifacts before
-  accepting; worker reports are navigation aids, never completion evidence. That
-  is a low-overhead requirement-to-artifact check with risk-based deep
-  verification — no new worker report, no mandatory full-suite rerun
-  (f5e3c084, touching 565e68d0: independent review stays user-invoked). The
-  docs and history that cite 565e68d0 keep reading as written; nothing they
-  state is contradicted, because the check adds a leader step and removes
-  nothing. Implementation home: feature leader-completeness-check.
 
 ## Pointers (implementation)
 
