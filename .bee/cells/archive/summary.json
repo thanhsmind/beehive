@@ -1142,7 +1142,7 @@
   "leader-completeness-check": {
     "capped": 1,
     "dropped": 0,
-    "archived_at": "2026-09-05T14:46:02.172Z"
+    "archived_at": "2026-09-06T16:31:00.086Z"
   },
   "worktree-entry-routing": {
     "capped": 1,
