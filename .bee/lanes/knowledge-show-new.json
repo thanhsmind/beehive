@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-show-new\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at ce44226; capture what settled, then bee close --feature knowledge-show-new.",
   "created_at": "2026-09-06T15:02:32.491Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "two verbs in the knowledge group; no risk flags; 4 product files",
     "updated_at": "2026-09-06T15:02:32.618Z",
     "feature": "knowledge-show-new"
-  },
-  "merge_ready": {
-    "since": "2026-09-06T15:24:27.868Z",
-    "branch": "wt/knowledge-show-new",
-    "worktree_id": "beehive--wt--knowledge-show-new",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
