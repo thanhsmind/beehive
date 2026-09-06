@@ -914,7 +914,7 @@ fn parse_tmux_pane_list(stdout: &str) -> HashSet<String> {
 /// A refused key — a typo, which `transport_kind` reports as an `Err` rather
 /// than guessing — resolves to `None`, i.e. the ledger's degraded timer
 /// answer, never the other transport's pane list.
-fn live_pane_ids(main_root: &Path) -> Option<HashSet<String>> {
+pub(super) fn live_pane_ids(main_root: &Path) -> Option<HashSet<String>> {
     match super::transport_kind_at(main_root) {
         Ok(super::TransportKind::Herdr) => live_pane_ids_via_herdr(),
         Ok(super::TransportKind::Tmux) => live_pane_ids_via_tmux(),
@@ -953,17 +953,10 @@ fn emit_occupancy(occ: &wave_ledger::Occupancy, json: bool) {
     println!("{}", occupancy_plain_line(occ));
 }
 
-/// `bee herding occupancy` — the CLI bridge to the wave ledger's read side
-/// (D10's occupancy answer), reachable from a markdown role for the first
-/// time (`role-dispatch.md` §4 can only run shell commands). Reports how
-/// many worker slots are occupied AND which answer it gave: a real
-/// pane-list cross-check (`source: "live"`) when `herdr pane list`
-/// succeeded, or the degraded one-hour timer fallback (`source:
-/// "fallback"`) when it did not.
-///
-/// Flags: `--main-root <path>` (same override the other verbs take),
-/// `--json`.
-pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
+pub(super) fn occupancy_with_panes(
+    flags: &[&str],
+    live_panes_override: Option<Option<HashSet<String>>>,
+) -> (ExitCode, wave_ledger::Occupancy, Vec<String>) {
     let mut explicit_root: Option<&str> = None;
     let mut json = false;
     let mut i = 0usize;
@@ -972,6 +965,10 @@ pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
             "--main-root" => {
                 explicit_root = flags.get(i + 1).copied();
                 i += 2;
+            }
+            arg if arg.starts_with("--main-root=") => {
+                explicit_root = Some(&arg["--main-root=".len()..]);
+                i += 1;
             }
             "--json" => {
                 json = true;
@@ -986,15 +983,43 @@ pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
             "bee herding occupancy: could not resolve the MAIN checkout root (no --main-root \
              given and `git rev-parse --git-common-dir` failed)"
         );
-        return ExitCode::FAILURE;
+        return (ExitCode::FAILURE, wave_ledger::Occupancy::Fallback(0), Vec::new());
     };
 
-    let live_panes = live_pane_ids(&main_root);
+    let live_panes = match live_panes_override {
+        Some(lp) => lp,
+        None => live_pane_ids(&main_root),
+    };
+
+    let mut sweep_lines = Vec::new();
+    if let Some(ref panes) = live_panes {
+        let bee_dir = main_root.join(".bee");
+        for marked_id in super::mailbox::mark_orphans(&bee_dir, panes) {
+            let msg = format!("herding: marked job {marked_id} interrupted (process_restarted)");
+            println!("{msg}");
+            sweep_lines.push(msg);
+        }
+    }
+
     let now_ms = chrono::Utc::now().timestamp_millis();
     let occ =
         wave_ledger::live_worker_count(&main_root, live_panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS);
     emit_occupancy(&occ, json);
-    ExitCode::SUCCESS
+    (ExitCode::SUCCESS, occ, sweep_lines)
+}
+
+/// `bee herding occupancy` — the CLI bridge to the wave ledger's read side
+/// (D10's occupancy answer), reachable from a markdown role for the first
+/// time (`role-dispatch.md` §4 can only run shell commands). Reports how
+/// many worker slots are occupied AND which answer it gave: a real
+/// pane-list cross-check (`source: "live"`) when `herdr pane list`
+/// succeeded, or the degraded one-hour timer fallback (`source:
+/// "fallback"`) when it did not.
+///
+/// Flags: `--main-root <path>` (same override the other verbs take),
+/// `--json`.
+pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
+    occupancy_with_panes(flags, None).0
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2209,5 +2234,79 @@ mod tests {
             "the recorded row's worktree must be the value given to --path"
         );
         assert_eq!(waves[0].workers[0].task, "P-777", "the recorded row's task must be the value given to --task");
+    }
+
+    #[test]
+    fn occupancy_sweep_marks_orphan_interrupted_process_restarted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-orphan");
+        std::fs::create_dir_all(&job_dir).unwrap();
+
+        let job_spec = serde_json::json!({
+            "job_id": "job-orphan",
+            "pane_id": "w4:dead",
+            "round": 1
+        });
+        std::fs::write(job_dir.join("job.json"), serde_json::to_string(&job_spec).unwrap()).unwrap();
+
+        // live_panes is empty, so w4:dead is not alive
+        let (exit, _occ, sweep_lines) =
+            occupancy_with_panes(&["--main-root", root_str], Some(Some(HashSet::new())));
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert_eq!(
+            sweep_lines,
+            vec!["herding: marked job job-orphan interrupted (process_restarted)"]
+        );
+
+        let (mark, reason) = crate::herding::mailbox::read_mark(&bee_dir, "job-orphan").expect("mark should exist");
+        assert_eq!(mark, crate::herding::mailbox::Mark::Interrupted);
+        assert_eq!(reason, Some("process_restarted".to_string()));
+    }
+
+    #[test]
+    fn occupancy_sweep_skips_jobs_with_result_or_live_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+
+        // Job 1: has result file
+        let job1_dir = bee_dir.join("mailbox").join("job-result");
+        std::fs::create_dir_all(&job1_dir).unwrap();
+        let job1_spec = serde_json::json!({
+            "job_id": "job-result",
+            "pane_id": "w4:dead",
+            "round": 1
+        });
+        std::fs::write(job1_dir.join("job.json"), serde_json::to_string(&job1_spec).unwrap()).unwrap();
+        let result_json = serde_json::json!({
+            "status": "done",
+            "summary": "all good",
+            "files_changed": [],
+            "proof": "tests passed"
+        });
+        std::fs::write(job1_dir.join("result-1.json"), serde_json::to_string(&result_json).unwrap()).unwrap();
+
+        // Job 2: pane is in live_panes
+        let job2_dir = bee_dir.join("mailbox").join("job-live");
+        std::fs::create_dir_all(&job2_dir).unwrap();
+        let job2_spec = serde_json::json!({
+            "job_id": "job-live",
+            "pane_id": "w4:live",
+            "round": 1
+        });
+        std::fs::write(job2_dir.join("job.json"), serde_json::to_string(&job2_spec).unwrap()).unwrap();
+
+        let live_panes: HashSet<String> = ["w4:live".to_string()].into_iter().collect();
+        let (exit, _occ, sweep_lines) =
+            occupancy_with_panes(&["--main-root", root_str], Some(Some(live_panes)));
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert!(sweep_lines.is_empty(), "neither job should be marked as orphan");
+
+        assert_eq!(crate::herding::mailbox::read_mark(&bee_dir, "job-result"), None);
+        assert_eq!(crate::herding::mailbox::read_mark(&bee_dir, "job-live"), None);
     }
 }

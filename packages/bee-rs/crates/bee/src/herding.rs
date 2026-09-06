@@ -62,9 +62,12 @@
 // still passing it keeps working.
 
 use serde_json::{Map, Value};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+
+use run::PaneTransport;
 
 // The append-only wave ledger (D10): one row per wave, read side (occupancy)
 // and write side (append_wave). `wave` below is the CLI verb that drives a
@@ -753,7 +756,210 @@ fn transport_state(explicit: Option<&str>) -> Map<String, Value> {
     }
 }
 
-fn status(flags: &[&str]) -> ExitCode {
+fn parse_brief_filename(name: &str) -> Option<u32> {
+    let digits = name.strip_prefix("brief-")?.strip_suffix(".txt")?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u32>().ok()
+}
+
+fn compute_job_status(
+    bee_dir: &Path,
+    job_id: &str,
+    job_obj: &Map<String, Value>,
+    result_round: Option<u32>,
+    pane_id: Option<&str>,
+    round: u32,
+    now_ms: i64,
+    transport: Option<&dyn PaneTransport>,
+) -> String {
+    // 1. A job with a result file shows its result status
+    if let Some(res_round) = result_round {
+        let path = mailbox::result_path(bee_dir, job_id, res_round);
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&path) {
+            if let Some(status) = map.get("status").and_then(Value::as_str) {
+                return status.to_string();
+            }
+        }
+        return "done".to_string();
+    }
+
+    // 2. D2 word: stale activity + Alive -> stalled
+    let is_stale_activity = match std::fs::read_to_string(mailbox::activity_path(bee_dir, job_id)) {
+        Ok(text) => match serde_json::from_str::<Value>(&text) {
+            Ok(v) => {
+                let round_matches = v
+                    .get("round")
+                    .and_then(Value::as_u64)
+                    .map(|r| r as u32)
+                    .map_or(true, |r| r >= round);
+                let at_ms = v
+                    .get("at")
+                    .and_then(Value::as_str)
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.timestamp_millis());
+                round_matches
+                    && at_ms.map_or(false, |at| {
+                        now_ms.saturating_sub(at)
+                            > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
+                    })
+            }
+            Err(_) => false,
+        },
+        Err(_) => false,
+    };
+
+    let is_alive = match (transport, pane_id) {
+        (Some(t), Some(p)) => matches!(t.process_info(p), run::Liveness::Alive { .. }),
+        _ => false,
+    };
+
+    if is_stale_activity && is_alive {
+        mailbox::transition_status(bee_dir, job_id, "stalled");
+        return "stalled".to_string();
+    }
+
+    // 3. transition_status gives recovered once; else the existing word
+    let last_status = job_obj.get("last_status").and_then(Value::as_str);
+    if last_status == Some("stalled") {
+        mailbox::transition_status(bee_dir, job_id, "recovered");
+        return "recovered".to_string();
+    }
+
+    let existing_word = match std::fs::read_to_string(mailbox::activity_path(bee_dir, job_id))
+        .ok()
+        .and_then(|t| mailbox::parse_activity_text(&t, round, now_ms))
+    {
+        Some(mailbox::ActivityState::Working) => "working".to_string(),
+        Some(mailbox::ActivityState::Blocked) | Some(mailbox::ActivityState::WaitingInput) => {
+            "blocked".to_string()
+        }
+        Some(mailbox::ActivityState::Idle) => "idle".to_string(),
+        Some(mailbox::ActivityState::Exited) => "exited".to_string(),
+        None => {
+            if let Some(t) = transport {
+                t.agent_status(job_id).unwrap_or_else(|| "working".to_string())
+            } else {
+                "working".to_string()
+            }
+        }
+    };
+    mailbox::transition_status(bee_dir, job_id, &existing_word);
+    existing_word
+}
+
+fn collect_jobs(
+    bee_dir: &Path,
+    _main_root: &Path,
+    transport: Option<&dyn PaneTransport>,
+) -> (Vec<Value>, Vec<String>) {
+    let mailbox_base = bee_dir.join("mailbox");
+    let rd = match std::fs::read_dir(&mailbox_base) {
+        Ok(rd) => rd,
+        Err(_) => return (Vec::new(), Vec::new()),
+    };
+
+    let mut job_dirs: Vec<PathBuf> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    job_dirs.sort();
+
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let mut jobs_json = Vec::new();
+    let mut plain_lines = Vec::new();
+
+    for job_dir in job_dirs {
+        let job_id = match job_dir.file_name().and_then(|n| n.to_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+
+        let jp = mailbox::job_path(bee_dir, &job_id);
+        let job_obj = match crate::fsutil::read_json(&jp) {
+            crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+            _ => continue,
+        };
+
+        let pane_id = job_obj
+            .get("pane_id")
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let entries: Vec<String> = match std::fs::read_dir(&job_dir) {
+            Ok(entries) => entries
+                .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+
+        let brief_round = entries.iter().filter_map(|n| parse_brief_filename(n)).max();
+        let result_round = mailbox::latest_result_round(&entries);
+        let job_round = job_obj.get("round").and_then(Value::as_u64).map(|r| r as u32);
+        let round = brief_round.or(result_round).or(job_round).unwrap_or(1);
+
+        let (mark_str, mark_reason_str) = match mailbox::read_mark(bee_dir, &job_id) {
+            Some((m, r)) => (Some(m.as_str().to_string()), r),
+            None => (None, None),
+        };
+
+        let status = compute_job_status(
+            bee_dir,
+            &job_id,
+            &job_obj,
+            result_round,
+            pane_id.as_deref(),
+            round,
+            now_ms,
+            transport,
+        );
+
+        let mut job_map = Map::new();
+        job_map.insert("job_id".into(), Value::String(job_id.clone()));
+        job_map.insert(
+            "pane_id".into(),
+            pane_id
+                .as_ref()
+                .map(|p| Value::String(p.clone()))
+                .unwrap_or(Value::Null),
+        );
+        job_map.insert("round".into(), Value::Number(round.into()));
+        job_map.insert(
+            "mark".into(),
+            mark_str
+                .as_ref()
+                .map(|m| Value::String(m.clone()))
+                .unwrap_or(Value::Null),
+        );
+        job_map.insert(
+            "mark_reason".into(),
+            mark_reason_str
+                .as_ref()
+                .map(|r| Value::String(r.clone()))
+                .unwrap_or(Value::Null),
+        );
+        job_map.insert("status".into(), Value::String(status.clone()));
+
+        jobs_json.push(Value::Object(job_map));
+
+        let pane_disp = pane_id.as_deref().unwrap_or("null");
+        let mark_disp = mark_str.as_deref().unwrap_or("null");
+        let reason_disp = mark_reason_str.as_deref().unwrap_or("null");
+        plain_lines.push(format!(
+            "{job_id}: pane_id={pane_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status}"
+        ));
+    }
+
+    (jobs_json, plain_lines)
+}
+
+pub(crate) fn status_with_panes_and_transport(
+    flags: &[&str],
+    transport_override: Option<&dyn PaneTransport>,
+    live_panes_override: Option<Option<HashSet<String>>>,
+) -> (ExitCode, Value, Vec<String>) {
     let mut explicit: Option<&str> = None;
     let mut json = false;
     let mut i = 0usize;
@@ -763,12 +969,42 @@ fn status(flags: &[&str]) -> ExitCode {
             i += 2;
             continue;
         }
+        if flags[i].starts_with("--main-root=") {
+            explicit = Some(&flags[i]["--main-root=".len()..]);
+            i += 1;
+            continue;
+        }
         if flags[i] == "--json" {
             json = true;
             i += 1;
             continue;
         }
         i += 1;
+    }
+
+    let main_root = resolve_main_root(explicit);
+
+    let mut sweep_lines = Vec::new();
+    if let Some(ref root) = main_root {
+        let bee_dir = root.join(".bee");
+        let live_panes_opt = match live_panes_override {
+            Some(ref lp) => lp.clone(),
+            None => wave::live_pane_ids(root),
+        };
+        match live_panes_opt {
+            Some(ref live_panes) => {
+                for marked_id in mailbox::mark_orphans(&bee_dir, live_panes) {
+                    let msg = format!("herding: marked job {marked_id} interrupted (process_restarted)");
+                    println!("{msg}");
+                    sweep_lines.push(msg);
+                }
+            }
+            None => {
+                let msg = "herding: transport cannot list panes; skipping orphan sweep".to_string();
+                println!("{msg}");
+                sweep_lines.push(msg);
+            }
+        }
     }
 
     let mut obj = enable_marker_state(explicit);
@@ -784,13 +1020,38 @@ fn status(flags: &[&str]) -> ExitCode {
 
     obj.insert("transport".into(), Value::Object(transport));
 
-    if json {
-        emit(obj);
-    } else {
-        println!("herding: enabled={enabled} transport={transport_ready_str} ({transport_reason})");
+    let mut jobs_val = Vec::new();
+    let mut job_plain_lines = Vec::new();
+
+    if let Some(ref root) = main_root {
+        let bee_dir = root.join(".bee");
+        let transport_box = if transport_override.is_none() {
+            job_verbs::transport_for_run(root).ok()
+        } else {
+            None
+        };
+        let t_ref = transport_override.or(transport_box.as_deref());
+        let (j_val, j_lines) = collect_jobs(&bee_dir, root, t_ref);
+        jobs_val = j_val;
+        job_plain_lines = j_lines;
     }
 
-    ExitCode::SUCCESS
+    obj.insert("jobs".into(), Value::Array(jobs_val));
+
+    if json {
+        emit(obj.clone());
+    } else {
+        println!("herding: enabled={enabled} transport={transport_ready_str} ({transport_reason})");
+        for line in &job_plain_lines {
+            println!("{line}");
+        }
+    }
+
+    (ExitCode::SUCCESS, Value::Object(obj), job_plain_lines)
+}
+
+fn status(flags: &[&str]) -> ExitCode {
+    status_with_panes_and_transport(flags, None, None).0
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1242,5 +1503,241 @@ mod tests {
     fn herding_status_subcommand_dispatches_in_try_native() {
         let args: Vec<OsString> = ["herding", "status", "--json"].iter().map(OsString::from).collect();
         assert_eq!(try_native(&args), Some(ExitCode::SUCCESS));
+    }
+
+    struct MockTransport {
+        alive_pid: Option<u32>,
+    }
+
+    impl PaneTransport for MockTransport {
+        fn name(&self) -> &'static str { "mock" }
+        fn pane_current(&self) -> Result<String, String> { Ok("p1".into()) }
+        fn pane_layout(&self, _pane_id: &str) -> Option<Vec<run::PaneGeom>> { None }
+        fn pane_split(&self, _pane_id: &str, _dir: &str, _ratio: f64, _cwd: &Path) -> Result<String, String> { Ok("p1".into()) }
+        fn tab_create(&self, _ws: &str, _cwd: &Path, _label: &str) -> Result<String, String> { Ok("p1".into()) }
+        fn pane_run(&self, _pane: &str, _cmd: &str) -> Result<(), String> { Ok(()) }
+        fn agent_start(&self, _job: &str, _kind: &str, _pane: &str, _args: &[String]) -> Result<(), String> { Ok(()) }
+        fn agent_prompt(&self, _job: &str, _prompt: &str, _working: &str, _timeout_ms: u64) -> Result<(), String> { Ok(()) }
+        fn agent_wait(&self, _job: &str, _timeout_ms: u64) -> Option<String> { None }
+        fn agent_status(&self, _job: &str) -> Option<String> { None }
+        fn pane_close(&self, _pane: &str) -> Result<(), String> { Ok(()) }
+        fn pane_alive(&self, _pane: &str) -> bool { self.alive_pid.is_some() }
+        fn pane_read(&self, _pane: &str) -> Result<String, String> { Ok(String::new()) }
+        fn process_info(&self, _pane_id: &str) -> run::Liveness {
+            match self.alive_pid {
+                Some(pid) => run::Liveness::Alive { pid },
+                None => run::Liveness::Absent,
+            }
+        }
+        fn pane_send_key(&self, _pane: &str, _key: &str) -> Result<(), String> { Ok(()) }
+    }
+
+    #[test]
+    fn status_lists_job_with_mark_null() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-normal");
+        std::fs::create_dir_all(&job_dir).unwrap();
+
+        let job_spec = serde_json::json!({
+            "job_id": "job-normal",
+            "pane_id": "w4:p1",
+            "round": 1
+        });
+        std::fs::write(job_dir.join("job.json"), serde_json::to_string(&job_spec).unwrap()).unwrap();
+
+        let live_panes: HashSet<String> = ["w4:p1".to_string()].into_iter().collect();
+        let (exit, val, _plain_lines) = status_with_panes_and_transport(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(live_panes)),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+
+        let jobs = val.get("jobs").and_then(Value::as_array).expect("jobs array present");
+        assert_eq!(jobs.len(), 1);
+        let job = &jobs[0];
+        assert_eq!(job.get("job_id"), Some(&Value::String("job-normal".to_string())));
+        assert_eq!(job.get("pane_id"), Some(&Value::String("w4:p1".to_string())));
+        assert_eq!(job.get("round"), Some(&serde_json::json!(1)));
+        assert_eq!(job.get("mark"), Some(&Value::Null));
+        assert_eq!(job.get("mark_reason"), Some(&Value::Null));
+        assert_eq!(job.get("status"), Some(&Value::String("working".to_string())));
+
+        // Check non-json plain output format
+        let (_exit, _val, lines) = status_with_panes_and_transport(
+            &["--main-root", root_str],
+            None,
+            Some(Some(["w4:p1".to_string()].into_iter().collect())),
+        );
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            lines[0],
+            "job-normal: pane_id=w4:p1 round=1 mark=null mark_reason=null status=working"
+        );
+    }
+
+    #[test]
+    fn status_marks_orphan_job_and_lists_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-orphan");
+        std::fs::create_dir_all(&job_dir).unwrap();
+
+        let job_spec = serde_json::json!({
+            "job_id": "job-orphan",
+            "pane_id": "w4:dead",
+            "round": 1
+        });
+        std::fs::write(job_dir.join("job.json"), serde_json::to_string(&job_spec).unwrap()).unwrap();
+
+        // live_panes is empty, so w4:dead is missing
+        let (exit, val, _lines) = status_with_panes_and_transport(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+
+        let jobs = val.get("jobs").and_then(Value::as_array).expect("jobs array present");
+        assert_eq!(jobs.len(), 1);
+        let job = &jobs[0];
+        assert_eq!(job.get("job_id"), Some(&Value::String("job-orphan".to_string())));
+        assert_eq!(job.get("mark"), Some(&Value::String("interrupted".to_string())));
+        assert_eq!(job.get("mark_reason"), Some(&Value::String("process_restarted".to_string())));
+
+        let (mark, reason) = mailbox::read_mark(&bee_dir, "job-orphan").expect("mark exists on disk");
+        assert_eq!(mark, mailbox::Mark::Interrupted);
+        assert_eq!(reason, Some("process_restarted".to_string()));
+    }
+
+    #[test]
+    fn status_skips_orphan_sweep_when_transport_cannot_list_panes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-orphan-skipped");
+        std::fs::create_dir_all(&job_dir).unwrap();
+
+        let job_spec = serde_json::json!({
+            "job_id": "job-orphan-skipped",
+            "pane_id": "w4:dead",
+            "round": 1
+        });
+        std::fs::write(job_dir.join("job.json"), serde_json::to_string(&job_spec).unwrap()).unwrap();
+
+        // live_panes_override = Some(None) represents transport cannot list panes
+        let (exit, val, _lines) = status_with_panes_and_transport(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(None),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+
+        // Job was NOT marked on disk
+        assert_eq!(mailbox::read_mark(&bee_dir, "job-orphan-skipped"), None);
+
+        let jobs = val.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs[0].get("mark"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn status_computes_stalled_and_recovered_transitions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-stall-rec");
+        std::fs::create_dir_all(&job_dir).unwrap();
+
+        let job_spec = serde_json::json!({
+            "job_id": "job-stall-rec",
+            "pane_id": "w4:alive",
+            "round": 1
+        });
+        std::fs::write(job_dir.join("job.json"), serde_json::to_string(&job_spec).unwrap()).unwrap();
+
+        let mock_transport = MockTransport { alive_pid: Some(4242) };
+        let live_panes: HashSet<String> = ["w4:alive".to_string()].into_iter().collect();
+
+        // 1. Stale activity (>120s ago) + alive process -> stalled
+        let stale_time = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        let stale_act = serde_json::json!({
+            "round": 1,
+            "at": stale_time.to_rfc3339(),
+            "state": "working"
+        });
+        std::fs::write(job_dir.join("activity.json"), serde_json::to_string(&stale_act).unwrap()).unwrap();
+
+        let (_exit, val1, _lines) = status_with_panes_and_transport(
+            &["--main-root", root_str, "--json"],
+            Some(&mock_transport),
+            Some(Some(live_panes.clone())),
+        );
+        let jobs1 = val1.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs1[0].get("status"), Some(&Value::String("stalled".to_string())));
+
+        // 2. Activity resumes (fresh) -> recovered once
+        let fresh_time = chrono::Utc::now();
+        let fresh_act = serde_json::json!({
+            "round": 1,
+            "at": fresh_time.to_rfc3339(),
+            "state": "working"
+        });
+        std::fs::write(job_dir.join("activity.json"), serde_json::to_string(&fresh_act).unwrap()).unwrap();
+
+        let (_exit, val2, _lines) = status_with_panes_and_transport(
+            &["--main-root", root_str, "--json"],
+            Some(&mock_transport),
+            Some(Some(live_panes.clone())),
+        );
+        let jobs2 = val2.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs2[0].get("status"), Some(&Value::String("recovered".to_string())));
+
+        // 3. Next read -> working
+        let (_exit, val3, _lines) = status_with_panes_and_transport(
+            &["--main-root", root_str, "--json"],
+            Some(&mock_transport),
+            Some(Some(live_panes)),
+        );
+        let jobs3 = val3.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs3[0].get("status"), Some(&Value::String("working".to_string())));
+    }
+
+    #[test]
+    fn status_shows_result_file_status() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+
+        let job_done_dir = bee_dir.join("mailbox").join("job-done");
+        std::fs::create_dir_all(&job_done_dir).unwrap();
+        let job_spec = serde_json::json!({
+            "job_id": "job-done",
+            "pane_id": "w4:p1",
+            "round": 1
+        });
+        std::fs::write(job_done_dir.join("job.json"), serde_json::to_string(&job_spec).unwrap()).unwrap();
+        let result_done = serde_json::json!({
+            "status": "done",
+            "summary": "finished cleanly",
+            "files_changed": [],
+            "proof": "cargo test"
+        });
+        std::fs::write(job_done_dir.join("result-1.json"), serde_json::to_string(&result_done).unwrap()).unwrap();
+
+        let (_exit, val, _lines) = status_with_panes_and_transport(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+        );
+        let jobs = val.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs[0].get("status"), Some(&Value::String("done".to_string())));
     }
 }
