@@ -1148,5 +1148,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-05T15:06:29.309Z"
+  },
+  "herding-cockpit-completeness": {
+    "capped": 10,
+    "dropped": 0,
+    "archived_at": "2026-09-06T12:54:04.461Z"
   }
 }
