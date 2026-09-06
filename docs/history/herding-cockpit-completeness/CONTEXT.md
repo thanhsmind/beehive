@@ -91,6 +91,7 @@ From the quick scout only. Downstream agents read these before planning.
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: the three planning questions were answered in plan.md § Discovery; the deferred ideas are backlog rows, not promises to act later -->
 ### Deferred To Planning
 
 - [ ] How the run process learns the pane's process id on Windows and POSIX for D4's confirm — read `pane process-info` support in `pane_verbs.rs`/`tmux.rs`.
@@ -107,4 +108,5 @@ From the quick scout only. Downstream agents read these before planning.
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
+<!-- /bee:not-a-deferral -->
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
