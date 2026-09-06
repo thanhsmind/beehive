@@ -1158,5 +1158,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-06T14:31:30.594Z"
+  },
+  "knowledge-show-new": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-06T15:24:54.566Z"
   }
 }
