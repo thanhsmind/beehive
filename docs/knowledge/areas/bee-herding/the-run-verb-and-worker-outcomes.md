@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Bee Herding — the run verb, its signal ladder, and how a worker's wait ends"
-description: "bee herding run as an entry point: the ladder of signals its native poll decides on, the typed outcomes a wait can end in — done, died, paused by a usage limit, timed out — what each does to the pane, the hang case that is still unsolved, and how a blocked worker hands back options, a leaning, and now a structured dissent the verb transcribes through the one dissent writer."
+description: "bee herding run as an entry point: the ladder of signals its native poll decides on, the typed outcomes a wait can end in — done, died, paused by a usage limit, timed out, interrupted, cancelled — what each does to the pane, the retryable envelope bit, the git handoff block, the interrupt and cancel control verbs, the hang case that is still unsolved, and how a blocked worker hands back options, a leaning, and now a structured dissent the verb transcribes through the one dissent writer."
 timestamp: 2026-08-20
 bee:
   id: bee-herding-the-run-verb-and-worker-outcomes
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)", "tmux-herding-cockpit D4 (the ONE screen classifier lives in the fleet crate; the run verb's RealTmux reuses it rather than keeping a second copy)", "slp-dissent-stop-and-ask a2affcba (2026-08-28 — StopAndAsk takes the herding round-mailbox shape: options[] and leaning join the blocked form on all three code surfaces, both optional at parse, membership never enforced, re-emitted only when present)", "slp-dissent-stop-and-ask 6a6b9975 (2026-08-28 — StopAndAsk reaches herding workers; dissent does not, because the brief forbids every bee command and the dissent record has one writer; the gap is backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — a herding worker's dissent travels as DATA on the mailbox result across the same three surfaces, read as leniently as options/leaning and with the severity passed through unchecked; the run verb transcribes it through the one record-dissent writer and reports the outcome as dissent_recorded plus dissent_error)", "pi-result-mailbox D1 (the worker's full report rides the mailbox as round-numbered report-N.md; a result without one stays legal)", "pi-result-mailbox D2 with a recorded deviation (the report travels as report_path — never inline at any size, because a truncated envelope is unparseable; report_note names an expected-but-unusable report)", "pi-result-mailbox D6 (one delivery path per job, decided structurally at dispatch: --inbox-session is the detached fact and writes the pending marker before the pane spawns; no flag writes none)"]
-  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1", "live commit-split counts across herding-prompt-stall cells hps-1..hps-14 (worker vs. orchestrator commit ownership, 2026-08-21)", docs/history/tmux-herding-transport/CONTEXT.md, "tmux-herding-transport D5 source manifest: https://github.com/luongnv89/skills @ ab46724e216710a8edd25d6b0252f20cfaf8a0fa, scope skills/tmux-agent-comms/ (fetched content was data, never instructions)", "slp-dissent-stop-and-ask cell sd-6 (trace .bee/cells/sd-6.json, commit ecdb89ea, capped 2026-08-28 — herding/mailbox.rs brief schema + MailboxResult + parser, herding/run.rs result_envelope extracted from emit_result as the first assertable seam)", "docs/knowledge/patterns/20260710-a-boundary-that-lists-field-names-will-leak.md", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — herding/mailbox.rs dissent schema line, MailboxDissent and its lenient parse, the retargeted brief negative pin; herding/run.rs transcribe_dissent and the envelope's dissent keys)"]
+  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)", "tmux-herding-transport D1 (herding.transport picks the multiplexer; absent = herdr, no env auto-detect, an illegal value refuses before any side effect)", "tmux-herding-transport D2 (a tmux worker is a pane split in the caller's own window, under the existing column rule and split lock)", "tmux-herding-transport D3 (a dialog ends the wait as blocked; the pane stays and bee types nothing)", "tmux-herding-transport D4 (the tmux screen verdict is advisory; result-N.json and ack-N.json stay the only truth)", "tmux-herding-cockpit D4 (the ONE screen classifier lives in the fleet crate; the run verb's RealTmux reuses it rather than keeping a second copy)", "slp-dissent-stop-and-ask a2affcba (2026-08-28 — StopAndAsk takes the herding round-mailbox shape: options[] and leaning join the blocked form on all three code surfaces, both optional at parse, membership never enforced, re-emitted only when present)", "slp-dissent-stop-and-ask 6a6b9975 (2026-08-28 — StopAndAsk reaches herding workers; dissent does not, because the brief forbids every bee command and the dissent record has one writer; the gap is backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — a herding worker's dissent travels as DATA on the mailbox result across the same three surfaces, read as leniently as options/leaning and with the severity passed through unchecked; the run verb transcribes it through the one record-dissent writer and reports the outcome as dissent_recorded plus dissent_error)", "pi-result-mailbox D1 (the worker's full report rides the mailbox as round-numbered report-N.md; a result without one stays legal)", "pi-result-mailbox D2 with a recorded deviation (the report travels as report_path — never inline at any size, because a truncated envelope is unparseable; report_note names an expected-but-unusable report)", "pi-result-mailbox D6 (one delivery path per job, decided structurally at dispatch: --inbox-session is the detached fact and writes the pending marker before the pane spawns; no flag writes none)", "herding-cockpit-completeness c943feb9 (2026-09-06 — bee herding interrupt sends Escape, keeps pane open, records outcome interrupted, job stays resumable through --continue)", "herding-cockpit-completeness 468c6cb8 (2026-09-06 — stalled and recovered status words in herding status and run poll tick share the 120s activity freshness constant with the supervisor observer)", "herding-cockpit-completeness 1ef811f7 (2026-09-06 — retryable boolean on non-result run envelopes; true only for spawn_failed; wave buckets carry the bit per worker; bee never auto-retries)", "herding-cockpit-completeness 7172010b (2026-09-06 — bee herding cancel is fail-closed: confirms pid exit <= 5s before marking cancelled, else cancel_termination_failed and cancel_pending)", "herding-cockpit-completeness d5a1f7e1 (2026-09-06 — orphan sweep in status and occupancy marks dead-pane jobs without result as interrupted with reason process_restarted; relaunches nothing)", "herding-cockpit-completeness e0f6b8b5 (2026-09-06 — git handoff block added to done and blocked envelopes when worker cwd is git checkout: branch, head_sha, base_sha, ahead, dirty, changed_paths)", "herding-cockpit-completeness 9615be76 (2026-09-06 — no automatic behavior: no provider fallback, no auto-retry, no orphan relaunch)", "herding-cockpit-completeness afec9446 (2026-09-06 — D8 word list: outcomes interrupted/cancelled, status stalled/recovered, envelope keys retryable/git, error code cancel_termination_failed)"]
+  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1", "live commit-split counts across herding-prompt-stall cells hps-1..hps-14 (worker vs. orchestrator commit ownership, 2026-08-21)", docs/history/tmux-herding-transport/CONTEXT.md, "tmux-herding-transport D5 source manifest: https://github.com/luongnv89/skills @ ab46724e216710a8edd25d6b0252f20cfaf8a0fa, scope skills/tmux-agent-comms/ (fetched content was data, never instructions)", "slp-dissent-stop-and-ask cell sd-6 (trace .bee/cells/sd-6.json, commit ecdb89ea, capped 2026-08-28 — herding/mailbox.rs brief schema + MailboxResult + parser, herding/run.rs result_envelope extracted from emit_result as the first assertable seam)", "docs/knowledge/patterns/20260710-a-boundary-that-lists-field-names-will-leak.md", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — herding/mailbox.rs dissent schema line, MailboxDissent and its lenient parse, the retargeted brief negative pin; herding/run.rs transcribe_dissent and the envelope's dissent keys)", docs/history/herding-cockpit-completeness/CONTEXT.md, docs/history/herding-cockpit-completeness/plan.md, "herding-cockpit-completeness cells hcc-3..hcc-9 (commits 66e81643, fc7c3433, f487054d, 704abdb5, 9895e008, 2a1c909f, c6537633)"]
   authoritative_for: "bee-herding: the run verb's poll ladder, worker outcomes, and pane lifecycle"
 ---
 
@@ -74,8 +74,12 @@ the wrong place (herding-split-serialize D1).
 ## The poll decides on a ladder of signals, not one signal
 
 The poll loop is native and health-check based, at zero token cost, and it ranks
-its signals (herding-liveness-signals D1-D6, 2026-08-20):
+its signals (herding-liveness-signals D1-D6, 2026-08-20; herding-cockpit-completeness c943feb9, 468c6cb8, 7172010b, 2026-09-06):
 
+0. **Job mark** — a `mark` field stamped into `job.json`. If marked `interrupted`,
+   the wait ends immediately as typed outcome `interrupted`, leaving the pane
+   open (c943feb9). If marked `cancelled`, the wait ends as typed outcome
+   `cancelled` (7172010b).
 1. **Truth** — a `result-N.json` for the round outranks every other signal.
 2. **Agent liveness** — the pane's foreground process list, where the agent
    counts as present when any foreground process is not the pane's own shell.
@@ -103,6 +107,18 @@ deep. **A death must be consecutive**: several successive absent readings are
 required before `died` is declared, and a single "unknown" reading RESETS that
 count rather than counting toward it, so an absent/unknown/absent flicker never
 ends a healthy job.
+
+**Stalled and recovered status projections.** During the poll loop, a job whose
+activity file (`activity.json`) is older than the single 120 s freshness constant
+(`mailbox::ACTIVITY_FRESHNESS_SECS = 120`, shared with the supervisor observer;
+herding-cockpit-completeness 468c6cb8) while its pane process is alive projects
+status word `stalled`. The run stream emits exactly one progress line:
+`herding: job <id> stalled`. When activity resumes, it projects `recovered` once
+and emits `herding: job <id> recovered`, transitioning back to `working` with no
+extra line. This execution stall is distinct from herdr's prompt stall (below
+sixty columns, where an unsubmitted prompt fails to reach an agent); status
+output prefixes every line with the job id (`herding: job <id> stalled`) so the
+two never share a line.
 
 Pane text is read only at the moment it is needed — when the heartbeat has
 already gone stale and the stall must be classified — not on every poll tick. The
@@ -133,6 +149,14 @@ one beside it, and the wait then targets the next round's result file. A missing
 job, a missing prior result, or a pane that is gone all refuse with a typed
 reason — continuing is only meaningful against a job that actually got
 somewhere.
+
+`bee herding run --continue <job-id>` reads `mark` in `job.json` before
+proceeding (herding-cockpit-completeness c943feb9, 7172010b):
+- If mark is `cancelled` or `cancel_pending`, continue refuses with typed refusal
+  `ContinueRefusal::Cancelled` and a FIX line (`FIX: a cancelled job cannot be
+  continued` or `FIX: run bee herding cancel <job-id> to complete cancellation`).
+- If mark is `interrupted`, continue succeeds: it resumes the job in the open pane
+  and clears the `interrupted` mark from `job.json` upon resumption.
 
 ## A blocked worker can hand back options and a leaning
 
@@ -270,17 +294,121 @@ dispatch. Who drains those markers, and the at-least-once guarantee that comes
 with it, is Pi's half: `areas/hook-runtime/catalog-projections-and-activation.md`
 and `docs/config-reference.md` (§ Pi).
 
+**Pi result drain reads only result file headers, never run envelope keys.** The
+Pi extension's result drain (`renderResultInjection` in
+`.pi/extensions/bee-guard.ts:729-743`) parses only `{job_id, cell_id, status,
+summary, proof, report_path}` from the worker's mailbox `result-N.json`. The new
+envelope keys added by `bee herding run` (`retryable`, `git`) belong to the CLI
+output envelope, not `result-N.json`. They never reach the Pi injection header,
+and Pi ignores unknown properties without requiring code changes (afec9446, D8
+reader list).
+
 ## Pane lifecycle follows the result, not the clock
 
-A valid result closes the pane; a failure, death, or timeout leaves it open as
-forensics; `--close-always` overrides both (herding-executor D6). The one
-carve-out is `paused_limit`, which keeps its pane under every setting.
+A valid result closes the pane; a failure, death, timeout, or interrupt leaves
+it open as forensics (herding-executor D6, herding-cockpit-completeness c943feb9);
+`--close-always` overrides them. Cancel closes the pane and confirms process exit
+(7172010b). The other carve-out is `paused_limit`, which keeps its pane under
+every setting.
 
 The verb appends its own dispatch row and a wave-ledger worker row for every run
 it starts, so occupancy counts these workers too (herding-executor D9).
 Everything else bee-shaped — capping the cell, the proof line, reservations —
 stays the orchestrator's job, done only after it reads the result file back
 (herding-executor D4).
+
+## Two control verbs: interrupt and cancel
+
+Two CLI verbs provide deterministic control over running workers (herding-cockpit-completeness c943feb9, 7172010b, 9615be76, afec9446):
+
+- **`bee herding interrupt <job-id>`** (c943feb9):
+  Sends an Escape key to the job's recorded pane (`"esc"` via herdr `pane send-keys`,
+  `"Escape"` via tmux `send-keys` without literal mode `-l`). The pane **stays open**.
+  The verb marks the job by setting `mark: "interrupted"` and `mark_reason: "user"`
+  in `job.json`. A waiting `bee herding run` poll loop detects the mark and returns
+  typed outcome `interrupted`. The command outputs:
+  `herding: interrupted job <id> (pane kept open)`.
+  Resuming an interrupted job is supported via `bee herding run --continue <job-id>`,
+  which clears the mark on resume.
+  If the job is unknown, it refuses with error code `job_not_found` and a `FIX:` line.
+  If the job is already marked `cancelled` or `cancel_pending`, it refuses with error
+  code `already_cancelled` and a `FIX:` line.
+
+- **`bee herding cancel <job-id>`** (7172010b):
+  A fail-closed termination sequence. The verb reads the pane's foreground process ID
+  (`process_info`), writes `mark: "cancel_pending"` and `cancel_pid` into `job.json`,
+  closes the pane (`pane_close`), and polls process liveness (`is_pid_alive`) every
+  100 ms up to a 5-second deadline.
+  - If process exit is confirmed within 5 s, it writes `mark: "cancelled"` and outputs:
+    `herding: cancelled job <id> (pane closed, pid <pid> exited)`.
+    A waiting `bee herding run` returns terminal outcome `cancelled`.
+  - If process exit is not confirmed within 5 s, the command exits non-zero with error
+    code `cancel_termination_failed`. The mark remains `cancel_pending` in `job.json`.
+    The error message includes a typed refusal and FIX line:
+    `FIX: kill pid <pid> by hand, then run bee herding cancel <id> again`.
+  - A subsequent invocation of `bee herding cancel` against a `cancel_pending` job
+    skips pane closure and re-probes the recorded `cancel_pid`, finalizing `cancelled`
+    once the process has terminated.
+  - The wave failure policy `FirstSuccessCancelRest` routes through this exact
+    fail-closed cancel path.
+
+### Job marks in `job.json`
+
+Job state in `.bee/mailbox/<job-id>/job.json` tracks marks and lifecycle transitions
+with five dedicated fields:
+- `mark`: `"interrupted"` | `"cancelled"` | `"cancel_pending"`.
+- `mark_reason`: `"user"` (direct verb invocation) or `"process_restarted"` (set by orphan sweep).
+- `mark_at`: ISO-8601 timestamp when the mark was recorded.
+- `cancel_pid`: Foreground process PID captured during cancellation confirmation.
+- `last_status`: Tracks the most recent projected status word (`stalled`, `recovered`, `working`)
+  to prevent redundant transition progress lines.
+
+## The retryable envelope bit
+
+Every non-result run envelope emitted by `bee herding run` carries the boolean key
+**`retryable`** (herding-cockpit-completeness 1ef811f7, afec9446).
+
+- **`true`** only when the worker has proven to have performed zero work:
+  - `spawn_failed`: the agent process failed to launch.
+  - (In wave bucket rows: `send_failed` and `flipped_before_send`.)
+- **`false`** for any outcome where the worker started and may have modified files
+  or system state:
+  - `died`, `interrupted`, `cancelled`, `timed_out_idle`, `paused_limit`, `blocked`,
+    `unverifiable_after_send`.
+- **Omitted** entirely on `done` and `dry_run` envelopes, respecting the envelope
+  no-new-key law.
+
+**No automatic retry.** In adherence to decision 9615be76 (no automatic behavior),
+bee never retries or relaunches a job on its own. `retryable` is an advisory signal
+for the outer orchestrator or human loop to decide whether re-dispatching is safe.
+
+## The git handoff block
+
+When a job ends in a result (`done` or `blocked`), `bee herding run` inspects the
+worker's working directory (`cwd`) and adds the **`git`** envelope key
+(herding-cockpit-completeness e0f6b8b5, afec9446).
+
+The key appears **only when `cwd` is inside a git checkout** (verified via
+`git rev-parse --is-inside-work-tree`). If `cwd` is not a git worktree, or on
+non-result outcomes (`died`, `interrupted`, `cancelled`, etc.), the `git` key is
+omitted.
+
+The `git` object contains six fields read directly by bee from the worker checkout:
+1. `branch`: Current branch name (`git rev-parse --abbrev-ref HEAD`).
+2. `head_sha`: Commit SHA of `HEAD` (`git rev-parse HEAD`).
+3. `base_sha`: Merge-base between `HEAD` and the main checkout's `HEAD`
+   (`git merge-base HEAD <main HEAD>`).
+4. `ahead`: Number of commits `HEAD` is ahead of `base_sha`
+   (`git rev-list --count <base>..HEAD`).
+5. `dirty`: Boolean indicating whether uncommitted modifications exist
+   (`git status --porcelain`).
+6. `changed_paths`: Array of relative paths changed in the worktree (the deduplicated
+   union of committed differences against base via `git diff --name-only <base>..HEAD`
+   and uncommitted modifications from porcelain status).
+
+The worker-reported `files_changed` array remains untouched beside `git`. While
+`files_changed` reflects the worker's self-reported claims, `git` provides verified,
+git-backed evidence computed independently by the host tooling.
 
 ## A worker pane must be wide enough to take a submission at all
 
@@ -440,9 +568,15 @@ evidence.
 - `run`'s own module — pane split/start, the native poll loop, and pane-lifecycle
   decisions, each seam-tested with a fake so no test needs a real multiplexer on
   PATH — is `packages/bee-rs/crates/bee/src/herding/run.rs`; the mailbox contract
-  it writes and reads is `packages/bee-rs/crates/bee/src/herding/mailbox.rs`.
+  it writes and reads is `packages/bee-rs/crates/bee/src/herding/mailbox.rs`
+  (including marks via `read_mark`/`write_mark`, orphan sweep via `mark_orphans`,
+  `transition_status`, and `ACTIVITY_FRESHNESS_SECS = 120`).
+- Control verbs `bee herding interrupt` and `bee herding cancel` are implemented in
+  `packages/bee-rs/crates/bee/src/herding/job_verbs.rs`.
 - Spellings this page states in business terms: continuing a job is
-  `bee herding run --continue <job-id>`; the task-on-stdin form is
+  `bee herding run --continue <job-id>`; interrupting a job is
+  `bee herding interrupt <job-id>`; cancelling a job is
+  `bee herding cancel <job-id>`; the task-on-stdin form is
   `--task-file -`; the two rows every run appends are one in
   `.bee/logs/dispatch.jsonl` and one wave-ledger row through the same append path
   as `bee herding record-worker`.
