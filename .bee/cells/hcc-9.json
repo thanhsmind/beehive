@@ -102,6 +102,41 @@
     "warnings": [
       "advisory: this cap's commit changes 289 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "h9-ledger-row",
+            "status": "PASS",
+            "evidence": "c6537633 wave_ledger.rs WorkerRow gains retryable: Option<bool> with serde default and skip_serializing_if; old ledgers still parse"
+          },
+          {
+            "id": "h9-bucket-rows",
+            "status": "PASS",
+            "evidence": "wave.rs fn outcome_retryable(outcome) -> Option<bool> and fn wave_bucket_rows(names, retryable); true only for spawn_failed, send_failed, flipped_before_send"
+          },
+          {
+            "id": "h9-callers",
+            "status": "PASS",
+            "evidence": "run.rs and control_loop.rs struct literals add retryable: None; no behaviour change to existing verbs; eleven retryable tests"
+          },
+          {
+            "id": "h9-frozen-judge",
+            "status": "PASS",
+            "evidence": "bee cells judge --id hcc-9 hits []; cargo test -p bee herding:: green in the worktree"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-06T11:25:06.098Z"
+      }
+    ]
   }
 }

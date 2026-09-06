@@ -92,6 +92,46 @@
     "warnings": [
       "advisory: this cap's commit changes 632 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "h7-jobs-array",
+            "status": "PASS",
+            "evidence": "9895e008 herding.rs: compute_job_status, collect_jobs, status_with_panes_and_transport; `jobs` array on status; test status_lists_job_with_mark_null"
+          },
+          {
+            "id": "h7-orphan-sweep",
+            "status": "PASS",
+            "evidence": "herding.rs orphan sweep line `herding: marked job {id} interrupted (process_restarted)` via mailbox::mark_orphans; tests status_marks_orphan_job_and_lists_it, status_skips_orphan_sweep_when_transport_cannot_list_panes"
+          },
+          {
+            "id": "h7-transitions",
+            "status": "PASS",
+            "evidence": "status writes last_status through mailbox::transition_status on change only; test status_computes_stalled_and_recovered_transitions"
+          },
+          {
+            "id": "h7-occupancy",
+            "status": "PASS",
+            "evidence": "wave.rs live_pane_ids shared with the occupancy sweep; occupancy_sweep_* tests"
+          },
+          {
+            "id": "h7-frozen-judge",
+            "status": "PASS",
+            "evidence": "bee cells judge --id hcc-7 hits []; cargo test -p bee herding:: green in the worktree"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "fable",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-06T11:25:05.964Z"
+      }
+    ]
   }
 }
