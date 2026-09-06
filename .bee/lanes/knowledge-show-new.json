@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"knowledge-show-new\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f286abc; capture what settled, then bee close --feature knowledge-show-new.",
+  "next_action": "Merged into main at beb2ab4; capture what settled, then bee close --feature knowledge-show-new.",
   "created_at": "2026-09-06T15:02:32.491Z",
   "run_state": null,
   "waiting_on": null,
