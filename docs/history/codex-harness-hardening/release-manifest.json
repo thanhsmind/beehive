@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "ccfa7a9baa7b92cba64a43dc8db3e55471e220a8af6f0897a1a581e552f41fe2",
+      "sha256": "54d2de2d54ed8d371140dee860fc7917240cbc9b852ac9ca402aef53b05e903f",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -163,6 +163,13 @@
       "packagePath": ".claude-plugin/skills/bee-capturing/references/citations.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-capturing/references/concept-authoring.md",
+      "sha256": "2b9a90bd1ae5cbc22a0b8fd2e60f23dbf62e866d9ff0dabc0922d971eec36477",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-capturing/references/concept-authoring.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-capturing/references/promotion.md",
       "sha256": "2693d8ce5c0a37b9e2703847430d7ccc6f7635d6987ee6e08e84f1f198cdbdf8",
       "mode": "644",
@@ -171,7 +178,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "5bf98c6d2fd97ebcc34aa32285d85d90a65dfa0ac860d0404aa04bf21a93f76e",
+      "sha256": "111a9ed9fecf2a139235fec6c81455f1e7a63f7a0793fccb4b188edc43092940",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/SKILL.md"
@@ -801,7 +808,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "8fae88c529c7b67270eee0f90e06bc749944099f5963a48a3525298b7d29e32f",
+      "sha256": "b701ce412ddf9bdc9743b0cbf33a5853d66073cccca09289c959f91f4df9a70d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -828,6 +835,13 @@
       "packagePath": ".codex-plugin/skills/bee-capturing/references/citations.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-capturing/references/concept-authoring.md",
+      "sha256": "2b9a90bd1ae5cbc22a0b8fd2e60f23dbf62e866d9ff0dabc0922d971eec36477",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-capturing/references/concept-authoring.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-capturing/references/promotion.md",
       "sha256": "2693d8ce5c0a37b9e2703847430d7ccc6f7635d6987ee6e08e84f1f198cdbdf8",
       "mode": "644",
@@ -836,7 +850,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "5bf98c6d2fd97ebcc34aa32285d85d90a65dfa0ac860d0404aa04bf21a93f76e",
+      "sha256": "111a9ed9fecf2a139235fec6c81455f1e7a63f7a0793fccb4b188edc43092940",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/SKILL.md"
@@ -1704,6 +1718,13 @@
       "packagePath": "skills/bee-capturing/references/citations.md"
     },
     {
+      "path": "skills/bee-capturing/references/concept-authoring.md",
+      "sha256": "2b9a90bd1ae5cbc22a0b8fd2e60f23dbf62e866d9ff0dabc0922d971eec36477",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-capturing/references/concept-authoring.md"
+    },
+    {
       "path": "skills/bee-capturing/references/promotion.md",
       "sha256": "2693d8ce5c0a37b9e2703847430d7ccc6f7635d6987ee6e08e84f1f198cdbdf8",
       "mode": "644",
@@ -1712,7 +1733,7 @@
     },
     {
       "path": "skills/bee-capturing/SKILL.md",
-      "sha256": "5bf98c6d2fd97ebcc34aa32285d85d90a65dfa0ac860d0404aa04bf21a93f76e",
+      "sha256": "111a9ed9fecf2a139235fec6c81455f1e7a63f7a0793fccb4b188edc43092940",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/SKILL.md"

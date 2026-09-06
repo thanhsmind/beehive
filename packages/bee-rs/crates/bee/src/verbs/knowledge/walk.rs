@@ -347,4 +347,8 @@ pub(crate) struct CheckReport {
     pub(crate) concepts: usize,
     pub(crate) ok: bool,
     pub(crate) notes: Vec<String>,
+    /// Area/pattern concepts no other concept names — informational, never
+    /// a warning: the bundle reaches patterns through the index and the
+    /// context ranker, so an unlinked concept is a link debt, not a defect.
+    pub(crate) orphans: Vec<String>,
 }

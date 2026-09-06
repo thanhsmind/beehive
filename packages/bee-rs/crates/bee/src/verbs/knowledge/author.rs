@@ -83,6 +83,38 @@ pub(crate) fn resolve_relative_target(base_dir: &str, link: &str) -> String {
     }
 }
 
+/// True when the concept at `other_path` names `target_path` (bundle-relative):
+/// through `bee.required_context`, a bare path mention in its body, or a
+/// relative `.md` link resolved against its own directory. One predicate for
+/// `show`'s links_in and `check`'s orphan_concept rule.
+pub(crate) fn links_to(
+    other_path: &str,
+    other_data: &Map<String, Value>,
+    other_body: &str,
+    target_path: &str,
+) -> bool {
+    let other_bee = bee_of(other_data);
+    if let Some(Value::Array(reqs)) = other_bee.get("required_context") {
+        for r in reqs {
+            if let Some(s) = r.as_str() {
+                let s_clean = s.strip_prefix("docs/knowledge/").unwrap_or(s);
+                if s_clean == target_path || normalize_rel_path(s_clean) == target_path {
+                    return true;
+                }
+            }
+        }
+    }
+    if other_body.contains(target_path)
+        || other_body.contains(&format!("docs/knowledge/{target_path}"))
+    {
+        return true;
+    }
+    let other_dir = dir_of(other_path);
+    extract_markdown_links(other_body)
+        .iter()
+        .any(|t| resolve_relative_target(other_dir, t) == target_path)
+}
+
 // ─── show logic ────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
@@ -127,43 +159,8 @@ pub(crate) fn show_concept(dir: &Path, id: &str) -> Result<ShowResult, ShowError
         if other.path == target.path {
             continue;
         }
-        let other_bee = bee_of(&other.data);
-        let mut matched = false;
-
-        // 1. Check required_context of other
-        if let Some(Value::Array(reqs)) = other_bee.get("required_context") {
-            for r in reqs {
-                if let Some(s) = r.as_str() {
-                    let s_clean = s.strip_prefix("docs/knowledge/").unwrap_or(s);
-                    if s_clean == target.path || normalize_rel_path(s_clean) == target.path {
-                        matched = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 2. Check body of other
-        if !matched {
-            let other_body = concept_body(dir, &other.path).unwrap_or_default();
-            if other_body.contains(&target.path)
-                || other_body.contains(&format!("docs/knowledge/{}", target.path))
-            {
-                matched = true;
-            } else {
-                let other_dir = dir_of(&other.path);
-                let targets = extract_markdown_links(&other_body);
-                for t in targets {
-                    let resolved = resolve_relative_target(other_dir, &t);
-                    if resolved == target.path {
-                        matched = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if matched {
+        let other_body = concept_body(dir, &other.path).unwrap_or_default();
+        if links_to(&other.path, &other.data, &other_body, &target.path) {
             links_in.push(other.path.clone());
         }
     }
@@ -582,6 +579,82 @@ mod tests {
         // Inbound referrers: mfa.md links to login.md, pattern names areas/auth/login.md in required_context
         assert!(res.links_in.contains(&"areas/auth/mfa.md".to_string()));
         assert!(res.links_in.contains(&"patterns/20260101-token-leak.md".to_string()));
+    }
+
+    #[test]
+    fn check_lists_the_unlinked_pattern_as_an_orphan_without_a_warning() {
+        let (_tmp, dir) = bundle();
+        write_concept(
+            &dir,
+            "areas/auth/overview.md",
+            "---
+type: bee.area
+title: Auth
+description: Auth area
+timestamp: 2026-08-01
+bee:
+  id: auth-overview
+  lifecycle: active
+  areas: [auth]
+---
+
+# Auth
+
+The token rule is [linked](../../patterns/20260101-linked.md).
+",
+        );
+        write_concept(
+            &dir,
+            "patterns/20260101-linked.md",
+            "---
+type: bee.pattern
+title: Linked
+description: Linked pattern
+timestamp: 2026-01-01
+bee:
+  id: pattern-20260101-linked
+  lifecycle: active
+  polarity: practice
+---
+
+# Linked
+",
+        );
+        write_concept(
+            &dir,
+            "patterns/20260102-orphan.md",
+            "---
+type: bee.pattern
+title: Orphan
+description: Orphan pattern
+timestamp: 2026-01-02
+bee:
+  id: pattern-20260102-orphan
+  lifecycle: active
+  polarity: pitfall
+---
+
+# Orphan
+",
+        );
+
+        let report = check_bundle(&dir, true).expect("check");
+        assert_eq!(report.orphans, vec!["patterns/20260102-orphan.md".to_string()]);
+        // Never a finding of any kind: the hand-typed fixture carries its own
+        // profile noise, so the claim is "no error or warning names the orphan".
+        let findings: Vec<String> =
+            report
+            .okf_errors
+            .iter()
+            .chain(report.profile_errors.iter())
+            .chain(report.warnings.iter())
+            .map(jsjson::js_to_string)
+            .collect();
+        assert!(
+            !findings.iter().any(|f| f.contains("orphan_concept")),
+            "orphans are notes, never findings: {findings:?}"
+        );
+        assert!(report.notes.iter().any(|n| n.starts_with("orphan_concept: 1 ")), "{:?}", report.notes);
     }
 
     #[test]
