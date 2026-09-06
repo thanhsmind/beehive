@@ -111,6 +111,11 @@ pub(crate) mod pane_verbs;
 // lock file, because each spawn is its own OS process. See split_lock.rs.
 mod split_lock;
 
+// The interrupt and cancel verbs (herding-cockpit-completeness D1, D4):
+// interrupt sends Escape and keeps the pane; cancel captures foreground pid,
+// closes the pane, and confirms exit within 5 s. See job_verbs.rs.
+mod job_verbs;
+
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
@@ -135,6 +140,8 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "record-worker" => Some(wave::record_worker(rest)),
         "run" => Some(run::run(rest)),
         "control-loop" => Some(control_loop::control_loop(rest)),
+        "interrupt" => Some(job_verbs::interrupt(rest)),
+        "cancel" => Some(job_verbs::cancel(rest)),
         _ => None,
     }
 }
