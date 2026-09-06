@@ -1163,5 +1163,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-06T15:24:54.566Z"
+  },
+  "knowledge-orphan-check": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-06T15:55:16.155Z"
   }
 }

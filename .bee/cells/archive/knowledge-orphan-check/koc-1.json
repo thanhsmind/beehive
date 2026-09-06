@@ -4,7 +4,7 @@
   "title": "List orphan concepts in bee knowledge check",
   "lane": "tiny",
   "role": "code",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "files": [
@@ -33,16 +33,45 @@
   ],
   "trace": {
     "worker": "leader",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "orphan list in knowledge check",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+      "skills/bee-capturing/references/concept-authoring.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "orphans are a note and a JSON list, not a warning — 207 of 351 concepts are unlinked, so a warning would turn every check --strict red and broke 7 existing tests — the plan was wrong about a fact"
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": "bee knowledge check reports orphan area/pattern concepts (no inbound link) as a note and a JSON list, never as a failure",
+    "capped_at": "2026-09-06T15:55:02.309Z",
+    "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "f1ec668d-fc40-4702-8eae-c0be9f8854cc",
-    "claimed_at": "2026-09-06T15:46:12.001Z"
+    "claimed_at": "2026-09-06T15:46:12.001Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "knowledge check lists every unlinked area/pattern concept as a NOTE plus profile.orphans in JSON; verdict unchanged (207/351 on the repo bundle). show links_in and the scan share links_to. concept-authoring.md step 4 names profile.orphans; bee dev regen rendered mirrors and manifest.",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+        "skills/bee-capturing/references/concept-authoring.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml author:: (6 ok) and knowledge (117 ok); bee knowledge check on the repo bundle stays OK with orphans 207; bee dev regen 3/3 green; bee dev release-manifest --check 340 match — green:unit — unit tests cover the scan and the emit; the repo-bundle run proves the verdict is unchanged",
+      "deviations": [
+        "orphans are a note and a JSON list, not a warning — 207 of 351 concepts are unlinked, so a warning would turn every check --strict red and broke 7 existing tests — the plan was wrong about a fact"
+      ],
+      "mistakes": [],
+      "commit": "2089c1f5"
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

@@ -482,6 +482,7 @@
     "memory",
     "knowledge-freshness-deferral",
     "knowledge-authoring-ref",
-    "knowledge-orphan-check"
+    "knowledge-orphan-check",
+    "okf"
   ]
 }
