@@ -1,0 +1,39 @@
+{
+  "id": "aphs-1",
+  "feature": "agents-parity-host-shell",
+  "lane": "tiny",
+  "title": "Declare host_shell powershell and let the AGENTS.md parity fence honour the declared shell",
+  "files": [
+    ".bee/config.json",
+    "packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs"
+  ],
+  "action": "Add \"host_shell\": \"powershell\" to .bee/config.json. In agents_block_render_parity.rs read .bee/config.json host_shell; when it is \"powershell\" append packages/bee/AGENTS.windows.md (trimmed, after a blank line) inside the expected block exactly as render_agents_block does; absent or posix stays the posix render. Update the header comment.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test agents_block_render_parity — green; onboard merge unit tests green",
+  "acceptance": "agents_md_block_is_the_rendered_source_byte_for_byte passes on Windows and on Linux CI with the committed AGENTS.md unchanged",
+  "deps": [],
+  "decisions": [
+    "f05e6583"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/merge.rs"
+  ],
+  "role": "code",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "claimed",
+  "trace": {
+    "worker": "leader-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "4c61cbaa-ebcd-4628-9732-8846563595e4",
+    "claimed_at": "2026-09-06T14:28:52.793Z",
+    "fix_first": "main CI red on agents_block_render_parity; this cell is the fix"
+  }
+}

@@ -15,9 +15,9 @@
   "created_at": "2026-09-05T15:54:47.997Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "Restart Pi from the herding-late-cleanup worktree; current session cwd is still main",
-    "asked_at": "2026-09-06T13:49:54.888Z",
-    "session": "01a076db-5b78-770c-9a28-429a531f3404"
+    "kind": "turn-end",
+    "subject": "Next task I would take: fix the red test `agents_block_render_parity` on main. Say \"fix the red test\" and I start it.",
+    "asked_at": "2026-09-06T14:24:54.832Z",
+    "session": "4c61cbaa-ebcd-4628-9732-8846563595e4"
   }
 }
