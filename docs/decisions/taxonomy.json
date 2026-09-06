@@ -481,6 +481,7 @@
     "worker-brief",
     "memory",
     "knowledge-freshness-deferral",
-    "knowledge-authoring-ref"
+    "knowledge-authoring-ref",
+    "knowledge-orphan-check"
   ]
 }

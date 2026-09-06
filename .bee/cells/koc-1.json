@@ -1,0 +1,48 @@
+{
+  "id": "koc-1",
+  "feature": "knowledge-orphan-check",
+  "title": "List orphan concepts in bee knowledge check",
+  "lane": "tiny",
+  "role": "code",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/walk.rs",
+    "skills/bee-capturing/references/concept-authoring.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/author.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/references/concept-authoring.md"
+  ],
+  "affects_specs": [],
+  "action": "Extract the links_in test from show_concept into pub(crate) fn links_to(other_path, other_data, other_body, target_path) -> bool in author.rs; show_concept calls it. In check_bundle, after the bundle-level profile checks, for every concept of type bee.area or bee.pattern whose basename is not overview.md, collect its path into CheckReport.orphans when no other parsed concept links_to it; push one note with the count. Informational only (measured 207 of 351 unlinked on the repo bundle, so a warning would drown --strict): routing emits profile.orphans and counts.orphans in JSON, the NOTE line in text; the verdict never changes. One inline test in author.rs: a bundle with one linked and one unlinked pattern lists exactly the unlinked one, ok stays true under --strict. Update skills/bee-capturing/references/concept-authoring.md step 4 to name profile.orphans; run bee dev regen (render-skill-trees, onboard --apply, release-manifest --write).",
+  "verify": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml author:: and knowledge; .bee/bin/bee knowledge check on the repo bundle stays OK; bee dev release-manifest --check",
+  "must_haves": [
+    "knowledge check --json lists every unlinked area/pattern concept under profile.orphans and a NOTE carries the count",
+    "overview.md and non-area/pattern types are never listed",
+    "the check verdict, strict or not, is unchanged by orphans",
+    "show links_in and the orphan scan share one predicate"
+  ],
+  "trace": {
+    "worker": "leader",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": "bee knowledge check reports orphan area/pattern concepts (no inbound link) as a note and a JSON list, never as a failure",
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f1ec668d-fc40-4702-8eae-c0be9f8854cc",
+    "claimed_at": "2026-09-06T15:46:12.001Z"
+  }
+}
