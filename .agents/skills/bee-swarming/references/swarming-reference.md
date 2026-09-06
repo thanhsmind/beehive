@@ -204,8 +204,8 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      risk, missing evidence, or a contradiction between report and diff
      earns the full diff read and wiring trace. No new report schema, no
      mandatory full-suite rerun — the single home of this rule is
-     `bee-hive` → `references/routing-and-contracts.md` ("Leader
-     completeness check").
+     `bee-hive/references/routing-and-contracts.md` ("Leader completeness
+     check").
    - **Read the recorded proof; re-run tests only on smell.** The worker's
      cap carries the proof line it chose and ran (`<command> — <result> —
      <scope reason>`); reading it satisfies the fresh-output rule. Re-run

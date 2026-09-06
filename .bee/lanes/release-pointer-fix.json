@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-pointer-fix",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-pointer-fix\" started at phase \"exploring\" (lane).",
+  "next_action": "Fix the two pointers inline (tiny), regen, commit, finish, close.",
+  "created_at": "2026-09-06T16:42:33.846Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "two broken pointers left by lcc-2 and the capture flush; release test suite red on them",
+    "updated_at": "2026-09-06T16:42:50.635Z",
+    "feature": "release-pointer-fix"
+  }
+}

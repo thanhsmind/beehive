@@ -1,0 +1,43 @@
+{
+  "id": "rpf-1",
+  "feature": "release-pointer-fix",
+  "title": "Repair the two pointers that turned the release test suite red",
+  "action": "In skills/bee-swarming/SKILL.md step 5 and swarming-reference.md step 7 write the cross-skill pointer as bee-hive/references/routing-and-contracts.md (the qualified form pointer_integrity resolves against skills/); in docs/knowledge/areas/bee-herding/overview.md replace the two markdown links that leave the bundle with bare docs/history/... paths; run bee dev regen; prove with cargo test -p bee --test pointer_integrity and the knowledge dangling-link test.",
+  "role": "docs",
+  "lane": "tiny",
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "affects_specs": [],
+  "behavior_change": false,
+  "must_haves": [
+    "pointer_integrity test green",
+    "repo_docs_knowledge_bundle_carries_no_dangling_body_links green",
+    "bee dev release-manifest --check green"
+  ],
+  "verify": "bee dev release-manifest --check — green:static — regenerated skill copies and manifest match",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "leader-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f1ec668d-fc40-4702-8eae-c0be9f8854cc",
+    "claimed_at": "2026-09-06T16:43:03.763Z"
+  }
+}
