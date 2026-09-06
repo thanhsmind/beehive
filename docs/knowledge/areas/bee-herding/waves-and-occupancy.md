@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-orchestration D2/D5 (the choreography is generic, behind a compiler-enforced boundary)", "herding-orchestration D7 (unverifiable is one of five worker states)", "herding-orchestration D9 (blocking threads, not an event runtime)", "herding-orchestration D10 (the wave ledger, written at spawn)", "herding-orchestration D11 (a wave is one value, not a sequence of calls)", "herding-orchestration D18 (dispatch records its own ledger row at spawn)", "tmux-herding-cockpit D1 (the whole cockpit — occupancy and waves included — selects its transport from the same herding.transport key)", "tmux-herding-cockpit D4 (waves and occupancy build the tmux backend from that key; ONE screen classifier, living in fleet, serves both crates)"]
-  sources: [docs/history/herding-orchestration/CONTEXT.md, "the first live D6 run on Linux, 2026-08-19", docs/history/tmux-herding-cockpit/CONTEXT.md]
+  decisions: ["herding-orchestration D2/D5 (the choreography is generic, behind a compiler-enforced boundary)", "herding-orchestration D7 (unverifiable is one of five worker states)", "herding-orchestration D9 (blocking threads, not an event runtime)", "herding-orchestration D10 (the wave ledger, written at spawn)", "herding-orchestration D11 (a wave is one value, not a sequence of calls)", "herding-orchestration D18 (dispatch records its own ledger row at spawn)", "tmux-herding-cockpit D1 (the whole cockpit — occupancy and waves included — selects its transport from the same herding.transport key)", "tmux-herding-cockpit D4 (waves and occupancy build the tmux backend from that key; ONE screen classifier, living in fleet, serves both crates)", "herding-cockpit-completeness 1ef811f7 (2026-09-06 — retryable bit on wave bucket rows and ledger worker rows; true only for send_failed and flipped_before_send)", "herding-cockpit-completeness d5a1f7e1 (2026-09-06 — orphan sweep in status and occupancy marks dead-pane jobs without result as interrupted with reason process_restarted; relaunches nothing)", "herding-cockpit-completeness 9615be76 (2026-09-06 — no automatic behavior: no auto-retry, no orphan relaunch)", "herding-cockpit-completeness afec9446 (2026-09-06 — D8 word list and envelope no-new-key law)"]
+  sources: [docs/history/herding-orchestration/CONTEXT.md, "the first live D6 run on Linux, 2026-08-19", docs/history/tmux-herding-transport/CONTEXT.md, docs/history/herding-cockpit-completeness/CONTEXT.md, docs/history/herding-cockpit-completeness/plan.md, "herding-cockpit-completeness cells hcc-5, hcc-7, hcc-9 (commits f487054d, 9895e008, c6537633)"]
   authoritative_for: "bee-herding: waves, the wave ledger, and occupancy"
 ---
 
@@ -59,6 +59,13 @@ unverifiable afterwards) rather than into a bare pass/fail, because partial
 failure is the normal case and the caller needs to know which kind it got. A
 worker that fails does not stop the others.
 
+**Failure bucket rows carry a per-worker `retryable` bit** (herding-cockpit-completeness 1ef811f7, c6537633). For every worker classified in a failure bucket, the JSON output row carries `"retryable": true` or `"retryable": false`:
+- `true` for `send_failed` and `flipped_before_send` — the worker never received its task or flipped before send; no work was started, so re-running is safe.
+- `false` for `refused_preflight`, `timed_out`, and `unverifiable_after_send` — the worker may have started or run steps that modified workspace state.
+- Omitted entirely on `succeeded` rows (envelope no-new-key law).
+
+The same bit is recorded on the wave ledger: `WorkerRow` in `wave_ledger.rs` stores `retryable: Option<bool>`. bee never auto-retries on its own (9615be76); the bit is an advisory signal for the outer orchestrator.
+
 ## Occupancy is read, and an unverifiable read refuses
 
 The dispatch role asks for the occupancy count instead of counting panes itself,
@@ -71,6 +78,17 @@ The fallback fires exactly when the live pane list could not be obtained — whi
 is also when counting panes would have failed — so refusing is not a lost
 opportunity, and dispatching on a count nobody can verify is the over-spawn the
 ledger exists to prevent.
+
+**The orphan sweep in occupancy and status.** Before computing slot occupancy,
+`bee herding occupancy` (and `bee herding status`) executes an orphan sweep
+(`mark_orphans`; herding-cockpit-completeness d5a1f7e1, 9895e008). Any job in
+`.bee/mailbox/*/job.json` that has a recorded `pane_id` absent from the live pane
+list, with no `result-*.json` file and no prior mark, is marked with
+`mark: "interrupted"` and `mark_reason: "process_restarted"`. The sweep writes
+only on state transition and prints a progress line per marked job in `status`.
+It relaunches nothing (9615be76). By marking dead panes as `interrupted`, the
+sweep ensures dead workers are resolved and do not leak into active occupancy
+counts.
 
 ## On tmux
 

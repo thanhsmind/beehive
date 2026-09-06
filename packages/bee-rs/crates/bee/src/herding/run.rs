@@ -489,6 +489,9 @@ pub(crate) trait PaneTransport {
     /// `herdr pane close <id>` — best-effort; a failure here is reported,
     /// never allowed to hide the run's own result.
     fn pane_close(&self, pane_id: &str) -> Result<(), String>;
+    /// `herdr pane send-keys <id> <key>` — sends a named key (such as `esc`
+    /// for Escape) to the pane.
+    fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String>;
     /// `herdr agent prompt <job_id> <prompt> --wait --until <state>
     /// --timeout <ms>` (D3 `--continue`; herding-prompt-stall D1) — sends
     /// the round N+1 brief (or the initial pointer) to an ALREADY-RUNNING
@@ -630,6 +633,13 @@ fn tab_create_argv<'a>(workspace: &'a str, cwd: &'a str, label: &'a str) -> [&'a
     ["tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label, "--no-focus"]
 }
 
+/// `pane_send_key`'s argv, pure: herdr accepts `esc` as the canonical Escape
+/// key name (`herdr pane send-keys <pane_id> <key>`). Split out so a test can
+/// pin the argv shape with no spawned process.
+fn pane_send_key_argv<'a>(pane_id: &'a str, key: &'a str) -> [&'a str; 4] {
+    ["pane", "send-keys", pane_id, key]
+}
+
 impl PaneTransport for RealHerdr {
     fn pane_current(&self) -> Result<String, String> {
         let v = self.call(&["pane", "current", "--current"])?;
@@ -716,6 +726,10 @@ impl PaneTransport for RealHerdr {
 
     fn pane_close(&self, pane_id: &str) -> Result<(), String> {
         self.call(&["pane", "close", pane_id]).map(|_| ())
+    }
+
+    fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
+        self.call(&pane_send_key_argv(pane_id, key)).map(|_| ())
     }
 
     fn agent_prompt(&self, job_id: &str, prompt: &str, until: &str, timeout_ms: u64) -> Result<(), String> {
@@ -1075,6 +1089,7 @@ enum PollDecision {
     /// D3: herdr reported `blocked` this tick — ends the wait at once,
     /// ahead of the idle timeout and the ceiling.
     Blocked,
+    Marked(mailbox::Mark),
 }
 
 /// The whole D5 timing rule, pure: a result already present short-circuits
@@ -1131,6 +1146,7 @@ struct PollTick {
     liveness: Option<Liveness>,
     /// D3: this tick observed herdr's `blocked` status.
     blocked: bool,
+    mark: Option<mailbox::Mark>,
 }
 
 /// The loop `decide_poll` drives: sleep, observe, decide, repeat until a
@@ -1155,6 +1171,9 @@ fn run_poll_loop(
         let heartbeat_already_stale = tick_now_ms.saturating_sub(last_heartbeat_ms)
             >= (idle_timeout_secs as i64).saturating_mul(1000);
         let observed = tick(heartbeat_already_stale);
+        if let Some(mark @ (mailbox::Mark::Interrupted | mailbox::Mark::Cancelled)) = observed.mark {
+            return PollDecision::Marked(mark);
+        }
         if observed.blocked && !observed.result_ready {
             return PollDecision::Blocked;
         }
@@ -1599,6 +1618,98 @@ fn activity_says_working(bee_dir: &Path, job_id: &str, round: u32, now_ms: i64) 
     matches!(read_activity(bee_dir, job_id, round, now_ms), Some(mailbox::ActivityState::Working))
 }
 
+/// Read `last_status` from `job.json` if present.
+fn read_last_status(bee_dir: &Path, job_id: &str) -> Option<String> {
+    let path = mailbox::job_path(bee_dir, job_id);
+    match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => {
+            m.get("last_status").and_then(Value::as_str).map(str::to_string)
+        }
+        _ => None,
+    }
+}
+
+/// D2: Check if the activity record is older than `mailbox::ACTIVITY_FRESHNESS_SECS`.
+/// Returns false if there is no activity file, invalid JSON, or round < current_round.
+fn activity_is_stale(bee_dir: &Path, job_id: &str, current_round: u32, now_ms: i64) -> bool {
+    let Ok(text) = std::fs::read_to_string(mailbox::activity_path(bee_dir, job_id)) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+    let Some(round) = obj.get("round").and_then(Value::as_u64).and_then(|r| u32::try_from(r).ok()) else {
+        return false;
+    };
+    if round < current_round {
+        return false;
+    }
+    let Some(at_str) = obj.get("at").and_then(Value::as_str) else {
+        return false;
+    };
+    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(at_str) else {
+        return false;
+    };
+    let at_ms = dt.timestamp_millis();
+    now_ms.saturating_sub(at_ms) > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
+}
+
+/// Check if there is a fresh activity record for `current_round`.
+fn is_fresh_activity(bee_dir: &Path, job_id: &str, current_round: u32, now_ms: i64) -> bool {
+    read_activity(bee_dir, job_id, current_round, now_ms).is_some()
+}
+
+/// In the run poll tick: compute the D2 word.
+/// `stalled` = the activity record is older than `mailbox::ACTIVITY_FRESHNESS_SECS` AND `process_info` is `Liveness::Alive`;
+/// `recovered` = the first fresh read after a stalled one;
+/// otherwise the word `status_with_activity` already yields.
+///
+/// Transitions `last_status` in `job.json` using `mailbox::transition_status`.
+/// When it returns `Some((from, to))` with `to != "working"`, outputs:
+/// `herding: job <id> <to>`.
+fn tick_d2_status(
+    bee_dir: &Path,
+    job_id: &str,
+    pane_id: &str,
+    min_round: u32,
+    tick_now: i64,
+    tick_index: u64,
+    herdr: &dyn PaneTransport,
+    progress: &mut dyn FnMut(&str),
+) -> (Option<String>, Option<Liveness>) {
+    let is_stale = activity_is_stale(bee_dir, job_id, min_round, tick_now);
+    let liveness = if is_stale || tick_index % 10 == 0 {
+        Some(herdr.process_info(pane_id))
+    } else {
+        None
+    };
+    let is_alive = matches!(liveness, Some(Liveness::Alive { .. }));
+
+    let status = if is_stale && is_alive {
+        Some("stalled".to_string())
+    } else if is_fresh_activity(bee_dir, job_id, min_round, tick_now)
+        && read_last_status(bee_dir, job_id).as_deref() == Some("stalled")
+    {
+        Some("recovered".to_string())
+    } else {
+        status_with_activity(bee_dir, job_id, min_round, tick_now, &mut || herdr.agent_status(job_id))
+    };
+
+    if let Some(ref word) = status {
+        if let Some((_from, to)) = mailbox::transition_status(bee_dir, job_id, word) {
+            if to != "working" {
+                progress(&format!("herding: job {job_id} {to}"));
+            }
+        }
+    }
+
+    (status, liveness)
+}
+
+
 /// The last few lines of a pane's capture, for a blocked-pane error's
 /// remedy text — enough to show WHAT is being asked without dumping a full
 /// screen (reuses `PaneTransport::pane_read`).
@@ -1752,6 +1863,8 @@ enum ContinueRefusal {
     /// `job.json` recorded no pane, or `herdr pane list` no longer shows
     /// the one it did record — the agent this job would prompt is gone.
     PaneGone { job_id: String, pane_id: Option<String> },
+    /// The job has a mark of `cancelled` or `cancel_pending` (D4).
+    Cancelled { job_id: String, mark: mailbox::Mark },
 }
 
 impl std::fmt::Display for ContinueRefusal {
@@ -1774,6 +1887,16 @@ impl std::fmt::Display for ContinueRefusal {
                 f,
                 "--continue {job_id}: job.json has no recorded pane — cannot continue"
             ),
+            ContinueRefusal::Cancelled { job_id, mark } => match mark {
+                mailbox::Mark::CancelPending => write!(
+                    f,
+                    "--continue {job_id}: job cancellation is pending — cannot continue. FIX: run `bee herding cancel {job_id}`"
+                ),
+                _ => write!(
+                    f,
+                    "--continue {job_id}: job was cancelled — cannot continue. FIX: run without --continue to start a new job"
+                ),
+            },
         }
     }
 }
@@ -1811,6 +1934,10 @@ enum RunOutcome {
     /// or question UI. Distinct from `SpawnFailed`: this fires mid-round,
     /// never before dispatch.
     PaneBlocked(String),
+    /// D1: Escape sent to pane, pane kept open, job resumable via `--continue`.
+    Interrupted,
+    /// D4: Pane closed and process exit confirmed; job terminal.
+    Cancelled,
 }
 
 struct ExecResult {
@@ -1954,6 +2081,7 @@ fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) 
         task: opts.task.clone(),
         outcome: None,
         evidence: None,
+        retryable: None,
     };
     let row = WaveRow {
         wave_id: opts.job_id.clone(),
@@ -2075,6 +2203,34 @@ fn wait_for_round(
     ceiling_secs: u64,
     herdr: &dyn PaneTransport,
 ) -> PollDecision {
+    wait_for_round_driven(
+        bee_dir,
+        job_id,
+        pane_id,
+        min_round,
+        started_at_ms,
+        idle_timeout_secs,
+        ceiling_secs,
+        herdr,
+        POLL_INTERVAL,
+        |d| std::thread::sleep(d),
+        &mut |line| println!("{line}"),
+    )
+}
+
+fn wait_for_round_driven(
+    bee_dir: &Path,
+    job_id: &str,
+    pane_id: &str,
+    min_round: u32,
+    started_at_ms: i64,
+    idle_timeout_secs: u64,
+    ceiling_secs: u64,
+    herdr: &dyn PaneTransport,
+    poll_interval: Duration,
+    sleep: impl FnMut(Duration),
+    progress: &mut dyn FnMut(&str),
+) -> PollDecision {
     let log_file_path = mailbox::log_path(bee_dir, job_id);
     let ack_file_path = mailbox::ack_path(bee_dir, job_id, min_round);
     let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
@@ -2085,7 +2241,7 @@ fn wait_for_round(
         started_at_ms,
         idle_timeout_secs,
         ceiling_secs,
-        POLL_INTERVAL,
+        poll_interval,
         |heartbeat_already_stale| {
             tick_index += 1;
             let result_ready = std::fs::read_dir(&mailbox_path)
@@ -2124,25 +2280,30 @@ fn wait_for_round(
             // own activity record ahead of that read, so a pane that went
             // blocked behind a screen the classifier reads as idle ends the
             // wait here instead of burning the whole idle timeout.
-            let status =
-                status_with_activity(bee_dir, job_id, min_round, now_ms(), &mut || herdr.agent_status(job_id));
-            if status.as_deref() == Some("working") {
+            // D2 projects stalled and recovered in the tick.
+            let (status, liveness) = tick_d2_status(
+                bee_dir,
+                job_id,
+                pane_id,
+                min_round,
+                now_ms(),
+                tick_index,
+                herdr,
+                progress,
+            );
+            if status.as_deref() == Some("working") || status.as_deref() == Some("recovered") {
                 heartbeat_fresh = true;
             }
             let blocked = status.as_deref() == Some("blocked");
-            let liveness = if tick_index % 10 == 0 {
-                Some(herdr.process_info(pane_id))
-            } else {
-                None
-            };
+            let mark = mailbox::read_mark(bee_dir, job_id).map(|(m, _)| m);
             let pane_text = if heartbeat_already_stale {
                 herdr.pane_read(pane_id).ok()
             } else {
                 None
             };
-            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked }
+            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked, mark }
         },
-        |d| std::thread::sleep(d),
+        sleep,
         now_ms,
     )
 }
@@ -2383,12 +2544,18 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             let tail = pane_tail(herdr, &new_pane);
             RunOutcome::PaneBlocked(blocked_message(&opts.job_id, &new_pane, &tail))
         }
+        PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+        PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+        PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
     let valid_result = matches!(outcome, RunOutcome::Result(_));
-    let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
-    let closed_pane = if close {
+    let close = !matches!(outcome, RunOutcome::PausedLimit | RunOutcome::Interrupted | RunOutcome::Cancelled)
+        && should_close_pane(valid_result, opts.close_always);
+    let closed_pane = if matches!(outcome, RunOutcome::Cancelled) {
+        true
+    } else if close {
         match herdr.pane_close(&new_pane) {
             Ok(()) => true,
             Err(e) => {
@@ -2438,7 +2605,7 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
         Err(_) => return refused(ContinueRefusal::JobDirMissing { job_id: job_id.clone() }),
     };
-    let job_value: Value = match std::fs::read_to_string(&job_file_path)
+    let mut job_value: Value = match std::fs::read_to_string(&job_file_path)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
     {
@@ -2546,12 +2713,18 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
                 let tail = pane_tail(herdr, &pane_id);
                 RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
             }
+            PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+            PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+            PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
             PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
         };
 
         let valid_result = matches!(outcome, RunOutcome::Result(_));
-        let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
-        let closed_pane = if close {
+        let close = !matches!(outcome, RunOutcome::PausedLimit | RunOutcome::Interrupted | RunOutcome::Cancelled)
+            && should_close_pane(valid_result, opts.close_always);
+        let closed_pane = if matches!(outcome, RunOutcome::Cancelled) {
+            true
+        } else if close {
             match herdr.pane_close(&pane_id) {
                 Ok(()) => true,
                 Err(e) => {
@@ -2568,6 +2741,28 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             pane_id: Some(pane_id),
             closed_pane,
         };
+    }
+
+    // herding-cockpit-completeness D1, D4: check mark on job
+    if let Some((mark, _)) = mailbox::read_mark(&bee_dir, job_id) {
+        match mark {
+            mailbox::Mark::Cancelled | mailbox::Mark::CancelPending => {
+                return refused(ContinueRefusal::Cancelled {
+                    job_id: job_id.clone(),
+                    mark,
+                });
+            }
+            mailbox::Mark::Interrupted => {
+                if let Err(e) = mailbox::clear_mark(&bee_dir, job_id) {
+                    eprintln!("bee herding run --continue: could not clear mark for {job_id}: {e}");
+                }
+                if let Value::Object(ref mut m) = job_value {
+                    m.remove("mark");
+                    m.remove("mark_reason");
+                    m.remove("mark_at");
+                }
+            }
+        }
     }
 
     // No prior result: nothing to continue FROM.
@@ -2699,12 +2894,18 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             let tail = pane_tail(herdr, &pane_id);
             RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
         }
+        PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+        PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+        PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
     let valid_result = matches!(outcome, RunOutcome::Result(_));
-    let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
-    let closed_pane = if close {
+    let close = !matches!(outcome, RunOutcome::PausedLimit | RunOutcome::Interrupted | RunOutcome::Cancelled)
+        && should_close_pane(valid_result, opts.close_always);
+    let closed_pane = if matches!(outcome, RunOutcome::Cancelled) {
+        true
+    } else if close {
         match herdr.pane_close(&pane_id) {
             Ok(()) => true,
             Err(e) => {
@@ -2734,6 +2935,8 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
         RunOutcome::PausedLimit => "paused_limit",
         RunOutcome::Died { .. } => "died",
         RunOutcome::PaneBlocked(_) => "pane_blocked",
+        RunOutcome::Interrupted => "interrupted",
+        RunOutcome::Cancelled => "cancelled",
     }
 }
 
@@ -2835,8 +3038,123 @@ fn transcribe_dissent(root: &Path, cell_id: Option<&str>, dissent: &MailboxDisse
 /// prints what this returns — the dissent WRITE already happened in `run`,
 /// and its outcome arrives here as data so this stays a pure builder.
 ///
+/// Envelope keys:
+/// - `job_id`: the job id string
+/// - `outcome`: outcome label string (e.g. `done`, `blocked`, `spawn_failed`, `interrupted`, `cancelled`, ...)
+/// - `pane_id`: string or null
+/// - `closed_pane`: boolean
+/// - `dry_run`: boolean
+/// - `retryable`: boolean (present on every envelope except `done` and `dry_run`; true only for `spawn_failed`, false otherwise)
+/// - `git`: object {branch, head_sha, base_sha, ahead, dirty, changed_paths} (D6: present only on done or blocked and only when cwd is a git checkout)
+///
 /// Note there is NO `status` key here and never was — done/blocked rides
 /// `outcome`, built by `outcome_label`.
+fn git_block(cwd: &Path, main_root: &Path) -> Option<Value> {
+    use crate::verbs::worktree::run_git;
+
+    let inside = run_git(cwd, &["rev-parse", "--is-inside-work-tree"]);
+    if inside.status != Some(0) || inside.stdout.as_deref().unwrap_or("").trim() != "true" {
+        return None;
+    }
+
+    let branch_out = run_git(cwd, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    if branch_out.status != Some(0) {
+        return None;
+    }
+    let branch = branch_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if branch.is_empty() {
+        return None;
+    }
+
+    let head_out = run_git(cwd, &["rev-parse", "HEAD"]);
+    if head_out.status != Some(0) {
+        return None;
+    }
+    let head_sha = head_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if head_sha.is_empty() {
+        return None;
+    }
+
+    let main_head_out = run_git(main_root, &["rev-parse", "HEAD"]);
+    if main_head_out.status != Some(0) {
+        return None;
+    }
+    let main_sha = main_head_out.stdout.as_deref().unwrap_or("").trim();
+    if main_sha.is_empty() {
+        return None;
+    }
+
+    let merge_base_out = run_git(cwd, &["merge-base", "HEAD", main_sha]);
+    if merge_base_out.status != Some(0) {
+        return None;
+    }
+    let base_sha = merge_base_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if base_sha.is_empty() {
+        return None;
+    }
+
+    let range = format!("{base_sha}..HEAD");
+    let ahead_out = run_git(cwd, &["rev-list", "--count", &range]);
+    if ahead_out.status != Some(0) {
+        return None;
+    }
+    let ahead: u64 = ahead_out.stdout.as_deref().unwrap_or("").trim().parse().ok()?;
+
+    let porcelain_out = run_git(cwd, &["status", "--porcelain"]);
+    if porcelain_out.status != Some(0) {
+        return None;
+    }
+    let mut porcelain_paths = Vec::new();
+    if let Some(stdout) = &porcelain_out.stdout {
+        for line in stdout.lines() {
+            let line = line.trim_end_matches(['\r', '\n']);
+            if line.len() >= 4 {
+                let rest = &line[3..];
+                let path = match rest.split_once(" -> ") {
+                    Some((_, dest)) => dest.trim(),
+                    None => rest.trim(),
+                };
+                if !path.is_empty() {
+                    porcelain_paths.push(path.to_string());
+                }
+            }
+        }
+    }
+    let dirty = !porcelain_paths.is_empty();
+
+    let diff_out = run_git(cwd, &["diff", "--name-only", &range]);
+    if diff_out.status != Some(0) {
+        return None;
+    }
+    let mut diff_paths = Vec::new();
+    if let Some(stdout) = &diff_out.stdout {
+        for line in stdout.lines() {
+            let path = line.trim();
+            if !path.is_empty() {
+                diff_paths.push(path.to_string());
+            }
+        }
+    }
+
+    let mut changed_set = std::collections::BTreeSet::new();
+    for p in diff_paths {
+        changed_set.insert(p);
+    }
+    for p in porcelain_paths {
+        changed_set.insert(p);
+    }
+    let changed_paths: Vec<Value> = changed_set.into_iter().map(Value::String).collect();
+
+    Some(serde_json::json!({
+        "branch": branch,
+        "head_sha": head_sha,
+        "base_sha": base_sha,
+        "ahead": ahead,
+        "dirty": dirty,
+        "changed_paths": changed_paths,
+    }))
+}
+
 fn result_envelope(
     opts: &Options,
     result: &ExecResult,
@@ -2849,6 +3167,11 @@ fn result_envelope(
     m.insert("pane_id".into(), result.pane_id.clone().map(Value::String).unwrap_or(Value::Null));
     m.insert("closed_pane".into(), Value::Bool(result.closed_pane));
     m.insert("dry_run".into(), Value::Bool(opts.dry_run));
+    let outcome = outcome_label(&result.outcome);
+    if outcome != "done" && outcome != "dry_run" && !opts.dry_run {
+        let retryable = matches!(result.outcome, RunOutcome::SpawnFailed(_));
+        m.insert("retryable".into(), Value::Bool(retryable));
+    }
     match &result.outcome {
         RunOutcome::Result(r) => {
             m.insert("summary".into(), Value::String(r.summary.clone()));
@@ -2857,6 +3180,9 @@ fn result_envelope(
                 Value::Array(r.files_changed.iter().cloned().map(Value::String).collect()),
             );
             m.insert("proof".into(), Value::String(r.proof.clone()));
+            if let Some(git) = git_block(&opts.cwd, &opts.main_root) {
+                m.insert("git".into(), git);
+            }
             // pi-result-mailbox D1/D2: the report travels as a PATH — never
             // its body, at any size (a long line read back through a tool
             // truncates, and a truncated envelope is unparseable). Both keys
@@ -2945,7 +3271,10 @@ fn result_envelope(
         RunOutcome::TimedOutIdle(msg) => {
             m.insert("error".into(), Value::String(msg.clone()));
         }
-        RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
+        RunOutcome::TimedOutCeiling
+        | RunOutcome::PausedLimit
+        | RunOutcome::Interrupted
+        | RunOutcome::Cancelled => {}
     }
     Value::Object(m)
 }
@@ -3266,6 +3595,21 @@ mod tests {
     }
 
     #[test]
+    fn herdr_pane_send_key_argv_shape() {
+        assert_eq!(
+            pane_send_key_argv("w1:p1", "esc"),
+            ["pane", "send-keys", "w1:p1", "esc"]
+        );
+    }
+
+    #[test]
+    fn fake_herdr_records_pane_send_key_calls() {
+        let fake = FakeHerdr::new();
+        fake.pane_send_key("w1:p2", "esc").unwrap();
+        assert_eq!(fake.send_key_calls(), vec![("w1:p2".to_string(), "esc".to_string())]);
+    }
+
+    #[test]
     fn pane_workspace_splits_at_the_first_colon() {
         assert_eq!(pane_workspace("w4:p31"), "w4");
         assert_eq!(pane_workspace("no-colon"), "no-colon");
@@ -3341,7 +3685,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false }
+                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None }
             },
             |_| {},
             || {
@@ -3361,7 +3705,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false },
+            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -3379,7 +3723,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false },
+            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false, mark: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -3406,6 +3750,7 @@ mod tests {
                     pane_text: None,
                     liveness: None,
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -3432,7 +3777,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true }
+                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None }
             },
             |_| {},
             || {
@@ -3454,7 +3799,7 @@ mod tests {
             900,
             21_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true },
+            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -3462,6 +3807,131 @@ mod tests {
             },
         );
         assert_eq!(decision, PollDecision::ResultReady);
+    }
+
+    #[test]
+    fn run_poll_loop_returns_interrupted_on_an_interrupted_tick() {
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| PollTick {
+                result_ready: false,
+                heartbeat_fresh: false,
+                pane_text: None,
+                liveness: None,
+                blocked: false,
+                mark: Some(mailbox::Mark::Interrupted),
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Marked(mailbox::Mark::Interrupted));
+    }
+
+    #[test]
+    fn run_poll_loop_returns_cancelled_on_a_cancelled_tick() {
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| PollTick {
+                result_ready: false,
+                heartbeat_fresh: false,
+                pane_text: None,
+                liveness: None,
+                blocked: false,
+                mark: Some(mailbox::Mark::Cancelled),
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Marked(mailbox::Mark::Cancelled));
+    }
+
+    #[test]
+    fn run_poll_loop_keeps_waiting_on_cancel_pending() {
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                let mark = if ticks == 1 {
+                    Some(mailbox::Mark::CancelPending)
+                } else {
+                    Some(mailbox::Mark::Cancelled)
+                };
+                PollTick {
+                    result_ready: false,
+                    heartbeat_fresh: true,
+                    pane_text: None,
+                    liveness: None,
+                    blocked: false,
+                    mark,
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Marked(mailbox::Mark::Cancelled));
+        assert_eq!(ticks, 2, "cancel_pending must keep waiting until cancelled or outcome");
+    }
+
+    #[test]
+    fn execute_interrupted_leaves_pane_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.close_always = true; // prove even close_always does not close interrupted pane (D1)
+        seed_ack(tmp.path(), &opts.job_id, 1);
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = opts.job_id.clone();
+        let bee_dir_clone = bee_dir.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            mailbox::write_mark(&bee_dir_clone, &job_id, mailbox::Mark::Interrupted, "user").unwrap();
+        });
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        writer.join().unwrap();
+        assert!(matches!(result.outcome, RunOutcome::Interrupted), "got {:?}", result.outcome);
+        assert!(!result.closed_pane, "interrupted must leave pane open (D1)");
+        assert!(fake.closed.borrow().is_empty(), "herdr pane_close must not be called");
+    }
+
+    #[test]
+    fn execute_cancelled_records_closed_pane_true() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_ack(tmp.path(), &opts.job_id, 1);
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = opts.job_id.clone();
+        let bee_dir_clone = bee_dir.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            mailbox::write_mark(&bee_dir_clone, &job_id, mailbox::Mark::Cancelled, "user").unwrap();
+        });
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        writer.join().unwrap();
+        assert!(matches!(result.outcome, RunOutcome::Cancelled), "got {:?}", result.outcome);
+        assert!(result.closed_pane, "cancelled records closed_pane true (D4)");
     }
 
     // ─── hps-7: prompt diagnosis, pure (D5) ────────────────────────────
@@ -3582,6 +4052,7 @@ mod tests {
         prompt_result: Result<(), String>,
         status: RefCell<Option<String>>,
         closed: RefCell<Vec<String>>,
+        send_key_calls: RefCell<Vec<(String, String)>>,
         /// Pane ids `pane_alive` answers `true` for — the FakeHerdr's
         /// stand-in for `herdr pane list`'s membership set.
         alive_panes: RefCell<Vec<String>>,
@@ -3649,6 +4120,7 @@ mod tests {
                 prompt_result: Ok(()),
                 status: RefCell::new(Some("idle".to_string())),
                 closed: RefCell::new(Vec::new()),
+                send_key_calls: RefCell::new(Vec::new()),
                 alive_panes: RefCell::new(vec!["w1:p2".to_string()]),
                 prompt_calls: RefCell::new(Vec::new()),
                 start_calls: RefCell::new(Vec::new()),
@@ -3666,6 +4138,10 @@ mod tests {
                 probe_path: RefCell::new(None),
                 probe_seen: RefCell::new(None),
             }
+        }
+
+        pub(crate) fn send_key_calls(&self) -> Vec<(String, String)> {
+            self.send_key_calls.borrow().clone()
         }
     }
 
@@ -3715,6 +4191,10 @@ mod tests {
         }
         fn pane_close(&self, pane_id: &str) -> Result<(), String> {
             self.closed.borrow_mut().push(pane_id.to_string());
+            Ok(())
+        }
+        fn pane_send_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
+            self.send_key_calls.borrow_mut().push((pane_id.to_string(), key.to_string()));
             Ok(())
         }
         fn agent_prompt(&self, job_id: &str, prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
@@ -3877,6 +4357,9 @@ mod tests {
         }
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
             unreachable!("split_worker_pane never closes a pane")
+        }
+        fn pane_send_key(&self, _pane_id: &str, _key: &str) -> Result<(), String> {
+            Ok(())
         }
         fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             unreachable!("split_worker_pane never prompts")
@@ -4076,6 +4559,9 @@ mod tests {
         }
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
             panic!("dry-run must never call PaneTransport::pane_close")
+        }
+        fn pane_send_key(&self, _pane_id: &str, _key: &str) -> Result<(), String> {
+            panic!("dry-run must never call PaneTransport::pane_send_key")
         }
         fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             panic!("dry-run must never call PaneTransport::agent_prompt")
@@ -5528,8 +6014,105 @@ mod tests {
         let envelope = result_envelope(&opts, &result, "herdr", None);
         assert_eq!(
             envelope_keys(&envelope),
-            vec!["closed_pane", "dry_run", "error", "job_id", "outcome", "pane_id"],
+            vec!["closed_pane", "dry_run", "error", "job_id", "outcome", "pane_id", "retryable"],
             "a malformed result with no report grew a key: {envelope}"
+        );
+    }
+
+    // ─── retryable envelope bit (herding-cockpit-completeness D3) ────────
+
+    #[test]
+    fn envelope_has_retryable_true_on_spawn_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let result = ExecResult {
+            outcome: RunOutcome::SpawnFailed("failed to start".to_string()),
+            pane_id: None,
+            closed_pane: false,
+        };
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(
+            envelope.get("retryable"),
+            Some(&Value::Bool(true)),
+            "spawn_failed must carry retryable: true: {envelope}"
+        );
+    }
+
+    #[test]
+    fn envelope_has_retryable_false_on_died_blocked_interrupted_cancelled_timed_out_idle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let cases = vec![
+            RunOutcome::Died { pid: Some(1234) },
+            RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Blocked,
+                summary: "blocked".to_string(),
+                files_changed: vec![],
+                proof: "n/a".to_string(),
+                options: vec![],
+                leaning: None,
+                dissent: None,
+                report_path: None,
+                report_note: None,
+            }),
+            RunOutcome::Interrupted,
+            RunOutcome::Cancelled,
+            RunOutcome::TimedOutIdle("idle timeout".to_string()),
+        ];
+        for outcome in cases {
+            let label = outcome_label(&outcome);
+            let result = ExecResult {
+                outcome,
+                pane_id: None,
+                closed_pane: false,
+            };
+            let envelope = result_envelope(&opts, &result, "herdr", None);
+            assert_eq!(
+                envelope.get("retryable"),
+                Some(&Value::Bool(false)),
+                "{label} must carry retryable: false: {envelope}"
+            );
+        }
+    }
+
+    #[test]
+    fn envelope_omits_retryable_on_done_and_dry_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let done_result = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Done,
+                summary: "done".to_string(),
+                files_changed: vec![],
+                proof: "green".to_string(),
+                options: vec![],
+                leaning: None,
+                dissent: None,
+                report_path: None,
+                report_note: None,
+            }),
+            pane_id: None,
+            closed_pane: true,
+        };
+        let envelope = result_envelope(&opts, &done_result, "herdr", None);
+        assert!(
+            envelope.get("retryable").is_none(),
+            "done envelope must not carry retryable: {envelope}"
+        );
+
+        let mut dry_run_opts = test_options(tmp.path(), true);
+        dry_run_opts.dry_run = true;
+        let dry_run_result = ExecResult {
+            outcome: RunOutcome::DryRun("brief".to_string()),
+            pane_id: None,
+            closed_pane: false,
+        };
+        let dry_envelope = result_envelope(&dry_run_opts, &dry_run_result, "herdr", None);
+        assert!(
+            dry_envelope.get("retryable").is_none(),
+            "dry_run envelope must not carry retryable: {dry_envelope}"
         );
     }
 
@@ -6580,6 +7163,76 @@ mod tests {
     }
 
     #[test]
+    fn continue_refuses_when_job_is_cancelled_with_fix_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let bee_dir = tmp.path().join(".bee");
+        mailbox::write_mark(&bee_dir, "job-1", mailbox::Mark::Cancelled, "user").unwrap();
+        let opts = continue_options(tmp.path(), false);
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::ContinueRefused(refusal @ ContinueRefusal::Cancelled { job_id, mark }) => {
+                assert_eq!(job_id, "job-1");
+                assert_eq!(*mark, mailbox::Mark::Cancelled);
+                let text = refusal.to_string();
+                assert!(text.contains("FIX:"), "refusal must contain FIX line: {text}");
+            }
+            other => panic!("expected ContinueRefused(Cancelled), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_refuses_when_job_is_cancel_pending_with_fix_line_naming_cancel() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let bee_dir = tmp.path().join(".bee");
+        mailbox::write_mark(&bee_dir, "job-1", mailbox::Mark::CancelPending, "user").unwrap();
+        let opts = continue_options(tmp.path(), false);
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::ContinueRefused(refusal @ ContinueRefusal::Cancelled { job_id, mark }) => {
+                assert_eq!(job_id, "job-1");
+                assert_eq!(*mark, mailbox::Mark::CancelPending);
+                let text = refusal.to_string();
+                assert!(text.contains("FIX:"), "refusal must contain FIX line: {text}");
+                assert!(
+                    text.contains("bee herding cancel job-1"),
+                    "FIX line must name bee herding cancel <job-id>: {text}"
+                );
+            }
+            other => panic!("expected ContinueRefused(Cancelled), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_accepts_interrupted_and_clears_the_mark() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        seed_ack(tmp.path(), "job-1", 2);
+        let bee_dir = tmp.path().join(".bee");
+        mailbox::write_mark(&bee_dir, "job-1", mailbox::Mark::Interrupted, "user").unwrap();
+        assert!(mailbox::read_mark(&bee_dir, "job-1").is_some());
+
+        let result_path = mailbox::result_path(&bee_dir, "job-1", 2);
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            std::fs::write(
+                &result_path,
+                r#"{"status":"done","summary":"resumed done","files_changed":[],"proof":"n/a"}"#,
+            )
+            .unwrap();
+        });
+
+        let opts = continue_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        writer.join().unwrap();
+
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert_eq!(mailbox::read_mark(&bee_dir, "job-1"), None, "mark must be cleared on resume");
+    }
+
+    #[test]
     fn continue_with_dry_run_renders_the_round_n_plus_one_brief_and_sends_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         seed_job(tmp.path(), "job-1", "w1:p2", 1);
@@ -6841,6 +7494,7 @@ mod tests {
                     pane_text: None,
                     liveness: Some(Liveness::Absent),
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -6883,6 +7537,7 @@ mod tests {
                     pane_text: None,
                     liveness,
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -6919,6 +7574,7 @@ mod tests {
                     pane_text: None,
                     liveness,
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -6948,6 +7604,7 @@ mod tests {
                     pane_text: None,
                     liveness: Some(Liveness::Unknown),
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -7212,4 +7869,423 @@ mod tests {
             other => panic!("expected DryRun, got {other:?}"),
         }
     }
+
+    #[test]
+    fn run_poll_tick_projects_stalled_and_recovered_with_progress_lines() {
+        // D2 (468c6cb8): alive + stale activity prints one stalled line,
+        // a second stale tick prints nothing,
+        // a fresh tick prints one recovered line,
+        // then silence (working on next tick prints no line).
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "j1";
+        let pane_id = "w1:p2";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": job_id,
+            "task": "do something",
+            "cwd": tmp.path().display().to_string(),
+            "round": 1,
+            "pane_id": pane_id,
+            "kind": "fake",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), serde_json::to_string(&job).unwrap()).unwrap();
+
+        let fake = FakeHerdr::new();
+        *fake.liveness_responses.borrow_mut() = vec![
+            Liveness::Alive { pid: 1234 },
+            Liveness::Alive { pid: 1234 },
+            Liveness::Alive { pid: 1234 },
+            Liveness::Alive { pid: 1234 },
+        ];
+
+        let lines = std::cell::RefCell::new(Vec::new());
+        let mut progress = |line: &str| lines.borrow_mut().push(line.to_string());
+
+        // Tick 1: alive + stale activity -> prints one stalled line
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        seed_activity(&bee_dir, job_id, "working", 1, &stale.to_rfc3339());
+        let (status1, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake, &mut progress);
+        assert_eq!(status1.as_deref(), Some("stalled"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled"]);
+
+        // Tick 2: second stale tick -> prints nothing
+        let (status2, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 2, &fake, &mut progress);
+        assert_eq!(status2.as_deref(), Some("stalled"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled"]);
+
+        // Tick 3: fresh activity -> prints one recovered line
+        let fresh = chrono::Utc::now();
+        seed_activity(&bee_dir, job_id, "working", 1, &fresh.to_rfc3339());
+        let (status3, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 3, &fake, &mut progress);
+        assert_eq!(status3.as_deref(), Some("recovered"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled", "herding: job j1 recovered"]);
+
+        // Tick 4: fresh activity again -> followed by working with no extra line
+        let (status4, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 4, &fake, &mut progress);
+        assert_eq!(status4.as_deref(), Some("working"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled", "herding: job j1 recovered"]);
+
+        // Tick 5: repeated working -> silence
+        let (status5, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 5, &fake, &mut progress);
+        assert_eq!(status5.as_deref(), Some("working"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled", "herding: job j1 recovered"]);
+    }
+
+    #[test]
+    fn stalled_needs_both_stale_activity_and_live_pane_process() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "j-check";
+        let pane_id = "w1:p2";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": job_id,
+            "task": "do something",
+            "cwd": tmp.path().display().to_string(),
+            "round": 1,
+            "pane_id": pane_id,
+            "kind": "fake",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), serde_json::to_string(&job).unwrap()).unwrap();
+
+        let lines = std::cell::RefCell::new(Vec::new());
+        let mut progress = |line: &str| lines.borrow_mut().push(line.to_string());
+
+        // Case 1: stale activity but process is Absent -> NOT stalled
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        seed_activity(&bee_dir, job_id, "working", 1, &stale.to_rfc3339());
+        let fake_absent = FakeHerdr::new();
+        *fake_absent.liveness_responses.borrow_mut() = vec![Liveness::Absent];
+        let (status, liveness) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_absent, &mut progress);
+        assert_ne!(status.as_deref(), Some("stalled"));
+        assert_eq!(liveness, Some(Liveness::Absent));
+        assert!(lines.borrow().is_empty());
+
+        // Case 2: stale activity but process is Unknown -> NOT stalled
+        let fake_unknown = FakeHerdr::new();
+        *fake_unknown.liveness_responses.borrow_mut() = vec![Liveness::Unknown];
+        let (status, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_unknown, &mut progress);
+        assert_ne!(status.as_deref(), Some("stalled"));
+        assert!(lines.borrow().is_empty());
+
+        // Case 3: alive process but activity is fresh -> NOT stalled
+        let fake_alive = FakeHerdr::new();
+        *fake_alive.liveness_responses.borrow_mut() = vec![Liveness::Alive { pid: 999 }];
+        seed_activity(&bee_dir, job_id, "working", 1, &chrono::Utc::now().to_rfc3339());
+        let (status, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_alive, &mut progress);
+        assert_eq!(status.as_deref(), Some("working"));
+        assert!(lines.borrow().is_empty());
+
+        // Case 4: alive process but no activity file at all -> NOT stalled
+        std::fs::remove_file(mailbox::activity_path(&bee_dir, job_id)).unwrap();
+        let fake_alive2 = FakeHerdr::new();
+        *fake_alive2.liveness_responses.borrow_mut() = vec![Liveness::Alive { pid: 999 }];
+        let (status, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_alive2, &mut progress);
+        assert_ne!(status.as_deref(), Some("stalled"));
+        assert!(lines.borrow().is_empty());
+    }
+
+    #[test]
+    fn wait_for_round_driven_prints_stalled_and_recovered_in_poll_loop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "j-loop";
+        let pane_id = "w1:p2";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": job_id,
+            "task": "do something",
+            "cwd": tmp.path().display().to_string(),
+            "round": 1,
+            "pane_id": pane_id,
+            "kind": "fake",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), serde_json::to_string(&job).unwrap()).unwrap();
+        seed_ack(tmp.path(), job_id, 1);
+
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        seed_activity(&bee_dir, job_id, "working", 1, &stale.to_rfc3339());
+
+        let fake = FakeHerdr::new();
+        *fake.liveness_responses.borrow_mut() = vec![
+            Liveness::Alive { pid: 555 },
+            Liveness::Alive { pid: 555 },
+            Liveness::Alive { pid: 555 },
+            Liveness::Alive { pid: 555 },
+        ];
+
+        let mut lines = Vec::new();
+        let mut loop_ticks = 0;
+        let bee_dir_clone = bee_dir.clone();
+        let job_id_str = job_id.to_string();
+
+        let decision = wait_for_round_driven(
+            &bee_dir,
+            job_id,
+            pane_id,
+            1,
+            now_ms(),
+            60,
+            3600,
+            &fake,
+            Duration::from_millis(0),
+            |_| {
+                loop_ticks += 1;
+                if loop_ticks == 3 {
+                    // Update activity to fresh on iteration 3
+                    seed_activity(&bee_dir_clone, &job_id_str, "working", 1, &chrono::Utc::now().to_rfc3339());
+                }
+                if loop_ticks == 5 {
+                    // Write result file on iteration 5 to end the loop
+                    std::fs::write(
+                        mailbox::result_path(&bee_dir_clone, &job_id_str, 1),
+                        r#"{"status":"done","summary":"all done","files_changed":[],"proof":"test"}"#,
+                    ).unwrap();
+                }
+            },
+            &mut |line| lines.push(line.to_string()),
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(lines, vec!["herding: job j-loop stalled", "herding: job j-loop recovered"]);
+    }
+
+    // ─── D6: git handoff block on done and blocked envelopes ────────────
+
+    #[test]
+    fn git_block_with_one_commit_ahead_and_one_dirty_file_attaches_to_done_and_blocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_dir = tmp.path().join("main");
+        std::fs::create_dir_all(&main_dir).unwrap();
+
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+
+        std::fs::write(main_dir.join("base.txt"), "base").unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["add", "base.txt"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args([
+                "-c", "user.email=bee@example.com",
+                "-c", "user.name=bee",
+                "-c", "commit.gpgSign=false",
+                "commit", "-q", "-m", "initial commit"
+            ])
+            .status()
+            .unwrap()
+            .success());
+
+        let work_dir = tmp.path().join("work");
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["worktree", "add", "-q", "-b", "feature"])
+            .arg(&work_dir)
+            .status()
+            .unwrap()
+            .success());
+
+        // One commit ahead in work_dir
+        std::fs::write(work_dir.join("committed.txt"), "committed").unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&work_dir)
+            .args(["add", "committed.txt"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&work_dir)
+            .args([
+                "-c", "user.email=bee@example.com",
+                "-c", "user.name=bee",
+                "-c", "commit.gpgSign=false",
+                "commit", "-q", "-m", "feature commit"
+            ])
+            .status()
+            .unwrap()
+            .success());
+
+        // One dirty file in work_dir
+        std::fs::write(work_dir.join("dirty.txt"), "dirty").unwrap();
+
+        let block = git_block(&work_dir, &main_dir).expect("git_block must succeed for git worktree");
+        assert_eq!(block.get("branch").and_then(Value::as_str), Some("feature"));
+        assert_eq!(block.get("ahead").and_then(Value::as_u64), Some(1));
+        assert_eq!(block.get("dirty").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            block.get("changed_paths").cloned(),
+            Some(serde_json::json!(["committed.txt", "dirty.txt"]))
+        );
+
+        let mut opts = test_options(&main_dir, false);
+        opts.cwd = work_dir.clone();
+
+        let done_res = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Done,
+                summary: "done".to_string(),
+                files_changed: vec!["worker_reported.txt".to_string()],
+                proof: "test — green".to_string(),
+                report_path: None,
+                report_note: None,
+                options: vec![],
+                leaning: None,
+                dissent: None,
+            }),
+            pane_id: Some("p1".to_string()),
+            closed_pane: true,
+        };
+        let env_done = result_envelope(&opts, &done_res, "herdr", None);
+        assert!(env_done.get("git").is_some(), "git key must attach on done");
+        assert_eq!(env_done["git"]["ahead"], 1);
+        assert_eq!(env_done["git"]["dirty"], true);
+        assert_eq!(env_done["git"]["changed_paths"], serde_json::json!(["committed.txt", "dirty.txt"]));
+        assert_eq!(env_done["files_changed"], serde_json::json!(["worker_reported.txt"]), "files_changed stays untouched");
+
+        let blocked_res = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Blocked,
+                summary: "blocked".to_string(),
+                files_changed: vec!["worker_reported.txt".to_string()],
+                proof: "n/a".to_string(),
+                report_path: None,
+                report_note: None,
+                options: vec![],
+                leaning: None,
+                dissent: None,
+            }),
+            pane_id: Some("p1".to_string()),
+            closed_pane: false,
+        };
+        let env_blocked = result_envelope(&opts, &blocked_res, "herdr", None);
+        assert!(env_blocked.get("git").is_some(), "git key must attach on blocked");
+        assert_eq!(env_blocked["git"]["ahead"], 1);
+        assert_eq!(env_blocked["git"]["dirty"], true);
+    }
+
+    #[test]
+    fn non_git_temp_dir_yields_no_git_key_in_result_envelope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let non_git = tmp.path().join("non_git");
+        std::fs::create_dir_all(&non_git).unwrap();
+
+        assert!(git_block(&non_git, tmp.path()).is_none());
+
+        let mut opts = test_options(tmp.path(), false);
+        opts.cwd = non_git;
+        let done_res = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Done,
+                summary: "done".to_string(),
+                files_changed: vec![],
+                proof: "test — green".to_string(),
+                report_path: None,
+                report_note: None,
+                options: vec![],
+                leaning: None,
+                dissent: None,
+            }),
+            pane_id: None,
+            closed_pane: false,
+        };
+        let env = result_envelope(&opts, &done_res, "herdr", None);
+        assert!(env.get("git").is_none(), "non-git dir yields no git key");
+    }
+
+    #[test]
+    fn died_envelope_never_carries_git_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_dir = tmp.path().join("main");
+        std::fs::create_dir_all(&main_dir).unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+
+        let mut opts = test_options(&main_dir, false);
+        opts.cwd = main_dir;
+        let died_res = ExecResult {
+            outcome: RunOutcome::Died { pid: Some(1234) },
+            pane_id: Some("p1".to_string()),
+            closed_pane: false,
+        };
+        let env = result_envelope(&opts, &died_res, "herdr", None);
+        assert!(env.get("git").is_none(), "died envelope never carries git key");
+    }
+
+    #[test]
+    fn git_block_porcelain_rename_keeps_dest_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_dir = tmp.path().join("main");
+        std::fs::create_dir_all(&main_dir).unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+
+        std::fs::write(main_dir.join("old.txt"), "content").unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["add", "old.txt"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args([
+                "-c", "user.email=bee@example.com",
+                "-c", "user.name=bee",
+                "-c", "commit.gpgSign=false",
+                "commit", "-q", "-m", "init"
+            ])
+            .status()
+            .unwrap()
+            .success());
+
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["mv", "old.txt", "new.txt"])
+            .status()
+            .unwrap()
+            .success());
+
+        let block = git_block(&main_dir, &main_dir).expect("git_block should succeed");
+        assert_eq!(block.get("dirty").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            block.get("changed_paths").cloned(),
+            Some(serde_json::json!(["new.txt"]))
+        );
+    }
 }
+
+

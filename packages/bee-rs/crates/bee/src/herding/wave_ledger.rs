@@ -75,7 +75,7 @@ pub(crate) fn wave_ledger_path(root: &Path) -> PathBuf {
 }
 
 /// One worker slot inside a wave row.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct WorkerRow {
     pub(crate) name: String,
     pub(crate) pane_id: String,
@@ -88,6 +88,8 @@ pub(crate) struct WorkerRow {
     /// commit — whatever the caller's proof for this worker actually is),
     /// never the evidence itself.
     pub(crate) evidence: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) retryable: Option<bool>,
 }
 
 /// One wave: the row this module appends exactly once per wave.
@@ -100,14 +102,18 @@ pub(crate) struct WaveRow {
 }
 
 fn worker_row_to_json(w: &WorkerRow) -> Value {
-    json!({
+    let mut obj = json!({
         "name": w.name,
         "pane_id": w.pane_id,
         "worktree": w.worktree,
         "task": w.task,
         "outcome": w.outcome,
         "evidence": w.evidence,
-    })
+    });
+    if let Some(r) = w.retryable {
+        obj.as_object_mut().unwrap().insert("retryable".to_string(), Value::Bool(r));
+    }
+    obj
 }
 
 fn wave_row_to_json(row: &WaveRow) -> Value {
@@ -139,6 +145,7 @@ fn worker_row_from_json(v: &Value) -> Option<WorkerRow> {
         task: obj.get("task")?.as_str()?.to_string(),
         outcome: obj.get("outcome").and_then(Value::as_str).map(str::to_string),
         evidence: obj.get("evidence").and_then(Value::as_str).map(str::to_string),
+        retryable: obj.get("retryable").and_then(Value::as_bool),
     })
 }
 
@@ -323,6 +330,7 @@ mod tests {
             task: "do the thing".to_string(),
             outcome: outcome.map(str::to_string),
             evidence: outcome.map(|_| format!(".bee/logs/wave/{name}.log")),
+            retryable: None,
         }
     }
 
@@ -593,5 +601,85 @@ mod tests {
         let occupancy = live_worker_count(root, None, now, DEFAULT_STALE_AFTER_MS);
         assert_eq!(occupancy, Occupancy::Fallback(1), "the timer-based fallback must still count a fresh unresolved worker");
         assert!(occupancy.is_fallback(), "the degraded nature of this answer must be visible to the caller, not hidden behind a bare count");
+    }
+
+    #[test]
+    fn old_ledger_row_without_retryable_parses_cleanly() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let json_line = serde_json::json!({
+            "wave_id": "old-wave",
+            "started_at": iso(0),
+            "workers": [
+                {
+                    "name": "worker-1",
+                    "pane_id": "p1",
+                    "worktree": "/tmp/wt",
+                    "task": "task",
+                    "outcome": "succeeded",
+                    "evidence": null
+                }
+            ]
+        });
+        crate::fsutil::append_jsonl(&wave_ledger_path(root), &json_line).unwrap();
+
+        let waves = read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].workers.len(), 1);
+        assert_eq!(waves[0].workers[0].retryable, None, "old ledger row without retryable must parse with retryable: None");
+    }
+
+    #[test]
+    fn done_worker_row_carries_no_retryable_key_in_json() {
+        let w = WorkerRow {
+            name: "worker-done".to_string(),
+            pane_id: "p1".to_string(),
+            worktree: "/tmp/wt".to_string(),
+            task: "task".to_string(),
+            outcome: Some("succeeded".to_string()),
+            evidence: None,
+            retryable: None,
+        };
+        let val = worker_row_to_json(&w);
+        assert!(val.get("retryable").is_none(), "done/succeeded worker row must carry no retryable key in JSON");
+
+        let serde_val = serde_json::to_value(&w).unwrap();
+        assert!(serde_val.get("retryable").is_none(), "serde serialization must omit retryable when None");
+    }
+
+    #[test]
+    fn send_failed_worker_row_carries_retryable_true() {
+        let w = WorkerRow {
+            name: "worker-send-fail".to_string(),
+            pane_id: "p1".to_string(),
+            worktree: "/tmp/wt".to_string(),
+            task: "task".to_string(),
+            outcome: Some("send_failed".to_string()),
+            evidence: None,
+            retryable: Some(true),
+        };
+        let val = worker_row_to_json(&w);
+        assert_eq!(val.get("retryable"), Some(&Value::Bool(true)), "send_failed worker row must carry retryable: true");
+
+        let serde_val = serde_json::to_value(&w).unwrap();
+        assert_eq!(serde_val.get("retryable"), Some(&Value::Bool(true)));
+    }
+
+    #[test]
+    fn unverifiable_after_send_worker_row_carries_retryable_false() {
+        let w = WorkerRow {
+            name: "worker-unverifiable".to_string(),
+            pane_id: "p1".to_string(),
+            worktree: "/tmp/wt".to_string(),
+            task: "task".to_string(),
+            outcome: Some("unverifiable_after_send".to_string()),
+            evidence: None,
+            retryable: Some(false),
+        };
+        let val = worker_row_to_json(&w);
+        assert_eq!(val.get("retryable"), Some(&Value::Bool(false)), "unverifiable_after_send worker row must carry retryable: false");
+
+        let serde_val = serde_json::to_value(&w).unwrap();
+        assert_eq!(serde_val.get("retryable"), Some(&Value::Bool(false)));
     }
 }

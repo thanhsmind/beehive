@@ -45,6 +45,7 @@
 // split is what lets every case here — including "no result file yet" and
 // "malformed result" — run as a unit test with no filesystem.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -651,6 +652,234 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         report_note: None,
     })
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Job marks (herding-cockpit-completeness D1, D4, D5, D8)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Mark {
+    Interrupted,
+    Cancelled,
+    CancelPending,
+}
+
+impl Mark {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Mark::Interrupted => "interrupted",
+            Mark::Cancelled => "cancelled",
+            Mark::CancelPending => "cancel_pending",
+        }
+    }
+
+    pub(crate) fn parse(s: &str) -> Option<Self> {
+        match s {
+            "interrupted" => Some(Mark::Interrupted),
+            "cancelled" => Some(Mark::Cancelled),
+            "cancel_pending" => Some(Mark::CancelPending),
+            _ => None,
+        }
+    }
+}
+
+/// Read the mark on a job, if one holds.
+///
+/// Returns `None` when `job.json` is missing or unreadable, when `mark` is
+/// absent or unparseable. `mark_reason` is returned alongside `mark` as
+/// `Some(reason)` when present as a string, or `None` when absent or unreadable.
+pub(crate) fn read_mark(bee_dir: &Path, job_id: &str) -> Option<(Mark, Option<String>)> {
+    let path = job_path(bee_dir, job_id);
+    let value = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(v) => v,
+        _ => return None,
+    };
+    let obj = value.as_object()?;
+    let mark_str = obj.get("mark")?.as_str()?;
+    let mark = Mark::parse(mark_str)?;
+    let mark_reason = obj
+        .get("mark_reason")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    Some((mark, mark_reason))
+}
+
+/// Write a mark to `job.json` for `job_id`, preserving all other keys.
+///
+/// Sets `mark`, `mark_reason`, and `mark_at` (ms epoch).
+pub(crate) fn write_mark(
+    bee_dir: &Path,
+    job_id: &str,
+    mark: Mark,
+    reason: &str,
+) -> Result<(), String> {
+    let path = job_path(bee_dir, job_id);
+    let mut obj = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        crate::fsutil::ReadJson::Missing => serde_json::Map::new(),
+        crate::fsutil::ReadJson::Corrupt => {
+            return Err(format!("corrupt JSON in {}", path.display()))
+        }
+        crate::fsutil::ReadJson::Parsed(_) => {
+            return Err(format!("expected JSON object in {}", path.display()))
+        }
+    };
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    obj.insert("mark".to_string(), Value::String(mark.as_str().to_string()));
+    obj.insert("mark_reason".to_string(), Value::String(reason.to_string()));
+    obj.insert(
+        "mark_at".to_string(),
+        Value::Number(serde_json::Number::from(now_ms)),
+    );
+
+    crate::fsutil::write_json_atomic(&path, &Value::Object(obj))
+        .map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
+/// Clear the mark from `job.json` for `job_id`, preserving all other keys.
+///
+/// Removes `mark`, `mark_reason`, and `mark_at`.
+pub(crate) fn clear_mark(bee_dir: &Path, job_id: &str) -> Result<(), String> {
+    let path = job_path(bee_dir, job_id);
+    let mut obj = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        crate::fsutil::ReadJson::Missing => return Ok(()),
+        crate::fsutil::ReadJson::Corrupt => {
+            return Err(format!("corrupt JSON in {}", path.display()))
+        }
+        crate::fsutil::ReadJson::Parsed(_) => {
+            return Err(format!("expected JSON object in {}", path.display()))
+        }
+    };
+
+    obj.remove("mark");
+    obj.remove("mark_reason");
+    obj.remove("mark_at");
+
+    crate::fsutil::write_json_atomic(&path, &Value::Object(obj))
+        .map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
+/// Sweep `.bee/mailbox/*/job.json` for orphaned jobs (D5 d5a1f7e1).
+///
+/// An orphan is a job whose `job.json` records a `pane_id` that is not present in
+/// `live_panes`, that has no `result-*.json` in its mailbox directory, and that has
+/// no mark yet (`read_mark` is `None`).
+///
+/// For each orphan found, writes mark `Interrupted` with reason `"process_restarted"`
+/// and records its `job_id`. Returns the marked job ids so the caller can print
+/// progress notifications. Jobs with no recorded `pane_id` are skipped. Nothing is
+/// relaunched (D7).
+pub(crate) fn mark_orphans(bee_dir: &Path, live_panes: &HashSet<String>) -> Vec<String> {
+    let mailbox_base = bee_dir.join("mailbox");
+    let rd = match std::fs::read_dir(&mailbox_base) {
+        Ok(rd) => rd,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut job_dirs: Vec<PathBuf> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    job_dirs.sort();
+
+    let mut marked = Vec::new();
+    for job_dir in job_dirs {
+        let job_id = match job_dir.file_name().and_then(|n| n.to_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+
+        let jp = job_path(bee_dir, &job_id);
+        let obj = match crate::fsutil::read_json(&jp) {
+            crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+            _ => continue,
+        };
+
+        let pane_id = match obj.get("pane_id").and_then(Value::as_str) {
+            Some(p) if !p.trim().is_empty() => p.trim(),
+            _ => continue,
+        };
+
+        if live_panes.contains(pane_id) {
+            continue;
+        }
+
+        let has_result = match std::fs::read_dir(&job_dir) {
+            Ok(entries) => entries
+                .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                .any(|name| parse_result_filename(&name).is_some()),
+            Err(_) => false,
+        };
+        if has_result {
+            continue;
+        }
+
+        if read_mark(bee_dir, &job_id).is_some() {
+            continue;
+        }
+
+        if write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
+            marked.push(job_id);
+        }
+    }
+
+    marked
+}
+
+/// Write-on-transition helper for job status projection (D2 468c6cb8, plan Open Question 3).
+///
+/// Reads `last_status` from `job.json`.
+/// When `last_status` differs from `now_word` (or is absent and `now_word` is `"stalled"`),
+/// writes `last_status = now_word` to `job.json` and returns
+/// `Some((previous_or_empty, now_word))`.
+/// When equal (or absent and `now_word` is not `"stalled"`), returns `None` and writes nothing.
+pub(crate) fn transition_status(
+    bee_dir: &Path,
+    job_id: &str,
+    now_word: &str,
+) -> Option<(String, String)> {
+    let path = job_path(bee_dir, job_id);
+    let mut obj = match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
+        _ => return None,
+    };
+
+    let prev = obj.get("last_status").and_then(Value::as_str);
+    match prev {
+        Some(p) => {
+            if p == now_word {
+                None
+            } else {
+                let prev_str = p.to_string();
+                obj.insert("last_status".to_string(), Value::String(now_word.to_string()));
+                if crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).is_ok() {
+                    Some((prev_str, now_word.to_string()))
+                } else {
+                    None
+                }
+            }
+        }
+        None => {
+            if now_word == "stalled" {
+                obj.insert("last_status".to_string(), Value::String(now_word.to_string()));
+                if crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).is_ok() {
+                    Some((String::new(), now_word.to_string()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -1420,4 +1649,288 @@ the report file's exact final name"),
             "clock skew is jitter, never staleness"
         );
     }
+
+    // ── job marks (herding-cockpit-completeness D1, D4, D5, D8) ─────────
+
+    #[test]
+    fn mark_as_str_and_parse_contract() {
+        assert_eq!(Mark::Interrupted.as_str(), "interrupted");
+        assert_eq!(Mark::Cancelled.as_str(), "cancelled");
+        assert_eq!(Mark::CancelPending.as_str(), "cancel_pending");
+
+        assert_eq!(Mark::parse("interrupted"), Some(Mark::Interrupted));
+        assert_eq!(Mark::parse("cancelled"), Some(Mark::Cancelled));
+        assert_eq!(Mark::parse("cancel_pending"), Some(Mark::CancelPending));
+        assert_eq!(Mark::parse("unknown"), None);
+        assert_eq!(Mark::parse(""), None);
+    }
+
+    #[test]
+    fn round_trip_write_then_read_mark_for_each_variant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let cases = [
+            (Mark::Interrupted, "user", "job-1"),
+            (Mark::Cancelled, "cancel_termination_failed", "job-2"),
+            (Mark::CancelPending, "kill_timeout", "job-3"),
+        ];
+
+        for (mark, reason, job_id) in cases {
+            write_mark(&bee_dir, job_id, mark, reason).expect("write_mark succeeds");
+            let read = read_mark(&bee_dir, job_id).expect("read_mark returns Some");
+            assert_eq!(read.0, mark);
+            assert_eq!(read.1, Some(reason.to_string()));
+
+            // Verify mark_at is present in the raw JSON
+            let raw = crate::fsutil::read_json(&job_path(&bee_dir, job_id));
+            if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+                assert_eq!(obj.get("mark").and_then(Value::as_str), Some(mark.as_str()));
+                assert_eq!(obj.get("mark_reason").and_then(Value::as_str), Some(reason));
+                assert!(obj.get("mark_at").and_then(Value::as_u64).unwrap_or(0) > 0);
+            } else {
+                panic!("job.json not readable as JSON object");
+            }
+        }
+    }
+
+    #[test]
+    fn clear_mark_removes_all_three_keys_and_keeps_other_keys() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-clear-test";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut initial = serde_json::Map::new();
+        initial.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        initial.insert("round".to_string(), Value::Number(1.into()));
+        initial.insert("task".to_string(), Value::String("run test".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(initial)).unwrap();
+
+        write_mark(&bee_dir, job_id, Mark::Interrupted, "user").expect("write_mark");
+        assert_eq!(read_mark(&bee_dir, job_id), Some((Mark::Interrupted, Some("user".to_string()))));
+
+        clear_mark(&bee_dir, job_id).expect("clear_mark succeeds");
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+
+        let raw = crate::fsutil::read_json(&path);
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+            assert!(!obj.contains_key("mark"));
+            assert!(!obj.contains_key("mark_reason"));
+            assert!(!obj.contains_key("mark_at"));
+            assert_eq!(obj.get("job_id").and_then(Value::as_str), Some(job_id));
+            assert_eq!(obj.get("round").and_then(Value::as_u64), Some(1));
+            assert_eq!(obj.get("task").and_then(Value::as_str), Some("run test"));
+        } else {
+            panic!("job.json was not parsed as JSON object");
+        }
+    }
+
+    #[test]
+    fn read_mark_on_job_without_mark_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-no-mark";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut initial = serde_json::Map::new();
+        initial.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(initial)).unwrap();
+
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn read_mark_on_missing_dir_returns_none() {
+        let nonexistent = Path::new("/nonexistent/mailbox/directory/.bee");
+        assert_eq!(read_mark(nonexistent, "job-ghost"), None);
+    }
+
+    #[test]
+    fn read_mark_handles_absent_and_non_string_mark_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-unusual-reason";
+        let path = job_path(&bee_dir, job_id);
+
+        // mark without mark_reason
+        let mut obj = serde_json::Map::new();
+        obj.insert("mark".to_string(), Value::String("cancelled".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).unwrap();
+        assert_eq!(read_mark(&bee_dir, job_id), Some((Mark::Cancelled, None)));
+
+        // mark with numeric mark_reason
+        let mut obj = serde_json::Map::new();
+        obj.insert("mark".to_string(), Value::String("cancel_pending".to_string()));
+        obj.insert("mark_reason".to_string(), Value::Number(42.into()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).unwrap();
+        assert_eq!(read_mark(&bee_dir, job_id), Some((Mark::CancelPending, None)));
+
+        // invalid mark value
+        let mut obj = serde_json::Map::new();
+        obj.insert("mark".to_string(), Value::String("not_a_mark".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(obj)).unwrap();
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn mark_orphans_marks_dead_pane_with_no_result_and_no_mark() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-orphan-1";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let live_panes = HashSet::from(["pane-other".to_string()]);
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert_eq!(marked, vec![job_id.to_string()]);
+        let mark_info = read_mark(&bee_dir, job_id).expect("job should be marked");
+        assert_eq!(mark_info.0, Mark::Interrupted);
+        assert_eq!(mark_info.1, Some("process_restarted".to_string()));
+    }
+
+    #[test]
+    fn mark_orphans_leaves_job_with_result_file_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-with-result";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let res_path = result_path(&bee_dir, job_id, 1);
+        std::fs::write(&res_path, "{}").unwrap();
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn mark_orphans_leaves_job_with_live_pane_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-live-pane";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-alive".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let live_panes = HashSet::from(["pane-alive".to_string()]);
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn mark_orphans_leaves_already_marked_job_alone_and_mark_reason_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-already-marked";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        job_spec.insert("pane_id".to_string(), Value::String("pane-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        write_mark(&bee_dir, job_id, Mark::Cancelled, "user").expect("write_mark");
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        let mark_info = read_mark(&bee_dir, job_id).expect("mark should still exist");
+        assert_eq!(mark_info.0, Mark::Cancelled);
+        assert_eq!(mark_info.1, Some("user".to_string()));
+    }
+
+    #[test]
+    fn mark_orphans_skips_jobs_without_pane_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-no-pane";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans(&bee_dir, &live_panes);
+
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_id), None);
+    }
+
+    #[test]
+    fn transition_status_returns_some_only_on_change_and_none_on_repeat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "job-transition-test";
+        let path = job_path(&bee_dir, job_id);
+
+        let mut job_spec = serde_json::Map::new();
+        job_spec.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        crate::fsutil::write_json_atomic(&path, &Value::Object(job_spec)).unwrap();
+
+        // 1. Initial state (no last_status) with "working" -> returns None, writes nothing
+        assert_eq!(transition_status(&bee_dir, job_id, "working"), None);
+        let raw = crate::fsutil::read_json(&path);
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+            assert!(!obj.contains_key("last_status"));
+        }
+
+        // 2. Initial transition to "stalled" -> returns Some(("", "stalled"))
+        assert_eq!(
+            transition_status(&bee_dir, job_id, "stalled"),
+            Some(("".to_string(), "stalled".to_string()))
+        );
+
+        // 3. Repeat "stalled" -> returns None
+        assert_eq!(transition_status(&bee_dir, job_id, "stalled"), None);
+
+        // 4. Transition from "stalled" to "recovered" -> returns Some(("stalled", "recovered"))
+        assert_eq!(
+            transition_status(&bee_dir, job_id, "recovered"),
+            Some(("stalled".to_string(), "recovered".to_string()))
+        );
+
+        // 5. Repeat "recovered" -> returns None
+        assert_eq!(transition_status(&bee_dir, job_id, "recovered"), None);
+
+        // 6. Transition from "recovered" to "working" -> returns Some(("recovered", "working"))
+        assert_eq!(
+            transition_status(&bee_dir, job_id, "working"),
+            Some(("recovered".to_string(), "working".to_string()))
+        );
+
+        // 7. Repeat "working" -> returns None
+        assert_eq!(transition_status(&bee_dir, job_id, "working"), None);
+
+        // Verify last_status on disk
+        let raw = crate::fsutil::read_json(&path);
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(obj)) = raw {
+            assert_eq!(
+                obj.get("last_status").and_then(Value::as_str),
+                Some("working")
+            );
+        } else {
+            panic!("job.json was not parsed as JSON object");
+        }
+    }
 }
+

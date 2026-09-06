@@ -757,6 +757,12 @@ mod tests {
         // (`bee mailbox reflect --no-mistakes`). `--force`, `--skip` and the
         // other booleans in this vocabulary all mean "override a check";
         // `--no-mistakes` ANSWERS one.
+        // 203 -> 203 (herding-cockpit-completeness hcc-4): `herding interrupt`
+        // and `herding cancel` land D1 and D4's orchestrator signals. Both
+        // take `<job-id>` positional plus `--main-root` and `--json`.
+        // Checked first: `--main-root` (interlock/command-template/wave/
+        // occupancy/control-loop) and `--json` (nearly every verb) are reused
+        // unchanged, no count cost. Net +0: 203 -> 203.
         const PINNED_FLAG_COUNT: usize = 203;
 
         let names: std::collections::BTreeSet<&str> =
