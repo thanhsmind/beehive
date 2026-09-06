@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "agents-parity-host-shell",
+  "mode": "tiny",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"agents-parity-host-shell\" started at phase \"exploring\".",
+  "next_action": "Continue bee-exploring for \"agents-parity-host-shell\".",
+  "created_at": "2026-09-06T14:28:18.349Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "pick slice A (skills-side rules) or B (knowledge CLI verbs) from the okf-agent-memory gap list",
+    "asked_at": "2026-09-06T14:51:51.126Z",
+    "session": "f1ec668d-fc40-4702-8eae-c0be9f8854cc"
+  }
+}
