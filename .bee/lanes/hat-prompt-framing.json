@@ -15,9 +15,9 @@
   "created_at": "2026-09-05T15:54:47.997Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**What you do now.** Open a session in `D:\\projects\\goglbe\\beehive--wt--herding-cockpit-completeness` and say \"plan\" to start bee-planning a",
-    "asked_at": "2026-09-06T03:46:06.020Z",
-    "session": "832a0c00-85cf-4f54-b8f8-b5624be2083d"
+    "kind": "question",
+    "subject": "Restart Pi from the herding-late-cleanup worktree; current session cwd is still main",
+    "asked_at": "2026-09-06T13:49:54.888Z",
+    "session": "01a076db-5b78-770c-9a28-429a531f3404"
   }
 }
