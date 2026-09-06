@@ -1089,6 +1089,7 @@ enum PollDecision {
     /// D3: herdr reported `blocked` this tick — ends the wait at once,
     /// ahead of the idle timeout and the ceiling.
     Blocked,
+    Marked(mailbox::Mark),
 }
 
 /// The whole D5 timing rule, pure: a result already present short-circuits
@@ -1145,6 +1146,7 @@ struct PollTick {
     liveness: Option<Liveness>,
     /// D3: this tick observed herdr's `blocked` status.
     blocked: bool,
+    mark: Option<mailbox::Mark>,
 }
 
 /// The loop `decide_poll` drives: sleep, observe, decide, repeat until a
@@ -1169,6 +1171,9 @@ fn run_poll_loop(
         let heartbeat_already_stale = tick_now_ms.saturating_sub(last_heartbeat_ms)
             >= (idle_timeout_secs as i64).saturating_mul(1000);
         let observed = tick(heartbeat_already_stale);
+        if let Some(mark @ (mailbox::Mark::Interrupted | mailbox::Mark::Cancelled)) = observed.mark {
+            return PollDecision::Marked(mark);
+        }
         if observed.blocked && !observed.result_ready {
             return PollDecision::Blocked;
         }
@@ -1766,6 +1771,8 @@ enum ContinueRefusal {
     /// `job.json` recorded no pane, or `herdr pane list` no longer shows
     /// the one it did record — the agent this job would prompt is gone.
     PaneGone { job_id: String, pane_id: Option<String> },
+    /// The job has a mark of `cancelled` or `cancel_pending` (D4).
+    Cancelled { job_id: String, mark: mailbox::Mark },
 }
 
 impl std::fmt::Display for ContinueRefusal {
@@ -1788,6 +1795,16 @@ impl std::fmt::Display for ContinueRefusal {
                 f,
                 "--continue {job_id}: job.json has no recorded pane — cannot continue"
             ),
+            ContinueRefusal::Cancelled { job_id, mark } => match mark {
+                mailbox::Mark::CancelPending => write!(
+                    f,
+                    "--continue {job_id}: job cancellation is pending — cannot continue. FIX: run `bee herding cancel {job_id}`"
+                ),
+                _ => write!(
+                    f,
+                    "--continue {job_id}: job was cancelled — cannot continue. FIX: run without --continue to start a new job"
+                ),
+            },
         }
     }
 }
@@ -1825,6 +1842,10 @@ enum RunOutcome {
     /// or question UI. Distinct from `SpawnFailed`: this fires mid-round,
     /// never before dispatch.
     PaneBlocked(String),
+    /// D1: Escape sent to pane, pane kept open, job resumable via `--continue`.
+    Interrupted,
+    /// D4: Pane closed and process exit confirmed; job terminal.
+    Cancelled,
 }
 
 struct ExecResult {
@@ -2144,6 +2165,7 @@ fn wait_for_round(
                 heartbeat_fresh = true;
             }
             let blocked = status.as_deref() == Some("blocked");
+            let mark = mailbox::read_mark(bee_dir, job_id).map(|(m, _)| m);
             let liveness = if tick_index % 10 == 0 {
                 Some(herdr.process_info(pane_id))
             } else {
@@ -2154,7 +2176,7 @@ fn wait_for_round(
             } else {
                 None
             };
-            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked }
+            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked, mark }
         },
         |d| std::thread::sleep(d),
         now_ms,
@@ -2397,12 +2419,18 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             let tail = pane_tail(herdr, &new_pane);
             RunOutcome::PaneBlocked(blocked_message(&opts.job_id, &new_pane, &tail))
         }
+        PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+        PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+        PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
     let valid_result = matches!(outcome, RunOutcome::Result(_));
-    let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
-    let closed_pane = if close {
+    let close = !matches!(outcome, RunOutcome::PausedLimit | RunOutcome::Interrupted | RunOutcome::Cancelled)
+        && should_close_pane(valid_result, opts.close_always);
+    let closed_pane = if matches!(outcome, RunOutcome::Cancelled) {
+        true
+    } else if close {
         match herdr.pane_close(&new_pane) {
             Ok(()) => true,
             Err(e) => {
@@ -2452,7 +2480,7 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
         Err(_) => return refused(ContinueRefusal::JobDirMissing { job_id: job_id.clone() }),
     };
-    let job_value: Value = match std::fs::read_to_string(&job_file_path)
+    let mut job_value: Value = match std::fs::read_to_string(&job_file_path)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
     {
@@ -2560,12 +2588,18 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
                 let tail = pane_tail(herdr, &pane_id);
                 RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
             }
+            PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+            PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+            PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
             PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
         };
 
         let valid_result = matches!(outcome, RunOutcome::Result(_));
-        let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
-        let closed_pane = if close {
+        let close = !matches!(outcome, RunOutcome::PausedLimit | RunOutcome::Interrupted | RunOutcome::Cancelled)
+            && should_close_pane(valid_result, opts.close_always);
+        let closed_pane = if matches!(outcome, RunOutcome::Cancelled) {
+            true
+        } else if close {
             match herdr.pane_close(&pane_id) {
                 Ok(()) => true,
                 Err(e) => {
@@ -2582,6 +2616,28 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             pane_id: Some(pane_id),
             closed_pane,
         };
+    }
+
+    // herding-cockpit-completeness D1, D4: check mark on job
+    if let Some((mark, _)) = mailbox::read_mark(&bee_dir, job_id) {
+        match mark {
+            mailbox::Mark::Cancelled | mailbox::Mark::CancelPending => {
+                return refused(ContinueRefusal::Cancelled {
+                    job_id: job_id.clone(),
+                    mark,
+                });
+            }
+            mailbox::Mark::Interrupted => {
+                if let Err(e) = mailbox::clear_mark(&bee_dir, job_id) {
+                    eprintln!("bee herding run --continue: could not clear mark for {job_id}: {e}");
+                }
+                if let Value::Object(ref mut m) = job_value {
+                    m.remove("mark");
+                    m.remove("mark_reason");
+                    m.remove("mark_at");
+                }
+            }
+        }
     }
 
     // No prior result: nothing to continue FROM.
@@ -2713,12 +2769,18 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             let tail = pane_tail(herdr, &pane_id);
             RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
         }
+        PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+        PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+        PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
     let valid_result = matches!(outcome, RunOutcome::Result(_));
-    let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
-    let closed_pane = if close {
+    let close = !matches!(outcome, RunOutcome::PausedLimit | RunOutcome::Interrupted | RunOutcome::Cancelled)
+        && should_close_pane(valid_result, opts.close_always);
+    let closed_pane = if matches!(outcome, RunOutcome::Cancelled) {
+        true
+    } else if close {
         match herdr.pane_close(&pane_id) {
             Ok(()) => true,
             Err(e) => {
@@ -2748,6 +2810,8 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
         RunOutcome::PausedLimit => "paused_limit",
         RunOutcome::Died { .. } => "died",
         RunOutcome::PaneBlocked(_) => "pane_blocked",
+        RunOutcome::Interrupted => "interrupted",
+        RunOutcome::Cancelled => "cancelled",
     }
 }
 
@@ -2849,6 +2913,14 @@ fn transcribe_dissent(root: &Path, cell_id: Option<&str>, dissent: &MailboxDisse
 /// prints what this returns — the dissent WRITE already happened in `run`,
 /// and its outcome arrives here as data so this stays a pure builder.
 ///
+/// Envelope keys:
+/// - `job_id`: the job id string
+/// - `outcome`: outcome label string (e.g. `done`, `blocked`, `spawn_failed`, `interrupted`, `cancelled`, ...)
+/// - `pane_id`: string or null
+/// - `closed_pane`: boolean
+/// - `dry_run`: boolean
+/// - `retryable`: boolean (present on every envelope except `done` and `dry_run`; true only for `spawn_failed`, false otherwise)
+///
 /// Note there is NO `status` key here and never was — done/blocked rides
 /// `outcome`, built by `outcome_label`.
 fn result_envelope(
@@ -2863,6 +2935,11 @@ fn result_envelope(
     m.insert("pane_id".into(), result.pane_id.clone().map(Value::String).unwrap_or(Value::Null));
     m.insert("closed_pane".into(), Value::Bool(result.closed_pane));
     m.insert("dry_run".into(), Value::Bool(opts.dry_run));
+    let outcome = outcome_label(&result.outcome);
+    if outcome != "done" && outcome != "dry_run" && !opts.dry_run {
+        let retryable = matches!(result.outcome, RunOutcome::SpawnFailed(_));
+        m.insert("retryable".into(), Value::Bool(retryable));
+    }
     match &result.outcome {
         RunOutcome::Result(r) => {
             m.insert("summary".into(), Value::String(r.summary.clone()));
@@ -2959,7 +3036,10 @@ fn result_envelope(
         RunOutcome::TimedOutIdle(msg) => {
             m.insert("error".into(), Value::String(msg.clone()));
         }
-        RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
+        RunOutcome::TimedOutCeiling
+        | RunOutcome::PausedLimit
+        | RunOutcome::Interrupted
+        | RunOutcome::Cancelled => {}
     }
     Value::Object(m)
 }
@@ -3370,7 +3450,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false }
+                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None }
             },
             |_| {},
             || {
@@ -3390,7 +3470,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false },
+            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -3408,7 +3488,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false },
+            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false, mark: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -3435,6 +3515,7 @@ mod tests {
                     pane_text: None,
                     liveness: None,
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -3461,7 +3542,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true }
+                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None }
             },
             |_| {},
             || {
@@ -3483,7 +3564,7 @@ mod tests {
             900,
             21_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true },
+            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -3491,6 +3572,131 @@ mod tests {
             },
         );
         assert_eq!(decision, PollDecision::ResultReady);
+    }
+
+    #[test]
+    fn run_poll_loop_returns_interrupted_on_an_interrupted_tick() {
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| PollTick {
+                result_ready: false,
+                heartbeat_fresh: false,
+                pane_text: None,
+                liveness: None,
+                blocked: false,
+                mark: Some(mailbox::Mark::Interrupted),
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Marked(mailbox::Mark::Interrupted));
+    }
+
+    #[test]
+    fn run_poll_loop_returns_cancelled_on_a_cancelled_tick() {
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| PollTick {
+                result_ready: false,
+                heartbeat_fresh: false,
+                pane_text: None,
+                liveness: None,
+                blocked: false,
+                mark: Some(mailbox::Mark::Cancelled),
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Marked(mailbox::Mark::Cancelled));
+    }
+
+    #[test]
+    fn run_poll_loop_keeps_waiting_on_cancel_pending() {
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                let mark = if ticks == 1 {
+                    Some(mailbox::Mark::CancelPending)
+                } else {
+                    Some(mailbox::Mark::Cancelled)
+                };
+                PollTick {
+                    result_ready: false,
+                    heartbeat_fresh: true,
+                    pane_text: None,
+                    liveness: None,
+                    blocked: false,
+                    mark,
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Marked(mailbox::Mark::Cancelled));
+        assert_eq!(ticks, 2, "cancel_pending must keep waiting until cancelled or outcome");
+    }
+
+    #[test]
+    fn execute_interrupted_leaves_pane_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.close_always = true; // prove even close_always does not close interrupted pane (D1)
+        seed_ack(tmp.path(), &opts.job_id, 1);
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = opts.job_id.clone();
+        let bee_dir_clone = bee_dir.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            mailbox::write_mark(&bee_dir_clone, &job_id, mailbox::Mark::Interrupted, "user").unwrap();
+        });
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        writer.join().unwrap();
+        assert!(matches!(result.outcome, RunOutcome::Interrupted), "got {:?}", result.outcome);
+        assert!(!result.closed_pane, "interrupted must leave pane open (D1)");
+        assert!(fake.closed.borrow().is_empty(), "herdr pane_close must not be called");
+    }
+
+    #[test]
+    fn execute_cancelled_records_closed_pane_true() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        seed_ack(tmp.path(), &opts.job_id, 1);
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = opts.job_id.clone();
+        let bee_dir_clone = bee_dir.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            mailbox::write_mark(&bee_dir_clone, &job_id, mailbox::Mark::Cancelled, "user").unwrap();
+        });
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        writer.join().unwrap();
+        assert!(matches!(result.outcome, RunOutcome::Cancelled), "got {:?}", result.outcome);
+        assert!(result.closed_pane, "cancelled records closed_pane true (D4)");
     }
 
     // ─── hps-7: prompt diagnosis, pure (D5) ────────────────────────────
@@ -5573,8 +5779,105 @@ mod tests {
         let envelope = result_envelope(&opts, &result, "herdr", None);
         assert_eq!(
             envelope_keys(&envelope),
-            vec!["closed_pane", "dry_run", "error", "job_id", "outcome", "pane_id"],
+            vec!["closed_pane", "dry_run", "error", "job_id", "outcome", "pane_id", "retryable"],
             "a malformed result with no report grew a key: {envelope}"
+        );
+    }
+
+    // ─── retryable envelope bit (herding-cockpit-completeness D3) ────────
+
+    #[test]
+    fn envelope_has_retryable_true_on_spawn_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let result = ExecResult {
+            outcome: RunOutcome::SpawnFailed("failed to start".to_string()),
+            pane_id: None,
+            closed_pane: false,
+        };
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(
+            envelope.get("retryable"),
+            Some(&Value::Bool(true)),
+            "spawn_failed must carry retryable: true: {envelope}"
+        );
+    }
+
+    #[test]
+    fn envelope_has_retryable_false_on_died_blocked_interrupted_cancelled_timed_out_idle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let cases = vec![
+            RunOutcome::Died { pid: Some(1234) },
+            RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Blocked,
+                summary: "blocked".to_string(),
+                files_changed: vec![],
+                proof: "n/a".to_string(),
+                options: vec![],
+                leaning: None,
+                dissent: None,
+                report_path: None,
+                report_note: None,
+            }),
+            RunOutcome::Interrupted,
+            RunOutcome::Cancelled,
+            RunOutcome::TimedOutIdle("idle timeout".to_string()),
+        ];
+        for outcome in cases {
+            let label = outcome_label(&outcome);
+            let result = ExecResult {
+                outcome,
+                pane_id: None,
+                closed_pane: false,
+            };
+            let envelope = result_envelope(&opts, &result, "herdr", None);
+            assert_eq!(
+                envelope.get("retryable"),
+                Some(&Value::Bool(false)),
+                "{label} must carry retryable: false: {envelope}"
+            );
+        }
+    }
+
+    #[test]
+    fn envelope_omits_retryable_on_done_and_dry_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let done_result = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Done,
+                summary: "done".to_string(),
+                files_changed: vec![],
+                proof: "green".to_string(),
+                options: vec![],
+                leaning: None,
+                dissent: None,
+                report_path: None,
+                report_note: None,
+            }),
+            pane_id: None,
+            closed_pane: true,
+        };
+        let envelope = result_envelope(&opts, &done_result, "herdr", None);
+        assert!(
+            envelope.get("retryable").is_none(),
+            "done envelope must not carry retryable: {envelope}"
+        );
+
+        let mut dry_run_opts = test_options(tmp.path(), true);
+        dry_run_opts.dry_run = true;
+        let dry_run_result = ExecResult {
+            outcome: RunOutcome::DryRun("brief".to_string()),
+            pane_id: None,
+            closed_pane: false,
+        };
+        let dry_envelope = result_envelope(&dry_run_opts, &dry_run_result, "herdr", None);
+        assert!(
+            dry_envelope.get("retryable").is_none(),
+            "dry_run envelope must not carry retryable: {dry_envelope}"
         );
     }
 
@@ -6625,6 +6928,76 @@ mod tests {
     }
 
     #[test]
+    fn continue_refuses_when_job_is_cancelled_with_fix_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let bee_dir = tmp.path().join(".bee");
+        mailbox::write_mark(&bee_dir, "job-1", mailbox::Mark::Cancelled, "user").unwrap();
+        let opts = continue_options(tmp.path(), false);
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::ContinueRefused(refusal @ ContinueRefusal::Cancelled { job_id, mark }) => {
+                assert_eq!(job_id, "job-1");
+                assert_eq!(*mark, mailbox::Mark::Cancelled);
+                let text = refusal.to_string();
+                assert!(text.contains("FIX:"), "refusal must contain FIX line: {text}");
+            }
+            other => panic!("expected ContinueRefused(Cancelled), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_refuses_when_job_is_cancel_pending_with_fix_line_naming_cancel() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let bee_dir = tmp.path().join(".bee");
+        mailbox::write_mark(&bee_dir, "job-1", mailbox::Mark::CancelPending, "user").unwrap();
+        let opts = continue_options(tmp.path(), false);
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::ContinueRefused(refusal @ ContinueRefusal::Cancelled { job_id, mark }) => {
+                assert_eq!(job_id, "job-1");
+                assert_eq!(*mark, mailbox::Mark::CancelPending);
+                let text = refusal.to_string();
+                assert!(text.contains("FIX:"), "refusal must contain FIX line: {text}");
+                assert!(
+                    text.contains("bee herding cancel job-1"),
+                    "FIX line must name bee herding cancel <job-id>: {text}"
+                );
+            }
+            other => panic!("expected ContinueRefused(Cancelled), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_accepts_interrupted_and_clears_the_mark() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        seed_ack(tmp.path(), "job-1", 2);
+        let bee_dir = tmp.path().join(".bee");
+        mailbox::write_mark(&bee_dir, "job-1", mailbox::Mark::Interrupted, "user").unwrap();
+        assert!(mailbox::read_mark(&bee_dir, "job-1").is_some());
+
+        let result_path = mailbox::result_path(&bee_dir, "job-1", 2);
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            std::fs::write(
+                &result_path,
+                r#"{"status":"done","summary":"resumed done","files_changed":[],"proof":"n/a"}"#,
+            )
+            .unwrap();
+        });
+
+        let opts = continue_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        writer.join().unwrap();
+
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert_eq!(mailbox::read_mark(&bee_dir, "job-1"), None, "mark must be cleared on resume");
+    }
+
+    #[test]
     fn continue_with_dry_run_renders_the_round_n_plus_one_brief_and_sends_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         seed_job(tmp.path(), "job-1", "w1:p2", 1);
@@ -6886,6 +7259,7 @@ mod tests {
                     pane_text: None,
                     liveness: Some(Liveness::Absent),
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -6928,6 +7302,7 @@ mod tests {
                     pane_text: None,
                     liveness,
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -6964,6 +7339,7 @@ mod tests {
                     pane_text: None,
                     liveness,
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
@@ -6993,6 +7369,7 @@ mod tests {
                     pane_text: None,
                     liveness: Some(Liveness::Unknown),
                     blocked: false,
+                    mark: None,
                 }
             },
             |_| {},
