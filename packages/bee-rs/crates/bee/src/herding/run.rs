@@ -3044,9 +3044,116 @@ fn transcribe_dissent(root: &Path, cell_id: Option<&str>, dissent: &MailboxDisse
 /// - `closed_pane`: boolean
 /// - `dry_run`: boolean
 /// - `retryable`: boolean (present on every envelope except `done` and `dry_run`; true only for `spawn_failed`, false otherwise)
+/// - `git`: object {branch, head_sha, base_sha, ahead, dirty, changed_paths} (D6: present only on done or blocked and only when cwd is a git checkout)
 ///
 /// Note there is NO `status` key here and never was — done/blocked rides
 /// `outcome`, built by `outcome_label`.
+fn git_block(cwd: &Path, main_root: &Path) -> Option<Value> {
+    use crate::verbs::worktree::run_git;
+
+    let inside = run_git(cwd, &["rev-parse", "--is-inside-work-tree"]);
+    if inside.status != Some(0) || inside.stdout.as_deref().unwrap_or("").trim() != "true" {
+        return None;
+    }
+
+    let branch_out = run_git(cwd, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    if branch_out.status != Some(0) {
+        return None;
+    }
+    let branch = branch_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if branch.is_empty() {
+        return None;
+    }
+
+    let head_out = run_git(cwd, &["rev-parse", "HEAD"]);
+    if head_out.status != Some(0) {
+        return None;
+    }
+    let head_sha = head_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if head_sha.is_empty() {
+        return None;
+    }
+
+    let main_head_out = run_git(main_root, &["rev-parse", "HEAD"]);
+    if main_head_out.status != Some(0) {
+        return None;
+    }
+    let main_sha = main_head_out.stdout.as_deref().unwrap_or("").trim();
+    if main_sha.is_empty() {
+        return None;
+    }
+
+    let merge_base_out = run_git(cwd, &["merge-base", "HEAD", main_sha]);
+    if merge_base_out.status != Some(0) {
+        return None;
+    }
+    let base_sha = merge_base_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if base_sha.is_empty() {
+        return None;
+    }
+
+    let range = format!("{base_sha}..HEAD");
+    let ahead_out = run_git(cwd, &["rev-list", "--count", &range]);
+    if ahead_out.status != Some(0) {
+        return None;
+    }
+    let ahead: u64 = ahead_out.stdout.as_deref().unwrap_or("").trim().parse().ok()?;
+
+    let porcelain_out = run_git(cwd, &["status", "--porcelain"]);
+    if porcelain_out.status != Some(0) {
+        return None;
+    }
+    let mut porcelain_paths = Vec::new();
+    if let Some(stdout) = &porcelain_out.stdout {
+        for line in stdout.lines() {
+            let line = line.trim_end_matches(['\r', '\n']);
+            if line.len() >= 4 {
+                let rest = &line[3..];
+                let path = match rest.split_once(" -> ") {
+                    Some((_, dest)) => dest.trim(),
+                    None => rest.trim(),
+                };
+                if !path.is_empty() {
+                    porcelain_paths.push(path.to_string());
+                }
+            }
+        }
+    }
+    let dirty = !porcelain_paths.is_empty();
+
+    let diff_out = run_git(cwd, &["diff", "--name-only", &range]);
+    if diff_out.status != Some(0) {
+        return None;
+    }
+    let mut diff_paths = Vec::new();
+    if let Some(stdout) = &diff_out.stdout {
+        for line in stdout.lines() {
+            let path = line.trim();
+            if !path.is_empty() {
+                diff_paths.push(path.to_string());
+            }
+        }
+    }
+
+    let mut changed_set = std::collections::BTreeSet::new();
+    for p in diff_paths {
+        changed_set.insert(p);
+    }
+    for p in porcelain_paths {
+        changed_set.insert(p);
+    }
+    let changed_paths: Vec<Value> = changed_set.into_iter().map(Value::String).collect();
+
+    Some(serde_json::json!({
+        "branch": branch,
+        "head_sha": head_sha,
+        "base_sha": base_sha,
+        "ahead": ahead,
+        "dirty": dirty,
+        "changed_paths": changed_paths,
+    }))
+}
+
 fn result_envelope(
     opts: &Options,
     result: &ExecResult,
@@ -3072,6 +3179,9 @@ fn result_envelope(
                 Value::Array(r.files_changed.iter().cloned().map(Value::String).collect()),
             );
             m.insert("proof".into(), Value::String(r.proof.clone()));
+            if let Some(git) = git_block(&opts.cwd, &opts.main_root) {
+                m.insert("git".into(), git);
+            }
             // pi-result-mailbox D1/D2: the report travels as a PATH — never
             // its body, at any size (a long line read back through a tool
             // truncates, and a truncated envelope is unparseable). Both keys
@@ -7942,5 +8052,239 @@ mod tests {
         assert_eq!(decision, PollDecision::ResultReady);
         assert_eq!(lines, vec!["herding: job j-loop stalled", "herding: job j-loop recovered"]);
     }
+
+    // ─── D6: git handoff block on done and blocked envelopes ────────────
+
+    #[test]
+    fn git_block_with_one_commit_ahead_and_one_dirty_file_attaches_to_done_and_blocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_dir = tmp.path().join("main");
+        std::fs::create_dir_all(&main_dir).unwrap();
+
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+
+        std::fs::write(main_dir.join("base.txt"), "base").unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["add", "base.txt"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args([
+                "-c", "user.email=bee@example.com",
+                "-c", "user.name=bee",
+                "-c", "commit.gpgSign=false",
+                "commit", "-q", "-m", "initial commit"
+            ])
+            .status()
+            .unwrap()
+            .success());
+
+        let work_dir = tmp.path().join("work");
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["worktree", "add", "-q", "-b", "feature"])
+            .arg(&work_dir)
+            .status()
+            .unwrap()
+            .success());
+
+        // One commit ahead in work_dir
+        std::fs::write(work_dir.join("committed.txt"), "committed").unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&work_dir)
+            .args(["add", "committed.txt"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&work_dir)
+            .args([
+                "-c", "user.email=bee@example.com",
+                "-c", "user.name=bee",
+                "-c", "commit.gpgSign=false",
+                "commit", "-q", "-m", "feature commit"
+            ])
+            .status()
+            .unwrap()
+            .success());
+
+        // One dirty file in work_dir
+        std::fs::write(work_dir.join("dirty.txt"), "dirty").unwrap();
+
+        let block = git_block(&work_dir, &main_dir).expect("git_block must succeed for git worktree");
+        assert_eq!(block.get("branch").and_then(Value::as_str), Some("feature"));
+        assert_eq!(block.get("ahead").and_then(Value::as_u64), Some(1));
+        assert_eq!(block.get("dirty").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            block.get("changed_paths").cloned(),
+            Some(serde_json::json!(["committed.txt", "dirty.txt"]))
+        );
+
+        let mut opts = test_options(&main_dir, false);
+        opts.cwd = work_dir.clone();
+
+        let done_res = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Done,
+                summary: "done".to_string(),
+                files_changed: vec!["worker_reported.txt".to_string()],
+                proof: "test — green".to_string(),
+                report_path: None,
+                report_note: None,
+                options: vec![],
+                leaning: None,
+                dissent: None,
+            }),
+            pane_id: Some("p1".to_string()),
+            closed_pane: true,
+        };
+        let env_done = result_envelope(&opts, &done_res, "herdr", None);
+        assert!(env_done.get("git").is_some(), "git key must attach on done");
+        assert_eq!(env_done["git"]["ahead"], 1);
+        assert_eq!(env_done["git"]["dirty"], true);
+        assert_eq!(env_done["git"]["changed_paths"], serde_json::json!(["committed.txt", "dirty.txt"]));
+        assert_eq!(env_done["files_changed"], serde_json::json!(["worker_reported.txt"]), "files_changed stays untouched");
+
+        let blocked_res = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Blocked,
+                summary: "blocked".to_string(),
+                files_changed: vec!["worker_reported.txt".to_string()],
+                proof: "n/a".to_string(),
+                report_path: None,
+                report_note: None,
+                options: vec![],
+                leaning: None,
+                dissent: None,
+            }),
+            pane_id: Some("p1".to_string()),
+            closed_pane: false,
+        };
+        let env_blocked = result_envelope(&opts, &blocked_res, "herdr", None);
+        assert!(env_blocked.get("git").is_some(), "git key must attach on blocked");
+        assert_eq!(env_blocked["git"]["ahead"], 1);
+        assert_eq!(env_blocked["git"]["dirty"], true);
+    }
+
+    #[test]
+    fn non_git_temp_dir_yields_no_git_key_in_result_envelope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let non_git = tmp.path().join("non_git");
+        std::fs::create_dir_all(&non_git).unwrap();
+
+        assert!(git_block(&non_git, tmp.path()).is_none());
+
+        let mut opts = test_options(tmp.path(), false);
+        opts.cwd = non_git;
+        let done_res = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Done,
+                summary: "done".to_string(),
+                files_changed: vec![],
+                proof: "test — green".to_string(),
+                report_path: None,
+                report_note: None,
+                options: vec![],
+                leaning: None,
+                dissent: None,
+            }),
+            pane_id: None,
+            closed_pane: false,
+        };
+        let env = result_envelope(&opts, &done_res, "herdr", None);
+        assert!(env.get("git").is_none(), "non-git dir yields no git key");
+    }
+
+    #[test]
+    fn died_envelope_never_carries_git_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_dir = tmp.path().join("main");
+        std::fs::create_dir_all(&main_dir).unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+
+        let mut opts = test_options(&main_dir, false);
+        opts.cwd = main_dir;
+        let died_res = ExecResult {
+            outcome: RunOutcome::Died { pid: Some(1234) },
+            pane_id: Some("p1".to_string()),
+            closed_pane: false,
+        };
+        let env = result_envelope(&opts, &died_res, "herdr", None);
+        assert!(env.get("git").is_none(), "died envelope never carries git key");
+    }
+
+    #[test]
+    fn git_block_porcelain_rename_keeps_dest_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_dir = tmp.path().join("main");
+        std::fs::create_dir_all(&main_dir).unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+
+        std::fs::write(main_dir.join("old.txt"), "content").unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["add", "old.txt"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args([
+                "-c", "user.email=bee@example.com",
+                "-c", "user.name=bee",
+                "-c", "commit.gpgSign=false",
+                "commit", "-q", "-m", "init"
+            ])
+            .status()
+            .unwrap()
+            .success());
+
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main_dir)
+            .args(["mv", "old.txt", "new.txt"])
+            .status()
+            .unwrap()
+            .success());
+
+        let block = git_block(&main_dir, &main_dir).expect("git_block should succeed");
+        assert_eq!(block.get("dirty").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            block.get("changed_paths").cloned(),
+            Some(serde_json::json!(["new.txt"]))
+        );
+    }
 }
+
 
