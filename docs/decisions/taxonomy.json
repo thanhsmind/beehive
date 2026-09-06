@@ -483,6 +483,7 @@
     "knowledge-freshness-deferral",
     "knowledge-authoring-ref",
     "knowledge-orphan-check",
-    "okf"
+    "okf",
+    "knowledge-orphan-links"
   ]
 }
