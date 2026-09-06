@@ -1618,6 +1618,98 @@ fn activity_says_working(bee_dir: &Path, job_id: &str, round: u32, now_ms: i64) 
     matches!(read_activity(bee_dir, job_id, round, now_ms), Some(mailbox::ActivityState::Working))
 }
 
+/// Read `last_status` from `job.json` if present.
+fn read_last_status(bee_dir: &Path, job_id: &str) -> Option<String> {
+    let path = mailbox::job_path(bee_dir, job_id);
+    match crate::fsutil::read_json(&path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m)) => {
+            m.get("last_status").and_then(Value::as_str).map(str::to_string)
+        }
+        _ => None,
+    }
+}
+
+/// D2: Check if the activity record is older than `mailbox::ACTIVITY_FRESHNESS_SECS`.
+/// Returns false if there is no activity file, invalid JSON, or round < current_round.
+fn activity_is_stale(bee_dir: &Path, job_id: &str, current_round: u32, now_ms: i64) -> bool {
+    let Ok(text) = std::fs::read_to_string(mailbox::activity_path(bee_dir, job_id)) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+    let Some(round) = obj.get("round").and_then(Value::as_u64).and_then(|r| u32::try_from(r).ok()) else {
+        return false;
+    };
+    if round < current_round {
+        return false;
+    }
+    let Some(at_str) = obj.get("at").and_then(Value::as_str) else {
+        return false;
+    };
+    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(at_str) else {
+        return false;
+    };
+    let at_ms = dt.timestamp_millis();
+    now_ms.saturating_sub(at_ms) > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
+}
+
+/// Check if there is a fresh activity record for `current_round`.
+fn is_fresh_activity(bee_dir: &Path, job_id: &str, current_round: u32, now_ms: i64) -> bool {
+    read_activity(bee_dir, job_id, current_round, now_ms).is_some()
+}
+
+/// In the run poll tick: compute the D2 word.
+/// `stalled` = the activity record is older than `mailbox::ACTIVITY_FRESHNESS_SECS` AND `process_info` is `Liveness::Alive`;
+/// `recovered` = the first fresh read after a stalled one;
+/// otherwise the word `status_with_activity` already yields.
+///
+/// Transitions `last_status` in `job.json` using `mailbox::transition_status`.
+/// When it returns `Some((from, to))` with `to != "working"`, outputs:
+/// `herding: job <id> <to>`.
+fn tick_d2_status(
+    bee_dir: &Path,
+    job_id: &str,
+    pane_id: &str,
+    min_round: u32,
+    tick_now: i64,
+    tick_index: u64,
+    herdr: &dyn PaneTransport,
+    progress: &mut dyn FnMut(&str),
+) -> (Option<String>, Option<Liveness>) {
+    let is_stale = activity_is_stale(bee_dir, job_id, min_round, tick_now);
+    let liveness = if is_stale || tick_index % 10 == 0 {
+        Some(herdr.process_info(pane_id))
+    } else {
+        None
+    };
+    let is_alive = matches!(liveness, Some(Liveness::Alive { .. }));
+
+    let status = if is_stale && is_alive {
+        Some("stalled".to_string())
+    } else if is_fresh_activity(bee_dir, job_id, min_round, tick_now)
+        && read_last_status(bee_dir, job_id).as_deref() == Some("stalled")
+    {
+        Some("recovered".to_string())
+    } else {
+        status_with_activity(bee_dir, job_id, min_round, tick_now, &mut || herdr.agent_status(job_id))
+    };
+
+    if let Some(ref word) = status {
+        if let Some((_from, to)) = mailbox::transition_status(bee_dir, job_id, word) {
+            if to != "working" {
+                progress(&format!("herding: job {job_id} {to}"));
+            }
+        }
+    }
+
+    (status, liveness)
+}
+
+
 /// The last few lines of a pane's capture, for a blocked-pane error's
 /// remedy text — enough to show WHAT is being asked without dumping a full
 /// screen (reuses `PaneTransport::pane_read`).
@@ -2110,6 +2202,34 @@ fn wait_for_round(
     ceiling_secs: u64,
     herdr: &dyn PaneTransport,
 ) -> PollDecision {
+    wait_for_round_driven(
+        bee_dir,
+        job_id,
+        pane_id,
+        min_round,
+        started_at_ms,
+        idle_timeout_secs,
+        ceiling_secs,
+        herdr,
+        POLL_INTERVAL,
+        |d| std::thread::sleep(d),
+        &mut |line| println!("{line}"),
+    )
+}
+
+fn wait_for_round_driven(
+    bee_dir: &Path,
+    job_id: &str,
+    pane_id: &str,
+    min_round: u32,
+    started_at_ms: i64,
+    idle_timeout_secs: u64,
+    ceiling_secs: u64,
+    herdr: &dyn PaneTransport,
+    poll_interval: Duration,
+    sleep: impl FnMut(Duration),
+    progress: &mut dyn FnMut(&str),
+) -> PollDecision {
     let log_file_path = mailbox::log_path(bee_dir, job_id);
     let ack_file_path = mailbox::ack_path(bee_dir, job_id, min_round);
     let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
@@ -2120,7 +2240,7 @@ fn wait_for_round(
         started_at_ms,
         idle_timeout_secs,
         ceiling_secs,
-        POLL_INTERVAL,
+        poll_interval,
         |heartbeat_already_stale| {
             tick_index += 1;
             let result_ready = std::fs::read_dir(&mailbox_path)
@@ -2159,18 +2279,22 @@ fn wait_for_round(
             // own activity record ahead of that read, so a pane that went
             // blocked behind a screen the classifier reads as idle ends the
             // wait here instead of burning the whole idle timeout.
-            let status =
-                status_with_activity(bee_dir, job_id, min_round, now_ms(), &mut || herdr.agent_status(job_id));
-            if status.as_deref() == Some("working") {
+            // D2 projects stalled and recovered in the tick.
+            let (status, liveness) = tick_d2_status(
+                bee_dir,
+                job_id,
+                pane_id,
+                min_round,
+                now_ms(),
+                tick_index,
+                herdr,
+                progress,
+            );
+            if status.as_deref() == Some("working") || status.as_deref() == Some("recovered") {
                 heartbeat_fresh = true;
             }
             let blocked = status.as_deref() == Some("blocked");
             let mark = mailbox::read_mark(bee_dir, job_id).map(|(m, _)| m);
-            let liveness = if tick_index % 10 == 0 {
-                Some(herdr.process_info(pane_id))
-            } else {
-                None
-            };
             let pane_text = if heartbeat_already_stale {
                 herdr.pane_read(pane_id).ok()
             } else {
@@ -2178,7 +2302,7 @@ fn wait_for_round(
             };
             PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked, mark }
         },
-        |d| std::thread::sleep(d),
+        sleep,
         now_ms,
     )
 }
@@ -7634,4 +7758,189 @@ mod tests {
             other => panic!("expected DryRun, got {other:?}"),
         }
     }
+
+    #[test]
+    fn run_poll_tick_projects_stalled_and_recovered_with_progress_lines() {
+        // D2 (468c6cb8): alive + stale activity prints one stalled line,
+        // a second stale tick prints nothing,
+        // a fresh tick prints one recovered line,
+        // then silence (working on next tick prints no line).
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "j1";
+        let pane_id = "w1:p2";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": job_id,
+            "task": "do something",
+            "cwd": tmp.path().display().to_string(),
+            "round": 1,
+            "pane_id": pane_id,
+            "kind": "fake",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), serde_json::to_string(&job).unwrap()).unwrap();
+
+        let fake = FakeHerdr::new();
+        *fake.liveness_responses.borrow_mut() = vec![
+            Liveness::Alive { pid: 1234 },
+            Liveness::Alive { pid: 1234 },
+            Liveness::Alive { pid: 1234 },
+            Liveness::Alive { pid: 1234 },
+        ];
+
+        let lines = std::cell::RefCell::new(Vec::new());
+        let mut progress = |line: &str| lines.borrow_mut().push(line.to_string());
+
+        // Tick 1: alive + stale activity -> prints one stalled line
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        seed_activity(&bee_dir, job_id, "working", 1, &stale.to_rfc3339());
+        let (status1, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake, &mut progress);
+        assert_eq!(status1.as_deref(), Some("stalled"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled"]);
+
+        // Tick 2: second stale tick -> prints nothing
+        let (status2, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 2, &fake, &mut progress);
+        assert_eq!(status2.as_deref(), Some("stalled"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled"]);
+
+        // Tick 3: fresh activity -> prints one recovered line
+        let fresh = chrono::Utc::now();
+        seed_activity(&bee_dir, job_id, "working", 1, &fresh.to_rfc3339());
+        let (status3, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 3, &fake, &mut progress);
+        assert_eq!(status3.as_deref(), Some("recovered"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled", "herding: job j1 recovered"]);
+
+        // Tick 4: fresh activity again -> followed by working with no extra line
+        let (status4, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 4, &fake, &mut progress);
+        assert_eq!(status4.as_deref(), Some("working"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled", "herding: job j1 recovered"]);
+
+        // Tick 5: repeated working -> silence
+        let (status5, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 5, &fake, &mut progress);
+        assert_eq!(status5.as_deref(), Some("working"));
+        assert_eq!(lines.borrow().as_slice(), &["herding: job j1 stalled", "herding: job j1 recovered"]);
+    }
+
+    #[test]
+    fn stalled_needs_both_stale_activity_and_live_pane_process() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "j-check";
+        let pane_id = "w1:p2";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": job_id,
+            "task": "do something",
+            "cwd": tmp.path().display().to_string(),
+            "round": 1,
+            "pane_id": pane_id,
+            "kind": "fake",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), serde_json::to_string(&job).unwrap()).unwrap();
+
+        let lines = std::cell::RefCell::new(Vec::new());
+        let mut progress = |line: &str| lines.borrow_mut().push(line.to_string());
+
+        // Case 1: stale activity but process is Absent -> NOT stalled
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        seed_activity(&bee_dir, job_id, "working", 1, &stale.to_rfc3339());
+        let fake_absent = FakeHerdr::new();
+        *fake_absent.liveness_responses.borrow_mut() = vec![Liveness::Absent];
+        let (status, liveness) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_absent, &mut progress);
+        assert_ne!(status.as_deref(), Some("stalled"));
+        assert_eq!(liveness, Some(Liveness::Absent));
+        assert!(lines.borrow().is_empty());
+
+        // Case 2: stale activity but process is Unknown -> NOT stalled
+        let fake_unknown = FakeHerdr::new();
+        *fake_unknown.liveness_responses.borrow_mut() = vec![Liveness::Unknown];
+        let (status, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_unknown, &mut progress);
+        assert_ne!(status.as_deref(), Some("stalled"));
+        assert!(lines.borrow().is_empty());
+
+        // Case 3: alive process but activity is fresh -> NOT stalled
+        let fake_alive = FakeHerdr::new();
+        *fake_alive.liveness_responses.borrow_mut() = vec![Liveness::Alive { pid: 999 }];
+        seed_activity(&bee_dir, job_id, "working", 1, &chrono::Utc::now().to_rfc3339());
+        let (status, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_alive, &mut progress);
+        assert_eq!(status.as_deref(), Some("working"));
+        assert!(lines.borrow().is_empty());
+
+        // Case 4: alive process but no activity file at all -> NOT stalled
+        std::fs::remove_file(mailbox::activity_path(&bee_dir, job_id)).unwrap();
+        let fake_alive2 = FakeHerdr::new();
+        *fake_alive2.liveness_responses.borrow_mut() = vec![Liveness::Alive { pid: 999 }];
+        let (status, _) = tick_d2_status(&bee_dir, job_id, pane_id, 1, now_ms(), 1, &fake_alive2, &mut progress);
+        assert_ne!(status.as_deref(), Some("stalled"));
+        assert!(lines.borrow().is_empty());
+    }
+
+    #[test]
+    fn wait_for_round_driven_prints_stalled_and_recovered_in_poll_loop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_id = "j-loop";
+        let pane_id = "w1:p2";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": job_id,
+            "task": "do something",
+            "cwd": tmp.path().display().to_string(),
+            "round": 1,
+            "pane_id": pane_id,
+            "kind": "fake",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), serde_json::to_string(&job).unwrap()).unwrap();
+        seed_ack(tmp.path(), job_id, 1);
+
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        seed_activity(&bee_dir, job_id, "working", 1, &stale.to_rfc3339());
+
+        let fake = FakeHerdr::new();
+        *fake.liveness_responses.borrow_mut() = vec![
+            Liveness::Alive { pid: 555 },
+            Liveness::Alive { pid: 555 },
+            Liveness::Alive { pid: 555 },
+            Liveness::Alive { pid: 555 },
+        ];
+
+        let mut lines = Vec::new();
+        let mut loop_ticks = 0;
+        let bee_dir_clone = bee_dir.clone();
+        let job_id_str = job_id.to_string();
+
+        let decision = wait_for_round_driven(
+            &bee_dir,
+            job_id,
+            pane_id,
+            1,
+            now_ms(),
+            60,
+            3600,
+            &fake,
+            Duration::from_millis(0),
+            |_| {
+                loop_ticks += 1;
+                if loop_ticks == 3 {
+                    // Update activity to fresh on iteration 3
+                    seed_activity(&bee_dir_clone, &job_id_str, "working", 1, &chrono::Utc::now().to_rfc3339());
+                }
+                if loop_ticks == 5 {
+                    // Write result file on iteration 5 to end the loop
+                    std::fs::write(
+                        mailbox::result_path(&bee_dir_clone, &job_id_str, 1),
+                        r#"{"status":"done","summary":"all done","files_changed":[],"proof":"test"}"#,
+                    ).unwrap();
+                }
+            },
+            &mut |line| lines.push(line.to_string()),
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(lines, vec!["herding: job j-loop stalled", "herding: job j-loop recovered"]);
+    }
 }
+
