@@ -7,6 +7,7 @@ timestamp: 2026-07-24
 bee:
   id: pattern-20260724-red-first-oracle-fed-by-live-environment
   lifecycle: active
+  areas: [verify-pipeline]
   sources: [i54-closeout-8 (PROBED_CODEX_VERSION bump; local reversion re-test green because live codex is 0.145.0; JUDGE_STANDARD_INSUFFICIENT flagged via deliberate_exceptions; external canary rerun substituted as proof), docs/history/i54-closeout/reports/i54-closeout-8.md]
   polarity: pitfall
   critical: false

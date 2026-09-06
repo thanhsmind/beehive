@@ -7,6 +7,7 @@ timestamp: 2026-07-23
 bee:
   id: pattern-20260723-a-system-contradicting-itself-hides-in-the-seam
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["issues-46-53 cells i-2, i-3 (the write guard directing writes the sweeper could not see; the merge refusal blaming an unchangeable branch; traces in `.bee/cells/`, 2026-07-23)", docs/history/learnings/20260723-four-of-seven-bug-reports-named-the-wrong-cause.md]
   polarity: pitfall
   critical: false

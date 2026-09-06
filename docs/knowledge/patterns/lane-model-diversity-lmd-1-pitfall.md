@@ -6,6 +6,7 @@ timestamp: 2026-08-29
 bee:
   id: lane-model-diversity-lmd-1-pitfall
   lifecycle: draft
+  areas: [workflow-state]
   sources: [.bee/cells/lmd-1.json]
   polarity: pitfall
 ---

@@ -7,6 +7,7 @@ timestamp: 2026-07-12
 bee:
   id: pattern-20260712-empty-child-process-output-can-be-a-sandbox
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT27", "original feature: harness-integration-adopt", docs/history/learnings/20260712-harness-integration-adopt.md]
   polarity: pitfall
   critical: false

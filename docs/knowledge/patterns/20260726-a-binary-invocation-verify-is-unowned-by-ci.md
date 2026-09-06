@@ -7,7 +7,7 @@ timestamp: 2026-07-26
 bee:
   id: pattern-20260726-a-binary-invocation-verify-is-unowned-by-ci
   lifecycle: active
-  areas: []
+  areas: [verify-pipeline]
   required_context: []
   decisions: []
   sources: ["rust-port (cell rust-port-15 discovered rust-port-4's verify red since rust-port-19)", docs/history/rust-port/reports/rust-port-15.md]

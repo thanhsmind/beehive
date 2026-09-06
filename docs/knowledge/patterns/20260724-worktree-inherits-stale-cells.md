@@ -7,6 +7,7 @@ timestamp: 2026-07-24
 bee:
   id: pattern-20260724-worktree-inherits-stale-cells
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["worktree-concurrency-guard session (2026-07-24): rel1150-1 (release-1-15-0, unrelated feature) blocked state start-feature in TWO separately created fresh worktrees before this feature could begin; filed as its own PBI p-9c48a67c, feature worktree-scaffolding-cell-leak"]
   polarity: pitfall
   critical: true

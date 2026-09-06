@@ -7,6 +7,7 @@ timestamp: 2026-07-11
 bee:
   id: pattern-20260711-never-poll-scratchpad-files-to-wait-for-your
   lifecycle: active
+  areas: [workflow-state]
   sources: ["docs/history/learnings/critical-patterns.md#PAT22", "original feature: session-observation (anphabe-gogl review run)", docs/history/learnings/20260711-subagent-poll-waste.md]
   polarity: pitfall
   critical: false

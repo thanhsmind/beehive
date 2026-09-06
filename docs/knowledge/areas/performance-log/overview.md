@@ -64,3 +64,8 @@ without disrupting active workflows.
 ## Concepts in this area
 
 - [Performance Log — CLI Self-Timing](cli-self-timing.md) — Every CLI invocation measures its own wall time — one fail-open JSONL line per run plus one stderr summary, stdout untouched; the raw material for finding and fixing slow commands.
+
+## Patterns in this area
+
+- [The bill is turns × prefix: keep the prefix immutable, warm, and lean](../../patterns/20260715-the-bill-is-turns-prefix-keep-the-prefix.md) — The bill is turns × prefix: keep the prefix immutable, warm, and lean
+- [A test name that states an old invariant is itself stale once the behavior changes](../../patterns/usage-in-bee-store-uibs-move-usage-record-pitfall.md) — Moving a side effect earlier in a flow can invalidate the premise a passing test's own name asserts, not just its assertions

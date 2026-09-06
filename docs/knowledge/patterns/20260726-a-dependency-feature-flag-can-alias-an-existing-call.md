@@ -7,7 +7,7 @@ timestamp: 2026-07-26
 bee:
   id: pattern-20260726-a-dependency-feature-flag-can-alias-an-existing-call
   lifecycle: active
-  areas: []
+  areas: [rust-runtime]
   required_context: []
   decisions: []
   sources: ["rust-port (cell rust-port-15 rework, judge finding declared-deviations-justified)", docs/history/rust-port/reports/rust-port-15.md]

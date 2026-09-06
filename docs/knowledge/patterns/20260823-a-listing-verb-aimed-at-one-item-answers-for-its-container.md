@@ -7,6 +7,7 @@ timestamp: 2026-08-23
 bee:
   id: pattern-20260823-a-listing-verb-aimed-at-one-item-answers-for-its-container
   lifecycle: active
+  areas: [bee-herding]
   sources: ["tmux-herding-transport cell tht-3 (list-panes -t <pane> answered with every pane of the window; the transport now asks for the #{pane_id} field and matches its own pane id in the rows, never the first row)"]
   polarity: pitfall
   critical: false

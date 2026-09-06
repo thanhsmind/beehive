@@ -6,6 +6,7 @@ timestamp: 2026-08-30
 bee:
   id: letter-reflection-lr-1-pitfall
   lifecycle: draft
+  areas: [rust-runtime]
   sources: [.bee/cells/archive/letter-reflection/lr-1.json]
   polarity: pitfall
 ---

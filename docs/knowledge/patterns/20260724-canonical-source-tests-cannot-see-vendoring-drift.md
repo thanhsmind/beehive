@@ -7,6 +7,7 @@ timestamp: 2026-07-24
 bee:
   id: pattern-20260724-canonical-source-tests-cannot-see-vendoring-drift
   lifecycle: active
+  areas: [onboarding]
   sources: [i54-closeout-9 (tokenize-command.mjs missing from HOOK_FILENAMES; write guard ERR_MODULE_NOT_FOUND fail-open on fresh repo-hooks installs; caught only by canary P5), docs/history/i54-closeout/reports/validation-canary.md]
   polarity: pitfall
   critical: true

@@ -6,6 +6,7 @@ timestamp: 2026-08-30
 bee:
   id: usage-in-bee-store-uibs-move-usage-record-pitfall
   lifecycle: draft
+  areas: [performance-log]
   sources: [.bee/cells/uibs-move-usage-record.json]
   polarity: pitfall
 ---

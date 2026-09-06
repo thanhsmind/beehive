@@ -7,6 +7,7 @@ timestamp: 2026-07-22
 bee:
   id: pattern-20260720-a-structural-review-never-satisfies-the-adversarial-obligation
   lifecycle: active
+  areas: [advisor-protocol]
   sources: ["docs/history/learnings/critical-patterns.md#PAT40", "original feature: self-correcting-loop", "okf-switchover-f3 cell f3-2 judged NEEDS_REVISION 8 PASS / 2 FAIL, repaired by f3-3 (second recurrence — a free-text uniqueness gate; trace in `.bee/cells/`, 2026-07-22)"]
   polarity: pitfall
   critical: true

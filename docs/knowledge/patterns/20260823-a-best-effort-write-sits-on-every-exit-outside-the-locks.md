@@ -7,6 +7,7 @@ timestamp: 2026-08-23
 bee:
   id: pattern-20260823-a-best-effort-write-sits-on-every-exit-outside-the-locks
   lifecycle: active
+  areas: [workflow-state]
   sources: ["merge-ready-fact cell mrf-2 (close has THREE full-doors vectors, not two — the proof-debt refusal arm assembles its own and returns before the green path; the blocked_by write was wired onto all three, pinned by a_close_stopped_at_the_tests_door_still_records_that_door)", "merge-ready-fact cell mrf-2 (set_uat runs after run_gate_body drops its mutation locks — the helper takes those very locks, so an earlier call would find them busy and fail-open into silence)", "merge-ready-fact cell mrf-2 (worktree unregister clears the fact before taking the worktree-admin lock, so record-mutation locks are never nested under it)"]
   polarity: pitfall
   critical: false

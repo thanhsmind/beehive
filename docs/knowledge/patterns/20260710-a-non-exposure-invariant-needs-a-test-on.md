@@ -7,6 +7,7 @@ timestamp: 2026-07-10
 bee:
   id: pattern-20260710-a-non-exposure-invariant-needs-a-test-on
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT16", "original feature: evolving-loop slice B"]
   polarity: pitfall
   critical: true

@@ -7,6 +7,7 @@ timestamp: 2026-07-12
 bee:
   id: pattern-20260712-fixture-vendored-module-lists-break-on-transitive-imports
   lifecycle: active
+  areas: [hook-runtime]
   sources: ["docs/history/learnings/critical-patterns.md#PAT28", "original feature: dispatcher-unify"]
   polarity: pitfall
   critical: false

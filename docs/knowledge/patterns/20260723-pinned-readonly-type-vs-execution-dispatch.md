@@ -7,6 +7,7 @@ timestamp: 2026-07-23
 bee:
   id: pattern-20260723-pinned-readonly-type-vs-execution-dispatch
   lifecycle: active
+  areas: [workflow-state]
   sources: [docs/history/learnings/20260723-backlog-auto-commit.md, "original feature: backlog-auto-commit (P78, cell backlog-auto-commit-1)", .bee/backlog.jsonl friction 2026-07-20 (dispatch prepare --kind cell) and 2026-07-23 (this recurrence)]
   polarity: pitfall
   critical: true

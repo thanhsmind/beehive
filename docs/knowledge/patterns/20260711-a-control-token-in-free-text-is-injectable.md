@@ -7,6 +7,7 @@ timestamp: 2026-07-11
 bee:
   id: pattern-20260711-a-control-token-in-free-text-is-injectable
   lifecycle: active
+  areas: [hook-runtime]
   sources: ["docs/history/learnings/critical-patterns.md#PAT20", "original feature: model-tier-guard", docs/history/learnings/20260711-model-tier-guard.md]
   polarity: pitfall
   critical: true

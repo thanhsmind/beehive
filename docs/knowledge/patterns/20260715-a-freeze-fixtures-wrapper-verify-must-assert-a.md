@@ -7,6 +7,7 @@ timestamp: 2026-07-15
 bee:
   id: pattern-20260715-a-freeze-fixtures-wrapper-verify-must-assert-a
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT36", "original feature: codex-harness-hardening", docs/history/learnings/20260715-codex-harness-hardening-slice0.md]
   polarity: pitfall
   critical: false

@@ -7,6 +7,7 @@ timestamp: 2026-07-19
 bee:
   id: pattern-20260719-a-shared-checkout-with-a-second-live-session
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT42", "original feature: lane-ceremony-v3"]
   polarity: pitfall
   critical: false
