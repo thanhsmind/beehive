@@ -1,0 +1,140 @@
+{
+  "id": "hcc-3",
+  "feature": "herding-cockpit-completeness",
+  "title": "Return interrupted/cancelled run outcomes from the job mark and add the retryable envelope bit",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "hcc-1",
+    "hcc-2"
+  ],
+  "decisions": [
+    "c943feb9",
+    "7172010b",
+    "1ef811f7",
+    "afec9446"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/CONTEXT.md",
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In run.rs: (1) add `RunOutcome::Interrupted` and `RunOutcome::Cancelled` (enum at run.rs:1782); `outcome_label` (run.rs:2722) returns `interrupted` / `cancelled`; `exit_code_for` gives them the same non-zero class as `died`. (2) In the poll tick closure (run.rs ~2100-2145) call `mailbox::read_mark(bee_dir, job_id)` once per tick beside status_with_activity; a mark `interrupted` ends the wait with Outcome Interrupted and the pane stays open (D1: never close it; should_close_pane returns false for it); a mark `cancelled` ends with Cancelled (pane already closed by the cancel verb, closed_pane true); `cancel_pending` keeps waiting. Thread the mark through PollTick/PollDecision in the smallest way that keeps run_poll_loop testable (one new PollTick field, one PollDecision variant). (3) In execute_continue (run.rs:2424) after the paused_limit_at check: mark `cancelled` or `cancel_pending` refuses with a new `ContinueRefusal::Cancelled { job_id, mark }` whose text ends with a FIX line naming `bee herding cancel <job-id>` for a pending one; mark `interrupted` is accepted and `mailbox::clear_mark` runs before the resume. (4) In result_envelope (run.rs ~2840) add key `retryable` on every envelope except outcome `done` and `dry_run`: `true` only for `spawn_failed`, `false` for every other label including `blocked`, `interrupted`, `cancelled` (D3 1ef811f7; no new key on done/dry_run per the no-new-key law afec9446). Update the envelope-key doc comment that lists keys. Tests beside the existing run.rs tests: run_poll_loop returns Interrupted on an interrupted tick with pane open; Cancelled on a cancelled tick; execute_continue refuses cancelled and cancel_pending with the FIX line, accepts interrupted and clears the mark; envelope has retryable true on spawn_failed, false on died/blocked/interrupted/cancelled/timed_out_idle, absent on done and dry_run.",
+  "must_haves": {
+    "truths": [
+      "outcome_label covers every RunOutcome variant (compiler-checked match)",
+      "An interrupted wait leaves the pane open",
+      "retryable is absent on done and dry_run, true only on spawn_failed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "two outcome variants, tick mark read, continue refusal, retryable key, tests"
+      }
+    ],
+    "key_links": [
+      "tick reads mailbox::read_mark from hcc-1",
+      "execute_continue refusal text carries a FIX line like herding.rs:618"
+    ],
+    "prohibitions": [
+      "No automatic retry or relaunch (D7 9615be76)",
+      "No change to existing outcome words or exit codes",
+      "No new key on a done envelope"
+    ]
+  },
+  "trace": {
+    "worker": "w-hcc-3",
+    "outcome": "Interrupted and cancelled run outcomes from the job mark, continue refusal with FIX line, retryable envelope bit",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "sync-ack: run.rs behaviour change; the bee-herding skill and knowledge sync is hcc-10's docs cell after hcc-3..9 land"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T10:25:14.234Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T10:00:05.309Z",
+    "sync_ack": "run.rs behaviour change; the bee-herding skill and knowledge sync is hcc-10's docs cell after hcc-3..9 land",
+    "plan_followed": true,
+    "mistakes": [
+      {
+        "wrong": "worker hcc-3-w1 committed 66e81643 and wrote result-1.json but never ran bee cells finish even with the reordered brief",
+        "better": "the leader capped from the result file; the worker brief needs the finish command spelled with the main checkout path since control-plane verbs refuse inside the worktree"
+      }
+    ],
+    "report": {
+      "outcome": "RunOutcome::Interrupted and ::Cancelled from mailbox::read_mark in the poll tick (pane stays open on interrupted), execute_continue refuses cancelled/cancel_pending with a FIX line and clears an interrupted mark, retryable key on every envelope except done and dry_run (true only on spawn_failed)",
+      "commit": "66e81643",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run — green:unit — 198 passed, the nine new interrupted/cancelled/retryable/continue tests listed by name; touched run.rs only",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "worker hcc-3-w1 committed 66e81643 and wrote result-1.json but never ran bee cells finish even with the reordered brief — the leader capped from the result file; the worker brief needs the finish command spelled with the main checkout path since control-plane verbs refuse inside the worktree"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "h3-outcome-label",
+            "status": "PASS",
+            "evidence": "run.rs:2798-2815 exhaustive match, no wildcard; Interrupted -> interrupted line 2813, Cancelled -> cancelled line 2814"
+          },
+          {
+            "id": "h3-pane-open",
+            "status": "PASS",
+            "evidence": "run.rs:2403-2410 close excludes Interrupted and Cancelled; Cancelled pane is closed by the cancel verb, not by run"
+          },
+          {
+            "id": "h3-retryable",
+            "status": "PASS",
+            "evidence": "run.rs:2935-2940 retryable absent on done/dry_run; true only for SpawnFailed; envelope_has_retryable_* tests"
+          },
+          {
+            "id": "h3-mark-read",
+            "status": "PASS",
+            "evidence": "run.rs:2165 mailbox::read_mark in the poll tick; run.rs:1172-1174 PollDecision::Marked"
+          },
+          {
+            "id": "h3-continue-fix",
+            "status": "PASS",
+            "evidence": "run.rs:1796-1804 CancelPending and Cancelled FIX lines; run.rs:2626-2637 Interrupted accepted and cleared via mailbox::clear_mark"
+          },
+          {
+            "id": "h3-prohibitions",
+            "status": "PASS",
+            "evidence": "no retry logic in mark handling; no new key on a done envelope; existing outcome words unchanged"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-06T10:39:30.463Z"
+      }
+    ]
+  }
+}

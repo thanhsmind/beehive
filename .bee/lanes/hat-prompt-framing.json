@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Which one?",
-    "asked_at": "2026-09-05T16:04:13.876Z",
-    "session": "5acf3646-dee3-4db3-8a5b-8263e009586a"
+    "subject": "**What you do now.** Open a session in `D:\\projects\\goglbe\\beehive--wt--herding-cockpit-completeness` and say \"plan\" to start bee-planning a",
+    "asked_at": "2026-09-06T03:46:06.020Z",
+    "session": "832a0c00-85cf-4f54-b8f8-b5624be2083d"
   }
 }

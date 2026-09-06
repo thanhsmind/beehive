@@ -1,0 +1,102 @@
+{
+  "id": "hcc-8",
+  "feature": "herding-cockpit-completeness",
+  "title": "Add the git handoff block to done and blocked run envelopes",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "hcc-3"
+  ],
+  "decisions": [
+    "e0f6b8b5",
+    "afec9446"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In run.rs add `fn git_block(cwd: &Path, main_root: &Path) -> Option<Value>` built on `crate::verbs::worktree::git::run_git` (git.rs:85; make it pub(crate) if it is not already reachable). Reads, in order: `rev-parse --is-inside-work-tree` (a failure or a non-`true` answer returns None — the key is then absent, no-new-key law); `rev-parse --abbrev-ref HEAD` → branch; `rev-parse HEAD` → head_sha; main HEAD via `run_git(main_root, [\"rev-parse\",\"HEAD\"])` then `merge-base HEAD <main_sha>` → base_sha (copies merge.rs:214); `rev-list --count <base>..HEAD` → ahead (u64); `status --porcelain` → dirty (bool, non-empty) and its paths; `diff --name-only <base>..HEAD` → paths. changed_paths = sorted union of the diff paths and the porcelain paths (porcelain lines strip the two status columns and a leading space; a rename `a -> b` keeps b). Attach key `git` = {branch, head_sha, base_sha, ahead, dirty, changed_paths} in result_envelope (run.rs:2840) only for outcome done or blocked and only when git_block returns Some (D6 e0f6b8b5). Worker-reported `files_changed` stays untouched beside it. Tests: a temp git repo with one commit ahead and one dirty file yields the block with ahead 1, dirty true, changed_paths containing both; a non-git temp dir yields no key; a died envelope never carries the key.",
+  "must_haves": {
+    "truths": [
+      "the git key appears only on done/blocked and only when cwd is a git checkout",
+      "changed_paths is the union of committed diff and porcelain paths",
+      "base_sha is the merge-base with the main checkout HEAD"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "git_block helper + envelope attach + tests"
+      }
+    ],
+    "key_links": [
+      "run_git in verbs/worktree/git.rs is the one git reader"
+    ],
+    "prohibitions": [
+      "Six read-only git commands, no write",
+      "No change to files_changed",
+      "No new dependency"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-hcc-8",
+    "outcome": "Add git handoff block to done and blocked run envelopes",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal herding change; skill sync is hcc-10"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T11:04:39.018Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T10:56:52.469Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": null,
+        "owner_bypassed": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+        "at": "2026-09-06T11:04:39.011Z"
+      }
+    ],
+    "sync_ack": "internal herding change; skill sync is hcc-10",
+    "plan_followed": true,
+    "mistakes": [
+      {
+        "wrong": "crates/bee/src/herding/run.rs tried to import crate::verbs::worktree::git::run_git which is a private module",
+        "better": "import crate::verbs::worktree::run_git directly from the public re-export"
+      }
+    ],
+    "report": {
+      "outcome": "Add git handoff block to done and blocked run envelopes",
+      "commit": "2a1c909f6a980ba5ddcfe1048930a08b93bb9d1e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run — green:unit — added git_block and envelope tests",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "crates/bee/src/herding/run.rs tried to import crate::verbs::worktree::git::run_git which is a private module — import crate::verbs::worktree::run_git directly from the public re-export"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 344 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

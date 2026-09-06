@@ -1,0 +1,97 @@
+{
+  "id": "hcc-7",
+  "feature": "herding-cockpit-completeness",
+  "title": "Add the jobs array to bee herding status and run the orphan sweep in status and occupancy",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "hcc-5",
+    "hcc-4"
+  ],
+  "decisions": [
+    "468c6cb8",
+    "d5a1f7e1",
+    "afec9446",
+    "9615be76"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "(1) `bee herding status` (herding.rs:749): before printing, call mailbox::mark_orphans(bee_dir, &live_panes) using the same live pane set occupancy already computes (wave.rs:992 live_pane_ids — make it pub(super) or move the small helper so both verbs share it; when the transport cannot list panes, skip the sweep and say so in one line). Print one line per marked id: `herding: marked job <id> interrupted (process_restarted)`. Then add a `jobs` array to the JSON output and one plain line per job: `job_id`, `pane_id`, `round`, `mark` (from read_mark, null when none), `mark_reason`, `status` — the D2 word computed with the same rule as hcc-6 (stale activity + Alive → stalled; transition_status gives recovered once; else the existing word; a job with a result file shows its result status). Prefix every plain line with the job id so `stalled` never shares a line with herdr's prompt-stall word (plan Open Question 5). (2) `bee herding occupancy` (wave.rs:966): call mark_orphans with its live_panes before computing counts; print the same one line per marked id. Nothing relaunched (D7). Tests with the fake cockpit: status lists a job with mark null, an orphan job gets marked and listed with mark interrupted / reason process_restarted, occupancy sweep marks the same shape.",
+  "must_haves": {
+    "truths": [
+      "status output carries a jobs array with job_id, pane_id, round, mark, mark_reason, status",
+      "status and occupancy both run the orphan sweep before their output and print one line per marked job",
+      "the sweep never touches a job with a result file or a live pane"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding.rs",
+        "substantive": "status jobs array + sweep call + tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "substantive": "occupancy sweep call + shared live pane helper"
+      }
+    ],
+    "key_links": [
+      "hcc-5 mark_orphans and transition_status are the only writers"
+    ],
+    "prohibitions": [
+      "No relaunch (D7)",
+      "No change to existing status keys enabled/marker/main_root/reason/transport",
+      "No registry change unless a new flag is added (none planned)"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-hcc-7",
+    "outcome": "Add jobs array to status and orphan sweep to status and occupancy",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal herding change; skill sync is hcc-10"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T10:55:56.014Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T10:38:26.098Z",
+    "sync_ack": "internal herding change; skill sync is hcc-10",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Add jobs array to status and orphan sweep to status and occupancy",
+      "commit": "9895e008a3c8c1f09384d2008affedbbff03fcaa",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: — green:unit — added status and occupancy sweep tests",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 632 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

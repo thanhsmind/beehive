@@ -1,0 +1,87 @@
+{
+  "id": "hcc-6",
+  "feature": "herding-cockpit-completeness",
+  "title": "Project stalled and recovered in the run tick with one progress line per transition",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "hcc-5",
+    "hcc-3"
+  ],
+  "decisions": [
+    "468c6cb8",
+    "afec9446"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In the run poll tick (run.rs ~1140-1197 and the loop that calls status_with_activity at ~1578): compute the D2 word. `stalled` = the activity record is older than mailbox::ACTIVITY_FRESHNESS_SECS AND process_info is Liveness::Alive; `recovered` = the first fresh read after a stalled one; otherwise the word status_with_activity already yields. Use mailbox::transition_status(bee_dir, job_id, word) from hcc-5 and, when it returns Some((from, to)), print exactly one progress line to the run stream (the same stream the tick's existing progress lines use): `herding: job <id> <to>` (e.g. `herding: job j1 stalled`, `herding: job j1 recovered`). `recovered` is followed by `working` on the next tick with no extra line. No new threshold number anywhere (D2). No behaviour change for dead panes (died path stays). Tests with FakeHerdr: alive + stale activity prints one stalled line, a second stale tick prints nothing, a fresh tick prints one recovered line, then silence.",
+  "must_haves": {
+    "truths": [
+      "stalled needs both a stale activity file and a live pane process",
+      "one progress line per transition, none on repeat",
+      "recovered prints once then working"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "tick projection using transition_status, with tests"
+      }
+    ],
+    "key_links": [
+      "hcc-5 transition_status is the single write point"
+    ],
+    "prohibitions": [
+      "No second freshness constant",
+      "No auto-relaunch or auto-nudge on stalled (D7)",
+      "No change to RunOutcome words"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-hcc-6",
+    "outcome": "Project stalled and recovered in run poll tick with progress lines",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal herding change; skill sync is hcc-10"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T10:54:04.736Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T10:38:25.643Z",
+    "sync_ack": "internal herding change; skill sync is hcc-10",
+    "plan_followed": true,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Project stalled and recovered in run poll tick with progress lines",
+      "commit": "704abdb50794987c49bb9d30f7157e8648127992",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run — green:unit — added D2 status projection in poll tick with unit tests",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 329 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

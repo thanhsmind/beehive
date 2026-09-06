@@ -1,0 +1,107 @@
+{
+  "id": "hcc-9",
+  "feature": "herding-cockpit-completeness",
+  "title": "Carry the retryable bit on wave bucket rows and the ledger worker row",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "hcc-3",
+    "hcc-7"
+  ],
+  "decisions": [
+    "1ef811f7",
+    "afec9446"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::wave",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-cockpit-completeness/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "D3 (1ef811f7) for waves. (1) wave_ledger.rs WorkerRow (line 79) gains `pub(crate) retryable: Option<bool>` with `#[serde(default, skip_serializing_if = \"Option::is_none\")]` so old ledgers still parse and the key appears only when set (no-new-key law). (2) wave.rs: where a worker lands in a bucket (~479-486) and where the wave JSON is built (~675-693), set retryable per worker: `true` for send_failed and flipped_before_send (the worker did no work), `false` for timed_out and unverifiable_after_send; a spawn failure, if the wave tracks one, is `true`. Emit the same bit in the per-worker JSON rows of the wave output (never on the bucket count summary). Reuse the outcome→retryable rule hcc-3 added in run.rs if it is a callable fn; otherwise a 6-line match here with a comment naming run.rs's rule as the source. Tests: a send_failed worker row carries retryable true, an unverifiable_after_send row carries false, a done row carries no key, and an old ledger line without the key still parses.",
+  "must_haves": {
+    "truths": [
+      "retryable true only for send_failed, flipped_before_send, spawn_failed",
+      "done rows carry no retryable key",
+      "old ledger rows without the key still parse"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+        "substantive": "WorkerRow.retryable optional field"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "substantive": "per-worker bit in buckets and JSON rows + tests"
+      }
+    ],
+    "key_links": [
+      "hcc-3 run.rs retryable rule is the source of truth"
+    ],
+    "prohibitions": [
+      "bee never retries on its own (D7)",
+      "No change to bucket names",
+      "No change to FailurePolicy"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-hcc-9",
+    "outcome": "Carry retryable bit on wave bucket rows and ledger worker rows",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [
+      "WorkerRow struct initialization in run.rs and control_loop.rs required retryable: None — field addition broke compilation — something else had to be fixed first",
+      "sync-ack: internal herding change; skill sync is hcc-10"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-06T11:14:25.302Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+    "claimed_at": "2026-09-06T10:56:52.832Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": null,
+        "owner_bypassed": "832a0c00-85cf-4f54-b8f8-b5624be2083d",
+        "at": "2026-09-06T11:14:25.301Z"
+      }
+    ],
+    "sync_ack": "internal herding change; skill sync is hcc-10",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Carry retryable bit on wave bucket rows and ledger worker rows",
+      "commit": "c6537633a3f9b94393d4b13261a05676c9cae767",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding::wave — green:unit — wave bucket rows and ledger worker row retryable tests",
+      "deviations": [
+        "WorkerRow struct initialization in run.rs and control_loop.rs required retryable: None — field addition broke compilation — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 289 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
