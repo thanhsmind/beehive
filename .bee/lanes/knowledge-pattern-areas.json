@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-pattern-areas",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"knowledge-pattern-areas\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"knowledge-pattern-areas\" (lane).",
+  "created_at": "2026-09-06T16:03:13.815Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "docs",
+    "lane": "docs",
+    "flags": [],
+    "product_files": 0,
+    "rationale": "curation: assign bee.areas to the 94 area-less patterns and link them from the area overview; docs/knowledge only",
+    "updated_at": "2026-09-06T16:03:13.875Z",
+    "feature": "knowledge-pattern-areas"
+  }
+}
