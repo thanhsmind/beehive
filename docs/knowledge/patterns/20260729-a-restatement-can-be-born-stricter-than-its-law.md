@@ -7,6 +7,7 @@ timestamp: 2026-07-29
 bee:
   id: pattern-20260729-a-restatement-can-be-born-stricter-than-its-law
   lifecycle: active
+  areas: [doctrine-layer]
   sources: ["original feature: lane-plan-unconditional", docs/history/learnings/20260729-lane-plan-unconditional.md]
   polarity: pitfall
   critical: false

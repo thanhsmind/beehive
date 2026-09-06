@@ -7,6 +7,7 @@ timestamp: 2026-07-29
 bee:
   id: pattern-20260729-a-flag-adopted-as-a-signal-inherits-every-exemption-its-readers-grant
   lifecycle: active
+  areas: [workflow-state]
   sources: ["original feature: worker-conformance", docs/history/learnings/20260729-worker-conformance.md]
   polarity: pitfall
   critical: false

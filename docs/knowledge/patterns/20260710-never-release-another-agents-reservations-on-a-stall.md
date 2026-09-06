@@ -7,6 +7,7 @@ timestamp: 2026-07-10
 bee:
   id: pattern-20260710-never-release-another-agents-reservations-on-a-stall
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT13", "original feature: evolving-loop"]
   polarity: pitfall
   critical: true

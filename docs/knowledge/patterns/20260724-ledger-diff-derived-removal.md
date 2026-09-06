@@ -7,6 +7,7 @@ timestamp: 2026-07-24
 bee:
   id: pattern-20260724-ledger-diff-derived-removal
   lifecycle: active
+  areas: [onboarding]
   sources: ["installer-verify-orphan-drift-1 (bee.mjs status correctly flagged .bee/bin/lib/herding.mjs as orphaned drift; onboard_bee.mjs had no removal path for it -- only helpers had one, via a hand-maintained RETIRED_HELPERS list)", "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md#R27"]
   polarity: pitfall
   critical: false

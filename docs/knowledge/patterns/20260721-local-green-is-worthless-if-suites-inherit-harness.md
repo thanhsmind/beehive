@@ -7,6 +7,7 @@ timestamp: 2026-07-21
 bee:
   id: pattern-20260721-local-green-is-worthless-if-suites-inherit-harness
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT46", "original feature: hardening-1-7-10"]
   polarity: pitfall
   critical: true

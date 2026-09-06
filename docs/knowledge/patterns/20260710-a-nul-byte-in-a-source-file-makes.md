@@ -7,6 +7,7 @@ timestamp: 2026-07-10
 bee:
   id: pattern-20260710-a-nul-byte-in-a-source-file-makes
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT14", "original feature: evolving-loop"]
   polarity: pitfall
   critical: false

@@ -7,6 +7,7 @@ timestamp: 2026-07-11
 bee:
   id: pattern-20260711-a-decision-attributed-to-the-user-needs-a
   lifecycle: active
+  areas: [decision-memory]
   sources: ["docs/history/learnings/critical-patterns.md#PAT23", "original feature: cli-mutations", docs/history/learnings/20260711-cli-mutations.md]
   polarity: pitfall
   critical: false

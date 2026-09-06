@@ -7,7 +7,7 @@ timestamp: 2026-07-26
 bee:
   id: pattern-20260726-a-guard-compared-to-its-own-derivation-never-fails
   lifecycle: active
-  areas: []
+  areas: [onboarding]
   required_context: []
   decisions: []
   sources: ["packages-engine-move (validation B5/C2: tautological identityOk re-anchor proposal; C1: HIVE_DIR three-semantics split)", docs/history/packages-engine-move/reports/validation-slice1.md, docs/history/learnings/20260726-packages-engine-move.md]

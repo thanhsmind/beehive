@@ -6,7 +6,7 @@ timestamp: 2026-08-17
 bee:
   id: pattern-20260817-shared-git-index-in-one-worktree
   lifecycle: active
-  areas: [worktree-lifecycle]
+  areas: [worktree-parallelism]
   sources: ["worktree-keep-on-merge cells wkm-2/wkm-3 worker reports (2026-08-17): wkm-2's commit cycle swept wkm-3's staged registry.rs; a tests.rs edit was wiped and redone; both self-healed, final attribution clean (commits 3e32e605, 6ff041f8)", "sibling friction: merge-time bookkeeping sweep, backlog row 2026-08-16 (commit e9840f11)"]
 ---
 

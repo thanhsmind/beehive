@@ -7,6 +7,7 @@ timestamp: 2026-07-11
 bee:
   id: pattern-20260711-a-removal-is-verified-by-its-invariants-not
   lifecycle: active
+  areas: [verify-pipeline]
   sources: ["docs/history/learnings/critical-patterns.md#PAT18", "original feature: learnings-pair-relocation", docs/history/learnings/20260711-learnings-pair-relocation.md]
   polarity: pitfall
   critical: false

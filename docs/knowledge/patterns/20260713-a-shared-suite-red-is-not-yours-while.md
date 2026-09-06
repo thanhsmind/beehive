@@ -7,6 +7,7 @@ timestamp: 2026-07-22
 bee:
   id: pattern-20260713-a-shared-suite-red-is-not-yours-while
   lifecycle: active
+  areas: [worktree-parallelism]
   sources: ["docs/history/learnings/critical-patterns.md#PAT29", "original feature: advisor", "okf-integration-close-f4 f4-4 (this heuristic misapplied by the orchestrator — the trap below; trace in `.bee/cells/`, 2026-07-22)"]
   polarity: pitfall
   critical: true

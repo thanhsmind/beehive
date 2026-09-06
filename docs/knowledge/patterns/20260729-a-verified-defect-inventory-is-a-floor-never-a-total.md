@@ -7,6 +7,7 @@ timestamp: 2026-07-29
 bee:
   id: pattern-20260729-a-verified-defect-inventory-is-a-floor-never-a-total
   lifecycle: active
+  areas: [workflow-state]
   sources: ["original feature: budget-fence-removal", docs/history/learnings/20260729-budget-fence-removal.md]
   polarity: pitfall
   critical: false

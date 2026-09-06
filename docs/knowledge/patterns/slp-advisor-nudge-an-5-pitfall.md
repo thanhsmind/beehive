@@ -6,6 +6,7 @@ timestamp: 2026-08-29
 bee:
   id: slp-advisor-nudge-an-5-pitfall
   lifecycle: draft
+  areas: [rust-runtime]
   sources: [.bee/cells/archive/slp-advisor-nudge/an-5.json]
   polarity: pitfall
 ---
