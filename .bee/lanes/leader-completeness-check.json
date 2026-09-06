@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
   "feature": "leader-completeness-check",
-  "mode": "build",
-  "phase": "idle",
+  "mode": null,
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,23 +10,18 @@
     "review": false,
     "uat": false
   },
-  "summary": "Shape and execution approved with actor auto/full. Execution not started: feature CONTEXT write was explicitly denied from current main-session cwd. No cell claimed; no source edits. Prior pause handoff carries pressure baseline and scope; gate-pending statement in that handoff is now resolved.",
-  "next_action": "bee close finished \"leader-completeness-check\" — feature is closed.",
+  "summary": "Feature \"leader-completeness-check\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming: one small docs cell over swarming SKILL.md step 5, swarming-reference step 7, worker-cell.md.",
   "created_at": "2026-09-05T11:17:12.643Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Want me to update the hat-wave prompt templates in `bee-hive/references/gates-and-delegation.md` to use this open-ended shape?",
-    "asked_at": "2026-09-05T15:53:43.966Z",
-    "session": "5acf3646-dee3-4db3-8a5b-8263e009586a"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "small",
     "flags": [],
     "product_files": 3,
-    "rationale": "Additive instruction contract in three source files, no Rust or schema changes, existing evidence reused; pressure tests prove behavior.",
-    "updated_at": "2026-09-05T11:18:39.660Z",
+    "rationale": "Additive instruction contract in three source files; no Rust or schema changes.",
+    "updated_at": "2026-09-06T16:22:53.329Z",
     "feature": "leader-completeness-check"
   }
 }

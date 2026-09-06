@@ -485,6 +485,7 @@
     "knowledge-orphan-check",
     "okf",
     "knowledge-orphan-links",
-    "knowledge-pattern-areas"
+    "knowledge-pattern-areas",
+    "leader-completeness-check"
   ]
 }
