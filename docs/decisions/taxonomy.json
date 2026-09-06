@@ -480,6 +480,7 @@
     "pi",
     "worker-brief",
     "memory",
-    "knowledge-freshness-deferral"
+    "knowledge-freshness-deferral",
+    "knowledge-authoring-ref"
   ]
 }
