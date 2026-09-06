@@ -84,8 +84,10 @@ Spec craft — what to write, what to omit, honest gaps:
 `.bee/expertise/documentation.md`. Template and mechanics:
 `references/area-spec.md` ("Area Spec Template", "Merge Rules",
 "Harvest Interview", "Rebuild Checklist"). In a bundle repo the CLI
-names the write target and emits the frontmatter — ask it; never pick
-paths or type frontmatter blocks by eye.
+names the write target and emits the frontmatter — `bee knowledge new`;
+never pick paths or type frontmatter blocks by eye. The full loop —
+search, decide, write, relate, validate — is
+`references/concept-authoring.md`.
 
 ## Compound — close with what you learned
 
@@ -161,6 +163,7 @@ critical promotions defer.
 |---|---|
 | `references/area-spec.md` | Area spec + system-overview templates, per-section and merge rules, harvest interview, bootstrap, rebuild checklist |
 | `references/citations.md` | Citation discipline: short8 decision ids in specs and backlog rows |
+| `references/concept-authoring.md` | A fact is about to become a concept file: search-before-write, extend vs new, the `bee knowledge new` write, the relate step (no orphans), validation, the end-of-task review, verb-per-situation table |
 | `references/promotion.md` | Harvest discipline (source ranking, what never becomes a record, denied writes), learnings file template, promotion decision tree, critical promotion format, friction entries |
 | `.bee/expertise/knowledge.md` | The project knowledge layer as a system: what belongs in it, harvesting from finished work, routing, the always-loaded budget, migration rot |
 | `.bee/expertise/documentation.md`, `.bee/expertise/decisions.md` | Spec craft; what deserves a decision record |
