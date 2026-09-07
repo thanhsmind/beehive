@@ -13,6 +13,11 @@
   "summary": "Feature \"install-fetch-reason\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"install-fetch-reason\" — feature is closed.",
   "created_at": "2026-09-07T03:41:45.940Z",
-  "run_state": "shaping",
-  "waiting_on": null
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Cây sạch. Chạy release 2.33.4.",
+    "asked_at": "2026-09-07T04:06:01.267Z",
+    "session": "2fb422f4-77ee-414b-8666-98a59d64866c"
+  }
 }
