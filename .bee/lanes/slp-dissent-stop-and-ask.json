@@ -15,9 +15,9 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Everything is staged for the last two doors. I hold for the reviewer's verdict before I log the impact decision.",
-    "asked_at": "2026-09-07T15:44:33.948Z",
+    "kind": "gate",
+    "subject": "uat approval for pi-worktree-session-relocation",
+    "asked_at": "2026-09-07T15:48:23.025Z",
     "session": "6d0bf082-1297-4e20-8219-f873e56e79df"
   },
   "route": {
