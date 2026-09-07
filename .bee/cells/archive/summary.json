@@ -1143,5 +1143,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-09-04T10:16:02.381Z"
+  },
+  "install-fetch-reason": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-07T04:02:28.376Z"
   }
 }

@@ -8,16 +8,11 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"install-fetch-reason\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at ed37d79; reload the product and test \"install-fetch-reason\", then either approve uat (\"bee gate --name uat --approved true --lane install-fetch-reason\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"install-fetch-reason\" (lane).",
   "created_at": "2026-09-07T03:41:45.940Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: install-fetch-reason",
-    "asked_at": "2026-09-07T03:52:49.073Z",
-    "session": "bee-worktree-merge-sessionless"
-  }
+  "run_state": "done",
+  "waiting_on": null
 }
