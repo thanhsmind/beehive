@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Four Pi session-relocation decisions locked; planning validates CLI and Pi seams.",
-  "next_action": "Invoke bee-planning.",
+  "next_action": "Merged into main at b84e73f; reload the product and test \"pi-worktree-session-relocation\", then either approve uat (\"bee gate --name uat --approved true --lane pi-worktree-session-relocation\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-07T05:34:32.734Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-worktree-session-relocation",
+    "asked_at": "2026-09-07T15:33:33.567Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -37,12 +42,5 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave:user-impact+value (3 seats dropped: Agent tool unavailable)",
     "digest_head": "# Gate 2 report — pi-worktree-session-relocation\n\n## Recommendation\n\nApprove the merged shape and execution plan in\n[plan.md](../plan.md). The selected route uses only Pi 0.85.1's supported\nsession-control context. It also preserves the normal agent-owned bee CLI flow.\n\n## Reality gate\n\n| Check | Result | Evidence |\n|---|---|---|\n| Outcome is nameable | PASS | One settled Pi conversation enters a verified worktree and returns to main before merge. |\n| Target behavior is supported | PASS | Pi 0.8"
-  },
-  "merge_ready": {
-    "since": "2026-09-07T13:08:01.313Z",
-    "branch": "wt/pi-worktree-session-relocation",
-    "worktree_id": "beehive--wt--pi-worktree-session-relocation",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
