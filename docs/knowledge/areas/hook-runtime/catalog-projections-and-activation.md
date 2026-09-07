@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-hook-state-parity D1-D3, D8-D13", "codex-runtime-parity D1, D2", d91a8398-2d63-426b-a133-341568453200, "opencode-support D1, D2, D5, D6", "pi-support D1, D2, D3, D4 (named deviation), D5", "pi-beehive D1, D2, D6, D7", 1edd8a90, b1a26071, 663c642e, 8d8ac85f]
-  sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "codex-native-runtime-v2 cnr2-2 (state-sync trigger extended at the generator sources to both runtimes' plan tools)", "opencode-support cells oc-2, oc-3, oc-6, oc-8, oc-9, oc-10 (OpenCode's own guard belt: live-proved throw-blocking, the apply_patch/lsp/list coverage-gate closures, and exit-0 repair/ask verdict honoring; capped traces in .bee/cells/, evidence in docs/history/opencode-support/discovery.md, 2026-08-11)", "opencode-support cell oc-12 (live nested-dispatch proof: the belt engaged correctly on a real cross-session hold and a real concurrent-worker git guard, and surfaced the session-identity gap named below; trace .bee/cells/oc-12.json)", "opencode-support cell oc-13 (bee onboard --apply installs the belt; this concept's own Pointers correction landed in passing; trace .bee/cells/oc-13.json)", "docs/specs/hook-runtime.md#B5", "docs/specs/hook-runtime.md#B6", "docs/specs/hook-runtime.md#R1", "docs/specs/hook-runtime.md#R6", "docs/specs/hook-runtime.md#E4", "docs/specs/hook-runtime.md#E5", "docs/specs/hook-runtime.md#E7", "docs/specs/hook-runtime.md#P3", "pi-support cell pis-1 (the Pi belt itself: .pi/extensions/bee-guard.ts, enumerated tool map with fail-safe unknown-tool routing, per-call passivity, model-guard named exclusion; commit 9a36fe28, 2026-08-29)", "pi-support cell pis-2 (the pi dispatch door: DISPATCH_RUNTIMES/RUNTIMES widened, the pi_requires_herding refusal helper, the \"pi\" => None label arm, the hook_manifests.rs named exclusion extended to Pi, onboard copy_pi_extension; commit 954e6d3c, 2026-08-29)", "pi-beehive cells pib-1..pib-4, pib-6 (the Pi belt reaches per-event parity: the two passive measurement checkpoints wired, session-close fired at turn end, compaction boundary and shutdown with a reason filter, the continuation verdict enforced behind a shape gate, and the advisory-gap coverage gate generalised over both hand-authored belts with comment-stripped derivations; commits 5bb29c38, fe1b670d, 860f07a5, 7e831404, 8276f6cb, cd940171, 2026-09-02)"]
+  decisions: ["codex-hook-state-parity D1-D3, D8-D13", "codex-runtime-parity D1, D2", d91a8398-2d63-426b-a133-341568453200, "opencode-support D1, D2, D5, D6", "pi-support D1, D2, D3, D4 (named deviation), D5", "pi-beehive D1, D2, D6, D7", 1edd8a90, b1a26071, 663c642e, 8d8ac85f, "c47fa930 (pi-worktree-session-relocation D1 — active-session replacement, no cwd mutation)", "1f947417 (pi-worktree-session-relocation D2 — forkFrom and switchSession)", "85d85ede (pi-worktree-session-relocation D3 — CLI transition intent and Pi harness action)", "0b4ff55b (pi-worktree-session-relocation D4 — enter after creation, exit before merge, no exit deletion)", "538c723d (pi-worktree-session-relocation D5 — zero-mutation worktree enter command for existing grant)", "113e9f2c (pi-worktree-session-relocation D6 — Pi queues relocation until agent_settled)"]
+  sources: ["codex-hook-state-parity cells 2, 3, 5 (paired Codex subagent audit, package authority, exclusive hook-source arbitration, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "codex-native-runtime-v2 cnr2-2 (state-sync trigger extended at the generator sources to both runtimes' plan tools)", "opencode-support cells oc-2, oc-3, oc-6, oc-8, oc-9, oc-10 (OpenCode's own guard belt: live-proved throw-blocking, the apply_patch/lsp/list coverage-gate closures, and exit-0 repair/ask verdict honoring; capped traces in .bee/cells/, evidence in docs/history/opencode-support/discovery.md, 2026-08-11)", "opencode-support cell oc-12 (live nested-dispatch proof: the belt engaged correctly on a real cross-session hold and a real concurrent-worker git guard, and surfaced the session-identity gap named below; trace .bee/cells/oc-12.json)", "opencode-support cell oc-13 (bee onboard --apply installs the belt; this concept's own Pointers correction landed in passing; trace .bee/cells/oc-13.json)", "docs/specs/hook-runtime.md#B5", "docs/specs/hook-runtime.md#B6", "docs/specs/hook-runtime.md#R1", "docs/specs/hook-runtime.md#R6", "docs/specs/hook-runtime.md#E4", "docs/specs/hook-runtime.md#E5", "docs/specs/hook-runtime.md#E7", "docs/specs/hook-runtime.md#P3", "pi-support cell pis-1 (the Pi belt itself: .pi/extensions/bee-guard.ts, enumerated tool map with fail-safe unknown-tool routing, per-call passivity, model-guard named exclusion; commit 9a36fe28, 2026-08-29)", "pi-support cell pis-2 (the pi dispatch door: DISPATCH_RUNTIMES/RUNTIMES widened, the pi_requires_herding refusal helper, the \"pi\" => None label arm, the hook_manifests.rs named exclusion extended to Pi, onboard copy_pi_extension; commit 954e6d3c, 2026-08-29)", "pi-beehive cells pib-1..pib-4, pib-6 (the Pi belt reaches per-event parity: the two passive measurement checkpoints wired, session-close fired at turn end, compaction boundary and shutdown with a reason filter, the continuation verdict enforced behind a shape gate, and the advisory-gap coverage gate generalised over both hand-authored belts with comment-stripped derivations; commits 5bb29c38, fe1b670d, 860f07a5, 7e831404, 8276f6cb, cd940171, 2026-09-02)", "docs/history/pi-worktree-session-relocation/CONTEXT.md and plan.md"]
   authoritative_for: "hook-runtime: the catalog of record, projection parity, and checkpoint activation"
 ---
 
@@ -200,6 +200,33 @@ Because the derivations read the belt as text, they first strip its comments:
 without that, commenting a call out would leave the gate green while the
 behavior disappeared.
 
+**B13 — Pi session relocation bridges CLI transition intent to active session
+replacement (c47fa930, 1f947417, 85d85ede, 113e9f2c).** Pi binds tools,
+resources, trust, and persistence to session cwd. Mutating process cwd would
+corrupt these bindings. Pi instead replaces the active session using
+`SessionManager.forkFrom(sourceSessionFile, targetCwd)` and
+`ctx.switchSession(forkFile, { withSession })`.
+
+Because Pi event handlers receive `ExtensionContext` (which cannot switch
+sessions), the belt cannot relocate during tool execution. When a bee CLI
+process (`worktree new`, `worktree enter`, or linked `worktree merge`) exits 0
+under `PI_SESSION_ID`, it emits `@@BEE_SESSION_TRANSITION@@ <json>` on stderr.
+The belt captures this marker in `tool_result` for shell tools (`bash`,
+`powershell`), strips the marker from visible tool results, and holds the intent.
+After `agent_settled`, the belt dispatches private command
+`/bee-worktree-relocate <token>` via `pi.sendUserMessage(..., { expandPromptTemplates: true })`.
+That command handler receives `ExtensionCommandContext` when idle, validates the
+intent against current cwd, forks the session, and switches. For exit
+transitions, the reconstructed merge runs within the post-switch `withSession`
+callback on main. Failure handling operates across three phases: (1) before
+fork, pre-switch validation failures fail closed with no fork created or
+deleted; (2) fork exists plus cancellation or pre-teardown switch failure, where
+a created fork file is deleted via rmSync to preserve the source session cleanly;
+and (3) post-teardown failure, where once ctx.switchSession begins teardown of
+the old context, failures during target service reconstruction cannot promise
+rollback and are logged honestly without deleting the fork or claiming false
+recovery.
+
 ## Business Rules
 
 - R1 — One catalog of record; Claude Code's and Codex's projections are
@@ -312,9 +339,16 @@ behavior disappeared.
   the prepare and wave paths, beside `DISPATCH_RUNTIMES` there and `RUNTIMES`
   in `verbs/drivers/models.rs`; operator-facing contract:
   `docs/config-reference.md` (§ Pi) and the `models.pi` block in
-  `.bee/config-sample.json`. Onboarding ships the belt from this checkout's
-  own tree via the `copy_pi_extension` step (`onboard/apply.rs`,
-  `onboard/plan.rs`).
+  `.bee/config-sample.json`. The belt file grew a THIRD capability with
+  pi-worktree-session-relocation (c47fa930, 85d85ede): registering public
+  commands `/bee-worktree-new`, `/bee-worktree-enter`, `/bee-worktree-merge`, and
+  private `/bee-worktree-relocate`, capturing `@@BEE_SESSION_TRANSITION@@`
+  markers from shell tool results, deferring relocation until `agent_settled`, and
+  executing session replacement via `SessionManager.forkFrom` and
+  `ctx.switchSession` (contracts proven in
+  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`). Onboarding ships the
+  belt from this checkout's own tree via the `copy_pi_extension` step
+  (`onboard/apply.rs`, `onboard/plan.rs`).
 - OpenCode belt internals (B7, B8): `mapToolCall` (tool→hook routing),
   `runBlockingHook` (throw-on-deny, exit-0 `updatedInput`/`ask`/unparseable
   handling), `runAdvisoryHook` (swallow + log), all in
