@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Green. Committing.",
-    "asked_at": "2026-09-07T15:02:54.781Z",
+    "subject": "Green in main. Now I check nothing drifted after the merge.",
+    "asked_at": "2026-09-07T15:30:03.694Z",
     "session": "6d0bf082-1297-4e20-8219-f873e56e79df"
   },
   "route": {
