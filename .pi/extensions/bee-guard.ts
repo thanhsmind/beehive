@@ -78,8 +78,8 @@
 //   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd, reason)
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import { execFileSync } from "node:child_process"
-import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs"
+import { execFile, execFileSync } from "node:child_process"
+import { existsSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs"
 import path from "node:path"
 
 const BINARY_NAMES = ["bee", "bee.exe"]
@@ -519,7 +519,7 @@ function sessionSource(reason: string | undefined): string {
 
 function sessionIdOf(ctx: any): string | undefined {
   try {
-    const id = ctx?.sessionManager?.getSessionId?.()
+    const id = ctx?.sessionManager?.getSessionId?.() ?? ctx?.sessionId
     return typeof id === "string" && id.length > 0 ? id : undefined
   } catch {
     return undefined
@@ -858,6 +858,730 @@ function startResultDrain(pi: any, directory: string, sessionId: string | undefi
   ;(globalThis as any)[DRAIN_SLOT] = timer
 }
 
+// ─── worktree session relocation (pi-worktree-session-relocation / pwsr-2) ──
+
+interface SessionTransitionContinuation {
+  operation: "merge-worktree"
+  noCleanup: boolean
+  skipUat: boolean
+  queueWaitMs: number | null
+}
+
+interface SessionTransitionIntent {
+  schemaVersion: 1
+  operation: "enter-worktree" | "exit-worktree-before-merge"
+  sourceCwd: string
+  targetCwd: string
+  worktreeId: string
+  feature: string | null
+  piSessionId: string | null
+  continuation: SessionTransitionContinuation | null
+}
+
+interface PendingRelocation {
+  transition: SessionTransitionIntent
+  sessionId: string
+  sourceCwd: string
+}
+
+const pendingTransitions = new Map<string, PendingRelocation>()
+const pendingRelocationTokens = new Map<string, string>()
+let activeTransition = false
+let transitionTeardownOccurred = false
+
+function canonicalizePath(p: string): string {
+  if (!p || typeof p !== "string") {
+    throw new Error("Path must be a non-empty string")
+  }
+  return realpathSync(p)
+}
+
+function tokenizeArgv(raw: string): string[] {
+  if (raw.includes("\0")) {
+    throw new Error("Command argument contains illegal NUL byte")
+  }
+  const tokens: string[] = []
+  let current = ""
+  let inSingle = false
+  let inDouble = false
+  let escaped = false
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+    if (escaped) {
+      current += ch
+      escaped = false
+      continue
+    }
+    if (ch === "\\") {
+      if (inSingle) {
+        current += ch
+      } else {
+        escaped = true
+      }
+      continue
+    }
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle
+      continue
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble
+      continue
+    }
+    if (/\s/.test(ch) && !inSingle && !inDouble) {
+      if (current.length > 0) {
+        tokens.push(current)
+        current = ""
+      }
+      continue
+    }
+    current += ch
+  }
+  if (escaped || inSingle || inDouble) {
+    throw new Error("Command argument contains unclosed quote or dangling escape")
+  }
+  if (current.length > 0) {
+    tokens.push(current)
+  }
+  return tokens
+}
+
+interface ExecBeeResult {
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+const BEE_CLI_TIMEOUT_MS = 30_000
+const DEFAULT_MERGE_QUEUE_WAIT_MS = 180_000
+const POST_EXIT_MERGE_MARGIN_MS = 60_000
+const MIN_POST_EXIT_TIMEOUT_MS = 30_000
+const NODE_MAX_TIMER_TIMEOUT_MS = 2_147_483_647 // 2**31 - 1, Node.js maximum setTimeout delay
+
+function derivePostExitTimeoutMs(queueWaitMs?: number | null): number {
+  const waitMs =
+    typeof queueWaitMs === "number" && Number.isFinite(queueWaitMs) && queueWaitMs >= 0
+      ? queueWaitMs
+      : DEFAULT_MERGE_QUEUE_WAIT_MS
+  const derived = Math.ceil(waitMs + POST_EXIT_MERGE_MARGIN_MS)
+  return Math.min(Math.max(derived, MIN_POST_EXIT_TIMEOUT_MS), NODE_MAX_TIMER_TIMEOUT_MS)
+}
+
+function execBeeCli(
+  directory: string,
+  args: string[],
+  sessionId?: string,
+  timeoutMs: number = BEE_CLI_TIMEOUT_MS,
+): Promise<ExecBeeResult> {
+  return new Promise((resolve) => {
+    const beeBinary = resolveBeeBinary(directory)
+    if (!beeBinary) {
+      return resolve({
+        stdout: "",
+        stderr: "bee binary not found in this project or its main worktree",
+        exitCode: 127,
+      })
+    }
+    const env = { ...process.env }
+    if (sessionId) {
+      env.PI_SESSION_ID = sessionId
+    }
+    env.BEE_EXEC_TIMEOUT_MS = String(timeoutMs)
+    const child = execFile(
+      beeBinary,
+      args,
+      {
+        cwd: directory,
+        env,
+        timeout: timeoutMs,
+        maxBuffer: 10 * 1024 * 1024,
+        encoding: "utf8",
+      },
+      (error, stdout, stderr) => {
+        let exitCode = 0
+        let errDetail = ""
+        if (error) {
+          exitCode =
+            typeof (error as any).code === "number"
+              ? (error as any).code
+              : (error as any).status || 1
+          if (exitCode === 0) exitCode = 1
+          errDetail =
+            (error as any).killed && (error as any).signal === "SIGTERM"
+              ? `bee CLI timed out after ${timeoutMs}ms`
+              : error.message || String(error)
+        }
+        const stderrStr = String(stderr || "")
+        resolve({
+          stdout: String(stdout || ""),
+          stderr: stderrStr.length > 0 ? stderrStr : errDetail,
+          exitCode,
+        })
+      },
+    )
+    child.stdin?.end()
+  })
+}
+
+const MARKER_REGEX = /@@BEE_SESSION_TRANSITION@@\s+([^\r\n]+)\r?\n?/g
+
+const EXPECTED_TRANSITION_KEYS = [
+  "continuation",
+  "feature",
+  "operation",
+  "piSessionId",
+  "schemaVersion",
+  "sourceCwd",
+  "targetCwd",
+  "worktreeId",
+]
+
+const EXPECTED_CONTINUATION_KEYS = [
+  "noCleanup",
+  "operation",
+  "queueWaitMs",
+  "skipUat",
+]
+
+function hasExactKeys(obj: Record<string, unknown>, expectedSortedKeys: string[]): boolean {
+  const keys = Object.keys(obj).sort()
+  if (keys.length !== expectedSortedKeys.length) return false
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i] !== expectedSortedKeys[i]) return false
+  }
+  return true
+}
+
+function validateTransitionIntent(
+  rawJson: string,
+  ctx: any,
+): SessionTransitionIntent | null {
+  let parsed: any
+  try {
+    parsed = JSON.parse(rawJson)
+  } catch {
+    return null
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null
+  }
+  if (!hasExactKeys(parsed, EXPECTED_TRANSITION_KEYS)) {
+    return null
+  }
+  if (parsed.schemaVersion !== 1) {
+    return null
+  }
+  if (parsed.operation !== "enter-worktree" && parsed.operation !== "exit-worktree-before-merge") {
+    return null
+  }
+  if (typeof parsed.sourceCwd !== "string" || typeof parsed.targetCwd !== "string") {
+    return null
+  }
+  if (!path.isAbsolute(parsed.sourceCwd) || !path.isAbsolute(parsed.targetCwd)) {
+    return null
+  }
+
+  if (typeof parsed.worktreeId !== "string" || parsed.worktreeId.trim().length === 0) {
+    return null
+  }
+
+  if (parsed.feature !== null && (typeof parsed.feature !== "string" || parsed.feature.trim().length === 0)) {
+    return null
+  }
+
+  const activeSessionId = sessionIdOf(ctx)
+  if (!activeSessionId || typeof parsed.piSessionId !== "string" || parsed.piSessionId !== activeSessionId) {
+    return null
+  }
+
+  if (parsed.operation === "enter-worktree") {
+    if (parsed.continuation !== null) {
+      return null
+    }
+  } else if (parsed.operation === "exit-worktree-before-merge") {
+    const cont = parsed.continuation
+    if (!cont || typeof cont !== "object" || Array.isArray(cont)) {
+      return null
+    }
+    if (!hasExactKeys(cont, EXPECTED_CONTINUATION_KEYS)) {
+      return null
+    }
+    if (cont.operation !== "merge-worktree") {
+      return null
+    }
+    if (typeof cont.noCleanup !== "boolean") {
+      return null
+    }
+    if (typeof cont.skipUat !== "boolean") {
+      return null
+    }
+    if (
+      cont.queueWaitMs !== null &&
+      (typeof cont.queueWaitMs !== "number" || !Number.isFinite(cont.queueWaitMs) || cont.queueWaitMs < 0)
+    ) {
+      return null
+    }
+  }
+
+  let canonSource: string
+  let canonTarget: string
+  let canonCtxCwd: string
+  try {
+    canonSource = canonicalizePath(parsed.sourceCwd)
+    canonTarget = canonicalizePath(parsed.targetCwd)
+    canonCtxCwd = canonicalizePath(ctx.cwd)
+  } catch {
+    return null
+  }
+
+  if (parsed.sourceCwd !== canonSource || parsed.targetCwd !== canonTarget) {
+    return null
+  }
+
+  if (canonSource !== canonCtxCwd) {
+    return null
+  }
+  if (canonTarget === canonSource) {
+    return null
+  }
+  if (!existsSync(parsed.targetCwd) || !isDirectory(parsed.targetCwd)) {
+    return null
+  }
+
+  return parsed as SessionTransitionIntent
+}
+
+function processTextForMarkers(
+  text: string,
+  ctx: any,
+): { newText: string; validIntent: SessionTransitionIntent | null; modified: boolean } {
+  if (!text.includes("@@BEE_SESSION_TRANSITION@@")) {
+    return { newText: text, validIntent: null, modified: false }
+  }
+
+  let validIntent: SessionTransitionIntent | null = null
+  let modified = false
+
+  const newText = text.replace(MARKER_REGEX, (match, jsonStr) => {
+    const validated = validateTransitionIntent(jsonStr.trim(), ctx)
+    if (validated && !validIntent) {
+      validIntent = validated
+      modified = true
+      return ""
+    }
+    return match
+  })
+
+  return { newText, validIntent, modified }
+}
+
+function extractAndCaptureTransitionMarker(
+  event: any,
+  ctx: any,
+): { content: any } | undefined {
+  let anyModified = false
+  let capturedIntent: SessionTransitionIntent | null = null
+
+  if (Array.isArray(event?.content)) {
+    for (const block of event.content) {
+      if (block && typeof block.text === "string") {
+        const { newText, validIntent, modified } = processTextForMarkers(block.text, ctx)
+        if (modified) {
+          block.text = newText
+          anyModified = true
+          if (validIntent && !capturedIntent) capturedIntent = validIntent
+        }
+      }
+    }
+  } else if (typeof event?.content === "string") {
+    const { newText, validIntent, modified } = processTextForMarkers(event.content, ctx)
+    if (modified) {
+      event.content = newText
+      anyModified = true
+      if (validIntent && !capturedIntent) capturedIntent = validIntent
+    }
+  }
+
+  if (typeof event?.text === "string") {
+    const { newText, validIntent, modified } = processTextForMarkers(event.text, ctx)
+    if (modified) {
+      event.text = newText
+      anyModified = true
+      if (validIntent && !capturedIntent) capturedIntent = validIntent
+    }
+  }
+
+  if (typeof event?.output === "string") {
+    const { newText, validIntent, modified } = processTextForMarkers(event.output, ctx)
+    if (modified) {
+      event.output = newText
+      anyModified = true
+      if (validIntent && !capturedIntent) capturedIntent = validIntent
+    }
+  }
+
+  if (!capturedIntent) {
+    return undefined
+  }
+
+  const activeSessionId = sessionIdOf(ctx)
+  if (!activeSessionId) return undefined
+
+  const token = `reloc-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const directory = directoryOf(ctx)
+  pendingTransitions.set(token, {
+    transition: capturedIntent,
+    sessionId: activeSessionId,
+    sourceCwd: directory,
+  })
+  pendingRelocationTokens.set(activeSessionId, token)
+
+  const patchContent = Array.isArray(event?.content)
+    ? event.content
+    : typeof event?.content === "string"
+      ? [{ type: "text", text: event.content }]
+      : typeof event?.text === "string"
+        ? [{ type: "text", text: event.text }]
+        : typeof event?.output === "string"
+          ? [{ type: "text", text: event.output }]
+          : event?.content
+
+  return { content: patchContent }
+}
+
+async function revalidateDeferredIntent(
+  ctx: any,
+  intent: SessionTransitionIntent,
+): Promise<SessionTransitionIntent | null> {
+  if (!intent || typeof intent !== "object") return null
+  if (intent.schemaVersion !== 1) return null
+
+  const directory = directoryOf(ctx)
+  let args: string[] = []
+
+  if (intent.operation === "enter-worktree") {
+    if (!intent.worktreeId) return null
+    args = ["worktree", "enter", "--id", intent.worktreeId, "--json"]
+  } else if (intent.operation === "exit-worktree-before-merge") {
+    args = ["worktree", "merge", "--json"]
+    if (intent.worktreeId) {
+      args.push("--id", intent.worktreeId)
+    }
+    if (intent.continuation?.noCleanup) {
+      args.push("--no-cleanup")
+    }
+    if (intent.continuation?.skipUat) {
+      args.push("--skip-uat")
+    }
+    if (intent.continuation?.queueWaitMs != null) {
+      args.push("--queue-wait-ms", String(intent.continuation.queueWaitMs))
+    }
+  } else {
+    return null
+  }
+
+  const result = await execBeeCli(directory, args, sessionIdOf(ctx))
+  if (result.exitCode !== 0) {
+    return null
+  }
+
+  let parsed: any
+  try {
+    parsed = JSON.parse(result.stdout)
+  } catch {
+    return null
+  }
+
+  const verified = parsed?.sessionTransition
+  if (!verified || typeof verified !== "object") return null
+
+  const validatedVerified = validateTransitionIntent(JSON.stringify(verified), ctx)
+  if (!validatedVerified) return null
+
+  if (validatedVerified.schemaVersion !== intent.schemaVersion) return null
+  if (validatedVerified.operation !== intent.operation) return null
+
+  if (
+    typeof validatedVerified.worktreeId !== "string" ||
+    typeof intent.worktreeId !== "string" ||
+    validatedVerified.worktreeId.trim().length === 0 ||
+    validatedVerified.worktreeId !== intent.worktreeId
+  ) {
+    return null
+  }
+
+  if ((validatedVerified.feature ?? null) !== (intent.feature ?? null)) return null
+  if ((validatedVerified.piSessionId ?? null) !== (intent.piSessionId ?? null)) return null
+
+  let canonVerifiedSource: string, canonIntentSource: string, canonCtxCwd: string
+  let canonVerifiedTarget: string, canonIntentTarget: string
+  try {
+    canonVerifiedSource = canonicalizePath(validatedVerified.sourceCwd)
+    canonIntentSource = canonicalizePath(intent.sourceCwd)
+    canonVerifiedTarget = canonicalizePath(validatedVerified.targetCwd)
+    canonIntentTarget = canonicalizePath(intent.targetCwd)
+    canonCtxCwd = canonicalizePath(ctx.cwd)
+  } catch {
+    return null
+  }
+  if (canonVerifiedSource !== canonIntentSource) return null
+  if (canonVerifiedSource !== canonCtxCwd) return null
+  if (canonVerifiedTarget !== canonIntentTarget) return null
+
+  if (intent.operation === "exit-worktree-before-merge") {
+    const vCont = validatedVerified.continuation
+    const iCont = intent.continuation
+    if (!vCont || !iCont) return null
+    if (vCont.operation !== iCont.operation) return null
+    if (vCont.noCleanup !== iCont.noCleanup) return null
+    if (vCont.skipUat !== iCont.skipUat) return null
+    if (vCont.queueWaitMs !== iCont.queueWaitMs) return null
+  } else {
+    if (validatedVerified.continuation !== null || intent.continuation !== null) return null
+  }
+
+  return validatedVerified
+}
+
+async function handlePostExitMerge(replacedCtx: any, intent: SessionTransitionIntent): Promise<void> {
+  const continuation = intent.continuation
+  const mergeArgs = ["worktree", "merge"]
+  if (intent.worktreeId) {
+    mergeArgs.push("--id", intent.worktreeId)
+  }
+  if (continuation?.noCleanup) {
+    mergeArgs.push("--no-cleanup")
+  }
+  if (continuation?.skipUat) {
+    mergeArgs.push("--skip-uat")
+  }
+  if (continuation?.queueWaitMs != null) {
+    mergeArgs.push("--queue-wait-ms", String(continuation.queueWaitMs))
+  }
+
+  const directory = replacedCtx.cwd || intent.targetCwd
+  const timeoutMs = derivePostExitTimeoutMs(continuation?.queueWaitMs)
+  const result = await execBeeCli(directory, mergeArgs, sessionIdOf(replacedCtx), timeoutMs)
+  if (result.exitCode === 0) {
+    const out = result.stdout.trim() || result.stderr.trim()
+    replacedCtx.ui?.notify?.(`Merge succeeded: ${out || `Merged worktree ${intent.worktreeId || ""}`}`, "info")
+  } else {
+    const err = result.stderr.trim() || result.stdout.trim()
+    const worktreeId = intent.worktreeId || ""
+    const reentryCmd = `/bee-worktree-enter --id ${worktreeId}`
+    replacedCtx.ui?.notify?.(
+      `Merge refused: ${err}\nTo return to the worktree, run: ${reentryCmd}`,
+      "error",
+    )
+  }
+}
+
+async function performSessionTransition(ctx: any, intent: SessionTransitionIntent): Promise<boolean> {
+  if (activeTransition) {
+    ctx.ui?.notify?.("Session transition refused: another transition is in progress", "warning")
+    return false
+  }
+  activeTransition = true
+  transitionTeardownOccurred = false
+
+  let forkedSessionFile: string | null = null
+  try {
+    if (typeof ctx?.isIdle === "function" && !ctx.isIdle()) {
+      ctx.ui?.notify?.("Session transition refused: agent turn is currently active", "error")
+      return false
+    }
+
+    const currentSessionId = sessionIdOf(ctx)
+    if (
+      !currentSessionId ||
+      typeof intent?.piSessionId !== "string" ||
+      intent.piSessionId !== currentSessionId
+    ) {
+      ctx.ui?.notify?.(
+        "Session transition refused: current session ID does not match intent session ID",
+        "error",
+      )
+      return false
+    }
+
+    if (!intent || typeof intent !== "object") {
+      ctx.ui?.notify?.("Session transition refused: intent is missing or invalid", "error")
+      return false
+    }
+    if (intent.schemaVersion !== 1) {
+      ctx.ui?.notify?.("Session transition refused: unsupported schemaVersion", "error")
+      return false
+    }
+    if (intent.operation !== "enter-worktree" && intent.operation !== "exit-worktree-before-merge") {
+      ctx.ui?.notify?.("Session transition refused: unknown operation", "error")
+      return false
+    }
+    if (typeof intent.sourceCwd !== "string" || typeof intent.targetCwd !== "string") {
+      ctx.ui?.notify?.("Session transition refused: sourceCwd or targetCwd missing", "error")
+      return false
+    }
+    if (!path.isAbsolute(intent.sourceCwd) || !path.isAbsolute(intent.targetCwd)) {
+      ctx.ui?.notify?.("Session transition refused: sourceCwd and targetCwd must be absolute", "error")
+      return false
+    }
+
+    let canonSource: string
+    let canonTarget: string
+    let canonCtxCwd: string
+    try {
+      canonSource = canonicalizePath(intent.sourceCwd)
+      canonTarget = canonicalizePath(intent.targetCwd)
+      canonCtxCwd = canonicalizePath(ctx.cwd)
+    } catch (err: any) {
+      ctx.ui?.notify?.(
+        `Session transition refused: path canonicalization failed (${err?.message ?? err})`,
+        "error",
+      )
+      return false
+    }
+
+    if (intent.sourceCwd !== canonSource || intent.targetCwd !== canonTarget) {
+      ctx.ui?.notify?.("Session transition refused: sourceCwd or targetCwd is not canonical", "error")
+      return false
+    }
+
+    if (canonSource !== canonCtxCwd) {
+      ctx.ui?.notify?.(`Session transition refused: sourceCwd (${canonSource}) does not match current directory (${canonCtxCwd})`, "error")
+      return false
+    }
+
+    if (canonTarget === canonSource) {
+      ctx.ui?.notify?.("Session transition refused: target directory is identical to source directory", "error")
+      return false
+    }
+
+    if (!existsSync(intent.targetCwd) || !isDirectory(intent.targetCwd)) {
+      ctx.ui?.notify?.(`Session transition refused: target directory does not exist: ${intent.targetCwd}`, "error")
+      return false
+    }
+
+    const validatedIntent = validateTransitionIntent(JSON.stringify(intent), ctx)
+    if (!validatedIntent) {
+      ctx.ui?.notify?.("Session transition refused: intent is missing or invalid", "error")
+      return false
+    }
+
+    const sm = ctx?.sessionManager
+    if (!sm) {
+      ctx.ui?.notify?.("Session transition refused: no sessionManager available", "error")
+      return false
+    }
+    if (typeof sm.isPersisted === "function" && !sm.isPersisted()) {
+      ctx.ui?.notify?.("Session transition refused: current session is in-memory and cannot be forked", "error")
+      return false
+    }
+    const sourceSessionFile =
+      typeof sm.getSessionFile === "function" ? sm.getSessionFile() : sm.sessionFile
+    if (!sourceSessionFile || typeof sourceSessionFile !== "string" || !existsSync(sourceSessionFile)) {
+      ctx.ui?.notify?.("Session transition refused: source session file does not exist on disk", "error")
+      return false
+    }
+    try {
+      if (statSync(sourceSessionFile).size === 0) {
+        ctx.ui?.notify?.("Session transition refused: source session file is empty", "error")
+        return false
+      }
+    } catch {
+      ctx.ui?.notify?.("Session transition refused: unable to inspect source session file", "error")
+      return false
+    }
+
+    const SessionManagerConstructor = sm.constructor
+    if (!SessionManagerConstructor || typeof SessionManagerConstructor.forkFrom !== "function") {
+      ctx.ui?.notify?.("Session transition refused: SessionManager.forkFrom is not available", "error")
+      return false
+    }
+
+    let forkedManager: any
+    try {
+      forkedManager = await SessionManagerConstructor.forkFrom(sourceSessionFile, intent.targetCwd)
+    } catch (forkErr: any) {
+      ctx.ui?.notify?.(`Session transition failed during fork: ${forkErr?.message ?? forkErr}`, "error")
+      return false
+    }
+
+    forkedSessionFile =
+      typeof forkedManager?.getSessionFile === "function"
+        ? forkedManager.getSessionFile()
+        : forkedManager?.sessionFile
+    if (!forkedSessionFile || !existsSync(forkedSessionFile)) {
+      ctx.ui?.notify?.("Session transition failed: forked session file was not created", "error")
+      return false
+    }
+
+    let switchResult: any
+    try {
+      switchResult = await ctx.switchSession(forkedSessionFile, {
+        withSession: async (replacedCtx: any) => {
+          if (intent.operation === "exit-worktree-before-merge") {
+            await handlePostExitMerge(replacedCtx, intent)
+          } else {
+            replacedCtx.ui?.notify?.(
+              `Relocated session to worktree ${intent.worktreeId || ""} (${intent.targetCwd})`,
+              "info",
+            )
+          }
+        },
+      })
+    } catch (switchErr: any) {
+      if (!transitionTeardownOccurred) {
+        if (forkedSessionFile && existsSync(forkedSessionFile)) {
+          try {
+            rmSync(forkedSessionFile, { force: true })
+          } catch {}
+        }
+      }
+      const switchErrMsg = switchErr?.message ?? switchErr
+      console.error(
+        transitionTeardownOccurred
+          ? `bee session switch failed after teardown: ${switchErrMsg}`
+          : `bee session switch failed: ${switchErrMsg}`,
+      )
+      try {
+        ctx.ui?.notify?.(
+          transitionTeardownOccurred
+            ? `Session switch failed after teardown: ${switchErrMsg}`
+            : `Session switch failed: ${switchErrMsg}`,
+          "error",
+        )
+      } catch (notifyErr: any) {
+        console.error(
+          `bee UI notification failed after session switch error: ${notifyErr?.message ?? notifyErr}`,
+        )
+      }
+      return false
+    }
+
+    if (switchResult && switchResult.cancelled) {
+      if (!transitionTeardownOccurred && forkedSessionFile && existsSync(forkedSessionFile)) {
+        try {
+          rmSync(forkedSessionFile, { force: true })
+        } catch {}
+      }
+      try {
+        ctx.ui?.notify?.("Session switch was cancelled", "info")
+      } catch (notifyErr: any) {
+        console.error(
+          `bee UI notification failed after session cancellation: ${notifyErr?.message ?? notifyErr}`,
+        )
+      }
+      return false
+    }
+
+    return true
+  } finally {
+    activeTransition = false
+    transitionTeardownOccurred = false
+  }
+}
+
 // ─── the belt ──────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
@@ -967,7 +1691,7 @@ export default function (pi: ExtensionAPI) {
   }) as any)
 
   // ── ADVISORY: state-sync, tools-logger, and activity after every tool result.
-  // Returns nothing, so the result itself is never modified. ─────────────────
+  // Strips and captures session transition markers from successful shell results. ──
   pi.on("tool_result", (async (event: any, ctx: any) => {
     const directory = directoryOf(ctx)
     const mapped = mapToolCall(String(event?.toolName ?? ""), event?.input)
@@ -1003,7 +1727,19 @@ export default function (pi: ExtensionAPI) {
     } catch (err: any) {
       console.error(`bee activity (advisory): ${err?.message ?? err}`)
     }
-    return undefined
+    let patch: { content: any } | undefined
+    try {
+      const isError = Boolean(event?.isError)
+      if (!isError) {
+        const toolName = String(event?.toolName ?? "").toLowerCase()
+        if (toolName === "bash" || toolName === "powershell") {
+          patch = extractAndCaptureTransitionMarker(event, ctx)
+        }
+      }
+    } catch (err: any) {
+      console.error(`bee transition marker capture (advisory): ${err?.message ?? err}`)
+    }
+    return patch
   }) as any)
 
   // ── ADVISORY: the turn-end waiting mark and continuation nudge.
@@ -1025,6 +1761,27 @@ export default function (pi: ExtensionAPI) {
       inFlightClaims.clear()
     } catch (err: any) {
       console.error(`bee result-inbox (advisory): could not consume a claim: ${err?.message ?? err}`)
+    }
+
+    try {
+      const activeSessionId = sessionIdOf(ctx)
+      if (activeSessionId && pendingRelocationTokens.has(activeSessionId)) {
+        const token = pendingRelocationTokens.get(activeSessionId)!
+        pendingRelocationTokens.delete(activeSessionId)
+        setTimeout(async () => {
+          try {
+            if (typeof pi?.sendUserMessage === "function") {
+              await pi.sendUserMessage(`/bee-worktree-relocate ${token}`, {
+                expandPromptTemplates: true,
+              })
+            }
+          } catch (err: any) {
+            console.error(`bee relocation dispatch (advisory): ${err?.message ?? err}`)
+          }
+        }, 0)
+      }
+    } catch (err: any) {
+      console.error(`bee relocation (advisory): ${err?.message ?? err}`)
     }
     try {
       const directory = directoryOf(ctx)
@@ -1122,6 +1879,9 @@ export default function (pi: ExtensionAPI) {
       //    In Pi, "resume" means switching away to another session file, so THIS session is ending.
       //    To prevent activity.rs from silently skipping the exit transition on Pi's "resume",
       //    all terminating Pi reasons map to a Claude-shaped exit reason ("quit").
+      if (reason === "resume" && activeTransition) {
+        transitionTeardownOccurred = true
+      }
       if (reason === "reload") return undefined
       const directory = directoryOf(ctx)
       try {
@@ -1146,10 +1906,188 @@ export default function (pi: ExtensionAPI) {
     } catch (err: any) {
       console.error(`bee session_shutdown (advisory): ${err?.message ?? err}`)
     }
+    pendingTransitions.clear()
+    pendingRelocationTokens.clear()
     return undefined
   }) as any)
+
+  // ── Worktree session relocation commands (pwsr-2) ──────────────────────────
+
+  pi.registerCommand("bee-worktree-new", {
+    description: "Create and enter a new bee worktree",
+    handler: async (args: string, ctx: any) => {
+      if (typeof ctx?.isIdle === "function" && !ctx.isIdle()) {
+        ctx.ui?.notify?.("Command refused: agent turn is currently active", "error")
+        return
+      }
+      let tokens: string[]
+      try {
+        tokens = tokenizeArgv(args)
+      } catch (err: any) {
+        ctx.ui?.notify?.(`Command argument error: ${err?.message ?? err}`, "error")
+        return
+      }
+      const beeArgs = ["worktree", "new", ...tokens]
+      if (!beeArgs.includes("--json")) {
+        beeArgs.push("--json")
+      }
+      const directory = directoryOf(ctx)
+      const result = await execBeeCli(directory, beeArgs, sessionIdOf(ctx))
+      if (result.exitCode !== 0) {
+        ctx.ui?.notify?.(result.stderr.trim() || result.stdout.trim() || "bee worktree new failed", "error")
+        return
+      }
+      let parsed: any
+      try {
+        parsed = JSON.parse(result.stdout)
+      } catch {
+        ctx.ui?.notify?.("Failed to parse bee output as JSON", "error")
+        return
+      }
+      if (parsed?.sessionTransition) {
+        await performSessionTransition(ctx, parsed.sessionTransition)
+      } else {
+        ctx.ui?.notify?.(
+          "bee version mismatch: worktree new succeeded but output lacked sessionTransition intent. Upgrade bee to enable session relocation.",
+          "error",
+        )
+      }
+    },
+  })
+
+  pi.registerCommand("bee-worktree-enter", {
+    description: "Enter an existing bee worktree",
+    handler: async (args: string, ctx: any) => {
+      if (typeof ctx?.isIdle === "function" && !ctx.isIdle()) {
+        ctx.ui?.notify?.("Command refused: agent turn is currently active", "error")
+        return
+      }
+      let tokens: string[]
+      try {
+        tokens = tokenizeArgv(args)
+      } catch (err: any) {
+        ctx.ui?.notify?.(`Command argument error: ${err?.message ?? err}`, "error")
+        return
+      }
+      const beeArgs = ["worktree", "enter", ...tokens]
+      if (!beeArgs.includes("--json")) {
+        beeArgs.push("--json")
+      }
+      const directory = directoryOf(ctx)
+      const result = await execBeeCli(directory, beeArgs, sessionIdOf(ctx))
+      if (result.exitCode !== 0) {
+        ctx.ui?.notify?.(result.stderr.trim() || result.stdout.trim() || "bee worktree enter failed", "error")
+        return
+      }
+      let parsed: any
+      try {
+        parsed = JSON.parse(result.stdout)
+      } catch {
+        ctx.ui?.notify?.("Failed to parse bee output as JSON", "error")
+        return
+      }
+      if (parsed?.sessionTransition) {
+        await performSessionTransition(ctx, parsed.sessionTransition)
+      } else {
+        ctx.ui?.notify?.(
+          "bee version mismatch: worktree enter succeeded but output lacked sessionTransition intent. Upgrade bee to enable session relocation.",
+          "error",
+        )
+      }
+    },
+  })
+
+  pi.registerCommand("bee-worktree-merge", {
+    description: "Merge current bee worktree back to main",
+    handler: async (args: string, ctx: any) => {
+      if (typeof ctx?.isIdle === "function" && !ctx.isIdle()) {
+        ctx.ui?.notify?.("Command refused: agent turn is currently active", "error")
+        return
+      }
+      let tokens: string[]
+      try {
+        tokens = tokenizeArgv(args)
+      } catch (err: any) {
+        ctx.ui?.notify?.(`Command argument error: ${err?.message ?? err}`, "error")
+        return
+      }
+      const beeArgs = ["worktree", "merge", ...tokens]
+      if (!beeArgs.includes("--json")) {
+        beeArgs.push("--json")
+      }
+      const directory = directoryOf(ctx)
+      const result = await execBeeCli(directory, beeArgs, sessionIdOf(ctx))
+      if (result.exitCode !== 0) {
+        ctx.ui?.notify?.(result.stderr.trim() || result.stdout.trim() || "bee worktree merge failed", "error")
+        return
+      }
+      let parsed: any
+      try {
+        parsed = JSON.parse(result.stdout)
+      } catch {
+        const out = result.stdout.trim() || result.stderr.trim()
+        ctx.ui?.notify?.(`Merge succeeded: ${out || "Merged worktree into main"}`, "info")
+        return
+      }
+      if (parsed?.sessionTransition) {
+        await performSessionTransition(ctx, parsed.sessionTransition)
+      } else {
+        const out = result.stdout.trim()
+        ctx.ui?.notify?.(`Merge succeeded: ${out || "Merged worktree into main"}`, "info")
+      }
+    },
+  })
+
+  pi.registerCommand("bee-worktree-relocate", {
+    description: "Internal session relocation command for bee worktree transitions",
+    handler: async (args: string, ctx: any) => {
+      if (typeof ctx?.isIdle === "function" && !ctx.isIdle()) {
+        ctx.ui?.notify?.("Command refused: agent turn is currently active", "error")
+        return
+      }
+      const token = args.trim()
+      if (!token) return
+      const pending = pendingTransitions.get(token)
+      if (!pending) return
+      pendingTransitions.delete(token)
+
+      const curSessionId = sessionIdOf(ctx)
+      if (
+        !curSessionId ||
+        !pending.sessionId ||
+        pending.sessionId !== curSessionId ||
+        typeof pending.transition?.piSessionId !== "string" ||
+        pending.transition.piSessionId !== curSessionId
+      ) {
+        ctx.ui?.notify?.(
+          "Session transition refused: session ID mismatch on private command",
+          "error",
+        )
+        return
+      }
+
+      const verifiedTransition = await revalidateDeferredIntent(ctx, pending.transition)
+      if (!verifiedTransition) {
+        ctx.ui?.notify?.(
+          "Session transition refused: deferred transition intent failed authenticity validation",
+          "error",
+        )
+        return
+      }
+
+      await performSessionTransition(ctx, verifiedTransition)
+    },
+  })
 }
 
 // Exported for the belt parity/contract suite (pi_plugin_contracts.rs), which
 // derives this belt's rows from this source rather than a hand list.
-export { PI_BUILTIN_TOOLS, mapToolCall }
+export {
+  PI_BUILTIN_TOOLS,
+  mapToolCall,
+  derivePostExitTimeoutMs,
+  DEFAULT_MERGE_QUEUE_WAIT_MS,
+  POST_EXIT_MERGE_MARGIN_MS,
+  NODE_MAX_TIMER_TIMEOUT_MS,
+  validateTransitionIntent,
+}
