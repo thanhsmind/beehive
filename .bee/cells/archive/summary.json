@@ -935,9 +935,9 @@
     "archived_at": "2026-08-27T20:56:17.914Z"
   },
   "slp-dissent-stop-and-ask": {
-    "capped": 6,
-    "dropped": 0,
-    "archived_at": "2026-08-28T05:24:20.642Z"
+    "capped": 0,
+    "dropped": 1,
+    "archived_at": "2026-09-07T03:29:37.977Z"
   },
   "uat-lane-source": {
     "capped": 1,
