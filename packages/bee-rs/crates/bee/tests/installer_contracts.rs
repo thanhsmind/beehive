@@ -504,8 +504,14 @@ fn install_ps1_raises_the_tls_floor_before_it_downloads() {
 /// discarded the exception, so a TLS failure, a proxy, a rate limit and a
 /// genuinely absent release all printed the same reasonless line before minutes
 /// of compiling. The one datum that tells a user what to fix must survive.
+///
+/// It survived on ONE installer. This test asserted the Windows half and said
+/// nothing about the POSIX half, so `install.sh` kept printing the reasonless
+/// line for a year of releases and a user who watched it compile could not say
+/// why afterwards. A contract pinned on one of two parallel implementations is
+/// the gap, not the guard — assert both.
 #[test]
-fn install_ps1_names_why_the_published_binary_was_skipped() {
+fn both_installers_name_why_the_published_binary_was_skipped() {
     let ps1 = read("scripts/install.ps1");
 
     assert!(
@@ -519,5 +525,51 @@ fn install_ps1_names_why_the_published_binary_was_skipped() {
     assert!(
         ps1.contains(r#"no downloadable asset at $prebuiltTag ($($_.Exception.Message))"#),
         "install.ps1 discards the reason the asset download failed"
+    );
+
+    let sh = read("scripts/install.sh");
+
+    assert!(
+        sh.contains("FETCH_ERR="),
+        "install.sh's fetch() discards the transport's stderr, so neither \
+         fallback line can name a reason"
+    );
+    assert!(
+        sh.contains("could not resolve a published release$FETCH_WHY"),
+        "install.sh no longer reports WHY it could not resolve a release"
+    );
+    assert!(
+        sh.contains("no downloadable asset at $PREBUILT_TAG$FETCH_WHY"),
+        "install.sh discards the reason the asset download failed"
+    );
+    // curl's diagnostics are multi-line. Pasted raw, they strand the closing
+    // paren and the "building from source" verdict on a line of their own.
+    assert!(
+        sh.contains(r#"tr '\n\r\t' '   '"#),
+        "install.sh pastes a multi-line transport error straight into a log \
+         line, splitting the verdict away from its reason"
+    );
+}
+
+/// A single blipped connection cost a multi-minute cargo build, because the
+/// fallback is a full source compile and the download that guards it got one
+/// attempt with no deadline. Three retries cost seconds; the build they avoid
+/// costs minutes. `install.ps1` is deliberately absent here — Windows
+/// PowerShell 5.1 has no `-MaximumRetryCount` and the script still supports it
+/// (it raises that host's TLS floor by hand), so retry parity there is a
+/// separate question with a separate risk.
+#[test]
+fn install_sh_retries_a_blipped_download_before_falling_back_to_a_build() {
+    let sh = read("scripts/install.sh");
+
+    assert!(
+        sh.contains("--retry 3") && sh.contains("--connect-timeout"),
+        "install.sh's curl branch gives a blipped download one attempt and no \
+         deadline before paying for a source build"
+    );
+    assert!(
+        sh.contains("--tries=3") && sh.contains("--timeout="),
+        "install.sh's wget branch gives a blipped download one attempt and no \
+         deadline before paying for a source build"
     );
 }
