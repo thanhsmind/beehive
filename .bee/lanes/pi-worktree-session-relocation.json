@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Four Pi session-relocation decisions locked; planning validates CLI and Pi seams.",
   "next_action": "Clear the impact door, then hand the uat door to the user",
   "created_at": "2026-09-07T05:34:32.734Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",

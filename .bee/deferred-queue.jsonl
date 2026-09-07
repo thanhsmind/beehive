@@ -511,3 +511,4 @@
 {"ts":"2026-09-07T22:49:26.719Z","event":"complete","id":"4ef9c3a6-458a-4451-a765-07f2534954e8"}
 {"ts":"2026-09-07T22:49:26.719Z","event":"complete","id":"a1ff4086-7805-4ccc-ac70-1ca899a28f76"}
 {"ts":"2026-09-07T22:49:26.719Z","event":"complete","id":"08844cb7-4449-4483-af0e-80303ded10ba"}
+{"ts":"2026-09-07T23:17:24.701Z","event":"add","id":"ffdbdc4d-2842-44fa-afc7-76dec6515a96","kind":"promote","feature":"pi-worktree-session-relocation","cells":[],"areas":[],"files":["docs/history/pi-worktree-session-relocation/promote-proposals.md"],"reason":"Promote proposal for \"pi-worktree-session-relocation\" awaiting apply — docs/history/pi-worktree-session-relocation/promote-proposals.md."}
