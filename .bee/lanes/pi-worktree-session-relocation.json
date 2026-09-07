@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-worktree-session-relocation",
   "mode": "feature",
-  "phase": "planning",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Four Pi session-relocation decisions locked; planning validates CLI and Pi seams.",
-  "next_action": "Merged into main at b84e73f; reload the product and test \"pi-worktree-session-relocation\", then either approve uat (\"bee gate --name uat --approved true --lane pi-worktree-session-relocation\") or fix it in the worktree and merge again.",
+  "next_action": "Clear the impact door, then hand the uat door to the user",
   "created_at": "2026-09-07T05:34:32.734Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pi-worktree-session-relocation",
-    "asked_at": "2026-09-07T15:33:33.567Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -42,5 +37,22 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave:user-impact+value (3 seats dropped: Agent tool unavailable)",
     "digest_head": "# Gate 2 report — pi-worktree-session-relocation\n\n## Recommendation\n\nApprove the merged shape and execution plan in\n[plan.md](../plan.md). The selected route uses only Pi 0.85.1's supported\nsession-control context. It also preserves the normal agent-owned bee CLI flow.\n\n## Reality gate\n\n| Check | Result | Evidence |\n|---|---|---|\n| Outcome is nameable | PASS | One settled Pi conversation enters a verified worktree and returns to main before merge. |\n| Target behavior is supported | PASS | Pi 0.8"
+  },
+  "last_scribing_run": {
+    "feature": "pi-worktree-session-relocation",
+    "date": "2026-09-07",
+    "at": "2026-09-07T15:42:25.708Z",
+    "areas_synced": [
+      "worktree-parallelism",
+      "hook-runtime"
+    ],
+    "next_action": "Record compounding, clear the impact door, then hand the uat door to the user"
+  },
+  "last_compounding_run": {
+    "feature": "pi-worktree-session-relocation",
+    "date": "2026-09-07",
+    "at": "2026-09-07T15:42:28.474Z",
+    "learnings": "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "next_action": "Clear the impact door, then hand the uat door to the user"
   }
 }

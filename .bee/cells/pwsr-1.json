@@ -240,6 +240,61 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "goal-met",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs:43 build_session_transition_with_session_id emits schemaVersion 1 typed intent; :127 enter_worktree_core; :201 linked_worktree_merge_core; :393 run_new inserts sessionTransition after create_feature_worktree success; :736 run_merge linked-valid branch returns exit intent; :1049 \"enter\" => run_enter dispatch"
+          },
+          {
+            "id": "decisions-honoured-D3",
+            "status": "PASS",
+            "evidence": "handlers.rs:43-64 builds structured JSON (schemaVersion/operation/sourceCwd/targetCwd/worktreeId/feature/piSessionId/continuation) from CLI-verified values only; :111-124 format_pi_transition_marker + eprintln stderr marker gated on piSessionId, so stdout JSON stays valid and the belt does the harness action"
+          },
+          {
+            "id": "decisions-honoured-D4",
+            "status": "PASS",
+            "evidence": "handlers.rs:387-395 enter intent is built only after create_feature_worktree returns Ok, on the same success path as new_result_and_text; handlers.rs:736-767 the linked-valid merge branch returns before resolve_cleanup_on_merge, the integration queue and every merge/cleanup call, so exit performs no deletion; ordinary-main merge path at :769+ unchanged"
+          },
+          {
+            "id": "decisions-honoured-D1",
+            "status": "PASS",
+            "evidence": "rg for set_current_dir|chdir over packages/bee-rs/crates/bee/src/verbs/worktree/ returned no matches; enter path only reads (read_grants_strict registry.rs:153, resolve_worktree_by_id merge.rs:562, resolve_worktree_feature merge.rs:535)"
+          },
+          {
+            "id": "scope-respected",
+            "status": "PASS",
+            "evidence": "git show a6321be4 --stat lists exactly 3 files: generated/registry_payload.json, verbs/worktree/handlers.rs, verbs/worktree/tests.rs (734 insertions, 5 deletions) — same as the declared set"
+          },
+          {
+            "id": "registry-payload-consistent",
+            "status": "PASS",
+            "evidence": "registry_payload.json gains worktree.enter (params id, json; required [id]) and updates worktree.merge id description + example \"bee worktree merge --json\"; the file is hand-maintained (docs/product-description/README.md:210), so no regen source is stale"
+          },
+          {
+            "id": "tests-real",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::worktree -> \"test result: ok. 176 passed; 0 failed; 0 ignored; 0 measured; 3272 filtered out; finished in 0.37s\"; 15 new test fns in the commit, e.g. build_session_transition_shape_and_fields, enter_worktree_core_verifies_grant_and_git_link_with_zero_mutation, linked_worktree_merge_core_emits_exit_intent_and_zero_mutation, all seen ok in the run"
+          },
+          {
+            "id": "registry-proof-real",
+            "status": "PASS",
+            "evidence": "cargo test --release --test registry_contracts --test registry_dispatch -> \"12 passed; 0 failed\" and \"9 passed; 0 failed\" (dispatch runs each entry's first example against the binary)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-07T15:38:51.342Z"
+      }
+    ]
   }
 }

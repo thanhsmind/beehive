@@ -148,7 +148,7 @@ Preconditions:
   parameters (`noCleanup`, `skipUat`, `queueWaitMs`). The merge itself executes
   only from main (or is reconstructed by the Pi belt after replacement on main).
 - `bee worktree enter` is main-only. Invoking it inside any linked worktree
-  refuses as `WORKTREE_ENTER_FROM_WORKTREE`.
+  refuses untyped, naming the checkout kind it was run from.
 - Exit before merge never deletes the worktree. Teardown runs only after a
   successful merge on main when `--cleanup` is passed or
   `worktree_cleanup_on_merge: true` is configured.

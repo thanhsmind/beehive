@@ -212,6 +212,66 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "goal-met",
+            "status": "PASS",
+            "evidence": "/home/thanhsmind/Projects/goglbe/beehive/.pi/extensions/bee-guard.ts:1504 forkFrom + :1521 ctx.switchSession perform the relocation; direct path via registered /bee-worktree-new|enter|merge commands and deferred path via private /bee-worktree-relocate after agent_settled (test deferred_exit_ordering_settled_fork_switch_replacement_merge ... ok)"
+          },
+          {
+            "id": "decisions-honoured-D1",
+            "status": "PASS",
+            "evidence": "no process.chdir in .pi/extensions/bee-guard.ts (rg for 'chdir' returns 0 hits); harness asserts run.process_cwd_unchanged at pi_plugin_contracts.rs:3661,3740,3877,4684,5291,5492"
+          },
+          {
+            "id": "decisions-honoured-D2",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:1496-1504 resolves sm.constructor.forkFrom(sourceSessionFile, intent.targetCwd); bee-guard.ts:1521-1532 ctx.switchSession(forkedSessionFile, {withSession})"
+          },
+          {
+            "id": "decisions-honoured-D3",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:1413-1463 schema/canonical/cwd validation, :1465 validateTransitionIntent, :1285-1345 zero-mutation CLI revalidation of deferred intent"
+          },
+          {
+            "id": "decisions-honoured-D4",
+            "status": "PASS",
+            "evidence": "merge runs only inside withSession after replacement (bee-guard.ts:1522-1524 -> handlePostExitMerge:1348); only rmSync targets are fork session files (bee-guard.ts:1537,1565) and inbox claims (:1760) - no worktree delete args in handlePostExitMerge:1350-1362"
+          },
+          {
+            "id": "rollback-phases-correct",
+            "status": "PASS",
+            "evidence": "teardown flag set only on session_shutdown reason=resume during an active transition (bee-guard.ts:1882-1884); fork deleted only when !transitionTeardownOccurred (bee-guard.ts:1534, :1563); source session file never removed; tests switch_pre_invalidation_throw_removes_new_fork_and_preserves_source_session ... ok and switch_post_invalidation_throw_preserves_both_fork_and_source_sessions ... ok"
+          },
+          {
+            "id": "scope-respected",
+            "status": "PASS",
+            "evidence": "git show 60f52080 --stat lists exactly .pi/extensions/bee-guard.ts and packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs (2 files changed, 3358 insertions, 17 deletions)"
+          },
+          {
+            "id": "tests-real",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts => 'running 59 tests' ... 'test result: ok. 59 passed; 0 failed; 0 ignored'; no node_or_skip skip lines in output"
+          },
+          {
+            "id": "post-invalidation-notify-safety",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:1542-1558 logs the switch error to console.error before ctx.ui.notify and wraps notify in try/catch; test asserts the stale-context notify throw case (pi_plugin_contracts.rs:4358-4372)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-07T15:39:24.357Z"
+      }
+    ]
   }
 }

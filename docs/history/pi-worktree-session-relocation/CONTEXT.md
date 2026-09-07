@@ -71,6 +71,7 @@ These decisions are fixed. Planning must cite them and must not reinterpret them
 
 None. D1-D4 define the product boundary.
 
+<!-- bee:not-a-deferral: a locked-context shaping record; these questions were answered by the plan that shipped, and the "Deferred Ideas" list restates the Out of Scope boundary — neither promises later work -->
 ### Deferred To Planning
 
 - Which existing worktree command surfaces should carry enter and exit intent?
@@ -84,6 +85,7 @@ None. D1-D4 define the product boundary.
 - Relocating non-Pi harness sessions.
 - Deleting a worktree as part of exit.
 - Mutating the Pi process cwd in place.
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 

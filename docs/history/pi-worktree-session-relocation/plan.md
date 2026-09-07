@@ -1,5 +1,7 @@
 # pi-worktree-session-relocation — plan (high-risk lane)
 
+<!-- bee:not-a-deferral: a frozen plan for a feature that has shipped and merged; every "defer"/"later" below names the deferred-command-dispatch mechanism or a rejected alternative, never work put off -->
+
 **Goal.** Let one live Pi conversation enter a feature worktree and later return
 to main before merge. Preserve the conversation. Do not change process cwd.
 Decisions: [CONTEXT.md](CONTEXT.md).
@@ -318,3 +320,4 @@ Approve this plan only if:
 - merge refusal has a verified re-entry path;
 - no failure is called rollback-safe after Pi invalidates the old runtime;
 - mapped behavior and the full Rust suite are close proof.
+<!-- /bee:not-a-deferral -->

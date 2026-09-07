@@ -27,7 +27,7 @@ worktree to emit exit-before-merge transition intent (c47fa930, 85d85ede, 0b4ff5
 - **Inside a linked worktree — exit intent before merge (0b4ff55b, 85d85ede):** When run from inside a
   verified linked worktree, `bee worktree merge [--id <id>]` does NOT execute the merge directly
   inside the worktree. An omitted `--id` defaults to the current verified worktree ID; a supplied
-  `--id` must match the current worktree (mismatch refuses typed `WORKTREE_MERGE_ID_MISMATCH`).
+  `--id` must match the current worktree (a mismatch refuses untyped: "cannot merge worktree … from inside worktree …").
   It verifies the strict grant, creates zero git commits, joins no integration queue, stops no
   companion, and performs zero mutation on disk. It emits structured `sessionTransition` metadata
   (`operation: "exit-worktree-before-merge"`, canonical `sourceCwd: worktreeRoot`, `targetCwd: main_root`,

@@ -314,6 +314,7 @@ recovery.
   `.opencode/plugins/bee-guard.ts`, not a rendered JSON manifest sharing this
   catalog's `Entry`/`Group` rows — see `hook_manifests.rs`'s own `Runtime`
   doc comment for why `Runtime::Opencode` would be the wrong shape.
+<!-- bee:not-a-deferral: "deferring relocation until `agent_settled`" names the shipped Pi belt mechanism, not work put off -->
 - Pi is a NAMED EXCLUSION from the same catalog, on the OpenCode precedent
   and written into the same `Runtime` doc comment (pi-support D4's recorded
   deviation, B9, R1): no `Runtime::Pi`, no fourth projection — the belt file
@@ -349,6 +350,7 @@ recovery.
   `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`). Onboarding ships the
   belt from this checkout's own tree via the `copy_pi_extension` step
   (`onboard/apply.rs`, `onboard/plan.rs`).
+<!-- /bee:not-a-deferral -->
 - OpenCode belt internals (B7, B8): `mapToolCall` (tool→hook routing),
   `runBlockingHook` (throw-on-deny, exit-0 `updatedInput`/`ask`/unparseable
   handling), `runAdvisoryHook` (swallow + log), all in

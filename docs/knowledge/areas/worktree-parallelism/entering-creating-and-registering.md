@@ -126,7 +126,7 @@ the ordinary main checkout:
 
 The zero-mutation paved road to enter an existing granted worktree — run from the ordinary MAIN checkout:
 
-- **Main-only and zero-mutation:** Requires cwd to be an ordinary main checkout; refuses if run inside any linked worktree (`WORKTREE_ENTER_FROM_WORKTREE`). Verifies the git worktree link and strict grant in the main store registry. Performs no git commits, writes no `.bee/` state, and modifies neither branch nor directory.
+- **Main-only and zero-mutation:** Requires cwd to be an ordinary main checkout; refuses if run inside any linked worktree (an untyped `{"error": …}` refusal naming the checkout kind, not a typed code). Verifies the git worktree link and strict grant in the main store registry. Performs no git commits, writes no `.bee/` state, and modifies neither branch nor directory.
 - **Emits enter transition intent:** Emits identical `sessionTransition` metadata (`operation: "enter-worktree"`, canonical `sourceCwd: main_root`, `targetCwd: worktreeRoot`, `worktreeId: <id>`, `feature: <slug>`, `piSessionId`, `continuation: null`) on stdout and the `@@BEE_SESSION_TRANSITION@@` stderr marker when `PI_SESSION_ID` is present (85d85ede).
 - **Recovery and re-entry:** Serves as the canonical entry path when returning to an in-flight worktree or re-entering after a refused merge on main (in Pi, the post-exit merge notification explicitly names `/bee-worktree-enter --id <id>` as the re-entry recovery command; CLI merge refuses typed while keeping the worktree granted).
 
