@@ -194,11 +194,47 @@ case "$(uname -s 2>/dev/null || echo unknown)/$(uname -m 2>/dev/null || echo unk
   MINGW*/x86_64|MSYS*/x86_64|CYGWIN*/x86_64) PREBUILT_ASSET="bee-x86_64-pc-windows-msvc.exe" ;;
 esac
 
+# The transport's own words, from the last fetch. NAME THE REASON: this used to
+# be discarded, so both fallback lines below printed one reasonless sentence and
+# then compiled for minutes — a TLS failure, a corporate proxy, a rate limit and
+# a genuinely absent asset were indistinguishable in the log, and the single
+# datum that tells a user what to fix was the one thing the installer threw
+# away. install.ps1 has named its reason since it was written; this is the POSIX
+# half of that same contract, and it was missing because the test that pinned it
+# asserted only the Windows half.
+FETCH_ERR=""
+FETCH_WHY=""
+
+# Render FETCH_ERR as a log parenthetical, or nothing when there is no reason —
+# a genuinely absent asset must not read as "asset missing ()". Written as a
+# function because `[ -n "$x" ] && y=z` returns 1 on the empty case and `set -e`
+# would take the whole installer down over a successful no-op.
+# ONE LINE. curl writes multi-line diagnostics, and pasting them raw split the
+# log entry across lines with its closing paren and "building from source" tail
+# stranded below — the reader loses which line is the verdict at the exact
+# moment the installer is telling them why it is about to compile for minutes.
+fetch_why() {
+  FETCH_WHY=""
+  if [ -n "$FETCH_ERR" ]; then
+    FETCH_WHY=" ($(printf '%s' "$FETCH_ERR" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ *$//'))"
+  fi
+}
+
 fetch() {
   # $1 url, $2 dest. curl or wget, whichever the host has.
-  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"
-  elif command -v wget >/dev/null 2>&1; then wget -qO "$2" "$1"
-  else return 1
+  #
+  # RETRY BEFORE GIVING UP. What waits below this is not "try again later", it
+  # is a full cargo build of the crate graph. Three retries and a connect
+  # deadline cost seconds against the minutes that fallback costs, and a hung
+  # connection now fails instead of hanging forever with no deadline at all.
+  FETCH_ERR=""
+  if command -v curl >/dev/null 2>&1; then
+    FETCH_ERR="$(curl -fsSL --retry 3 --retry-connrefused --connect-timeout 10 "$1" -o "$2" 2>&1)"
+  elif command -v wget >/dev/null 2>&1; then
+    FETCH_ERR="$(wget -q --tries=3 --timeout=10 -O "$2" "$1" 2>&1)"
+  else
+    FETCH_ERR="neither curl nor wget is on PATH"
+    return 1
   fi
 }
 
@@ -221,10 +257,23 @@ else
   # and the instruction layer it vendors can never come from different commits.
   case "$REF" in
     v[0-9]*) PREBUILT_TAG="$REF" ;;
-    *) PREBUILT_TAG="$(fetch "$RELEASES/latest" /dev/stdout 2>/dev/null | sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*|\1|p' | head -1 || true)" ;;
+    *)
+      # Fetch to a FILE, never down a pipe. A pipeline runs fetch in a subshell
+      # and FETCH_ERR dies with it, which would silently reintroduce the very
+      # reasonless line this block exists to fix.
+      STATE_TMP_TAG="$(mktemp -d)"
+      if fetch "$RELEASES/latest" "$STATE_TMP_TAG/latest.html"; then
+        PREBUILT_TAG="$(sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*|\1|p' "$STATE_TMP_TAG/latest.html" | head -1 || true)"
+        if [ -z "$PREBUILT_TAG" ]; then
+          FETCH_ERR="no release tag in the redirect from /releases/latest"
+        fi
+      fi
+      rm -rf "$STATE_TMP_TAG"
+      ;;
   esac
   if [ -z "$PREBUILT_TAG" ]; then
-    log "binary   could not resolve a published release — building from source"
+    fetch_why
+    log "binary   could not resolve a published release$FETCH_WHY — building from source"
   else
     STATE_TMP_BIN="$(mktemp -d)"
     if fetch "$RELEASES/download/$PREBUILT_TAG/$PREBUILT_ASSET" "$STATE_TMP_BIN/$PREBUILT_ASSET"        && fetch "$RELEASES/download/$PREBUILT_TAG/SHA256SUMS" "$STATE_TMP_BIN/SHA256SUMS"; then
@@ -239,7 +288,8 @@ else
         rm -rf "$STATE_TMP_BIN"
       fi
     else
-      log "binary   no downloadable asset at $PREBUILT_TAG — building from source"
+      fetch_why
+      log "binary   no downloadable asset at $PREBUILT_TAG$FETCH_WHY — building from source"
       rm -rf "$STATE_TMP_BIN"
     fi
   fi
