@@ -486,6 +486,7 @@
     "okf",
     "knowledge-orphan-links",
     "knowledge-pattern-areas",
-    "leader-completeness-check"
+    "leader-completeness-check",
+    "pi-worktree-session-relocation"
   ]
 }
