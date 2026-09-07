@@ -4714,13 +4714,38 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, "{}");
         // No on-disk prompts: the embedded copy is the only one.
-        assert!(prompts_match_disk(&root, "gather"));
+        assert!(prompt_skew(&root, "gather").is_none());
         // A vendored copy that MATCHES is fine (CRLF normalization included).
         w(&root, ".bee/bin/prompts/gather.md", &PROMPT_GATHER.replace('\n', "\r\n"));
-        assert!(prompts_match_disk(&root, "gather"));
+        assert!(prompt_skew(&root, "gather").is_none());
         // A skewed vendored copy delegates.
         w(&root, ".bee/bin/prompts/gather.md", "Gather: something else\n");
-        assert!(!prompts_match_disk(&root, "gather"));
+        assert!(prompt_skew(&root, "gather").is_some());
+    }
+
+    /// Prompt skew used to `return None`, which the dispatcher turns into
+    /// the generic "unsupported argument shape" refusal — blaming the
+    /// caller's flags for a stale binary. The Node runtime that `None` used
+    /// to delegate to was deleted at R6, so the skew must name itself: which
+    /// file disagrees, and how to fix it.
+    #[test]
+    fn prompt_skew_names_the_offending_file_and_its_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        assert!(prompt_skew(&root, "gather").is_none(), "a repo with no on-disk copy is not skewed");
+
+        w(&root, ".bee/bin/prompts/gather.md", "Gather: something else\n");
+        let skew = prompt_skew(&root, "gather").expect("a skewed vendored copy is skew");
+        let PromptSkew::Disk(path) = &skew else { panic!("expected a disk skew, got {skew:?}") };
+        assert!(path.ends_with(".bee/bin/prompts/gather.md"), "names the file: {path:?}");
+
+        let msg = prompt_skew_message("dispatch prepare", "gather", &skew);
+        assert!(msg.contains(".bee/bin/prompts/gather.md"), "{msg}");
+        assert!(msg.contains("FIX:"), "carries a remedy: {msg}");
+        assert!(
+            !msg.contains("unsupported argument shape"),
+            "must not read like the generic dispatcher refusal: {msg}"
+        );
     }
 
     #[test]
@@ -6496,9 +6521,9 @@ use std::time::Instant;
     /// gather kind's slot moved nothing else.
     #[test]
     fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
-        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
-        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
-        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nPaths: <caller fills in the exact files/paths to read>\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"advisor (fable)","model":"fable"}"#;
+        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
+        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"advisor (fable)","model":"fable"}"#;
 
         let t0 = tempfile::tempdir().unwrap();
         let none = chain_repo(&t0, "");
@@ -6876,8 +6901,6 @@ advance_on — falling to another model there hides the defect (D11)"
     const ADVISOR_BODY_WITHOUT_A_BRIEF: &str = concat!(
         "Advisor consult: produce an independent digest/opinion on the given question. Read-only.\n",
         "\n",
-        "Paths: <caller fills in the exact files/paths to read>\n",
-        "\n",
         "Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked."
     );
 
@@ -7184,7 +7207,7 @@ advance_on — falling to another model there hides the defect (D11)"
             .join("..")
             .join("..");
         assert!(
-            prompts_match_disk(&repo_root, "advisor"),
+            prompt_skew(&repo_root, "advisor").is_none(),
             "packages/bee/prompts/advisor.md or .bee/bin/prompts/advisor.md drifted from the \
              compiled-in template — run `bee dev regen` and rebuild, or every dispatch prepare \
              in this checkout resolves to nothing"
@@ -7983,7 +8006,7 @@ advance_on — falling to another model there hides the defect (D11)"
             .join("..");
         for name in ["gather", "reviewer", "advisor"] {
             assert!(
-                prompts_match_disk(&repo_root, name),
+                prompt_skew(&repo_root, name).is_none(),
                 "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
                  compiled-in template — run `bee dev regen` and rebuild, or every dispatch \
                  prepare in this checkout resolves to nothing"
@@ -8327,7 +8350,7 @@ advance_on — falling to another model there hides the defect (D11)"
             .join("..");
         for name in ["worker-cell", "gather", "reviewer", "advisor"] {
             assert!(
-                prompts_match_disk(&repo_root, name),
+                prompt_skew(&repo_root, name).is_none(),
                 "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
                  compiled-in template — run `bee dev regen` and rebuild"
             );
