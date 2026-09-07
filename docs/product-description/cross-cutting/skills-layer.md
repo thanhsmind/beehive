@@ -102,7 +102,7 @@ Some skill rules have teeth in the binary; the rest are honor-system. The differ
 | Close carries a capture line or an explicit "nothing settled" | Partly — `bee close`'s capture-queue door is report-only; the scribing-debt door blocks. |
 | Load the skill `orient` names | No. Nothing records or checks which skill is loaded. |
 | One commit per cell, with the cell id as a trailer | No — a convention, not a check. |
-| Route by lane, keep narration under five lines | No — instructions only. |
+| Route by lane, keep narration to what the user needs to act on | No — instructions only. |
 
 ## Modifiers
 
@@ -157,7 +157,7 @@ Columns: before and after the skill's first command (the first side effect that 
 
 ## Open questions and verification
 
-- **Suspected staleness:** `bee-evolving` declares a `nodejs-runtime` dependency and its steps call `node .bee/bin/bee.mjs feedback rank`, but the interpreted runtime was retired — `.bee/bin/bee` is the compiled binary and no `.mjs` remains — while the registry does carry native `feedback collect|digest|count|rank`. If that skill were loaded today the command would fail. Worth a triage entry; not probed, because the skill runs only in the bee repo and only on explicit human invocation.
+- **Fixed 2026-09-07 (prompt audit):** `bee-evolving` declared a `nodejs-runtime` dependency and its steps called `node .bee/bin/bee.mjs feedback rank`, `packages/bee/lib/feedback.mjs` and `node scripts/run_verify.mjs` — all retired with the Rust port, so its own step-0 guard failed inside the bee repo and the skill refused to run. It now declares the `bee-cli` dependency and calls `.bee/bin/bee feedback rank` and `.bee/bin/bee test`.
 - The `missing_effect` values (`unavailable`, `degraded`, `blocked`) were found only in skill frontmatter and in the handbook; no code reads them. Whether any runtime acts on them was not determined.
 - How a runtime decides to surface a skill from its `description` (exact matching behavior, ranking, whether more than one can fire) is the harness's business, not bee's, and was not investigated.
 - The command families in the catalog were derived by reading each `SKILL.md` and its references for `bee …` invocations; a family a skill uses only inside a reference file may be under-represented.

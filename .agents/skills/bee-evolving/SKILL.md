@@ -6,11 +6,11 @@ metadata:
   version: '0.1'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: blocked
-      reason: Ranks the feedback digest via the vendored .bee/bin helpers.
+      reason: Ranks the feedback digest and runs the declared test path through the vendored bee binary.
 ---
 
 # Evolving (the hive improves itself)
@@ -34,10 +34,10 @@ Suites green -> Gate B (human reviews diff) -> Push (named, manual)
 Before anything else, run the guard:
 
 ```bash
-test -f packages/bee/lib/feedback.mjs && test -f skills/bee-writing-skills/SKILL.md
+test -f packages/bee/AGENTS.block.md && test -f packages/bee-rs/crates/bee/Cargo.toml && test -f skills/bee-writing-skills/SKILL.md
 ```
 
-Only the repo that *develops* bee has `packages/bee/` — a host repo's vendored `.bee/bin/` copy
+Only the repo that *develops* bee has `packages/bee-rs/` — a host repo's vendored `.bee/bin/` copy
 does NOT qualify. Guard fails → **REFUSE and stop**:
 
 > bee-evolving runs only in the bee repository. This repo is a bee *host*. I will not rank, patch,
@@ -51,7 +51,7 @@ it, never by moving the loop.
 ## 1. Rank the feedback — merged view only
 
 ```bash
-node .bee/bin/bee.mjs feedback rank --json
+.bee/bin/bee feedback rank --json
 ```
 
 Merges the local digest with any configured `dogfood_repos` digests through `mergeDigests`
@@ -96,7 +96,7 @@ a body line must change agent behavior, or it belongs in `references/`.
 Required green before Gate B:
 
 ```bash
-node scripts/run_verify.mjs
+.bee/bin/bee test
 ```
 
 A red suite returns the loop to step 3. Never weaken an existing assertion to get green.
@@ -143,7 +143,7 @@ nor any autonomy flag covers either gate.
 ## Red Flags — STOP
 
 - running any step of this loop in a repo that fails the step-0 guard
-- reading a foreign repo's `.bee/` files directly instead of consuming `bee.mjs feedback rank`
+- reading a foreign repo's `.bee/` files directly instead of consuming `bee feedback rank`
 - rendering the cluster `key` (or any datamark-stripped text) to the human or into any prompt
 - implementing anything before the human's Gate A pick, or "getting sign-off retroactively"
 - fixing inline instead of handing off to bee-writing-skills with its RED phase first

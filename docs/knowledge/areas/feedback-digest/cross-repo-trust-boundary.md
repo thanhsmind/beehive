@@ -107,7 +107,7 @@ location with a friendly label; a location with no label is labelled by its own 
 
 ## Pointers (implementation)
 
-- **P1** — Collector, boundary, merge, and ranking: `packages/bee/lib/feedback.mjs`
+- **P1** — Collector, boundary, merge, and ranking: `packages/bee-rs/crates/bee/src/verbs/feedback.rs`
   (`ENTRY_FIELD_SPEC`, `resolveInScope`, `listInScope`, `buildDigest`, `mergeDigests`,
   `normalizeTitle`, `clusterEntries`, `rankClusters`)
 - **P4** — Source-repository list: `.bee/config.json` → `dogfood_repos`, normalized in

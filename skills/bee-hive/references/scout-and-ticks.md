@@ -11,7 +11,7 @@ Retrieval triggers, not reading lists. Token budgets by lane:
 
 | Lane | Harness-context budget | Always read | Trigger-based reads |
 |---|---|---|---|
-| tiny / small | ≈ 2K tokens | bee_status, critical-patterns digest, touched area's state-layer doc — with a bundle: `docs/knowledge/areas/<area>/index.md`; with no bundle: `docs/specs/<area>.md` when present | touched-file neighborhood only |
+| tiny / small | ≈ 2K tokens | bee status, critical-patterns digest, touched area's state-layer doc — with a bundle: `docs/knowledge/areas/<area>/index.md`; with no bundle: `docs/specs/<area>.md` when present | touched-file neighborhood only |
 | standard | ≈ 5K tokens | + recent active decisions, CONTEXT.md | touching schema → schema decisions first; touching auth → auth decisions |
 | high-risk | ≈ 10K tokens | + full decision search on tags, plan history | + high-risk template, prior spikes in `.bee/spikes/`, related learnings files |
 
@@ -93,13 +93,13 @@ Then emit the re-lane tick (Progress ticks below) and continue on the new lane �
 ### Transcript recovery and session mining
 
 Mining runs on **two triggers (crashed or asked-for), under one discipline**:
-- **Crashed session**: `bee_status --json` reports `recovery.candidates` (a stale-heartbeat session with a dirty transcript tail and no clean-end trio).
+- **Crashed session**: `bee status --json` reports `recovery.candidates` (a stale-heartbeat session with a dirty transcript tail and no clean-end trio).
 - **Asked-for mining**: the user asks to mine or reflect on a session in plain language (when asked, there is no dedicated CLI verb or slash command).
 
 **Discipline:** Never auto-run either trigger. Offer mining in one line, and act only when the human agrees — the same discipline the capture-queue flush uses. The offer must disclose two facts when applicable (D7): (1) that the transcript is read by the configured `read` slot (naming that it is an external pane when the slot is herding-shaped), and (2) that the capture queue is already past its blocker threshold when it is.
 
 **Inputs read per path (D3):**
-- *Crashed:* reads `transcript` and `since` from `recovery.candidates[]` in `bee_status --json` (unchanged).
+- *Crashed:* reads `transcript` and `since` from `recovery.candidates[]` in `bee status --json`.
 - *Asked-for:* reads `transcript_path` and `started_at` from the session record (`bee state session list --json`).
 - *Bound:* both paths bound the worker at the transcript's last 256 KB (`DEFAULT_TAIL_MAX_BYTES`). No recovery CLI verb is built or used (D1) — prompts live inline below.
 
@@ -127,7 +127,9 @@ Mining runs on **two triggers (crashed or asked-for), under one discipline**:
 
 Two mechanisms surface results where humans already look — bee otherwise works
 invisibly in `docs/history/` and `.bee/` state. No gate, proof, or evidence rule
-moves; never auto-merge; never work on `main`/default branches directly.
+moves; never auto-merge; code-touching feature work runs in its worktree,
+never on `main` directly (rule: agents-worktree-first — the docs-lane and
+solo-`tiny` exemptions are AGENTS.md's).
 
 **Draft PR, push per cap.** Config key `ship_visibility` in `.bee/config.json`:
 `"draft-pr" | "push-only" | "off"`. Default by lane: `tiny` defaults to
@@ -242,11 +244,11 @@ When the active feature has a `bee.work-item` concept in `docs/knowledge/`, the 
 
 ### Capture queue offer
 
-When `bee_status` reports pending capture stubs, offer the flush before new work — "N settlement(s) from a previous session await their spec merge — flush now (a few minutes) or after the current task?" One line, user chooses; the queue is never silently ignored and never silently dropped.
+When `bee status` reports pending capture stubs, offer the flush before new work — "N settlement(s) from a previous session await their spec merge — flush now (a few minutes) or after the current task?" One line, user chooses; the queue is never silently ignored and never silently dropped.
 
 ### Review candidates
 
-`bee_status --json` carries a `review` block — candidate counts by derived status (`unreviewed`/`in_review`/`reviewed`/`stale`) and any open review sessions. Independent review is user-invoked only: never self-dispatch a reviewer wave because candidates exist. When `high_risk_unreviewed > 0`, surface it plainly — a hard-gate change (auth, data loss, security, external provider) is sitting unreviewed — state the merge/release consequence and offer to start a review; do not label anything reviewed or approved until the user calls it.
+`bee status --json` carries a `review` block — candidate counts by derived status (`unreviewed`/`in_review`/`reviewed`/`stale`) and any open review sessions. Independent review is user-invoked only: never self-dispatch a reviewer wave because candidates exist. When `high_risk_unreviewed > 0`, surface it plainly — a hard-gate change (auth, data loss, security, external provider) is sitting unreviewed — state the merge/release consequence and offer to start a review; do not label anything reviewed or approved until the user calls it.
 
 ### Critical patterns source
 

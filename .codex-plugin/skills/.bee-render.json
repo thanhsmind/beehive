@@ -8,7 +8,7 @@
     },
     {
       "name": "bee-evolving",
-      "sha256": "f00217a8a58897c5907b5656eeb325d1ae1d9de38c2521637e93d470af1aea11"
+      "sha256": "e118c2e68c707f07f44bc70c4a3df89a01fb13d786da61242a7b1b56707aa783"
     },
     {
       "name": "bee-grooming",
@@ -24,7 +24,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "081bb69ffe9a68c681fc97e444578f88f680a19a0eaaaadc0fe96a1303adb2a4"
+      "sha256": "85a2f1be71275fac40efbf495e27de70c6cfe8a65b946c73933101442fd02bd9"
     },
     {
       "name": "bee-planning",
@@ -100,7 +100,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "31e02d22503da3fd36f7108f6674c18a69c979bed653f77a75110acfdc1ad6b4"
+      "sha256": "67550ab67889038900ba6c825a6a0a75f2488fe082721d40a4eb7ece0e0da23a"
     },
     {
       "name": "bee-verify-upkeep",
@@ -116,7 +116,7 @@
     },
     {
       "name": "bee-writing-skills",
-      "sha256": "59b46e2db23d09b357b6a2896322a18b51d4fc2aedd1d781dee50916535fe8e5"
+      "sha256": "c913879b2bd92d547b62d183f83993ce96824b5145b762a7ef7fa488ef9c4726"
     }
   ]
 }

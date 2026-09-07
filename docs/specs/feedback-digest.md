@@ -59,7 +59,7 @@ and not a reason to invent structure that was never there.
 | E4 | [docs/knowledge/areas/feedback-digest/data-model.md](../knowledge/areas/feedback-digest/data-model.md) | a record whose text names an internal function, file, or configuration key is not a problem |
 | E5 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | a source repository that has never closed a feature has no digest |
 | E6 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | two generations from unchanged records differ only in the recorded generation moment |
-| P1 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | collector, boundary, merge, and ranking — `packages/bee/lib/feedback.mjs` |
+| P1 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | collector, boundary, merge, and ranking — `packages/bee-rs/crates/bee/src/verbs/feedback.rs` |
 | P2 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | command surface — `the bee binary` (`feedback` group) |
 | P3 | [docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md](../knowledge/areas/feedback-digest/ranking-and-self-improvement.md) | the self-improvement process — `docs/handbook/evolving.md` |
 | P4 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | source-repository list — `.bee/config.json` → `dogfood_repos` |

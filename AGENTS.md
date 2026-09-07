@@ -1,6 +1,6 @@
 # bee
 
-<!-- [unknown] one-line project description - replace me -->
+<!-- bee: a gated, verified agent-coding workflow — a Rust CLI plus a skill tree that routes work through explore, gate, plan, execute, scribe, compound. -->
 
 - README.md
 
@@ -150,7 +150,9 @@ context before planning or executing.
   gates, synthesis, state writes, and the human conversation stay on
   the session model.
 - The ONE door for any dispatch is `.bee/bin/bee dispatch prepare
-  --runtime <rt> --kind cell|gather|reviewer|advisor --json` — run it
+  --runtime <rt> --kind cell|gather|reviewer|advisor [--role <name>]
+  --json` — `--role` names the job outright, and is how a read-shaped
+  gather reaches the cheap reader (`--kind gather --role extraction`) — run it
   first, then run exactly the tool and payload it returns (an Agent
   call naming a rendered bee agent, or a Bash `bee herding run` / cli
   call). Never hand-pick `subagent_type`, a `model` param, or a
@@ -220,7 +222,8 @@ treating the ask as new.
 
 <!-- rule: agents-one-next-action -->
 The user hears the work in their own terms, never bee mechanics. Open
-with one line of state; keep narration under five lines; link records
+with one line of state; keep narration to what the user needs to act on;
+link records
 instead of pasting them — name a doc by its bare repo-relative path
 (`docs/...`), never a viewer URL; close on exactly ONE next action — the
 agent's own next move, or the one thing only the user can decide,
@@ -263,7 +266,7 @@ skill ("Communication contract").
 - Batch related edits into one operation — never five edits where one
   serves.
 - Skip filler confirmations ("I'll continue…") — just do it.
-- If a task needs one tool call, do not spend three. Plan before acting.
+- If a task needs one tool call, do not spend three.
 - Do not summarize what you just did unless the result is ambiguous or
   you need additional input.
 
@@ -316,32 +319,6 @@ a Codex runtime — the capture discipline in
 `bee-capturing` ("Capture the moment it settles"), and the question
 craft in `bee-shaping` ("Interview craft"). Independent review runs
 on user request via `bee-reviewing` (rule: agents-review-user-invoked).
-
-## Environment — Windows
-
-This project runs on Windows. Two shells are in play; never mix them.
-
-- **A command the user runs in their own terminal is PowerShell.** Write
-  `Get-Content`, `Select-String`, `Measure-Object -Line`, `$env:TEMP`, `;`
-  chaining. Never `&&`, `/tmp/...`, `grep`, `wc`, `head`.
-- **A command the agent runs through its own Bash tool is Git Bash**, and
-  stays POSIX. So is anything the user types with the `!` prefix — that runs
-  in the session shell, not in PowerShell.
-- Default to PowerShell for anything handed to the user. Assume Bash only
-  when the user has said they are in Git Bash or WSL.
-
-Three Windows facts break silently:
-
-- A path inside a Bash-tool command uses forward slashes — `/c/Users/...`,
-  never `C:\Users\...`, where the backslash is an escape character.
-- A file may carry CRLF. Anchor a pattern with `\r?$`, never a bare `$`.
-- `chmod`, the exec bit and symlinks do not mean on NTFS what they mean on
-  Linux. bee probes both `.bee/bin/bee` and `.bee/bin/bee.exe` for that
-  reason.
-
-This section renders because the resolved host shell is PowerShell. Set
-`host_shell` in `.bee/config.json` to `powershell` or `posix` to decide it
-per repository instead of per machine.
 <!-- BEE:END -->
 
 ## Search commands

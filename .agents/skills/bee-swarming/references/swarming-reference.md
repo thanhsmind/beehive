@@ -260,10 +260,9 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
 
 > The agent owns test scope: pick proof, record on cap, doors check and run nothing (rule: agents-proof-at-cap).
 
-- **Declaration:** `.bee/config.json` `commands.test` still names the
+- **Declaration:** `.bee/config.json` `commands.test` names the
   project's one declared suite — what CI runs on every push, and the
-  default a code-change proof reaches for. It no longer obliges any
-  boundary door to run anything.
+  default a code-change proof reaches for. No boundary door runs it.
 - **Runner:** `bee test` runs the declared commands in order and writes
   ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
   commands: [{command, exit, duration_ms, failure_excerpt, failure_log}]}`.

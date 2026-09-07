@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "2.33.4",
   "managed": {
-    "agents_block": "8a3ae7320aaf5171bcebe44c7e0845acf4d8ddfb13118e60ee9a6c3165f5706f",
+    "agents_block": "4bec7d30ff5214cc8edf14032171469d07f75c7167d4f962380b7b84bc5cfecf",
     "gitignore_block": "be2b7a05d1cf097556c357429ff583df300c20bb3fdbd91cba7ba93a205d870a",
     "helpers": {},
     "lib": {},
@@ -35,10 +35,10 @@
       "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
     },
     "prompts": {
-      "advisor.md": "5067a6c0b341ece8f96865418631d7406a75e53e663928581ca9c5af26efa0dc",
-      "gather.md": "1f2821b12577bd0e93002ad1d3207a127bd63c8bf7c0b9870244335b75899c95",
-      "reviewer.md": "7f7611b844cd8e48e5c95a5d22016605c40012b36c64b3d2663c012b64304e2b",
-      "worker-cell.md": "ea1bafad58df16bf38da9fe96a87870c8ac972c04cf9eece931274eca8dbcbd5"
+      "advisor.md": "423a42cde79306d3e099b21f55f1c20c4311b09d3cfb397a5a5ce958ab68af94",
+      "gather.md": "5f926764b74322c40074aef75b8611ff103c4591cfc1ca77c98ded55a421d056",
+      "reviewer.md": "94f049066d97749f8ff37490dd589c3f269101964da400022c0e3603ff455af1",
+      "worker-cell.md": "a44bd4f0a35cc0bd156decda1a7a5d7d7de1fb4e29355b180e7d2fd6a072557b"
     },
     "repo_hooks": {
       ".codex/hooks.json": "c23084ec82ea0418547addc8e3fdf74ffc0fb2d65b7692f54ba5b95a94f8e4ae"
@@ -75,5 +75,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-09-07T04:02:50.169Z"
+  "updated_at": "2026-09-07T15:00:38.774Z"
 }

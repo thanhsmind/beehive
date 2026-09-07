@@ -221,10 +221,10 @@ rule. It says nothing whatever about whether the rule was then obeyed
   `packages/bee/hooks/test_write_guard.mjs` (the fixture row that hand-built the
   retired phase value). Evidence: traces `.bee/cells/dch-5.json`,
   `.bee/cells/dch-7.json`.
-- Every-turn reachability check (B6/R4): `scripts/tests/test_always_loaded_rules.mjs`
-  — blocking (exits 1 on a finding), picked up by the chain's `test_*.mjs` glob
-  over `scripts/tests/`, so no registration in `scripts/run_verify.mjs` was
-  needed. Its one seed is `EVERY_TURN_PHRASES` (six wording patterns); the rule
+- Every-turn reachability check (B6/R4): implemented by `scripts/tests/test_always_loaded_rules.mjs`,
+  deleted with the Node runtime at the Rust port and NOT ported — no test in the
+  declared `commands.test` chain enforces it today. Recorded here as the contract
+  a port must re-arm. Its one seed is `EVERY_TURN_PHRASES` (six wording patterns); the rule
   set, the reference corpus (`*.md` under any `references/` directory beneath
   `skills/`), and the pointer set are all read off the tree at run time — no rule
   name, heading, or rule count is hardcoded. The two always-loaded locations it

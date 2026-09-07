@@ -37,14 +37,10 @@ metadata:
 the skill cannot run at all. Reserve `degraded` for a dependency whose absence
 costs a capability but still leaves the skill usable.
 
-## Persuasion principles
+## Stating a rule
 
-Apply deliberately, matched to the rule being enforced:
-
-| Principle | Implementation | Use For |
-|---|---|---|
-| **Authority** | "YOU MUST", "Never", "No exceptions" | Discipline-enforcing rules |
-| **Commitment** | Ordered checklists, announce skill usage | Multi-step processes |
-| **Scarcity** | "Before proceeding", "IMMEDIATELY after X" | Verification requirements |
-| **Social Proof** | "Teams report...", "X without Y = failure. Every time." | Common failure patterns |
-| **Unity** | "our skills", collaborative framing | Techniques, guidance |
+State each rule once, at normal volume, with its reason in the same
+sentence — the reason is what lets a reader apply the rule to a case the
+text never named. A conditional states its condition before its
+instruction ("When X, do Y"). Never invent evidence ("Teams report...")
+to make a rule land.

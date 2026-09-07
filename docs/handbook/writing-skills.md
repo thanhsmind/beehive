@@ -61,7 +61,7 @@ skill directory.
 - [ ] **Regrowth law:** a new learning lands in the knowledge bundle, `expertise/`, or `references/` by default; edit the body itself only for a load-bearing invariant
 - [ ] **Per-turn rules (chat shape, communication) are never exiled to references** — they live in the always-loaded layer; a reference nothing forces open is a rule nothing follows
 - [ ] Commands quoted in the body match the **live** surface — `bee --help --json` for porcelain, `--help --all --json` for everything — and use the flow spelling where one exists (`bee gate`, not `bee state gate`)
-- [ ] Short `Headless` section; Red Flags or Hard rules list; HARD-GATE markers on critical stops (`writing-skills-references/checklist-examples.md` ("Persuasion principles"))
+- [ ] Short `Headless` section; every irreversible stop stated once, at normal volume, with its reason in the same sentence (`writing-skills-references/checklist-examples.md` ("Stating a rule"))
 - [ ] Ends with a **References table**: one row per `references/` file and per `.bee/expertise/` guide, each with a *when to load* trigger — the routing surface is the skill's last section
 - [ ] Cross-references other skills by name (`Invoke bee-planning`), never inlines their content
 

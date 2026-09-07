@@ -213,17 +213,16 @@ When a worker caps a cell, the leader must verify completion before accepting th
 
 ## Evidence Report Budget
 
-A per-cell report file is CONDITIONAL: routine `[DONE]` cells write none — the cap trace + status-token message are the record. A report is owed only for `[BLOCKED]`/`[HANDOFF]`, consult-carrying cells, or on explicit orchestrator request. When one IS written, `docs/history/<feature>/reports/<cell-id>.md` targets **<=40 lines**. Structure:
+A per-cell report file is CONDITIONAL: routine `[DONE]` cells write none — the cap trace + status-token message are the record. A report is owed only for `[BLOCKED]`/`[HANDOFF]`, consult-carrying cells, or on explicit orchestrator request. When one IS written, `docs/history/<feature>/reports/<cell-id>.md` is a short summary the orchestrator can act on without opening anything else first. Structure:
 
-- **Outcome** (1-3 lines) — status token + what changed, in plain language.
-- **Tests** — the declared command(s) and the decisive lines of the result record, quoted, **<=10 lines**.
-- **Files + commit** (<=5 lines) — files touched and the commit hash.
-- **Deviations** (<=5 lines) — one line each, only if any fired.
+- **Outcome** — status token + what changed, in plain language.
+- **Tests** — the declared command(s) and the decisive lines of the result record, quoted.
+- **Files + commit** — files touched and the commit hash.
+- **Deviations** — one line each, only if any fired.
 - **Side-by-side excerpts** — only when the cell explicitly demands them (e.g. a before/after diff the reviewer can't get any other way).
 
 Raw full output never goes inline — point to `.bee/cells/<cell-id>.json` (the `trace`) and `.bee/logs/test-results.json` instead.
 
-**Soft budget:** going over 40 lines is allowed but requires a one-line reason at the top of the report (e.g. "high-risk cell, full trace required").
 
 ## Post-Compaction Recovery
 
@@ -280,8 +279,8 @@ next: <one line>
 
 **After advice:** advice never substitutes for fresh test output — always re-run the declared tests yourself (`bee test`) before deciding whether the advised retry passed. Advice is **advice-only**: it never authorizes a package install, a gate approval, or file scope beyond the cell. Advice that conflicts with a locked decision → return `[BLOCKED]` citing both the D-ID and the advice.
 
-**Authority-type blocks never consult** — ambiguous cell, uncapped deps, architectural change, package install, locked-decision conflict stay **instant** `[BLOCKED]` exactly as in step 4 (Implement), whether or not an `Advisor` line is present.
+**Authority-type blocks never consult** — ambiguous cell, uncapped deps, architectural change, package install, locked-decision conflict stay **instant** `[BLOCKED]` exactly as in the Execute loop's step 2 (Implement), whether or not an `Advisor` line is present.
 
-**Headless rule:** consulting the advisor is not "asking the parent or user" under the Headless rule below — it stays inside your own turn. Workers still never approve gates.
+**Headless rule:** consulting the advisor is not "asking the parent or user" under bee-swarming's Headless section — it stays inside your own turn. Workers still never approve gates.
 
-Record every consult in the cap trace and the per-cell report (see Cap and Return) — count, advisor identity, and a one-line ask/answer digest per consult.
+Record every consult in the cap trace and the per-cell report (see Result Field Spec) — count, advisor identity, and a one-line ask/answer digest per consult.

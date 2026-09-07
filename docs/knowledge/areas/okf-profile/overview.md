@@ -65,7 +65,7 @@ under:
   concept, the preamble names the `context` command and instructs the session to load its manifest
   before touching code (B7, in `context-and-promote.md`). This is the trigger that makes the bundle
   load-bearing rather than optional.
-- `node scripts/run_verify.mjs` — the verify chain `knowledge check` and `knowledge index --check`
+- `.bee/bin/bee test` (the declared `commands.test`) — the test chain `knowledge check` and `knowledge index --check`
   both join (D34); a profile violation fails the chain the same way any other suite does. The
   per-migration coverage gates (`scripts/okf_migrate.mjs --check <area>` and `--check-patterns`,
   D35) join the same chain, one entry per migrated source.
@@ -98,7 +98,7 @@ under:
   draft, the area bullets and the pitfall candidates a finished work item earned; writes nothing.
   The **human or agent who accepts a proposal** is the actor that turns it into a concept — the
   profile deliberately keeps that step outside the tool (D38).
-- **`node scripts/run_verify.mjs`** — the CI-equivalent chain `check` (and later `index --check`)
+- **`.bee/bin/bee test`** (the declared `commands.test`) — the CI-equivalent chain `check` (and later `index --check`)
   joins; a profile violation fails the same way any other suite failure does.
 - **The human owner** — configures nothing here; the profile has no runtime knobs. Owner-level
   input landed once, at exploring, as the locked decisions this document cites.

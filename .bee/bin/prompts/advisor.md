@@ -3,8 +3,11 @@ Advisor consult: produce an independent digest/opinion on the given question. Re
 
 {{original_request}}
 {{/if}}
+{{#if paths}}
 
-Paths: <caller fills in the exact files/paths to read>
+Paths:
+{{paths}}
+{{/if}}
 
 Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.
 {{#if expertise}}

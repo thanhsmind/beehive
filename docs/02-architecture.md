@@ -123,7 +123,7 @@ Every bee skill supports two invocation modes (compound-engineering):
 - **Interactive (default):** ask at decision points, using the standard question format.
 - **Headless (`mode:headless`):** never block on a question. Apply only unambiguous actions, classify ambiguous cases as deferred, and end with a structured report containing an `Outstanding Questions` section. Terminal output is JSON or structured markdown so an orchestrator (go mode, a pipeline, another skill) can consume it deterministically.
 
-Hard limit: headless mode defers *within-stage* ambiguity only and never self-approves a gate. The one mode that self-approves gates is the opt-in gate-bypass switch (`.bee/config.json` `gate_bypass`, toggled through `bee-hive`'s "Gates" section, decision 0010): it auto-approves Gates 1-2 for `tiny`/`small`/`standard` work, never for high-risk/hard-gate work, and never Gate 3 UAT/P1 or secret reads. Off by default; surfaced loudly in the preamble and `bee_status` when on.
+Hard limit: headless mode defers *within-stage* ambiguity only and never self-approves a gate. The one mode that self-approves gates is the opt-in gate-bypass switch (`.bee/config.json` `gate_bypass`, toggled through `bee-hive`'s "Gates" section, decision 0010): it auto-approves Gates 1-2 for `tiny`/`small`/`standard` work, never for high-risk/hard-gate work, and never Gate 3 UAT/P1 or secret reads. Off by default; surfaced loudly in the preamble and `bee status` when on.
 
 ## The cell (task unit)
 
@@ -202,7 +202,7 @@ The workflow contract is runtime-neutral; only two seams differ:
 | Claude Code | `packages/bee/hooks/bee-session-init.mjs` (SessionStart on startup/resume/clear/compact) injects the routing preamble plus live state: status, gates, HANDOFF surfacing, standard commands + baseline gate, critical-patterns digest, recent decisions (superpowers pattern + claudekit session-init) |
 | Codex | The `AGENTS.template.md` block installed into the repo's `AGENTS.md` carries the same instructions (khuym pattern); `bee status --json` is the first commanded step. Re-read after any compaction. |
 
-Both vectors point at the same skill (`bee-hive`); the preamble content is generated from one shared module (`bin/lib/inject.mjs`) for the hook, the AGENTS.md block, and `bee_status` output, so the runtimes can never drift. The preamble carries, in order: standard commands (host project paths), a Project map section (pointers to `docs/specs/` maps and a specced-area count, or a bootstrap warning when absent) with a PBI counts line when `docs/backlog.md` exists, the critical-patterns digest, and recent decisions.
+Both vectors point at the same skill (`bee-hive`); the preamble content is generated from one shared module (`bin/lib/inject.mjs`) for the hook, the AGENTS.md block, and `bee status` output, so the runtimes can never drift. The preamble carries, in order: standard commands (host project paths), a Project map section (pointers to `docs/specs/` maps and a specced-area count, or a bootstrap warning when absent) with a PBI counts line when `docs/backlog.md` exists, the critical-patterns digest, and recent decisions.
 
 ### Seam 2 — Subagent spawn (how swarming launches workers)
 

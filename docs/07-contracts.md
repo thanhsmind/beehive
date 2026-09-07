@@ -200,7 +200,7 @@ Enforced invariants only — this section states no promise the code above does 
   never trusted as-is. `bee feedback rank`/`collect` only ever consume `mergeDigests`'s output,
   never a foreign digest file directly.
 - **Bee-repo-only (D3).** [handbook/evolving.md](handbook/evolving.md) step 0 is a hard guard
-  (`test -f packages/bee/lib/feedback.mjs && test -f docs/handbook/writing-skills.md`)
+  (`test -f packages/bee/AGENTS.block.md && test -f packages/bee-rs/crates/bee/Cargo.toml && test -f skills/bee-writing-skills/SKILL.md`)
   that refuses to proceed anywhere the bee-repo-only files are absent; pressure-tested RED-first
   under the full Iron Law (decision `ff26725d`) — see
   `docs/history/evolving-loop/reports/evolving-10-pressure.md`.

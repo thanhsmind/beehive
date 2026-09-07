@@ -118,13 +118,13 @@ After each slice's swarm completes: later approved work remains → return to St
 
 - **Spike returns NO** (opt-in by change class — migration, security, external side effect, or no in-repo precedent): STOP before Gate 2. Present "Spike [id] failed: [reason]. Current work is blocked." Options: revise approach / descope the risky part / change mode or boundaries. A workaround that "probably works" is not a path — plausibility is not evidence.
 - **SMALLER PATH check fails:** default is to redraft the shape before presenting Gate 2, rather than persist-then-preview.
-- **Review-wave BLOCKER still open after the second pass** (bee-planning's Review Wave): escalate — present both positions to the user and ask "Return to planning with these specific concerns?". A third pass needs a recorded reason.
+- **A hat-wave BLOCKER still open after its one permitted re-run** (`gates-and-delegation.md`, "Hat wave" — Idempotence): escalate — present both positions to the user and ask "Return to planning with these specific concerns?".
 - **Context hits ~65% mid-swarm** (rule: agents-context-handoff-65)**:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully.
 - **User rejects at any gate:** identify what feels wrong, return to the owning stage, update the artifact in place, re-present the same gate.
 
 ## Close-out
 
-After compounding: set state `phase: idle`, `feature: null`, `mode: null`, summary "Go mode complete for <feature>", and delete `.bee/HANDOFF.json` if present. Report the completion line from `bee_status` (verified/unreviewed candidate count) — never state or imply the feature was reviewed unless a review session actually ran and approved it.
+After compounding: set state `phase: idle`, `feature: null`, `mode: null`, summary "Go mode complete for <feature>", and delete `.bee/HANDOFF.json` if present. Report the completion line from `bee status` (verified/unreviewed candidate count) — never state or imply the feature was reviewed unless a review session actually ran and approved it.
 
 ## Headless Go Mode
 

@@ -143,7 +143,9 @@ context before planning or executing.
   gates, synthesis, state writes, and the human conversation stay on
   the session model.
 - The ONE door for any dispatch is `.bee/bin/bee dispatch prepare
-  --runtime <rt> --kind cell|gather|reviewer|advisor --json` — run it
+  --runtime <rt> --kind cell|gather|reviewer|advisor [--role <name>]
+  --json` — `--role` names the job outright, and is how a read-shaped
+  gather reaches the cheap reader (`--kind gather --role extraction`) — run it
   first, then run exactly the tool and payload it returns (an Agent
   call naming a rendered bee agent, or a Bash `bee herding run` / cli
   call). Never hand-pick `subagent_type`, a `model` param, or a
@@ -213,7 +215,8 @@ treating the ask as new.
 
 <!-- rule: agents-one-next-action -->
 The user hears the work in their own terms, never bee mechanics. Open
-with one line of state; keep narration under five lines; link records
+with one line of state; keep narration to what the user needs to act on;
+link records
 instead of pasting them — name a doc by its bare repo-relative path
 (`docs/...`), never a viewer URL; close on exactly ONE next action — the
 agent's own next move, or the one thing only the user can decide,
@@ -256,7 +259,7 @@ skill ("Communication contract").
 - Batch related edits into one operation — never five edits where one
   serves.
 - Skip filler confirmations ("I'll continue…") — just do it.
-- If a task needs one tool call, do not spend three. Plan before acting.
+- If a task needs one tool call, do not spend three.
 - Do not summarize what you just did unless the result is ambiguous or
   you need additional input.
 

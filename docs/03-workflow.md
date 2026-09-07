@@ -89,7 +89,7 @@ Rule of use: **the least workflow that honestly protects the work**. A tiny fix 
 
 ### bee-planning (the waggle dance)
 
-- **Reads:** CONTEXT.md, critical-patterns, active decisions, bee_status scout.
+- **Reads:** CONTEXT.md, critical-patterns, active decisions, bee status scout.
 - **Does:**
   1. **Discovery** at the right research level (gsd): L0 skip / L1 quick verify / L2 standard (2–3 options) / L3 deep dive — using the three-layers framing (tried-and-true, new-and-popular, first-principles).
   2. **Mode gate** (mechanical flags, above).

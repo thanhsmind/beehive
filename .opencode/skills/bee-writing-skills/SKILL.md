@@ -42,7 +42,7 @@ CREATION-LOG.md template: `references/creation-log-template.md`.
 - [ ] **Regrowth law:** a new learning lands in the knowledge bundle or `references/` by default; edit the body itself only for a load-bearing invariant
 - [ ] **Per-turn rules (chat shape, communication) are never exiled to references** — they live in the always-loaded layer; a reference nothing forces open is a rule nothing follows
 - [ ] Commands quoted in the body match the `.bee/bin` CLI surface in `bee/docs/07-contracts.md` verbatim
-- [ ] Short `Headless` section; Red Flags list; persuasion principles applied (`references/checklist-examples.md` ("Persuasion principles")); HARD-GATE markers on critical stops
+- [ ] Short `Headless` section; every irreversible stop stated once, at normal volume, with its reason in the same sentence (`references/checklist-examples.md` ("Stating a rule"))
 - [ ] Ends with the handoff sentence: `[Outcome]. Invoke bee-<next-skill> skill.`
 - [ ] Cross-references other skills by name (`Invoke bee-planning`), never inlines their content
 
