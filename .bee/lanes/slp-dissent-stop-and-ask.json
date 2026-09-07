@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-dissent-stop-and-ask",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,13 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"slp-dissent-stop-and-ask\" started at phase \"exploring\" (lane).",
-  "next_action": "40 older capture stubs remain",
+  "next_action": "bee close finished \"slp-dissent-stop-and-ask\" — feature is closed.",
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat gate for slp-dissent-stop-and-ask: test bee cells dissent / dissent-verdict on main, then approve",
-    "asked_at": "2026-09-07T03:28:38.437Z",
+    "kind": "turn-end",
+    "subject": "Nếu OK, nói **\"ok uat\"** — tôi chạy `bee gate --name uat --approved true` rồi `bee close`.",
+    "asked_at": "2026-09-07T03:40:22.812Z",
     "session": "2fb422f4-77ee-414b-8666-98a59d64866c"
   },
   "route": {

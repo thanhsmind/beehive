@@ -1,0 +1,69 @@
+{
+  "id": "ifr-1",
+  "lane": "tiny",
+  "role": "code",
+  "feature": "install-fetch-reason",
+  "title": "Name why install.sh skipped the published binary, and retry before giving up",
+  "intent": "install.sh falls back to a multi-minute cargo build without naming the transport error, while install.ps1 already interpolates its own. Give the POSIX installer the same answer and stop a blip from reaching the fallback at all.",
+  "action": "Widen installer_contracts.rs::install_ps1_names_why_the_published_binary_was_skipped into both_installers_name_why_the_published_binary_was_skipped, adding the two install.sh assertions, and watch them fail. Then in scripts/install.sh: capture the transport's stderr in fetch() as FETCH_ERR, interpolate it into both fallback log lines (omitting the parenthetical when empty), and add --retry 3 --retry-connrefused --connect-timeout 10 to curl and --tries=3 --timeout=10 to wget. Finish with the regen chain so the release manifest re-hashes install.sh.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml --test installer_contracts --test installer_invocations --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+  "files": [
+    "scripts/install.sh",
+    "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "depends_on": [],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "main-2fb422f4",
+    "outcome": "install.sh now names the transport error on both published-binary fallback lines and retries three times with a connect deadline; the contract test asserts both installers",
+    "files_changed": [
+      "scripts/install.sh",
+      "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "Added a second test and a third assertion beyond plan.md — curl's multi-line stderr split the log verdict from its reason on the first driven run, so the one-line collapse is pinned as its own contract",
+      "Added a third assertion and a second test beyond the plan: curl writes multi-line diagnostics, and the first driven run stranded the closing paren and the building-from-source verdict on their own lines — the reason had to be collapsed to one line to be readable, so the collapse is pinned too"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-07T03:52:19.449Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2fb422f4-77ee-414b-8666-98a59d64866c",
+    "claimed_at": "2026-09-07T03:44:10.104Z",
+    "mistakes": [
+      {
+        "wrong": "Wrote the tag-resolution fetch as a pipeline the way the original did, which runs fetch in a subshell where FETCH_ERR dies with it",
+        "better": "the reason would have been silently lost again, caught only while re-reading the edit — when a function must return a side effect, fetch to a temp FILE and never down a pipe"
+      }
+    ],
+    "report": {
+      "outcome": "install.sh captures curl/wget stderr in FETCH_ERR, renders it as a one-line parenthetical on both fallback log lines, and retries 3x with a 10s connect deadline; installer_contracts.rs now asserts both installers name their reason",
+      "commit": "3d442b27",
+      "files": [
+        "scripts/install.sh",
+        "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "cargo test --test installer_contracts --test installer_invocations --test instruction_laws && bee dev release-manifest --check — green:live — 15+2+9 passed and 340 manifest files match, with the two new assertions watched RED first; beyond that the patched installer was RUN twice against the real releases API: the happy path printed \"binary v2.33.3 bee-x86_64-unknown-linux-gnu (checksum verified) — no build needed\" and --ref v0.0.0-nope printed \"binary no downloadable asset at v0.0.0-nope (curl: (28) Connection timed out after 10002 milliseconds curl: (22) The requested URL returned error: 404) — building from source\", which is the whole point of the change on one line",
+      "deviations": [
+        "Added a third assertion and a second test beyond the plan: curl writes multi-line diagnostics, and the first driven run stranded the closing paren and the building-from-source verdict on their own lines — the reason had to be collapsed to one line to be readable, so the collapse is pinned too"
+      ],
+      "mistakes": [
+        "Wrote the tag-resolution fetch as a pipeline the way the original did, which runs fetch in a subshell where FETCH_ERR dies with it — the reason would have been silently lost again, caught only while re-reading the edit — when a function must return a side effect, fetch to a temp FILE and never down a pipe"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
