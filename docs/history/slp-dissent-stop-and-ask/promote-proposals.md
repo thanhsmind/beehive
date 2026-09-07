@@ -43,7 +43,9 @@ Each cell below was capped only against a recorded passing verify result — bee
 
 - **sd-1** — Spelled the claim flag --reason instead of --claim — `claim` is in the CLI-wide FLAG_ALONE_BOOLEANS set (dispatch prepare --claim), so --claim <text> swallows its own value token and the whole argv declines; the record field is still `claim` — the plan was wrong about a fact
 - **sd-1** — Extracted the blocked-status write from run_block into apply_block_mutation in util.rs and reserved handlers_close.rs to repoint it, rather than writing a second copy in dissent.rs — the cell prohibits a second block mutation and its file list did not name handlers_close.rs — found a better route
+<!-- bee:not-a-deferral: a recorded scope split inside this same plan, not a promise to act later — the verdict verb shipped as `bee cells dissent-verdict` in sd-2 and the judge-debt and dissent-debt close doors shipped in the later cells of this feature, both already green on this close -->
 - **sd-1** — Did not add a verdict placeholder key to the dissent record — the verdict verb and the two debt doors are later cells and own that shape — something else had to be fixed first
+<!-- /bee:not-a-deferral -->
 - **sd-1** — sync-ack: Phase 1 is the record and its teeth only; the worker-facing contract in skills/bee-swarming is Phase 4 of this same plan (plan.md Shape), and this cell's declared files deliberately hold no skill path.
 - **sd-2** — The router coverage entry joined the cells dissent line that sd-1 added, as `cells dissent|dissent-verdict`, instead of the judge line the cell named — that dedicated line landed after the cell was written and the verdict belongs beside its record, not beside judge — found a better route
 - **sd-2** — PINNED_FLAG_COUNT stays 196 with a recorded reason instead of a bump — `--verdict` already exists on `state plan-conflicts verdict` and `--id`/`--reason` are cells-wide, so the verb adds no new spelling — the plan was wrong about a fact
@@ -118,7 +120,9 @@ bee cells dissent records {target, claim, alternative, severity} with a closed s
 
 - **deviation** — Spelled the claim flag --reason instead of --claim — `claim` is in the CLI-wide FLAG_ALONE_BOOLEANS set (dispatch prepare --claim), so --claim <text> swallows its own value token and the whole argv declines; the record field is still `claim` — the plan was wrong about a fact
 - **deviation** — Extracted the blocked-status write from run_block into apply_block_mutation in util.rs and reserved handlers_close.rs to repoint it, rather than writing a second copy in dissent.rs — the cell prohibits a second block mutation and its file list did not name handlers_close.rs — found a better route
+<!-- bee:not-a-deferral: a recorded scope split inside this same plan, not a promise to act later — the verdict verb shipped as `bee cells dissent-verdict` in sd-2 and the judge-debt and dissent-debt close doors shipped in the later cells of this feature, both already green on this close -->
 - **deviation** — Did not add a verdict placeholder key to the dissent record — the verdict verb and the two debt doors are later cells and own that shape — something else had to be fixed first
+<!-- /bee:not-a-deferral -->
 - **deviation** — sync-ack: Phase 1 is the record and its teeth only; the worker-facing contract in skills/bee-swarming is Phase 4 of this same plan (plan.md Shape), and this cell's declared files deliberately hold no skill path.
 
 ## Status
