@@ -1,0 +1,245 @@
+{
+  "id": "pwsr-1",
+  "feature": "pi-worktree-session-relocation",
+  "title": "Emit verified worktree session-transition intent from the CLI",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "85d85ede",
+    "0b4ff55b",
+    "538c723d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/pi-worktree-session-relocation/CONTEXT.md",
+    "docs/history/pi-worktree-session-relocation/plan.md",
+    "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "behavior_change": true,
+  "action": "Implement plan.md pwsr-1. Add one versioned sessionTransition builder. Successful worktree new emits enter intent only after all setup succeeds. Add main-only zero-mutation worktree enter --id with strict grant and Git-link verification. Linked worktree merge defaults omitted --id to current verified id, rejects mismatch or absent grant, and emits exit intent plus typed normalized continuation before queue, companion, merge, cleanup, or store writes. Main merge stays unchanged. With PI_SESSION_ID, emit one compact stderr marker without corrupting JSON; non-Pi text stays unchanged. Update routing and registry help. Write red-first behavior tests. Commit with trailer cell: pwsr-1.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "new emits no transition before complete success",
+      "enter verifies an existing grant and mutates no Git or bee state",
+      "linked merge emits exit intent before all merge effects",
+      "main merge stays unchanged",
+      "Pi marker does not corrupt JSON"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "substantive": "verified transition routing"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "identity marker and zero-mutation tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "enter and merge help contract"
+      }
+    ],
+    "key_links": [
+      "transition identity comes from Pre or strict grants",
+      "exit continuation contains typed options only"
+    ],
+    "prohibitions": [
+      "no process cwd mutation",
+      "no caller transition path",
+      "no linked-exit merge side effect",
+      "no main merge sequence change"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "kevin",
+    "outcome": "Emit verified worktree session-transition intent from the CLI",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-07T11:22:52.213Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": "2026-09-07T11:17:41.776Z",
+    "ownership_overrides": [
+      {
+        "verb": "blockCell",
+        "forced_by": null,
+        "owner_bypassed": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "at": "2026-09-07T10:57:12.418Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T10:57:12.446Z"
+      },
+      {
+        "verb": "blockCell",
+        "forced_by": null,
+        "owner_bypassed": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "at": "2026-09-07T11:06:17.094Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T11:06:17.115Z"
+      },
+      {
+        "verb": "blockCell",
+        "forced_by": null,
+        "owner_bypassed": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "at": "2026-09-07T11:14:05.156Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T11:14:05.177Z"
+      },
+      {
+        "verb": "blockCell",
+        "forced_by": null,
+        "owner_bypassed": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "at": "2026-09-07T11:16:38.635Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T11:16:38.638Z"
+      },
+      {
+        "verb": "blockCell",
+        "forced_by": null,
+        "owner_bypassed": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "at": "2026-09-07T11:17:41.693Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T11:17:41.696Z"
+      }
+    ],
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-07T10:57:12.418Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T10:55:59.949Z",
+        "acquired_at": "2026-09-07T10:38:45.570Z",
+        "worker": "kevin",
+        "verdict": "blocked",
+        "failure_signature": "afa9bbd466a8",
+        "note": "Leader check rejected the first diff: canonical_path_str silently falls back instead of refusing; false-valued grants count as granted; fractional queue-wait-ms is truncated; user text claims enter/exit before Pi acts; PI_SESSION_ID tests mutate global environment; two run_* tests depend on this live worktree; and no test observes marker formatting or red-first evidence. Amend the existing commit, keep one commit, and replace these with hermetic behavior tests."
+      },
+      {
+        "n": 2,
+        "at": "2026-09-07T11:06:17.094Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T11:05:54.563Z",
+        "acquired_at": "2026-09-07T10:57:24.943Z",
+        "worker": "kevin",
+        "verdict": "blocked",
+        "failure_signature": "512d9b996700",
+        "note": "Leader completeness: registry_payload worktree.merge still says every linked-worktree call is refused, contradicting the new exit-intent behavior; worktree.new help also omits its additive transition result. Amend the same commit to make public help exact and add or adjust a registry assertion so this contradiction cannot return."
+      },
+      {
+        "n": 3,
+        "at": "2026-09-07T11:14:05.156Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T11:13:04.541Z",
+        "acquired_at": "2026-09-07T11:06:28.088Z",
+        "worker": "kevin",
+        "verdict": "blocked",
+        "failure_signature": "d1b0ef9af4ad",
+        "note": "Scope correction: remove only pwsr-1's addition from undeclared packages/bee-rs/crates/bee/tests/registry_contracts.rs. Keep the equivalent regression assertion in the declared worktree/tests.rs, amend the same commit, and rerun the cell verify."
+      },
+      {
+        "n": 4,
+        "at": "2026-09-07T11:16:38.635Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T11:16:13.640Z",
+        "acquired_at": "2026-09-07T11:14:05.212Z",
+        "worker": null,
+        "verdict": "blocked",
+        "failure_signature": "43b2b2aa7b8f",
+        "note": "Retry cleanup: the prior prepare acquired a claim file but failed before cell status changed; keep the same scope correction."
+      },
+      {
+        "n": 5,
+        "at": "2026-09-07T11:17:41.693Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T11:17:15.128Z",
+        "acquired_at": "2026-09-07T11:16:38.671Z",
+        "worker": null,
+        "verdict": "blocked",
+        "failure_signature": "b197674a0f23",
+        "note": "Clear the orphan claim left by failed dispatch prepare; the remaining correction is unchanged."
+      }
+    ],
+    "blocked_reason": null,
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-09-07T11:17:41.696Z",
+    "reopened_reason": "Retry through separate claim and prepare steps",
+    "budget_resets": [
+      {
+        "reset_at": "2026-09-07T11:17:05.023Z",
+        "reason": "Leader review found one remaining scope-only correction: remove the undeclared registry_contracts.rs test while keeping equivalent declared coverage; implementation is otherwise green.",
+        "by_session": null,
+        "by_actor": "orchestrator"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "handlers.rs initially accepted a canonicalization fallback and false-valued grants",
+        "better": "strict refusal tests should have been written before implementation"
+      },
+      {
+        "wrong": "registry_contracts.rs received an undeclared assertion",
+        "better": "the equivalent regression assertion should have stayed in declared worktree/tests.rs"
+      }
+    ],
+    "report": {
+      "outcome": "Added verified typed session-transition intent for worktree creation, entry, and linked-worktree merge.",
+      "commit": "a6321be4b8c507d73febd85b7577ca42d4d43d33",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::worktree && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch — green:unit — 176 worktree unit tests, 12 registry contract tests, and 9 registry dispatch tests passed; frozen judge reported no out-of-scope test, CI, or lockfile changes",
+      "deviations": [],
+      "mistakes": [
+        "handlers.rs initially accepted a canonicalization fallback and false-valued grants — strict refusal tests should have been written before implementation",
+        "registry_contracts.rs received an undeclared assertion — the equivalent regression assertion should have stayed in declared worktree/tests.rs"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

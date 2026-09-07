@@ -1,0 +1,165 @@
+{
+  "id": "pwsr-3",
+  "feature": "pi-worktree-session-relocation",
+  "title": "Document and drive Pi worktree relocation end to end",
+  "lane": "high-risk",
+  "role": "docs",
+  "deps": [
+    "pwsr-2"
+  ],
+  "decisions": [
+    "c47fa930",
+    "1f947417",
+    "85d85ede",
+    "0b4ff55b",
+    "113e9f2c",
+    "538c723d"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/worktree-and-close.md",
+    "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-worktree-session-relocation/CONTEXT.md",
+    "docs/history/pi-worktree-session-relocation/plan.md",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md",
+    "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    ".agents/skills/verify-app/SKILL.md",
+    ".agents/skills/bee-capturing/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "behavior_change": false,
+  "action": "Implement plan.md pwsr-3. Extend the existing feature map and three named one-fact homes. Document direct commands, automatic post-agent movement, status, refusal recovery, compatibility, and the honest Pi late-runtime boundary. In a throwaway onboarded Git repo, drive real new, enter, and linked merge and prove canonical roots plus zero mutation during enter/exit. Drive the closest real Pi 0.85.1 surface. If TUI automation is absent, name that limit and use the Node contract only as fallback, never green:live. Run bee dev regen, then bee dev release-manifest --write because pwsr-2 changed a shipped Pi extension; verify the manifest. Run the full Rust suite. Commit with trailer cell: pwsr-3.",
+  "verify": "/home/thanhsmind/.cache/cargo-target/release/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "users discover create existing-enter and merge",
+      "agent path is automatic after settled",
+      "refusal names re-entry",
+      "live proof is distinct from Node fallback",
+      "late runtime boundary is honest"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/features/worktree-and-close.md",
+        "substantive": "drivable relocation and recovery rows"
+      },
+      {
+        "path": "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+        "substantive": "new and existing entry contract"
+      },
+      {
+        "path": "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+        "substantive": "exit and recovery contract"
+      },
+      {
+        "path": "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "substantive": "Pi marker command mechanism"
+      }
+    ],
+    "key_links": [
+      "verification invokes documented public commands",
+      "behavior claims cite fresh evidence"
+    ],
+    "prohibitions": [
+      "no duplicate knowledge home",
+      "no mock green:live",
+      "no exit deletion claim",
+      "no hidden user step"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "ada",
+    "outcome": "Document and verify Pi worktree session relocation end to end",
+    "files_changed": [
+      ".bee/verify/verify-app/features/worktree-and-close.md",
+      "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "release-manifest regeneration moved into pwsr-3 — pwsr-2 used the approved wave-barrier acknowledgment for its shipped Pi extension change — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-07T13:08:01.289Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": "2026-09-07T12:57:25.555Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-07T12:57:25.476Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T12:55:31.357Z",
+        "acquired_at": "2026-09-07T12:41:40.053Z",
+        "worker": "ada",
+        "verdict": "blocked",
+        "failure_signature": "82389d554029",
+        "note": "Documentation and proof correction. The feature map says any main-side CLI merge refusal names bee worktree enter, but only the Pi post-exit reconstructed merge notification guarantees /bee-worktree-enter; narrow that claim everywhere. The rollback text says errors before switchSession delete a fork, although most pre-switch validation/fork failures created no fork; state the exact three phases: before fork, fork exists plus cancellation/pre-teardown switch failure, and post-teardown failure. The preserved control-bee evidence contains no PI_SESSION_ID marker command despite the report claiming one; drive a fresh real-binary marker path through control-bee with PI_SESSION_ID, preserve and cite the evidence directory and exact numbered files. Record the initial unknown bee feature start command as a mistake. Rerun manifest write/check and the declared full suite, amend the same commit, and keep the five-file scope."
+      }
+    ],
+    "blocked_reason": null,
+    "ownership_overrides": [
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T12:57:25.479Z"
+      }
+    ],
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-09-07T12:57:25.479Z",
+    "reopened_reason": "Correct recovery and rollback wording and preserve real marker evidence",
+    "mistakes": [
+      {
+        "wrong": "control-bee first received the unknown command bee feature start",
+        "better": "use bee state start after checking the current command registry"
+      },
+      {
+        "wrong": "worktree-and-close.md initially said every main CLI merge refusal names re-entry",
+        "better": "limit the guaranteed recovery notification to Pi post-exit merge"
+      }
+    ],
+    "report": {
+      "outcome": "Documented and drove create, existing entry, linked exit, main merge, Pi marker, recovery, and late-runtime failure behavior.",
+      "commit": "c0c6587b4c354b962152928cb3d305f42315d095",
+      "files": [
+        ".bee/verify/verify-app/features/worktree-and-close.md",
+        "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+        "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "control-bee real sandbox evidence 20260907-200106-2533570; bee dev release-manifest --check; cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:live — real CLI emitted enter and exit Pi markers, enter and linked exit left both trees unchanged, exit kept the worktree, main merge landed, manifest matched 340 files, and the full suite passed 3427 unit tests plus all integration suites",
+      "deviations": [
+        "release-manifest regeneration moved into pwsr-3 — pwsr-2 used the approved wave-barrier acknowledgment for its shipped Pi extension change — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "control-bee first received the unknown command bee feature start — use bee state start after checking the current command registry",
+        "worktree-and-close.md initially said every main CLI merge refusal names re-entry — limit the guaranteed recovery notification to Pi post-exit merge"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 204 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

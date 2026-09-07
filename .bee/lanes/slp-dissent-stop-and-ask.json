@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Nếu OK, nói **\"ok uat\"** — tôi chạy `bee gate --name uat --approved true` rồi `bee close`.",
-    "asked_at": "2026-09-07T03:40:22.812Z",
-    "session": "2fb422f4-77ee-414b-8666-98a59d64866c"
+    "subject": "Green. Committing.",
+    "asked_at": "2026-09-07T15:02:54.781Z",
+    "session": "6d0bf082-1297-4e20-8219-f873e56e79df"
   },
   "route": {
     "class": "feature",

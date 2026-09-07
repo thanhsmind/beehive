@@ -1,0 +1,217 @@
+{
+  "id": "pwsr-2",
+  "feature": "pi-worktree-session-relocation",
+  "title": "Move the settled Pi conversation through supported session commands",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "pwsr-1"
+  ],
+  "decisions": [
+    "c47fa930",
+    "1f947417",
+    "85d85ede",
+    "0b4ff55b",
+    "113e9f2c",
+    "538c723d"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-worktree-session-relocation/CONTEXT.md",
+    "docs/history/pi-worktree-session-relocation/plan.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "behavior_change": true,
+  "action": "Implement plan.md pwsr-2 on Pi 0.85.1. Register public new, enter, and merge commands plus one private token command. Use no-shell bounded execFile and quote-aware argv tokenization; Rust owns bee flags. Extract and remove valid Pi markers from successful shell tool results. After agent_settled returns, submit the private token with expandPromptTemplates; never switch in an event. Require idle and validate exact intent and canonical roots. Call SessionManager.forkFrom through the manager constructor, then ctx.switchSession. Use withSession for status and post-exit typed merge. Remove only a new fork on pre-replacement cancellation. Report merge refusal and re-entry. Extend the real-extension Node harness red-first for direct/deferred paths, ordering, replay, spoofing, cancellation, errors, paths, no process.chdir, and old guard parity. Commit with trailer cell: pwsr-2.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "only command context switches",
+      "agent CLI waits for settled without a model turn",
+      "fork preserves history and changes session cwd",
+      "exit precedes merge",
+      "merge refusal keeps worktree and names re-entry"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "validated direct and deferred replacement bridge"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "real extension lifecycle and failure contracts"
+      }
+    ],
+    "key_links": [
+      "tool result reaches switch only through private command",
+      "fork output is the switch path",
+      "typed continuation reconstructs merge after replacement"
+    ],
+    "prohibitions": [
+      "no process.chdir",
+      "no event-context switch",
+      "no shell interpolation",
+      "no private-command path",
+      "no source session deletion",
+      "no false late rollback claim"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "linus",
+    "outcome": "Relocate live Pi sessions across verified worktree boundaries",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-07T12:39:59.540Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": "2026-09-07T12:30:41.942Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-07T11:48:15.003Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T11:46:57.061Z",
+        "acquired_at": "2026-09-07T11:23:42.316Z",
+        "worker": "linus",
+        "verdict": "blocked",
+        "failure_signature": "8199edad1918",
+        "note": "Leader review found release blockers. tool_result mutates event content but returns undefined, so Pi's supported runner reports no modification; return a ToolResultEventResult and make the harness assert the returned content. The spoof test is vacuous: a successful shell can forge a marker with the live session id and arbitrary existing target. Revalidate deferred intent through Rust's zero-mutation enter/linked-merge route, compare the exact typed intent, and add a real forged-marker refusal test. Do not delete the fork on switchSession exceptions because Pi can throw after old-runtime invalidation; delete only on explicit pre-replacement cancellation and test a post-invalidation throw. Make canonicalization fail closed, add an execFile timeout, and cover true/fractional continuation reconstruction. Amend the same commit and keep the two-file scope."
+      },
+      {
+        "n": 2,
+        "at": "2026-09-07T12:00:55.451Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T11:59:26.295Z",
+        "acquired_at": "2026-09-07T11:48:15.039Z",
+        "worker": "linus",
+        "verdict": "blocked",
+        "failure_signature": "c100994fdd51",
+        "note": "Final contract review found three plan gaps. The fixed 30s execFile timeout is shorter than Bee's 180s default merge queue wait; derive a bounded post-exit timeout from typed queueWaitMs with enough merge margin and test the default and explicit bounds. Marker extraction currently strips and queues malformed, wrong-session, unknown-operation, and incomplete markers before validation; exact schema/type/canonical/source checks must happen first, invalid markers must remain visible, and no private command may queue. switchSession can fail both before and after teardown: track Pi's resume shutdown during the active transition, remove the fork only when the failure occurs before invalidation, and preserve it afterward; test both phases. Also give worktree new/enter a named old-bee version-mismatch result when successful JSON lacks sessionTransition. Amend the same commit within the two-file scope."
+      },
+      {
+        "n": 3,
+        "at": "2026-09-07T12:16:01.614Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T12:14:38.243Z",
+        "acquired_at": "2026-09-07T12:00:55.485Z",
+        "worker": "linus",
+        "verdict": "blocked",
+        "failure_signature": "de146ceab37a",
+        "note": "Exactness review found two remaining trust gaps and one semantic timeout issue. validateTransitionIntent does not enforce the exact top-level field set, allows missing exit worktreeId, missing continuation booleans, any feature type, extra fields, noncanonical spellings, and does not require enter continuation null. Enforce the exact Rust-emitted schema and finite values; require current piSessionId again in perform/private paths; compare worktreeId unconditionally during revalidation; add adversarial rows. The 600s timeout cap silently shortens valid larger Rust queue waits; preserve the typed wait with margin up to Node's maximum timer bound and use ceil. Also wrap post-invalidation UI notification so a stale context cannot replace the original Pi error. Amend the same commit and keep scope unchanged."
+      },
+      {
+        "n": 4,
+        "at": "2026-09-07T12:30:41.864Z",
+        "claim_session": "01a07a87-10bd-7188-b123-8729f9fa2d54",
+        "claimed_at": "2026-09-07T12:29:39.122Z",
+        "acquired_at": "2026-09-07T12:16:01.653Z",
+        "worker": "linus",
+        "verdict": "blocked",
+        "failure_signature": "30e6a201ae6e",
+        "note": "One observed failure-report gap remains: after post-invalidation switch failure, a stale ctx.ui.notify throw causes the catch to log only the notification error and swallow the original Pi switch error. Log the original switch error before touching the stale UI and assert stderr retains it. Complete the plan's named command-error rows with red-first tests for NUL/unclosed tokenizer refusal before CLI, CLI nonzero and malformed JSON before fork, forkFrom failure before switch, successful worktree-new relocation, enter performing no merge, and deferred exit ordering. Fix only behavior those rows expose, amend the same commit, and keep the two-file scope."
+      }
+    ],
+    "blocked_reason": null,
+    "ownership_overrides": [
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T11:48:15.006Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T12:00:55.453Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T12:16:01.616Z"
+      },
+      {
+        "verb": "reopenCell",
+        "forced_by": null,
+        "owner_bypassed": null,
+        "at": "2026-09-07T12:30:41.866Z"
+      }
+    ],
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-09-07T12:30:41.866Z",
+    "reopened_reason": "Preserve the original post-invalidation error and complete planned command failure coverage",
+    "budget_resets": [
+      {
+        "reset_at": "2026-09-07T12:16:01.625Z",
+        "reason": "Three leader reviews exposed distinct high-risk session-transition boundaries; one final audited amendment is warranted before cap.",
+        "by_session": null,
+        "by_actor": "orchestrator"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "tool_result initially mutated event content but returned undefined",
+        "better": "test and use Pi ToolResultEventResult as the supported modification path"
+      },
+      {
+        "wrong": "switchSession errors initially deleted every fork",
+        "better": "distinguish pre-invalidation cleanup from post-invalidation state preservation"
+      },
+      {
+        "wrong": "execFile initially used a 30-second timeout below Bee default queue wait",
+        "better": "derive the bound from typed continuation semantics"
+      },
+      {
+        "wrong": "validateTransitionIntent initially accepted incomplete and extra fields",
+        "better": "start from the exact Rust-emitted schema and adversarial rows"
+      },
+      {
+        "wrong": "post-invalidation notification initially could swallow the original switch error",
+        "better": "log the primary error before using stale UI context"
+      },
+      {
+        "wrong": "the first proof set omitted named tokenizer CLI fork and deferred-exit rows",
+        "better": "derive tests from the complete plan failure matrix before implementation"
+      }
+    ],
+    "report": {
+      "outcome": "Implemented validated direct and deferred Pi session relocation with safe pre/post-invalidation behavior and exit-before-merge continuation.",
+      "commit": "60f52080c35aa599aef474c9082bceea5f0574db",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts — green:unit — 59 real-extension lifecycle and failure contract tests passed; frozen judge reported no out-of-scope test, CI, or lockfile changes",
+      "deviations": [],
+      "mistakes": [
+        "tool_result initially mutated event content but returned undefined — test and use Pi ToolResultEventResult as the supported modification path",
+        "switchSession errors initially deleted every fork — distinguish pre-invalidation cleanup from post-invalidation state preservation",
+        "execFile initially used a 30-second timeout below Bee default queue wait — derive the bound from typed continuation semantics",
+        "validateTransitionIntent initially accepted incomplete and extra fields — start from the exact Rust-emitted schema and adversarial rows",
+        "post-invalidation notification initially could swallow the original switch error — log the primary error before using stale UI context",
+        "the first proof set omitted named tokenizer CLI fork and deferred-exit rows — derive tests from the complete plan failure matrix before implementation"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

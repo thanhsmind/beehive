@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-worktree-session-relocation",
+  "mode": "feature",
+  "phase": "planning",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Four Pi session-relocation decisions locked; planning validates CLI and Pi seams.",
+  "next_action": "Invoke bee-planning.",
+  "created_at": "2026-09-07T05:34:32.734Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "cross-platform",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": "Pi session replacement changes harness lifecycle, CLI transition output, and cross-platform cwd behavior",
+    "updated_at": "2026-09-07T05:35:08.238Z",
+    "feature": "pi-worktree-session-relocation"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-07T07:07:06.895Z",
+    "feature": "pi-worktree-session-relocation",
+    "newest_decision_id": "dea09161-4da1-452e-a109-6ac69cf63814",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave:user-impact+value (3 seats dropped: Agent tool unavailable)",
+    "digest_head": "# Gate 2 report — pi-worktree-session-relocation\n\n## Recommendation\n\nApprove the merged shape and execution plan in\n[plan.md](../plan.md). The selected route uses only Pi 0.85.1's supported\nsession-control context. It also preserves the normal agent-owned bee CLI flow.\n\n## Reality gate\n\n| Check | Result | Evidence |\n|---|---|---|\n| Outcome is nameable | PASS | One settled Pi conversation enters a verified worktree and returns to main before merge. |\n| Target behavior is supported | PASS | Pi 0.8"
+  },
+  "merge_ready": {
+    "since": "2026-09-07T13:08:01.313Z",
+    "branch": "wt/pi-worktree-session-relocation",
+    "worktree_id": "beehive--wt--pi-worktree-session-relocation",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
