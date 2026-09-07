@@ -34,6 +34,225 @@ pub(crate) fn bool_flag_true(flags: &Flags, name: &str) -> bool {
     }
 }
 
+pub(crate) fn canonical_path_str(path: &Path) -> Result<String, String> {
+    dunce::canonicalize(path)
+        .map(|c| c.to_string_lossy().into_owned())
+        .map_err(|e| format!("cannot canonicalize path {}: {}", path.display(), e))
+}
+
+pub(crate) fn build_session_transition_with_session_id(
+    operation: &str,
+    source_cwd: &Path,
+    target_cwd: &Path,
+    worktree_id: &str,
+    feature: Option<&str>,
+    continuation: Option<Value>,
+    pi_session_id: Option<&str>,
+) -> Result<Value, String> {
+    let source_canon = canonical_path_str(source_cwd)?;
+    let target_canon = canonical_path_str(target_cwd)?;
+    Ok(json!({
+        "schemaVersion": 1,
+        "operation": operation,
+        "sourceCwd": source_canon,
+        "targetCwd": target_canon,
+        "worktreeId": worktree_id,
+        "feature": feature.map_or(Value::Null, |f| json!(f)),
+        "piSessionId": pi_session_id.map_or(Value::Null, |id| json!(id)),
+        "continuation": continuation.unwrap_or(Value::Null),
+    }))
+}
+
+pub(crate) fn build_session_transition(
+    operation: &str,
+    source_cwd: &Path,
+    target_cwd: &Path,
+    worktree_id: &str,
+    feature: Option<&str>,
+    continuation: Option<Value>,
+) -> Result<Value, String> {
+    let pi_session_id = std::env::var("PI_SESSION_ID")
+        .ok()
+        .filter(|s| !s.is_empty());
+    build_session_transition_with_session_id(
+        operation,
+        source_cwd,
+        target_cwd,
+        worktree_id,
+        feature,
+        continuation,
+        pi_session_id.as_deref(),
+    )
+}
+
+pub(crate) fn build_merge_continuation(
+    no_cleanup: bool,
+    skip_uat: bool,
+    queue_wait_ms: Option<f64>,
+) -> Value {
+    let queue_wait_val = match queue_wait_ms {
+        Some(ms) => {
+            if ms.fract() == 0.0 && ms >= 0.0 && ms <= (u64::MAX as f64) {
+                json!(ms as u64)
+            } else {
+                json!(ms)
+            }
+        }
+        None => Value::Null,
+    };
+    json!({
+        "operation": "merge-worktree",
+        "noCleanup": no_cleanup,
+        "skipUat": skip_uat,
+        "queueWaitMs": queue_wait_val,
+    })
+}
+
+pub(crate) fn format_pi_transition_marker(transition: &Value) -> Option<String> {
+    if transition.get("piSessionId").and_then(|v| v.as_str()).is_some() {
+        serde_json::to_string(transition)
+            .ok()
+            .map(|s| format!("@@BEE_SESSION_TRANSITION@@ {s}"))
+    } else {
+        None
+    }
+}
+
+pub(crate) fn emit_pi_transition_marker_if_present(transition: &Value) {
+    if let Some(marker) = format_pi_transition_marker(transition) {
+        eprintln!("{marker}");
+    }
+}
+
+pub(crate) fn enter_worktree_core(
+    main_root: &Path,
+    id: &str,
+) -> Result<(Value, String), String> {
+    let grants = read_grants_strict(&main_root.join(".bee"))
+        .ok_or_else(|| "cannot read worktree grants".to_string())?;
+    if grants.get(id) != Some(&Value::Bool(true)) {
+        return Err(format!(
+            "no granted worktree found for id \"{id}\". Run \"bee worktree list\" to see granted worktrees."
+        ));
+    }
+    let target_root = resolve_worktree_by_id(main_root, id).ok_or_else(|| {
+        format!(
+            "no matching, bidirectionally-valid git worktree link was found for id \"{id}\"."
+        )
+    })?;
+    let feature_info = resolve_worktree_feature(&target_root);
+    let feature = feature_info.feature;
+    let transition = build_session_transition(
+        "enter-worktree",
+        main_root,
+        &target_root,
+        id,
+        feature.as_deref(),
+        None,
+    )?;
+    let mut result = Map::new();
+    result.insert("ok".into(), json!(true));
+    result.insert("id".into(), json!(id));
+    result.insert("worktreeRoot".into(), json!(p(&target_root)));
+    if let Some(ref f) = feature {
+        result.insert("feature".into(), json!(f));
+    }
+    result.insert("sessionTransition".into(), transition);
+
+    let text = format!(
+        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): target at {}.\nOpen next session with cwd={} — this session stays on main until relocated.",
+        feature.as_deref().unwrap_or(id),
+        p(&target_root),
+        p(&target_root)
+    );
+    Ok((Value::Object(result), text))
+}
+
+pub(crate) fn run_enter(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(&flags, &["id"]) {
+        return None;
+    }
+    let id = match flags.get("id") {
+        Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
+        _ => return None,
+    };
+    let ctx = match prelude("worktree enter", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+    if ctx.kind != "ordinary" {
+        return Some(ctx.fail(&format!(
+            "\"bee worktree enter\" must be run from inside the main checkout, not a \"{}\" checkout — run it from the main repo root to switch to a granted worktree.",
+            ctx.kind
+        )));
+    }
+    let main_root = ctx.work_root.clone();
+    match enter_worktree_core(&main_root, &id) {
+        Ok((result, text)) => {
+            if let Some(transition) = result.get("sessionTransition") {
+                emit_pi_transition_marker_if_present(transition);
+            }
+            Some(ctx.emit(&result, &text))
+        }
+        Err(err) => Some(ctx.fail(&err)),
+    }
+}
+
+pub(crate) fn linked_worktree_merge_core(
+    worktree_root: &Path,
+    current_id: &str,
+    main_root: &Path,
+    passed_id: Option<&str>,
+    no_cleanup: bool,
+    skip_uat: bool,
+    queue_wait_ms: Option<f64>,
+) -> Result<(Value, String), String> {
+    if let Some(pid) = passed_id {
+        if pid != current_id {
+            return Err(format!(
+                "cannot merge worktree \"{pid}\" from inside worktree \"{current_id}\" — omit --id to merge the active worktree, or run from the main checkout"
+            ));
+        }
+    }
+    let grants = read_grants_strict(&main_root.join(".bee"))
+        .ok_or_else(|| "cannot read worktree grants".to_string())?;
+    if grants.get(current_id) != Some(&Value::Bool(true)) {
+        return Err(format!(
+            "no granted worktree found for id \"{current_id}\". Run \"bee worktree list\" from the main checkout to see granted worktrees."
+        ));
+    }
+
+    let feature_info = resolve_worktree_feature(worktree_root);
+    let feature = feature_info.feature;
+    let continuation = build_merge_continuation(no_cleanup, skip_uat, queue_wait_ms);
+    let transition = build_session_transition(
+        "exit-worktree-before-merge",
+        worktree_root,
+        main_root,
+        current_id,
+        feature.as_deref(),
+        Some(continuation),
+    )?;
+
+    let mut result = Map::new();
+    result.insert("ok".into(), json!(true));
+    result.insert("id".into(), json!(current_id));
+    result.insert("worktreeRoot".into(), json!(p(worktree_root)));
+    result.insert("mainRoot".into(), json!(p(main_root)));
+    if let Some(ref f) = feature {
+        result.insert("feature".into(), json!(f));
+    }
+    result.insert("sessionTransition".into(), transition);
+
+    let text = format!(
+        "Session transition intent emitted for worktree \"{current_id}\" (feature: \"{}\"): return to main checkout at {}.\nSwitch session to cwd={} to run merge — this session stays in the worktree until relocated.",
+        feature.as_deref().unwrap_or(current_id),
+        p(main_root),
+        p(main_root)
+    );
+    Ok((Value::Object(result), text))
+}
+
 pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(&flags, &["feature", "base-ref", "with-companion"]) {
         return None;
@@ -161,7 +380,20 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         p(&created.worktree_root),
         created.id
     );
-    let (result, text) = new_result_and_text(&feature, &created, &next_step);
+    let (mut result, text) = new_result_and_text(&feature, &created, &next_step);
+    let transition = match build_session_transition(
+        "enter-worktree",
+        &main_root,
+        &created.worktree_root,
+        &created.id,
+        Some(&feature),
+        None,
+    ) {
+        Ok(t) => t,
+        Err(err) => return Some(ctx.fail(&err)),
+    };
+    result.insert("sessionTransition".into(), transition.clone());
+    emit_pi_transition_marker_if_present(&transition);
     Some(ctx.emit(&Value::Object(result), &text))
 }
 
@@ -489,9 +721,10 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
             }
         }
     }
-    let id = match flags.get("id") {
-        Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
-        _ => return None,
+    let passed_id = match flags.get("id") {
+        Some(FlagV::S(s)) if !s.is_empty() => Some(s.clone()),
+        Some(_) => return None,
+        None => None,
     };
     let cleanup_flag = bool_flag_true(&flags, "cleanup");
     let no_cleanup_flag = bool_flag_true(&flags, "no-cleanup");
@@ -501,12 +734,53 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
+    if ctx.kind == "linked-valid" {
+        let worktree_root = ctx.work_root.clone();
+        let current_id = match ctx.id.as_deref() {
+            Some(id) => id,
+            None => return Some(ctx.fail("Worktree has no git-verified id")),
+        };
+        let main_root = match ctx.main_root.as_deref() {
+            Some(r) => r,
+            None => return Some(ctx.fail("Cannot resolve main checkout root")),
+        };
+        let queue_wait_opt = if flags.get("queue-wait-ms").is_some() {
+            Some(queue_wait_bound_ms)
+        } else {
+            None
+        };
+        match linked_worktree_merge_core(
+            &worktree_root,
+            current_id,
+            main_root,
+            passed_id.as_deref(),
+            no_cleanup_flag,
+            skip_uat_flag,
+            queue_wait_opt,
+        ) {
+            Ok((result, text)) => {
+                if let Some(transition) = result.get("sessionTransition") {
+                    emit_pi_transition_marker_if_present(transition);
+                }
+                return Some(ctx.emit(&result, &text));
+            }
+            Err(err) => return Some(ctx.fail(&err)),
+        }
+    }
     if ctx.kind != "ordinary" {
         return Some(ctx.fail(&format!(
             "\"bee worktree merge\" must be run from inside the main checkout, not a \"{}\" checkout — a worktree, including the one being merged, cannot merge itself.",
             ctx.kind
         )));
     }
+    let id = match passed_id {
+        Some(id) => id,
+        None => {
+            return Some(ctx.fail(
+                "\"bee worktree merge\" requires --id <worktree-id> when run from the main checkout. Run \"bee worktree list\" to see granted worktrees."
+            ));
+        }
+    };
     let main_root = ctx.work_root.clone();
 
     // wkm-1 (D1): the worktree is KEPT by default; `--cleanup` or an
@@ -772,6 +1046,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "register" => run_register(flags, use_json, t0),
         "unregister" => run_unregister(flags, use_json, t0),
         "new" => run_new(flags, use_json, t0),
+        "enter" => run_enter(flags, use_json, t0),
         "merge" => run_merge(flags, use_json, t0),
         "prune" => run_prune(flags, use_json, t0),
         _ => None,

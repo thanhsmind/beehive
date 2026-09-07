@@ -5865,3 +5865,457 @@ use std::time::Instant;
             "an unresolvable id is silence, never a throw"
         );
     }
+
+    // ─── pwsr-1 (pi-worktree-session-relocation) ───────────────────────────
+    //    CLI session transition emission: builder, enter, linked merge, and Pi marker
+
+    #[test]
+    fn build_session_transition_shape_and_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("source");
+        let dst = tmp.path().join("target");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dst).unwrap();
+
+        // 1. Enter transition shape (without PI_SESSION_ID)
+        let enter = build_session_transition_with_session_id(
+            "enter-worktree",
+            &src,
+            &dst,
+            "wt-demo",
+            Some("demo"),
+            None,
+            None,
+        ).expect("build_session_transition must succeed for valid paths");
+        assert_eq!(enter["schemaVersion"], json!(1));
+        assert_eq!(enter["operation"], json!("enter-worktree"));
+        assert_eq!(enter["worktreeId"], json!("wt-demo"));
+        assert_eq!(enter["feature"], json!("demo"));
+        assert_eq!(enter["continuation"], Value::Null);
+        assert_eq!(enter["piSessionId"], Value::Null);
+        assert_eq!(enter["sourceCwd"], json!(canonical_path_str(&src).unwrap()));
+        assert_eq!(enter["targetCwd"], json!(canonical_path_str(&dst).unwrap()));
+
+        // 2. Exit transition shape with typed continuation
+        let cont = build_merge_continuation(true, true, Some(4500.0));
+        assert_eq!(cont["operation"], json!("merge-worktree"));
+        assert_eq!(cont["noCleanup"], json!(true));
+        assert_eq!(cont["skipUat"], json!(true));
+        assert_eq!(cont["queueWaitMs"], json!(4500));
+
+        let exit = build_session_transition_with_session_id(
+            "exit-worktree-before-merge",
+            &dst,
+            &src,
+            "wt-demo",
+            None,
+            Some(cont),
+            None,
+        ).expect("build_session_transition must succeed for valid paths");
+        assert_eq!(exit["schemaVersion"], json!(1));
+        assert_eq!(exit["operation"], json!("exit-worktree-before-merge"));
+        assert_eq!(exit["feature"], Value::Null);
+        assert_eq!(exit["continuation"]["operation"], json!("merge-worktree"));
+        assert_eq!(exit["continuation"]["noCleanup"], json!(true));
+        assert_eq!(exit["continuation"]["skipUat"], json!(true));
+        assert_eq!(exit["continuation"]["queueWaitMs"], json!(4500));
+    }
+
+    #[test]
+    fn build_session_transition_refuses_uncanonicalizable_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let existing = tmp.path().join("existing");
+        let non_existent = tmp.path().join("does-not-exist");
+        std::fs::create_dir_all(&existing).unwrap();
+
+        // Target path does not exist: must refuse rather than silently falling back
+        let err1 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &existing,
+            &non_existent,
+            "wt-1",
+            None,
+            None,
+            None,
+        ).unwrap_err();
+        assert!(err1.contains("cannot canonicalize path"), "{err1}");
+
+        // Source path does not exist: must refuse
+        let err2 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &non_existent,
+            &existing,
+            "wt-1",
+            None,
+            None,
+            None,
+        ).unwrap_err();
+        assert!(err2.contains("cannot canonicalize path"), "{err2}");
+    }
+
+    #[test]
+    fn build_merge_continuation_preserves_fractional_queue_wait_ms() {
+        // Fractional milliseconds must not be truncated to integer
+        let cont_frac = build_merge_continuation(false, false, Some(1234.5));
+        assert_eq!(cont_frac["queueWaitMs"], json!(1234.5));
+
+        // Exact whole milliseconds serialize as integer
+        let cont_whole = build_merge_continuation(false, false, Some(5000.0));
+        assert_eq!(cont_whole["queueWaitMs"], json!(5000));
+
+        // None serializes as null
+        let cont_none = build_merge_continuation(false, false, None);
+        assert_eq!(cont_none["queueWaitMs"], Value::Null);
+    }
+
+    #[test]
+    fn enter_worktree_core_verifies_grant_and_git_link_with_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-enter");
+
+        // Record states before enter
+        let main_status_before = git_status_porcelain_str(&main);
+        let wt_status_before = git_status_porcelain_str(&created.worktree_root);
+        let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
+
+        let (result, text) = enter_worktree_core(&main, &created.id)
+            .expect("enter_worktree_core must succeed for valid granted worktree");
+
+        // Verify result and transition
+        assert_eq!(result["id"], json!(created.id));
+        assert_eq!(result["worktreeRoot"], json!(p(&created.worktree_root)));
+        assert_eq!(result["feature"], json!("demo-enter"));
+
+        let trans = &result["sessionTransition"];
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["operation"], json!("enter-worktree"));
+        assert_eq!(trans["worktreeId"], json!(created.id));
+        assert_eq!(trans["feature"], json!("demo-enter"));
+        assert_eq!(trans["sourceCwd"], json!(canonical_path_str(&main).unwrap()));
+        assert_eq!(trans["targetCwd"], json!(canonical_path_str(&created.worktree_root).unwrap()));
+        assert_eq!(trans["continuation"], Value::Null);
+
+        // User text must not claim that the session entered before Pi acts
+        assert!(!text.contains("Entered"), "text must not claim entered before Pi acts: {text}");
+        assert!(!text.contains("Exiting"), "text must not claim exiting: {text}");
+        assert!(text.contains("Session transition intent emitted"), "{text}");
+        assert!(text.contains("stays on main until relocated"), "{text}");
+        assert!(text.contains(&created.id));
+        assert!(text.contains(&p(&created.worktree_root)));
+
+        // Verify ZERO mutations
+        assert_eq!(git_status_porcelain_str(&main), main_status_before);
+        assert_eq!(git_status_porcelain_str(&created.worktree_root), wt_status_before);
+        assert_eq!(read_grants_strict(&main.join(".bee")).unwrap(), grants_before);
+    }
+
+    #[test]
+    fn enter_worktree_core_refuses_ungranted_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let err = enter_worktree_core(&main, "nonexistent-id").unwrap_err();
+        assert!(err.contains("no granted worktree found for id \"nonexistent-id\""), "{err}");
+    }
+
+    #[test]
+    fn enter_worktree_core_and_linked_merge_refuse_false_valued_grants() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-false-grant");
+
+        // Overwrite grant value with boolean false
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.insert(created.id.clone(), json!(false));
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        // 1. enter_worktree_core must refuse false-valued grant
+        let enter_err = enter_worktree_core(&main, &created.id).unwrap_err();
+        assert!(
+            enter_err.contains(&format!("no granted worktree found for id \"{}\"", created.id)),
+            "enter must refuse false-valued grant: {enter_err}"
+        );
+
+        // 2. linked_worktree_merge_core must refuse false-valued grant
+        let merge_err = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None,
+            false,
+            false,
+            None,
+        ).unwrap_err();
+        assert!(
+            merge_err.contains(&format!("no granted worktree found for id \"{}\"", created.id)),
+            "merge must refuse false-valued grant: {merge_err}"
+        );
+    }
+
+    #[test]
+    fn enter_worktree_core_refuses_broken_git_link() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        // Manually insert a grant with no matching git worktree
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.insert("ghost-id".to_string(), json!(true));
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        let err = enter_worktree_core(&main, "ghost-id").unwrap_err();
+        assert!(err.contains("no matching, bidirectionally-valid git worktree link was found"), "{err}");
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_emits_exit_intent_and_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-exit");
+
+        let main_status_before = git_status_porcelain_str(&main);
+        let wt_status_before = git_status_porcelain_str(&created.worktree_root);
+        let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
+
+        // 1. Omitted id defaults to current_id
+        let (result, text) = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None, // omitted id
+            false,
+            false,
+            None,
+        ).expect("linked_worktree_merge_core must succeed with omitted id");
+
+        assert_eq!(result["ok"], json!(true));
+        assert_eq!(result["id"], json!(created.id));
+        assert_eq!(result["worktreeRoot"], json!(p(&created.worktree_root)));
+        assert_eq!(result["mainRoot"], json!(p(&main)));
+        assert_eq!(result["feature"], json!("demo-exit"));
+
+        let trans = &result["sessionTransition"];
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["operation"], json!("exit-worktree-before-merge"));
+        assert_eq!(trans["worktreeId"], json!(created.id));
+        assert_eq!(trans["feature"], json!("demo-exit"));
+        assert_eq!(trans["sourceCwd"], json!(canonical_path_str(&created.worktree_root).unwrap()));
+        assert_eq!(trans["targetCwd"], json!(canonical_path_str(&main).unwrap()));
+
+        let cont = &trans["continuation"];
+        assert_eq!(cont["operation"], json!("merge-worktree"));
+        assert_eq!(cont["noCleanup"], json!(false));
+        assert_eq!(cont["skipUat"], json!(false));
+        assert_eq!(cont["queueWaitMs"], Value::Null);
+
+        // User text must not claim exiting before Pi acts
+        assert!(!text.contains("Exiting"), "text must not claim exiting before Pi acts: {text}");
+        assert!(!text.contains("Entered"), "text must not claim entered: {text}");
+        assert!(text.contains("Session transition intent emitted"), "{text}");
+        assert!(text.contains("stays in the worktree until relocated"), "{text}");
+        assert!(text.contains(&created.id));
+        assert!(text.contains(&p(&main)));
+
+        // Verify ZERO side effects
+        assert_eq!(git_status_porcelain_str(&main), main_status_before);
+        assert_eq!(git_status_porcelain_str(&created.worktree_root), wt_status_before);
+        assert_eq!(read_grants_strict(&main.join(".bee")).unwrap(), grants_before);
+        assert!(!main.join(".bee/runtime/integration/queue").exists());
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_passes_typed_flags_to_continuation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-exit-flags");
+
+        let (result, _text) = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            Some(&created.id), // matching id
+            true, // noCleanup
+            true, // skipUat
+            Some(7500.5), // fractional queueWaitMs preserved
+        ).expect("linked_worktree_merge_core must succeed with matching id");
+
+        let cont = &result["sessionTransition"]["continuation"];
+        assert_eq!(cont["operation"], json!("merge-worktree"));
+        assert_eq!(cont["noCleanup"], json!(true));
+        assert_eq!(cont["skipUat"], json!(true));
+        assert_eq!(cont["queueWaitMs"], json!(7500.5));
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_rejects_id_mismatch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-mismatch");
+
+        let err = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            Some("other-id"),
+            false,
+            false,
+            None,
+        ).unwrap_err();
+
+        assert!(err.contains("cannot merge worktree \"other-id\" from inside worktree"), "{err}");
+    }
+
+    #[test]
+    fn linked_worktree_merge_core_rejects_absent_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-no-grant");
+
+        // Remove grant from main store
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.remove(&created.id);
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        let err = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None,
+            false,
+            false,
+            None,
+        ).unwrap_err();
+
+        assert!(err.contains(&format!("no granted worktree found for id \"{}\"", created.id)), "{err}");
+    }
+
+    #[test]
+    fn new_result_and_text_and_transition_builder_compose() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "compose-test");
+
+        let next_step = "Open next session";
+        let (mut result, text) = new_result_and_text("compose-test", &created, next_step);
+        assert!(!text.is_empty());
+
+        let transition = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &created.worktree_root,
+            &created.id,
+            Some("compose-test"),
+            None,
+            None,
+        ).expect("transition must build");
+        result.insert("sessionTransition".into(), transition.clone());
+
+        assert_eq!(result["sessionTransition"]["operation"], json!("enter-worktree"));
+        assert_eq!(result["sessionTransition"]["sourceCwd"], json!(canonical_path_str(&main).unwrap()));
+        assert_eq!(result["sessionTransition"]["targetCwd"], json!(canonical_path_str(&created.worktree_root).unwrap()));
+        assert_eq!(result["sessionTransition"]["worktreeId"], json!(created.id));
+        assert_eq!(result["sessionTransition"]["feature"], json!("compose-test"));
+        assert_eq!(result["sessionTransition"]["continuation"], Value::Null);
+    }
+
+    #[test]
+    fn pi_marker_formatting_and_hermetic_session_handling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(&main).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+
+        // 1. Without PI_SESSION_ID: no marker formatted, piSessionId is null
+        let trans1 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &wt,
+            "wt-1",
+            Some("f1"),
+            None,
+            None,
+        ).unwrap();
+        assert_eq!(trans1["piSessionId"], Value::Null);
+        assert_eq!(format_pi_transition_marker(&trans1), None);
+
+        // 2. With PI_SESSION_ID: marker is formatted as @@BEE_SESSION_TRANSITION@@ {json}
+        let session_id = "pi-test-session-999";
+        let trans2 = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &wt,
+            "wt-1",
+            Some("f1"),
+            None,
+            Some(session_id),
+        ).unwrap();
+        assert_eq!(trans2["piSessionId"], json!(session_id));
+
+        let marker = format_pi_transition_marker(&trans2)
+            .expect("must format marker when piSessionId is present");
+        assert!(marker.starts_with("@@BEE_SESSION_TRANSITION@@ "), "must have expected prefix: {marker}");
+        assert!(!marker.contains('\n'), "marker must be a single compact line on stderr");
+
+        let json_str = marker.strip_prefix("@@BEE_SESSION_TRANSITION@@ ").unwrap();
+        let parsed: Value = serde_json::from_str(json_str).expect("marker must contain valid JSON");
+        assert_eq!(parsed, trans2);
+    }
+
+    #[test]
+    fn run_enter_flag_validation_is_hermetic() {
+        // Unknown flag returns None before calling prelude
+        let (flags1, use_json1) = parse_flags(&["--id", "any-id", "--bogus", "val"]).unwrap();
+        assert_eq!(run_enter(flags1, use_json1, Instant::now()), None);
+
+        // Missing required --id returns None before calling prelude
+        let (flags2, use_json2) = parse_flags(&[]).unwrap();
+        assert_eq!(run_enter(flags2, use_json2, Instant::now()), None);
+
+        // Empty --id returns None before calling prelude
+        let (flags3, use_json3) = parse_flags(&["--id", ""]).unwrap();
+        assert_eq!(run_enter(flags3, use_json3, Instant::now()), None);
+    }
+
+    #[test]
+    fn worktree_registry_payload_help_accurately_describes_transitions() {
+        let raw = include_str!("../../generated/registry_payload.json");
+        let payload: Value = serde_json::from_str(raw).expect("registry payload must parse");
+        let cmds = payload["commands"].as_array().expect("commands must be an array");
+
+        let merge = cmds
+            .iter()
+            .find(|c| c["name"] == "worktree.merge")
+            .expect("worktree.merge must exist in registry payload");
+        let merge_desc = merge["description"].as_str().unwrap();
+        assert!(
+            !merge_desc.contains("running it from inside ANY linked worktree, including the one being merged, is refused"),
+            "worktree.merge description must not claim linked worktree is refused: {merge_desc}"
+        );
+        assert!(
+            !merge_desc.contains("a worktree cannot merge itself"),
+            "worktree.merge description must not claim worktree cannot merge itself: {merge_desc}"
+        );
+        assert!(
+            merge_desc.contains("linked worktree") && merge_desc.contains("exit"),
+            "worktree.merge description must explain linked worktree exit transition: {merge_desc}"
+        );
+
+        let new_cmd = cmds
+            .iter()
+            .find(|c| c["name"] == "worktree.new")
+            .expect("worktree.new must exist in registry payload");
+        let new_desc = new_cmd["description"].as_str().unwrap();
+        assert!(
+            new_desc.contains("transition") && new_desc.contains("enter"),
+            "worktree.new description must describe enter session transition: {new_desc}"
+        );
+
+        let enter_cmd = cmds
+            .iter()
+            .find(|c| c["name"] == "worktree.enter")
+            .expect("worktree.enter must exist in registry payload");
+        let enter_desc = enter_cmd["description"].as_str().unwrap();
+        assert!(
+            enter_desc.contains("transition") && enter_desc.to_ascii_lowercase().contains("enter"),
+            "worktree.enter description must describe enter session transition: {enter_desc}"
+        );
+    }
