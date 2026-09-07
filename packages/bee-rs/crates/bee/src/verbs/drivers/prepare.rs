@@ -2248,6 +2248,26 @@ pub(crate) fn claim_and_reserve_for_dispatch(
     .map_err(|e| (e, true))
 }
 
+/// Emit the prompt-skew refusal on the caller's chosen stream, with timing,
+/// exactly as the root refusals beside it do.
+fn emit_prompt_skew(
+    cwd: &Path,
+    cmd: &str,
+    name: &str,
+    skew: &PromptSkew,
+    use_json: bool,
+    t0: Instant,
+) -> ExitCode {
+    let msg = prompt_skew_message(cmd, name, skew);
+    if use_json {
+        println!("{}", crate::jsjson::stringify(&serde_json::json!({ "error": msg })));
+    } else {
+        eprintln!("{msg}");
+    }
+    crate::verbs::record_timing(cwd, cmd, t0, false);
+    ExitCode::FAILURE
+}
+
 pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
@@ -2399,8 +2419,12 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         }
     };
     let prompt_name = if kind == "cell" { "worker-cell" } else { kind.as_str() };
-    if !prompts_match_disk(&root, prompt_name) {
-        return None; // prompt skew ⇒ delegate (C4)
+    // Skew used to `return None` — delegate to the Node renderer (C4). That
+    // runtime was deleted at R6, so `None` reaches the dispatcher's generic
+    // argument-shape classifier and blames the caller's flags for a stale
+    // binary. Name it instead.
+    if let Some(skew) = prompt_skew(&root, prompt_name) {
+        return Some(emit_prompt_skew(&cwd, "dispatch prepare", prompt_name, &skew, use_json, t0));
     }
     let classification = if runtime == "codex" {
         Some(native_transport_classification(&root).ok()?)
@@ -2802,8 +2826,8 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     };
     // Every wave cell renders the "worker-cell" prompt (kind is always
     // "cell") — the same skew guard `dispatch prepare --claim` applies.
-    if !prompts_match_disk(&root, "worker-cell") {
-        return None;
+    if let Some(skew) = prompt_skew(&root, "worker-cell") {
+        return Some(emit_prompt_skew(&cwd, "dispatch wave", "worker-cell", &skew, use_json, t0));
     }
     let classification = if runtime == "codex" {
         Some(native_transport_classification(&root).ok()?)

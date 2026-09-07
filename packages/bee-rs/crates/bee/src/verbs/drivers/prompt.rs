@@ -69,11 +69,21 @@ pub(crate) fn load_prompt(name: &str) -> Option<String> {
 /// this port would render a stale template: byte-compare and delegate on any
 /// mismatch. A repo shipping neither (a pure-binary install) trusts the
 /// embedded copy, which is the only copy that exists there.
-pub(crate) fn prompts_match_disk(root: &Path, name: &str) -> bool {
-    let embedded = match embedded_prompt(name) {
-        Some(t) => t,
-        None => return false,
-    };
+/// What a skew IS, so the refusal can name it instead of shrugging.
+#[derive(Debug)]
+pub(crate) enum PromptSkew {
+    /// No compiled-in template answers to this name.
+    NoEmbedded,
+    /// This on-disk copy disagrees with the compiled-in bytes.
+    Disk(std::path::PathBuf),
+}
+
+/// The first on-disk prompt copy whose bytes disagree with the compiled-in
+/// template, or `None` when every copy present agrees. Same comparison
+/// this guard always made — it now reports WHICH file, because a
+/// caller that cannot delegate has to explain itself.
+pub(crate) fn prompt_skew(root: &Path, name: &str) -> Option<PromptSkew> {
+    let embedded = embedded_prompt(name)?;
     let candidates = [
         root.join("packages").join("bee").join("prompts").join(format!("{name}.md")),
         root.join(".bee").join("bin").join("prompts").join(format!("{name}.md")),
@@ -82,10 +92,36 @@ pub(crate) fn prompts_match_disk(root: &Path, name: &str) -> bool {
         let Ok(bytes) = std::fs::read(&file) else { continue };
         let disk = String::from_utf8_lossy(&bytes);
         if normalize_template(&disk) != normalize_template(embedded) {
-            return false;
+            return Some(PromptSkew::Disk(file));
         }
     }
-    true
+    None
+}
+
+/// The refusal a skew earns. Skew used to `return None` — "delegate to the
+/// Node renderer" — and the dispatcher turned that into its generic
+/// "unsupported argument shape" message, which blames the caller's flags for
+/// a stale binary. The Node runtime was deleted at R6, so there is nothing to
+/// delegate TO: name the file, the cause, and the remedy.
+pub(crate) fn prompt_skew_message(cmd: &str, name: &str, skew: &PromptSkew) -> String {
+    match skew {
+        PromptSkew::NoEmbedded => format!(
+            "bee {cmd}: no prompt template named `{name}` is compiled into this binary \
+             (bee {}), so no worker prompt can be rendered. FIX: rebuild from a source tree \
+             that carries packages/bee/prompts/{name}.md.",
+            crate::version::BEE_VERSION
+        ),
+        PromptSkew::Disk(path) => format!(
+            "bee {cmd}: prompt skew — {} does not match the `{name}` template compiled into \
+             this binary (bee {}), so a worker would be handed a prompt that is not the one on \
+             disk. Nothing is dispatched. FIX: re-vendor the binary from this source tree \
+             (`cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee`, then \
+             copy the built `bee` over `.bee/bin/bee`), or restore that file to the bytes this \
+             binary was built from.",
+            path.display(),
+            crate::version::BEE_VERSION
+        ),
+    }
 }
 
 /// provenance: prompt-renderer.mjs render(template, vars) — the whole minimal
