@@ -1263,14 +1263,10 @@ use std::time::Instant;
         };
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(v.get("payload").unwrap().get("command"), Some(&json!("glm run")));
-        assert!(v
-            .get("payload")
-            .unwrap()
-            .get("stdin")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .starts_with("Gather:"));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        let gather_body = embedded_agent_body("bee-gather").unwrap();
+        assert!(stdin.starts_with(gather_body));
+        assert!(stdin.contains("Gather: locate and digest the requested paths/facts."));
     }
 
     // ── ht-3: herding-tier D4 — the herding-exec Bash payload ──────────────
@@ -6923,6 +6919,23 @@ advance_on — falling to another model there hides the defect (D11)"
         }
     }
 
+    /// hab-2: a herding or cli payload prefixes the embedded agent template body
+    /// when the kind maps to a known bee agent (bee-build, bee-gather, bee-review).
+    fn expected_dispatched_body(runtime: &str, kind: &str, body: &str) -> String {
+        if runtime == "pi" {
+            let pinned_type = match kind {
+                "cell" => "bee-build",
+                "gather" => "bee-gather",
+                "reviewer" => "bee-review",
+                _ => "general-purpose",
+            };
+            if let Some(agent_body) = embedded_agent_body(pinned_type) {
+                return format!("{agent_body}\n\n{body}");
+            }
+        }
+        body.to_string()
+    }
+
     fn brief_file(root: &Path, name: &str, body: &str) -> String {
         let file = root.join(name);
         std::fs::write(&file, body).unwrap();
@@ -6976,7 +6989,8 @@ advance_on — falling to another model there hides the defect (D11)"
                 );
                 if kind != "cell" {
                     let before = render(&load_prompt(kind).unwrap(), &[]).unwrap();
-                    assert_eq!(body, before, "{runtime}/{kind}: payload bytes drifted");
+                    let expected = expected_dispatched_body(runtime, kind, &before);
+                    assert_eq!(body, expected, "{runtime}/{kind}: payload bytes drifted");
                 }
             }
         }
@@ -8115,16 +8129,18 @@ advance_on — falling to another model there hides the defect (D11)"
                 );
                 assert!(!body.contains("{{"), "{runtime}/{kind}: unrendered marker left behind");
                 if kind == "cell" {
+                    let head = "Nickname (reservation identity): w\nAssigned cell id: c-1\nFeature: f\n\nCell (authoritative — do not re-fetch):";
+                    let expected_head = expected_dispatched_body(runtime, kind, head);
                     assert!(
-                        body.starts_with(
-                            "Nickname (reservation identity): w\nAssigned cell id: c-1\nFeature: f\n\nCell (authoritative — do not re-fetch):"
-                        ),
+                        body.starts_with(&expected_head),
                         "{runtime}/{kind}: the worker prompt head drifted: {body}"
                     );
                 } else {
+                    let before = render(&load_prompt(kind).unwrap(), &[]).unwrap();
+                    let expected = expected_dispatched_body(runtime, kind, &before);
                     assert_eq!(
                         body,
-                        render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                        expected,
                         "{runtime}/{kind}: payload bytes drifted"
                     );
                 }
@@ -8172,9 +8188,11 @@ advance_on — falling to another model there hides the defect (D11)"
                 write_anchor(&root, "default", STALE);
                 let body = body_of_kind(&root, runtime, kind);
                 assert!(!body.contains(STALE), "{runtime}/{kind}: read a stale default anchor");
+                let before = render(&load_prompt(kind).unwrap(), &[]).unwrap();
+                let expected = expected_dispatched_body(runtime, kind, &before);
                 assert_eq!(
                     body,
-                    render(&load_prompt(kind).unwrap(), &[]).unwrap(),
+                    expected,
                     "{runtime}/{kind}: payload bytes drifted"
                 );
             }
@@ -8914,4 +8932,60 @@ advance_on — falling to another model there hides the defect (D11)"
                 "worker-details.md's nudge consult is missing the return-form token {needle:?}"
             );
         }
+    }
+
+    #[test]
+    fn herding_gather_payload_stdin_starts_with_agent_body_and_ends_with_brief() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "pi", "gather", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected a gather envelope on pi")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        let gather_body = embedded_agent_body("bee-gather").expect("bee-gather body");
+        assert!(stdin.starts_with(gather_body));
+        let prompt = render(&load_prompt("gather").unwrap(), &[]).unwrap();
+        assert!(stdin.ends_with(&prompt));
+    }
+
+    #[test]
+    fn herding_cell_payload_stdin_starts_with_agent_body_and_carries_worker_contract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"carry agent body","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "pi", "cell", Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected a cell envelope on pi")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        let build_body = embedded_agent_body("bee-build").expect("bee-build body");
+        assert!(stdin.starts_with(build_body));
+        assert!(stdin.contains("Contract:\n- Load the bee-swarming skill (Execute section) for the full worker contract."));
+        assert!(stdin.contains("Assigned cell id: c-1"));
+    }
+
+    #[test]
+    fn herding_general_purpose_advisor_payload_stdin_is_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "pi", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an advisor envelope on pi")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        assert_eq!(stdin, ADVISOR_BODY_WITHOUT_A_BRIEF);
     }
