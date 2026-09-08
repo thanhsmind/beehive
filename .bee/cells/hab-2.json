@@ -1,0 +1,79 @@
+{
+  "id": "hab-2",
+  "feature": "herding-agent-brief",
+  "lane": "small",
+  "role": "code",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [
+    "hab-1"
+  ],
+  "title": "Carry the related agent body into every non-Agent dispatch payload",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, three arms build a Bash payload whose prompt travels on stdin: the native-fallback cli arm (prepare.rs:1750), the Resolved::Cli arm (prepare.rs:1776) and the Resolved::Herding arm (prepare.rs:1817). Each inserts `prompt_body.clone()`. On the Agent path Claude loads the agent file itself; on these three paths nobody does, so the pane worker gets only the thin kind brief. STEP 1 — compute ONCE, next to `prompt_body`, a `pane_prompt`: when `embedded_agent_body(pinned_type)` (added by hab-1) returns Some(body), it is format!(\"{body}\\n\\n{prompt_body}\"); otherwise it is `prompt_body` unchanged. Use `pane_prompt` in all three stdin inserts. `pinned_type` is already in scope at prepare.rs:1631. Do NOT touch the Agent arms (prepare.rs:1707, :1908) or the codex spawn_agent arm — their bytes are pinned at tests.rs:6524-6526 and must stay green. STEP 2 — existing byte-identity tests WILL go red, correctly, and must be repaired, not deleted. DISPATCH_RUNTIMES (prepare.rs:40) is [codex, claude, pi] and the BRIEF_HOST fixture (tests.rs:6893) gives `pi` herding slots, so every walk over runtime x kind now sees the agent body on pi/gather (bee-gather) and pi/reviewer (bee-review); pi/advisor is unchanged because its pinned_type is general-purpose. The helper `dispatched_body` (tests.rs:6911) reads `stdin` as well as `prompt`, which is why these tests see it. Repair each of these by expecting the agent body as a PREFIX on a herding-shaped slot while keeping exact bytes everywhere else — a shared test helper that wraps the expected body is preferred over editing each assertion by hand: no_brief_leaves_every_runtime_and_kind_pair_exactly_as_it_was (tests.rs:6949), a_whitespace_only_brief_is_no_brief_at_all (:7000), a_gather_dispatch_carrying_expertise_renders_the_reading_list (:7808), a_reviewer_dispatch_carrying_expertise_renders_the_reading_list (:7828), a_briefless_advisor_dispatch_carrying_expertise_renders_the_reading_list (:7851 — should stay byte-identical, confirm it does), no_resolvable_anchor_leaves_every_runtime_and_kind_pair_byte_identical (:8106), a_featureless_dispatch_reads_no_default_anchor_even_when_one_exists (:8166), a_whitespace_only_request_is_no_request_at_all (:8272), an_unusable_anchor_degrades_to_no_block_and_never_fails_the_dispatch (:8297). Run the full drivers test module and repair every remaining red the same way. Never delete or weaken an assertion to make it pass.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "must_haves": {
+    "truths": [
+      "a herding gather payload's stdin starts with the bee-gather body and still ends with the gather kind brief",
+      "a herding cell payload's stdin starts with the bee-build body and still carries the full worker contract below it",
+      "a role whose pinned_type is general-purpose (advisor) produces stdin byte-identical to today",
+      "the Agent-path assertions at tests.rs:6524-6526 pass unchanged - no edit to those constants",
+      "new tests cover the gather herding case, the cell herding case, and the general-purpose no-op case",
+      "every pre-existing test named in the action is green again, repaired by expecting the body, never by deleting or weakening an assertion",
+      "cargo test over the whole drivers module is green"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+  ],
+  "decisions": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "hab-w2",
+    "outcome": "Every non-Agent dispatch payload now carries the related bee agent body above its kind brief",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-08T13:50:07.404Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "91bfae1e-9a10-4077-ab0d-1f6b8f28c115",
+    "claimed_at": "2026-09-08T13:41:24.827Z",
+    "mistakes": [
+      {
+        "wrong": "the new expected_dispatched_body test helper keys off runtime == \"pi\" rather than off the resolved slot being herding",
+        "better": "it encodes the BRIEF_HOST fixture instead of the behavior, so a fixture change would let it pass wrongly; keying it on the resolved transport would have been better"
+      }
+    ],
+    "report": {
+      "outcome": "pane_prompt built once at prepare.rs:1638 and used in all three Bash stdin arms (1751, 1777, 1818); 9 byte-identity tests repaired through a new expected_dispatched_body helper; 2 new tests pin the gather and cell herding shapes",
+      "commit": "6207b51f3f406b92784484ebb89424d4437ffe84",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the whole declared suite, run by the leader before merge: 35 binaries, 0 failed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "the new expected_dispatched_body test helper keys off runtime == \"pi\" rather than off the resolved slot being herding — it encodes the BRIEF_HOST fixture instead of the behavior, so a fixture change would let it pass wrongly; keying it on the resolved transport would have been better"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

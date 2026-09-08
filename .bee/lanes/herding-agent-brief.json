@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-agent-brief",
+  "mode": "standard",
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-agent-brief\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"herding-agent-brief\" (lane).",
+  "created_at": "2026-09-08T13:29:06.358Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "refactor",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-09-08T13:29:18.125Z",
+    "feature": "herding-agent-brief"
+  },
+  "merge_ready": {
+    "since": "2026-09-08T13:50:07.432Z",
+    "branch": "wt/herding-agent-brief",
+    "worktree_id": "beehive--wt--herding-agent-brief",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

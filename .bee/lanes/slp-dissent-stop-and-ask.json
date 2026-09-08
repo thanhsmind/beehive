@@ -15,10 +15,10 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "Xoá 6 file capture-queue.jsonl đã flush hết trong worktree, để prune dọn được 6 worktree đó?",
-    "asked_at": "2026-09-08T11:48:07.557Z",
-    "session": "9c1d5194-8c87-42c5-b450-b9e1980fa134"
+    "kind": "turn-end",
+    "subject": "Say which one, and I do it.",
+    "asked_at": "2026-09-08T12:07:30.996Z",
+    "session": "91bfae1e-9a10-4077-ab0d-1f6b8f28c115"
   },
   "route": {
     "class": "feature",
