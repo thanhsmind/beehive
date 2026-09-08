@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-09-08T10:25:05.403Z",
+    "subject": "Bạn muốn tôi **tiếp tục `pi-worktree-session-relocation`** hay **dọn hai thứ nhỏ trên trước**? Tôi chọn tiếp tục feature — hai thứ kia rất n",
+    "asked_at": "2026-09-08T10:30:23.904Z",
     "session": "2d1f7241-ee7b-479e-8888-c9aef7a0ae36"
   },
   "route": {

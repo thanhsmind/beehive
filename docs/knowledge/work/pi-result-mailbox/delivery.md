@@ -7,7 +7,7 @@ bee:
   id: pi-result-mailbox-delivery
   lifecycle: active
   required_context: [docs/history/pi-result-mailbox/CONTEXT.md, docs/history/pi-result-mailbox/plan.md]
-  sources: [docs/history/pi-result-mailbox/CONTEXT.md, docs/history/pi-result-mailbox/plan.md, .bee/cells/prm-1.json, .bee/cells/prm-2.json, .bee/cells/prm-3.json, .bee/cells/prm-4.json, .bee/cells/prm-5.json]
+  sources: [docs/history/pi-result-mailbox/CONTEXT.md, docs/history/pi-result-mailbox/plan.md, .bee/cells/archive/pi-result-mailbox/prm-1.json, .bee/cells/archive/pi-result-mailbox/prm-2.json, .bee/cells/archive/pi-result-mailbox/prm-3.json, .bee/cells/archive/pi-result-mailbox/prm-4.json, .bee/cells/archive/pi-result-mailbox/prm-5.json]
 ---
 
 # pi-result-mailbox — Delivery

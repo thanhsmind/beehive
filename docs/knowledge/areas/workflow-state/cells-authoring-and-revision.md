@@ -367,6 +367,18 @@ red (295 records against an expected 296) on the base the *next* cell inherited
 The cells-add pre-flight names this obligation already; ep-1 was drafted without
 reading it.
 
+**A `cargo test` invocation that names an integration test without `--test` is a
+test-NAME filter.** It matches zero tests, runs nothing, and exits `0`. A cell
+whose verify command is written that way can never go red, so the cap records a
+green that proves nothing. Running an integration test file requires
+`--test <name>`. Found by a worker checking its own verify line against
+`expertise-principles` cells ep-1 and ep-3. The sibling trap is a bare
+filter list: `cargo test <args> prepare model_guard drivers` is rejected by
+cargo itself (`unexpected argument`), because those filters belong to libtest
+and need a `--` separator. One form fails loudly, the other passes silently,
+and the silent one is the dangerous one — a verify line is not proven until it
+has been seen to go RED for the right reason.
+
 ## Open Gaps
 
 - *(Closed by supersession 2026-07-31 — decision 412e9b3a,

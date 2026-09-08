@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [.bee/logs/scribing-runs.jsonl, .bee/lanes/doctor-probe-etxtbsy.json]
-  sources: [.bee/logs/scribing-runs.jsonl, .bee/lanes/doctor-probe-etxtbsy.json, .bee/cells/dpe-1.json]
+  sources: [.bee/logs/scribing-runs.jsonl, .bee/lanes/doctor-probe-etxtbsy.json, .bee/cells/archive/doctor-probe-etxtbsy/dpe-1.json]
 ---
 
 # doctor-probe-etxtbsy — Delivery
@@ -27,4 +27,4 @@ bee:
 
 ## Provenance
 
-Mined from 1 capped cell trace in `.bee/cells/dpe-1.json`.
+Mined from 1 capped cell trace in `.bee/cells/archive/doctor-probe-etxtbsy/dpe-1.json`.

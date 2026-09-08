@@ -7,7 +7,7 @@ bee:
   id: usage-in-bee-store-delivery
   lifecycle: active
   required_context: [.bee/lanes/usage-in-bee-store.json]
-  sources: [.bee/lanes/usage-in-bee-store.json, .bee/cells/uibs-move-usage-record.json]
+  sources: [.bee/lanes/usage-in-bee-store.json, .bee/cells/archive/usage-in-bee-store/uibs-move-usage-record.json]
 ---
 
 # usage-in-bee-store — Delivery

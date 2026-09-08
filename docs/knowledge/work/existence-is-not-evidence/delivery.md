@@ -7,7 +7,7 @@ bee:
   id: existence-is-not-evidence-delivery
   lifecycle: active
   required_context: [docs/history/existence-is-not-evidence/CONTEXT.md, docs/history/existence-is-not-evidence/plan.md]
-  sources: [docs/history/existence-is-not-evidence/CONTEXT.md, docs/history/existence-is-not-evidence/plan.md, .bee/cells/eine-rust-claims-gate.json, .bee/cells/eine-skill-mandates.json]
+  sources: [docs/history/existence-is-not-evidence/CONTEXT.md, docs/history/existence-is-not-evidence/plan.md, .bee/cells/archive/existence-is-not-evidence/eine-rust-claims-gate.json, .bee/cells/archive/existence-is-not-evidence/eine-skill-mandates.json]
 ---
 
 # existence-is-not-evidence — Delivery

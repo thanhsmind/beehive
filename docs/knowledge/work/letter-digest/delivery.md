@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [human-mailbox]
   required_context: [docs/history/letter-digest/CONTEXT.md, docs/history/letter-digest/plan.md]
-  sources: [docs/history/letter-digest/CONTEXT.md, docs/history/letter-digest/plan.md, .bee/cells/ld-1.json, .bee/cells/ld-2.json, .bee/cells/ld-3.json]
+  sources: [docs/history/letter-digest/CONTEXT.md, docs/history/letter-digest/plan.md, .bee/cells/archive/letter-digest/ld-1.json, .bee/cells/archive/letter-digest/ld-2.json, .bee/cells/archive/letter-digest/ld-3.json]
 ---
 
 # letter-digest — Delivery

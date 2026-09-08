@@ -7,7 +7,7 @@ bee:
   id: lane-model-diversity-delivery
   lifecycle: active
   required_context: [docs/history/lane-model-diversity/CONTEXT.md, docs/history/lane-model-diversity/plan.md]
-  sources: [docs/history/lane-model-diversity/CONTEXT.md, docs/history/lane-model-diversity/plan.md, .bee/cells/lmd-1.json, .bee/cells/lmd-2.json, .bee/cells/lmd-3.json]
+  sources: [docs/history/lane-model-diversity/CONTEXT.md, docs/history/lane-model-diversity/plan.md, .bee/cells/archive/lane-model-diversity/lmd-1.json, .bee/cells/archive/lane-model-diversity/lmd-2.json, .bee/cells/archive/lane-model-diversity/lmd-3.json]
 ---
 
 # lane-model-diversity — Delivery

@@ -7,7 +7,7 @@ bee:
   id: close-usage-record-delivery
   lifecycle: active
   required_context: [.bee/lanes/close-usage-record.json]
-  sources: [.bee/lanes/close-usage-record.json, .bee/cells/cur-usage-json-record.json]
+  sources: [.bee/lanes/close-usage-record.json, .bee/cells/archive/close-usage-record/cur-usage-json-record.json]
 ---
 
 # close-usage-record — Delivery

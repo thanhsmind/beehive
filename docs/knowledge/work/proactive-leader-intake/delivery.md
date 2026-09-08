@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [advisor-protocol, doctrine-layer]
   required_context: [docs/history/proactive-leader-intake/CONTEXT.md, docs/history/proactive-leader-intake/plan.md]
-  sources: [docs/history/proactive-leader-intake/CONTEXT.md, docs/history/proactive-leader-intake/plan.md, .bee/cells/pli-1.json, .bee/cells/pli-2.json, .bee/cells/pli-3.json, .bee/cells/pli-4.json]
+  sources: [docs/history/proactive-leader-intake/CONTEXT.md, docs/history/proactive-leader-intake/plan.md, .bee/cells/archive/proactive-leader-intake/pli-1.json, .bee/cells/archive/proactive-leader-intake/pli-2.json, .bee/cells/archive/proactive-leader-intake/pli-3.json, .bee/cells/archive/proactive-leader-intake/pli-4.json]
 ---
 
 # proactive-leader-intake — Delivery
