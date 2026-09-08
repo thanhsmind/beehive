@@ -7,7 +7,7 @@ bee:
   id: models-show-verb-delivery
   lifecycle: active
   required_context: [docs/history/models-show-verb/CONTEXT.md, docs/history/models-show-verb/plan.md]
-  sources: [docs/history/models-show-verb/CONTEXT.md, docs/history/models-show-verb/plan.md, .bee/cells/archive/models-show-verb/archive/models-show-verb/ms-1.json, .bee/cells/archive/models-show-verb/archive/models-show-verb/ms-2.json, .bee/cells/archive/models-show-verb/archive/models-show-verb/ms-3.json]
+  sources: [docs/history/models-show-verb/CONTEXT.md, docs/history/models-show-verb/plan.md, .bee/cells/archive/models-show-verb/ms-1.json, .bee/cells/archive/models-show-verb/ms-2.json, .bee/cells/archive/models-show-verb/ms-3.json]
 ---
 
 # models-show-verb — Delivery

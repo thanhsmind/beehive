@@ -235,5 +235,5 @@ should not infer it.
 - Reader — `build_lane_rows` in `verbs/status_full/topology.rs` copies the
   object onto each lane row (R4). The worktree lookup the setter uses is
   `find_granted_worktree_for_feature` in the same module.
-- Cells: `.bee/cells/mrf-1.json` (helper plus the completion and reopen
-  paths), `.bee/cells/mrf-2.json` (close, gate, merge, unregister, status).
+- Cells: `.bee/cells/archive/merge-ready-fact/mrf-1.json` (helper plus the completion and reopen
+  paths), `.bee/cells/archive/merge-ready-fact/mrf-2.json` (close, gate, merge, unregister, status).

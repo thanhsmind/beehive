@@ -9,7 +9,7 @@ bee:
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
   decisions: [D2, D4, D10, D12, D13, D18, D19, D23, D31, G14 (okf-switchover-f3 — the profile-error severity that fails a non-strict chain run)]
-  sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B1", "docs/specs/okf-profile.md#B2", "docs/specs/okf-profile.md#B3", "docs/specs/okf-profile.md#B4", "docs/specs/okf-profile.md#E2", "docs/specs/okf-profile.md#P1"]
+  sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B1", "docs/specs/okf-profile.md#B2", "docs/specs/okf-profile.md#B3", "docs/specs/okf-profile.md#B4", "docs/specs/okf-profile.md#E2", "docs/specs/okf-profile.md#P1", "knowledge-orphan-check cell koc-1 (orphan_concept NOTE tier + profile.orphans JSON list; trace .bee/cells/archive/knowledge-orphan-check/koc-1.json, capped 2026-09-06)"]
   authoritative_for: "okf-profile: the two-level conformance check and its finding codes"
 ---
 
@@ -83,6 +83,15 @@ Profile-warning codes — reported always, failing only under `--strict`:
 | `dangling_md_link` (knowledge-link-check klc-1, 2026-08-11) | A relative body link ending in `.md` (external `http(s)`/`mailto`, absolute paths, and anchor-only links are skipped) resolved against the containing file's directory does not exist or escapes the bundle. |
 | `dangling_wiki_link` (knowledge-link-check klc-1, 2026-08-11) | A `[[target]]` body reference where neither `target` nor `target` minus an optional `pattern-` prefix matches the stem of any `.md` in the bundle. Code fences and inline backtick spans are stripped first — quoted syntax never warns. A host-repo integration test keeps the shipped bundle clean of both link codes. |
 | `invalid_evidence_state` (evidence-ladder el-1, 2026-08-11) | A `bee.evidence` value outside present/wired/exercised, named by file and value. Absent stays valid and reads as present; `bee.evidence_ref` names the enforcing hook/guard/doctor check/test. `bee knowledge report` surfaces the ladder — per-state counts over patterns plus the present-only list — so a doc-only pattern is visible risk, never a silent default. |
+
+**B2b — The orphan report is a NOTE, never a warning (knowledge-orphan-check cell koc-1,
+2026-09-06).** `check` also lists every area or pattern concept that no other concept links to. It
+rides the human output as a single `NOTE: orphan_concept: <n> concept(s) …` line and the `--json`
+payload as `profile.orphans`, and it carries **no finding code**: it counts toward neither `errors`
+nor `warnings`, so `--strict` stays green on it. The tier is forced by the corpus, not by taste —
+207 of 351 concepts were unlinked when the check shipped, so a warning would have turned every
+`--strict` run red and broke seven existing tests. The bar it does set is forward-looking: a NEW
+concept must not appear in that list — link it from its area or a sibling pattern.
 
 **B3 — Emitter-first parsing, zero dependencies (D12).** `knowledge.mjs` ships its own frontmatter
 codec covering exactly the YAML subset its own emitter can produce; anything outside that subset

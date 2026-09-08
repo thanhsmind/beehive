@@ -9,7 +9,7 @@ bee:
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/overview.md]
   decisions: [js-parity-cleanup D3 (helpers consolidate to one module and truncation goes character-based; the code-unit comparator survives as a named exception with its real reproduction rationale), "bc2e2d44 (judge pass over the consolidation: the question-heading guard had been converted with everything else and had to go back, and the surviving exception's stated rationale was inverted)"]
-  sources: ["js-parity-cleanup cell jp-5 (seven duplicated helpers plus three inline copies folded into one module; trace .bee/cells/jp-5.json, 2026-08-04 — 1004 passed, 0 failed)", "js-parity-cleanup cell jp-9 (heading guard restored to code units, exception rationale corrected; trace .bee/cells/jp-9.json, 2026-08-04 — 1006 passed, 0 failed)", docs/history/js-parity-cleanup/CONTEXT.md, "packages/bee-rs/crates/bee/src/textutil.rs (the one module: char_len, truncate_chars_head, truncate_chars_tail, utf16_len, code_unit_cmp, js_default_sort)"]
+  sources: ["js-parity-cleanup cell jp-5 (seven duplicated helpers plus three inline copies folded into one module; trace .bee/cells/archive/js-parity-cleanup/jp-5.json, 2026-08-04 — 1004 passed, 0 failed)", "js-parity-cleanup cell jp-9 (heading guard restored to code units, exception rationale corrected; trace .bee/cells/archive/js-parity-cleanup/jp-9.json, 2026-08-04 — 1006 passed, 0 failed)", docs/history/js-parity-cleanup/CONTEXT.md, "packages/bee-rs/crates/bee/src/textutil.rs (the one module: char_len, truncate_chars_head, truncate_chars_tail, utf16_len, code_unit_cmp, js_default_sort)"]
   authoritative_for: "rust-runtime: how string length is counted, where each counting unit applies, and the pinned exceptions"
 ---
 
@@ -99,6 +99,6 @@ tests actually pin.
   path list is ordered by `sort_by_locale`, proven by
   `code_unit_sort_would_not_reproduce_the_manifest`.
 - The heading guard's call site: `hooks/write_guard/detectors.rs:159`.
-- Evidence: traces `.bee/cells/jp-5.json` (1004 passed) and `.bee/cells/jp-9.json`
+- Evidence: traces `.bee/cells/archive/js-parity-cleanup/jp-5.json` (1004 passed) and `.bee/cells/archive/js-parity-cleanup/jp-9.json`
   (1006 passed), both 2026-08-04; the correction originates in judge decision
   bc2e2d44.

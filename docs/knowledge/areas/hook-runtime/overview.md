@@ -9,7 +9,7 @@ bee:
   areas: [hook-runtime]
   required_context: []
   decisions: ["codex-runtime-parity D1, D2", "c2c46488 (a closed feature's approvals never license the next write; the guard's silence is never permission)"]
-  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "docs/specs/hook-runtime.md#B1", "docs/specs/hook-runtime.md#R2", "docs/specs/hook-runtime.md#R13", "knowledge-loop cell kl-4 (session-start critical-pattern digest ranked by relevance; trace .bee/cells/kl-4.json, commit d74ca11c, 2026-08-05) — cross-referenced, owned by okf-profile/context-and-promote.md"]
+  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "docs/specs/hook-runtime.md#B1", "docs/specs/hook-runtime.md#R2", "docs/specs/hook-runtime.md#R13", "knowledge-loop cell kl-4 (session-start critical-pattern digest ranked by relevance; trace .bee/cells/archive/knowledge-loop/kl-4.json, commit d74ca11c, 2026-08-05) — cross-referenced, owned by okf-profile/context-and-promote.md"]
   authoritative_for: "hook-runtime: purpose, actors, and the cross-cutting checkpoint frame"
   owns.code: ["packages/bee-rs/crates/bee/src/hooks/*"]
   owns.skills: []

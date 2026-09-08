@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/capture-queue-and-the-blocker-threshold.md, areas/workflow-state/holds-and-the-coordination-lock.md]
   decisions: ["traceable-runs D5 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — deferred capture, scribing, review, and promote-proposal work all become records in ONE claimable queue, each carrying feature, cells, areas, files, and a reason, plus a claim/lease, so a parallel agent absent when the item was queued can still execute it)"]
-  sources: ["traceable-runs cell trun-8 (trace .bee/cells/trun-8.json, capped 2026-08-14 — new deferred_queue.rs verb module: add/list/claim/release/complete, claim exclusivity proven by a real multi-process race in tests/concurrency.rs plus a negative control)", "traceable-runs cell trun-9 (trace .bee/cells/trun-9.json, capped 2026-08-14 after two rounds of judge rework — scribe/promote materialization from the two derived scans, reconciled across all six scribing-debt scan copies through state_group::ledger::deferred_debt_cleared and the shared fold scribe_queue_cells)", "docs/history/traceable-runs/plan.md (S4, the reusable primitives: lock::acquire_store_lock, resolve_session_id, backlog.rs's append-then-fold shape, cells/claims.rs's O_EXCL claim protocol and dual-condition stale sweep)"]
+  sources: ["traceable-runs cell trun-8 (trace .bee/cells/archive/traceable-runs/trun-8.json, capped 2026-08-14 — new deferred_queue.rs verb module: add/list/claim/release/complete, claim exclusivity proven by a real multi-process race in tests/concurrency.rs plus a negative control)", "traceable-runs cell trun-9 (trace .bee/cells/archive/traceable-runs/trun-9.json, capped 2026-08-14 after two rounds of judge rework — scribe/promote materialization from the two derived scans, reconciled across all six scribing-debt scan copies through state_group::ledger::deferred_debt_cleared and the shared fold scribe_queue_cells)", "docs/history/traceable-runs/plan.md (S4, the reusable primitives: lock::acquire_store_lock, resolve_session_id, backlog.rs's append-then-fold shape, cells/claims.rs's O_EXCL claim protocol and dual-condition stale sweep)"]
   authoritative_for: "workflow-state: the deferred-work queue (.bee/deferred-queue.jsonl), its claim protocol, and the scribe/promote scan-to-record materialization"
 ---
 
@@ -199,7 +199,7 @@ found the gap the previous round's own count had missed.
   claim race and its negative control live in
   `packages/bee-rs/crates/bee/tests/concurrency.rs`, the crate's
   established home for real-OS-process race proofs. Evidence: trace
-  `.bee/cells/trun-8.json`.
+  `.bee/cells/archive/traceable-runs/trun-8.json`.
 - Reconciliation (R123): `deferred_debt_cleared` and the shared fold
   `scribe_queue_cells`, both in
   `packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs`. All six
@@ -209,7 +209,7 @@ found the gap the previous round's own count had missed.
   `hooks/chain_nudge.rs`; `scribing_debt` and `global_scribing_debt` in
   `verbs/status_full/cells.rs`. The promote-proposal path,
   `unapplied_promote_proposals` in `verbs/status_full/mod.rs`, reconciles
-  the same way. Evidence: trace `.bee/cells/trun-9.json` — three cap
+  the same way. Evidence: trace `.bee/cells/archive/traceable-runs/trun-9.json` — three cap
   rounds; the first wired only `drivers/close.rs` and the promote path,
   the second wired `hooks/session_preamble/store.rs` and
   `hooks/chain_nudge.rs`, the third wired `verbs/status_full/cells.rs`.

@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [okf-profile]
   decisions: [D2, D10, D13, D15, D20, D21, D23, D24, D27, D29, D30, D34, D37, D38]
-  sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", "okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "okf-switchover-f3 cell f3-5 (G6 — this spec migrated into the bundle it describes; trace in `.bee/cells/`, 2026-07-22)", "docs/specs/okf-profile.md#P4", "docs/specs/okf-profile.md#P6", "docs/specs/okf-profile.md#P7"]
+  sources: ["okf-foundation cell okf-1 (knowledge.mjs core — emitter-first frontmatter codec, concept model, two-level check verb; trace in `.bee/cells/`, report `docs/history/okf-foundation/reports/`, 2026-07-22)", "okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "okf-switchover-f3 cell f3-5 (G6 — this spec migrated into the bundle it describes; trace in `.bee/cells/`, 2026-07-22)", "docs/specs/okf-profile.md#P4", "docs/specs/okf-profile.md#P6", "docs/specs/okf-profile.md#P7", "knowledge-show-new cell ksn-1 (`bee knowledge show` and `bee knowledge new` verbs; trace .bee/cells/archive/knowledge-show-new/ksn-1.json, capped 2026-09-06)"]
   authoritative_for: "okf-profile: purpose, entry points, and actors"
   owns.code: ["packages/bee-rs/crates/bee/src/verbs/knowledge/*"]
   owns.skills: []
@@ -83,6 +83,14 @@ under:
   feature from `.bee/cells/*.json` (a read of the runtime store — D2 permits reads and forbids
   writes) and prints three proposals: a delivery draft, candidate area spec-sync bullets, and
   candidate pitfall patterns. It writes nothing (B5, in `context-and-promote.md`).
+- `bee knowledge show --id <bee.id> [--json]` — reads ONE concept out of the bundle by its
+  `bee.id`: metadata, body, outbound links, and the inbound referrers pointing at it. The read
+  companion to `list`, which never returns file content (knowledge-show-new cell ksn-1, 2026-09-06).
+- `bee knowledge new --type pattern|area --title <t> --summary <s> --area <a> [--tags] [--lifecycle]
+  [--file <body.md>] [--json]` — writes a canonical concept file into `docs/knowledge/` and
+  regenerates the bundle indexes. It is the ONE authoring verb, and the second write path into the
+  bundle after `index`'s generated `index.md` files; the checker itself still writes nothing (B4,
+  D2) (knowledge-show-new cell ksn-1, 2026-09-06).
 - Migration authoring (the D20 loop: read a legacy source, split it into concepts, carry its
   frontmatter across per D33, replace it with a pointer stub per D37) is the human/agent trigger
   that populates the bundle the checker then grades. The checker itself performs no writes (D2).

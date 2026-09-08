@@ -8,7 +8,7 @@ bee:
   id: pattern-20260818-a-never-do-x-twice-constraint-is-invisible-to-a-suite-that-only-asserts-outcomes
   lifecycle: active
   areas: [workflow-state, rust-runtime]
-  sources: [".bee/cells/awm-2.json", "original feature: auto-wait-mark"]
+  sources: [".bee/cells/archive/auto-wait-mark/awm-2.json", "original feature: auto-wait-mark"]
   polarity: pitfall
   critical: true
   evidence: wired

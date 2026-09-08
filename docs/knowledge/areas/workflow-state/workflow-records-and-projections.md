@@ -914,14 +914,14 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `verbs/state_group/feature.rs`. Tests covering all four authoring paths,
   the legacy-shape read, invalid-value refusal, and the intended plan-rev
   divergence: `workflow_store/tests.rs`. Evidence: trace
-  `.bee/cells/trun-1.json`.
+  `.bee/cells/archive/traceable-runs/trun-1.json`.
 - `bee state gate`'s new `--actor`/`--bypass-level`/`--reason` flags
   (R108, D2, trun-2): the accepted-flags allowlist and the auto-actor
   precondition in `run_gate_body`
   (`packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs`), which
   issues its own still-lock-held `update_workflow_assuming_lock_with` patch
   after `write_through_projection` lands the legacy projection. Evidence:
-  trace `.bee/cells/trun-2.json`. Known gap: the generated CLI registry
+  trace `.bee/cells/archive/traceable-runs/trun-2.json`. Known gap: the generated CLI registry
   payload (`packages/bee-rs/crates/bee/src/generated/registry_payload.json`,
   fed by `bee --help --json`) does not list these three flags for `state
   gate` — the flags are fully enforced by `run_gate_body`'s own
@@ -939,13 +939,13 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   default in `workflow_store/record.rs`; carried into `.bee/state.json` by
   `apply_workflow_d1_fields` in `workflow_store/projections.rs` — the seam
   the plan named as the one that makes the byte-identical-rebuild proof
-  pass vacuously if skipped. Evidence: trace `.bee/cells/trun-7.json`.
+  pass vacuously if skipped. Evidence: trace `.bee/cells/archive/traceable-runs/trun-7.json`.
 - `bee status --json`'s `gate_records`/`run_state` exposure (D7 boundary,
   trun-3): `build_gate_records` in
   `packages/bee-rs/crates/bee/src/verbs/status_full/build.rs`, reading the
   live workflow record rather than the projection; rendered one line per
   non-approved gate in `status_full/render.rs`. Evidence: trace
-  `.bee/cells/trun-3.json`.
+  `.bee/cells/archive/traceable-runs/trun-3.json`.
 - Creation seam and retirement verb (R105): `ensure_workflow_record_for_feature`
   in `packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs:337-385`
   (idempotent by feature; refuses an empty slug), wired into the feature start
@@ -972,14 +972,14 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `awaiting-approval` beside the pending-gate condition, in the same
   function. Carried into `.bee/state.json` by `apply_workflow_d1_fields`
   (`workflow_store/projections.rs`), extended the same way R109's own
-  `run_state` carry-through was. Evidence: trace `.bee/cells/ah-1.json`,
+  `run_state` carry-through was. Evidence: trace `.bee/cells/archive/awaiting-human/ah-1.json`,
   commit `b306201f`.
 - The three clearing paths (R126, D2/D4, ah-2):
   `clear_and_reap_waiting_on_best_effort`,
   `clear_workflow_waiting_on`/`clear_default_state_waiting_on`, and
   `reap_stale_waiting_on` (the dual-condition reap, mirroring
   `cells/claims.rs`'s reclaim rule) in `hooks/prompt_context.rs` and
-  `workflow_store/record.rs`. Evidence: trace `.bee/cells/ah-2.json`,
+  `workflow_store/record.rs`. Evidence: trace `.bee/cells/archive/awaiting-human/ah-2.json`,
   commit `39facee4`. Rework (ah-2, commit `b7b422f9`): the human-message
   path proved through the real `prompt_context::run` hook entry point, not
   only the inner clear function —
@@ -992,7 +992,7 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   `status_full/build.rs`, the blocker + `where.waiting_on` in
   `status_full/orient.rs`, the text line in `status_full/render.rs`, and
   `waiting_on_note` in `hooks/session_preamble/render.rs`. Evidence: trace
-  `.bee/cells/ah-3.json`, commit `fe0b8885`. Rework (ah-3, commit
+  `.bee/cells/archive/awaiting-human/ah-3.json`, commit `fe0b8885`. Rework (ah-3, commit
   `c5dc3d70`): full census in
   `docs/history/awaiting-human/reports/ah-3-rework.md` found and wired a
   fifth surface, the post-compaction capsule's
@@ -1010,7 +1010,7 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   cell (no generator exists for that file in this repo). Proved end to end
   through the real CLI binary, not only at the unit level, in
   `packages/bee-rs/crates/bee/tests/workflow_verbs.rs`. Evidence: trace
-  `.bee/cells/ah-4.json`, commit `00c67cb6`.
+  `.bee/cells/archive/awaiting-human/ah-4.json`, commit `00c67cb6`.
 - Closed-record fallback + lane-pair clear (R129, merge-closes-the-lane D3):
   new `pub(crate)` helper `clear_lane_waiting_on_pair` in
   `packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs`. Evidence:

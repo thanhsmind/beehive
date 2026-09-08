@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: ["c8e25271 (a settlement is stubbed the moment it settles; the flush is offered, never forced)", c2a7bd4f item 2 (prose-rule-audit batch A — the capture-queue offer gains blocker teeth past a count and an age threshold), "counter-teeth D2 (thresholds are ten pending stubs or an oldest stub older than seven days; constants in code for this batch, config keys deferred)", counter-teeth D6 (a test proving the counter computes correctly lands before the flip to refusal)]
-  sources: ["counter-teeth cell ct-3 (trace .bee/cells/ct-3.json, 2026-08-04 — escalation reuses the existing pending membership; status_full 49 passed, 0 failed)", docs/history/counter-teeth/CONTEXT.md, "packages/bee-rs/crates/bee/src/state.rs (DEFAULT_CAPTURE_QUEUE_THRESHOLD + capture_queue_threshold — the two constants, moved here from the retired status_full/orient.rs:134-181 during the rust-port split)", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs (capture_queue_door_detail — the escalation predicate; capture_queue_pending — pending membership, stub rows minus flush rows; moved here from the retired status_full/records.rs:215)"]
+  sources: ["counter-teeth cell ct-3 (trace .bee/cells/archive/counter-teeth/ct-3.json, 2026-08-04 — escalation reuses the existing pending membership; status_full 49 passed, 0 failed)", docs/history/counter-teeth/CONTEXT.md, "packages/bee-rs/crates/bee/src/state.rs (DEFAULT_CAPTURE_QUEUE_THRESHOLD + capture_queue_threshold — the two constants, moved here from the retired status_full/orient.rs:134-181 during the rust-port split)", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs (capture_queue_door_detail — the escalation predicate; capture_queue_pending — pending membership, stub rows minus flush rows; moved here from the retired status_full/records.rs:215)"]
   authoritative_for: "workflow-state: the capture queue's pending membership and its escalation from offer to blocker"
   applied_at: [skills/bee-capturing/SKILL.md, packages/bee-rs/crates/bee/src/verbs/capture.rs]
 ---
@@ -105,7 +105,7 @@ open.
   `capture_queue_summary` (`status_full/records.rs:215`), which the orientation
   surface consumes rather than recomputing; the non-escalated offer line is
   rendered at `status_full/render.rs:246-252`. Red-first per counter-teeth D6.
-  Evidence: trace `.bee/cells/ct-3.json` (status_full 49 passed, 0 failed,
+  Evidence: trace `.bee/cells/archive/counter-teeth/ct-3.json` (status_full 49 passed, 0 failed,
   2026-08-04).
 - The skill answer (B51/R102): `--skill-answer` is declared on `capture add` in
   `packages/bee-rs/crates/bee/src/generated/registry_payload.json` (hand-edited —

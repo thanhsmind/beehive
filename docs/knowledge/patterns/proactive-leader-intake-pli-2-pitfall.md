@@ -7,7 +7,7 @@ bee:
   id: proactive-leader-intake-pli-2-pitfall
   lifecycle: draft
   areas: [advisor-protocol, doctrine-layer]
-  sources: [.bee/cells/pli-2.json]
+  sources: [.bee/cells/archive/proactive-leader-intake/pli-2.json]
   polarity: pitfall
 ---
 

@@ -336,7 +336,7 @@ came through.
   (`contract_status_over`, `resolve_store_citation`,
   `open_trigger_decision_keys`). The authoring-side status refusal (R18) is
   in `packages/bee-rs/crates/bee/src/verbs/cells/validate.rs`
-  (`validate_new_cell_problems`). Evidence: `.bee/cells/scor-4.json`.
+  (`validate_new_cell_problems`). Evidence: `.bee/cells/archive/slp-contract-original-request/scor-4.json`.
 - Mint trap (R19): `contract_claim_refusal` (the claim door's one entry for
   both contract rules), `mint_trap_over`, `declared_test_path`,
   `mint_trap_ramp_warning` and `mint_trap_advisory_line` in
@@ -346,7 +346,7 @@ came through.
   `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs`. Tests:
   `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs` (refuse, allow, the
   ramp's two states, and the named hole asserting it claims). Evidence:
-  `.bee/cells/scor-5.json`.
+  `.bee/cells/archive/slp-contract-original-request/scor-5.json`.
 - Unknown-flag rejection (R14): `main()` in `the bee binary` (mirrored
   `.bee/bin/bee`), firing after `validate()` and before every handler
   dispatch; registry gaps declared in `packages/bee/lib/command-registry.mjs`

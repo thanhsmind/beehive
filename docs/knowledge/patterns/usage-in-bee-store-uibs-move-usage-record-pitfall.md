@@ -7,7 +7,7 @@ bee:
   id: usage-in-bee-store-uibs-move-usage-record-pitfall
   lifecycle: draft
   areas: [performance-log]
-  sources: [.bee/cells/uibs-move-usage-record.json]
+  sources: [.bee/cells/archive/usage-in-bee-store/uibs-move-usage-record.json]
   polarity: pitfall
 ---
 

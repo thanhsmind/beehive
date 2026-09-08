@@ -262,9 +262,9 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
 - Shared anchor resolver (B9): `resolve_anchor` in
   `packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs`; consumed by `context.rs`, `promote.rs`,
   and the port copy in `drivers/kctx.rs` (reached by `bee dispatch prepare` via `drivers/prepare.rs`).
-  Evidence: trace `.bee/cells/kl-1.json`, commit `1b2a8253`; trace `.bee/cells/kl-2.json`, commit
+  Evidence: trace `.bee/cells/archive/knowledge-loop/kl-1.json`, commit `1b2a8253`; trace `.bee/cells/archive/knowledge-loop/kl-2.json`, commit
   `e6f99a7a`.
 - Digest relevance ranking (B8, D3): `bundle_critical_patterns_digest` in
   `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs`, reusing
   `score_critical_relevance` from `verbs/knowledge/context.rs` against the B9 anchor. Evidence:
-  trace `.bee/cells/kl-4.json`, commit `d74ca11c`.
+  trace `.bee/cells/archive/knowledge-loop/kl-4.json`, commit `d74ca11c`.

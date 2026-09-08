@@ -9,7 +9,7 @@ bee:
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
   decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)", "761515d4 (guard-parser-depth Gate 2: close the compound-command and shell-wrapper bypasses in one parse every guard consumer shares, depth-bounded with truncation marked — cell gpd-1, 2026-08-05)", "js-parity-cleanup D3 as corrected by jp-9 (docs/history/js-parity-cleanup/CONTEXT.md, 2026-08-04 — display caps count characters, but the question-heading limit keeps the platform validator's own counting unit; judge finding bc2e2d44)"]
-  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)", "js-parity-cleanup cell jp-9 (heading guard restored to the platform's counting unit, the ASCII-only repair and its fall-through named; trace .bee/cells/jp-9.json, 2026-08-04 — full suite 1006 passed, 0 failed)"]
+  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/archive/guard-parser-depth/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)", "js-parity-cleanup cell jp-9 (heading guard restored to the platform's counting unit, the ASCII-only repair and its fall-through named; trace .bee/cells/archive/js-parity-cleanup/jp-9.json, 2026-08-04 — full suite 1006 passed, 0 failed)"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
 ---
 
@@ -258,7 +258,7 @@ never as inline compound shell.
   `write_guard/tests.rs` (`sh_bash_eval_wrapper_around_a_git_verb_is_now_refused`,
   `nested_wrapper_still_refuses`, `tokenize_deep_never_expands_a_quoted_span_that_is_not_a_wrapper_payload`,
   `tokenize_deep_bounds_recursion_and_flags_truncation`). Provenance:
-  `.bee/cells/gpd-1.json`, commit 98888896. HEREDOC bodies are fenced BEFORE
+  `.bee/cells/archive/guard-parser-depth/gpd-1.json`, commit 98888896. HEREDOC bodies are fenced BEFORE
   that deep read (`fence_heredocs`, ahead of `tokenize_deep` in
   `extract_bash_targets`): `<<`/`<<-` with quoted, unquoted, and dash
   terminators, several heredocs per line in operator order, unterminated
@@ -285,5 +285,5 @@ never as inline compound shell.
   the delegation fall-through are at `detectors.rs:201-207`, the rewrite itself
   at `detectors.rs:207-215`. Full text-measurement rule:
   `areas/rust-runtime/text-measurement-and-the-two-counting-units.md`. Evidence:
-  trace `.bee/cells/jp-9.json` (full suite 1006 passed, 0 failed, 2026-08-04);
+  trace `.bee/cells/archive/js-parity-cleanup/jp-9.json` (full suite 1006 passed, 0 failed, 2026-08-04);
   the finding that produced it is judge decision bc2e2d44.

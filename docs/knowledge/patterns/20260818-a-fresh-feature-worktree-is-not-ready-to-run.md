@@ -7,7 +7,7 @@ bee:
   id: pattern-20260818-fresh-worktree-not-ready-to-run
   lifecycle: active
   areas: [worktree-parallelism]
-  sources: ["porting-protocol cell pp-1 (worker copied .bee/bin/bee from main; merge blocked on untracked .bee/cells/pp-1.json, cleaned via git clean; 2026-08-18)", "pocock-nuggets cell pn-1 (same binary copy, same dirty-copy clean)", "review-axes cell ra-1 (same pair; docs/history/review-axes/promote-proposals.md pattern candidate)", "backlog: teach bee worktree new to close both gaps"]
+  sources: ["porting-protocol cell pp-1 (worker copied .bee/bin/bee from main; merge blocked on untracked .bee/cells/archive/porting-protocol/pp-1.json, cleaned via git clean; 2026-08-18)", "pocock-nuggets cell pn-1 (same binary copy, same dirty-copy clean)", "review-axes cell ra-1 (same pair; docs/history/review-axes/promote-proposals.md pattern candidate)", "backlog: teach bee worktree new to close both gaps"]
 ---
 
 **The binary gap is CLOSED (store-reach-gaps D2, 2026-08-21).** It read: a

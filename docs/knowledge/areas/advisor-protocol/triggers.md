@@ -9,7 +9,7 @@ bee:
   areas: [advisor-protocol]
   required_context: [areas/advisor-protocol/overview.md]
   decisions: ["AO2(b)/AO3/AO13 (one orchestrator trigger; execution-gate precondition, folded from the old standalone execution gate into Gate 2 by validation-diet D2/D14; event-based staleness, never a TTL)", AO4 (call paths split by trigger class), AO14 (execution-worker class), "126412b9 (precondition keys on the selected record's mode)", "20969403 (gate-door-refusal: the high-risk execution refusal states its own cause instead of rendering as an argument-shape complaint; the honesty shipped, the unblock deliberately did not — cell gdr-1, 2026-08-04)", "b34fdea9 (proactive-leader-intake D4: the orchestrator consult IS the plan-step hat wave's synthesis, recorded post-plan with the unchanged advisor-ref verb)"]
-  sources: ["advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", first live orchestrator consult digest .bee/spikes/advisor-and-orchestration/slice5-advisor-digest.txt, "docs/specs/advisor-protocol.md#B1", "docs/specs/advisor-protocol.md#B3", "docs/specs/advisor-protocol.md#E3", "docs/specs/advisor-protocol.md#P2", "docs/specs/advisor-protocol.md#P6", "gate-door-refusal cell gdr-1 (both high-risk refusal arms return a stated refusal via one shared helper; trace .bee/cells/gdr-1.json, capped 2026-08-04 — state_group tests green)"]
+  sources: ["advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", first live orchestrator consult digest .bee/spikes/advisor-and-orchestration/slice5-advisor-digest.txt, "docs/specs/advisor-protocol.md#B1", "docs/specs/advisor-protocol.md#B3", "docs/specs/advisor-protocol.md#E3", "docs/specs/advisor-protocol.md#P2", "docs/specs/advisor-protocol.md#P6", "gate-door-refusal cell gdr-1 (both high-risk refusal arms return a stated refusal via one shared helper; trace .bee/cells/archive/gate-door-refusal/gdr-1.json, capped 2026-08-04 — state_group tests green)"]
   authoritative_for: "advisor-protocol: consult triggers"
 ---
 
@@ -117,4 +117,4 @@ That precondition and its recording verb remain unfinished; the gap is stated in
   joins are built by `advisor_ref_stale` in `advisor_ref.rs:133-199`. Test:
   `set_gate.rs:1048-1069` asserts the refusal is a stated one naming the
   high-risk cause, not the generic argument-shape error. Evidence: trace
-  `.bee/cells/gdr-1.json`, capped 2026-08-04.
+  `.bee/cells/archive/gate-door-refusal/gdr-1.json`, capped 2026-08-04.

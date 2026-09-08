@@ -7,7 +7,7 @@ bee:
   id: lane-model-diversity-lmd-1-pitfall
   lifecycle: draft
   areas: [workflow-state]
-  sources: [.bee/cells/lmd-1.json]
+  sources: [.bee/cells/archive/lane-model-diversity/lmd-1.json]
   polarity: pitfall
 ---
 
