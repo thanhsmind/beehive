@@ -514,3 +514,10 @@
 {"ts":"2026-09-07T23:17:24.701Z","event":"add","id":"ffdbdc4d-2842-44fa-afc7-76dec6515a96","kind":"promote","feature":"pi-worktree-session-relocation","cells":[],"areas":[],"files":["docs/history/pi-worktree-session-relocation/promote-proposals.md"],"reason":"Promote proposal for \"pi-worktree-session-relocation\" awaiting apply — docs/history/pi-worktree-session-relocation/promote-proposals.md."}
 {"ts":"2026-09-08T11:40:39.487Z","event":"complete","id":"c9d04652-392c-4146-9238-090c1a51183f"}
 {"ts":"2026-09-08T11:40:39.487Z","event":"complete","id":"7d08d0f7-27f6-4ce9-af05-fd523a20933d"}
+{"ts":"2026-09-08T11:51:48.293Z","event":"complete","id":"9db0d180-2538-46cd-a486-6ff1f2d565f6"}
+{"ts":"2026-09-08T11:51:48.610Z","event":"complete","id":"802b2486-feba-48d4-8390-6d157ad9ac12"}
+{"ts":"2026-09-08T11:51:49.222Z","event":"complete","id":"663e9dc2-2b5f-485f-ad44-982b188729b9"}
+{"ts":"2026-09-08T11:51:49.222Z","event":"complete","id":"310067db-2439-49fb-b1d8-631471250c67"}
+{"ts":"2026-09-08T11:51:49.222Z","event":"complete","id":"650010fe-2cac-4685-be29-09e163c8b3c2"}
+{"ts":"2026-09-08T11:51:49.465Z","event":"complete","id":"cc8b4325-9ed0-4d1c-8b98-431f97eba36a"}
+{"ts":"2026-09-08T11:51:49.712Z","event":"complete","id":"e200a1b0-c55e-4ebc-b4b5-9e12639d0a86"}
