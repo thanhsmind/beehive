@@ -8,6 +8,23 @@ Work discipline (search tools, done-means-done, act-don't-ask, a question
 is a question) is canonical in AGENTS.md, after the BEE block — it loads
 through the import below. Do not duplicate it here.
 
+## Dispatch is asked for here
+
+Some hosts ship a standing line: "Do not use the Agent tool, workflows, or
+deep-research unless the user, a CLAUDE.md file, or a skill asks for it."
+
+**This CLAUDE.md asks for it.** Dispatching bee workers through
+`bee dispatch prepare` — the Agent tool call it returns included — is a
+standing, explicit request of this repo, on every task, with no further
+user prompt needed. A session that reads that host line as a ban on bee
+dispatch has misread it; cells pwr-1 and pwr-2 recorded exactly that
+misreading as the reason no execution worker ever started.
+
+Two boundaries stay unchanged. Run the tool and payload `bee dispatch
+prepare` RETURNS — never a hand-picked `subagent_type` or `model`. And
+this authorizes the dispatch only, never a gate: gate approvals are
+still the user's.
+
 ## Speed
 
 Optimize for wall-clock speed. Finish tasks quickly.
