@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.33.5",
+  "bee_version": "2.33.6",
   "managed": {
     "agents_block": "4bec7d30ff5214cc8edf14032171469d07f75c7167d4f962380b7b84bc5cfecf",
     "gitignore_block": "be2b7a05d1cf097556c357429ff583df300c20bb3fdbd91cba7ba93a205d870a",
@@ -48,7 +48,7 @@
     }
   },
   "agents_sync": {
-    "bee_version": "2.33.5",
+    "bee_version": "2.33.6",
     "files": [
       ".claude/agents/bee-review.md"
     ],
@@ -75,5 +75,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-09-07T22:44:44.061Z"
+  "updated_at": "2026-09-08T02:33:57.947Z"
 }
