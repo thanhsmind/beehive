@@ -15,9 +15,9 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**Việc tiếp theo**: còn 8 worktree cũ có thể xoá. Tôi chạy `bee worktree prune --dry-run` xem nó xoá gì, rồi mới xoá thật. Bạn cho phép nhé?",
-    "asked_at": "2026-09-08T11:36:14.481Z",
+    "kind": "question",
+    "subject": "Gom 100 capture stub trong 6 worktree vào bundle? Việc này cũng mở khoá cho 6 worktree đó được xoá",
+    "asked_at": "2026-09-08T11:41:31.231Z",
     "session": "9c1d5194-8c87-42c5-b450-b9e1980fa134"
   },
   "route": {

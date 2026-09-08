@@ -98,6 +98,16 @@ persistent record is the only thing that survives between two cold ticks, and a
 turn boundary is the only moment a session can be handed something without
 being interrupted mid-thought.
 
+A session inside a **linked worktree** hears the supervisor too. The prompt
+hook bails to `Outcome::Delegate` far above the ordinary delivery code for a
+worktree session, so the pending-delivery read is lifted ABOVE that bail and
+the worktree path takes the same delivery through its own
+`worktree_delivery` (`hooks/prompt_context.rs`); a session id is all it
+needs, and no session id or nothing addressed to it delivers nothing and
+writes nothing. Delivery is therefore not a main-checkout privilege —
+which matters, because feature work is exactly what lives in a worktree
+(decision 50d29046, 2026-08-31).
+
 **The same point is never made twice.** Each intervention carries a *point key*
 and a frequency cap over it. The first record on a point is the question. A
 second hit on that same point does not repeat the question — it **escalates**.

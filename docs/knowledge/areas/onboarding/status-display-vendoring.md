@@ -133,6 +133,16 @@ the first; a re-run plans nothing.
   while carrying the project-level entry) is drift and fails the standing guard
   (`packages/bee-rs/crates/bee/tests/statusline_contract.rs`) (decision c6ee6b6e,
   review finding P2-3).
+- **R4a** — **Canonical is the only edit site of the pair.** R4 says the two
+  copies must match; this says which one to change. `onboard --apply` (and
+  `bee dev regen` through it) overwrites the vendored copy from canonical, so a
+  one-sided fix of the COPY is erased on the next apply, and a one-sided fix of
+  CANONICAL is invisible until one runs. Commit 00a8fdf4 is the standing
+  example: it repaired `.claude/statusline-command.sh` and left
+  `packages/bee/statusline/statusline-command.sh` resolving the binary at
+  `<repo>/bee` instead of `<repo>/.bee/bin/bee`, so the usage segment vanished,
+  fail-open and silent, on any host re-vendored from canonical
+  (statusline-binary-lookup, 2026-09-01).
 - **R5** — The command bee writes must satisfy R3's own detector, pinned by a
   test — otherwise a host silently un-adopts on the next run.
 
