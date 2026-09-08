@@ -85,13 +85,32 @@ Profile-warning codes — reported always, failing only under `--strict`:
 | `invalid_evidence_state` (evidence-ladder el-1, 2026-08-11) | A `bee.evidence` value outside present/wired/exercised, named by file and value. Absent stays valid and reads as present; `bee.evidence_ref` names the enforcing hook/guard/doctor check/test. `bee knowledge report` surfaces the ladder — per-state counts over patterns plus the present-only list — so a doc-only pattern is visible risk, never a silent default. |
 
 **B2b — The orphan report is a NOTE, never a warning (knowledge-orphan-check cell koc-1,
-2026-09-06).** `check` also lists every area or pattern concept that no other concept links to. It
-rides the human output as a single `NOTE: orphan_concept: <n> concept(s) …` line and the `--json`
-payload as `profile.orphans`, and it carries **no finding code**: it counts toward neither `errors`
-nor `warnings`, so `--strict` stays green on it. The tier is forced by the corpus, not by taste —
-207 of 351 concepts were unlinked when the check shipped, so a warning would have turned every
-`--strict` run red and broke seven existing tests. The bar it does set is forward-looking: a NEW
-concept must not appear in that list — link it from its area or a sibling pattern.
+2026-09-06).** `check` also lists every concept that no other concept links to. It rides the human
+output as one `NOTE: orphan_concept: <n> …` line and the `--json` payload as `profile.orphans` (a
+path array) with `counts.orphans`, and it carries **no finding code**: it counts toward neither
+`errors` nor `warnings`, so `--strict` stays green on it.
+
+The tier is forced by the corpus, not by taste — 207 of 351 concepts were unlinked when the check
+shipped, so a warning would have reddened every `--strict` run and broke seven existing tests. The
+bar it does set is forward-looking: a NEW concept must not appear in that list — link it from its
+area or a sibling pattern.
+
+Two scoping rules keep the list meaningful:
+
+- Only `bee.area` and `bee.pattern` concepts are graded. The feature-history types (`bee.work-item`,
+  `bee.plan`, `bee.delivery`, …) only ever link OUT, so grading them would report the whole
+  `work/` tree as unreachable.
+- An `overview.md` is exempt. An area's front door is a root by construction — the thing other
+  concepts reach through, not the thing they cite.
+
+**One concept links to another** when any of these holds, and this same rule is what
+`bee knowledge show` reports as `links_in` (`concept-model-and-authoring.md`):
+
+- a `bee.required_context` entry names the target's bundle-relative path (with or without the
+  `docs/knowledge/` prefix);
+- the body mentions that path as text, in either form;
+- a relative markdown link in the body resolves, against the citing file's own directory, to the
+  target.
 
 **B3 — Emitter-first parsing, zero dependencies (D12).** `knowledge.mjs` ships its own frontmatter
 codec covering exactly the YAML subset its own emitter can produce; anything outside that subset

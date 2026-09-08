@@ -83,14 +83,14 @@ under:
   feature from `.bee/cells/*.json` (a read of the runtime store — D2 permits reads and forbids
   writes) and prints three proposals: a delivery draft, candidate area spec-sync bullets, and
   candidate pitfall patterns. It writes nothing (B5, in `context-and-promote.md`).
-- `bee knowledge show --id <bee.id> [--json]` — reads ONE concept out of the bundle by its
-  `bee.id`: metadata, body, outbound links, and the inbound referrers pointing at it. The read
-  companion to `list`, which never returns file content (knowledge-show-new cell ksn-1, 2026-09-06).
-- `bee knowledge new --type pattern|area --title <t> --summary <s> --area <a> [--tags] [--lifecycle]
-  [--file <body.md>] [--json]` — writes a canonical concept file into `docs/knowledge/` and
-  regenerates the bundle indexes. It is the ONE authoring verb, and the second write path into the
-  bundle after `index`'s generated `index.md` files; the checker itself still writes nothing (B4,
-  D2) (knowledge-show-new cell ksn-1, 2026-09-06).
+- `bee knowledge show --id <bee.id> [--json]` — reads ONE concept whole: metadata, every `bee.*`
+  field, its outbound links, its inbound referrers, then the body. The read companion to `list`,
+  which returns rows and never content (behavior: `concept-model-and-authoring.md`).
+- `bee knowledge new --type pattern|area --title <t> --summary <s> --area <a> [--tags]
+  [--lifecycle] [--file <body.md>] [--json]` — the ONE authoring verb: it derives the id and the
+  path from the title, emits canonical frontmatter, and re-renders the indexes. The second write
+  path into the bundle after `index`; the checker still writes nothing (B4, D2)
+  (behavior and refusals: `concept-model-and-authoring.md`).
 - Migration authoring (the D20 loop: read a legacy source, split it into concepts, carry its
   frontmatter across per D33, replace it with a pointer stub per D37) is the human/agent trigger
   that populates the bundle the checker then grades. The checker itself performs no writes (D2).

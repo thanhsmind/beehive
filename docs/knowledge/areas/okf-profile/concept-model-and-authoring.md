@@ -9,7 +9,7 @@ bee:
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
   decisions: [D4, D10, D11, D12, D17, D18, D19, D23, D31, D32, D33, D36, G12, G13, G14]
-  sources: ["okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#E1", "okf-switchover-f3 cells f3-2, f3-3 (bundle-first scribing target, the three-layer anti-fork gate, and both doc trees resolved off the product root; capped with verify evidence, trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-switchover-f3/CONTEXT.md`]
+  sources: ["okf-foundation cell okf-2 (bundle skeleton + this spec, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#E1", "okf-switchover-f3 cells f3-2, f3-3 (bundle-first scribing target, the three-layer anti-fork gate, and both doc trees resolved off the product root; capped with verify evidence, trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-switchover-f3/CONTEXT.md`, "knowledge-show-new cell ksn-1 (`bee knowledge show` and `bee knowledge new`; trace .bee/cells/archive/knowledge-show-new/ksn-1.json, capped 2026-09-06)"]
   authoritative_for: "okf-profile: the concept model, its frontmatter, and concept authoring"
 ---
 
@@ -165,6 +165,45 @@ that skipped the gate entirely — so the gate is built in depth:
 
 No layer is softened to get a write through: a refused write means the bundle is wrong, not the
 gate.
+
+**Reading one concept and writing one concept — `bee knowledge show` and `bee knowledge new`
+(knowledge-show-new cell ksn-1, 2026-09-06).** The bundle had a lister that never returns content
+(`list`, D15) and a ranked search, but no way to read ONE concept whole and no way to author one
+without hand-typing frontmatter. These two verbs are that pair, and both obey the identity/path
+direction (D32): the caller names an id or a title, never a path.
+
+`bee knowledge show --id <bee.id> [--json]` resolves the id by exact match against every concept
+`bee.id` in the bundle — never a path, never a prefix, never a fuzzy match — and renders the whole
+concept: `path`, `type`, `title`, `description`, `tags`, `timestamp`, then every `bee.*` field in
+the canonical key order with unknown keys sorted after it, then `links_out`, `links_in`, then the
+body. `links_out` is the body's markdown links plus every `bee.required_context` entry not already
+among them; `links_in` is every OTHER concept that links to this one under the shared link rule
+(`conformance-check.md`, B2b). An unmatched id fails with `concept not found: <id>` and a non-zero
+exit; `--json` returns `{path, data, body, links_out, links_in}`.
+
+`bee knowledge new --type pattern|area --title <t> --summary <s> --area <a> [--tags a,b]
+[--lifecycle draft|active|superseded|archived] [--file <body.md>] [--json]` writes ONE canonical
+concept file and then re-renders every `index.md` in the bundle, reporting the file and its
+generated id (`Created <path> (<id>)` plus the index count). Both the id and the path are **derived
+from the title's slug**, never supplied:
+
+| `--type` | `bee.id` | path |
+|---|---|---|
+| `pattern` | `pattern-<YYYYMMDD>-<slug>` | `patterns/<YYYYMMDD>-<slug>.md` |
+| `area` | `<area>-<slug>` | `areas/<area>/<slug>.md` |
+
+The frontmatter goes through the same emitter the check re-emits against, so a freshly created file
+can never carry a `not_canonical` warning: `type`, `title`, `description`, `tags` only when given,
+`timestamp` of today, and `bee` holding `id`, `lifecycle` (default `active`) and
+`areas: [<area>]`. The body is `--file`'s content, or a bare `# <title>` heading when no file is
+given. Four refusals fire **before any write**: a title carrying no letters or digits to slug from,
+a `--type` outside the two, an existing file at the derived path, and an id already claimed — the
+last one names the claiming file, because an id collision is D31's fork with extra steps.
+
+`new` is the SECOND write path into the bundle, after `index`'s generated `index.md` files. The
+checker's never-writes boundary (`conformance-check.md`, B4/D2) is untouched: grading and authoring
+are different verbs. What a new concept still owes is an inbound link — the orphan NOTE
+(`conformance-check.md`, B2b) exists so the author of a NEW file sees it land unreachable.
 
 ## Business Rules
 
