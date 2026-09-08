@@ -125,6 +125,33 @@ not expertise-denial. The same entry shape reaches Task-tool workers through
 `bee dispatch prepare --expertise` and the worker-cell prompt's conditional
 Expertise block (D4).
 
+## The agent's own contract rides the brief only when the transport is a pane
+
+A dispatch names a job role, and the role's configured slot decides the
+transport: a slot holding a model resolves to an in-family subagent, a slot
+holding an agent name resolves to a pane. Those two transports differ in who
+reads the agent's contract. On the subagent path the host loads the rendered
+agent file itself, so the dispatch payload carries only the kind brief. On the
+pane path nobody loads it — the foreign worker has never seen the tool, which is
+the whole premise of this area — so for as long as the payloads were symmetric,
+a pane worker served a read-only job received two lines of instruction where its
+in-family sibling received the full contract: read-only rule, digest form, no
+reservations, and the decide-altitude boundary that keeps it from judging.
+
+The asymmetry is now answered at the source. Every pane- and cli-shaped payload
+carries the related agent's own body at the head of its brief, above the kind
+text, chosen by the same pinned agent the subagent path would have named:
+bee-build for a cell, bee-gather for a gather, bee-extract for an extraction,
+bee-review for a review. The subagent payload is untouched and byte-identical,
+because adding the body there would state twice what the host already reads
+once.
+
+A role whose pinned agent is the generic fallback adds nothing at all. That is
+not a gap to close later: most configurable roles — advisor, plan, test, docs —
+have no rendered agent file, and answering one would name a contract that does
+not exist. Nothing is the honest answer, and the payload for those roles stays
+exactly as it was.
+
 ## A delivery receipt is an artifact the receiver wrote
 
 This is the "receipt-as-artifact" rule. It retired two earlier detection
@@ -281,6 +308,16 @@ permit.
 
 ## Pointers (implementation)
 
+- The agent body that rides a pane brief is joined once into `pane_prompt` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, which the three
+  Bash-payload arms (native-fallback cli, `Resolved::Cli`, `Resolved::Herding`)
+  read instead of the bare rendered prompt; the Agent arm still reads the bare
+  one. The bodies are compiled in beside the prompt templates as
+  `embedded_agent_body` in `verbs/drivers/prompt.rs`, sourced from
+  `packages/bee/agents/bee-*.md.tmpl` and split by the single
+  `split_frontmatter` in `textutil.rs`. Which agent a role pins is
+  `pinned_agent_type` / `agent_for_role` in `verbs/drivers/guard.rs`, where
+  `None` is a legal answer.
 - The mailbox contract it writes and reads is
   `packages/bee-rs/crates/bee/src/herding/mailbox.rs`; the delivery path
   (`deliver_pointer`), the ack-wait budget, and the stall/blocked errors are in
