@@ -340,23 +340,58 @@ const SUPERVISOR_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
     "Task",
 ];
 
-/// The router's whole tool surface for Slice 1 (read-and-announce only),
-/// in one place, enumerated verb by verb.
+/// The router's whole tool surface for Slice 2, in one place, enumerated verb
+/// by verb.
 ///
 /// Modelled on `SUPERVISOR_ALLOWED_TOOLS`: enumerated verb by verb, never the
 /// `Bash(.bee/bin/bee:*)` wildcard. Route reaches panes only through the
 /// transport-neutral `bee herding pane` verbs, so both transports get the
 /// identical string.
+///
+/// Slice 1 verbs (read-and-announce):
+/// - `Bash(.bee/bin/bee status:*)`: inspect bee state
+/// - `Bash(.bee/bin/bee orient:*)`: read phase, blockers, and orientation
+/// - `Bash(.bee/bin/bee worktree list:*)`: find granted and active worktrees
+/// - `Bash(.bee/bin/bee cells list:*)`: check whether worktree has open or claimed cells
+/// - `Bash(.bee/bin/bee herding occupancy:*)`: check cockpit slot occupancy against the 4-slot cap
+/// - `Bash(.bee/bin/bee herding pane list:*)`: list live multiplexer panes
+/// - `Bash(.bee/bin/bee herding pane read:*)`: read scrollback for announce-once dedup
+/// - `Bash(.bee/bin/bee herding pane send-text:*)`: announce status to the control pane
+/// - `Bash(git -C:*)`: verify HEAD branch and tree cleanliness
+/// - `Bash(ls:*)`: inspect marker presence
+/// - `Read`: read files without shell execution
+///
+/// Slice 2 verbs (reviewer dispatch and verdict routing):
+/// 1. Start a reviewer:
+///    - `Bash(.bee/bin/bee dispatch prepare:*)`: dispatch through the one door
+///    - `Bash(.bee/bin/bee herding run:*)`: run the reviewer worker
+/// 2. Record a verdict:
+///    - `Bash(.bee/bin/bee reviews:*)`: review store verbs (create, record, status, candidate)
+/// 3. Write the CHANGES cell:
+///    - `Bash(.bee/bin/bee cells add:*)`: write the CHANGES follow-up cell into the feature's lane
+/// 4. Markers:
+///    - `Bash(mkdir:*)` and `Bash(touch:*)`: create marker directory and touch `.bee/tmp/bee-herding.{review,blocked}.<slug>`
+///    - `Bash(rm:*)`: clear own `.bee/tmp/bee-herding.review.<slug>` marker when a verdict lands
+/// 5. Waiting-on mark:
+///    - `Bash(.bee/bin/bee state waiting-on:*)`: set waiting-on mark when routing stops cold on BLOCKED
 const ROUTE_ALLOWED_TOOLS: &str = "Bash(.bee/bin/bee status:*),\
 Bash(.bee/bin/bee orient:*),\
 Bash(.bee/bin/bee worktree list:*),\
 Bash(.bee/bin/bee cells list:*),\
+Bash(.bee/bin/bee cells add:*),\
+Bash(.bee/bin/bee dispatch prepare:*),\
 Bash(.bee/bin/bee herding occupancy:*),\
 Bash(.bee/bin/bee herding pane list:*),\
 Bash(.bee/bin/bee herding pane read:*),\
 Bash(.bee/bin/bee herding pane send-text:*),\
+Bash(.bee/bin/bee herding run:*),\
+Bash(.bee/bin/bee reviews:*),\
+Bash(.bee/bin/bee state waiting-on:*),\
 Bash(git -C:*),\
 Bash(ls:*),\
+Bash(mkdir:*),\
+Bash(rm:*),\
+Bash(touch:*),\
 Read";
 
 /// Tokens that must never appear in a router's tool surface (must-haves / plan.md).
@@ -369,6 +404,8 @@ const ROUTE_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
     "Bash(tmux:*)",
     "Bash(.bee/bin/bee:*)",
     "Task",
+    "Bash(.bee/bin/bee worktree merge",
+    "Bash(.bee/bin/bee gate",
 ];
 
 /// The model one control-pane invocation runs on.
@@ -1312,7 +1349,7 @@ mod tests {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..");
         let body = read_prompt_file(&repo_root, Role::Route).expect("the shipped prompt file reads");
         for needle in [
-            "read and announce",
+            "scrollback dedup",
             "bee herding interlock",
             "gate_bypass_level",
             "bee herding occupancy",
