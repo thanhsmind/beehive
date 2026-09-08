@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Say which one, and I do it.",
-    "asked_at": "2026-09-08T12:07:30.996Z",
-    "session": "91bfae1e-9a10-4077-ab0d-1f6b8f28c115"
+    "subject": "Now I write the distill report.",
+    "asked_at": "2026-09-08T14:01:29.749Z",
+    "session": "ac83adf7-9f51-4558-a3ad-49533284ee5d"
   },
   "route": {
     "class": "feature",

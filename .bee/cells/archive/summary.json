@@ -1153,5 +1153,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-09-07T23:17:24.700Z"
+  },
+  "herding-agent-brief": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-08T14:06:28.321Z"
   }
 }
