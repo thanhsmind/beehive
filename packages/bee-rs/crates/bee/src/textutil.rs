@@ -71,6 +71,21 @@ pub(crate) fn truncate_chars_tail(s: &str, n: usize) -> String {
     s.chars().skip(len - n).collect()
 }
 
+/// Splits a `.md.tmpl` source into (frontmatter, body): the frontmatter is
+/// the text strictly between the opening and closing `---` lines, the body
+/// is everything from just past the closing `---` line onward (including
+/// the blank line that conventionally follows it). A file with no closing
+/// delimiter is treated as having no frontmatter at all — the whole source
+/// is the body — so a malformed template degrades to "no fields found"
+/// rather than panicking.
+pub(crate) fn split_frontmatter(source: &str) -> (&str, &str) {
+    let Some(after_open) = source.strip_prefix("---\n") else { return ("", source) };
+    let Some(close_at) = after_open.find("\n---\n") else { return ("", source) };
+    let front = &after_open[..close_at];
+    let body = &after_open[close_at + "\n---\n".len()..];
+    (front, body)
+}
+
 // ─── the code-unit-order EXCEPTION (release-manifest reproduction) ────────
 
 /// String ordering by UTF-16 code unit. Kept deliberately distinct from this
@@ -146,5 +161,20 @@ mod tests {
         let mut v = vec!["b".to_string(), "_".to_string(), "a".to_string()];
         js_default_sort(&mut v);
         assert_eq!(v, ["_", "a", "b"]); // '_' (0x5F) < 'a' (0x61) < 'b' (0x62)
+    }
+
+    #[test]
+    fn split_frontmatter_splits_template() {
+        let tmpl = "---\nname: test\n---\n\nbody here\n";
+        let (front, body) = split_frontmatter(tmpl);
+        assert_eq!(front, "name: test");
+        assert_eq!(body, "\nbody here\n");
+    }
+
+    #[test]
+    fn split_frontmatter_handles_no_frontmatter() {
+        let (front, body) = split_frontmatter("plain text");
+        assert_eq!(front, "");
+        assert_eq!(body, "plain text");
     }
 }

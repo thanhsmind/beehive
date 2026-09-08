@@ -38,6 +38,26 @@ pub(crate) const PROMPT_REVIEWER: &str = include_str!("../../../../../../bee/pro
 
 pub(crate) const PROMPT_ADVISOR: &str = include_str!("../../../../../../bee/prompts/advisor.md");
 
+pub(crate) const AGENT_BUILD: &str = include_str!("../../../../../../bee/agents/bee-build.md.tmpl");
+
+pub(crate) const AGENT_GATHER: &str = include_str!("../../../../../../bee/agents/bee-gather.md.tmpl");
+
+pub(crate) const AGENT_EXTRACT: &str = include_str!("../../../../../../bee/agents/bee-extract.md.tmpl");
+
+pub(crate) const AGENT_REVIEW: &str = include_str!("../../../../../../bee/agents/bee-review.md.tmpl");
+
+pub(crate) fn embedded_agent_body(agent_name: &str) -> Option<&'static str> {
+    let source = match agent_name {
+        "bee-build" => AGENT_BUILD,
+        "bee-gather" => AGENT_GATHER,
+        "bee-extract" => AGENT_EXTRACT,
+        "bee-review" => AGENT_REVIEW,
+        _ => return None,
+    };
+    let (_front, body) = crate::textutil::split_frontmatter(source);
+    Some(body.trim())
+}
+
 pub(crate) fn embedded_prompt(name: &str) -> Option<&'static str> {
     match name {
         "worker-cell" => Some(PROMPT_WORKER_CELL),
@@ -226,4 +246,34 @@ pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, St
         i += ch.len_utf8();
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_agent_body_resolves_known_agents() {
+        let body = embedded_agent_body("bee-gather").expect("bee-gather body should exist");
+        assert!(body.starts_with("You are a bee gather worker"));
+        assert!(!body.contains("---"));
+
+        let build = embedded_agent_body("bee-build").expect("bee-build body should exist");
+        assert!(build.starts_with("You are a bee execution worker"));
+        assert!(!build.contains("---"));
+
+        let extract = embedded_agent_body("bee-extract").expect("bee-extract body should exist");
+        assert!(extract.starts_with("You are a bee extract worker"));
+        assert!(!extract.contains("---"));
+
+        let review = embedded_agent_body("bee-review").expect("bee-review body should exist");
+        assert!(review.starts_with("You are a bee review worker"));
+        assert!(!review.contains("---"));
+    }
+
+    #[test]
+    fn embedded_agent_body_returns_none_for_unknown_agents() {
+        assert_eq!(embedded_agent_body("general-purpose"), None);
+        assert_eq!(embedded_agent_body("nonsense"), None);
+    }
 }

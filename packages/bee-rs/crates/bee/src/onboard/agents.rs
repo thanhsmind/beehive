@@ -26,6 +26,7 @@ use super::templates::{
     AGENT_TIER_DEFAULTS_OPENCODE, CODEX_AGENTS_NOTE,
 };
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists};
+use crate::textutil::split_frontmatter;
 use crate::verbs::drivers::{normalize_tier_value, resolve_role, Resolved};
 use serde_json::{json, Map, Value};
 use std::path::Path;
@@ -164,21 +165,6 @@ pub fn render_claude_agent_file(engine: &Engine, agent_name: &str) -> Option<Str
         }
     }
     Some(out)
-}
-
-/// Splits a `.md.tmpl` source into (frontmatter, body): the frontmatter is
-/// the text strictly between the opening and closing `---` lines, the body
-/// is everything from just past the closing `---` line onward (including
-/// the blank line that conventionally follows it). A file with no closing
-/// delimiter is treated as having no frontmatter at all — the whole source
-/// is the body — so a malformed template degrades to "no fields found"
-/// rather than panicking.
-fn split_frontmatter(source: &str) -> (&str, &str) {
-    let Some(after_open) = source.strip_prefix("---\n") else { return ("", source) };
-    let Some(close_at) = after_open.find("\n---\n") else { return ("", source) };
-    let front = &after_open[..close_at];
-    let body = &after_open[close_at + "\n---\n".len()..];
-    (front, body)
 }
 
 /// Reads one `key: value` line out of a frontmatter block (first match,
