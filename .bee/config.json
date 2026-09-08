@@ -205,6 +205,7 @@
     }
   },
   "herding": {
+    "ceiling_seconds": 1800,
     "agent_command": "claude-sonnet",
     "control_command": [
       "claude",
@@ -236,13 +237,13 @@
         "pi",
         "-a",
         "--model",
-        "gpt-5.6-luna:high"
+        "openai-codex/gpt-5.6-luna:high"
       ],
       "pi-gpt-6-astra": [
         "pi",
         "-a",
         "--model",
-        "gpt-6-astra:medium"
+        "openai-codex/gpt-6-astra:medium"
       ],
       "agy-flash": {
         "argv": [

@@ -7,7 +7,7 @@ use super::*;
 use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
-use crate::herding::{transport_kind_at, TransportKind};
+use crate::herding::{ceiling_seconds_at, transport_kind_at, TransportKind};
 use crate::state::read_config_raw;
 use crate::verbs::knowledge;
 use crate::verbs::reservations::{
@@ -1802,6 +1802,17 @@ pub(crate) fn prepare_dispatch_with_brief(
                     command.push_str(agent);
                     command.push('"');
                 }
+                // herding-stall-ceiling D1: `herding.ceiling_seconds` in the
+                // MAIN checkout's config becomes `--ceiling <n>` on the
+                // command. `herding run` already caps a DEAD pane through
+                // --idle-timeout; this caps a pane that is busy but useless —
+                // the worker that reads without ever editing and so keeps its
+                // own heartbeat alive past the idle door. Absent or
+                // out-of-range key leaves the command byte-identical.
+                if let Some(seconds) = ceiling_seconds_at(root) {
+                    command.push_str(" --ceiling ");
+                    command.push_str(&seconds.to_string());
+                }
                 payload.insert("command".into(), Value::String(command));
                 payload.insert("stdin".into(), Value::String(prompt_body.clone()));
                 // herding-reach D1: dispatch prepare reports herding transport
@@ -3302,6 +3313,50 @@ mod role_flag_tests {
             v.get("economics").and_then(|e| e.get("logical_tier")),
             Some(&json!("read"))
         );
+    }
+
+    /// herding-stall-ceiling D1: with `herding.ceiling_seconds` set, the
+    /// herding command carries `--ceiling <n>` — the wall-clock cap that ends
+    /// a pane which is busy but useless. `--idle-timeout` cannot do this job:
+    /// a worker that reads without editing keeps its own heartbeat alive.
+    #[test]
+    fn a_configured_ceiling_rides_the_herding_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"herding":{"ceiling_seconds":1800},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        let command = v
+            .get("payload")
+            .and_then(|p| p.get("command"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(command.contains("--ceiling 1800"), "{command}");
+        assert!(command.contains("--agent \"x\""), "{command}");
+    }
+
+    /// herding-stall-ceiling D1: absent or out-of-range leaves the command
+    /// byte-identical to before the key existed — the fail-open posture every
+    /// other read of this config file takes.
+    #[test]
+    fn an_absent_or_bogus_ceiling_leaves_the_command_alone() {
+        for cfg in [
+            r#"{"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+            r#"{"herding":{"ceiling_seconds":0},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+            r#"{"herding":{"ceiling_seconds":99999},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+            r#"{"herding":{"ceiling_seconds":"1800"},"models":{"claude":{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}}}"#,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, cfg);
+            let v = envelope(&root, "gather", None);
+            let command = v
+                .get("payload")
+                .and_then(|p| p.get("command"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(!command.contains("--ceiling"), "{cfg} -> {command}");
+        }
     }
 
     /// D1: an explicitly NULL read slot is one somebody turned off, so the

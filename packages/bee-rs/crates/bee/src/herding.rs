@@ -653,6 +653,30 @@ pub(crate) fn transport_kind_at(main_root: &Path) -> Result<TransportKind, Strin
     transport_kind(&cfg)
 }
 
+/// herding-stall-ceiling D1: the optional `herding.ceiling_seconds` knob.
+/// `bee herding run --ceiling` defaults to 6 hours and `--idle-timeout` only
+/// counts a DEAD heartbeat, so a worker that reads file after file without
+/// ever editing keeps its heartbeat alive and is never stopped (cell sbd-4:
+/// "read for ~50 minutes without a single edit"). This key is the wall-clock
+/// cap `dispatch prepare` writes onto the herding command so the leader gets
+/// its pane back on a schedule it chose.
+///
+/// Fail-open like every other read of this file: a missing key, an
+/// unparseable file, a non-integer, or a value outside 1..=21600 reads as
+/// None and the command stays byte-identical to before this key existed.
+pub(crate) fn ceiling_seconds(cfg: &Value) -> Option<u64> {
+    cfg.get("herding")
+        .and_then(|h| h.get("ceiling_seconds"))
+        .and_then(|v| v.as_u64())
+        .filter(|n| (1..=21_600).contains(n))
+}
+
+/// `ceiling_seconds` over `<main_root>/.bee/config.json`.
+pub(crate) fn ceiling_seconds_at(main_root: &Path) -> Option<u64> {
+    let raw = std::fs::read_to_string(main_root.join(".bee").join("config.json")).ok()?;
+    ceiling_seconds(&serde_json::from_str::<Value>(&raw).ok()?)
+}
+
 /// The herdr-only spelling every pre-tmux caller and test uses: unchanged
 /// behavior, now one delegation deep. Production reaches the probe through
 /// `transport_state_for` with the configured kind, so this name survives for
