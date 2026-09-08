@@ -1635,6 +1635,10 @@ pub(crate) fn prepare_dispatch_with_brief(
     } else {
         pinned_agent_type(marker_role)
     };
+    let pane_prompt = match embedded_agent_body(pinned_type) {
+        Some(body) => format!("{body}\n\n{prompt_body}"),
+        None => prompt_body.clone(),
+    };
 
     // The dispatch SUBJECT — computed ONCE, here, before the transport match,
     // so every branch below (native override, native fallback, codex
@@ -1747,7 +1751,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                     // on an external CLI-executor call to carry a subject.
                     tool = "Bash".into();
                     payload.insert("command".into(), Value::String(command.clone()));
-                    payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                    payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
                     channel = "cli-exec".into();
                     extra_fallback_reason = Some("native_unavailable");
                 } else {
@@ -1773,7 +1777,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                 // limit, not an oversight.
                 tool = "Bash".into();
                 payload.insert("command".into(), Value::String(command.clone()));
-                payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
                 channel = "cli-exec".into();
             }
             Resolved::Herding { agent, fallback } => {
@@ -1814,7 +1818,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                     command.push_str(&seconds.to_string());
                 }
                 payload.insert("command".into(), Value::String(command));
-                payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
                 // herding-reach D1: dispatch prepare reports herding transport
                 // reachability. Probes the caller's environment and writes
                 // transport_ready and transport_reason into the payload.
