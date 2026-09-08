@@ -15,10 +15,10 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-09-08T02:27:15.119Z",
-    "session": "03f8f26e-9f2b-4a9c-91d9-7b66e06b61bb"
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-09-08T10:25:05.403Z",
+    "session": "2d1f7241-ee7b-479e-8888-c9aef7a0ae36"
   },
   "route": {
     "class": "feature",
