@@ -209,6 +209,17 @@ govern the working residue of a cell rather than its content.
     deliberately legal: a docs cell has nothing stronger to offer honestly
     (D3).
 
+  **A user-facing surface is DRIVEN, not merely compiled
+  (verification-in-the-flow D4/D5, decisions `c93a6948` and `036e8a79`,
+  2026-09-02).** The proof-by-change-type list carries one more row: a change to
+  a surface a user reaches is proven by driving that surface's mapped feature
+  with the evidence attached, and the cap records it as `green:live`. The map is
+  read-first and loads in two tiers — the feature index at shaping, to tell a new
+  ask from a mapped one, then the ONE matching feature file at planning. The
+  drive rides the existing cap proof line, so this adds no door and no fourth
+  proof value; an absent or empty map is an environment fact, and the ask
+  proceeds as new.
+
   **The write path closes; the read path stays tolerant (D2).** `bee cells
   finish` refuses a bare `green` on a NEW cap. `feature_proof_check` — the
   same reader `bee close` and `bee worktree merge` use — still accepts a

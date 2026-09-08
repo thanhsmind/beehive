@@ -523,6 +523,29 @@ rather than running anything. So the orchestrator runs the proof itself
 before it caps, and treats the worker's proof text as a claim, never as
 evidence.
 
+
+## The run verb's outcome token says nothing about the cap door
+
+A worker dispatched through `bee herding run` **does not reliably cap its own
+cell**, and the run's own token cannot tell you whether it did. Observed twice
+consecutively on `nudge-consult`: nc-1 returned `outcome=done` with a valid proof
+string while leaving six files uncommitted *and* the cell still claimed; nc-2
+committed cleanly and still returned without ever running `bee cells finish`.
+Both looked identical from the envelope.
+
+Two consequences follow. An orchestrator checks cell status and `git log` after
+every herding run rather than trusting the token. And the herding worker prompt
+(or its close path) owes a fix that makes the cap an action taken rather than
+text echoed. A Task-tool worker is a different case: it caps reliably today, so
+this is a transport-specific hole, not a worker-contract hole.
+
+**A busy but useless pane is capped by the clock, not by the heartbeat.**
+`--idle-timeout` only counts a dead heartbeat, so a worker that reads for fifty
+minutes without editing is never stopped — it keeps its own heartbeat alive by
+working. The `herding.ceiling_seconds` config key, read by `bee dispatch
+prepare`, appends `--ceiling` to the herding command and bounds that case; the
+verb's own default ceiling of 21600 s is far too loose to serve as one.
+
 ## Open Gaps
 
 - **Whether the brief should even ask the worker to commit is unresolved.**

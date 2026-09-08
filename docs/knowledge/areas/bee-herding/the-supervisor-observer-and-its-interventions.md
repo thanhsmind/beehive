@@ -211,6 +211,22 @@ already established for `bee decisions log` / `bee backlog pbi add`).
   already built against that surface (waggledance's own PBI
   `sup-20260831-b2e1`) needs no changes on this side either.
 
+
+## A plan check that refuses the shape is the plan check working
+
+`slp-lead-recovery` was ported as an automatic successor spawn and shipped as
+the observer-only 20 % — a dead-lead signal and a resume line — because the
+five-seat hat wave found the ported mechanism unbuildable: no field held the
+evidence it needed, nothing ran the sweep that sets the dead mark, the cap could
+not stop a spawn chain, and the successor would have spawned into main rather
+than the dead lead's worktree.
+
+The decisive fact was cheaper than any of that: the trigger had **never fired in
+218 sessions**, and both apparent candidates were false positives — a UAT wait
+and an already-merged lane. Verify a ported feature's TRIGGER against the local
+history before shaping its mechanism; a mechanism built for a trigger that never
+fires is dead code that still has to be maintained.
+
 ## Pointers
 
 - Role arm and the enumerated tool surface: `packages/bee-rs/crates/bee/src/herding/control_loop.rs` (`Role`, `allowed_tools_for`).

@@ -136,6 +136,18 @@ the first; a re-run plans nothing.
 - **R5** — The command bee writes must satisfy R3's own detector, pinned by a
   test — otherwise a host silently un-adopts on the next run.
 
+**Turning an opt-in into a default promotes its rough edges into the vendor's
+bugs.** The status display had shipped for a year with a hard `jq` dependency
+that printed a RED error on every prompt when `jq` was missing, and a settings
+pointer to a script the host might not have. While the human had *chosen* the
+feature, both were their problem. The moment onboarding installs it unasked,
+both become bee's. The rule generalises past this feature: before flipping any
+opt-in to opt-out, audit every failure mode the feature can show a user who
+never asked for it, and make each one silent. The two supporting rules settled
+in the same pass are stated above — one backup per run rather than per writer,
+and an unparseable host config read as "leave alone" rather than "absent",
+because a refusal turns one broken file into a blocked install.
+
 ## Edge Cases Settled
 
 - Settings file unparseable → not absent, treated as broken, zero status-display actions, run proceeds normally.

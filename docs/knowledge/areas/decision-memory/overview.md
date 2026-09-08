@@ -297,6 +297,17 @@ Three field failures (reported against a host repo, fixed generically):
   explicit cutoff; union reads (`--all`) reach both the active store and the
   archive and de-duplicate by id.
 
+
+## A promotion that cannot be mechanised routes to where it will be READ
+
+The three promotion bars — multi-feature relevance, meaningful waste prevented,
+generalisable — are unchanged, and an executable check still beats prose. What
+settles is where the prose goes when no check is possible: into a skill the run
+**actually opened**. A skill that should have fired and never opened has a
+discovery problem, not a content problem, so it earns a tuned *description*
+rather than a longer body — text added to a skill nobody loads is a record that
+cannot be read.
+
 ## Open Gaps
 
 - **The ownership map is re-read from disk on every logged decision.** The

@@ -234,6 +234,14 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   fails standalone against the live hook and is excluded with a dated
   comment — filed as a P1 fix-first item, not silently adopted or trusted.
 
+
+**A `cargo test` invocation that names an integration test without `--test` is a
+test-NAME filter.** It matches zero tests, runs nothing, and exits `0`. A cell
+whose verify command is written that way can never go red, so the cap records a
+green that proves nothing. Running an integration test file requires
+`--test <name>`. Found by a worker checking its own verify line against
+`expertise-principles` cells ep-1 and ep-3.
+
 ## Open Gaps
 
 - The CLI dispatcher (4.4k lines, all handlers inline) remains the last

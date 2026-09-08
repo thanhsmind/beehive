@@ -172,6 +172,26 @@ bought a smaller help output at the price of a blind guard.
   hook dispatcher never panics on a missing subcommand (harness-audit-hardening
   hah-5, hooks/mod.rs, 2026-08-07).
 
+
+**`--no-mistakes` is spelled two different ways at two doors, and one of them
+writes nothing.** Both `bee cells cap --no-mistakes` and `bee mailbox reflect
+--no-mistakes` declare a boolean in `--help`, but the accepted forms disagree:
+`mailbox reflect` takes the flag **bare**, `cells cap` refuses the bare form as
+`unsupported_argument_shape` and accepts `--no-mistakes true`. Proven
+2026-09-01 by driving the real binary against a throwaway onboarded sandbox.
+The cause is a list, not a parser: `no-mistakes` is absent from the
+alone-boolean allowlist, so the bare form is rejected before it is read.
+
+**A cap cannot record the clean-run answer at all (open).** The asymmetry above
+has a second half: `--no-mistakes true` is *accepted* and the cap exits `0`, but
+`bool_flag` maps the string `"true"` to `false` on purpose — JS parity, because
+`"true" !== true` — so `trace.no_mistakes` is never written and `bee close`'s
+mistakes door still blocks. Both spellings therefore fail, one loudly and one
+silently. The unit tests stay green because they set the flag in Rust and never
+cross the CLI parser, which is this bundle's own *a guard and its tests are one
+model* pattern seen from the inside. Both source facts re-checked 2026-09-08 and
+unchanged. The fix is one list entry, not a parser change.
+
 ## Open Gaps
 
 - The porcelain set is a judgement about what a session needs, re-made when the

@@ -232,6 +232,21 @@ disagree.
   versions. Whenever a switch narrows what a run compares, the switch's absence
   must narrow what the run *claims*, never only what it does.
 
+
+**`include_str!` on a path outside the crate is not a tracked build
+dependency.** The version the binary reports is embedded from
+`.claude-plugin/plugin.json`, which sits above the crate root. Cargo's
+fingerprint does not follow that read, so on a version bump it rebuilt the `bee`
+binary but not the `front_door` test, then the reverse on the next run — and
+`bee version` and the plugin manifest disagreed in *opposite directions* across
+two consecutive runs. That flip is what identified the fingerprint as the
+culprit rather than either target. The fix belongs in
+`packages/bee-rs/crates/bee/build.rs` as a `cargo:rerun-if-changed` on the
+embedded file, never as a `touch` or `clean` inside `scripts/release.sh`: CI and
+every incremental build share the same hole. A release gate that cries wolf
+trains its operator to bypass it — this one refused two healthy releases before
+the cause was found.
+
 ## Open Gaps
 
 - R29's malformed/symlinked-stamp behavior (never falling back to the legacy

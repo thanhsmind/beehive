@@ -277,6 +277,18 @@ sampled state — but it is a RETRYABLE one, not an immediate failure
 (herding-prompt-stall D6, narrowing D1); see
 `handing-a-foreign-agent-its-brief.md` for the bounded retry it feeds.
 
+
+## A pi agent's `--model` must name its provider
+
+A bare model name in a pi herding agent is resolved by the provider router, and
+the router can pick a variant that cannot serve interactive work.
+`gpt-5.6-luna:high` matched OpenRouter's `openai/gpt-5.6-luna:batch` — a
+batch-only endpoint — so every pi-runtime plan, review, advisor, lane and hat
+dispatch died on HTTP 404 while the config looked correct. Qualify the name with
+its provider (`openai-codex/gpt-5.6-luna:high`). The failure is silent at
+configuration time and only appears as a dead dispatch, so the provider prefix is
+part of the agent entry, never an optimisation.
+
 ## Open Gaps
 
 - **The dependency on the multiplexer's JSON shapes is still unpinned** — there

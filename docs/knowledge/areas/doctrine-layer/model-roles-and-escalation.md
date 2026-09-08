@@ -274,6 +274,33 @@ can ever travel under — is warned by name instead of dying silently.
   `areas/doctrine-layer/delegation-threshold.md`. Roles answer "which model",
   never "should this be delegated".
 
+
+## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
+
+The premise behind `pi_requires_herding` is that Pi ships no **built-in**
+Task/Agent tool, which is true. The stronger reading — that herding is Pi's only
+possible fan-out — is not. A study of pi 0.84.4 found three unused paths:
+`pi.registerTool()` works at runtime and Pi ships a working subagent example
+extension that spawns pi child processes from markdown agent definitions; the Pi
+SDK's `createAgentSession` gives in-process child sessions; and `pi --mode rpc`
+gives headless children.
+
+The user was shown all three on 2026-09-02 and **declined to supersede** the
+locked decision: Pi dispatch stays herding-only (store `9f5c6d17`), and `pi`
+means the pi binary 0.84.x alone, not omp (store `5d87f14e`). So the rule stands
+on a choice about one transport, not on an absence of alternatives — which is
+what a later reader needs to know before proposing the "obvious" fix again.
+
+**`pi` and `omp` are two different binaries.** Both were installed side by side
+on the development machine: pi (`@earendil-works/pi-coding-agent`) and omp
+(`github:can1357/oh-my-pi`, `~/.omp` paths). bee supports pi only — there is no
+`.omp` directory and no omp entry among the runtimes. omp loads legacy pi
+extensions, rewriting the old import paths and shimming the trust call, so an
+extension written to pi's **narrower** surface runs on both while the reverse is
+false. A belt meant to reach two targets therefore stays inside the portable
+core: the extension factory, `on(session_start|tool_call|tool_result)`,
+`registerTool`, `registerCommand`, and `sendMessage`/`appendEntry`.
+
 ## Open Gaps
 
 - The escalation ration's denominator moved from `ceiling / tiered` to

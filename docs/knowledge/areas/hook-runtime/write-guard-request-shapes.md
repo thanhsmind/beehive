@@ -203,6 +203,27 @@ is an open gap named below rather than a working path.
   wrapper: only a real shell name, invoked with the read-a-command-string
   option, opens its payload for re-reading (cell gpd-1).
 
+
+**A shell request the guard cannot resolve statically is refused, not
+resolved.** Three shapes reach the guard as unreadable and are denied rather
+than executed and checked afterwards (proven 2026-09-01 while building
+`.claude/skills/verify-bee`, and hit again 2026-09-08 during a capture drain):
+
+- **An unexpanded `$VAR` in a write target or in command position.** The guard
+  sees `$SP/out.sh`, cannot canonicalise it, and refuses by name — its remedy
+  line says to expand the variable first or pass a plain in-worktree path.
+  A literal dollar in a filename must be escaped or quoted so the shell never
+  expands it.
+- **A write after a `cd` in the same compound command.** The target is resolved
+  against the request's own worktree root, not against the directory the
+  compound command would have moved to, so the write is refused instead of
+  landing somewhere the guard never checked.
+- **A redirect to an absolute path outside the worktree.**
+
+The consequence for tooling: a harness that drives bee against an out-of-tree
+sandbox ships as an executable script invoked by its literal absolute path,
+never as inline compound shell.
+
 ## Open Gaps
 
 - An over-long heading containing any non-ASCII character reaches a branch that

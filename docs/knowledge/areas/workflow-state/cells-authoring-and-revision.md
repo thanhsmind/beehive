@@ -358,6 +358,15 @@ silent.
   by running those tests green and recording the judgement with its citations
   (worker-conformance D4).
 
+
+**A cell that adds a file under a release-manifest root carries the manifest
+obligation in its own `verify` and `files`.** `expertise-principles` ep-1 added
+a skill file without a release-manifest row, so the manifest rebuild test was
+red (295 records against an expected 296) on the base the *next* cell inherited
+— a red the authoring cell never saw and the following cell could not explain.
+The cells-add pre-flight names this obligation already; ep-1 was drafted without
+reading it.
+
 ## Open Gaps
 
 - *(Closed by supersession 2026-07-31 — decision 412e9b3a,

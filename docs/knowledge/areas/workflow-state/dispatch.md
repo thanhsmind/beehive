@@ -304,6 +304,14 @@ decision 80b64c20).
   speak — no citations and nothing naming tests — so the ordinary cell pays
   what it paid before either rule existed.
 
+
+**The dispatch label leads with the ROLE when one was asked for.** With
+`--role`, the description a transport shows opens with the asked role and its
+resolved model (`hat-facts-gaps: … (opus)`); without it the label opens with the
+kind, exactly as before. The label is what a human reads in a pane list or an
+agent-tool row, so it names the job that was requested rather than the door it
+came through.
+
 ## Pointers (implementation)
 
 - Unified dispatcher and catalog: `the bee binary`,
