@@ -346,6 +346,30 @@ fn hat_description_advisory(root: &Path, runtime: Runtime) -> Option<(Value, Str
     ))
 }
 
+/// team-config-rename D2: a top-level check for the legacy models config key.
+/// Emits one advisory when .bee/config.json still uses models (folded on read).
+/// When both keys are present, notes that team is used and models is ignored.
+pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
+    let config_path = root.join(".bee").join("config.json");
+    let ReadJson::Parsed(Value::Object(map)) = read_json(&config_path) else {
+        return None;
+    };
+    let had_team = map.contains_key("team");
+    let mut copy = map;
+    if !crate::verbs::drivers::fold_team_key(&mut copy) {
+        return None;
+    }
+    let detail = if had_team {
+        ".bee/config.json still uses the models key — team is used and models is ignored.".to_string()
+    } else {
+        ".bee/config.json still uses the models key — rename it to team (models is read as an alias for now).".to_string()
+    };
+    Some((
+        json!({"row": "legacy_models_key", "status": "advisory", "detail": detail.clone()}),
+        detail,
+    ))
+}
+
 /// Source that ships without reinstalling the binary the hooks call is
 /// inert — a pattern this repo has paid for more than once (four features
 /// shipped to main in one session with `.bee/bin/bee` never rebuilt). This
@@ -690,6 +714,10 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
     if let Some((row, _)) = &advisory {
         all.push(row.clone());
     }
+    let team_advisory = team_config_advisory(&root);
+    if let Some((row, _)) = &team_advisory {
+        all.push(row.clone());
+    }
 
     // Never ready from presence alone: the ladder is evaluated, not assumed.
     let status = if !mechanical_ok {
@@ -729,6 +757,9 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
     }
     if let Some((_, detail)) = &advisory {
         lines.push(format!("  note {:<22} {}", "hat_slot_descriptions", detail));
+    }
+    if let Some((_, detail)) = &team_advisory {
+        lines.push(format!("  note {:<22} {}", "legacy_models_key", detail));
     }
     lines.push(match status {
         "blocked" => "next: fix the FAIL row(s) above — nothing else can be trusted until they are ok".to_string(),

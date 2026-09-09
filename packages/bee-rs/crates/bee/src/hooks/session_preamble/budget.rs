@@ -648,6 +648,15 @@ pub fn build_session_preamble(
     lines.push(String::new());
     lines.push("### Dispatch door".to_string());
     lines.extend(crate::hooks::model_guard::dispatch_door_lines(Some(&config), "claude"));
+    let raw_config = read_json_object(&root.join(".bee").join("config.json")).unwrap_or_default();
+    if !raw_config.contains_key("team") {
+        let mut raw_copy = raw_config;
+        if crate::verbs::drivers::fold_team_key(&mut raw_copy) {
+            lines.push(
+                "- config: .bee/config.json uses the legacy models key — rename to team.".to_string(),
+            );
+        }
+    }
 
     // csc-1: the whole command surface, always on — unlike Standard
     // commands above it never depends on host-project config. Placed right

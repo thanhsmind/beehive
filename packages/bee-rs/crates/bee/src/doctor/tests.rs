@@ -611,3 +611,50 @@ fn the_advisory_reads_the_runtimes_own_table() {
     assert!(hat_description_advisory(&root, Runtime::Claude).is_none());
     assert_eq!(hat_slots_missing_a_description(&root, Runtime::Codex), vec!["hat-risks"]);
 }
+
+// ═══ team-config-rename D2 — the legacy models advisory ════════════════════
+
+#[test]
+fn doctor_emits_one_advisory_on_models_only_config_and_none_on_team() {
+    let tmp = tempfile::tempdir().unwrap();
+
+    // 1. models-only config: exactly one advisory emitted
+    let root_models = repo_with_config(
+        &tmp.path().join("models_only"),
+        r#"{"models":{"claude":{"code":"opus"}}}"#,
+    );
+    let (row, detail) = team_config_advisory(&root_models).expect("advisory on models-only config");
+    assert_eq!(row.get("status"), Some(&json!("advisory")));
+    assert_eq!(row.get("row"), Some(&json!("legacy_models_key")));
+    assert_eq!(
+        detail,
+        ".bee/config.json still uses the models key — rename it to team (models is read as an alias for now)."
+    );
+
+    // 2. team-only config: no advisory emitted
+    let root_team = repo_with_config(
+        &tmp.path().join("team_only"),
+        r#"{"team":{"claude":{"code":"opus"}}}"#,
+    );
+    assert!(
+        team_config_advisory(&root_team).is_none(),
+        "team-only config must emit no advisory"
+    );
+
+    // 3. both keys present: advisory names the ignored key and says team is used
+    let root_both = repo_with_config(
+        &tmp.path().join("both_keys"),
+        r#"{"team":{"claude":{"code":"opus"}},"models":{"claude":{"code":"sonnet"}}}"#,
+    );
+    let (row_both, detail_both) = team_config_advisory(&root_both).expect("advisory on both keys");
+    assert_eq!(row_both.get("status"), Some(&json!("advisory")));
+    assert!(detail_both.contains("team is used and models is ignored"), "{detail_both}");
+    assert_eq!(
+        detail_both,
+        ".bee/config.json still uses the models key — team is used and models is ignored."
+    );
+
+    // 4. neither key: no advisory emitted
+    let root_neither = repo_with_config(&tmp.path().join("neither"), r#"{}"#);
+    assert!(team_config_advisory(&root_neither).is_none());
+}

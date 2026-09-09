@@ -174,6 +174,7 @@ pub const FLOW_VERBS: &[(&str, &[&str])] = &[
     ("shape", &["intent", "set"]),
     ("gate", &["state", "gate"]),
     ("finish", &["cells", "finish"]),
+    ("models", &["team"]),
 ];
 
 pub const INTERNAL: &str = "internal";
@@ -215,8 +216,16 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if let Some(code) = crate::verbs::help::try_native(args, t0) {
         return Some(code);
     }
+    let is_models_alias = args.first().and_then(|a| a.to_str()) == Some("models");
     match rewrite_front_door(args) {
-        Some(rewritten) => dispatch(&rewritten, t0),
+        Some(rewritten) => {
+            if is_models_alias {
+                eprintln!(
+                    "bee models show is now bee team show — the config block is team.<runtime>.<role>; models is a read alias."
+                );
+            }
+            dispatch(&rewritten, t0)
+        }
         None => dispatch(args, t0),
     }
 }
@@ -625,6 +634,17 @@ mod tests {
     #[test]
     fn a_flow_verb_expands_to_its_proven_target() {
         for (name, target) in FLOW_VERBS {
+            if *name == "models" {
+                let rewritten = rewrite_front_door(&strs(&[name, "show", "--json"])).expect("{name} rewrites");
+                let got: Vec<String> =
+                    rewritten.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+                assert_eq!(got, vec!["team", "show", "--json"]);
+                assert!(
+                    crate::catalog::resolve(&["team", "show"]).is_some(),
+                    "team.show is in the registry"
+                );
+                continue;
+            }
             let rewritten = rewrite_front_door(&strs(&[name, "--json"])).expect("{name} rewrites");
             let got: Vec<String> =
                 rewritten.iter().map(|a| a.to_string_lossy().into_owned()).collect();
@@ -681,6 +701,15 @@ mod tests {
     #[test]
     fn every_flow_verb_is_declared_porcelain_in_the_registry() {
         for (name, _) in FLOW_VERBS {
+            if *name == "models" {
+                let (entry, rest) = crate::catalog::resolve(&["models", "show"]).unwrap_or_else(|| {
+                    panic!("{name}.show is not in the command registry")
+                });
+                assert!(rest.is_empty());
+                assert_eq!(entry.invoke, "bee models show");
+                assert!(entry.unavailable.is_none(), "{name} must be callable");
+                continue;
+            }
             let (entry, rest) = crate::catalog::resolve(&[name]).unwrap_or_else(|| {
                 panic!("{name} is not in the command registry")
             });
@@ -688,6 +717,66 @@ mod tests {
             assert_eq!(entry.invoke, format!("bee {name}"));
             assert!(entry.unavailable.is_none(), "{name} must be callable");
         }
+    }
+
+    #[test]
+    fn models_show_alias_matches_team_show_and_warns_on_stderr() {
+        let bin = {
+            let mut dir = std::env::current_exe().expect("test binary path");
+            dir.pop();
+            if dir.ends_with("deps") {
+                dir.pop();
+            }
+            dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX))
+        };
+        if !bin.is_file() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        std::fs::create_dir_all(repo.join(".bee")).unwrap();
+        std::fs::write(repo.join(".bee/onboarding.json"), r#"{"completed":true}"#).unwrap();
+        std::fs::write(
+            repo.join(".bee/config.json"),
+            r#"{"team":{"claude":{"code":"opus"}}}"#,
+        )
+        .unwrap();
+
+        // 1. Text mode equality
+        let out_team = std::process::Command::new(&bin)
+            .args(["team", "show"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let out_models = std::process::Command::new(&bin)
+            .args(["models", "show"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        assert_eq!(out_team.stdout, out_models.stdout, "stdout must be byte-identical");
+        let stderr_models = String::from_utf8_lossy(&out_models.stderr);
+        let stderr_team = String::from_utf8_lossy(&out_team.stderr);
+        let notice = "bee models show is now bee team show — the config block is team.<runtime>.<role>; models is a read alias.";
+        assert!(stderr_models.contains(notice), "alias stderr must contain notice: {stderr_models}");
+        assert!(!stderr_team.contains(notice), "canonical team show must not contain notice: {stderr_team}");
+        assert_eq!(
+            stderr_models.lines().filter(|l| *l == notice).count(),
+            1,
+            "exactly one warning line to stderr"
+        );
+
+        // 2. JSON mode equality
+        let out_team_json = std::process::Command::new(&bin)
+            .args(["team", "show", "--json"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let out_models_json = std::process::Command::new(&bin)
+            .args(["models", "show", "--json"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        assert_eq!(out_team_json.stdout, out_models_json.stdout, "JSON stdout must be byte-identical");
     }
 
     /// The regression this cell exists for: `state route --lane-value` used
