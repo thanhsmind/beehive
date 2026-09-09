@@ -56,8 +56,8 @@ a slot resolves, how a worker is spawned, or what a role may run.
 ### Integration Points
 
 - `AGENTS.md` "Work in parallel, coordinate through the store" — the dispatch-door paragraph (the host block is rendered from it).
-- `skills/bee-hive/references/routing-and-contracts.md` — the delegation contract.
-- `skills/bee-swarming/references/worker-details.md` — the worker brief's model-shaped vs cli-shaped advisor text.
+- `skills/bee-hive/references/gates-and-delegation.md:124` — the delegation contract (*corrected 2026-09-09 after the hat wave; the first draft named `routing-and-contracts.md`, which only points here*).
+- `packages/bee/prompts/worker-cell.md` — the prompt that reaches **every** worker, pane workers included; `skills/bee-swarming/references/worker-details.md:277-282` names transports by shape and keeps a pointer.
 - `docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` — B12/B13 (display law, the read door).
 
 ## Canonical References
@@ -73,8 +73,12 @@ a slot resolves, how a worker is spawned, or what a role may run.
 
 ### Deferred To Planning
 
-- [ ] Whether the dispatch record (`.bee/logs/dispatch.jsonl`) gains `declared` only at prepare time or also from the model guard's audit line — read `guard.rs` and `model_guard.rs` for who else writes the status.
-- [ ] Whether the cli executor's command string is parsed for `-m`/`--model` too, or only herding argv — the codex `review` slot is a cli command with `-m gpt-5.5`.
+- [x] Whether the dispatch record gains `declared` only at prepare time or also from the model guard's audit line — **both**: the guard recomputes all six fields itself (`hooks/model_guard.rs:1213-1258`), so one helper in the drivers module serves both writers and the two rows agree (plan revision 2).
+- [x] Whether the cli executor's command string is parsed too — **yes**: `Resolved::Cli { command: String }` is split quote-aware and read for `--model X`, `--model=X`, `-m X`; at both cli-exec sites the command that will run is what is read (plan revision 2).
+
+### Amended by planning
+
+- **D4** (logged 2026-09-09): `bee team show` may resolve for display — role, description, model, transport — and still writes, guards and dispatches nothing; the preamble roster prints every role one per line with no descriptions. Amends doctrine B12/B13 on the display axis only.
 
 ## Deferred Ideas
 
