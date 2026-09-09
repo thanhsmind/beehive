@@ -206,7 +206,7 @@ Read `.bee/config.json` from MAIN. The cockpit spawns every worker from one key
 and never varies it per dispatch.
 
 Resolve the producer using this precedence:
-1. If `models.<runtime>.generation` names a herding agent, that agent wins.
+1. If `team.<runtime>.generation` names a herding agent, that agent wins.
 2. Otherwise, use `herding.agent_command` (a `herding.agents` registry key).
 
 That is the same precedence `bee herding run` itself uses with no `--agent`.
@@ -223,7 +223,7 @@ Never proceed on an unknown producer. End the tick immediately.
 ### 6. Choose the reviewer — a different agent (D2)
 
 Independent review requires a different agent (D2):
-1. Prefer the agent named by the `review` model role (`models.<runtime>.review`).
+1. Prefer the agent named by the `review` model role (`team.<runtime>.review`).
 2. If that resolves to the producer, take the first `herding.agents` key that differs.
 3. If the registry holds only the producer, REFUSE and announce once into
    `<chat_pane_id>` using scrollback dedup (§9):
