@@ -1,0 +1,50 @@
+{
+  "id": "hrr-4",
+  "feature": "herding-route-role",
+  "title": "Pin the shipped route prompt against its contract",
+  "lane": "high-risk",
+  "role": "test",
+  "action": "Add a test to `control_loop.rs`'s test module that asserts the REAL `skills/bee-herding/references/route-prompt.md` shipped in this repo carries route's contract — the same guard `the_supervisor_prompt_file_shipped_in_this_repo_carries_the_observer_contract` (control_loop.rs:1038-1075) already gives the observer. Open that test and follow its shape exactly; it resolves the file from the repo root and asserts on needles in the body.\n\nAssert the needles that would matter if someone quietly rewrote the document: the pointer to `role-merge.md:73-76` rather than a restated copy of the four conditions; `bee herding interlock`; the `gate_bypass` requirement; the occupancy refusal; the `--lines 200` scrollback dedup; and each item of route's never-list.\n\nAlso assert the file resolves through the same `read_prompt_file` path the loop itself uses for `Role::Route`, so a rename of either the role or the file breaks this test rather than breaking a cold 3am tick.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+    "skills/bee-herding/references/route-prompt.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "hrr-1",
+    "hrr-2"
+  ],
+  "decisions": [
+    "a685d557-23bf-43fd-a75e-b3a075cc93bf"
+  ],
+  "must_haves": {
+    "truths": [
+      "the test reads the real shipped route-prompt.md, not a fixture",
+      "it resolves the file through read_prompt_file for Role::Route, so a rename of either breaks the test",
+      "it asserts the pointer to role-merge.md:73-76 and fails if the four conditions are restated instead",
+      "it asserts both arming checks, the occupancy refusal, and the dedup"
+    ]
+  },
+  "change_class": "test",
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "Already delivered inside hrr-1's commit 7275d515. The worker wrote the_route_prompt_file_shipped_in_this_repo_carries_the_router_contract, which reads the REAL shipped skills/bee-herding/references/route-prompt.md through read_prompt_file(&repo_root, Role::Route) — exactly this cell's action, including the resolve-through-the-loop's-own-path requirement. Re-doing it would file a near-duplicate test beside a passing one."
+  }
+}

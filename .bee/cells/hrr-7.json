@@ -1,0 +1,70 @@
+{
+  "id": "hrr-7",
+  "feature": "herding-route-role",
+  "title": "Teach the merge role to honor the in-review marker",
+  "lane": "high-risk",
+  "role": "docs",
+  "action": "`skills/bee-herding/references/role-merge.md` must not land a worktree that route has under review. Today merge reads the same four finished conditions route does, on its own loop, with no coordination — three independent hat seats found this race.\n\nTwo edits, both following the shape the red-stop marker already has in this file:\n\n1. **A second pre-merge marker check.** Beside the existing red-stop check (`ls .bee/tmp/bee-herding.red.<slug>` — exists → skip, say nothing), add `ls .bee/tmp/bee-herding.review.<slug>` — exists → skip this worktree, and unlike the red marker, say so ONCE through the chat pane's scrollback dedup: a worktree that looks finished but never merges is confusing silence otherwise. Add it to the quick-reference table near the end of the file that already lists the red-stop check, so both markers are visible in one place.\n\n2. **Close the reviewer's pane too.** The cleanup step finds the worktree's runtime pane by label and closes it. A reviewed worktree may also have a pane labelled `<slug>-review`. Close that one as well, with the same 'no pane carries that label → nothing to close, not an error' posture the existing text uses. Say plainly that this is the only circumstance in which the merge role closes a review pane.\n\nDo NOT change the four finished conditions, the proof check, the red-stop behavior, or anything else in this file. This is an additive guard.",
+  "verify": "rg -q 'bee-herding.review' skills/bee-herding/references/role-merge.md && rg -q -- '-review' skills/bee-herding/references/role-merge.md && rg -q 'bee-herding.red' skills/bee-herding/references/role-merge.md",
+  "files": [
+    "skills/bee-herding/references/role-merge.md"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "skills/bee-herding/references/role-merge.md"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/role-merge.md"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "8388df3e-48d5-4daf-976c-1932c947b775"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "merge skips a worktree carrying .bee/tmp/bee-herding.review.<slug> and says so once",
+      "the new check appears in the quick-reference table beside the red-stop check",
+      "merge closes a <slug>-review pane as well as the coder's pane, with the same not-an-error posture",
+      "the four finished conditions, the proof check and the red-stop behavior are byte-unchanged"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "route-w7",
+    "outcome": "merge role honors the in-review marker and closes the <slug>-review pane",
+    "files_changed": [
+      "skills/bee-herding/references/role-merge.md"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths and AGENTS.md in the shared worktree.",
+      "sync-ack: parallel wave: siblings landed control_loop.rs, route-prompt.md, AGENTS.md and operational-invariants.md in the same shared worktree. hrr-7's own commit 9d76eed2 carries role-merge.md alone."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T03:26:37.767Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-08T15:33:23.564Z",
+    "sync_ack": "parallel wave: siblings landed control_loop.rs, route-prompt.md, AGENTS.md and operational-invariants.md in the same shared worktree. hrr-7's own commit 9d76eed2 carries role-merge.md alone.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "role-merge.md gains a second pre-merge marker check beside the red-stop one: .bee/tmp/bee-herding.review.<slug> present means skip, announced once through the scrollback dedup; the quick-reference table lists both markers; cleanup also closes a pane labelled <slug>-review with the same not-an-error posture. The four finished conditions, the proof check and the red-stop behavior are unchanged.",
+      "commit": "9d76eed2",
+      "files": [
+        "skills/bee-herding/references/role-merge.md"
+      ],
+      "tests": "rg -q bee-herding.review && rg -q -- -review && rg -q bee-herding.red on role-merge.md — green:static — docs change: parity checks pin the new marker, the review pane label, and that the red-stop marker survived; run by the orchestrator, exit 0",
+      "deviations": [
+        "Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths and AGENTS.md in the shared worktree."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"herding-agent-brief\" — feature is closed.",
   "created_at": "2026-09-08T13:29:06.358Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The monitor window closed — nothing to act on. Finishing the close myself rather than waiting on you.",
+    "asked_at": "2026-09-08T14:07:55.819Z",
+    "session": "91bfae1e-9a10-4077-ab0d-1f6b8f28c115"
+  },
   "route": {
     "class": "refactor",
     "lane": "small",

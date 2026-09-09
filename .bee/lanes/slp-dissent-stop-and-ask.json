@@ -15,9 +15,9 @@
   "created_at": "2026-08-27T20:58:29.709Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Now I write the distill report.",
-    "asked_at": "2026-09-08T14:01:29.749Z",
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-08T14:49:43.850Z",
     "session": "ac83adf7-9f51-4558-a3ad-49533284ee5d"
   },
   "route": {

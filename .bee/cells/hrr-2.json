@@ -1,0 +1,75 @@
+{
+  "id": "hrr-2",
+  "feature": "herding-route-role",
+  "title": "Write route-prompt.md as the role's whole contract",
+  "lane": "high-risk",
+  "role": "docs",
+  "action": "Create `skills/bee-herding/references/route-prompt.md`. It is the WHOLE contract for the route role — there is no `role-route.md` beside it. The precedent is `supervisor-prompt.md`, which says so in its own opening: \"Unlike the dispatch and merge roles of this same loop, no skill document carries your procedure. This file is the whole contract.\" (supervisor-prompt.md:8-10). Open that file and follow its shape.\n\nThe document covers SLICE 1 ONLY — read and announce. It must carry:\n\n- **What you are**: a cold, bounded iteration with no memory of any previous tick. You READ granted worktrees and you ANNOUNCE which are finished and not already under review. In slice 1 you dispatch nothing, write no cell, start no reviewer, and touch no worktree.\n- **What you are not**: never merge, never pick a PBI, never start a coder, never create a pane, never touch main. About to take another role's action? Wrong section.\n- **The finished test, by POINTER not by copy**: `role-merge.md:73-76` holds the four conditions in their single home. Cite it; do not restate the four conditions in this file. A second copy is a second thing to drift.\n- **The arming checks**, both of them, both announced when they refuse: the owner enable marker via `bee herding interlock`, and `gate_bypass_level` exactly `full` or `total` via `bee status --json` — the same refusal `role-dispatch.md:41-42` already runs.\n- **The four-slot cap**: read it from `bee herding occupancy --json`. `source: \"live\"` and count >= 4 means no slot is free. `source: \"fallback\"`, a non-zero exit, or unparseable output are all the SAME answer — occupancy is undetermined, which is a refusal, never a guess. Same posture as `role-dispatch.md:89-125`.\n- **Announce once, never once per tick**: read the chat pane's own scrollback with `bee herding pane read <chat_pane_id> --lines 200` and send the line only if it is not already there — the dedup at `role-dispatch.md:100-101`. This applies to every line, refusals included. A silent refusal looks identical to nothing happening.\n- **The interval is a guess**: state plainly that route's default tick is a starting number, not a measurement, and that it should be re-set once anyone has watched a real review run end to end.\n- **What slice 2 will add**, in one short paragraph, so a reader of this file is not surprised later: the carve-out, the reviewer on a different agent, the in-review marker, and the four verdict paths.\n\nWrite it in the voice the other role documents use: second person, imperative, numbered steps for the tick.",
+  "verify": "test -f skills/bee-herding/references/route-prompt.md && rg -q 'role-merge.md:73-76' skills/bee-herding/references/route-prompt.md && rg -q 'bee herding interlock' skills/bee-herding/references/route-prompt.md && rg -q 'lines 200' skills/bee-herding/references/route-prompt.md && ! rg -q '^1\\. `phase` is' skills/bee-herding/references/route-prompt.md",
+  "files": [
+    "skills/bee-herding/references/route-prompt.md"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "skills/bee-herding/references/supervisor-prompt.md",
+    "skills/bee-herding/references/role-merge.md",
+    "skills/bee-herding/references/role-dispatch.md"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/route-prompt.md"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "a685d557-23bf-43fd-a75e-b3a075cc93bf",
+    "8388df3e-48d5-4daf-976c-1932c947b775"
+  ],
+  "must_haves": {
+    "truths": [
+      "the file is the whole contract — no role-route.md is created",
+      "the four finished conditions are cited at role-merge.md:73-76, never restated",
+      "both arming checks are present, and both announce when they refuse",
+      "occupancy fallback and command failure are treated as a refusal, never as a count",
+      "every announcement goes through the scrollback dedup",
+      "the interval is stated as an unmeasured starting guess"
+    ]
+  },
+  "change_class": "behavior",
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "route-w2",
+    "outcome": "route-prompt.md written as the route role's whole contract, 218 lines, slice 1 scope only",
+    "files_changed": [
+      "skills/bee-herding/references/route-prompt.md"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: a sibling cell in the same parallel wave touched skills/bee-herding/SKILL.md in the shared worktree between this commit and this cap.",
+      "sync-ack: parallel wave: hrr-3 landed skills/bee-herding/SKILL.md in the same shared worktree between this cell's commit and its cap, so the door sees a sibling's touched path. hrr-2's own commit 0efa2de4 carries route-prompt.md alone."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-08T15:23:37.643Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-08T15:19:45.068Z",
+    "sync_ack": "parallel wave: hrr-3 landed skills/bee-herding/SKILL.md in the same shared worktree between this cell's commit and its cap, so the door sees a sibling's touched path. hrr-2's own commit 0efa2de4 carries route-prompt.md alone.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "route-prompt.md is the whole contract for the route role — no role-route.md beside it, matching the supervisor precedent. Cites the four finished conditions at role-merge.md:73-76 rather than restating them, carries both arming checks with announced refusals, treats an occupancy fallback or command failure as a refusal never a count, routes every line through the scrollback dedup, and states the tick interval as an unmeasured starting guess.",
+      "commit": "0efa2de49dbc82352d8506546b6f8563c793e311",
+      "files": [
+        "skills/bee-herding/references/route-prompt.md"
+      ],
+      "tests": "test -f skills/bee-herding/references/route-prompt.md && rg -q role-merge.md:73-76 && rg -q \"bee herding interlock\" && rg -q \"lines 200\" && ! rg -q restated-conditions — green:static — docs change: the proof a role contract needs is a pointer/parity check, and this one pins the single-home citation, both arming checks, the dedup, and the absence of a restated copy",
+      "deviations": [
+        "Capped with --sync-ack: a sibling cell in the same parallel wave touched skills/bee-herding/SKILL.md in the shared worktree between this commit and this cap."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
