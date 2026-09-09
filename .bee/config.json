@@ -248,6 +248,8 @@
       "agy-flash": {
         "argv": [
           "agy",
+          "--model",
+          "gemini-3.8-flash-high",
           "--dangerously-skip-permissions"
         ],
         "workspace_trust": {
