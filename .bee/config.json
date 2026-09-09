@@ -18,7 +18,7 @@
   "uat_stop": "close",
   "uat_before_merge": false,
   "staging_before_merge": false,
-  "models": {
+  "team": {
     "pi": {
       "code": {
         "kind": "herding",

@@ -346,7 +346,7 @@ A capped `behavior_change` cell also creates **scribing debt** until its meaning
 Models are not one ladder. Some plan well, some test well, some design well, some code well — so bee asks each piece of work **what job it is**, not how expensive it is, and your config says which model does that job. A cell declares a `role`; the dispatch asks for that role; `.bee/config.json` answers with a model:
 
 ```json
-"models": {
+"team": {
   "claude": { "code": "sonnet", "read": "haiku", "extraction": "haiku", "generation": "sonnet" },
   "codex":  { "code": null,     "read": null,    "extraction": null,    "generation": null }
 }
@@ -366,7 +366,7 @@ The orchestrator pattern keeps the strongest model scarce:
 
 - **Fan-out delegation** (default): run the session on your strong model; it orchestrates all work and dispatches gather-altitude steps (multi-file reads, document rendering, trace mining) to cheaper read-role workers, collecting digests instead of verbatim output. The Delegation contract (in gates-and-delegation.md) specifies which steps delegate and what a digest must carry. `bee-swarming`'s default.
 
-**To change the worker models**, edit `.bee/config.json` `models.claude.code` / `read` (or add your own role key); the escalated model changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
+**To change the worker models**, edit `.bee/config.json` `team.claude.code` / `read` (or add your own role key); the escalated model changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
 
 ### Model pairs: the full slot set and its five shapes
 
@@ -641,7 +641,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 |---|---|
 | `onboarding.json` | installed bee version + managed-file hashes (drift detection) |
 | `state.json` | phase, mode, feature, the four gate approvals, workers, next action |
-| `config.json` | per-repo hook/guard toggles, lanes, capabilities, **`gate_bypass`**, **`models`** (runtime-keyed role→model map) |
+| `config.json` | per-repo hook/guard toggles, lanes, capabilities, **`gate_bypass`**, **`team`** (runtime-keyed role→model map) |
 | `HANDOFF.json` | pause context at ~65% budget — surfaced next session, never auto-resumed |
 | `cells/<id>.json` | one cell each: acceptance criteria, verify command, full trace |
 | `decisions.jsonl` / `backlog.jsonl` | append-only decision events / friction & grooming items |
@@ -654,7 +654,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 
 | Doc | Read when |
 |---|---|
-| [config-reference.md](docs/config-reference.md) | You want to configure `.bee/config.json` — models/ceiling, commands, bypass, uat/staging (with a sample to copy) |
+| [config-reference.md](docs/config-reference.md) | You want to configure `.bee/config.json` — team/ceiling, commands, bypass, uat/staging (with a sample to copy) |
 | [model-presets.md](docs/model-presets.md) | Copy-paste model pairs: all-Claude, Codex-reviews, Codex-implements, Gemini/agy, opencode, budget |
 | [00-vision.md](docs/00-vision.md) | You want the principles and non-goals |
 | [01-distillation.md](docs/01-distillation.md) | What bee took from each upstream framework, and what it rejected |
@@ -689,7 +689,7 @@ Recent additions, each gated by a decision record:
 - **Artifact scaling + cap-time before-state** (0009) — planning stops fanning out four overlapping documents for small work; capping a behavior change now requires a recorded "before".
 - **Gate bypass** (0010; today `bee-hive`'s "Gates" section) — opt-in autopilot with LEVELS: normal keeps the safety floor (high-risk/hard-gate, Gate 3 UAT, P1 and secrets still stop); full lifts the high-risk floor; total lifts everything and leaves no human checkpoint.
 - **Capture-mode spine / scribing debt** (0011) — behavior_change cells capped since the last spec sync are counted as *scribing debt* and surfaced in `bee status`, the preamble, and the swarming nudge, so settled behavior reaches `docs/specs/` mid-flight instead of only when a human remembers.
-- **Runtime-keyed model tiers + scarcity signal** (0012) — a per-repo `models` map with one shared resolver; `bee status`/preamble warn when the session-model share runs high, keeping the strongest model scarce. (Superseded in part: the cost tiers became open-ended **roles** — a cell declares the job it is, and `ceiling` became the `bee cells escalate` flag. See “Model roles” above.)
+- **Runtime-keyed model tiers + scarcity signal** (0012) — a per-repo `team` map with one shared resolver; `bee status`/preamble warn when the session-model share runs high, keeping the strongest model scarce. (Superseded in part: the cost tiers became open-ended **roles** — a cell declares the job it is, and `ceiling` became the `bee cells escalate` flag. See “Model roles” above.)
 - **Grooming is project-first** (0014) — the hygiene pass hunts the *current project's* debt in plain language; `.bee/`, `.claude/`, `.codex/` and bee's own plumbing are out of scope (a harness bug becomes a one-line upstream note, not a project kill), and the entropy score is demoted to a short hive-housekeeping side-note. Also fixes two real bugs it caught: `capCell` now honors a cell's declared `behavior_change` even when the CLI flag is omitted, and the write-guard no longer misreads `2>&1` as a file write. (Note: this parenthetical is superseded by skill-sync above — `onboard --apply` now syncs `skills/*` into the host repo's own `.claude/skills/bee-*` and `.agents/skills/bee-*` by default, committed to the repo; downgrades refused by default. `--global-skills` extends the sync to the legacy global `~/.claude/skills` root (and, via the install scripts, `~/.codex/skills`); without it neither global root is touched.)
 
 **Known debt before 1.0** (recorded per skill in `docs/decisions/skills/*-creation-log.md`): the newer skills and the two most recent decisions have not yet been dogfooded/pressure-tested per bee's own Iron Law; the gate-bypass safety floor in particular wants RED-baseline testing on a real high-risk feature.

@@ -101,10 +101,10 @@ Two different kinds of "no" come out of this door, and they carry different exit
 | `reason` | When | What the `fix` says |
 | --- | --- | --- |
 | `claim_ownership` | `--kind cell` over a cell that is not `claimed`, or is claimed by someone else | names the actual status and owner; `--force-ownership` overrides, audited |
-| `role_not_configured` | `--role <name>` naming a role `models.<runtime>` does not carry | lists the roles this runtime can resolve, and how to add one |
-| `tier_not_configured` | a pre-role cell record whose recorded `tier` nothing configures | `set models.<runtime>.<tier> in .bee/config.json` |
+| `role_not_configured` | `--role <name>` naming a role `team.<runtime>` does not carry | lists the roles this runtime can resolve, and how to add one |
+| `tier_not_configured` | a pre-role cell record whose recorded `tier` nothing configures | `set team.<runtime>.<tier> in .bee/config.json` |
 | `cli_tier_gather_only` | a cli-shaped slot resolved for `--kind cell` | declare `{for:"gather"}`; cell execution through a cli tier stays refused |
-| `advisor_not_configured` | `--kind advisor` (or `--role advisor`) with no advisor slot | `set models.<runtime>.advisor` — the advisor never falls back |
+| `advisor_not_configured` | `--kind advisor` (or `--role advisor`) with no advisor slot | `set team.<runtime>.advisor` — the advisor never falls back |
 | `native_unavailable` | a codex native slot with no fallback command | carries the classification as `detail` |
 | `kind_slot_unmapped` | a `--kind` with no slot mapping — unreachable today | names the code arm to add |
 
@@ -139,7 +139,7 @@ The envelope's keys: `tool`, `payload`, `dispatch_id`, `economics`, plus `worktr
 
 **The kinds.** `cell` is the only execution purpose: it requires `--cell` and `--worker`, loads the cell record for prompt context, and checks the requesting worker against the cell's own claim. `gather` is the read-only default, and with no `--role` it asks for the read job: an ordered walk of `[read, generation]` that takes the first name the host configures. `extraction` is deliberately absent from that tail — it was the cheapest slot of the tier era and never the gather slot, so a host that configures `extraction` and `generation` but no `read` keeps its gathers on `generation` rather than sliding down to the cheap reader. The name that *won* the walk is the name the dispatch travels under: `[bee-tier: <winner>]` and `economics.logical_tier` both read `read` on a host that configures it and `generation` on one that does not, while the agent is pinned by the kind, so a role-less gather is `bee-gather` either way. `reviewer` resolves the review role, falling through to generation when review is unconfigured. `advisor` resolves the advisor slot alone — one name, no fall-through, so an unconfigured advisor refuses rather than quietly running on something else.
 
-**Roles are an open set.** A role is any name `models.<runtime>` carries; bee holds no fixed list, and a host can configure `test` or `design` and reach it. `--role <name>` names the slot outright — the kind's default is not consulted, and neither is the cell's own recorded role. That is how a read-shaped gather reaches the cheap reader: `--kind gather --role extraction` resolves the extraction slot and returns the `bee-extract` worker. A name nothing configures refuses by name rather than resolving onto something else.
+**Roles are an open set.** A role is any name `team.<runtime>` carries; bee holds no fixed list, and a host can configure `test` or `design` and reach it. `--role <name>` names the slot outright — the kind's default is not consulted, and neither is the cell's own recorded role. That is how a read-shaped gather reaches the cheap reader: `--kind gather --role extraction` resolves the extraction slot and returns the `bee-extract` worker. A name nothing configures refuses by name rather than resolving onto something else.
 
 **A cell declares its own job.** With no `--role`, a `--kind cell` dispatch reads the cell's recorded `role` and resolves an ordered list headed by it: `[<the cell's role>, "code", "generation"]`, or `["read", "extraction", "generation"]` for a read-shaped cell. The walk takes the first name the host configures, so a host that never heard of `code` still lands on the `generation` model it has had for years. `economics.tier_source` records who chose: `flag`, `cell`, or `default`.
 
@@ -201,7 +201,7 @@ Columns: before and after the first side effect — the `dispatch.jsonl` append 
 
 **What the human sees.** Nothing directly. The preamble's Dispatch door section is written for the agent; the human sees per-cell progress ticks and, when the guard repairs a dispatch, a `systemMessage` naming the fix.
 
-**Configuration.** `models.<runtime>` is the whole authority: which roles exist, which model each resolves to, whether a slot is a model, a cli command, a herding pane, or off. `retry.fallbackChains` optionally attaches a `fallback_chain` beside a payload's model — published as advice for the caller, never a loop bee runs. `herding.transport` decides which environment variables the reachability probe reads.
+**Configuration.** `team.<runtime>` is the whole authority: which roles exist, which model each resolves to, whether a slot is a model, a cli command, a herding pane, or off. `retry.fallbackChains` optionally attaches a `fallback_chain` beside a payload's model — published as advice for the caller, never a loop bee runs. `herding.transport` decides which environment variables the reachability probe reads.
 
 **Output modes and exit codes.** 0 for a served payload *and* for a typed refusal; 1 for a malformed call, a missing cell, a reservation conflict, or an unresolvable wave feature. Standard streams otherwise ([invocation](../foundations/invocation.md)).
 

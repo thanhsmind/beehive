@@ -122,7 +122,7 @@ The vocabulary used across these documents. When a document uses one of these wo
 
 **Dispatch envelope.** The JSON object `bee dispatch prepare` returns and the agent executes verbatim: `tool`, `payload` (including the rendered worker prompt), `dispatch_id`, and the *economics record*. The envelope is the whole product of the dispatch door; the agent never composes or edits one.
 
-**Role.** The name of the job a dispatch is, used to select its model. Roles are an open set — any key `models.<runtime>` configures is legal; one nothing configures is refused by name, never silently resolved onto another model.
+**Role.** The name of the job a dispatch is, used to select its model. Roles are an open set — any key `team.<runtime>` configures is legal; one nothing configures is refused by name, never silently resolved onto another model.
 
 **Rendered agent.** One of the four subagent definitions bee writes into a host — `bee-gather`, `bee-extract`, `bee-build`, `bee-review` — each generated from a role's configured model and carrying its contract as its system prompt. Naming one in a dispatch is a role declaration.
 

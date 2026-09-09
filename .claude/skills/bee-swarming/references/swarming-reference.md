@@ -106,7 +106,7 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    Agent/Bash payload to run (per D1). `--role <name>` names the JOB the
    dispatch is and overrides the slot the kind would have resolved —
    `--kind gather --role extraction` is how a read-only gather reaches the
-   cheap reader. Any name `models.<runtime>` carries is legal; a `--role`
+   cheap reader. Any name `team.<runtime>` carries is legal; a `--role`
    naming a name nothing configures is refused by name, with a FIX listing
    the roles this runtime resolves and ending "Any role name you configure
    is legal; bee holds no fixed list" — never silently resolved.
@@ -145,7 +145,7 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    - **`read`** — the work only reads: retrieval, tracing a call path,
      mining a transcript, an evidence digest.
    - **`test`, `docs`, `design`, `review`, or a name this repo invented** —
-     the work is that job, and `models.<runtime>` decides which model is
+     the work is that job, and `team.<runtime>` decides which model is
      good at it.
 
    The dispatch asks for an ORDERED LIST headed by the cell's own role and
@@ -154,7 +154,7 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    for a read job. **An unconfigured role never fails**: it yields to the
    next name in the list and WARNS on stderr, naming what it fell through
    to — silent only for `code` or `read` on a runtime whose
-   `models.<runtime>` configures neither of them, the pre-roles window.
+   `team.<runtime>` configures neither of them, the pre-roles window.
    That tail is why this costs no host its current model.
 
    **Escalation is a separate lever, not a role name.** Integration across
@@ -323,7 +323,7 @@ that acceptance, not on an ordinary wave.
 | | Claude Code |
 |---|---|
 | Spawn | `Agent` tool, one call per worker; put the worker prompt in `prompt`; set `run_in_background: true` so the whole wave runs in parallel (send all spawns of a wave in one message) |
-| Model | `model` parameter per Agent call = the model `config.models.claude` maps the dispatch's resolved ROLE to (a fresh config seeds `code`/`read` beside the historical `extraction`/`generation`); an ESCALATED cell carries no `model` param at all — it inherits the session model, kept scarce |
+| Model | `model` parameter per Agent call = the model `config.team.claude` maps the dispatch's resolved ROLE to (a fresh config seeds `code`/`read` beside the historical `extraction`/`generation`); an ESCALATED cell carries no `model` param at all — it inherits the session model, kept scarce |
 | Result collection | You are notified when each background agent completes; its final message is the worker report — parse the leading status token |
 | Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
@@ -358,7 +358,7 @@ Read the configured roles for the active runtime before spawning:
 .bee/bin/bee status --json    # .models shows both runtime maps
 ```
 
-**Resolution is a walk down an ordered list, and the walk is ONE function.** `resolve_role(models, roles, runtime, kind)` (`verbs/drivers/models.rs` — the single parser the dispatcher, the model guard and onboarding's agent renderer all call) takes the names the consumer will accept, best first, and returns a typed dispatch for the first that carries a resolvable configuration: a model, a prompt budget (anchored `[bee-tier: <role>]` marker), a cli executor (external, below — gather purposes only), or a refusal for a cli-shaped role asked for cell execution (`cli_tier_gather_only`). An unset or unresolvable name YIELDS to the next; a name nothing has heard of also **warns on stderr**, naming what it fell through to. The last entry always resolves, so the walk cannot dead-end. No name resolves a model the config does not carry for it, and the ONE unknown name that resolves silently is `code` or `read` on a runtime whose `models.<runtime>` configures NEITHER of them — the pre-roles window, where falling through to the historical name is the intended no-op and a warning would fire on every dispatch. The window is per runtime, because the table is, and the first of the two keys an operator configures shuts it, so a half-migrated config is loud about the sibling it missed. Every other unrecognized slot quietly reading as `generation` is exactly what this feature deleted.
+**Resolution is a walk down an ordered list, and the walk is ONE function.** `resolve_role(models, roles, runtime, kind)` (`verbs/drivers/models.rs` — the single parser the dispatcher, the model guard and onboarding's agent renderer all call) takes the names the consumer will accept, best first, and returns a typed dispatch for the first that carries a resolvable configuration: a model, a prompt budget (anchored `[bee-tier: <role>]` marker), a cli executor (external, below — gather purposes only), or a refusal for a cli-shaped role asked for cell execution (`cli_tier_gather_only`). An unset or unresolvable name YIELDS to the next; a name nothing has heard of also **warns on stderr**, naming what it fell through to. The last entry always resolves, so the walk cannot dead-end. No name resolves a model the config does not carry for it, and the ONE unknown name that resolves silently is `code` or `read` on a runtime whose `team.<runtime>` configures NEITHER of them — the pre-roles window, where falling through to the historical name is the intended no-op and a warning would fire on every dispatch. The window is per runtime, because the table is, and the first of the two keys an operator configures shuts it, so a half-migrated config is loud about the sibling it missed. Every other unrecognized slot quietly reading as `generation` is exactly what this feature deleted.
 
 Two doors ask the same question and answer it differently, on purpose:
 - a **cell's** declared role heads an ordered list → an unconfigured name falls through and warns (silent only inside the pre-roles window above), and the work still runs;

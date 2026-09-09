@@ -47,7 +47,7 @@ Four contract clauses are common to all of them, and they are what makes a worke
 
 ### Which model a file pins
 
-The `model:` line is resolved at onboarding from the agent's role list, walked against bee's baked-in seed (`extraction` → haiku, `generation` → sonnet, `review` → opus) overlaid by whatever `models.claude` carries. In a freshly onboarded host — whose seeded config names `code`, `read`, `extraction`, `generation` and no `review` — that gives bee-gather and bee-build sonnet, bee-extract haiku, and bee-review opus off the seed.
+The `model:` line is resolved at onboarding from the agent's role list, walked against bee's baked-in seed (`extraction` → haiku, `generation` → sonnet, `review` → opus) overlaid by whatever `team.claude` carries. In a freshly onboarded host — whose seeded config names `code`, `read`, `extraction`, `generation` and no `review` — that gives bee-gather and bee-build sonnet, bee-extract haiku, and bee-review opus off the seed.
 
 > Technical note: beehive's own checkout is a variant, not a contradiction. Its config configures the roles differently, so its rendered files read gather/build/review as opus and extract as sonnet. The role list is fixed; the model behind it is per host.
 
@@ -115,7 +115,7 @@ The order is load-bearing; the first matching rule wins.
 
 **Refuse.**
 
-- *A marker naming a role nothing configures* — checked before everything else, because a wrong role is wrong whatever else the dispatch carries. The refusal names the role and says how to configure it: `[bee-tier: <name>] names a role nothing configures — models.claude in .bee/config.json carries no "<name>" entry, so the dispatch would silently inherit the session model while dispatch.jsonl recorded a role that selects no model.`
+- *A marker naming a role nothing configures* — checked before everything else, because a wrong role is wrong whatever else the dispatch carries. The refusal names the role and says how to configure it: `[bee-tier: <name>] names a role nothing configures — team.claude in .bee/config.json carries no "<name>" entry, so the dispatch would silently inherit the session model while dispatch.jsonl recorded a role that selects no model.`
 - *An ambiguous generic type* — a role served by more than one rendered agent, dispatched as `general-purpose`. `generation` is served by two (bee-gather reads, bee-build writes), and the guard will not guess which. The FIX names both with a clause each: `subagent_type "bee-gather" reads and reports (never writes); subagent_type "bee-build" executes a cell (reserves, writes, commits, caps)`.
 - *A marker whose role resolves to no model, dispatched with a `model` parameter* — the marker would record one thing while the subagent ran on another.
 - *A bare `model` parameter naming a model no configured role carries* — a param outside config selects an unaudited model and, on an up-dispatch, hides ceiling scarcity.
@@ -169,7 +169,7 @@ The guard is an instantaneous decider, so the meaningful rows are about the disp
 
 **What the human sees.** A repair announces itself twice — `additionalContext` to the agent, `systemMessage` to the human — so a rewritten dispatch is never quiet. A deny is a refusal line and is never silenced.
 
-**Configuration.** `hooks.model-guard: false` turns the guard off entirely. `models.<runtime>` decides which roles exist and what each resolves to; a slot object may carry a `description`, which only the preamble's door line prints — nothing that resolves, guards or dispatches ever reads it.
+**Configuration.** `hooks.model-guard: false` turns the guard off entirely. `team.<runtime>` decides which roles exist and what each resolves to; a slot object may carry a `description`, which only the preamble's door line prints — nothing that resolves, guards or dispatches ever reads it.
 
 **Output modes and exit codes.** Deny = exit 2 with stderr text; repair = exit 0 with a JSON rewrite on stdout; allow = exit 0 silent with an audit line; no opinion = exit 0 silent with nothing at all.
 

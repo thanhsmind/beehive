@@ -12,12 +12,12 @@ bee:
   polarity: pitfall
   critical: false
   evidence: exercised
-  evidence_ref: "reporting host vnbptw-mapcompany (models.claude.generation = {kind:\"herding\"}) hit herding-tier-denied and bare-denied on every subagent dispatch; bee dispatch prepare already resolved the slot correctly, only the prose readers were not consulting it"
+  evidence_ref: "reporting host vnbptw-mapcompany (team.claude.generation = {kind:\"herding\"}) hit herding-tier-denied and bare-denied on every subagent dispatch; bee dispatch prepare already resolved the slot correctly, only the prose readers were not consulting it"
 ---
 
 # Prose that recommends a dispatch shape drifts from the resolver that computes it
 
-A host repo running `models.claude.generation = {kind:"herding"}` had every
+A host repo running `team.claude.generation = {kind:"herding"}` had every
 subagent dispatch refused: `Agent(subagent_type: "bee-gather")` denied
 `herding-tier-denied`, a bare `Agent(subagent_type: "Explore")` denied
 `bare-denied`. Both refusals were correct — a PreToolUse hook can only allow

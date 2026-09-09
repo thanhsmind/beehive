@@ -98,7 +98,7 @@ CLAUDE.md                     the @AGENTS.md import section
 .gitignore                    managed block between # BEE:START / # BEE:END
 .bee/onboarding.json          the ledger
 .bee/state.json               phase idle, gates false
-.bee/config.json              six hooks on, gate_bypass false, models.claude / models.codex
+.bee/config.json              six hooks on, gate_bypass false, team.claude / team.codex
 .bee/config-sample.json       the annotated copy of bee's own sample
 .bee/reservations.json        {"reservations": []}
 .bee/decisions.jsonl          empty
@@ -169,7 +169,7 @@ Columns: before and after the first plan item is written (a check run never reac
 
 `bee status` carries the same fact with detail: `onboarding.installed`, `bee_version`, `plugin_version`, a `drift` boolean, and a `drift_detail` list naming each managed file that changed, went `(missing)`, or appeared `(extra)`. The report only reports — bringing a drifted host back is an apply run. See [status](../observability/status.md).
 
-**Configuration.** Onboarding seeds `.bee/config.json` once and never edits it again. It *reads* config to resolve each agent file's model from `models.<runtime>`, to decide the host shell for the PowerShell section, and to detect the statusline opt-out. It also *proposes*: a host with no `commands.setup/start/test` recorded gets a notice listing detected candidates with the instruction to confirm them with the human and write only confirmed values — never to invent them. Stale keys are warned about, never rewritten: a leftover top-level `advisor`, and a retired `commands.verify` (with a sharper warning when no `commands.test` exists at all). A host with git-tracked files that the managed ignore block cannot silence gets the exact `git rm -r --cached` line to fix it. See [configuration](../cross-cutting/configuration.md).
+**Configuration.** Onboarding seeds `.bee/config.json` once and never edits it again. It *reads* config to resolve each agent file's model from `team.<runtime>`, to decide the host shell for the PowerShell section, and to detect the statusline opt-out. It also *proposes*: a host with no `commands.setup/start/test` recorded gets a notice listing detected candidates with the instruction to confirm them with the human and write only confirmed values — never to invent them. Stale keys are warned about, never rewritten: a leftover top-level `advisor`, and a retired `commands.verify` (with a sharper warning when no `commands.test` exists at all). A host with git-tracked files that the managed ignore block cannot silence gets the exact `git rm -r --cached` line to fix it. See [configuration](../cross-cutting/configuration.md).
 
 **Output modes and exit codes.** Check run: exit 0 always, including `blocked_*`. Apply run: exit 0 on success, exit 1 on any blocked preflight (zero mutations). Parse errors and the no-source refusal exit 1. No timing line on any path.
 
