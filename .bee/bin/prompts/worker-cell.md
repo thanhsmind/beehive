@@ -40,7 +40,7 @@ Advisor: {{advisor}}
 {{/if}}
 
 Contract:
-- Load the bee-swarming skill (Execute section) for the full worker contract.
+- Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
 - Execute only the assigned cell. Do not select or accept other work.
 - The cell's listed files are reserved under your nickname by the claim that dispatched you, and `bee cells finish` releases them at cap; reserve any ADDITIONAL path before writing: .bee/bin/bee reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.

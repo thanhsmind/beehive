@@ -66,7 +66,9 @@ bee:
   logical_tier, requested_model, effective_model, effective_model_status,
   channel, enforcement (additive; the legacy transport key is untouched). A
   model-param dispatch is `pinned`; a bare-marker budget dispatch is
-  `unverified`. A second-runtime native spawn stays `inherited-or-unknown`
+  `unverified`; an external herding or cli argv naming a model read back by bee
+  is `declared` (weaker than `pinned`, stronger than `unverified`). A
+  second-runtime native spawn stays `inherited-or-unknown`
   with `prompt-budget` enforcement UNLESS a version- and configuration-scoped
   capability probe has classified the client as accepting a native model
   override for the resolved route — only then does the record carry
