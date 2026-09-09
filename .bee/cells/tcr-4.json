@@ -1,0 +1,76 @@
+{
+  "id": "tcr-4",
+  "feature": "team-config-rename",
+  "title": "bee team show, the models alias, and the two D2 warnings",
+  "lane": "standard",
+  "role": "code",
+  "action": "Four things, all on the verb and hook surface.\n\n1. **The verb.** Rename the `models` command group to `team` in the command registry (`catalog.rs` — see the `resolve(&[\"models\",\"show\"])` assertion at `catalog.rs:816`, which must become `team`) and in `verbs/models_group.rs` (rename the file's public entry to `team show`; keep the module name if churn is large). `bee team show` is the canonical verb.\n\n2. **The alias.** Add `(\"models\", &[\"team\"])` to `FLOW_VERBS` at `router.rs:173-176`, the same table that maps `gate` to `state gate`. Because the help probe runs on argv BEFORE the rewrite (`router.rs:203-212`), `models` still needs its own registry entry — keep one that documents itself as a deprecated alias. When the alias is used, print exactly ONE line to **stderr**: `bee models show is now bee team show — the config block is team.<runtime>.<role>; models is a read alias.` stdout and `--json` must be byte-identical to `bee team show` (the verb emits JSON through `ctx.emit` at `models_group.rs:235`; a stdout line would corrupt it).\n\n3. **The doctor warning.** A TOP-LEVEL check (not inside the per-runtime `hat_slots_missing_a_description` at `doctor.rs:294`, which would print twice and never see pi/opencode): read the raw config, call `fold_team_key` on a copy, and if it returns true emit ONE advisory: `.bee/config.json still uses the models key — rename it to team (models is read as an alias for now).` When both keys are present, the line says `team` is used and `models` is ignored.\n\n4. **The preamble line.** In `hooks/session_preamble/budget.rs`, inside the `### Dispatch door` section (:649), when the fold reported the legacy key: ONE terse line, `- config: .bee/config.json uses the legacy models key — rename to team.` Nothing else, and never when the config already says `team`.\n\nTests: alias output equality (stdout and JSON) plus exactly one stderr line; doctor emits one line on a models-only fixture, none on team; preamble the same; both-keys case names the ignored key.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- models_group router doctor session_preamble catalog",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "read_first": [
+    "docs/history/team-config-rename/plan.md",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "tcr-1",
+    "tcr-3"
+  ],
+  "decisions": [],
+  "must_haves": {
+    "truths": [
+      "bee team show is the canonical verb and bee models show still works",
+      "the alias's stdout and --json are byte-identical to bee team show; exactly one line goes to stderr",
+      "bee doctor emits exactly one line on a models-only config and none on a team config, from a top-level check",
+      "the preamble emits exactly one terse line in Dispatch door on a models-only config and none otherwise",
+      "the both-keys case names the ignored key"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "trace": {
+    "worker": "team-w4",
+    "outcome": "bee team show is the verb; bee models show is a router alias with a stderr notice; doctor and the preamble each carry one legacy-key line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-09T04:35:27.589Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-09T04:20:02.389Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "FLOW_VERBS gains (models, [team]) at router.rs:177 and the alias path prints one stderr line (router.rs:219-226); the models registry entry stays for the help probe; team_config_advisory (doctor.rs:352) runs top-level per doctor invocation and prints one note on a models config, none on team, and the ignored-key wording when both are present; budget.rs:656 prints the one-line Dispatch-door note on a legacy config.",
+      "commit": "0d5cdb66",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- models_group router doctor session_preamble catalog, then the built binary driven live against this repo models-only config and three scratch fixtures — green:live — 124 passed 0 failed; bee team show and bee models show byte-identical on stdout and --json with exactly one stderr notice; doctor --runtime claude prints one legacy_models_key note on models-only, zero on team-only, and the team-is-used wording on both-keys; run by the orchestrator",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
