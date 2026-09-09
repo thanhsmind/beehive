@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"herding-route-role\" started at phase \"exploring\".",
-  "next_action": "Invoke bee-swarming for slice 1 (hrr-1..hrr-4).",
+  "next_action": "Merged into main at 6bf22bd; reload the product and test \"herding-route-role\", then either approve uat (\"bee gate --name uat --approved true --lane herding-route-role\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-08T14:53:00.012Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-09-09T03:15:51.337Z",
-    "session": "ac83adf7-9f51-4558-a3ad-49533284ee5d"
+    "subject": "uat: herding-route-role",
+    "asked_at": "2026-09-09T03:31:56.205Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "advisor_ref": {
     "consulted_at": "2026-09-08T15:15:59.325Z",
@@ -42,12 +42,5 @@
     "rationale": "D2 and D4 both widen what an unattended agent may do without the human — D2 is a named carve-out to the locked agents-review-user-invoked rule, D4 lets route write into a live worker's pane. An authority widening is audit/security territory and a hard gate on its own. Beside it: bee herding control-loop --role is a public CLI contract, the work spans the Rust crate plus skills plus AGENTS.md plus the knowledge bundle, and existing role-parse tests assert the three-role set.",
     "updated_at": "2026-09-08T15:19:34.957Z",
     "feature": "herding-route-role"
-  },
-  "merge_ready": {
-    "since": "2026-09-09T03:26:43.780Z",
-    "branch": "wt/herding-route-role",
-    "worktree_id": "beehive--wt--herding-route-role",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
