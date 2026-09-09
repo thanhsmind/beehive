@@ -53,19 +53,9 @@ adds one accessor, nothing about what runs.
 
 ### Integration Points — the raw readers that must all go through the accessor
 
-No single accessor exists today. Fourteen sites read `get("models")` directly, outside the drivers module:
+*(Corrected 2026-09-09 after the plan-step hat wave; the original list counted a telemetry read as a config read and missed a writer.)*
 
-- `doctor.rs:297`
-- `verbs/models_group.rs:149`
-- `verbs/status_full/build.rs:343`, `store.rs:448`, `store.rs:535`, `store.rs:853`
-- `onboard/agents.rs:78`
-- `hooks/model_guard.rs:80` (plus three test fixtures at `:2015`, `:2549`, `:2582`)
-- `hooks/session_close/perf.rs:576`
-- `hooks/compaction.rs:1525`
-- `herding/wave.rs:358`
-- `hooks/session_preamble/budget.rs:650`
-
-Plus the drivers module's own reads. A site left on the raw key silently ignores a `team` block — that is the failure this feature must not ship.
+Config enters the crate through **three loaders** — `state.rs:161`, `hooks/session_preamble/state.rs:50`, `hooks/compaction.rs:124` — two of which already normalize a key at load (`shift_remove("advisor")`). One reader bypasses them: `onboard/agents.rs:73`. Eleven production sites then read the loaded map by the old key: `doctor.rs:297`, `models_group.rs:149`, `status_full/build.rs:343`, `store.rs:448`, `:535`, `:853`, `model_guard.rs:80`, `compaction.rs:1525`, `herding/wave.rs:358`, `session_preamble/budget.rs:650` (the last two through one shared helper, `model_guard.rs:520`). A **writer** generates the old key for every fresh host: `onboard/templates.rs:175`, beside a compiled-in sample (`:264`). `hooks/session_close/perf.rs:576` reads a session usage record, **not** config, and must not be touched. A reader left on the raw key silently ignores a `team` block — that is the failure this feature must not ship.
 
 ## Canonical References
 
