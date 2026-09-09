@@ -1163,5 +1163,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-09-09T07:54:09.081Z"
+  },
+  "leader-sees-team": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-09T07:54:43.848Z"
   }
 }

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "team-config-rename",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"team-config-rename\" started at phase \"exploring\" (lane).",
-  "next_action": "Owner tests on main: bee team show, bee models show (stderr notice), bee doctor --runtime claude; then approves the uat gate or reports what broke.",
+  "next_action": "bee close finished \"team-config-rename\" — feature is closed.",
   "created_at": "2026-09-09T03:23:19.960Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "refactor",
