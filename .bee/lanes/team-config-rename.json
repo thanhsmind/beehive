@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "team-config-rename",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"team-config-rename\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 13e5c98; reload the product and test \"team-config-rename\", then either approve uat (\"bee gate --name uat --approved true --lane team-config-rename\") or fix it in the worktree and merge again.",
+  "next_action": "Resolve the merge conflict in the worktree, re-merge, then scribing-run.",
   "created_at": "2026-09-09T03:23:19.960Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: team-config-rename",
-    "asked_at": "2026-09-09T04:36:24.631Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "refactor",
     "lane": "standard",
