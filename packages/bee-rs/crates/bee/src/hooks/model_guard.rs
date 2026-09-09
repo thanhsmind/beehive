@@ -16,7 +16,7 @@ use crate::hooks::Outcome;
 use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
-use crate::verbs::drivers::{normalize_models, resolve_tier, Resolved};
+use crate::verbs::drivers::{declared_model_for, normalize_models, resolve_tier, Resolved};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -78,6 +78,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     }
 
     let models = normalize_models(config.get("team"));
+    let cfg = Value::Object(config);
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
 
     let mut verdict = if is_codex_spawn {
@@ -91,7 +92,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
         return Ok((0, String::new(), String::new()));
     };
 
-    let economics = derive_dispatch_economics(&models, is_codex_spawn, &verdict);
+    let economics = derive_dispatch_economics(&cfg, &models, is_codex_spawn, &verdict);
 
     // toolInput is a plain object on every verdict-carrying path.
     let input_map = match &tool_input {
@@ -1211,6 +1212,7 @@ expensive session model.\n{bare_fix}"
 // ─── dispatch economics (g22-2) ─────────────────────────────────────────────
 
 fn derive_dispatch_economics(
+    cfg: &Value,
     models: &Map<String, Value>,
     is_codex_spawn: bool,
     verdict: &Verdict,
@@ -1229,6 +1231,11 @@ fn derive_dispatch_economics(
     let resolved_model = resolved.as_ref().and_then(resolved_model_name);
     let param_model = verdict.model.as_deref();
 
+    let declared = resolved.as_ref().and_then(|r| match r {
+        Resolved::Herding { .. } | Resolved::Cli { .. } => declared_model_for(cfg, r, runtime),
+        _ => None,
+    });
+
     // nativeConfirmed is never passed by the hook => always false.
     let enforcement = if is_codex_spawn {
         "prompt-budget"
@@ -1241,10 +1248,12 @@ fn derive_dispatch_economics(
         (None, "inherited-or-unknown")
     } else if let Some(p) = param_model {
         (Some(p), "pinned")
+    } else if declared.is_some() {
+        (None, "declared")
     } else {
         (None, "unverified")
     };
-    let requested_model = param_model.or(resolved_model);
+    let requested_model = param_model.or(declared.as_deref()).or(resolved_model);
 
     let str_or_null = |v: Option<&str>| v.map_or(Value::Null, |s| Value::String(s.to_string()));
     let mut out = Map::new();
@@ -3218,5 +3227,66 @@ mod tests {
                 "{seat}: the cell path is byte-identical to every other role's"
             );
         }
+    }
+
+    #[test]
+    fn prepare_row_and_guard_row_agree_for_a_herding_slot() {
+        let config = json!({
+            "team": {
+                "claude": {
+                    "code": { "kind": "herding", "agent": "agy-flash" }
+                }
+            },
+            "herding": {
+                "agents": {
+                    "agy-flash": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            }
+        });
+        let f = fixture(&config);
+        let root = f.path();
+        crate::fsutil::ensure_dir(&root.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("cells").join("c-agree.json"),
+            r#"{"id":"c-agree","feature":"f","title":"herding agree","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        )
+        .unwrap();
+
+        let prep_result = crate::verbs::drivers::prepare_dispatch(
+            root, "claude", "cell", Some("c-agree"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let crate::verbs::drivers::Prepared::Value(prep) = prep_result else {
+            panic!("expected Prepared::Value");
+        };
+        let prep_econ = prep.get("economics").unwrap();
+
+        let models = normalize_models(config.get("team"));
+        let verdict = Verdict {
+            deny: false,
+            transport: Some("herding"),
+            reason: None,
+            tier: Some("code".into()),
+            model: None,
+            subagent_type: None,
+            updated_input: None,
+            notes: vec![],
+        };
+        let guard_econ = derive_dispatch_economics(&config, &models, false, &verdict).unwrap();
+
+        assert_eq!(
+            prep_econ.get("requested_model"),
+            guard_econ.get("requested_model"),
+            "prepare and guard requested_model must agree"
+        );
+        assert_eq!(
+            prep_econ.get("effective_model_status"),
+            guard_econ.get("effective_model_status"),
+            "prepare and guard effective_model_status must agree"
+        );
+        assert_eq!(prep_econ.get("requested_model"), Some(&json!("gemini-3.8-flash-high")));
+        assert_eq!(prep_econ.get("effective_model_status"), Some(&json!("declared")));
     }
 }

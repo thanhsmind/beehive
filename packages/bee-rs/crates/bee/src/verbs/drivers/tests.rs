@@ -745,14 +745,14 @@ use std::time::Instant;
     #[test]
     fn derive_economics_matches_the_honest_mapping() {
         let model = Resolved::Model { model: "sonnet".into(), effort: None };
-        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false);
+        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param"}"#
         );
         // codex-native without a confirmed override is ALWAYS
         // inherited-or-unknown, whatever the tier resolves to.
-        let e = derive_economics("codex-native", "generation", None, &Resolved::Budget, false);
+        let e = derive_economics("codex-native", "generation", None, &Resolved::Budget, false, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"codex-native","enforcement":"prompt-budget"}"#
@@ -766,20 +766,20 @@ use std::time::Instant;
             agent_type: "worker".into(),
             fallback: None,
         };
-        let e = derive_economics("codex-native", "generation", None, &native, true);
+        let e = derive_economics("codex-native", "generation", None, &native, true, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":"gpt-5","effective_model":null,"effective_model_status":"native-requested","channel":"codex-native","enforcement":"native-model-param"}"#
         );
         // cli-exec never reports a requested_model.
         let cli = Resolved::Cli { command: "glm run".into() };
-        let e = derive_economics("cli-exec", "generation", None, &cli, false);
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"cli-exec","enforcement":"cli-command"}"#
         );
         // herding-exec mirrors cli-exec, never prompt-budget.
-        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false);
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
@@ -8971,7 +8971,7 @@ advance_on — falling to another model there hides the defect (D11)"
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
         let build_body = embedded_agent_body("bee-build").expect("bee-build body");
         assert!(stdin.starts_with(build_body));
-        assert!(stdin.contains("Contract:\n- Load the bee-swarming skill (Execute section) for the full worker contract."));
+        assert!(stdin.contains("Contract:\n- Load the bee-swarming skill (Execute section) for the full worker contract"));
         assert!(stdin.contains("Assigned cell id: c-1"));
     }
 
@@ -8988,4 +8988,135 @@ advance_on — falling to another model there hides the defect (D11)"
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
         assert_eq!(stdin, ADVISOR_BODY_WITHOUT_A_BRIEF);
+    }
+
+    #[test]
+    fn declared_model_for_model_flag_sets_declared() {
+        let cli = Resolved::Cli { command: "foo --model gpt-4o".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("gpt-4o".to_string()));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"));
+        assert_eq!(e.get("requested_model"), Some(&json!("gpt-4o")));
+        assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn declared_model_for_model_equals_flag_sets_declared() {
+        let cli = Resolved::Cli { command: "tool --model=claude-3-5-sonnet".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("claude-3-5-sonnet".to_string()));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("claude-3-5-sonnet"));
+        assert_eq!(e.get("requested_model"), Some(&json!("claude-3-5-sonnet")));
+        assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn declared_model_for_short_m_flag_sets_declared() {
+        let cli = Resolved::Cli { command: "tool -m mistral-large".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("mistral-large".to_string()));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("mistral-large"));
+        assert_eq!(e.get("requested_model"), Some(&json!("mistral-large")));
+        assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn declared_model_for_multiple_tokens_picks_first() {
+        let cli = Resolved::Cli { command: "tool --model first-model -m second-model".into() };
+        let empty_cfg = json!({});
+        assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("first-model".to_string()));
+
+        let cli2 = Resolved::Cli { command: "tool -m second-model --model=first-model".into() };
+        assert_eq!(declared_model_for(&empty_cfg, &cli2, "claude"), Some("second-model".to_string()));
+    }
+
+    #[test]
+    fn declared_model_for_herding_agent_none_resolves_through_generation_slot() {
+        let cfg = json!({
+            "team": {
+                "claude": {
+                    "generation": { "kind": "herding", "agent": "gen-agent" }
+                }
+            },
+            "herding": {
+                "agents": {
+                    "gen-agent": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            }
+        });
+        let res = Resolved::Herding { agent: None, fallback: None };
+        assert_eq!(
+            declared_model_for(&cfg, &res, "claude"),
+            Some("gemini-3.8-flash-high".to_string())
+        );
+    }
+
+    #[test]
+    fn declared_model_for_registry_fixture_with_no_model_token_yields_claim_10_bytes() {
+        let cfg = json!({
+            "herding": {
+                "agents": {
+                    "no-model-agent": {
+                        "argv": ["custom-tool", "--flag", "value"]
+                    }
+                }
+            }
+        });
+        let res = Resolved::Herding { agent: Some("no-model-agent".into()), fallback: None };
+        let declared = declared_model_for(&cfg, &res, "claude");
+        assert_eq!(declared, None);
+        let e = derive_economics("herding-exec", "generation", None, &res, false, declared.as_deref());
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+        );
+    }
+
+    #[test]
+    fn native_on_cli_exec_reads_fallback_command_model_never_native_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = r#"{
+            "team": {
+                "codex": {
+                    "generation": {
+                        "primary": { "kind": "native", "model": "native-gpt-5" },
+                        "fallback_policy": "explicit-only",
+                        "fallback": {
+                            "kind": "cli",
+                            "command": "tool --model fallback-claude-3-5"
+                        }
+                    }
+                }
+            }
+        }"#;
+        let root = repo(&tmp, config);
+        w(
+            &root,
+            ".bee/cells/c-fb.json",
+            r#"{"id":"c-fb","feature":"f","title":"native fallback test","role":"generation","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "codex", "cell", Some("c-fb"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch")
+        };
+        let economics = v.get("economics").unwrap();
+        assert_eq!(economics.get("channel"), Some(&json!("cli-exec")));
+        assert_eq!(economics.get("requested_model"), Some(&json!("fallback-claude-3-5")));
+        assert_eq!(economics.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    #[test]
+    fn native_model_slot_still_pinned_and_session_model_still_inherited_or_unknown() {
+        let model = Resolved::Model { model: "sonnet".into(), effort: None };
+        let e_pinned = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None);
+        assert_eq!(e_pinned.get("effective_model_status"), Some(&json!("pinned")));
+        assert_eq!(e_pinned.get("requested_model"), Some(&json!("sonnet")));
+
+        let e_session = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None);
+        assert_eq!(e_session.get("effective_model_status"), Some(&json!("inherited-or-unknown")));
+        assert_eq!(e_session.get("requested_model"), Some(&Value::Null));
     }

@@ -551,6 +551,117 @@ pub(crate) fn resolve_role(
     resolve_role_named(models, roles, runtime, kind).1
 }
 
+/// Scans argv tokens for `--model X`, `--model=X`, or `-m X`.
+///
+/// If more than one model token is present, the first one wins (named guess).
+fn scan_model_tokens<I, S>(tokens: I) -> Option<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let tokens: Vec<S> = tokens.into_iter().collect();
+    let mut i = 0;
+    while i < tokens.len() {
+        let tok = tokens[i].as_ref();
+        if tok == "--model" || tok == "-m" {
+            if i + 1 < tokens.len() {
+                return Some(tokens[i + 1].as_ref().to_string());
+            }
+        } else if let Some(stripped) = tok.strip_prefix("--model=") {
+            return Some(stripped.to_string());
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Splits a CLI command string into argv tokens with quote awareness
+/// (supports single quotes `'` and double quotes `"`).
+fn tokenize_command(cmd: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    let mut has_token = false;
+
+    for c in cmd.chars() {
+        if escaped {
+            current.push(c);
+            has_token = true;
+            escaped = false;
+            continue;
+        }
+
+        if c == '\\' && !in_single {
+            escaped = true;
+            continue;
+        }
+
+        if in_single {
+            if c == '\'' {
+                in_single = false;
+            } else {
+                current.push(c);
+            }
+            has_token = true;
+        } else if in_double {
+            if c == '"' {
+                in_double = false;
+            } else {
+                current.push(c);
+            }
+            has_token = true;
+        } else {
+            match c {
+                '\'' => {
+                    in_single = true;
+                    has_token = true;
+                }
+                '"' => {
+                    in_double = true;
+                    has_token = true;
+                }
+                c if c.is_whitespace() => {
+                    if has_token {
+                        tokens.push(std::mem::take(&mut current));
+                        has_token = false;
+                    }
+                }
+                _ => {
+                    current.push(c);
+                    has_token = true;
+                }
+            }
+        }
+    }
+
+    if has_token {
+        tokens.push(current);
+    }
+
+    tokens
+}
+
+/// leader-sees-team D2: the model an external program was ASKED for, read from the argv bee built.
+///
+/// If more than one model token is present, the first one wins (named guess).
+pub(crate) fn declared_model_for(cfg: &Value, resolved: &Resolved, runtime: &str) -> Option<String> {
+    match resolved {
+        Resolved::Herding { agent, .. } => {
+            let (kind, args, _, _) =
+                crate::herding::wave::resolve_agent_command_for_runtime(cfg, agent.as_deref(), runtime).ok()?;
+            scan_model_tokens(std::iter::once(&kind).chain(args.iter()))
+        }
+        Resolved::Cli { command } => {
+            let tokens = tokenize_command(command);
+            scan_model_tokens(&tokens)
+        }
+        _ => None,
+    }
+}
+
+
 /// `resolve_role` plus the ONE fact its caller cannot recompute afterwards:
 /// WHICH name in the list actually won.
 ///
