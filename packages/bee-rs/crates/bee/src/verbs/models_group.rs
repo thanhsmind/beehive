@@ -31,7 +31,9 @@
 // lock, no normalization, no dispatch code reached.
 
 use crate::state::read_config_raw;
-use crate::verbs::drivers::{default_models, RUNTIMES};
+use crate::verbs::drivers::{
+    declared_model_for, default_models, normalize_models, resolve_role, Resolved, RUNTIMES,
+};
 use crate::verbs::knowledge::{g_prelude, pre_json_scan, GPre};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV};
 use serde_json::{Map, Value};
@@ -45,13 +47,54 @@ pub(crate) const SOURCE_DEFAULT: &str = "default";
 
 /// The teaching line the text rendering opens with. An agent that ran this
 /// verb once should never go back to parsing the config by hand.
-const TEACH: &str = "team — the role table bee dispatches from. A role's `description` is written in \
+const TEACH: &str = "team — who does which job. Pick team members by the description column; the transport is configuration. A role's `description` is written in \
 .bee/config.json under team.<runtime>.<role>, and this verb is how it is read; \
 never parse that file by hand.";
 
+/// Resolve a slot's model and transport for display and --json.
+fn resolve_slot_display(
+    cfg: &Value,
+    role: &str,
+    slot: &Value,
+    rt: &str,
+    normalized: &Map<String, Value>,
+) -> (Option<String>, Option<String>) {
+    if slot.is_null() {
+        return (None, None);
+    }
+    let resolved = resolve_role(normalized, &[role], rt, "gather");
+    match &resolved {
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => {
+            (Some(model.clone()), Some("native".to_string()))
+        }
+        Resolved::Herding { agent, .. } => {
+            let dm = declared_model_for(cfg, &resolved, rt);
+            let tr = match agent {
+                Some(a) => format!("herding: {a}"),
+                None => "herding".to_string(),
+            };
+            (dm, Some(tr))
+        }
+        Resolved::Cli { .. } | Resolved::Refused { .. } => {
+            let dm = declared_model_for(cfg, &resolved, rt);
+            (dm, Some("cli".to_string()))
+        }
+        Resolved::Inherit => {
+            (Some("session default".to_string()), Some("native".to_string()))
+        }
+        Resolved::Budget => (None, None),
+    }
+}
+
 /// One role's row: the slot exactly as the config wrote it, plus where it came
-/// from and the description lifted out for readers who only want the sentence.
-fn row(role: &str, slot: &Value, source: &str) -> Value {
+/// from, the description, and the resolved model and transport fields.
+fn row(
+    role: &str,
+    slot: &Value,
+    source: &str,
+    model: Option<String>,
+    transport: Option<String>,
+) -> Value {
     let description = slot
         .as_object()
         .and_then(|o| o.get("description"))
@@ -62,6 +105,14 @@ fn row(role: &str, slot: &Value, source: &str) -> Value {
     m.insert("role".into(), Value::String(role.to_string()));
     m.insert("source".into(), Value::String(source.to_string()));
     m.insert("description".into(), description);
+    m.insert(
+        "model".into(),
+        model.map(Value::String).unwrap_or(Value::Null),
+    );
+    m.insert(
+        "transport".into(),
+        transport.map(Value::String).unwrap_or(Value::Null),
+    );
     // VERBATIM: no normalize, no trim, no key filtering.
     m.insert("slot".into(), slot.clone());
     Value::Object(m)
@@ -82,10 +133,25 @@ fn known_runtimes(raw_models: Option<&Map<String, Value>>) -> Vec<String> {
     names
 }
 
-/// The whole result, built from a raw `models` value. `runtime` filters to one
-/// table; `None` is every runtime the config or the defaults know.
+/// The whole result, built from a raw `models` or `team` or root config value.
+/// `runtime` filters to one table; `None` is every runtime the config or the defaults know.
 pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> Result<Value, String> {
-    let raw = raw_models.and_then(Value::as_object);
+    let (cfg_val, team_val) = match raw_models {
+        Some(v) if v.is_object() => {
+            let obj = v.as_object().unwrap();
+            if obj.contains_key("team") || obj.contains_key("models") {
+                let team = obj.get("team").or_else(|| obj.get("models"));
+                (v.clone(), team.cloned().unwrap_or_else(|| Value::Object(Map::new())))
+            } else {
+                let mut c = Map::new();
+                c.insert("team".into(), v.clone());
+                (Value::Object(c), v.clone())
+            }
+        }
+        _ => (Value::Object(Map::new()), Value::Object(Map::new())),
+    };
+    let normalized = normalize_models(Some(&team_val));
+    let raw = team_val.as_object();
     let mut names = known_runtimes(raw);
     if let Some(want) = runtime {
         if !names.iter().any(|n| n == want) {
@@ -107,7 +173,9 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
         if let Some(table) = table {
             for (role, slot) in table {
                 configured_total += 1;
-                rows.push(row(role, slot, SOURCE_CONFIGURED));
+                let (model, transport) =
+                    resolve_slot_display(&cfg_val, role, slot, rt, &normalized);
+                rows.push(row(role, slot, SOURCE_CONFIGURED, model, transport));
             }
         }
         // Built-ins only where bee actually ships them, and only for a role
@@ -118,7 +186,9 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
                     continue;
                 }
                 default_total += 1;
-                rows.push(row(&role, &slot, SOURCE_DEFAULT));
+                let (model, transport) =
+                    resolve_slot_display(&cfg_val, &role, &slot, rt, &normalized);
+                rows.push(row(&role, &slot, SOURCE_DEFAULT, model, transport));
             }
         }
         roles_total += rows.len();
@@ -144,37 +214,15 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
 /// The raw table for a repo root. `read_config_raw` is the config layer's own
 /// reader (tracked config + the local overlay, corrupt-tolerant); nothing is
 /// normalized on the way out.
-/// The raw table for a repo root. `read_config_raw` is the config layer's own
-/// reader (tracked config + the local overlay, corrupt-tolerant); nothing is
-/// normalized on the way out.
 pub(crate) fn team_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
     let config = read_config_raw(root);
-    build_table(config.get("team"), runtime)
+    build_table(Some(&Value::Object(config)), runtime)
 }
 
 /// Legacy alias for `team_table`.
 #[allow(dead_code)]
 pub(crate) fn models_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
     team_table(root, runtime)
-}
-
-/// A slot on one line. The description is printed as prose beside the row, so
-/// it is dropped from the JSON echo here rather than shown twice — every OTHER
-/// key of the slot is rendered exactly as stored.
-fn slot_display(slot: &Value) -> String {
-    match slot {
-        Value::Null => "unset".to_string(),
-        Value::Object(o) => {
-            let rest: Map<String, Value> =
-                o.iter().filter(|(k, _)| *k != "description").map(|(k, v)| (k.clone(), v.clone())).collect();
-            if rest.is_empty() {
-                "(description only)".to_string()
-            } else {
-                crate::jsjson::stringify(&Value::Object(rest))
-            }
-        }
-        other => crate::jsjson::stringify(other),
-    }
 }
 
 fn render(result: &Value) -> String {
@@ -190,26 +238,70 @@ fn render(result: &Value) -> String {
             lines.push("  (no roles — this runtime has no table and no built-in defaults)".to_string());
             continue;
         }
-        let width = roles
+        let width_role = roles
             .iter()
             .filter_map(|r| r.get("role").and_then(Value::as_str))
             .map(str::len)
             .max()
             .unwrap_or(0);
+        let width_source = roles
+            .iter()
+            .filter_map(|r| r.get("source").and_then(Value::as_str))
+            .map(|s| s.len() + 2)
+            .max()
+            .unwrap_or(0);
+        let width_desc = roles
+            .iter()
+            .map(|r| r.get("description").and_then(Value::as_str).unwrap_or("").len())
+            .max()
+            .unwrap_or(0);
+        let width_model = roles
+            .iter()
+            .map(|r| match r.get("model") {
+                Some(Value::String(s)) => s.len(),
+                _ => {
+                    let tr = r.get("transport").and_then(Value::as_str).unwrap_or("");
+                    if tr.starts_with("herding") {
+                        "model chosen by the agent".len()
+                    } else if r.get("slot").is_some_and(Value::is_null) {
+                        "unset".len()
+                    } else {
+                        1
+                    }
+                }
+            })
+            .max()
+            .unwrap_or(0);
+
         for role_row in roles {
             let role = role_row.get("role").and_then(Value::as_str).unwrap_or("?");
             let source = role_row.get("source").and_then(Value::as_str).unwrap_or("?");
-            let slot = role_row.get("slot").unwrap_or(&Value::Null);
-            let mut line =
-                format!("  {role:<width$}  [{source}]  {}", slot_display(slot), width = width);
-            if let Some(description) = role_row.get("description").and_then(Value::as_str) {
-                line.push_str(&format!(" — {description}"));
-            }
+            let source_col = format!("[{source}]");
+            let description = role_row.get("description").and_then(Value::as_str).unwrap_or("");
+            let model_str = match role_row.get("model") {
+                Some(Value::String(s)) => s.as_str(),
+                _ => {
+                    let tr = role_row.get("transport").and_then(Value::as_str).unwrap_or("");
+                    if tr.starts_with("herding") {
+                        "model chosen by the agent"
+                    } else if role_row.get("slot").is_some_and(Value::is_null) {
+                        "unset"
+                    } else {
+                        "-"
+                    }
+                }
+            };
+            let transport_str = role_row.get("transport").and_then(Value::as_str).unwrap_or("-");
+
+            let line = format!(
+                "  {role:<width_role$}  {source_col:<width_source$}  {description:<width_desc$}  {model_str:<width_model$}  {transport_str}"
+            );
             lines.push(line);
         }
     }
     lines.join("\n")
 }
+
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first()?.to_str()? != "team" {
@@ -478,12 +570,52 @@ mod tests {
         assert!(text.contains("code"), "{text}");
         assert!(text.contains("[configured]"), "{text}");
         assert!(text.contains("write the cell's code"), "{text}");
-        assert!(text.contains(r#"{"model":"opus"}"#), "{text}");
-        assert!(
-            !text.contains("\"description\":\"write the cell's code\""),
-            "the description is printed twice: {text}"
-        );
+        assert!(text.contains("opus"), "{text}");
+        assert!(text.contains("native"), "{text}");
         assert!(text.contains("[default]"), "the built-ins are missing from the text: {text}");
+    }
+
+    #[test]
+    fn team_show_columns_order_on_claude_and_pi() {
+        let raw = json!({
+            "claude": {
+                "code": {"model": "opus", "description": "write the code"}
+            },
+            "pi": {
+                "plan": {"model": "gpt-5", "description": "shape the plan"}
+            }
+        });
+        for rt in &["claude", "pi"] {
+            let text = render(&table(&raw, Some(rt)));
+            let role_name = if *rt == "claude" { "code" } else { "plan" };
+            let line = text.lines().find(|l| l.contains(role_name)).expect("found role line");
+            let pos_role = line.find(role_name).unwrap();
+            let pos_source = line.find("[configured]").unwrap();
+            let desc_str = if *rt == "claude" { "write the code" } else { "shape the plan" };
+            let pos_desc = line.find(desc_str).unwrap();
+            let model_str = if *rt == "claude" { "opus" } else { "gpt-5" };
+            let pos_model = line.find(model_str).unwrap();
+            let pos_transport = line.find("native").unwrap();
+
+            assert!(pos_role < pos_source, "role before source in {line}");
+            assert!(pos_source < pos_desc, "source before desc in {line}");
+            assert!(pos_desc < pos_model, "desc before model in {line}");
+            assert!(pos_model < pos_transport, "model before transport in {line}");
+        }
+    }
+
+    #[test]
+    fn team_show_json_preserves_slot_and_adds_model_and_transport() {
+        let raw = json!({
+            "claude": {
+                "code": {"model": "opus", "description": "write code"}
+            }
+        });
+        let result = table(&raw, Some("claude"));
+        let code = role(&result, "claude", "code");
+        assert_eq!(code["slot"], json!({"model": "opus", "description": "write code"}));
+        assert_eq!(code["model"], json!("opus"));
+        assert_eq!(code["transport"], json!("native"));
     }
 
     #[test]

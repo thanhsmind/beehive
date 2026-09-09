@@ -1744,12 +1744,16 @@ mod tests {
             ),
             "{text}"
         );
+        assert!(text.contains("- generation → sonnet (native)"), "{text}");
+        assert!(text.contains("- review → opus (native)"), "{text}");
+        assert!(text.contains("- extraction → haiku (native)"), "{text}");
         assert!(
             text.contains(
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name team.claude configures is legal; one nothing configures refuses by name."
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
+
     }
 
     /// The capsule and the preamble carried two copies of this literal, which
