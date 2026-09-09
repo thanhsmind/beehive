@@ -118,6 +118,23 @@ say nothing, move on.** Do not merge it, re-report it, or touch the marker.
 Removing it is the human's acknowledgement that they looked; nothing else
 clears it, and this role never removes its own markers.
 
+Next, check for an in-review marker:
+
+```
+ls .bee/tmp/bee-herding.review.<slug>
+```
+
+Exists → route has this worktree under review. **Skip this worktree.** Unlike
+the red marker, say so **ONCE** through the chat pane's scrollback dedup: read
+`bee herding pane read <chat_pane_id> --lines 200` first, and only send the line
+if that scrollback does not already carry it:
+
+```
+bee herding pane send-text <chat_pane_id> "merge: <slug> is under review (.bee/tmp/bee-herding.review.<slug> exists) — skipping this pass"
+```
+
+A worktree that looks finished but never merges is confusing silence otherwise.
+
 **Why a file, not the chat pane.** A `send-text` line is not a durable record:
 it types into an interactive composer, not scrollback that reads back reliably;
 a busy pane scrolls a report away within minutes; the human may close and
@@ -160,10 +177,15 @@ the result:
   it: `bee herding pane close <pane_id>`. This is the **only** circumstance in which
   this role closes a pane — it frees the slot dispatch's §4 occupancy count
   watches next. No pane carries that label (already closed, or the agent never
-  claimed one) → nothing to close; not an error. The merge result carrying
-  `staging_rebuild_suggested` means a staging record already exists and main
-  just moved (staging-lane D0a trigger 3) — run `bee staging rebuild` (or
-  report the nudge in the chat pane) so staging stops testing a stale base.
+  claimed one) → nothing to close; not an error. A reviewed worktree may also have
+  a pane labelled `<slug>-review`. Close that one as well: find it by label in
+  the same list and close it (`bee herding pane close <pane_id>`). No pane carries
+  that label (already closed, or no review ran) → nothing to close; not an error.
+  This is the only circumstance in which the merge role closes a review pane.
+  The merge result carrying `staging_rebuild_suggested` means a staging record
+  already exists and main just moved (staging-lane D0a trigger 3) — run
+  `bee staging rebuild` (or report the nudge in the chat pane) so staging stops
+  testing a stale base.
 - **`MERGE_CONFLICT` or `WORKTREE_MERGE_PROOF_DEBT`.** **STOP for this
   worktree: no retry, no merge, no cleanup, no pane closed.** The merge verb
   already refused cleanup, so there is nothing to undo — main is byte-untouched.
@@ -235,6 +257,7 @@ integration transaction.
 | Worktree cleanliness / branch | `git -C <path> status --porcelain`, `git -C <path> rev-parse --abbrev-ref HEAD` |
 | Killed-merge wreckage on main | `git -C <main-root> rev-parse -q --verify MERGE_HEAD` → `git -C <main-root> merge --abort` |
 | Red-stop marker, check before merging | `ls .bee/tmp/bee-herding.red.<slug>` — exists → skip this worktree, say nothing (§4) |
+| In-review marker, check before merging | `ls .bee/tmp/bee-herding.review.<slug>` — exists → skip this worktree, say so once via scrollback dedup (§4) |
 | Merge and clean up | `bee worktree merge --id <grant-key> --cleanup` |
 | Find the worktree's runtime pane | `bee herding pane list --workspace <id>` filtered to the runtime tab, `label == <slug>` |
 | Close it (only after a successful merge) | `bee herding pane close <pane_id>` |

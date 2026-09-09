@@ -24,11 +24,7 @@ chain.
 
 <!-- rule: agents-review-user-invoked -->
 Independent review is a separate, user-invoked pass, never an
-automatic stage of that chain. Inside the bee-herding cockpit, and
-only while the owner's enable marker exists and `gate_bypass` is `full`
-or `total`, the `route` role may start a reviewer on a different agent
-without being asked (decision 8388df3e) — refusing rather than guessing
-or self-reviewing.
+automatic stage of that chain.
 <!-- /rule -->
 
 Four boundaries hold in every mode:
