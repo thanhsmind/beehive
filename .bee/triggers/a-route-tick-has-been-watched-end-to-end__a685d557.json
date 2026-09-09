@@ -1,0 +1,11 @@
+{
+  "id": "a-route-tick-has-been-watched-end-to-end__a685d557",
+  "decision": "a685d557",
+  "condition": "A route tick has been watched end to end in a live cockpit and a real review's duration measured; then the route interval (a 300s starting guess) is re-set from that number and the deferred ideas in docs/history/herding-route-role/CONTEXT.md (harness-health guard, artifact-liveness measurement, runtime-neutral result inbox, the four-slot cap) are re-triaged.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-09T07:55:37.286Z",
+  "updated_at": "2026-09-09T07:55:37.286Z",
+  "outcome": null
+}

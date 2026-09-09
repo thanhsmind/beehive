@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "leader-sees-team",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"leader-sees-team\" started at phase \"exploring\" (lane).",
-  "next_action": "Owner tests on main: the session-start roster (every role, one per line), bee team show --runtime claude|pi (role, description, model, transport), and a dispatch prepare on a pi role reporting declared; then approves the uat gate for leader-sees-team or reports what broke.",
+  "next_action": "bee close finished \"leader-sees-team\" — feature is closed.",
   "created_at": "2026-09-09T05:04:15.142Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
