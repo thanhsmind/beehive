@@ -172,7 +172,7 @@ pub fn default_config() -> Value {
         "uat_stop": "close",
         "uat_before_merge": false,
         "staging_before_merge": false,
-        "models": {
+        "team": {
             "claude": {
                 "code": { "model": "sonnet", "description": "write the cell's code and its tests" },
                 "read": { "model": "haiku", "description": "multi-file gathers and codebase scans, read-only" },
@@ -287,7 +287,7 @@ pub const CODEX_STATUS_LINE_BLOCK: &str = "status_line = [\"current-dir\", \"git
 /// onboard_bee.mjs COMMAND_KEYS (l. 2592) — its own copy of state.mjs's list.
 pub const COMMAND_KEYS: &[&str] = &["setup", "start", "test"];
 
-pub const STALE_ADVISOR_KEY_WARNING: &str = "advisor mode was removed in 0.1.23; the top-level advisor key in .bee/config.json is ignored — delete it. (This does not affect the models.<runtime>.advisor slot, which is separate and still valid.)";
+pub const STALE_ADVISOR_KEY_WARNING: &str = "advisor mode was removed in 0.1.23; the top-level advisor key in .bee/config.json is ignored — delete it. (This does not affect the team.<runtime>.advisor slot, which is separate and still valid.)";
 
 /// The `commands.verify` retirement (2.1.0). Two shapes, because the damage
 /// differs: with a `test` recorded the key is merely dead weight; without one
@@ -475,7 +475,7 @@ mod tests {
     fn default_config_keeps_literal_order_and_nulls() {
         let v = default_config();
         let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-        // The full workflow structure: hooks, commands, workflow settings, models, herding.
+        // The full workflow structure: hooks, commands, workflow settings, team, herding.
         assert_eq!(
             keys,
             vec![
@@ -488,11 +488,11 @@ mod tests {
                 "uat_stop",
                 "uat_before_merge",
                 "staging_before_merge",
-                "models",
+                "team",
                 "herding"
             ]
         );
-        assert!(v["models"]["codex"]["extraction"].is_null());
+        assert!(v["team"]["codex"]["extraction"].is_null());
         // Herding skeleton is present.
         assert!(v["herding"]["agent_command"].as_str().is_some());
         assert!(v["herding"]["agents"].as_object().is_some());
@@ -505,7 +505,7 @@ mod tests {
         let v = default_config();
 
         // Claude ships the full table.
-        let claude_table = v["models"]["claude"].as_object().unwrap();
+        let claude_table = v["team"]["claude"].as_object().unwrap();
         let claude_names: Vec<&str> = claude_table.keys().map(|k| k.as_str()).collect();
         assert_eq!(
             claude_names,
@@ -533,11 +533,11 @@ mod tests {
         );
 
         // Codex stays minimal — all null by design (CODEX_AGENTS_NOTE).
-        let codex_table = v["models"]["codex"].as_object().unwrap();
+        let codex_table = v["team"]["codex"].as_object().unwrap();
         let codex_names: Vec<&str> = codex_table.keys().map(|k| k.as_str()).collect();
         assert_eq!(codex_names, vec!["code", "read", "extraction", "generation"], "codex");
         for name in ["code", "read", "extraction", "generation"] {
-            assert!(v["models"]["codex"][name].is_null(), "codex.{name} must stay null");
+            assert!(v["team"]["codex"][name].is_null(), "codex.{name} must stay null");
         }
     }
 
@@ -546,7 +546,7 @@ mod tests {
     #[test]
     fn every_claude_role_has_a_description() {
         let v = default_config();
-        let claude_table = v["models"]["claude"].as_object().unwrap();
+        let claude_table = v["team"]["claude"].as_object().unwrap();
 
         for (name, slot) in claude_table {
             let obj = slot
@@ -582,5 +582,7 @@ mod tests {
         let v: Value = serde_json::from_str(CONFIG_SAMPLE_JSON)
             .expect("embedded .bee/config-sample.json must parse as JSON");
         assert!(v.get("herding").is_some(), "embedded config-sample.json is missing the herding key");
+        assert!(v.get("team").is_some(), "embedded config-sample.json is missing the team key");
+        assert!(v.get("models").is_none(), "embedded config-sample.json still carries the models key");
     }
 }
