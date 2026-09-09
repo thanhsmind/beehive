@@ -1,0 +1,72 @@
+{
+  "id": "lst-2",
+  "feature": "leader-sees-team",
+  "title": "Job first: the preamble roster and bee team show lead with the role and its description",
+  "lane": "standard",
+  "role": "code",
+  "action": "Read plan.md revision 2 (D1, D4) and CONTEXT.md first. `declared_model_for` from lst-1 is the one source of the model for a herding or cli slot.\n\n**The preamble roster** (`hooks/model_guard.rs`):\n- `role_slot_display` (`:463-465`) takes only the `team` subtree; give it the whole config (its caller `dispatch_door_lines` at `:520` already holds the loaded map) so it can call the helper.\n- `render_role` (`:417`) returns `<model> (native)` for a native slot, `<declared-model> (herding: <agent>)` for a herding slot with a declared model, `model chosen by the agent (herding: <agent>)` when none is declared, `<declared-model> (cli)` for a cli slot.\n- `dispatch_door_lines` (`:520-545`) prints one line per role — `- <role> → <render_role>` — for EVERY role, no descriptions, each line ≤ 60 characters (truncate the transport tail with `…` if needed, never the role or model), and retires `DOOR_ROLES_SHOWN` (`:346`) and the `+N more` tail. Keep the trailing `open set: any name team.<runtime> configures is legal…` sentence as its own final line.\n- Update every test that asserts the old `- Roles (claude): a=b | c=d` shape (`:2882`, `:2888`, `:2917` and siblings); add one asserting all 18 roles of a fixture appear and no line exceeds 60 chars.\n\n**`bee team show`** (`verbs/models_group.rs`):\n- Render through `resolve_role` + `declared_model_for` instead of `slot_display`'s raw JSON: aligned columns `role  [source]  description  model  transport`, in that order (description may be empty; the order never changes). `--json` keeps the raw `slot` and adds `model` and `transport` fields.\n- `TEACH` (`:48`) opens with `team — who does which job. …` and tells the reader to pick by the description column.\n- Update the asserting tests (`:456` and siblings).\n\nDo NOT touch the economics code, prepare.rs, or any doc.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- model_guard models_group session_preamble compaction",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+  ],
+  "read_first": [
+    "docs/history/leader-sees-team/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "lst-1"
+  ],
+  "decisions": [],
+  "must_haves": {
+    "truths": [
+      "the roster prints every configured role, one per line, role then model then transport, no descriptions, no line over 60 characters",
+      "a herding slot with no declared model prints a plain phrase, never a status word",
+      "bee team show columns are role, source, description, model, transport — in that order — on claude and pi",
+      "team show --json still carries the raw slot",
+      "no economics or prepare code is touched"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "trace": {
+    "worker": "lst-w2",
+    "outcome": "the preamble roster prints every role one per line as role, model, transport; bee team show leads with role, source and description, then model and transport, and its JSON carries model, transport and the raw slot",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: display-only files an ownership map ties to bee-herding; the doctrine amendment for this display law (D4) landed in lst-3.",
+      "sync-ack: display-only change in model_guard.rs and models_group.rs; the roster and team show texts are governed by D4, whose doctrine amendment lst-3 already landed in model-roles-and-escalation.md B12/B13"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T06:47:11.054Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-09T05:34:23.036Z",
+    "sync_ack": "display-only change in model_guard.rs and models_group.rs; the roster and team show texts are governed by D4, whose doctrine amendment lst-3 already landed in model-roles-and-escalation.md B12/B13",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "role_slot_display takes the whole config and render_role prints <model> (native) / <declared> (herding: <agent>) / a plain phrase when nothing is declared; dispatch_door_lines prints one line per role for every role with DOOR_ROLES_SHOWN retired; bee team show renders through resolve_role and declared_model_for into aligned columns role, source, description, model, transport, with --json carrying model, transport and the raw slot; TEACH opens with team — who does which job.",
+      "commit": "7a9cbc2d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- model_guard models_group session_preamble compaction, then the worktree-built binary run as bee team show --runtime claude|pi against main config — green:live — 147 passed 0 failed; live rows read role, source, description, model, transport in that order on both runtimes and --json carries model, transport and slot; run by the orchestrator",
+      "deviations": [
+        "Capped with --sync-ack: display-only files an ownership map ties to bee-herding; the doctrine amendment for this display law (D4) landed in lst-3."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

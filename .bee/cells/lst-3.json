@@ -1,0 +1,96 @@
+{
+  "id": "lst-3",
+  "feature": "leader-sees-team",
+  "title": "Put the rule in every host and sweep the texts declared makes false",
+  "lane": "standard",
+  "role": "docs",
+  "action": "Read plan.md revision 2 (D3, D4) and CONTEXT.md first. One sentence per home — AGENTS.md is always-loaded context and every word costs every session.\n\n1. `packages/bee/AGENTS.block.md` — beside the dispatch-door bullet (`:145-152`), one sentence: *Pick the team member by job — the role's description says what it is good at; whether it runs as a native model, a herding pane or a cli is config, never the leader's choice.*\n2. `skills/bee-hive/references/gates-and-delegation.md` — inside `### Delegation contract` (`:124`), the same rule at gather altitude, one sentence.\n3. `packages/bee/prompts/worker-cell.md` — beside `:43`, one clause: the shape you were handed (native, pane, cli) is config, not a signal about the work. `skills/bee-swarming/references/worker-details.md:277-282` gets a one-line pointer to it.\n4. `skills/bee-swarming/references/swarming-reference.md:398` — the sentence saying cli-exec `requested_model` \"is always null\" is now false: rewrite it to name `declared` (\"the model the command names in its own argv, read back by bee; null only when the command names none\").\n5. `docs/knowledge/areas/advisor-protocol/slots-and-tiers.md:68-69` (R9) — add `declared` to the vocabulary with its one-line meaning.\n6. `docs/config-reference.md` — the dispatch-economics status table gains a `declared` row.\n7. `docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` — amend B12 and B13 citing D4: `team show` resolves for display and still writes nothing; the roster is one role per line.\n8. Run `bee dev regen` so the AGENTS.md block renders (the parity test pins it), then `bee knowledge index`.\n\nDo NOT touch `docs/history/**`. Do NOT touch any Rust file.",
+  "verify": "rg -q 'never the leader' packages/bee/AGENTS.block.md AGENTS.md && rg -q 'never the leader' skills/bee-hive/references/gates-and-delegation.md && rg -q 'config, not a signal' packages/bee/prompts/worker-cell.md && ! rg -q 'is always .null. there' skills/bee-swarming/references/swarming-reference.md && rg -q 'declared' docs/knowledge/areas/advisor-protocol/slots-and-tiers.md docs/config-reference.md && rg -q 'D4' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/knowledge/areas/advisor-protocol/slots-and-tiers.md",
+    "docs/config-reference.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "read_first": [
+    "docs/history/leader-sees-team/plan.md",
+    "docs/history/leader-sees-team/CONTEXT.md",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "affects_specs": [],
+  "decisions": [],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "exactly one new sentence in each of the three homes, and the rendered AGENTS.md matches its source (parity test green)",
+      "swarming-reference.md no longer claims cli-exec requested_model is always null",
+      "declared is in the knowledge vocabulary and the config-reference status table",
+      "B12 and B13 cite D4 and describe the new display law",
+      "docs/history is untouched"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "lst-w3",
+    "outcome": "the pick-by-job rule is in the host AGENTS.md block, the delegation contract and the worker prompt; the false cli-exec sentence is rewritten; declared is in the vocabulary homes; B12/B13 cite D4",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/knowledge/areas/advisor-protocol/slots-and-tiers.md",
+      "docs/config-reference.md",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: AGENTS.md is a rule home for agents-capture-line-at-close, which this one-sentence door-bullet edit does not touch.",
+      "sync-ack: the AGENTS.md edit adds one sentence to the dispatch-door bullet; it does not touch the agents-capture-line-at-close rule the sync door keys on, so that rule's applied_at files owe no update"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T05:25:47.739Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-09T05:17:29.878Z",
+    "sync_ack": "the AGENTS.md edit adds one sentence to the dispatch-door bullet; it does not touch the agents-capture-line-at-close rule the sync door keys on, so that rule's applied_at files owe no update",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "One new sentence in each of the three homes (AGENTS.block.md beside the door bullet, rendered into AGENTS.md; gates-and-delegation.md:132 inside the Delegation contract Transport bullet; worker-cell.md one clause, with a pointer in worker-details.md). swarming-reference.md no longer says cli-exec requested_model is always null. declared added to slots-and-tiers.md R9 and the config-reference status table. B12/B13 amended citing D4. bee dev regen ran; docs/history untouched.",
+      "commit": "dd7dca5a",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "docs/knowledge/areas/advisor-protocol/slots-and-tiers.md",
+        "docs/config-reference.md",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+      ],
+      "tests": "rg for the three sentences, the absence of the always-null claim, declared in both vocabulary homes, and D4 in the doctrine area — green:static — docs change: parity/pointer checks over each home, run by the orchestrator, exit 0; the two extra never-the-leader hits in gates-and-delegation.md are pre-existing lines 299/309, not copies",
+      "deviations": [
+        "Capped with --sync-ack: AGENTS.md is a rule home for agents-capture-line-at-close, which this one-sentence door-bullet edit does not touch."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

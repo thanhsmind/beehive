@@ -1,0 +1,81 @@
+{
+  "id": "lst-1",
+  "feature": "leader-sees-team",
+  "title": "Record the declared model for herding and cli dispatches, from both writers",
+  "lane": "standard",
+  "role": "code",
+  "action": "Read plan.md revision 2 first; it defines every case below.\n\n1. **The helper.** In `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`, beside `resolve_role`:\n```rust\n/// leader-sees-team D2: the model an external program was ASKED for, read from the argv bee built.\npub(crate) fn declared_model_for(cfg: &Value, resolved: &Resolved, runtime: &str) -> Option<String>\n```\n- `Resolved::Herding { agent, .. }` (BOTH arms — `agent: None` too): resolve the argv with `crate::herding::wave::resolve_agent_command_for_runtime(cfg, agent.as_deref(), runtime)` and scan its args.\n- `Resolved::Cli { command }`: split the command string quote-aware (a small tokenizer; single and double quotes), then scan.\n- Anything else → `None`.\n- Scan rule: accept `--model X`, `--model=X`, `-m X`. If more than one is present, the FIRST wins — record this as a named guess in the doc comment.\n\n2. **The sixth argument.** `derive_economics` in `verbs/drivers/guard.rs:342` gains `declared: Option<&str>`. When `channel` is `herding-exec` or `cli-exec` and `declared` is `Some(m)`: `requested_model = m`, `effective_model_status = \"declared\"`. When `None`: today's exact bytes (`null`, `\"unverified\"`) — the test at `guard.rs:670` must still pass unchanged. `effective_model` stays null in both cases. Every other channel is untouched. Update the five existing test call sites (`guard.rs:667,676`, `tests.rs:748,755,769,776,782`) to pass `None`.\n\n3. **The caller.** In `verbs/drivers/prepare.rs` beside `param_model` (`:1972-1975`), compute `let declared = declared_model_for(&cfg, &resolved, runtime)` for BOTH cli-exec sites (`:1755` and `:1781`) and the herding-exec site. At the `:1755` site `resolved` is a `Resolved::Native` whose fallback COMMAND runs — read that command string, never the Native `model` field. Pass `declared.as_deref()` at `:1979`. A herding `fallback` model (`:1870-1887`) is untouched; the record describes the primary argv only.\n\n4. **The second writer.** `hooks/model_guard.rs` `derive_dispatch_economics` (`:1213-1258`) recomputes the six fields itself and maps `Resolved::Herding` to no model (`resolved_model_name`, `:331-335`). Make it call the same helper for a `Herding` or `Cli` resolution so its audit row carries the same `requested_model`/`declared` prepare's row would. It has `models` (the team subtree) — give it the whole config it needs.\n\n5. **Tests** (in `guard.rs` / `models.rs` / `model_guard.rs` test modules, whichever owns the code): `--model X` → declared; `--model=X` → declared; `-m X` → declared; two tokens → first; `agent: None` resolving through the generation slot; a fixture registry entry with NO model token → exactly claim-10 bytes; `Native` on cli-exec → the fallback command's model, never the model field; native model slot still `pinned`; session-model still `inherited-or-unknown`; and one test asserting prepare's row and the guard's row agree for a herding slot.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers model_guard",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/leader-sees-team/plan.md",
+    "docs/history/leader-sees-team/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "must_haves": {
+    "truths": [
+      "one helper, declared_model_for(cfg, resolved, runtime), in the drivers module; no other site parses argv for a model",
+      "derive_economics stays config-free: it takes declared as a value and is byte-identical on None (the guard.rs:670 test passes unchanged)",
+      "both cli-exec sites and the herding-exec site pass declared; the Native-fallback site reads the command that runs",
+      "the model guard's own economics row uses the same helper and agrees with prepare's row for a herding slot",
+      "a registry fixture with no model token yields null and unverified",
+      "agent: None resolves through the same precedence the run verb uses"
+    ]
+  },
+  "change_class": "api",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "lst-w1",
+    "outcome": "bee reads the model out of the argv it builds for herding and cli dispatches and records it as declared, from both writers of the economics record",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: read-only call into bee-herding-owned wave.rs; the doctrine homes were updated by lst-3.",
+      "sync-ack: the helper calls into herding/wave.rs read-only (resolve_agent_command_for_runtime) and changes no herding behaviour; the doctrine homes this feature owes were updated by lst-3 (gates-and-delegation, worker-details, swarming-reference), and no skills/bee-herding text describes the economics record"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T05:34:22.947Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-09T05:17:25.823Z",
+    "sync_ack": "the helper calls into herding/wave.rs read-only (resolve_agent_command_for_runtime) and changes no herding behaviour; the doctrine homes this feature owes were updated by lst-3 (gates-and-delegation, worker-details, swarming-reference), and no skills/bee-herding text describes the economics record",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "declared_model_for(cfg, resolved, runtime) at models.rs:649 handles both Herding arms through resolve_agent_command_for_runtime and Cli command strings through a quote-aware split (--model X, --model=X, -m X, first wins); derive_economics gains declared: Option<&str> at guard.rs:350 and is byte-identical on None (the claim-10 test passes unchanged); prepare computes it beside param_model for herding-exec and both cli-exec sites; the model guard own economics writer calls the same helper. Live through the dispatch door on main config: pi code/review/advisor/plan and claude code report declared with the real model names, codex review (cli-exec) reports declared gpt-5.5; native slots stay pinned.",
+      "commit": "c3ab08ec",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers model_guard, then the worktree-built binary driven through bee dispatch prepare for claude/pi/codex x code/review/advisor/plan against main config — green:live — 423 passed 0 failed; the door reports declared with real model names on every herding and cli slot and pinned on every native slot, run by the orchestrator",
+      "deviations": [
+        "Capped with --sync-ack: read-only call into bee-herding-owned wave.rs; the doctrine homes were updated by lst-3."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
