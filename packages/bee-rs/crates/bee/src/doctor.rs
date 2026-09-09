@@ -294,7 +294,7 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
 fn hat_slots_missing_a_description(root: &Path, runtime: Runtime) -> Vec<String> {
     let config = crate::state::read_config_raw(root);
     let Some(table) = config
-        .get("models")
+        .get("team")
         .and_then(|m| m.get(runtime.name()))
         .and_then(Value::as_object)
     else {
@@ -334,7 +334,7 @@ fn hat_description_advisory(root: &Path, runtime: Runtime) -> Option<(Value, Str
         return None;
     }
     let detail = format!(
-        "{} hat slot(s) in models.{} carry no description: {} — each hat's purpose belongs in its own slot (\"{}\": {{\"model\": \"…\", \"description\": \"what this hat looks for\"}}), so the config reads self-documenting. Advisory only: it does not change the verdict.",
+        "{} hat slot(s) in team.{} carry no description: {} — each hat's purpose belongs in its own slot (\"{}\": {{\"model\": \"…\", \"description\": \"what this hat looks for\"}}), so the config reads self-documenting. Advisory only: it does not change the verdict.",
         missing.len(),
         runtime.name(),
         missing.join(", "),
@@ -342,6 +342,30 @@ fn hat_description_advisory(root: &Path, runtime: Runtime) -> Option<(Value, Str
     );
     Some((
         json!({"row": "hat_slot_descriptions", "status": "advisory", "detail": detail.clone()}),
+        detail,
+    ))
+}
+
+/// team-config-rename D2: a top-level check for the legacy models config key.
+/// Emits one advisory when .bee/config.json still uses models (folded on read).
+/// When both keys are present, notes that team is used and models is ignored.
+pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
+    let config_path = root.join(".bee").join("config.json");
+    let ReadJson::Parsed(Value::Object(map)) = read_json(&config_path) else {
+        return None;
+    };
+    let had_team = map.contains_key("team");
+    let mut copy = map;
+    if !crate::verbs::drivers::fold_team_key(&mut copy) {
+        return None;
+    }
+    let detail = if had_team {
+        ".bee/config.json still uses the models key — team is used and models is ignored.".to_string()
+    } else {
+        ".bee/config.json still uses the models key — rename it to team (models is read as an alias for now).".to_string()
+    };
+    Some((
+        json!({"row": "legacy_models_key", "status": "advisory", "detail": detail.clone()}),
         detail,
     ))
 }
@@ -690,6 +714,10 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
     if let Some((row, _)) = &advisory {
         all.push(row.clone());
     }
+    let team_advisory = team_config_advisory(&root);
+    if let Some((row, _)) = &team_advisory {
+        all.push(row.clone());
+    }
 
     // Never ready from presence alone: the ladder is evaluated, not assumed.
     let status = if !mechanical_ok {
@@ -729,6 +757,9 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
     }
     if let Some((_, detail)) = &advisory {
         lines.push(format!("  note {:<22} {}", "hat_slot_descriptions", detail));
+    }
+    if let Some((_, detail)) = &team_advisory {
+        lines.push(format!("  note {:<22} {}", "legacy_models_key", detail));
     }
     lines.push(match status {
         "blocked" => "next: fix the FAIL row(s) above — nothing else can be trusted until they are ok".to_string(),

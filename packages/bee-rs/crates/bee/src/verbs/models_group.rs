@@ -1,11 +1,11 @@
-// bee models — the role table read out loud (models-show-verb D1).
+// bee team — the role table read out loud (team-config-rename D1).
 //
 // Verbs served natively (exact argv shapes only — see the probe):
-//   models show [--runtime claude|codex|opencode] [--json]
+//   team show [--runtime claude|codex|opencode] [--json]
 //
 // WHY IT EXISTS. An agent that has to pick a role for a dispatch had exactly
 // one way to learn what the roles MEAN: open `.bee/config.json` and parse
-// `models.<runtime>` by hand. D1 makes that a verb — "lấy thông tin models từ
+// `team.<runtime>` by hand. D1 makes that a verb — "lấy thông tin models từ
 // config nên là 1 verb trong bee để nhận trọn bộ không cần phải viết code
 // đọc" — so the table has one reader and the descriptions have one home.
 //
@@ -14,7 +14,7 @@
 // acts on, and a sentence written for a human would be dead weight (and a
 // silent behaviour surface) down there. That strip is exactly what makes it
 // the wrong source for this verb — the whole point here is the sentence. So
-// this module reads `read_config_raw(root)["models"]` and carries every slot
+// this module reads `read_config_raw(root)["team"]` and carries every slot
 // through VERBATIM: string slots, `{kind:"cli"}` slots, `{kind:"herding"}`
 // slots, junk slots normalize would have dropped, all of it. A slot shape
 // this file understands is a slot shape it renders more prettily, never a
@@ -45,8 +45,8 @@ pub(crate) const SOURCE_DEFAULT: &str = "default";
 
 /// The teaching line the text rendering opens with. An agent that ran this
 /// verb once should never go back to parsing the config by hand.
-const TEACH: &str = "models — the role table bee dispatches from. A role's `description` is written in \
-.bee/config.json under models.<runtime>.<role>, and this verb is how it is read; \
+const TEACH: &str = "team — the role table bee dispatches from. A role's `description` is written in \
+.bee/config.json under team.<runtime>.<role>, and this verb is how it is read; \
 never parse that file by hand.";
 
 /// One role's row: the slot exactly as the config wrote it, plus where it came
@@ -90,7 +90,7 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
     if let Some(want) = runtime {
         if !names.iter().any(|n| n == want) {
             return Err(format!(
-                "bee models show: --runtime {want:?} is not a runtime this repo knows. Legal: {}.",
+                "bee team show: --runtime {want:?} is not a runtime this repo knows. Legal: {}.",
                 names.join(", ")
             ));
         }
@@ -144,9 +144,18 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
 /// The raw table for a repo root. `read_config_raw` is the config layer's own
 /// reader (tracked config + the local overlay, corrupt-tolerant); nothing is
 /// normalized on the way out.
-pub(crate) fn models_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
+/// The raw table for a repo root. `read_config_raw` is the config layer's own
+/// reader (tracked config + the local overlay, corrupt-tolerant); nothing is
+/// normalized on the way out.
+pub(crate) fn team_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
     let config = read_config_raw(root);
-    build_table(config.get("models"), runtime)
+    build_table(config.get("team"), runtime)
+}
+
+/// Legacy alias for `team_table`.
+#[allow(dead_code)]
+pub(crate) fn models_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
+    team_table(root, runtime)
 }
 
 /// A slot on one line. The description is printed as prose beside the row, so
@@ -203,7 +212,7 @@ fn render(result: &Value) -> String {
 }
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
-    if args.first()?.to_str()? != "models" {
+    if args.first()?.to_str()? != "team" {
         return None;
     }
     if args.get(1)?.to_str()? != "show" {
@@ -223,12 +232,12 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         _ => None,
     };
 
-    let ctx = match g_prelude("models show", json, pre_json, t0)? {
+    let ctx = match g_prelude("team show", json, pre_json, t0)? {
         GPre::Go(c) => c,
         GPre::Emitted(code) => return Some(code),
     };
 
-    match models_table(&ctx.root, runtime.as_deref()) {
+    match team_table(&ctx.root, runtime.as_deref()) {
         Err(message) => Some(ctx.fail(&message)),
         Ok(result) => {
             let text = render(&result);
@@ -419,18 +428,30 @@ mod tests {
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         std::fs::write(
             root.join(".bee").join("config.json"),
-            r#"{"models":{"claude":{"code":{"model":"opus","description":"from disk"}}}}"#,
+            r#"{"team":{"claude":{"code":{"model":"opus","description":"from disk"}}}}"#,
         )
         .unwrap();
-        let result = models_table(root, None).unwrap();
+        let result = team_table(root, None).unwrap();
         assert_eq!(role(&result, "claude", "code")["description"], json!("from disk"));
         assert_eq!(
             role(&result, "claude", "code")["slot"],
             json!({"model": "opus", "description": "from disk"})
         );
+
+        // Alias config still works via fold at load
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        std::fs::create_dir_all(root2.join(".bee")).unwrap();
+        std::fs::write(
+            root2.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"code":{"model":"opus","description":"from legacy models"}}}}"#,
+        )
+        .unwrap();
+        let result2 = team_table(root2, None).unwrap();
+        assert_eq!(role(&result2, "claude", "code")["description"], json!("from legacy models"));
     }
 
-    /// Read-only means read-only: a `models show` must leave the store exactly
+    /// Read-only means read-only: a `team show` must leave the store exactly
     /// as it found it.
     #[test]
     fn reading_the_table_writes_nothing() {
@@ -438,10 +459,10 @@ mod tests {
         let root = tmp.path();
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         let config = root.join(".bee").join("config.json");
-        std::fs::write(&config, r#"{"models":{"claude":{"code":"opus"}}}"#).unwrap();
+        std::fs::write(&config, r#"{"team":{"claude":{"code":"opus"}}}"#).unwrap();
         let before = std::fs::read_dir(root.join(".bee")).unwrap().count();
         let raw_before = std::fs::read_to_string(&config).unwrap();
-        models_table(root, None).unwrap();
+        team_table(root, None).unwrap();
         let after = std::fs::read_dir(root.join(".bee")).unwrap().count();
         assert_eq!(before, after, "reading the role table created or removed a store file");
         assert_eq!(raw_before, std::fs::read_to_string(&config).unwrap());
@@ -453,7 +474,7 @@ mod tests {
             "claude": {"code": {"model": "opus", "description": "write the cell's code"}}
         });
         let text = render(&table(&raw, Some("claude")));
-        assert!(text.contains("models.<runtime>.<role>"), "the teaching line is missing: {text}");
+        assert!(text.contains("team.<runtime>.<role>"), "the teaching line is missing: {text}");
         assert!(text.contains("code"), "{text}");
         assert!(text.contains("[configured]"), "{text}");
         assert!(text.contains("write the cell's code"), "{text}");

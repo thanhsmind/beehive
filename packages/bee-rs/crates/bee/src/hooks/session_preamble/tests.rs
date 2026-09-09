@@ -1459,7 +1459,7 @@ use crate::version::BEE_VERSION;
         );
         assert!(
             text.contains(
-                "- Roles (claude): generation=herding (agy-flash) | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+                "- Roles (claude): generation=herding (agy-flash) | review=opus | extraction=haiku — open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
@@ -1533,7 +1533,7 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(
             text.contains(
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=opus — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=opus — open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
@@ -1630,4 +1630,51 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("- Roles (claude): generation=opus |"), "{text}");
         assert!(!text.contains("opus:high"), "the door published a dropped effort:\n{text}");
         assert!(!text.contains(":high"), "the door published a dropped effort:\n{text}");
+    }
+
+    /// team-config-rename D2: Dispatch door emits one terse warning line on models-only config, and never when team is present.
+    #[test]
+    fn dispatch_door_emits_legacy_models_warning_only_when_models_key_used() {
+        let warning_line = "- config: .bee/config.json uses the legacy models key — rename to team.";
+
+        // 1. models-only config: exactly one warning line emitted in Dispatch door
+        let tmp_models = minimal_repo();
+        write(
+            tmp_models.path(),
+            ".bee/config.json",
+            r#"{"models":{"claude":{"code":"opus"}}}"#,
+        );
+        let text_models = render(tmp_models.path());
+        assert!(text_models.contains("### Dispatch door"), "{text_models}");
+        assert!(text_models.contains(warning_line), "{text_models}");
+        assert_eq!(
+            text_models.lines().filter(|l| *l == warning_line).count(),
+            1,
+            "exactly one warning line"
+        );
+
+        // 2. team-only config: no warning line emitted
+        let tmp_team = minimal_repo();
+        write(
+            tmp_team.path(),
+            ".bee/config.json",
+            r#"{"team":{"claude":{"code":"opus"}}}"#,
+        );
+        let text_team = render(tmp_team.path());
+        assert!(!text_team.contains(warning_line), "{text_team}");
+
+        // 3. both keys present: never emitted when config already says team
+        let tmp_both = minimal_repo();
+        write(
+            tmp_both.path(),
+            ".bee/config.json",
+            r#"{"team":{"claude":{"code":"opus"}},"models":{"claude":{"code":"sonnet"}}}"#,
+        );
+        let text_both = render(tmp_both.path());
+        assert!(!text_both.contains(warning_line), "{text_both}");
+
+        // 4. no config: no warning line emitted
+        let tmp_none = minimal_repo();
+        let text_none = render(tmp_none.path());
+        assert!(!text_none.contains(warning_line), "{text_none}");
     }

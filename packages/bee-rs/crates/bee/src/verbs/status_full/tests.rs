@@ -3225,7 +3225,7 @@ use crate::version::BEE_VERSION;
             .iter()
             .find(|w| w.starts_with("config validate [cli-malformed]"))
             .unwrap_or_else(|| panic!("no cli-malformed warning in {warnings:?}"));
-        assert!(hit.contains(" models.claude.generation:"), "{hit}");
+        assert!(hit.contains(" team.claude.generation:"), "{hit}");
         assert!(hit.contains("silently reverts to the seeded default"), "{hit}");
 
         // Control: the same tier, now well-formed, is adopted AND silent.
@@ -4648,7 +4648,7 @@ use crate::version::BEE_VERSION;
         assert_eq!(codes(&invented), vec!["slot-value-malformed"]);
         assert_eq!(codes(&invented), codes(&historical));
         assert_eq!(invented[0].slot.as_deref(), Some("test"));
-        assert!(invented[0].message.contains("models.claude.test"), "{}", invented[0].message);
+        assert!(invented[0].message.contains("team.claude.test"), "{}", invented[0].message);
 
         // (b) every check below the entry point reaches an invented name too,
         // not just the value-shape one at the top.
@@ -4797,7 +4797,7 @@ use crate::version::BEE_VERSION;
         let mut ctx = ctx_for(root);
         let status = build_status(&mut ctx, false).unwrap();
         let raw = read_config_raw(root);
-        let before = Value::Object(normalize_models(raw.get("models")));
+        let before = Value::Object(normalize_models(raw.get("team")));
         assert_eq!(
             serde_json::to_string(status.get("models").expect("models section")).unwrap(),
             serde_json::to_string(&before).unwrap()

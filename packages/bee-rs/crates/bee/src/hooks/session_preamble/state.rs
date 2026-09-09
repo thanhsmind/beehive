@@ -58,6 +58,7 @@ pub(crate) fn read_config_raw_open(root: &Path) -> JMap {
         None => tracked,
     };
     merged.shift_remove("advisor");
+    crate::verbs::drivers::fold_team_key(&mut merged);
     merged
 }
 

@@ -43,6 +43,9 @@ pub struct Entry {
     /// Present when the registry declares the command but this build has no
     /// implementation. `{reason, fix}`.
     pub unavailable: Option<Unavailable>,
+    /// Present when the command is deprecated in favor of another spelling.
+    #[allow(dead_code)]
+    pub deprecated: Option<Value>,
 }
 
 pub struct Unavailable {
@@ -97,7 +100,8 @@ fn parse() -> Vec<Entry> {
                 reason: u.get("reason").and_then(Value::as_str).unwrap_or("").to_string(),
                 fix: u.get("fix").and_then(Value::as_str).unwrap_or("").to_string(),
             });
-            Some(Entry { name, invoke, required, properties, examples, unavailable })
+            let deprecated = c.get("deprecated").filter(|d| !d.is_null()).cloned();
+            Some(Entry { name, invoke, required, properties, examples, unavailable, deprecated })
         })
         .collect()
 }
@@ -807,26 +811,28 @@ mod tests {
         );
     }
 
-    /// models-show-verb D1: the role table's own verb has to RESOLVE, or the
-    /// dispatcher answers `bee models show` with "unknown command" and the
-    /// agent goes back to parsing .bee/config.json by hand — the exact defect
-    /// the verb replaces.
+    /// team-config-rename D1: bee team show is the canonical verb.
     #[test]
-    fn models_show_resolves_and_is_built_into_this_binary() {
-        let (entry, rest) = resolve(&["models", "show"]).expect("models.show is in the registry");
-        assert_eq!(entry.invoke, "bee models show");
+    fn team_show_resolves_and_is_built_into_this_binary() {
+        let (entry, rest) = resolve(&["team", "show"]).expect("team.show is in the registry");
+        assert_eq!(entry.invoke, "bee team show");
         assert!(rest.is_empty());
         assert!(
             entry.unavailable.is_none(),
-            "models show is served natively, not declared and missing"
+            "team show is served natively, not declared and missing"
         );
         assert!(entry.properties.contains_key("runtime"), "the --runtime filter is undeclared");
         assert!(missing_required(entry, &[]).is_empty(), "a read verb must need no flags");
         assert!(
-            group_subverbs("models").contains(&"show".to_string()),
-            "`bee models` never offers its one verb: {:?}",
-            group_subverbs("models")
+            group_subverbs("team").contains(&"show".to_string()),
+            "`bee team` never offers its one verb: {:?}",
+            group_subverbs("team")
         );
+
+        // Alias still resolves for help/registry probe
+        let (alias_entry, _) = resolve(&["models", "show"]).expect("models.show is in the registry");
+        assert_eq!(alias_entry.invoke, "bee models show");
+        assert!(alias_entry.deprecated.is_some());
     }
 
     /// models-show-verb D2: `bee cells add --help` is the OTHER door where an
@@ -849,11 +855,11 @@ mod tests {
         // in place of it: one says where the meaning lives, the other says
         // how to read it.
         assert!(
-            desc.contains("models.<runtime>.<role>.description"),
+            desc.contains("team.<runtime>.<role>.description"),
             "cells add --help lost the line naming where a role's meaning is written down"
         );
         assert!(
-            desc.contains("bee models show"),
+            desc.contains("bee team show"),
             "cells add --help never names the verb that prints the role table"
         );
         // Read-first, and only when unread this session (D2's condition).

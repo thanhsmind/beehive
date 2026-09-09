@@ -614,7 +614,7 @@ fn high_risk_advisor_refusal(
     Some(format!(
         "gate: execution approval refused for high-risk work \u{2014} the advisor consult is missing or stale (AO3/AO13). \
          Reason(s): {}. \
-         FIX: resolve the advisor from config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, \
+         FIX: resolve the advisor from config (team.<runtime>.advisor), run it read-only with the evidence bundle on stdin, \
          then record the consult: bee state advisor-ref record --advisor \"<identity>\" --digest-file <path>{lane_tail}. Nothing is written until a non-stale advisor_ref exists.",
         staleness.reasons.join("; "),
     ))

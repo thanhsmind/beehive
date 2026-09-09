@@ -1229,7 +1229,7 @@ use std::time::Instant;
         };
         assert_eq!(
             jsjson::stringify(&v),
-            r#"{"ok":false,"reason":"advisor_not_configured","fix":"set models.claude.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."}"#
+            r#"{"ok":false,"reason":"advisor_not_configured","fix":"set team.claude.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."}"#
         );
     }
 
@@ -2229,7 +2229,7 @@ use std::time::Instant;
         assert_eq!(v.get("type"), Some(&json!("refused")));
         assert_eq!(v.get("reason"), Some(&json!("tier_not_configured")));
         assert_eq!(v.get("tier"), Some(&json!("extraction")));
-        assert!(v.get("fix").unwrap().as_str().unwrap().contains("set models.claude.extraction"));
+        assert!(v.get("fix").unwrap().as_str().unwrap().contains("set team.claude.extraction"));
 
         // Arbitrary unknown tier
         w(
@@ -2257,7 +2257,7 @@ use std::time::Instant;
         assert_eq!(v2.get("type"), Some(&json!("refused")));
         assert_eq!(v2.get("reason"), Some(&json!("tier_not_configured")));
         assert_eq!(v2.get("tier"), Some(&json!("quantum")));
-        assert!(v2.get("fix").unwrap().as_str().unwrap().contains("set models.claude.quantum"));
+        assert!(v2.get("fix").unwrap().as_str().unwrap().contains("set team.claude.quantum"));
     }
 
     // ── hrv-1: herding-review-slots D1/D2 — reviewer/advisor purposes ──────
@@ -8587,7 +8587,7 @@ advance_on — falling to another model there hides the defect (D11)"
             let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
             assert!(!slot.is_empty(), "{name}: the refusal must name the slot — {v}");
             assert!(
-                fix.contains(&format!("models.pi.{slot}")),
+                fix.contains(&format!("team.pi.{slot}")),
                 "{name}: the fix must name the slot to configure: {fix}"
             );
             assert!(
@@ -8646,7 +8646,7 @@ advance_on — falling to another model there hides the defect (D11)"
         assert_eq!(v.get("reason"), Some(&json!("role_not_configured")), "{v}");
         assert_eq!(v.get("role"), Some(&json!("designer")), "{v}");
         let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
-        assert!(fix.contains("models.pi"), "the fix must name the pi table: {fix}");
+        assert!(fix.contains("team.pi"), "the fix must name the pi table: {fix}");
     }
 
     /// GATE TWO of the three a runtime name passes. The argv-shape guard
