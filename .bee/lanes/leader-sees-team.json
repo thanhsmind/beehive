@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"leader-sees-team\" started at phase \"exploring\" (lane).",
-  "next_action": "Execute lst-1 and lst-3 in parallel; lst-2 after lst-1.",
+  "next_action": "Merged into main at 091a5b0; reload the product and test \"leader-sees-team\", then either approve uat (\"bee gate --name uat --approved true --lane leader-sees-team\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-09T05:04:15.142Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "lst-2's tests: **147 passed, 0 failed**. The live build for the roster and `bee team show` is still running; I cap once I've seen every role",
-    "asked_at": "2026-09-09T06:47:24.216Z",
-    "session": "ac83adf7-9f51-4558-a3ad-49533284ee5d"
+    "kind": "gate",
+    "subject": "uat: leader-sees-team",
+    "asked_at": "2026-09-09T06:48:10.108Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -39,12 +39,5 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave-3-seat (opus x2, agy-flash)",
     "digest_head": "# Hat wave — plan-step synthesis, leader-sees-team\n\nDate: 2026-09-09. Three seats, two models, one draft (`plan.md` revision 1, commit `66a8963e`).\nSeats: `hat-facts-gaps` (opus), `hat-alternatives` (opus), `hat-user-impact` (agy-flash pane).\nNo seat dropped. This wave is the feature's plan check (absorption, decision `b34fdea9`).\n\n## Verdict\n\n**Revision 2 is owed.** The claims table survived (14/14 verbatim, both `ran` rows reproduced),\nbut the shape did not: the helper was placed where the con"
-  },
-  "merge_ready": {
-    "since": "2026-09-09T06:47:11.061Z",
-    "branch": "wt/leader-sees-team",
-    "worktree_id": "beehive--wt--leader-sees-team",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
