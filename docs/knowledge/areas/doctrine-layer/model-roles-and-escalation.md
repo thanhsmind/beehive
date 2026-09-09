@@ -146,7 +146,10 @@ silently dropped — the answer is in `docs/history/model-role-split/plan.md`
 ("D12's fate").
 
 **B12 — A role slot may describe itself, and only the door line reads the
-description** (role-slot-description, cell rsd-1, PBI p-a1399c00). A
+description** (role-slot-description, cell rsd-1, PBI p-a1399c00; display order
+amended by leader-sees-team D1 and D4 on 2026-09-09 — the leader chooses a team
+member by job, so every read surface leads with role and description and shows
+the transport last). A
 `team.<runtime>` role slot may carry an optional description string.
 Exactly one surface renders it: the dispatch-door roles line, reading the
 RAW config and clipping to 60 characters, as `name=model ("desc")`. The
@@ -159,7 +162,10 @@ with no descriptions (≤ 60 characters per line, no six-role cap);
 descriptions appear only in `bee team show`.
 
 **B13 — `bee team show` is the one read door for the role table**
-(models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44; renamed from
+(models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44; the rule that the
+leader picks by job and the transport is config ships to every host under
+leader-sees-team D3 — one sentence in the rendered AGENTS.md block, the
+delegation contract and the worker prompt; renamed from
 `bee models show` by team-config-rename D1 on 2026-09-09, when the config block
 itself went from `models.<runtime>` to `team.<runtime>` — the block is the
 leader's roster of who does which job, not a list of model ids, and the old

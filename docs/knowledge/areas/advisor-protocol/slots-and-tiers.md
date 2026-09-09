@@ -67,7 +67,8 @@ bee:
   channel, enforcement (additive; the legacy transport key is untouched). A
   model-param dispatch is `pinned`; a bare-marker budget dispatch is
   `unverified`; an external herding or cli argv naming a model read back by bee
-  is `declared` (weaker than `pinned`, stronger than `unverified`). A
+  is `declared` (weaker than `pinned`, stronger than `unverified`;
+  leader-sees-team D2). A
   second-runtime native spawn stays `inherited-or-unknown`
   with `prompt-budget` enforcement UNLESS a version- and configuration-scoped
   capability probe has classified the client as accepting a native model

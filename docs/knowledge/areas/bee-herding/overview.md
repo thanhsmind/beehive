@@ -2,7 +2,7 @@
 type: bee.area
 title: "Bee Herding — the four-role cockpit, its safety boundaries, and adoption"
 description: "A cockpit that runs several Claude Code sessions in parallel worktrees, over whichever pane transport one config key names (herdr or tmux): a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, a read-only supervisor role that observes beside them, a route role that reads finished worktrees and — inside the cockpit only, under a named carve-out — starts a reviewer on a different agent and hands a CHANGES verdict back to the coder's own pane, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
-timestamp: 2026-08-20
+timestamp: 2026-09-09
 bee:
   id: bee-herding-overview
   lifecycle: active

@@ -79,7 +79,7 @@ Config enters the crate through **three loaders** — `state.rs:161`, `hooks/ses
 
 - Letting bee read the model out of a herding agent's argv (`bee-model-binding-stability-xia.md`, fix 3) — a separate feature.
 - Injecting the resolved model into the worker brief, omp-style (fix 4) — separate.
-- Removing the `models` alias — its own release, per D2.
+- Removing the `models` alias — its own release, per D2; firing condition registered as trigger `every-host-bee-dogfoods-or-onboards-has-m__0b1c2a7a`.
 
 ## Handoff Note
 
