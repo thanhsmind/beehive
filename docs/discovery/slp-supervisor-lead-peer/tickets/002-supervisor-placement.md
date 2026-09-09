@@ -22,7 +22,7 @@ Option (c): the supervisor runs as a new `--role supervisor` of the
 existing native control loop (`bee herding control-loop --interval
 900`), spawning COLD each tick — no persistent session, no context
 bloat. Model is pure configuration thanks to the open fall-through
-role set (`06e49368`): `models.claude.supervisor` on a cheap model,
+role set (`06e49368`): `team.claude.supervisor` on a cheap model,
 with the existing `advisor` role as the semantic escalation path.
 Tool surface stays enumerated read/query only, so R2/R3/R4 hold.
 Cron/external schedulers rejected (no repo/lifecycle awareness,

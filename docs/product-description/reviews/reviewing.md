@@ -155,7 +155,7 @@ Columns: before and after the record is written (the first side effect).
 
 **What the human sees.** The frozen scope preview before any reviewer runs; the synthesis report, grouped by axis, ending in its one required counts line; each acceptance item as a Pass/Fail/Skip question; the merge question. In `bee status` and the session preamble: `Completed and verified; independent review not requested; N candidate(s) awaiting review.` — informational, because closing unreviewed is the truthful normal state — and, for an unreviewed or stale high-risk candidate, a prominent warning that bee will not auto-dispatch reviewers and that review must be requested.
 
-**Configuration.** `models.<runtime>.review` is the reviewer model slot (seeded `opus` on Claude); `bee dispatch prepare --kind reviewer` resolves it and returns the read-only `bee-review` agent. No config key changes any `reviews` verb.
+**Configuration.** `team.<runtime>.review` is the reviewer model slot (seeded `opus` on Claude); `bee dispatch prepare --kind reviewer` resolves it and returns the read-only `bee-review` agent. No config key changes any `reviews` verb.
 
 **Output modes and exit codes.** Standard — 0 on success, 1 on refusal, `--json` moving payloads and `{"error": …}` to stdout ([invocation](../foundations/invocation.md)). Verb-owned refusals carry the timing line; shape refusals do not.
 

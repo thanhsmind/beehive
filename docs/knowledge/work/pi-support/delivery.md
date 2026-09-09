@@ -17,7 +17,7 @@ bee:
 - **pis-1** — Pi enforcement belt written: enumerated built-in tool map, fail-safe unknown-tool routing to write-guard, fail-closed blocking runner, never-throw advisory wrappers, per-call .bee-directory passivity, model-guard named exclusion (1 file(s) changed)
 - **pis-2** — runtime pi is legal at the dispatch door, herding-only with typed refusals on every other resolution, and the belt ships through onboard plus the release inventory (13 file(s) changed)
 - **pis-3** — Pi belt fixture suite lands and the belt parity test derives a fourth belt from the Pi source, with model-guard excluded by name (2 file(s) changed)
-- **pis-4** — models.pi documented as a herding-only preview runtime across the config sample, the config reference, and the hook-runtime knowledge area (3 file(s) changed)
+- **pis-4** — team.pi documented as a herding-only preview runtime across the config sample, the config reference, and the hook-runtime knowledge area (3 file(s) changed)
 
 ## Verify
 
@@ -26,14 +26,14 @@ Each cell below was capped only against a recorded passing verify result — bee
 - **pis-1** — `node --check .pi/extensions/bee-guard.ts`
 - **pis-2** — `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee && .bee/bin/bee dev release-manifest --check`
 - **pis-3** — `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test opencode_plugin_contracts`
-- **pis-4** — `rg -n "models.pi" .bee/config-sample.json docs/config-reference.md && rg -ni "pi-result-mailbox" docs/config-reference.md`
+- **pis-4** — `rg -n "team.pi" .bee/config-sample.json docs/config-reference.md && rg -ni "pi-result-mailbox" docs/config-reference.md`
 
 ## Deviations
 
 - **pis-1** — Mapped Pi edit to MultiEdit and translated edits[].oldText/newText into old_string/new_string instead of a bare Edit passthrough — Pi edit takes an array of replacements, which is MultiEdit shape, and bee treats Edit/Write/MultiEdit identically so the honest name costs nothing — found a better route
 - **pis-1** — Unmapped tools carrying a string command route as Bash instead of Write — Bash is write-capable in bee terms too and a Write-shaped route would hide a custom shell tool command from the guard, a real bypass — hit an unforeseen obstacle
 - **pis-1** — Blocking runner blocks on an updatedInput repair it cannot apply to a field-translated tool — plan.md said Pi has no documented input-mutation contract, but docs/extensions.md tool_call documents mutable event.input, so the repair channel exists and dropping it would run the call unrepaired — the plan was wrong about a fact
-- **pis-2** — Reserved and edited two files the cell did not name — verbs/drivers/tests.rs and verbs/models_group.rs — because widening DISPATCH_RUNTIMES and RUNTIMES turned 12 existing tests red (walks over both constants); the driver walks now configure a herding models.pi table instead of skipping pi, so pi stays inside the derived matrix — something else had to be fixed first
+- **pis-2** — Reserved and edited two files the cell did not name — verbs/drivers/tests.rs and verbs/models_group.rs — because widening DISPATCH_RUNTIMES and RUNTIMES turned 12 existing tests red (walks over both constants); the driver walks now configure a herding team.pi table instead of skipping pi, so pi stays inside the derived matrix — something else had to be fixed first
 - **pis-2** — Ran the release-manifest proof with the binary built from this cell (/home/thanhsmind/.cache/cargo-target/release/bee) instead of the cell verify line's .bee/bin/bee, which is a symlink to the main checkout's binary built before this change and cannot know the new .pi/extensions root — the plan was wrong about a fact
 - **pis-2** — Wired the wave door to unwind its own claim on a pi refusal rather than pushing an ok:false payload carrying claimed:true, so a refused pi wave leaks no claims — found a better route
 - **pis-3** — Bounded the mapToolCall switch slice at the function's closing brace in both parsers — unbounded it ran on into sessionSource's switch (reason) and read case "new"/"reload" as routed tool names — hit an unforeseen obstacle

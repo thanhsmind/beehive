@@ -520,7 +520,7 @@ never serves cell execution, while a `herding`-shaped slot serves every
 purpose, cell included.
 
 **The config route now covers every purpose (herding-tier D1-D6, widened by
-herding-review-slots D1):** `models.<runtime>.generation` (or any configurable slot) accepts
+herding-review-slots D1):** `team.<runtime>.generation` (or any configurable slot) accepts
 `{"kind": "herding"}` as a value — ANY purpose dispatched against that slot (cell, gather,
 reviewer, advisor, extraction) resolves automatically to the `bee herding run` payload this
 section describes, no per-purpose request needed. The old gather/review/advisor

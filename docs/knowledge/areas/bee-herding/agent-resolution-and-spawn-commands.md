@@ -21,7 +21,7 @@ RESOLUTION that names the agent once the work is going there.
 
 ## The route: a configured slot sends a whole purpose through a pane
 
-Setting `{"kind": "herding"}` on a `models.<runtime>.generation` slot (or any
+Setting `{"kind": "herding"}` on a `team.<runtime>.generation` slot (or any
 configurable slot) routes EVERY purpose dispatched against it — cell, gather,
 reviewer, advisor, extraction — through `bee herding run` automatically, with no
 per-purpose request needed. The old gather/review/advisor default-model fallback
@@ -70,7 +70,7 @@ use the same resolver, herding-bare-agent D1-D5), resolution follows a strict
 four-step precedence:
 
 1. An explicit `--agent <name>`, resolved through `herding.agents`;
-2. The cell-execution tier slot `models.<runtime>.generation`, but ONLY when it
+2. The cell-execution tier slot `team.<runtime>.generation`, but ONLY when it
    is an object with `kind: "herding"` and a non-empty `agent` string — that
    name resolves through `herding.agents`. This is the configured role-to-agent
    mapping that a bare `bee herding run` obeys;

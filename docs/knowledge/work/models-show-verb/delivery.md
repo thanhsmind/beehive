@@ -14,9 +14,9 @@ bee:
 
 ## What shipped
 
-- **ms-1** — bee models show prints the raw models role table, descriptions intact, each row marked configured or default (5 file(s) changed)
+- **ms-1** — bee team show prints the raw models role table, descriptions intact, each row marked configured or default (5 file(s) changed)
 - **ms-2** — bee status --json models section merges each raw slot description onto the normalized slot for display; resolution keeps the stripped map (2 file(s) changed)
-- **ms-3** — Fresh installs seed a described role table; both role doors send the author to bee models show (5 file(s) changed)
+- **ms-3** — Fresh installs seed a described role table; both role doors send the author to bee team show (5 file(s) changed)
 
 ## Verify
 
@@ -34,7 +34,7 @@ Each cell below was capped only against a recorded passing verify result — bee
 - **ms-2** — Test expectation for a whitespace-only description was wrong: a raw {model, description:" "} slot normalizes to the OBJECT {model}, not to a bare string, so it asserts {model:"haiku"} and a separate undescribed string slot covers the no-widen case — the plan was wrong about a fact
 - **ms-3** — Also edited packages/bee-rs/crates/bee/src/verbs/cells/tests.rs (reserved first) — two tests pin the missing-role refusal string verbatim, so changing the refusal without them is a guaranteed red — something else had to be fixed first
 - **ms-3** — Compared resolve_role answers instead of the whole normalized map — the {model} leaf is not byte-equal to the bare string it replaces, so map equality would fail on a shape change that resolution is blind to — the plan was wrong about a fact
-- **ms-3** — sync-ack: The cell declares affects_skills [] on purpose: this changes the onboarding seed and two CLI strings (the missing-role refusal, cells add --help), and both now teach bee models show at the point of use. No bee-planning/swarming/reviewing/capturing text states the seed shape or quotes either string, so there is nothing there to keep in sync.
+- **ms-3** — sync-ack: The cell declares affects_skills [] on purpose: this changes the onboarding seed and two CLI strings (the missing-role refusal, cells add --help), and both now teach bee team show at the point of use. No bee-planning/swarming/reviewing/capturing text states the seed shape or quotes either string, so there is nothing there to keep in sync.
 
 ## Provenance
 

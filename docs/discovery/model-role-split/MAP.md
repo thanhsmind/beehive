@@ -119,7 +119,7 @@ slot.
   Ticket: `tickets/001-dead-extraction-slot.md`.
 - **`06e49368`** — model roles become an **open, fall-through set**. A
   consumer names an ordered *list* of role names and an unset name
-  yields to the next; any name in `models.<runtime>` is a legal role and
+  yields to the next; any name in `team.<runtime>` is a legal role and
   the guard asks "is this configured" rather than checking a hardcoded
   list; an unconfigured name is warned, never silently accepted. Ends
   the dead-slot class of defect, so role **count** stops being the

@@ -16,7 +16,7 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "ffbedfd6a7ad4054109d21afe57295cf1fb4604b10f1580c4753b417235fe76a"
+      "sha256": "b500e6a1ebc5607ed17dcd2c61b2263bf8b4a5ce57055e7daa7b1964114b9f0c"
     },
     {
       "name": "bee-herdr",
@@ -24,11 +24,11 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "86e6d86d86d4e267576e97c87961be00a3bfb709e52c1b1ea6fed3f7ffa01502"
+      "sha256": "027afdb854c61c10e1b4dbaf3886fead260170f74766d18ad8666ca1763ba3cb"
     },
     {
       "name": "bee-planning",
-      "sha256": "959fc11b6b51ff0df4028f8926f1fecfea25740941fb40e85172df80457e27a0"
+      "sha256": "21d2f42866e1518092b20d50f1b86beb25fd86383de21719aef6de82b710ed47"
     },
     {
       "name": "bee-principle-chestertons-fence",
@@ -100,7 +100,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "ed390594c7240aa201d1a782a843f3c7897aad12c14186eb4b31ca3b4cce1c4d"
+      "sha256": "3a34d7587059b7ba4f49942a21c921164488595c1b97459adc5e772c87e4b460"
     },
     {
       "name": "bee-verify-upkeep",

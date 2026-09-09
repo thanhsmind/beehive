@@ -339,7 +339,7 @@ recovery.
   `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, fired from both
   the prepare and wave paths, beside `DISPATCH_RUNTIMES` there and `RUNTIMES`
   in `verbs/drivers/models.rs`; operator-facing contract:
-  `docs/config-reference.md` (§ Pi) and the `models.pi` block in
+  `docs/config-reference.md` (§ Pi) and the `team.pi` block in
   `.bee/config-sample.json`. The belt file grew a THIRD capability with
   pi-worktree-session-relocation (c47fa930, 85d85ede): registering public
   commands `/bee-worktree-new`, `/bee-worktree-enter`, `/bee-worktree-merge`, and
@@ -362,7 +362,7 @@ recovery.
   `three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode`;
   the fail-not-skip opt-out (R28) is `BEE_OPENCODE_SUITE_ALLOW_SKIP`.
   Model-parameter allowlist gap (Open Gaps): `evaluate_claude_dispatch` in
-  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (no `models.opencode`
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs` (no `team.opencode`
   branch yet). Nested-dispatch session-identity gap (Open Gaps): reservation
   identity is the acting CLI session (`verbs/reservations/reserve.rs`);
   the belt forwards OpenCode's own `input.sessionID` as `session_id`

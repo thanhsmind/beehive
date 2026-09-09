@@ -104,11 +104,11 @@ consult budget.
   `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs` (the model-role
   split retired `MODEL_TIERS`/`CONFIGURABLE_TIERS` and the Node
   `state.mjs` reader; `ceiling` is still never configured — the validator
-  now names the key on sight — and any role `models.<runtime>` carries is
+  now names the key on sight — and any role `team.<runtime>` carries is
   configurable).
 - Adviser (worker consult): `resolveAdvisor` + `MODEL_NORMALIZE_SLOTS` in
   `packages/bee/lib/state.mjs` (byte-mirrored to `.bee/bin/lib/`);
-  slot `models.<runtime>.advisor` in `.bee/config.json`; worker protocol in
+  slot `team.<runtime>.advisor` in `.bee/config.json`; worker protocol in
   `skills/bee-swarming/references/worker-details.md` ("Advisor consult in
   full"); dispatch-time
   same-model no-op + Advisor line (AO5 form, ladder removed by ao-2b-1) in
@@ -118,7 +118,7 @@ consult budget.
   Evidence: commits 14e0e1b, 68d3a0d, 33aaad7; traces `.bee/cells/adv-{1,2,3}.json`;
   transport proofs `docs/history/advisor/reports/validation-advisor-consult.md`.
 - Advisor config tolerance: `STALE_ADVISOR_KEY_WARNING` (copy names the
-  top-level key; the nested `models.<runtime>.advisor` slot is separate and
+  top-level key; the nested `team.<runtime>.advisor` slot is separate and
   valid), `hasStaleAdvisorKey`
   in `packages/bee/lib/state.mjs` (byte-mirrored to
   `.bee/bin/lib/state.mjs`); surfaced by `the bee binary`

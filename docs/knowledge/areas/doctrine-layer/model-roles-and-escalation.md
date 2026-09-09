@@ -26,7 +26,7 @@ that keep an open set safe, and the separate lever cost moved onto.
 
 ## Behaviors & Operations
 
-**B1 — One parser owns the `models.<runtime>` shape** (model-role-split D1,
+**B1 — One parser owns the `team.<runtime>` shape** (model-role-split D1,
 store `cd72ec97`). A single `resolve_role` in the drivers module reads the
 config; the model guard calls through to it rather than carrying a second
 implementation, and `resolve_advisor` collapses the same way. Why it is first
@@ -39,7 +39,7 @@ already drifted four entries against five with nothing intending it.
 `06e49368`). A consumer names an ordered *list* of role names. An unset or
 unresolvable name yields to the next; the last entry is always a name bee
 resolves, so no existing host changes model when the feature lands. Any name
-present in `models.<runtime>` is legal — the guard asks "is this configured",
+present in `team.<runtime>` is legal — the guard asks "is this configured",
 never "is this one of four words". `CLAUDE_TIERS` and `CODEX_TIERS` end as
 hand-maintained closed lists. A name nothing configures is **warned on stderr**,
 never silently accepted and never a refusal. Falling through on an *absent*
@@ -73,7 +73,7 @@ information in `tier` meant budget rather than model choice, and 20 of them said
 `ceiling`. Holding cost apart also preserves decision `0015` with no carve-out:
 `ceiling` is not a role name at all, so the open set needs no exception for it —
 and since role-edge-hardening D1, `0015` has teeth: a configured
-`models.<rt>.ceiling` key is named by the config validator for every value
+`team.<rt>.ceiling` key is named by the config validator for every value
 shape, with a teach line pointing at `bee cells escalate`, instead of being
 silently accepted and then poisoning a dispatch with the marker-plus-model
 pair the guard denies.
@@ -147,7 +147,7 @@ silently dropped — the answer is in `docs/history/model-role-split/plan.md`
 
 **B12 — A role slot may describe itself, and only the door line reads the
 description** (role-slot-description, cell rsd-1, PBI p-a1399c00). A
-`models.<runtime>` role slot may carry an optional description string.
+`team.<runtime>` role slot may carry an optional description string.
 Exactly one surface renders it: the dispatch-door roles line, reading the
 RAW config and clipping to 60 characters, as `name=model ("desc")`. The
 normalizer drops the field, which is what keeps resolution, the model
@@ -155,9 +155,17 @@ guard, and dispatch prepare blind to it — a display string can never
 steer a dispatch. The validator already tolerated unknown keys; that
 tolerance is now pinned by test.
 
-**B13 — `bee models show` is the one read door for the role table**
-(models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44). It prints the
-raw `models.<runtime>` slots verbatim — description intact — plus the
+**B13 — `bee team show` is the one read door for the role table**
+(models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44; renamed from
+`bee models show` by team-config-rename D1 on 2026-09-09, when the config block
+itself went from `models.<runtime>` to `team.<runtime>` — the block is the
+leader's roster of who does which job, not a list of model ids, and the old
+name made agents read it as one. `models` is still read as an alias, folded
+into `team` once at config load (team-config-rename D2): `team` wins when both
+are present, a `models`-only config gets one `note legacy_models_key` line from
+`bee doctor` and one line in the preamble's Dispatch door, and `bee models
+show` still runs with one stderr notice.) It prints the
+raw `team.<runtime>` slots verbatim — description intact — plus the
 built-in defaults, each row source-marked. `bee status --json` keeps
 descriptions display-only; the default config seeds described roles; and
 the missing-role refusal and the `bee cells add` help both send an
@@ -178,7 +186,7 @@ seat yields to the advisor** (lane-model-diversity D1/D2/D3/D4/D5). The
 eight seat names — `lane-1..lane-3` and `hat-facts-gaps`,
 `hat-risks`, `hat-value`, `hat-alternatives`, `hat-user-impact` — live in
 `SEAT_ROLES` beside `tier_role_list` in the drivers module (case-folded
-membership), and each configures a model in the same open `models.<runtime>`
+membership), and each configures a model in the same open `team.<runtime>`
 table as every other role (D1). On `--kind advisor` only, a declared seat
 whose slot resolves nothing — absent, null, or shapeless — rebinds to the
 advisor slot instead of refusing, keeping `resolve_advisor`'s one-name
@@ -204,7 +212,7 @@ other consumers (bee-reviewing's specialists, exploring's fresh-eyes) plus its
 `null` fallback to generation. No constant changed — `SEAT_ROLES` and the
 resolution path are untouched; what moved is which skill asks for which kind.
 
-**B16 — `models.pi` is a herding-only role table with a settled value set**
+**B16 — `team.pi` is a herding-only role table with a settled value set**
 (pi-support D5/D6). The pi runtime resolves roles from the same one config
 home, but every slot must resolve `kind: herding` — the dispatch door's
 `pi_requires_herding` refusal covers plain-string, native, cli, budget and
@@ -220,7 +228,7 @@ worker wrote a report. The Pi-only async half is opt-in per dispatch
 (`--inbox-session <token>`) and carries named limits: at-least-once
 delivery with `job_id` as the dedupe key, a drain that needs a live Pi
 session, and header-only injection (the report body is never injected).
-See `docs/config-reference.md`, "Pi — models.pi is herding-only".
+See `docs/config-reference.md`, "Pi — team.pi is herding-only".
 
 **B17 — A gather asks for the read job** (gather-reads-the-read-slot D1/D3,
 store `295f3d03`). A `--kind gather` dispatched with no `--role` resolves the
@@ -245,7 +253,7 @@ is untouched.
 
 Every rule above refuses or warns rather than resolving silently, with a single
 exception that is deliberate and bounded: `code` or `read` asked on a runtime
-whose `models.<runtime>` configures neither of them. That is the pre-roles
+whose `team.<runtime>` configures neither of them. That is the pre-roles
 migration window, and it closes the moment either key is **written** — an
 explicit null counts, because a written key means the operator knows the
 vocabulary, and a present-but-null name resolves Budget at its own slot rather
@@ -308,6 +316,6 @@ core: the extension factory, `on(session_start|tool_call|tool_result)`,
   denominator reads 0 once `role` is required — and is argued at all three code
   sites, but D5's wording still says the ration is "unchanged in force".
 - On opencode the rendered agent file is the enforcement rather than a dispatch
-  model param, so a configured `models.opencode.code` is currently ignored.
+  model param, so a configured `team.opencode.code` is currently ignored.
 - `role` is the one required field with no revision door: it is absent from the
   cell `UPDATE_FIELDS` list and is not named as frozen either.

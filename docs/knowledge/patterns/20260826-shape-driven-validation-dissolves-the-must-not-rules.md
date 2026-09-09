@@ -8,7 +8,7 @@ bee:
   id: pattern-20260826-shape-driven-validation-dissolves-the-must-not-rules
   lifecycle: active
   areas: [rust-runtime, doctrine-layer]
-  sources: ["role-edge-hardening reh-1, 2026-08-25 — a well-formed models.<rt>.ceiling key passed the rebuilt validator with zero problems, though decision 0015 forbids the key outright", "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs (validate_models_config, the ceiling-not-a-role arm)"]
+  sources: ["role-edge-hardening reh-1, 2026-08-25 — a well-formed team.<rt>.ceiling key passed the rebuilt validator with zero problems, though decision 0015 forbids the key outright", "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs (validate_models_config, the ceiling-not-a-role arm)"]
   polarity: pitfall
   critical: false
   evidence: exercised
@@ -25,7 +25,7 @@ role's junk value was "dropped by the parser and reported by nobody".
 The inversion had a blind spot the other way. Under the old allow-list, a
 forbidden key never validated because it never appeared; under shape-walking,
 the forbidden key validated **successfully** — a well-formed
-`models.<rt>.ceiling` value passed every shape check, because shape checks were
+`team.<rt>.ceiling` value passed every shape check, because shape checks were
 all that remained. Decision 0015 forbids that key; the rule had no code home
 anymore, so it dissolved without anyone deciding to drop it. Downstream, the
 silently-accepted key made `dispatch prepare` stamp a `[bee-tier: ceiling]`

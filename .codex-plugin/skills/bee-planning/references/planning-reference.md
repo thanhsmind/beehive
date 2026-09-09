@@ -337,10 +337,10 @@ history.
     `lane` is (`bee cells add` refuses without it). The recommended vocabulary —
     `code`, `read`, `test`, `docs`, `review`, `design` — is authoring guidance
     only; any non-empty name is legal, validation checks presence and shape,
-    never membership. A role nothing in `models.<runtime>` configures still
+    never membership. A role nothing in `team.<runtime>` configures still
     runs: it falls through to the next name the dispatch asks for and warns,
     it never fails. The one silent case is `code` or `read` on a runtime whose
-    `models.<runtime>` configures NEITHER of them — the pre-roles window, where
+    `team.<runtime>` configures NEITHER of them — the pre-roles window, where
     falling through is the intended no-op; configuring either key closes it.
 
 ## Example cell JSON

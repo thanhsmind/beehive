@@ -126,7 +126,7 @@ caller — and charged a round trip for every guess.
   Both orientations a session can start from — the full startup preamble
   and the narrowed post-compaction orientation — carry a "Dispatch door"
   block: the one preparation verb, then one line publishing the roles
-  `models.<runtime>` actually configures plus the `--role` spelling, capped
+  `team.<runtime>` actually configures plus the `--role` spelling, capped
   at six names with a "+N more" count and never rendering a slot's effort
   value (fbbadad5, which re-rendered dispatch-door-upfront D2's original
   four-tier line in role language after the model-role split). The line is
