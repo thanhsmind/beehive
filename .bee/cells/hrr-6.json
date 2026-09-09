@@ -1,0 +1,77 @@
+{
+  "id": "hrr-6",
+  "feature": "herding-route-role",
+  "title": "Give route-prompt.md its slice 2 half: the carve-out, the reviewer, and the four verdicts",
+  "lane": "high-risk",
+  "role": "docs",
+  "action": "`skills/bee-herding/references/route-prompt.md` currently says it covers slice 1 only. Replace that limitation with the full contract. This document IS the behavior — route is a cold LLM following it — so write it as precisely as a spec.\n\nAdd, after the existing read-and-announce steps:\n\n**The carve-out, stated as a carve-out (D2, decision 8388df3e).** Independent review in bee is the human's own door — rule `agents-review-user-invoked`. You are the ONE named exception, and only while BOTH are true: the owner enable marker exists (`bee herding interlock`) AND `gate_bypass_level` is exactly `full` or `total`. Either missing → announce the refusal once and end the tick. You cannot arm yourself; both conditions are the owner's.\n\n**Resolving the producing agent.** Read `.bee/config.json` from MAIN. The cockpit spawns every worker from one key and never varies it per dispatch, so the producer is `herding.agent_command` (a `herding.agents` registry key), unless `models.<runtime>.generation` names a herding agent, which wins. That is the same precedence `bee herding run` itself uses with no `--agent`. If neither resolves, or the resolved name is not a key in `herding.agents`, REFUSE and announce — never proceed on an unknown producer.\n\n**Choosing the reviewer — a different agent (D2).** Prefer the agent named by the `review` model role. If that resolves to the producer, take the first `herding.agents` key that differs. If the registry holds only the producer, REFUSE and say exactly that: bee cannot review this work with a different agent. A rename is not a difference you can see, so a producer key absent from the registry is a refusal, not a licence.\n\n**The in-review marker — this is what keeps merge off your worktree.** BEFORE you start the reviewer, write `.bee/tmp/bee-herding.review.<slug>` containing the worktree's HEAD sha and the reviewer's pane id, one per line. It is read by the merge role, which skips a marked worktree, and by your own next tick, which must be able to tell 'reviewer running' from 'finished and unrouted'. Same pattern as `.bee/tmp/bee-herding.red.<slug>` (role-merge.md:237). Rules: a marker whose HEAD sha still matches and whose pane is still live means a review is in flight — do nothing this tick. A marker whose pane is GONE means the reviewer died: remove the marker, announce it once, and let a later tick start over. You clear the marker when a verdict lands. A human deleting it by hand is the undo for a route that should not have happened.\n\n**Starting the reviewer.** Dispatch through `bee dispatch prepare --runtime <rt> --kind reviewer` and run exactly the tool and payload it returns; never hand-pick a model. Split its pane and label it `<slug>-review` — NOT `<slug>`, which is the coder's label and would collide. Count it against the four-slot cap like any other worker.\n\n**The four verdicts, all four.** Record every one through `bee reviews record --kind decision`, whose status vocabulary is the closed set `pending|blocked|approved`:\n\n| Verdict | Record | Then |\n|---|---|---|\n| clean | `approved` | clear the marker, announce `<slug> reviewed clean by <agent> — ready for your merge`, stop. You never merge. |\n| CHANGES | `blocked`, findings appended via `--kind finding` | write the cell, hand the brief to the coder's pane, clear the marker, announce both acts |\n| reviewer BLOCKED | `blocked` | write `.bee/tmp/bee-herding.blocked.<slug>` with the reason, set `bee state waiting-on set --kind question`, announce, stop cold. Never restart, never re-brief, never try another agent. |\n| unclassifiable | nothing | announce once, leave the worktree exactly as you found it |\n\n**The CHANGES hand-off (D4, decision 4a395ea7-503d-4117-b84b-96b657490f70 and the D4 record).** Two acts, in this order. FIRST write the cell: `bee cells add` takes no root flag, so run it from inside the worktree; the cell lands in that feature's lane, which is empty because a finished worktree has zero open cells — that is why it is served first, and why no priority field exists or is needed. THEN hand the brief to the coder's own pane, which is still open and idle because merge is the only thing that ever closes it (role-merge.md:157-161): find the pane whose label equals the bare slug and `bee herding pane send-text` it a short brief naming the cell id and the findings file. You still never START a coder and never create a pane — you hand work to one that is already there. If no pane carries the bare slug, say so plainly and leave the cell for a human; do not go looking for another pane to hand it to.\n\n**Announce every refusal**, once, through the same scrollback dedup the rest of this file uses. A silent refusal is indistinguishable from a dead loop.\n\nAlso delete the 'What slice 2 will add' forward-looking paragraph — it is now the document.",
+  "verify": "rg -q 'agents-review-user-invoked' skills/bee-herding/references/route-prompt.md && rg -q 'bee-herding.review' skills/bee-herding/references/route-prompt.md && rg -q -- '-review' skills/bee-herding/references/route-prompt.md && rg -q 'approved' skills/bee-herding/references/route-prompt.md && rg -q 'waiting-on' skills/bee-herding/references/route-prompt.md && ! rg -q 'SLICE 1 ONLY' skills/bee-herding/references/route-prompt.md",
+  "files": [
+    "skills/bee-herding/references/route-prompt.md"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "docs/history/herding-route-role/CONTEXT.md",
+    "skills/bee-herding/references/route-prompt.md",
+    "skills/bee-herding/references/role-merge.md"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/route-prompt.md"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "8388df3e-48d5-4daf-976c-1932c947b775",
+    "4a395ea7-503d-4117-b84b-96b657490f70"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "the carve-out is stated AS a carve-out, naming the rule it excepts and both owner-held arming conditions",
+      "the producing agent resolves by the documented precedence, and an unresolvable or unregistered producer refuses",
+      "a registry holding only the producer refuses and says why",
+      "the in-review marker is written BEFORE the reviewer starts, carries HEAD sha and pane id, and has defined behavior for live, dead-pane and stale-head cases",
+      "the reviewer pane is labelled <slug>-review, never the bare slug",
+      "all four verdicts have a recorded status and a defined next act, including the clean one",
+      "the CHANGES hand-off writes the cell first, then sends to the pane labelled with the bare slug, and refuses to improvise when no such pane exists",
+      "no forward-looking 'slice 2 will add' paragraph remains"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "route-w6",
+    "outcome": "route-prompt.md now carries the whole slice-2 contract: carve-out, producer resolution, different-agent rule, in-review marker, reviewer pane label, four verdict paths, D4 hand-off, BLOCKED stop",
+    "files_changed": [
+      "skills/bee-herding/references/route-prompt.md"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths and AGENTS.md in the shared worktree.",
+      "sync-ack: parallel wave: siblings landed control_loop.rs, role-merge.md, AGENTS.md and operational-invariants.md in the same shared worktree. hrr-6's own commit 4951bb6d carries route-prompt.md alone."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T03:26:32.520Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-08T15:33:22.141Z",
+    "sync_ack": "parallel wave: siblings landed control_loop.rs, role-merge.md, AGENTS.md and operational-invariants.md in the same shared worktree. hrr-6's own commit 4951bb6d carries route-prompt.md alone.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The slice-1-only limitation is gone. The document states the carve-out as a carve-out naming agents-review-user-invoked and both owner-held arming conditions, resolves the producer by the documented precedence and refuses on unknown or unregistered, refuses a one-entry registry by name, writes .bee/tmp/bee-herding.review.<slug> with HEAD sha and pane id BEFORE the reviewer starts with live/dead-pane/stale-head cases defined, labels the reviewer pane <slug>-review, maps all four verdicts onto approved|blocked, hands CHANGES to the bare-slug pane after the cell is written, and stops cold on BLOCKED with the blocked marker and a waiting-on mark.",
+      "commit": "4951bb6d",
+      "files": [
+        "skills/bee-herding/references/route-prompt.md"
+      ],
+      "tests": "rg -q agents-review-user-invoked && rg -q bee-herding.review && rg -q -- -review && rg -q approved && rg -q waiting-on && ! rg -q SLICE-1-ONLY on route-prompt.md — green:static — docs change: pointer/parity checks pin the carve-out name, the marker, the reviewer label, the verdict vocabulary, the waiting-on mark, and the removal of the slice-1 fence; run by the orchestrator, exit 0",
+      "deviations": [
+        "Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths and AGENTS.md in the shared worktree."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

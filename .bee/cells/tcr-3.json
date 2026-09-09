@@ -1,0 +1,87 @@
+{
+  "id": "tcr-3",
+  "feature": "team-config-rename",
+  "title": "Sweep the words agents read: models.<runtime> becomes team.<runtime>",
+  "lane": "standard",
+  "role": "code",
+  "action": "88 user-facing strings in non-test Rust still name `models.<runtime>` (find them with `rg -n 'models\\.(claude|codex|pi|opencode|<runtime>|<rt>|\\{)' packages/bee-rs/crates/bee/src --glob '*.rs' | grep -v '/tests\\|tests.rs'`). The decisive ones: the dispatch-door line printed into every session preamble (`hooks/model_guard.rs:542`), the guard's refusal (`:293-297`), `verbs/drivers/models.rs:489`, the pi refusals at `verbs/drivers/prepare.rs:143,147`, fifteen `bee status` problem messages in `verbs/status_full/store.rs` (:529, :543, :558, :588, :606, :625, :638, :651, :664, :677, :689, :716, :727, :738, :761, :775), `doctor.rs:337`, the addCell refusal that teaches the key at `verbs/cells/validate.rs:362`, the `TEACH` constant at `verbs/models_group.rs:48`, and the porcelain line at `router.rs:86`.\n\nChange every one from `models.<...>` to `team.<...>`. Where a string says `bee models show`, make it `bee team show`. Then update every test that asserts the old wording verbatim — known ones at `model_guard.rs:2653, 2719, 2735, 2879, 2885, 2914, 3152` and `models_group.rs:456` (`assert!(text.contains(\"models.<runtime>.<role>\"))`); find the rest by running the suite.\n\nDo NOT touch `docs/`, `skills/`, or `.bee/config.json` — those are slice 2. Do NOT rename the `bee status --json` OUTPUT key `models` (`status_full/build.rs:339-344`) — it is a public contract and stays. Do NOT touch the string literal `\"models\"` used as a JSON KEY in code — only prose that a human or agent reads.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee && ! rg -n 'models\\.(claude|codex|pi|opencode|<runtime>|<rt>|\\{)' packages/bee-rs/crates/bee/src --glob '*.rs' | grep -v '/tests\\|tests.rs' | grep -q .",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+    "packages/bee-rs/crates/bee/src/router.rs"
+  ],
+  "read_first": [
+    "docs/history/team-config-rename/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [
+    "tcr-1"
+  ],
+  "decisions": [],
+  "must_haves": {
+    "truths": [
+      "the preamble dispatch-door line (model_guard.rs:542) says team.<runtime>",
+      "zero models.<rt> prose in non-test Rust",
+      "every test that asserted the old wording is updated and green",
+      "the status --json output key and JSON key literals are untouched"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "trace": {
+    "worker": "team-w3",
+    "outcome": "every user-facing Rust string now says team.<runtime>; the preamble roster line, the guard refusal, the status problem messages, the addCell refusal and the porcelain line included",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+      "packages/bee-rs/crates/bee/src/router.rs"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: string-only change on files an ownership map ties to bee-herding; the skill prose sweep is slice 2.",
+      "sync-ack: string-only sweep of user-facing prose (models.<runtime> to team.<runtime>) across files an ownership map ties to bee-herding; no bee-herding skill text depends on those Rust strings, and the skill-side prose sweep of the same words is slice 2 (docs lane) per plan.md revision 2"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T04:20:02.296Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-09T03:57:15.220Z",
+    "sync_ack": "string-only sweep of user-facing prose (models.<runtime> to team.<runtime>) across files an ownership map ties to bee-herding; no bee-herding skill text depends on those Rust strings, and the skill-side prose sweep of the same words is slice 2 (docs lane) per plan.md revision 2",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The 88 non-test prose occurrences of models.<runtime> are gone: the dispatch-door roster line (model_guard.rs:543) says team.{runtime}, the guard refusal, models.rs:489, the pi refusals, the fifteen status problem messages, doctor.rs:337, validate.rs:362, the TEACH constant body and router.rs:86 all say team; every test that asserted the old wording is updated. The bee status --json output key models (build.rs:339-340) and JSON key literals are untouched.",
+      "commit": "0bcabb49",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+        "packages/bee-rs/crates/bee/src/router.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee, plus rg for models.<rt> prose over non-test Rust — green:unit — 3443 passed 0 failed on the worker commit, run by the orchestrator; the prose rg returned 0",
+      "deviations": [
+        "Capped with --sync-ack: string-only change on files an ownership map ties to bee-herding; the skill prose sweep is slice 2."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

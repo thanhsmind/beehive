@@ -549,6 +549,38 @@ replacement for it. Config shape and samples: `docs/config-reference.md`
 (models section), `.bee/config-sample.json`,
 `.bee/config-sample-cli-executors.json`.
 
+## The route role — review carve-out and boundaries
+
+**The review carve-out and its two owner-held arming conditions.** Rule
+`agents-review-user-invoked` requires independent review to be a separate,
+user-invoked pass and never an automatic stage. Inside the bee-herding cockpit
+only, a named carve-out permits the `route` role to start an independent
+review over a finished worktree without being asked (decision 8388df3e).
+This carve-out has two owner-held arming conditions: the owner enable marker
+(`.bee/tmp/bee-herding.enable`) must exist, and `gate_bypass` must be `full`
+or `total`. The `route` role can never arm itself because both conditions
+belong to the owner and require explicit owner setup. When either condition is
+unmet, `route` refuses rather than proceeding.
+
+**Different-agent requirement and refusal direction.** The reviewer must run
+on a different `herding.agents` entry than the agent that produced the
+worktree's changes. Self-review by the producing agent is prohibited. If a
+different agent is not available or cannot be resolved, `route` refuses rather
+than guessing.
+
+**Hard boundaries: what route never does.** The `route` role is strictly
+limited to routing finished worktrees. Concretely, `route` never merges, never
+approves a gate, never starts a coder, and never creates a pane. Merging remains
+an owner gesture; gates belong to the human; coding stays with working agents;
+and pane creation is reserved for cockpit setup.
+
+**Worktree isolation during review: the in-review marker.** To prevent races
+between cockpit roles, `route` creates the in-review marker
+(`.bee/tmp/bee-herding.review.<slug>`) before starting a review. The
+in-review marker is the mechanism that keeps the `merge` role off a worktree
+mid-review: while `.bee/tmp/bee-herding.review.<slug>` is present, `merge` skips
+the worktree, preventing concurrent merge attempts while review is in flight.
+
 ## What actually contains this
 
 Do not assume the loop "will not pick up hard-gate work" —

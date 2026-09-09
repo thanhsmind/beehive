@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "feature": "team-config-rename",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"team-config-rename\" started at phase \"exploring\" (lane).",
+  "next_action": "Merged into main at 13e5c98; reload the product and test \"team-config-rename\", then either approve uat (\"bee gate --name uat --approved true --lane team-config-rename\") or fix it in the worktree and merge again.",
+  "created_at": "2026-09-09T03:23:19.960Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: team-config-rename",
+    "asked_at": "2026-09-09T04:36:24.631Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
+  "route": {
+    "class": "refactor",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain",
+      "covered-contract-change"
+    ],
+    "product_files": 14,
+    "rationale": "A public config key every host reads and a hook (model_guard) that decides dispatch both change spelling; 14 raw reader sites across doctor, status, onboard, hooks and herding; existing tests assert the old key. No auth, no data, no external system — standard, not high-risk.",
+    "updated_at": "2026-09-09T03:24:44.858Z",
+    "feature": "team-config-rename"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-09T03:38:26.024Z",
+    "feature": "team-config-rename",
+    "newest_decision_id": "261f72fe-aef1-4821-b7da-b0fafb3713a9",
+    "plan_sha256": "absent",
+    "advisor": "hat-wave-3-seat (opus x2, agy-flash)",
+    "digest_head": "# Hat wave — plan-step synthesis, team-config-rename\n\nDate: 2026-09-09. Three seats, two models, one draft (`plan.md` revision 1, commit `6e3d7061`).\nSeats: `hat-facts-gaps` (opus), `hat-alternatives` (opus), `hat-user-impact` (agy-flash pane).\nNo seat dropped. This wave is the feature's plan check (absorption, decision `b34fdea9`).\n\n## Verdict\n\n**Revision 2 is owed.** Revision 1's claims table carried one false claim, one telemetry read\nmislabelled as a config read, one fabricated `ran` row, an"
+  }
+}

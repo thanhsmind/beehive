@@ -1,0 +1,70 @@
+{
+  "id": "hrr-3",
+  "feature": "herding-route-role",
+  "title": "Move the herding skill from three roles to four",
+  "lane": "high-risk",
+  "role": "docs",
+  "action": "Update `skills/bee-herding/SKILL.md` so it describes four roles, not three.\n\n- The heading and body currently read \"The three roles\". Make it four and add route's paragraph beside bootstrap, dispatch and merge, in the same shape they use: one sentence of what it is, then the step list in brief, then `Protocol: references/route-prompt.md`. Note that route is the one role whose whole contract is its prompt file, as the supervisor's is.\n- The **Role boundary** section enumerates what each role never does. Add route's line: it only reads and reports; it never merges, never picks a PBI, never starts a coder or creates a pane, and never touches main.\n- Do NOT add anything about the review carve-out, the reviewer, or the verdict paths — those are slice 2 and are not true of the shipped code yet. This document must describe what exists.\n\nCheck the skill's frontmatter `description` too: if it says \"three roles\" or enumerates bootstrap/dispatch/merge as the complete set, it is now wrong and must be corrected in the same edit.",
+  "verify": "rg -q 'route' skills/bee-herding/SKILL.md && ! rg -q 'The three roles' skills/bee-herding/SKILL.md",
+  "files": [
+    "skills/bee-herding/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "skills/bee-herding/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/SKILL.md"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "a685d557-23bf-43fd-a75e-b3a075cc93bf"
+  ],
+  "must_haves": {
+    "truths": [
+      "the skill names four roles and route's protocol pointer is references/route-prompt.md",
+      "the role boundary section carries route's own never-list",
+      "nothing about the carve-out, the reviewer or the verdicts appears — slice 1 ships none of it",
+      "the frontmatter description does not still claim a three-role cockpit"
+    ]
+  },
+  "change_class": "behavior",
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "route-w3",
+    "outcome": "bee-herding SKILL.md now describes four roles; route's paragraph, protocol pointer and never-list added, frontmatter corrected",
+    "files_changed": [
+      "skills/bee-herding/SKILL.md"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: a sibling cell in the same parallel wave touched skills/bee-herding/references/route-prompt.md in the shared worktree.",
+      "sync-ack: parallel wave: hrr-2 landed skills/bee-herding/references/route-prompt.md in the same shared worktree, so the door sees a sibling's touched path. hrr-3's own commit 45ecdce1 carries SKILL.md alone."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-08T15:23:46.821Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-08T15:19:46.990Z",
+    "sync_ack": "parallel wave: hrr-2 landed skills/bee-herding/references/route-prompt.md in the same shared worktree, so the door sees a sibling's touched path. hrr-3's own commit 45ecdce1 carries SKILL.md alone.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "SKILL.md moves from three roles to four: route gains its own paragraph pointing at references/route-prompt.md and noting it is the one role whose whole contract is its prompt file, the Role boundary section gains route own never-list, and the frontmatter description no longer claims a three-role cockpit. Nothing about the carve-out, the reviewer or the verdicts appears — slice 1 ships none of it.",
+      "commit": "45ecdce1d88fa932a3393a1e97a4c810de8d0c92",
+      "files": [
+        "skills/bee-herding/SKILL.md"
+      ],
+      "tests": "rg -q route skills/bee-herding/SKILL.md && ! rg -q \"The three roles\" skills/bee-herding/SKILL.md — green:static — docs change: the proof is a parity check that the document now names four roles and no longer claims three, in the body and in the frontmatter",
+      "deviations": [
+        "Capped with --sync-ack: a sibling cell in the same parallel wave touched skills/bee-herding/references/route-prompt.md in the shared worktree."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

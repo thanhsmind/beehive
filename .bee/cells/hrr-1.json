@@ -1,0 +1,82 @@
+{
+  "id": "hrr-1",
+  "feature": "herding-route-role",
+  "title": "Register route as the control loop's fourth role",
+  "lane": "high-risk",
+  "role": "code",
+  "action": "Add a fourth `Role::Route` variant to the herding control loop and register it at every one of the eight closed sites the existing three roles occupy, then prove the registration with tests.\n\nThe eight sites, each verified at these exact anchors in plan.md's claims table:\n1. the `Role` enum (control_loop.rs around :58-67)\n2. `Role::parse` — add `\"route\" => Some(Role::Route)` (:72-75)\n3. `Role::as_str` — add `Role::Route => \"route\"` (:81-83); this is what builds the prompt-file name\n4. `Role::default_interval` (:93-94) — give route its own arm. Ship 300 seconds and say in the code comment that the number is a STARTING GUESS, not a measurement (plan.md OQ5): dispatch/merge run at 60s and supervisor at 900s, and nobody has measured how long a review takes in this repo.\n5. the `--role` refusal string (:153) — it must now name all four\n6. the missing-role message (:195) — same\n7. the usage line (:225) — same\n8. `allowed_tools_for` (:273-291) — add BOTH transport arms for Route\n\nThe tool surface is the load-bearing part. Model it on `SUPERVISOR_ALLOWED_TOOLS` (:299-309): enumerate verbs one by one, never the `Bash(.bee/bin/bee:*)` wildcard. Route needs, and gets, exactly: `bee status`, `bee orient`, `bee worktree list`, `bee cells list`, `bee herding occupancy`, `bee herding pane list`, `bee herding pane read`, `bee herding pane send-text`, `git -C` reads (`status`, `rev-parse`), `ls`, and `Read`. It must NOT carry `Write`, `Edit`, `Bash(git:*)`, `Bash(herdr:*)`, `Bash(tmux:*)`, `Task`, or the bee wildcard. Like the supervisor's, the surface is identical on both transports because route reaches panes only through the transport-neutral `bee herding pane` verbs.\n\nSlice 1 is READ-AND-ANNOUNCE only. Do not add the reviewer dispatch, the review marker, `bee reviews`, or `bee cells add` to the surface — those arrive with slice 2.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "docs/history/herding-route-role/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [
+    "a685d557-23bf-43fd-a75e-b3a075cc93bf"
+  ],
+  "must_haves": {
+    "truths": [
+      "`--role route` parses and `Role::Route.as_str()` is exactly \"route\"",
+      "`--role rout` refuses and the message names all four roles, not three",
+      "the missing-role message and the usage line both name all four",
+      "route's default interval is its own value, and dispatch/merge keep 60s and supervisor keeps 900s unchanged",
+      "route's tool surface contains no `Write`, no `Edit`, no `Bash(git:*)`, no `Bash(herdr:*)`, no `Bash(tmux:*)`, no `Task`, and no `Bash(.bee/bin/bee:*)` wildcard — asserted by a forbidden-token test in the shape of SUPERVISOR_FORBIDDEN_TOOL_TOKENS",
+      "route's tool surface is the same string on the herdr and tmux arms",
+      "the three existing roles' tool surfaces are byte-unchanged"
+    ]
+  },
+  "change_class": "api",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "route-w1",
+    "outcome": "route registered as the control loop's fourth role across all eight closed sites, with an enumerated read-and-announce tool surface",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: siblings in the same parallel wave touched skills/** in the shared worktree.",
+      "The worker delivered hrr-4 scope (the shipped-route-prompt contract test) inside this cell; hrr-4 is dropped rather than re-done.",
+      "sync-ack: parallel wave: siblings hrr-2 and hrr-3 landed skills/bee-herding/references/route-prompt.md and skills/bee-herding/SKILL.md in the same shared worktree. hrr-1's own commit 7275d515 carries control_loop.rs alone."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-08T15:28:42.225Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-08T15:18:39.755Z",
+    "sync_ack": "parallel wave: siblings hrr-2 and hrr-3 landed skills/bee-herding/references/route-prompt.md and skills/bee-herding/SKILL.md in the same shared worktree. hrr-1's own commit 7275d515 carries control_loop.rs alone.",
+    "mistakes": [
+      {
+        "wrong": "The orchestrator grepped for the wrong pattern (contains(\"route\")) and reported to the user that the worker had missed a declared must-have, then wrote a duplicate test",
+        "better": "the worker had already covered it in two tests. Better: run the suite and read the test NAMES before claiming a gap, never infer coverage from a grep for one assertion spelling."
+      }
+    ],
+    "report": {
+      "outcome": "Role::Route added and registered at all eight closed sites: the enum, parse, as_str, default_interval (300s, commented in the source as a starting guess rather than a measurement), the unknown-role refusal, the missing-role message, the usage line, and allowed_tools_for on both transports. ROUTE_ALLOWED_TOOLS is enumerated verb by verb on the SUPERVISOR_ALLOWED_TOOLS pattern and carries no Write, no Edit, no Bash(git:*), no multiplexer client and no bee CLI wildcard. The worker also delivered hrr-4 scope inside this commit: the shipped-route-prompt contract test.",
+      "commit": "7275d5152a6df9e67d1f787c20e2bdab971b887c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- control_loop — green:unit — 61 passed 0 failed, run by the orchestrator on the worker commit; covers all six route tests plus three_existing_roles_tool_surfaces_remain_byte_unchanged and the shipped-prompt contract test",
+      "deviations": [
+        "Capped with --sync-ack: siblings in the same parallel wave touched skills/** in the shared worktree.",
+        "The worker delivered hrr-4 scope (the shipped-route-prompt contract test) inside this cell; hrr-4 is dropped rather than re-done."
+      ],
+      "mistakes": [
+        "The orchestrator grepped for the wrong pattern (contains(\"route\")) and reported to the user that the worker had missed a declared must-have, then wrote a duplicate test — the worker had already covered it in two tests. Better: run the suite and read the test NAMES before claiming a gap, never infer coverage from a grep for one assertion spelling."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 204 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -10,9 +10,10 @@
 
 The bee-herding control loop gains a fourth cold role, `route`, that reads one
 finished worktree per iteration, starts a reviewer on a different agent for it,
-turns a CHANGES verdict into a priority cell in that worktree's own lane, and
-stops cold on anything it cannot classify — and it ends there: `route` never
-merges, never picks a PBI, never starts a coder, and never touches main.
+turns a CHANGES verdict into a cell in that worktree's own lane and hands the
+brief to that worktree's already-open coder pane (D4), and stops cold on
+anything it cannot classify — and it ends there: `route` never merges, never
+picks a PBI, never **starts** a coder or creates a pane, and never touches main.
 
 ## Locked Decisions
 
@@ -24,6 +25,7 @@ a silent edit.
 |----|----------|-----------------------------------------------|
 | D1 | The control loop takes a **fourth role, `route`**, beside `dispatch`, `merge` and `supervisor`. Its finish signal is a **finished worktree** — the same four conditions `role-merge.md` already tests: phase `compounding-complete`, zero cells open or claimed, a clean tree, and `HEAD` exactly on `wt/<slug>`. One cold iteration acts on exactly **one** finished worktree, then exits. `.bee/result-inbox/` markers stay outside this role's scope. (decision `a685d557`) | The cockpit's dispatched coders reach `compounding-complete`; none of them ever writes a result-inbox marker, so the inbox alone would leave the loop open. The four-condition test already exists and is already proven in the merge role — one home, not a second definition of "finished". |
 | D2 | A **named, scoped carve-out** to rule `agents-review-user-invoked`. Inside the herding cockpit **only**, and only while **both** the owner enable marker (`.bee/tmp/bee-herding.enable`) is present **and** `gate_bypass` is `full` or `total`, `route` may start a reviewer over a finished worktree with no human ask. The reviewer **must** run on a different `herding.agents` entry than the agent that produced the work. Everywhere else — every ordinary session, every lane, `bee-reviewing`, Gate 3 — independent review stays the human's door, unchanged. (decision `8388df3e`, touches `565e68d0` and `b34fdea9`) | The two arming conditions are the same pair `role-dispatch.md` §2 and §5 already refuse below, so the carve-out cannot arm itself. The different-agent requirement is new law: bee today has **no** rule against a model reviewing its own output, and `tier_role_list("review")` falls through to `generation` when the review slot is unset. |
+| D4 | `route` may deliver a CHANGES follow-up brief into the **producing coder's still-open pane**. It still never *starts* a coder and never creates a pane; it may hand work to a pane already open and idle on the worktree it just reviewed. **This amends the Feature Boundary line below**, on the owner's answer of 2026-09-08. | Without it D3's cell has no actor at all: writing the cell makes the worktree unfinished, so `merge` skips it permanently (`role-merge.md:89-90`) and `dispatch` refuses it for holding a grant (`role-dispatch.md:243`), while `route` starts no coder. The coder's pane is still open — merge is the only thing that closes it (`role-merge.md:157-161`) — and it is the actor the source fleet uses. Found by two hat seats independently; escalated rather than designed. |
 | D3 | The two bad-outcome paths are **asymmetric**. A review verdict of **CHANGES** becomes work the **same** worktree takes ahead of anything new: `route` writes the findings as a cell in that feature's lane, and that cell is served before any other ready cell in the lane. A **BLOCKED** worker **stops the routing cold** and reports to the human — never restarted, never re-briefed, never handed to a different agent. An outcome `route` cannot classify is **reported and left standing**, never dropped. (decision `4a395ea7`) | CHANGES is mechanical work with a named author and a named diff, so the loop can carry it. BLOCKED is a decision the agent could not make — restarting it asks the same agent the same unanswerable question. |
 
 ### Agent's Discretion

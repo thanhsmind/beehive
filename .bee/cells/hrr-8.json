@@ -1,0 +1,75 @@
+{
+  "id": "hrr-8",
+  "feature": "herding-route-role",
+  "title": "Name the review carve-out where the rule itself lives",
+  "lane": "high-risk",
+  "role": "docs",
+  "action": "A rule with an unnamed exception misleads everyone who reads it. Two files carry that rule and must now carry its one exception.\n\n**1. `AGENTS.md`.** Find the line that states independent review is user-invoked (it reads roughly 'Independent review is a separate, user-invoked pass, never an automatic stage of that chain'). Leave the rule standing and add ONE sentence naming its single exception: inside the bee-herding cockpit, and only while the owner's enable marker exists AND `gate_bypass` is `full` or `total`, the `route` role may start a reviewer on a different agent without being asked (decision 8388df3e). Everywhere else the rule is unchanged. Keep it to one sentence — AGENTS.md is always-loaded context and every word costs every session.\n\n**2. `skills/bee-herding/references/operational-invariants.md`.** This file is where each cockpit safety boundary has its full record. Add route's boundary beside the existing ones, in their shape and at their length: the carve-out and its two owner-held arming conditions; that route can never arm itself because both conditions are the owner's; that the reviewer must run on a different `herding.agents` entry and refuses rather than guessing; that route never merges, never approves a gate, never starts a coder and never creates a pane; and that the in-review marker is the mechanism keeping merge off a worktree mid-review.\n\nBoth edits describe behavior slice 2 actually ships. Do not describe anything else.",
+  "verify": "rg -q 'route' AGENTS.md && rg -q 'gate_bypass' AGENTS.md && rg -q 'route' skills/bee-herding/references/operational-invariants.md && rg -q 'bee-herding.review' skills/bee-herding/references/operational-invariants.md",
+  "files": [
+    "AGENTS.md",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "read_first": [
+    "docs/history/herding-route-role/plan.md",
+    "docs/history/herding-route-role/CONTEXT.md",
+    "AGENTS.md",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "affects_specs": [],
+  "decisions": [
+    "8388df3e-48d5-4daf-976c-1932c947b775"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "the AGENTS.md rule still stands and gains exactly one sentence naming the exception and its two arming conditions",
+      "operational-invariants.md carries route's boundary at the length and shape its siblings use",
+      "both name the different-agent requirement and the refusal direction",
+      "neither describes behavior slice 2 does not ship"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "route-w8",
+    "outcome": "the review carve-out is named where the rule lives: one sentence in AGENTS.md, a full boundary in operational-invariants.md",
+    "files_changed": [
+      "AGENTS.md",
+      "skills/bee-herding/references/operational-invariants.md"
+    ],
+    "deviations": [
+      "Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths in the shared worktree.",
+      "sync-ack: parallel wave: siblings landed control_loop.rs, route-prompt.md and role-merge.md in the same shared worktree. hrr-8's own commit 85436d0b carries AGENTS.md and operational-invariants.md alone."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-09T03:26:43.777Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-08T15:33:25.273Z",
+    "sync_ack": "parallel wave: siblings landed control_loop.rs, route-prompt.md and role-merge.md in the same shared worktree. hrr-8's own commit 85436d0b carries AGENTS.md and operational-invariants.md alone.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "AGENTS.md keeps the agents-review-user-invoked rule and adds one sentence naming its single exception with both arming conditions and decision 8388df3e. operational-invariants.md gains route boundary at its siblings length: the carve-out, that route cannot arm itself, the different-agent requirement with refuse-over-guess, the never-list, and the in-review marker as the mechanism keeping merge off a worktree mid-review.",
+      "commit": "85436d0b",
+      "files": [
+        "AGENTS.md",
+        "skills/bee-herding/references/operational-invariants.md"
+      ],
+      "tests": "rg -q route AGENTS.md && rg -q gate_bypass AGENTS.md && rg -q route operational-invariants.md && rg -q bee-herding.review operational-invariants.md — green:static — docs change: parity checks pin that both files name the role, the arming level, and the marker; run by the orchestrator, exit 0",
+      "deviations": [
+        "Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths in the shared worktree."
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

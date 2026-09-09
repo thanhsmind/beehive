@@ -1,0 +1,63 @@
+{
+  "id": "tcr-2",
+  "feature": "team-config-rename",
+  "title": "Generate fresh hosts on the team key, sample included",
+  "lane": "standard",
+  "role": "code",
+  "action": "`onboard/templates.rs:175` `default_config()` writes `\"models\": {` into every freshly onboarded host's config. Change it to `\"team\": {`. The sample config is compiled into the binary — `templates.rs:264` `CONFIG_SAMPLE_JSON` is an `include_str!` of `.bee/config-sample.json` — so change that file's `models` key(s) to `team` in the SAME commit (the file has the key at two places, around :14 and :71; both).\n\nUpdate the tests that pin these: `templates.rs:491` asserts `default_config()`'s literal key order and names `\"models\"`; `templates.rs:582` parses `CONFIG_SAMPLE_JSON`. Also `STALE_ADVISOR_KEY_WARNING` at `templates.rs:290` names `models.<runtime>.advisor` — make it `team.<runtime>.advisor`.\n\nDo NOT touch this repo's own `.bee/config.json` — that flip is slice 2, after the alias is proven live. Leave `default_config()` writing `team` ONLY; never write both keys.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::templates && ! rg -q '\"models\"' .bee/config-sample.json",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "docs/history/team-config-rename/plan.md",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    ".bee/config-sample.json"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "decisions": [],
+  "must_haves": {
+    "truths": [
+      "default_config() emits team and no models",
+      ".bee/config-sample.json carries team at every place it carried models",
+      "the key-order test and the sample-parse test pass on the new key",
+      "this repo's .bee/config.json is untouched"
+    ]
+  },
+  "change_class": "behavior",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "team-w2",
+    "outcome": "fresh hosts are generated on the team key; the compiled-in sample and the stale-advisor warning moved with it",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-09T03:45:49.770Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
+    "claimed_at": "2026-09-09T03:40:04.380Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "default_config() writes team instead of models (templates.rs:175); .bee/config-sample.json carries team at both places it carried models (include_str at :264 recompiles it); STALE_ADVISOR_KEY_WARNING names team.<runtime>.advisor; the key-order and sample-parse tests pass on the new key. This repo own .bee/config.json is untouched.",
+      "commit": "90780aae25b899be65cf358e33995ccebaaea868",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        ".bee/config-sample.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- onboard::templates && ! rg -q \"models\" .bee/config-sample.json — green:unit — 6 passed 0 failed on the worker commit, run by the orchestrator; sample carries zero models keys; default_config emits team at :175",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
