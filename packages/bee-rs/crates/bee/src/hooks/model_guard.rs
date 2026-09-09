@@ -77,7 +77,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
         return Ok((0, String::new(), String::new()));
     }
 
-    let models = normalize_models(config.get("models"));
+    let models = normalize_models(config.get("team"));
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
 
     let mut verdict = if is_codex_spawn {
@@ -517,12 +517,13 @@ pub(crate) fn role_slot_display(
 /// rendered here and nowhere else: `role_slot_description` reads the raw
 /// config, resolution never sees the field, so a described role and an
 /// undescribed one resolve and dispatch identically.
-pub(crate) fn dispatch_door_lines(models_raw: Option<&Value>, runtime: &str) -> Vec<String> {
-    let roles = role_slot_display(models_raw, runtime);
+pub(crate) fn dispatch_door_lines(config: Option<&Map<String, Value>>, runtime: &str) -> Vec<String> {
+    let team_raw = config.and_then(|c| c.get("team"));
+    let roles = role_slot_display(team_raw, runtime);
     let shown = std::cmp::min(DOOR_ROLES_SHOWN, roles.len());
     let mut listed = roles[..shown]
         .iter()
-        .map(|(k, v)| match role_slot_description(models_raw, runtime, k) {
+        .map(|(k, v)| match role_slot_description(team_raw, runtime, k) {
             Some(desc) => format!("{k}={v} (\"{desc}\")"),
             None => format!("{k}={v}"),
         })
@@ -1993,7 +1994,7 @@ mod tests {
         if let Some(fb) = fallback {
             slot["fallback"] = fb;
         }
-        json!({"models": {"claude": {
+        json!({"team": {"claude": {
             "extraction": "haiku",
             "generation": slot,
             "review": "opus"
@@ -2012,7 +2013,7 @@ mod tests {
         assert_eq!(d["transport"], "model-param");
         assert_eq!(d["model"], "sonnet");
         // The flag rides on the resolved slot, so the set is directly checkable.
-        let models = normalize_models(herding_generation(Some(json!("default"))).get("models"));
+        let models = normalize_models(herding_generation(Some(json!("default"))).get("team"));
         assert!(configured_model_set(&models).contains("sonnet"));
     }
 
@@ -2538,7 +2539,7 @@ mod tests {
     /// one, codex does not, which is the pair the role-legality question has
     /// to answer differently.
     fn open_role_config() -> Value {
-        json!({"models": {
+        json!({"team": {
             "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "test": "gpt-test", "advisor": "fable" },
             "codex": { "generation": "gpt-5.5", "design": "gpt-design" }
         }})
@@ -2546,7 +2547,7 @@ mod tests {
 
     #[test]
     fn the_known_role_set_is_derived_from_what_the_host_configures() {
-        let models = normalize_models(open_role_config().get("models"));
+        let models = normalize_models(open_role_config().get("team"));
         let claude = crate::verbs::drivers::known_roles(&models, "claude");
         // The operator's own roles, the defaults normalize seeds, and the
         // escalation word — every entry published by something, none of them
@@ -2579,7 +2580,7 @@ mod tests {
     fn a_role_outside_the_old_three_slots_is_a_configured_model() {
         // The hard dependency D2 names: the member set walked a literal
         // ["extraction", "generation", "review"], so this model DENIED.
-        let models = normalize_models(open_role_config().get("models"));
+        let models = normalize_models(open_role_config().get("team"));
         let set = configured_model_set(&models);
         assert!(set.contains("gpt-test"), "{set:?}");
         let fx = fixture(&open_role_config());
@@ -2862,18 +2863,20 @@ mod tests {
     /// role that declared none renders byte-identically to before.
     #[test]
     fn the_door_prints_a_role_description_beside_its_model() {
-        let described = json!({"claude": {
+        let described_team = json!({"claude": {
             "generation": {"model": "sonnet", "description": "build and edit code"},
             "review": "opus",
             "design": {"kind": "herding", "agent": "agy-flash"},
         }});
-        let bare = json!({"claude": {
+        let bare_team = json!({"claude": {
             "generation": {"model": "sonnet"},
             "review": "opus",
             "design": {"kind": "herding", "agent": "agy-flash"},
         }});
-        let with_desc = dispatch_door_lines(Some(&described), "claude");
-        let without = dispatch_door_lines(Some(&bare), "claude");
+        let described = json!({"team": described_team});
+        let bare = json!({"team": bare_team});
+        let with_desc = dispatch_door_lines(described.as_object(), "claude");
+        let without = dispatch_door_lines(bare.as_object(), "claude");
         assert_eq!(
             with_desc[1],
             "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name models.claude configures is legal; one nothing configures refuses by name."
@@ -2889,8 +2892,8 @@ mod tests {
         // ...and resolution is blind to it: described and bare resolve to the
         // SAME published value, which is what makes this display-only.
         assert_eq!(
-            role_slot_display(Some(&described), "claude"),
-            role_slot_display(Some(&bare), "claude")
+            role_slot_display(described.get("team"), "claude"),
+            role_slot_display(bare.get("team"), "claude")
         );
     }
 
@@ -2907,8 +2910,8 @@ mod tests {
             json!({"model": "sonnet", "description": 7}),
             json!({"model": "sonnet", "description": null}),
         ] {
-            let models = json!({"claude": {"generation": slot.clone()}});
-            let line = &dispatch_door_lines(Some(&models), "claude")[1];
+            let config = json!({"team": {"claude": {"generation": slot.clone()}}});
+            let line = &dispatch_door_lines(config.as_object(), "claude")[1];
             assert_eq!(
                 line,
                 "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name.",
@@ -2925,10 +2928,10 @@ mod tests {
     #[test]
     fn a_long_description_is_clipped_at_the_door_budget() {
         let long = "x".repeat(200);
-        let models = json!({"claude": {"generation": {"model": "sonnet", "description": long}}});
-        let rendered = role_slot_description(Some(&models), "claude", "generation").unwrap();
+        let config = json!({"team": {"claude": {"generation": {"model": "sonnet", "description": long}}}});
+        let rendered = role_slot_description(config.get("team"), "claude", "generation").unwrap();
         assert_eq!(rendered, format!("{}...", "x".repeat(ROLE_DESCRIPTION_MAX)));
-        assert!(dispatch_door_lines(Some(&models), "claude")[1]
+        assert!(dispatch_door_lines(config.as_object(), "claude")[1]
             .contains(&format!("generation=sonnet (\"{rendered}\")")));
 
         // Exactly at the budget is NOT clipped: the ellipsis promises there

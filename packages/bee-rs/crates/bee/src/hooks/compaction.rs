@@ -135,13 +135,16 @@ pub(crate) fn read_config_failopen(root: &Path) -> Map<String, Value> {
     };
     let tracked = read_obj(root.join(".bee").join("config.json"));
     let overlay = read_obj(root.join(".bee").join("config.local.json"));
-    if overlay.is_empty() {
-        return tracked;
-    }
-    match crate::state::merge_config_overlay(&Value::Object(tracked), &Value::Object(overlay)) {
-        Value::Object(m) => m,
-        _ => Map::new(),
-    }
+    let mut out = if overlay.is_empty() {
+        tracked
+    } else {
+        match crate::state::merge_config_overlay(&Value::Object(tracked), &Value::Object(overlay)) {
+            Value::Object(m) => m,
+            _ => Map::new(),
+        }
+    };
+    crate::verbs::drivers::fold_team_key(&mut out);
+    out
 }
 
 /// state.mjs normalizeCommands — the `commands` slice readConfig exposes.
@@ -1520,9 +1523,8 @@ pub fn build_compact_capsule(
     // bytes (`hooks/model_guard::dispatch_door_lines`): a second copy of the
     // literal here is precisely how a compacted session gets told a role list
     // or a command spelling the preamble has already stopped saying.
-    let config_val = Value::Object(config);
     sections
-        .push(crate::hooks::model_guard::dispatch_door_lines(config_val.get("models"), "claude"));
+        .push(crate::hooks::model_guard::dispatch_door_lines(Some(&config), "claude"));
 
     // ── item 11: the survival count and, when it applies, the D9 advisory.
     // Silent on a repo with no records at all (D15).

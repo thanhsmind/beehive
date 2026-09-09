@@ -294,7 +294,7 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
 fn hat_slots_missing_a_description(root: &Path, runtime: Runtime) -> Vec<String> {
     let config = crate::state::read_config_raw(root);
     let Some(table) = config
-        .get("models")
+        .get("team")
         .and_then(|m| m.get(runtime.name()))
         .and_then(Value::as_object)
     else {

@@ -355,7 +355,7 @@ fn resolve_from_registry(
 /// defaulting to `"claude"`.
 fn generation_slot_herding_agent<'a>(cfg: &'a Value, runtime: &str) -> Option<&'a str> {
     let rt = if matches!(runtime, "claude" | "codex" | "opencode") { runtime } else { "claude" };
-    let slot = cfg.get("models")?.get(rt)?.get("generation")?;
+    let slot = cfg.get("team")?.get(rt)?.get("generation")?;
     let obj = slot.as_object()?;
     if obj.get("kind").and_then(Value::as_str) != Some("herding") {
         return None;

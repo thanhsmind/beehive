@@ -4797,7 +4797,7 @@ use crate::version::BEE_VERSION;
         let mut ctx = ctx_for(root);
         let status = build_status(&mut ctx, false).unwrap();
         let raw = read_config_raw(root);
-        let before = Value::Object(normalize_models(raw.get("models")));
+        let before = Value::Object(normalize_models(raw.get("team")));
         assert_eq!(
             serde_json::to_string(status.get("models").expect("models section")).unwrap(),
             serde_json::to_string(&before).unwrap()

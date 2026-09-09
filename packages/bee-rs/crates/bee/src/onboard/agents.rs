@@ -71,11 +71,14 @@ pub fn roles_for_agent(agent_name: &str) -> Option<&'static [&'static str]> {
 /// normalizes to `Null`, replaces the seed, and turns the role off, so
 /// "absent" and "refused" stay different reads.
 fn agent_models(repo_root: &Path, runtime_key: &str, seed: &[(&str, &str)]) -> Map<String, Value> {
-    let config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
+    let mut config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
+    if let Some(Value::Object(ref mut map)) = config {
+        crate::verbs::drivers::fold_team_key(map);
+    }
     let raw_runtime = config
         .as_ref()
         .filter(|c| c.is_object())
-        .and_then(|c| c.get("models"))
+        .and_then(|c| c.get("team"))
         .filter(|m| m.is_object())
         .and_then(|m| m.get(runtime_key))
         .and_then(|c| c.as_object())

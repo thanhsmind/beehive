@@ -647,7 +647,7 @@ pub fn build_session_preamble(
     // something the preamble no longer says.
     lines.push(String::new());
     lines.push("### Dispatch door".to_string());
-    lines.extend(crate::hooks::model_guard::dispatch_door_lines(config.get("models"), "claude"));
+    lines.extend(crate::hooks::model_guard::dispatch_door_lines(Some(&config), "claude"));
 
     // csc-1: the whole command surface, always on — unlike Standard
     // commands above it never depends on host-project config. Placed right

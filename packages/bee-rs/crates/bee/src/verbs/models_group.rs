@@ -146,7 +146,7 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
 /// normalized on the way out.
 pub(crate) fn models_table(root: &Path, runtime: Option<&str>) -> Result<Value, String> {
     let config = read_config_raw(root);
-    build_table(config.get("models"), runtime)
+    build_table(config.get("team"), runtime)
 }
 
 /// A slot on one line. The description is printed as prose beside the row, so

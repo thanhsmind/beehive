@@ -340,7 +340,7 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         "models".into(),
         Value::Object(models_with_descriptions(
             &config_models.models,
-            config_models.raw.get("models"),
+            config_models.raw.get("team"),
         )),
     );
     // ── PUBLIC CONTRACT: `tier_mix` is renamed to `role_mix` (D6) ──────────

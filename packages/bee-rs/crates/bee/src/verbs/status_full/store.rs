@@ -445,7 +445,7 @@ pub(crate) fn dogfood_warnings(ctx: &mut Ctx, raw: &JMap) {
 pub(crate) fn read_config(ctx: &mut Ctx) -> R<Config> {
     let raw = read_config_raw(&ctx.root);
     let commands = normalize_commands(raw.get("commands"));
-    let models = normalize_models(raw.get("models"));
+    let models = normalize_models(raw.get("team"));
     dogfood_warnings(ctx, &raw);
     Ok(Config { raw, commands, models })
 }
@@ -519,8 +519,8 @@ pub(crate) struct Problem {
 pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
     let mut problems = Vec::new();
     let Some(config) = config else { return problems };
-    let obj = match config {
-        Value::Object(m) => m,
+    let mut obj = match config {
+        Value::Object(m) => m.clone(),
         _ => {
             problems.push(Problem {
                 code: "config-malformed",
@@ -532,7 +532,8 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
             return problems;
         }
     };
-    let Some(models) = obj.get("models") else { return problems };
+    crate::verbs::drivers::fold_team_key(&mut obj);
+    let Some(models) = obj.get("team") else { return problems };
     let models = match models {
         Value::Object(m) => m,
         _ => {
@@ -849,10 +850,11 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
     const AGENT_FILE_ROOTS: [(&str, &str, &str); 2] =
         [("claude", ".claude", "agents"), ("opencode", ".opencode", "agent")];
     let mut problems = Vec::new();
-    let raw_models = raw_config.and_then(|c| match c {
-        Value::Object(m) => m.get("models"),
-        _ => None,
-    });
+    let mut folded = raw_config.and_then(Value::as_object).cloned();
+    if let Some(ref mut m) = folded {
+        crate::verbs::drivers::fold_team_key(m);
+    }
+    let raw_models = folded.as_ref().and_then(|m| m.get("team"));
     let models = normalize_models(raw_models);
     for (runtime, dir, subdir) in AGENT_FILE_ROOTS {
         let rel_prefix = format!("{dir}/{subdir}");

@@ -279,6 +279,25 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
     out
 }
 
+/// team-config-rename D2: the roster block is `team`; `models` is a read alias.
+/// Returns true when the legacy key served (folded or dropped), false otherwise.
+pub(crate) fn fold_team_key(map: &mut Map<String, Value>) -> bool {
+    if let Some(team_val) = map.get("team") {
+        if !team_val.is_object() {
+            return false;
+        }
+        if map.remove("models").is_some() {
+            return true;
+        }
+        false
+    } else if let Some(models_val) = map.remove("models") {
+        map.insert("team".to_string(), models_val);
+        true
+    } else {
+        false
+    }
+}
+
 /// The `models` slice of readConfig(root). Delegates on the ONE readConfig
 /// side effect this port still does not reproduce: normalizeDogfoodRepos'
 /// per-dead-repo console.warn. (A corrupt config no longer delegates — it
@@ -290,7 +309,7 @@ pub(crate) fn read_models(root: &Path) -> D<Map<String, Value>> {
             return Err(Delegate); // normalizeDogfoodRepos may warn to stderr
         }
     }
-    Ok(normalize_models(config.get("models")))
+    Ok(normalize_models(config.get("team")))
 }
 
 /// provenance: state.mjs resolveTier / resolveAdvisor return shapes.
@@ -908,7 +927,7 @@ pub(crate) fn read_fallback_chains(root: &Path) -> Map<String, Value> {
     // The chain still publishes (junk-drop stays for structural junk only);
     // the operator just hears about it instead of nothing.
     if !chains.is_empty() {
-        let models = normalize_models(config.get("models"));
+        let models = normalize_models(config.get("team"));
         for key in dead_chain_keys(&chains, &models) {
             warn_fallback_chain(
                 &key,
@@ -1017,4 +1036,73 @@ pub(crate) fn fallback_chain_payload(key: &str, steps: &[String]) -> Value {
     out.insert("advance_on".into(), chain_class_list(&CHAIN_ADVANCE_ON));
     out.insert("never_advance_on".into(), chain_class_list(&CHAIN_NEVER_ADVANCE_ON));
     Value::Object(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn fold_team_key_team_only() {
+        let team_obj = json!({"claude": {"generation": "sonnet"}});
+        let mut map = Map::new();
+        map.insert("team".to_string(), team_obj.clone());
+
+        assert!(!fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&team_obj));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_models_only() {
+        let models_obj = json!({"claude": {"generation": "sonnet"}});
+        let mut map = Map::new();
+        map.insert("models".to_string(), models_obj.clone());
+
+        assert!(fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&models_obj));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_both_present() {
+        let team_obj = json!({"claude": {"generation": "sonnet"}});
+        let models_obj = json!({"claude": {"generation": "haiku"}});
+        let mut map = Map::new();
+        map.insert("team".to_string(), team_obj.clone());
+        map.insert("models".to_string(), models_obj);
+
+        assert!(fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&team_obj));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_neither_present() {
+        let mut map = Map::new();
+        map.insert("unrelated".to_string(), json!(true));
+
+        assert!(!fold_team_key(&mut map));
+        assert!(!map.contains_key("team"));
+        assert!(!map.contains_key("models"));
+    }
+
+    #[test]
+    fn fold_team_key_team_non_object() {
+        let models_obj = json!({"claude": {"generation": "sonnet"}});
+        let mut map = Map::new();
+        map.insert("team".to_string(), json!("not an object"));
+        map.insert("models".to_string(), models_obj.clone());
+
+        assert!(!fold_team_key(&mut map));
+        assert_eq!(map.get("team"), Some(&json!("not an object")));
+        assert_eq!(map["models"], models_obj);
+
+        // Also test non-object without models
+        let mut map2 = Map::new();
+        map2.insert("team".to_string(), json!(12345));
+        assert!(!fold_team_key(&mut map2));
+        assert_eq!(map2.get("team"), Some(&json!(12345)));
+    }
 }

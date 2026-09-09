@@ -183,6 +183,7 @@ pub fn read_config_raw(root: &Path) -> Map<String, Value> {
         None => tracked,
     };
     merged.shift_remove("advisor");
+    crate::verbs::drivers::fold_team_key(&mut merged);
     merged
 }
 

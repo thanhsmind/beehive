@@ -583,6 +583,6 @@ mod tests {
             .expect("embedded .bee/config-sample.json must parse as JSON");
         assert!(v.get("herding").is_some(), "embedded config-sample.json is missing the herding key");
         assert!(v.get("team").is_some(), "embedded config-sample.json is missing the team key");
-        assert!(v.get("models").is_none(), "embedded config-sample.json still carries the models key");
+        assert!(!v.as_object().unwrap().contains_key("models"), "embedded config-sample.json still carries the models key");
     }
 }
