@@ -1,7 +1,7 @@
 ---
 name: bee-herding
 description: >-
-  Drive the bee-herding cockpit's three roles — bootstrap (one-shot human setup that pre-flights and turns the cockpit on), dispatch (one cold control-loop iteration that starts safe backlog work in a fresh worktree), and merge (an owner gesture, single-shot, that lands finished worktrees in main). Use when a human invokes bootstrap directly (no --role given), or when bee herding control-loop runs exactly one iteration as --role dispatch|merge — each invocation is fresh, with no memory of any earlier one. Not for feature work inside a worktree — that belongs to the working agent's own bee chain.
+  Drive the bee-herding cockpit's four roles — bootstrap (one-shot human setup that pre-flights and turns the cockpit on), dispatch (one cold control-loop iteration that starts safe backlog work in a fresh worktree), merge (an owner gesture, single-shot, that lands finished worktrees in main), and route (one cold control-loop iteration that reads finished worktrees and reports them). Use when a human invokes bootstrap directly (no --role given), or when bee herding control-loop runs exactly one iteration as --role dispatch|merge|route — each invocation is fresh, with no memory of any earlier one. Not for feature work inside a worktree — that belongs to the working agent's own bee chain.
 metadata:
   version: '0.2'
   ecosystem: bee
@@ -25,7 +25,7 @@ metadata:
 
 # Herding — the unattended cockpit
 
-## The three roles
+## The four roles
 
 Read your role's reference in full before acting, then act once,
 report into the chat pane, and exit; the loop (or the owner's next
@@ -55,13 +55,23 @@ pane — and STOP COLD on `MERGE_CONFLICT` or `WORKTREE_MERGE_PROOF_DEBT`,
 never retry (the proof check runs before `git merge`; this role runs no
 verify command). Protocol: `references/role-merge.md`.
 
+**Route** — one cold iteration that only READS and reports, never
+touching main: self-name, check the enable marker and bypass level,
+find the chat pane, count occupied runtime slots, read granted
+worktrees, find finished worktrees using the merge pointer, announce
+routable worktrees with scrollback dedup. Route is the one role whose
+whole contract is its prompt file, as the supervisor's is. Protocol:
+`references/route-prompt.md`.
+
 ## Role boundary
 
 Bootstrap only builds the cockpit and starts the loops — never picks a
 PBI, creates a worktree beyond layout, or merges one. Dispatch only
 starts work — never merges, deletes a worktree, or closes a pane.
 Merge only retires finished work — never picks a PBI, creates a
-worktree, or starts an agent. About to take another role's action?
+worktree, or starts an agent. Route only reads and reports — never
+merges, never picks a PBI, never starts a coder or creates a pane, and
+never touches main. About to take another role's action?
 Stop — wrong section.
 
 ## Safety boundaries
@@ -103,7 +113,7 @@ never `eval`. Shape and examples:
 
 ## Waves — briefing several workers at once
 
-`bee herding wave` is a SEPARATE shape from the three roles, and no role
+`bee herding wave` is a SEPARATE shape from the four roles, and no role
 calls it. Dispatch starts one worker per iteration and never speaks to
 it again; a wave briefs N already-running panes in one act, waits on
 all of them at the same time, and records the run as one ledger row.
@@ -123,6 +133,7 @@ signal exists — read the ledger row and the panes instead. Protocol:
 | `references/role-bootstrap.md` | You are the bootstrap role — read the full protocol before any pre-flight action |
 | `references/role-dispatch.md` | You are the dispatch role — read the full protocol (plus quick reference) before building the dispatchable set |
 | `references/role-merge.md` | You are the merge role — read the full protocol (plus quick reference) before touching any worktree |
+| `references/route-prompt.md` | You are the route role — read the full contract before reading or reporting worktrees |
 | `references/wave-runs.md` | Running `bee herding wave` — what it does not do, the input shape, and why `success` is not the thing to read |
 | `references/operational-invariants.md` | A safety boundary needs its full record — permission posture, runtime adapter, containment, stop/resume |
 | `references/dispatch-dry-run.md` | Auditing what a dispatch iteration decides — the recorded dry-run proof |

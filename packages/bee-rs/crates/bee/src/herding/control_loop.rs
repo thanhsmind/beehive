@@ -64,6 +64,11 @@ pub(crate) enum Role {
     /// merges, never approves, and (see `allowed_tools_for`) carries no
     /// write-scope tool at all.
     Supervisor,
+    /// herding-route-role D1 (a685d557) — the ROUTER. It reads one finished
+    /// worktree per iteration, starts a reviewer on a different agent, routes
+    /// a CHANGES verdict to the coder's open pane, and stops cold on anything
+    /// it cannot classify.
+    Route,
 }
 
 impl Role {
@@ -72,6 +77,7 @@ impl Role {
             "dispatch" => Some(Role::Dispatch),
             "merge" => Some(Role::Merge),
             "supervisor" => Some(Role::Supervisor),
+            "route" => Some(Role::Route),
             _ => None,
         }
     }
@@ -81,23 +87,32 @@ impl Role {
             Role::Dispatch => "dispatch",
             Role::Merge => "merge",
             Role::Supervisor => "supervisor",
+            Role::Route => "route",
         }
     }
 
     /// The tick spacing this role gets when the operator names no
     /// `--interval`. The observer wakes every 15 minutes (322695d6's
     /// `--interval 900`); the two cockpit roles keep the 60s the bash script
-    /// shipped with, untouched.
+    /// shipped with, untouched. Route defaults to 300s.
     fn default_interval(self) -> u64 {
         match self {
             Role::Dispatch | Role::Merge => DEFAULT_INTERVAL,
             Role::Supervisor => SUPERVISOR_DEFAULT_INTERVAL,
+            // herding-route-role (plan.md OQ5): 300s is a STARTING GUESS,
+            // not a measurement. Nobody has measured how long a review takes
+            // in this repo; dispatch/merge run at 60s and supervisor at 900s.
+            Role::Route => ROUTE_DEFAULT_INTERVAL,
         }
     }
 }
 
 const DEFAULT_INTERVAL: u64 = 60;
 const SUPERVISOR_DEFAULT_INTERVAL: u64 = 900;
+/// herding-route-role (plan.md OQ5): 300s is a STARTING GUESS, not a
+/// measurement: dispatch/merge run at 60s and supervisor at 900s, and nobody
+/// has measured how long a review takes in this repo.
+const ROUTE_DEFAULT_INTERVAL: u64 = 300;
 const DEFAULT_TIMEOUT: u64 = 900;
 const DEFAULT_MAX_CONSECUTIVE_FAILURES: u64 = 20;
 const DEFAULT_TURN_CEILING: u64 = 50;
@@ -150,7 +165,7 @@ impl Options {
                 "--role" => {
                     let v = need_value(flag, flags, i)?;
                     role = Some(Role::parse(v).ok_or_else(|| {
-                        format!("unknown role '{v}' (expected dispatch, merge or supervisor)")
+                        format!("unknown role '{v}' (expected dispatch, merge, supervisor or route)")
                     })?);
                     i += 2;
                 }
@@ -192,7 +207,7 @@ impl Options {
             }
         }
 
-        let role = role.ok_or_else(|| "--role dispatch|merge|supervisor is required".to_string())?;
+        let role = role.ok_or_else(|| "--role dispatch|merge|supervisor|route is required".to_string())?;
         Ok(Options {
             role,
             main_root,
@@ -222,7 +237,7 @@ fn positive_int(flag: &str, raw: &str) -> Result<u64, String> {
 
 fn print_usage() {
     eprintln!(
-        "Usage: bee herding control-loop --role dispatch|merge|supervisor [--main-root PATH] \
+        "Usage: bee herding control-loop --role dispatch|merge|supervisor|route [--main-root PATH] \
          [--interval N] [--timeout N] [--max-iterations N] \
          [--max-consecutive-failures N] [--turn-ceiling N] [--once]"
     );
@@ -275,6 +290,10 @@ fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
         // The observer's surface does not vary by transport: it touches no
         // multiplexer client at all (see 3. above).
         (Role::Supervisor, TransportKind::Herdr | TransportKind::Tmux) => SUPERVISOR_ALLOWED_TOOLS,
+        // The router's surface also does not vary by transport: like the
+        // supervisor, it reaches panes only through the transport-neutral
+        // `bee herding pane` verbs.
+        (Role::Route, TransportKind::Herdr | TransportKind::Tmux) => ROUTE_ALLOWED_TOOLS,
         (Role::Dispatch, TransportKind::Herdr) => {
             "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
         }
@@ -321,6 +340,74 @@ const SUPERVISOR_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
     "Task",
 ];
 
+/// The router's whole tool surface for Slice 2, in one place, enumerated verb
+/// by verb.
+///
+/// Modelled on `SUPERVISOR_ALLOWED_TOOLS`: enumerated verb by verb, never the
+/// `Bash(.bee/bin/bee:*)` wildcard. Route reaches panes only through the
+/// transport-neutral `bee herding pane` verbs, so both transports get the
+/// identical string.
+///
+/// Slice 1 verbs (read-and-announce):
+/// - `Bash(.bee/bin/bee status:*)`: inspect bee state
+/// - `Bash(.bee/bin/bee orient:*)`: read phase, blockers, and orientation
+/// - `Bash(.bee/bin/bee worktree list:*)`: find granted and active worktrees
+/// - `Bash(.bee/bin/bee cells list:*)`: check whether worktree has open or claimed cells
+/// - `Bash(.bee/bin/bee herding occupancy:*)`: check cockpit slot occupancy against the 4-slot cap
+/// - `Bash(.bee/bin/bee herding pane list:*)`: list live multiplexer panes
+/// - `Bash(.bee/bin/bee herding pane read:*)`: read scrollback for announce-once dedup
+/// - `Bash(.bee/bin/bee herding pane send-text:*)`: announce status to the control pane
+/// - `Bash(git -C:*)`: verify HEAD branch and tree cleanliness
+/// - `Bash(ls:*)`: inspect marker presence
+/// - `Read`: read files without shell execution
+///
+/// Slice 2 verbs (reviewer dispatch and verdict routing):
+/// 1. Start a reviewer:
+///    - `Bash(.bee/bin/bee dispatch prepare:*)`: dispatch through the one door
+///    - `Bash(.bee/bin/bee herding run:*)`: run the reviewer worker
+/// 2. Record a verdict:
+///    - `Bash(.bee/bin/bee reviews:*)`: review store verbs (create, record, status, candidate)
+/// 3. Write the CHANGES cell:
+///    - `Bash(.bee/bin/bee cells add:*)`: write the CHANGES follow-up cell into the feature's lane
+/// 4. Markers:
+///    - `Bash(mkdir:*)` and `Bash(touch:*)`: create marker directory and touch `.bee/tmp/bee-herding.{review,blocked}.<slug>`
+///    - `Bash(rm:*)`: clear own `.bee/tmp/bee-herding.review.<slug>` marker when a verdict lands
+/// 5. Waiting-on mark:
+///    - `Bash(.bee/bin/bee state waiting-on:*)`: set waiting-on mark when routing stops cold on BLOCKED
+const ROUTE_ALLOWED_TOOLS: &str = "Bash(.bee/bin/bee status:*),\
+Bash(.bee/bin/bee orient:*),\
+Bash(.bee/bin/bee worktree list:*),\
+Bash(.bee/bin/bee cells list:*),\
+Bash(.bee/bin/bee cells add:*),\
+Bash(.bee/bin/bee dispatch prepare:*),\
+Bash(.bee/bin/bee herding occupancy:*),\
+Bash(.bee/bin/bee herding pane list:*),\
+Bash(.bee/bin/bee herding pane read:*),\
+Bash(.bee/bin/bee herding pane send-text:*),\
+Bash(.bee/bin/bee herding run:*),\
+Bash(.bee/bin/bee reviews:*),\
+Bash(.bee/bin/bee state waiting-on:*),\
+Bash(git -C:*),\
+Bash(ls:*),\
+Bash(mkdir:*),\
+Bash(rm:*),\
+Bash(touch:*),\
+Read";
+
+/// Tokens that must never appear in a router's tool surface (must-haves / plan.md).
+#[cfg(test)]
+const ROUTE_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
+    "Write",
+    "Edit",
+    "Bash(git:*)",
+    "Bash(herdr:*)",
+    "Bash(tmux:*)",
+    "Bash(.bee/bin/bee:*)",
+    "Task",
+    "Bash(.bee/bin/bee worktree merge",
+    "Bash(.bee/bin/bee gate",
+];
+
 /// The model one control-pane invocation runs on.
 ///
 /// The two cockpit roles keep `DEFAULT_MODEL` exactly as the bash script had
@@ -341,7 +428,7 @@ const SUPERVISOR_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
 /// on the public `models::role_is_unknown` predicate the test below asserts).
 fn model_for(main_root: &Path, role: Role) -> String {
     match role {
-        Role::Dispatch | Role::Merge => DEFAULT_MODEL.to_string(),
+        Role::Dispatch | Role::Merge | Role::Route => DEFAULT_MODEL.to_string(),
         Role::Supervisor => supervisor_model(main_root),
     }
 }
@@ -1029,7 +1116,7 @@ mod tests {
             r#"{"models":{"claude":{"supervisor":"haiku"}}}"#,
         )
         .unwrap();
-        for role in [Role::Dispatch, Role::Merge] {
+        for role in [Role::Dispatch, Role::Merge, Role::Route] {
             assert_eq!(model_for(tmp.path(), role), DEFAULT_MODEL, "{role:?}");
         }
     }
@@ -1133,6 +1220,145 @@ mod tests {
         );
     }
 
+    // ── the router role (herding-route-role hrr-1) ─────────────────────────
+
+    /// Writes the route prompt file a tick reads and returns the tmpdir.
+    fn route_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("route-prompt.md"), "PROMPT BODY route\n").unwrap();
+        tmp
+    }
+
+    #[test]
+    fn route_is_a_parsed_role_that_names_itself_route() {
+        assert_eq!(Role::parse("route"), Some(Role::Route));
+        assert_eq!(Role::Route.as_str(), "route");
+    }
+
+    #[test]
+    fn route_role_parses_off_the_real_flag_line_with_the_300s_default() {
+        let opts = Options::parse(&["--role", "route"]).expect("parses");
+        assert_eq!(opts.role, Role::Route);
+        assert_eq!(opts.interval, 300);
+        assert_eq!(Options::parse(&["--role", "dispatch"]).unwrap().interval, 60);
+        assert_eq!(Options::parse(&["--role", "merge"]).unwrap().interval, 60);
+        assert_eq!(Options::parse(&["--role", "supervisor"]).unwrap().interval, 900);
+        assert_eq!(
+            Options::parse(&["--role", "route", "--interval", "45"]).unwrap().interval,
+            45
+        );
+    }
+
+    #[test]
+    fn unknown_role_names_all_four_expected_roles() {
+        let err = Options::parse(&["--role", "rout"]).unwrap_err();
+        for expected in ["dispatch", "merge", "supervisor", "route"] {
+            assert!(err.contains(expected), "error '{err}' missing '{expected}'");
+        }
+    }
+
+    #[test]
+    fn missing_role_and_usage_name_all_four_expected_roles() {
+        let err = Options::parse(&[]).unwrap_err();
+        for expected in ["dispatch", "merge", "supervisor", "route"] {
+            assert!(err.contains(expected), "missing-role message '{err}' missing '{expected}'");
+        }
+    }
+
+    #[test]
+    fn route_role_gets_the_read_and_announce_allowlist_and_prompt_file() {
+        let tmp = route_root();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Route, 12).expect("argv resolves");
+        assert_eq!(
+            argv,
+            vec![
+                "claude".to_string(),
+                "-p".to_string(),
+                "PROMPT BODY route\n".to_string(),
+                "--model".to_string(),
+                "sonnet".to_string(),
+                "--max-turns".to_string(),
+                "12".to_string(),
+                "--allowedTools".to_string(),
+                ROUTE_ALLOWED_TOOLS.to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn route_allowlist_carries_no_forbidden_tool_tokens_on_either_transport() {
+        for kind in [TransportKind::Herdr, TransportKind::Tmux] {
+            let tools = allowed_tools_for(Role::Route, kind);
+            for forbidden in ROUTE_FORBIDDEN_TOOL_TOKENS {
+                assert!(!tools.contains(forbidden), "{kind:?} allowlist contains forbidden token {forbidden}: {tools}");
+            }
+        }
+    }
+
+    #[test]
+    fn route_allowlist_is_the_same_string_on_both_transports() {
+        assert_eq!(
+            allowed_tools_for(Role::Route, TransportKind::Herdr),
+            allowed_tools_for(Role::Route, TransportKind::Tmux)
+        );
+    }
+
+    #[test]
+    fn route_allowlist_reaches_the_spawned_argv_even_on_tmux() {
+        let tmp = route_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"tmux"}}"#).unwrap();
+
+        let argv = resolve_iteration_argv(tmp.path(), Role::Route, 12).expect("argv resolves");
+        assert_eq!(argv.last().unwrap(), ROUTE_ALLOWED_TOOLS);
+    }
+
+    #[test]
+    fn three_existing_roles_tool_surfaces_remain_byte_unchanged() {
+        assert_eq!(
+            allowed_tools_for(Role::Dispatch, TransportKind::Herdr),
+            "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Merge, TransportKind::Herdr),
+            "Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Dispatch, TransportKind::Tmux),
+            "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Merge, TransportKind::Tmux),
+            "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Supervisor, TransportKind::Herdr),
+            SUPERVISOR_ALLOWED_TOOLS
+        );
+        assert_eq!(
+            allowed_tools_for(Role::Supervisor, TransportKind::Tmux),
+            SUPERVISOR_ALLOWED_TOOLS
+        );
+    }
+
+    #[test]
+    fn the_route_prompt_file_shipped_in_this_repo_carries_the_router_contract() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..");
+        let body = read_prompt_file(&repo_root, Role::Route).expect("the shipped prompt file reads");
+        for needle in [
+            "scrollback dedup",
+            "bee herding interlock",
+            "gate_bypass_level",
+            "bee herding occupancy",
+            "bee worktree list",
+        ] {
+            assert!(body.contains(needle), "route-prompt.md is missing {needle:?}");
+        }
+    }
+
     // ── the transport swaps exactly one allowlist entry ───────────────────
 
     #[test]
@@ -1218,12 +1444,13 @@ mod tests {
 
     #[test]
     fn every_role_resolves_through_the_one_installed_skill_root_reader() {
-        // All three roles go through the same reader; none keeps a private
+        // All four roles go through the same reader; none keeps a private
         // path of its own.
         for (prefix, role) in [
             (".claude/skills", Role::Dispatch),
             (".agents/skills", Role::Merge),
             (".opencode/skills", Role::Supervisor),
+            (".codex/skills", Role::Route),
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let refs = tmp.path().join(prefix).join("bee-herding").join("references");
