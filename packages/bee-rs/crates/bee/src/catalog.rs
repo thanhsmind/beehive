@@ -849,11 +849,11 @@ mod tests {
         // in place of it: one says where the meaning lives, the other says
         // how to read it.
         assert!(
-            desc.contains("models.<runtime>.<role>.description"),
+            desc.contains("team.<runtime>.<role>.description"),
             "cells add --help lost the line naming where a role's meaning is written down"
         );
         assert!(
-            desc.contains("bee models show"),
+            desc.contains("bee team show"),
             "cells add --help never names the verb that prints the role table"
         );
         // Read-first, and only when unread this session (D2's condition).

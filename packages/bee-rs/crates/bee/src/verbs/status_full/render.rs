@@ -56,7 +56,7 @@ const MODELS_ROLE_LIST_BUDGET: usize = 120;
 /// model-role-split D2 (store 06e49368): DERIVED from the config, never
 /// listed. This line used to be a FIXED three-slot format string, so an
 /// operator who followed this feature's own advice — add
-/// `models.claude.test`, mark a cell `role: test` — saw `test` in
+/// `team.claude.test`, mark a cell `role: test` — saw `test` in
 /// `bee status --json` and NOTHING in the line they actually read.
 ///
 /// The ORDER is derived too, and it is load-bearing because the list can be
@@ -479,7 +479,7 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
         ));
         // model-role-split (mrs-27): codex had NO line at all. Two runtimes
         // were printed by hand out of the three `RUNTIMES` names status
-        // itself carries, so an operator who configured `models.codex` read a
+        // itself carries, so an operator who configured `team.codex` read a
         // status page that reported on everything except the runtime they
         // configured — the same invisibility as the closed role list, one
         // axis over. It is guarded rather than unconditional because codex,

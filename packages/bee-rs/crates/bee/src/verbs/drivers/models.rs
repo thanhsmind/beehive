@@ -26,13 +26,13 @@ use std::time::Instant;
 
 pub(crate) const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
-// opencode-support E4/S4: opencode joins claude/codex as a real `models.<rt>`
+// opencode-support E4/S4: opencode joins claude/codex as a real `team.<rt>`
 // key (docs/config-reference.md) rather than the silently-ignored third key
 // it used to be — every function below is already keyed generically off this
 // list (`models.get(rt)`, no struct field per runtime), so widening it is the
 // whole fix for this reader.
 // pi-support D5/D6: `pi` joins them for the same reason and with the same one
-// line of change — `models.pi` is a real role table in the ONE config home,
+// line of change — `team.pi` is a real role table in the ONE config home,
 // read generically like every other key. What is pi-specific lives at the
 // dispatch door (`prepare::pi_requires_herding_refusal`), never here: this
 // reader's job is "does the operator's config name this runtime", and a
@@ -43,7 +43,7 @@ pub(crate) const RUNTIMES: [&str; 4] = ["claude", "codex", "opencode", "pi"];
 /// The names bee itself ships a built-in default for.
 ///
 /// model-role-split D2 (store 06e49368) RETIRED this list as a membership
-/// test: a role name is legal because `models.<runtime>` carries it, never
+/// test: a role name is legal because `team.<runtime>` carries it, never
 /// because it appears here. It gates neither normalization nor resolution any
 /// more — `normalize_models` carries every key the config names, and
 /// `resolve_role` asks "is this name configured", not "is this name one of
@@ -251,7 +251,7 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
 ///
 /// model-role-split D2 (store 06e49368): the overlay used to walk
 /// MODEL_NORMALIZE_SLOTS, so a config naming any other role
-/// (`models.claude.test`) was read and then silently DROPPED — the role could
+/// (`team.claude.test`) was read and then silently DROPPED — the role could
 /// never resolve, and nothing said why. The open role set starts here: every
 /// key whose value normalizes into a documented leaf shape is carried, and a
 /// key whose value is junk is dropped exactly as a junk `generation` was.
@@ -458,7 +458,7 @@ fn resolve_configured(value: &Value, name: &str, kind: &str) -> Option<Resolved>
     None
 }
 
-/// A name bee has never heard of — absent from `models.<runtime>` AND from
+/// A name bee has never heard of — absent from `team.<runtime>` AND from
 /// the built-in defaults — is the typo case, and the ONE thing it must never
 /// do is quietly hand back some other role's model. It says so, on stderr,
 /// naming what it fell through to.
@@ -469,7 +469,7 @@ fn resolve_configured(value: &Value, name: &str, kind: &str) -> Option<Resolved>
 /// per-dispatch warning storm on an unconfigured runtime while leaving the
 /// misspelling loud.
 /// The exact question `resolve_role_named` asks before it warns — a name
-/// nothing has heard of: absent from `models.<runtime>` and absent from the
+/// nothing has heard of: absent from `team.<runtime>` and absent from the
 /// built-in defaults, with ONE bounded exception.
 ///
 /// Public because the warn itself goes to stderr, which an in-process test
@@ -505,7 +505,7 @@ fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
         None => " — nothing after it in the list, so no model is selected".to_string(),
     };
     eprintln!(
-        "bee: model role \"{name}\" is not configured in models.{runtime} of .bee/config.json{tail}"
+        "bee: model role \"{name}\" is not configured in team.{runtime} of .bee/config.json{tail}"
     );
 }
 
@@ -519,7 +519,7 @@ fn warn_unknown_role(name: &str, runtime: &str, next: Option<&str>) {
 /// halves naming one word instead of two literals drifting apart.
 pub(crate) const ESCALATION_WORD: &str = "ceiling";
 
-/// Resolve an ORDERED LIST of role names against `models.<runtime>`.
+/// Resolve an ORDERED LIST of role names against `team.<runtime>`.
 ///
 /// model-role-split D2 (store 06e49368). The consumer names the roles it will
 /// accept, best first; the first name that carries a resolvable configuration
@@ -696,7 +696,7 @@ pub(crate) fn tier_role_list(slot: &str) -> Vec<&str> {
 /// once; before this they all resolved the ONE `advisor` slot, so every
 /// parallel brainstorm agent ran the same model and the diversity the fan-out
 /// exists for was thrown away at the door. Each seat now has its own name in
-/// the ONE `models.<runtime>` table (D1 keeps the single config home,
+/// the ONE `team.<runtime>` table (D1 keeps the single config home,
 /// `4a6e38be`), so an operator can point lane-2 at a different model from
 /// lane-1 by writing one key.
 ///

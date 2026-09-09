@@ -366,7 +366,7 @@ pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] = &[
 /// `onboard::agents` walks that list through the one shared resolver
 /// (`verbs::drivers::resolve_role`) — the same resolver `bee dispatch
 /// prepare` and the model guard read. A host that configures a role in
-/// `models.<runtime>` therefore sees that role in the rendered agent file,
+/// `team.<runtime>` therefore sees that role in the rendered agent file,
 /// with no second parser to keep in step.
 ///
 /// The NAMES here are today's names on purpose. Which role names bee
@@ -399,7 +399,7 @@ pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
 
 /// onboard_bee.mjs AGENT_TIER_DEFAULTS_CLAUDE (l. 1946) — bee's own baked-in
 /// model per role for the claude agent files. It is the SEED the host's
-/// `models.claude` overlays, never a resolver: `onboard::agents` hands the
+/// `team.claude` overlays, never a resolver: `onboard::agents` hands the
 /// seeded map to `verbs::drivers::resolve_role` and reads the answer.
 ///
 /// The `TIER` in the name is the retiring cost word and outlives this cell on
@@ -413,8 +413,8 @@ pub const CODEX_AGENTS_NOTE: &str = "Codex has no per-agent model selection (DEF
 /// opencode-support oc-14: OpenCode's own per-tier model defaults, mirroring
 /// AGENT_TIER_DEFAULTS_CLAUDE's role but for the free, zero-config
 /// `opencode/*` provider (the only live provider verified on this machine —
-/// opencode-support oc-11/discovery.md). `models.opencode.<slot>` in
-/// `.bee/config.json` overrides a slot exactly like `models.claude.<slot>`
+/// opencode-support oc-11/discovery.md). `team.opencode.<slot>` in
+/// `.bee/config.json` overrides a slot exactly like `team.claude.<slot>`
 /// does; unconfigured stands on these baked-in names rather than the
 /// model-guard dispatch default of Null, because these agent files pin a
 /// real model regardless (structural enforcement, plan.md's model-guard

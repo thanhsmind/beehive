@@ -30,7 +30,7 @@ pub(crate) const NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY: &str = "native_budget_only
 
 /// Every role name a dispatch on this runtime may legally declare.
 ///
-/// DERIVED, never listed (model-role-split D2): the keys `models.<runtime>`
+/// DERIVED, never listed (model-role-split D2): the keys `team.<runtime>`
 /// carries after `normalize_models` — the operator's own roles plus the
 /// built-in defaults bee seeds there — and `ceiling`, which decision 0015
 /// keeps out of config on purpose and which `resolve_tier` answers with
@@ -291,7 +291,7 @@ pub(crate) fn agents_for_role(role: &str) -> Vec<&'static str> {
 /// declaration in every sense that matters.
 ///
 /// NOT alias-normalized, and that is the point of the split: this answer is
-/// resolved against `models.<runtime>` by the caller, so it has to be the
+/// resolved against `team.<runtime>` by the caller, so it has to be the
 /// name the agent was rendered from — the historical one every host still
 /// carries. See `ROLE_ALIASES`.
 pub(crate) fn role_for_agent(agent: &str) -> Option<&'static str> {

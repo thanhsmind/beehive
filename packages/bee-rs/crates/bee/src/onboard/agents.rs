@@ -56,7 +56,7 @@ pub fn roles_for_agent(agent_name: &str) -> Option<&'static [&'static str]> {
 ///
 /// model-role-split D1/D2 (store `cd72ec97`, `06e49368`): this module used to
 /// carry its own `normalizeAgentTierValueLocal` + `resolveAgentTierModel`
-/// pair — a second parser of the `models.<runtime>` shape, keyed to a closed
+/// pair — a second parser of the `team.<runtime>` shape, keyed to a closed
 /// three-slot table. Both are gone. What is left is the one thing onboarding
 /// legitimately owns: the SEED, bee's baked-in model per role for agent
 /// FILES, which differs from `drivers::default_models` on opencode by design
@@ -133,7 +133,7 @@ pub fn resolve_agent_model(repo_root: &Path, agent_name: &str) -> Option<String>
 }
 
 /// opencode-support oc-14's counterpart: same roles, same shared resolver,
-/// keyed off `models.opencode` and seeded with the free `opencode/*` names
+/// keyed off `team.opencode` and seeded with the free `opencode/*` names
 /// instead of haiku/sonnet/opus.
 pub fn resolve_opencode_agent_model(repo_root: &Path, agent_name: &str) -> Option<String> {
     let roles = roles_for_agent(agent_name)?;
@@ -425,7 +425,7 @@ mod tests {
     }
 
     /// The capability the whole rebase exists for: a host configures a role
-    /// name of its own under `models.<runtime>`, an agent declares it, and
+    /// name of its own under `team.<runtime>`, an agent declares it, and
     /// the rendered agent file pins that model — no bee code knows the name.
     /// The role list is declared here rather than in `AGENT_ROLES_BY_NAME`
     /// because WHICH names bee publishes is a separate decision (D3); the

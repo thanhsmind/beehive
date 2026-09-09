@@ -172,11 +172,11 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     }
     let raw_for_validation = read_raw_config_for_validation(ctx)?;
     for problem in validate_models_config(raw_for_validation.as_ref()) {
-        // `${problem.runtime ? ` models.${runtime}.${slot}:` : ''}` — slot is
+        // `${problem.runtime ? ` team.${runtime}.${slot}:` : ''}` — slot is
         // explicitly null on runtime-level rows, templating as "null".
         let runtime_part = match (problem.runtime, problem.slot) {
             (Some(rt), slot) if !rt.is_empty() => {
-                format!(" models.{rt}.{}:", slot.as_deref().unwrap_or("null"))
+                format!(" team.{rt}.{}:", slot.as_deref().unwrap_or("null"))
             }
             _ => String::new(),
         };

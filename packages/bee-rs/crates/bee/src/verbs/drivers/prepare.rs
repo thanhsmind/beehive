@@ -27,7 +27,7 @@ use std::time::Instant;
 // ═══ dispatch prepare ══════════════════════════════════════════════════════
 
 /// pi-support D5 (store: the pi belt's dispatch door): `pi` joins codex and
-/// claude as a legal `--runtime`, resolving `models.pi` in the ONE config home
+/// claude as a legal `--runtime`, resolving `team.pi` in the ONE config home
 /// every other runtime reads. It is a HERDING-ONLY door — see
 /// `pi_requires_herding_refusal` — because Pi ships no Agent/subagent tool
 /// surface for a payload to name.
@@ -140,11 +140,11 @@ pub(crate) fn pi_requires_herding_refusal(slot: &str, resolved: &Resolved, escal
     refusal.insert("resolution".into(), Value::String(resolution.to_string()));
     let fix = if resolution == "escalation" {
         format!(
-            "the \"{slot}\" dispatch asked for the session model (escalation), and the pi runtime has no session subagent to hand it to — Pi ships no Agent tool surface, so the payload would dispatch nothing. FIX: Pi has no subagent surface, run the escalated cell inline in the session. Every other cell on pi resolves a {{\"kind\":\"herding\"}} slot under models.pi."
+            "the \"{slot}\" dispatch asked for the session model (escalation), and the pi runtime has no session subagent to hand it to — Pi ships no Agent tool surface, so the payload would dispatch nothing. FIX: Pi has no subagent surface, run the escalated cell inline in the session. Every other cell on pi resolves a {{\"kind\":\"herding\"}} slot under team.pi."
         )
     } else {
         format!(
-            "models.pi.{slot} resolved a \"{resolution}\" slot, and the pi runtime dispatches ONLY through herding — Pi ships no Agent tool surface, so any other payload would dispatch nothing. FIX: set models.pi.{slot} in .bee/config.json to {{\"kind\":\"herding\",\"agent\":\"<herding.agents name>\"}}."
+            "team.pi.{slot} resolved a \"{resolution}\" slot, and the pi runtime dispatches ONLY through herding — Pi ships no Agent tool surface, so any other payload would dispatch nothing. FIX: set team.pi.{slot} in .bee/config.json to {{\"kind\":\"herding\",\"agent\":\"<herding.agents name>\"}}."
         )
     };
     refusal.insert("fix".into(), Value::String(fix));
@@ -1369,7 +1369,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                 refusal.insert("reason".into(), Value::String("role_not_configured".into()));
                 refusal.insert("role".into(), Value::String(declared.to_string()));
                 refusal.insert("fix".into(), Value::String(format!(
-                    "--role \"{declared}\" names a role nothing configures — models.{runtime} in .bee/config.json carries no \"{declared}\" entry, so the dispatch would select no model while the record asserted the caller had chosen one. FIX: name a configured role ({roles}), or configure this one — add \"{declared}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you configure is legal; bee holds no fixed list."
+                    "--role \"{declared}\" names a role nothing configures — team.{runtime} in .bee/config.json carries no \"{declared}\" entry, so the dispatch would select no model while the record asserted the caller had chosen one. FIX: name a configured role ({roles}), or configure this one — add \"{declared}\": \"<model>\" to team.{runtime} in .bee/config.json. Any role name you configure is legal; bee holds no fixed list."
                 )));
                 return Ok(Prepared::Value(Value::Object(refusal)));
             }
@@ -1494,7 +1494,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                 refusal.insert("ok".into(), Value::Bool(false));
                 refusal.insert("reason".into(), Value::String("advisor_not_configured".into()));
                 refusal.insert("fix".into(), Value::String(format!(
-                    "set models.{runtime}.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."
+                    "set team.{runtime}.advisor in .bee/config.json to enable an advisor consult (resolveAdvisor never falls back to another tier)."
                 )));
                 return Ok(Prepared::Value(Value::Object(refusal)));
             }
@@ -1522,7 +1522,7 @@ pub(crate) fn prepare_dispatch_with_brief(
             refusal.insert("reason".into(), Value::String("tier_not_configured".into()));
             refusal.insert("tier".into(), Value::String(tier_token.to_string()));
             refusal.insert("fix".into(), Value::String(format!(
-                "set models.{runtime}.{tier_token} in .bee/config.json to configure this tier."
+                "set team.{runtime}.{tier_token} in .bee/config.json to configure this tier."
             )));
             return Ok(Prepared::Value(Value::Object(refusal)));
         }
@@ -2989,7 +2989,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                     // `dispatch prepare` emits, and the claim this loop just
                     // took is unwound rather than left standing on a cell
                     // nothing can dispatch. Every cell of a pi wave resolves
-                    // the same `models.pi` table, so this fires for the whole
+                    // the same `team.pi` table, so this fires for the whole
                     // wave or for none of it — the operator gets a `skipped`
                     // row per cell naming the slot and the herding shape,
                     // instead of a `wave` array of refusals holding claims.
@@ -3497,7 +3497,7 @@ mod role_flag_tests {
         for configured in ["extraction", "generation", "review"] {
             assert!(fix.contains(configured), "the FIX lists {configured}: {fix}");
         }
-        assert!(fix.contains("models.claude"), "the FIX names where to add it: {fix}");
+        assert!(fix.contains("team.claude"), "the FIX names where to add it: {fix}");
         // A role the operator invented and CONFIGURED is legal — the open set
         // is open (D2), so this is not a four-word allowlist wearing a new
         // name.
@@ -3897,7 +3897,7 @@ mod role_flag_tests {
                 "{config}: the missing thing is the advisor, and the refusal names it"
             );
             let fix = v.get("fix").and_then(Value::as_str).unwrap_or_default();
-            assert!(fix.contains("models.claude.advisor"), "{fix}");
+            assert!(fix.contains("team.claude.advisor"), "{fix}");
         }
     }
 

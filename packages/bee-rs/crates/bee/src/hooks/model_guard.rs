@@ -290,11 +290,11 @@ fn unconfigured_role_reason(name: &str, models: &Map<String, Value>, runtime: &s
     let roles = role_list(models, runtime);
     format!(
         "bee-model-guard: [bee-tier: {name}] names a role nothing configures — \
-models.{runtime} in .bee/config.json carries no \"{name}\" entry, so the dispatch would \
+team.{runtime} in .bee/config.json carries no \"{name}\" entry, so the dispatch would \
 silently inherit the session model while dispatch.jsonl recorded a role that selects no \
 model.\n\
 FIX: open with a configured role ({roles}), or configure this one — add \
-\"{name}\": \"<model>\" to models.{runtime} in .bee/config.json. Any role name you \
+\"{name}\": \"<model>\" to team.{runtime} in .bee/config.json. Any role name you \
 configure is legal; bee holds no fixed list."
     )
 }
@@ -302,7 +302,7 @@ configure is legal; bee holds no fixed list."
 // ─── model config (the ONE parser lives in verbs::drivers) ────────────────
 //
 // model-role-split D1 (store cd72ec97): this hook used to carry a SECOND
-// implementation of the `models.<runtime>` shape — its own Slot/Slots/Models
+// implementation of the `team.<runtime>` shape — its own Slot/Slots/Models
 // normalize plus a private resolve_tier/resolve_advisor. The two copies had
 // already drifted (four tier names against five) with nothing intending it,
 // so `verbs::drivers` is now the single parser and this hook calls it. No
@@ -361,7 +361,7 @@ const ROLE_DESCRIPTION_MAX: usize = 60;
 /// hook's deny/allow decision and `dispatch prepare` all see exactly the
 /// same value they saw before an operator wrote one.
 ///
-/// Only an OBJECT slot can carry it. `models.claude.generation: "sonnet"`
+/// Only an OBJECT slot can carry it. `team.claude.generation: "sonnet"`
 /// has nowhere to put a description and renders exactly as it always did;
 /// so does an object slot without the key, an empty one, and a whitespace
 /// one — the door never prints an empty pair of quotes.
@@ -396,7 +396,7 @@ fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) 
 /// shape this feature exists to remove. Three separate facts, because the two
 /// runtimes fail for DIFFERENT reasons:
 ///
-/// * `models.<runtime>.<role>` accepts `{model, effort}` and
+/// * `team.<runtime>.<role>` accepts `{model, effort}` and
 ///   `normalize_tier_value` keeps the value, so it does reach
 ///   `Resolved::Model`. Config and parsing are not the gap.
 /// * On CLAUDE it dies at the door: every `Resolved::Model` site in
@@ -440,7 +440,7 @@ fn render_role(resolved: &Resolved) -> Option<String> {
 /// returned a FIXED four-entry vector — `generation`, `extraction`, `review`,
 /// `advisor` — because under a closed set those were the only names that
 /// could exist. The set is open now, so there is no fixed list to print and
-/// the names are DERIVED from `models.<runtime>` after `normalize_models`
+/// the names are DERIVED from `team.<runtime>` after `normalize_models`
 /// (the operator's own keys plus the defaults bee seeds there), exactly as
 /// every other role surface derives them.
 ///
@@ -540,7 +540,7 @@ pub(crate) fn dispatch_door_lines(config: Option<&Map<String, Value>>, runtime: 
             "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime {runtime} --kind cell|gather|reviewer|advisor [--role <name>] --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
         ),
         format!(
-            "- Roles ({runtime}): {listed} — open set: any name models.{runtime} configures is legal; one nothing configures refuses by name."
+            "- Roles ({runtime}): {listed} — open set: any name team.{runtime} configures is legal; one nothing configures refuses by name."
         ),
     ]
 }
@@ -550,9 +550,9 @@ pub(crate) fn dispatch_door_lines(config: Option<&Map<String, Value>>, runtime: 
 ///
 /// model-role-split D2 (store 06e49368): this walked the literal
 /// `["extraction", "generation", "review"]` plus the advisor slot, so a model
-/// configured under any OTHER role (`models.claude.test`) failed membership
+/// configured under any OTHER role (`team.claude.test`) failed membership
 /// and the dispatch DENIED — the hard blocker on an open role set. It now
-/// walks whatever `models.claude` carries, which is that map's keys after
+/// walks whatever `team.claude` carries, which is that map's keys after
 /// `normalize_models`: the operator's roles plus bee's own seeded defaults.
 /// `advisor` needs no special case any more — it is one of those keys when it
 /// is configured, and `resolve_tier` reads its slot directly (mrs-2), so the
@@ -1483,7 +1483,7 @@ mod tests {
         root.join(".bee").join("logs").join("dispatch.jsonl")
     }
 
-    // opencode-support E4/S4: models.opencode used to be silently dropped by
+    // opencode-support E4/S4: team.opencode used to be silently dropped by
     // this hook's own second normalize_models (only ["claude", "codex"] were
     // parsed) — docs/config-reference.md called that "dead config that never
     // resolves". model-role-split D1 deleted that copy, so these rows now
@@ -1516,7 +1516,7 @@ mod tests {
             resolve_tier(&models, "review", "opencode", GUARD_PURPOSE),
             model("opencode/nemotron-3-ultra-free")
         );
-        // Unconfigured (no models.opencode key at all) resolves to Budget on
+        // Unconfigured (no team.opencode key at all) resolves to Budget on
         // every slot — same no-baked-in-default treatment codex gets.
         let models = normalize_models(None);
         assert_eq!(
@@ -2651,7 +2651,7 @@ mod tests {
         assert!(stderr.contains("[bee-tier: advisor] names a role nothing configures"), "{stderr}");
         // The FIX teaches the remedy and does not offer the very name it just
         // refused as one of the roles to use instead.
-        assert!(stderr.contains("models.claude in .bee/config.json"), "{stderr}");
+        assert!(stderr.contains("team.claude in .bee/config.json"), "{stderr}");
         assert!(!stderr.contains("(advisor/"), "the FIX must not advertise advisor: {stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "role-not-configured");
@@ -2717,7 +2717,7 @@ mod tests {
         assert!(stderr.contains("FIX:"), "{stderr}");
         // The remedy is named, and the roles it offers are the configured
         // ones — including the operator's own.
-        assert!(stderr.contains("models.claude in .bee/config.json"), "{stderr}");
+        assert!(stderr.contains("team.claude in .bee/config.json"), "{stderr}");
         assert!(stderr.contains("test"), "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "role-not-configured");
@@ -2733,7 +2733,7 @@ mod tests {
         );
         assert_eq!(code, 2, "{stderr}");
         assert!(stderr.contains("names a role nothing configures"), "{stderr}");
-        assert!(stderr.contains("models.codex in .bee/config.json"), "{stderr}");
+        assert!(stderr.contains("team.codex in .bee/config.json"), "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "codex-spawn-role-unconfigured");
         assert_eq!(d["tier"], "tset");
@@ -2879,13 +2879,13 @@ mod tests {
         let without = dispatch_door_lines(bare.as_object(), "claude");
         assert_eq!(
             with_desc[1],
-            "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+            "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name team.claude configures is legal; one nothing configures refuses by name."
         );
         // The same line without the field is what it always was — additive,
         // never a re-render of the roles that declared nothing.
         assert_eq!(
             without[1],
-            "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+            "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name team.claude configures is legal; one nothing configures refuses by name."
         );
         // The prepare-command line never mentions the field at all.
         assert_eq!(with_desc[0], without[0]);
@@ -2914,7 +2914,7 @@ mod tests {
             let line = &dispatch_door_lines(config.as_object(), "claude")[1];
             assert_eq!(
                 line,
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name.",
+                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name team.claude configures is legal; one nothing configures refuses by name.",
                 "{slot} must render the historical line"
             );
         }
@@ -3152,7 +3152,7 @@ mod tests {
                 stderr.contains(&format!("[bee-tier: {seat}] names a role nothing configures")),
                 "{seat}: {stderr}"
             );
-            assert!(stderr.contains("models.claude in .bee/config.json"), "{seat}: {stderr}");
+            assert!(stderr.contains("team.claude in .bee/config.json"), "{seat}: {stderr}");
             let d = last_jsonl(dispatch_log(fx.path())).unwrap();
             assert_eq!(d["transport"], "role-not-configured", "{seat}");
             assert_eq!(d["tier"], json!(seat), "{seat}: refused in the name that was written");

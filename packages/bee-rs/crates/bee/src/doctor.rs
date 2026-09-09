@@ -334,7 +334,7 @@ fn hat_description_advisory(root: &Path, runtime: Runtime) -> Option<(Value, Str
         return None;
     }
     let detail = format!(
-        "{} hat slot(s) in models.{} carry no description: {} — each hat's purpose belongs in its own slot (\"{}\": {{\"model\": \"…\", \"description\": \"what this hat looks for\"}}), so the config reads self-documenting. Advisory only: it does not change the verdict.",
+        "{} hat slot(s) in team.{} carry no description: {} — each hat's purpose belongs in its own slot (\"{}\": {{\"model\": \"…\", \"description\": \"what this hat looks for\"}}), so the config reads self-documenting. Advisory only: it does not change the verdict.",
         missing.len(),
         runtime.name(),
         missing.join(", "),

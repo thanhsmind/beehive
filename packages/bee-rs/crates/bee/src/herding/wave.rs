@@ -349,7 +349,7 @@ fn resolve_from_registry(
 }
 
 /// Returns the configured agent name from the cell-execution tier slot
-/// (`models.<runtime>.generation`), but ONLY when it is an object with
+/// (`team.<runtime>.generation`), but ONLY when it is an object with
 /// `kind == "herding"` and an `agent` field that is a non-empty string.
 /// `<runtime>` is mapped to one of `"claude"`, `"codex"`, `"opencode"`,
 /// defaulting to `"claude"`.
@@ -382,7 +382,7 @@ fn current_runtime() -> String {
 ///     through `herding.agents` alone. An unknown name is
 ///     `AgentCommandError::UnknownAgent`, listing every registry key.
 ///   - `agent = None` and the cell-execution tier slot
-///     (`models.<runtime>.generation`) is an object with `kind == "herding"`
+///     (`team.<runtime>.generation`) is an object with `kind == "herding"`
 ///     and a non-empty `agent`: resolved through `herding.agents` the same
 ///     way (an unknown name refuses typed).
 ///   - `agent = None` and `herding.agent_command` is a plain JSON string:
@@ -1555,12 +1555,12 @@ mod tests {
         assert_eq!(expand_tilde("~otheruser/bar.json"), "~otheruser/bar.json");
     }
 
-    // ─── tier slot resolution: models.<runtime>.generation ────────────
+    // ─── tier slot resolution: team.<runtime>.generation ────────────
 
     #[test]
     fn tier_slot_wins_over_differing_agent_command() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "agy-flash" }
                 }
@@ -1577,7 +1577,7 @@ mod tests {
     #[test]
     fn explicit_agent_name_still_wins_over_the_tier_slot() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "agy-flash" }
                 }
@@ -1592,7 +1592,7 @@ mod tests {
     fn non_participating_tier_slots_fall_through_to_agent_command() {
         // 1. kind: herding with no agent
         let cfg_no_agent = serde_json::json!({
-            "models": { "claude": { "generation": { "kind": "herding" } } },
+            "team": { "claude": { "generation": { "kind": "herding" } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_no_agent, None, "claude").unwrap();
@@ -1601,7 +1601,7 @@ mod tests {
 
         // 2. kind: herding with empty/whitespace agent
         let cfg_empty_agent = serde_json::json!({
-            "models": { "claude": { "generation": { "kind": "herding", "agent": "   " } } },
+            "team": { "claude": { "generation": { "kind": "herding", "agent": "   " } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_empty_agent, None, "claude").unwrap();
@@ -1610,7 +1610,7 @@ mod tests {
 
         // 3. plain model-name slot
         let cfg_model_str = serde_json::json!({
-            "models": { "claude": { "generation": "sonnet" } },
+            "team": { "claude": { "generation": "sonnet" } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_model_str, None, "claude").unwrap();
@@ -1619,7 +1619,7 @@ mod tests {
 
         // 4. kind: "cli" slot
         let cfg_cli = serde_json::json!({
-            "models": { "claude": { "generation": { "kind": "cli", "command": "run-cmd" } } },
+            "team": { "claude": { "generation": { "kind": "cli", "command": "run-cmd" } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_cli, None, "claude").unwrap();
@@ -1628,7 +1628,7 @@ mod tests {
 
         // 5. null / non-object slot
         let cfg_null = serde_json::json!({
-            "models": { "claude": { "generation": null } },
+            "team": { "claude": { "generation": null } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
         let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_null, None, "claude").unwrap();
@@ -1639,7 +1639,7 @@ mod tests {
     #[test]
     fn tier_slot_naming_unknown_agent_returns_unknown_agent_error() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "no-such-herd" }
                 }
@@ -1663,7 +1663,7 @@ mod tests {
     #[test]
     fn tier_slot_resolving_to_object_shape_entry_carries_env() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "codex-envd" }
                 }
@@ -1687,7 +1687,7 @@ mod tests {
     #[test]
     fn unknown_or_absent_runtime_reads_the_claude_block() {
         let cfg = serde_json::json!({
-            "models": {
+            "team": {
                 "claude": {
                     "generation": { "kind": "herding", "agent": "agy-flash" }
                 },

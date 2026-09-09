@@ -5,7 +5,7 @@
 //
 // WHY IT EXISTS. An agent that has to pick a role for a dispatch had exactly
 // one way to learn what the roles MEAN: open `.bee/config.json` and parse
-// `models.<runtime>` by hand. D1 makes that a verb — "lấy thông tin models từ
+// `team.<runtime>` by hand. D1 makes that a verb — "lấy thông tin models từ
 // config nên là 1 verb trong bee để nhận trọn bộ không cần phải viết code
 // đọc" — so the table has one reader and the descriptions have one home.
 //
@@ -46,7 +46,7 @@ pub(crate) const SOURCE_DEFAULT: &str = "default";
 /// The teaching line the text rendering opens with. An agent that ran this
 /// verb once should never go back to parsing the config by hand.
 const TEACH: &str = "models — the role table bee dispatches from. A role's `description` is written in \
-.bee/config.json under models.<runtime>.<role>, and this verb is how it is read; \
+.bee/config.json under team.<runtime>.<role>, and this verb is how it is read; \
 never parse that file by hand.";
 
 /// One role's row: the slot exactly as the config wrote it, plus where it came
@@ -90,7 +90,7 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
     if let Some(want) = runtime {
         if !names.iter().any(|n| n == want) {
             return Err(format!(
-                "bee models show: --runtime {want:?} is not a runtime this repo knows. Legal: {}.",
+                "bee team show: --runtime {want:?} is not a runtime this repo knows. Legal: {}.",
                 names.join(", ")
             ));
         }
@@ -453,7 +453,7 @@ mod tests {
             "claude": {"code": {"model": "opus", "description": "write the cell's code"}}
         });
         let text = render(&table(&raw, Some("claude")));
-        assert!(text.contains("models.<runtime>.<role>"), "the teaching line is missing: {text}");
+        assert!(text.contains("team.<runtime>.<role>"), "the teaching line is missing: {text}");
         assert!(text.contains("code"), "{text}");
         assert!(text.contains("[configured]"), "{text}");
         assert!(text.contains("write the cell's code"), "{text}");

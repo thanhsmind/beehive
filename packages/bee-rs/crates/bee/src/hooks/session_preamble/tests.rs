@@ -1459,7 +1459,7 @@ use crate::version::BEE_VERSION;
         );
         assert!(
             text.contains(
-                "- Roles (claude): generation=herding (agy-flash) | review=opus | extraction=haiku — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+                "- Roles (claude): generation=herding (agy-flash) | review=opus | extraction=haiku — open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
@@ -1533,7 +1533,7 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(
             text.contains(
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=opus — open set: any name models.claude configures is legal; one nothing configures refuses by name."
+                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=opus — open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );

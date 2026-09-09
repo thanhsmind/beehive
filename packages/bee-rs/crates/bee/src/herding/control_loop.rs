@@ -328,7 +328,7 @@ const SUPERVISOR_FORBIDDEN_TOOL_TOKENS: &[&str] = &[
 /// touches it. The supervisor instead asks the OPEN model-role set for the
 /// name `supervisor` (322695d6; the resolver is model-role-split D2, store
 /// `06e49368`), so the operator picks the observer's model in
-/// `.bee/config.json` under `models.claude.supervisor` with zero resolver
+/// `.bee/config.json` under `team.claude.supervisor` with zero resolver
 /// changes.
 ///
 /// It can never fail the tick. `read_models` bowing out (the dogfood-repos
@@ -353,7 +353,7 @@ fn supervisor_model(main_root: &Path) -> String {
         return DEFAULT_MODEL.to_string();
     };
     // Runtime is `claude` by construction: this loop's default argv spawns
-    // `claude -p` (D13), so the table it must read is `models.claude`.
+    // `claude -p` (D13), so the table it must read is `team.claude`.
     match resolve_role(&models, &[SUPERVISOR_MODEL_ROLE], "claude", "cell") {
         Resolved::Model { model, .. } | Resolved::Native { model, .. } => model,
         _ => DEFAULT_MODEL.to_string(),
@@ -929,7 +929,7 @@ mod tests {
                 "-p".to_string(),
                 "PROMPT BODY supervisor\n".to_string(),
                 "--model".to_string(),
-                // No `models.claude.supervisor` in this root: the resolver
+                // No `team.claude.supervisor` in this root: the resolver
                 // warns and falls through, and the loop lands on its default
                 // rather than failing the tick.
                 "sonnet".to_string(),
