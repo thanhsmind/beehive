@@ -1300,6 +1300,7 @@ pub(crate) fn prepare_dispatch_with_brief(
         return Ok(Prepared::Value(unmapped_kind_refusal(kind)));
     };
     let models = read_models(root)?;
+    let cfg = Value::Object(read_config_raw(root));
     // T012a: a `--role` naming a role nothing configures is REFUSED, never
     // resolved onto some other role's model. Same FIX shape as the
     // model-guard's marker refusal, and — the part that used to be a comment
@@ -1973,6 +1974,15 @@ pub(crate) fn prepare_dispatch_with_brief(
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
         _ => None,
     };
+    let declared = match (&channel[..], &resolved) {
+        ("cli-exec", Resolved::Native { fallback: Some(command), .. }) => {
+            declared_model_for(&cfg, &Resolved::Cli { command: command.clone() }, runtime)
+        }
+        ("cli-exec", Resolved::Cli { .. }) | ("herding-exec", Resolved::Herding { .. }) => {
+            declared_model_for(&cfg, &resolved, runtime)
+        }
+        _ => None,
+    };
     // `logical_tier` audits the model channel this dispatch actually took, so
     // it reads the resolved role for the same reason the marker does — the
     // guard's own audit line resolves that name back and the two must agree.
@@ -1982,6 +1992,7 @@ pub(crate) fn prepare_dispatch_with_brief(
         param_model.as_deref(),
         &resolved,
         native_confirmed,
+        declared.as_deref(),
     );
     economics.insert("tier_source".into(), Value::String(tier_source.to_string()));
     // lane-model-diversity D2 — the seat that was ASKED FOR, beside the role

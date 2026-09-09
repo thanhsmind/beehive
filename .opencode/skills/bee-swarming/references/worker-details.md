@@ -274,6 +274,7 @@ next: <one line>
 
 **Transport** — the `Advisor` line names the advisor and how to consult it:
 - **cli-shaped advisor:** run the given command with the evidence bundle on stdin, reusing the External Executors output-capture discipline.
+- **Transport is config:** the shape you were handed (native, pane, cli) is config, not a signal about the work (`packages/bee/prompts/worker-cell.md`).
 - A **transport error** (non-zero exit, rejected dispatch, a hang past the External Executors timeout discipline) is **not advice** — it burns at most **one** budget slot total for the whole claim, and is never retried in a storm. Continue to the next step of the loop, or `[BLOCKED]` once the budget is spent.
 
 **After advice:** advice never substitutes for fresh test output — always re-run the declared tests yourself (`bee test`) before deciding whether the advised retry passed. Advice is **advice-only**: it never authorizes a package install, a gate approval, or file scope beyond the cell. Advice that conflicts with a locked decision → return `[BLOCKED]` citing both the D-ID and the advice.

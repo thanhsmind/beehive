@@ -16,7 +16,7 @@ use crate::hooks::Outcome;
 use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
-use crate::verbs::drivers::{normalize_models, resolve_tier, Resolved};
+use crate::verbs::drivers::{declared_model_for, normalize_models, resolve_tier, Resolved};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -78,6 +78,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     }
 
     let models = normalize_models(config.get("team"));
+    let cfg = Value::Object(config);
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
 
     let mut verdict = if is_codex_spawn {
@@ -91,7 +92,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
         return Ok((0, String::new(), String::new()));
     };
 
-    let economics = derive_dispatch_economics(&models, is_codex_spawn, &verdict);
+    let economics = derive_dispatch_economics(&cfg, &models, is_codex_spawn, &verdict);
 
     // toolInput is a plain object on every verdict-carrying path.
     let input_map = match &tool_input {
@@ -335,15 +336,6 @@ fn resolved_model_name(resolved: &Resolved) -> Option<&str> {
     }
 }
 
-/// How many roles the dispatch door prints before it starts counting.
-///
-/// The door block is injected into EVERY session and re-injected after every
-/// compaction, so its length is a real, repeated cost — publishing a long
-/// list of names would be worse than the fixed tier list it replaced. Six is
-/// bee's own slots plus room for a couple of the operator's; past that the
-/// line says how many more there are and `bee dispatch prepare --role <name>`
-/// answers for any of them by name.
-const DOOR_ROLES_SHOWN: usize = 6;
 
 /// How many characters of a role's optional `description` the door prints
 /// before it clips. The door block is injected into EVERY session, so a
@@ -411,63 +403,60 @@ fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) 
 ///   who reads "harness limit" and takes the whole thing as closed is reading
 ///   past a live gap.
 ///
-/// `Resolved::Native` is the one place effort IS delivered; it is not
-/// rendered here either, because the native arm's own `reasoning_effort` is
-/// what speaks for it and this line publishes the model, not the transport.
-fn render_role(resolved: &Resolved) -> Option<String> {
+/// leader-sees-team D1/D4: render a role as `<model> (native)` for a native slot,
+/// `<declared-model> (herding: <agent>)` for a herding slot with a declared model,
+/// `model chosen by the agent (herding: <agent>)` when none is declared,
+/// `<declared-model> (cli)` for a cli slot.
+fn render_role(cfg: &Value, resolved: &Resolved, runtime: &str) -> Option<String> {
     Some(match resolved {
-        Resolved::Model { model, .. } => model.clone(),
-        Resolved::Herding { agent, fallback } => {
-            let mut s = match agent {
-                Some(a) => format!("herding ({a})"),
+        Resolved::Model { model, .. } | Resolved::Native { model, .. } => {
+            format!("{model} (native)")
+        }
+        Resolved::Herding { agent, .. } => {
+            let declared = crate::verbs::drivers::declared_model_for(cfg, resolved, runtime);
+            let agent_str = match agent {
+                Some(a) => format!("herding: {a}"),
                 None => "herding".to_string(),
             };
-            if let Some(fb) = fallback {
-                s.push_str(&format!(" fallback={fb}"));
+            match declared {
+                Some(dm) => format!("{dm} ({agent_str})"),
+                None => format!("model chosen by the agent ({agent_str})"),
             }
-            s
         }
-        Resolved::Cli { .. } | Resolved::Refused { .. } => "cli".to_string(),
-        Resolved::Native { model, .. } => format!("native:{model}"),
-        Resolved::Inherit => "session default".to_string(),
+        Resolved::Cli { .. } | Resolved::Refused { .. } => {
+            let declared = crate::verbs::drivers::declared_model_for(cfg, resolved, runtime);
+            match declared {
+                Some(dm) => format!("{dm} (cli)"),
+                None => "cli".to_string(),
+            }
+        }
+        Resolved::Inherit => "session default (native)".to_string(),
         Resolved::Budget => return None,
     })
 }
 
 /// The roles this host actually configures, each resolved to what it selects.
 ///
-/// model-role-split D2 (store 06e49368): this was `tier_slot_display` and it
-/// returned a FIXED four-entry vector — `generation`, `extraction`, `review`,
-/// `advisor` — because under a closed set those were the only names that
-/// could exist. The set is open now, so there is no fixed list to print and
-/// the names are DERIVED from `team.<runtime>` after `normalize_models`
-/// (the operator's own keys plus the defaults bee seeds there), exactly as
-/// every other role surface derives them.
-///
-/// Read from the TABLE rather than from `known_roles`, deliberately: the
-/// resolver warns on a name absent from both the table and the built-in
-/// defaults, and `known_roles` adds `ceiling`, which no config carries —
-/// walking it here would print one stderr warning per session render on every
-/// host. Every key of the table is by definition present in the table, so this
-/// walk cannot warn. (`known_roles` used to add `advisor` on every host too,
-/// configured or not; that was the P2 this comment already smelled, and it is
-/// fixed at the source — see `verbs::drivers::known_roles`.)
-///
-/// `ceiling` is excluded: D5 (store 97ce5225) makes it an escalation flag,
-/// never a role, and it selects no model.
-///
-/// Order is derived too, never hand-listed: the slots bee's own dispatch
-/// kinds resolve come first, in `DISPATCH_KINDS` order, so the name most
-/// dispatches land on still reads first; whatever else the host configures
-/// follows in config order.
+/// leader-sees-team D1/D4: `role_slot_display` takes the whole config so it
+/// can call `declared_model_for` for herding and cli slots.
 pub(crate) fn role_slot_display(
-    models_raw: Option<&Value>,
+    config: Option<&Map<String, Value>>,
     runtime: &str,
 ) -> Vec<(String, String)> {
     use crate::verbs::drivers::{
         normalize_models, resolve_role, slot_for_kind, DISPATCH_KINDS, ESCALATION_WORD,
     };
-    let map = normalize_models(models_raw);
+    let cfg_val = config.map(|m| Value::Object(m.clone())).unwrap_or_else(|| Value::Object(Map::new()));
+    let team_raw = config.and_then(|c| {
+        if c.contains_key("team") {
+            c.get("team")
+        } else if c.contains_key("models") {
+            c.get("models")
+        } else {
+            Some(&cfg_val)
+        }
+    });
+    let map = normalize_models(team_raw);
     let table = map.get(runtime).and_then(Value::as_object);
     let mut order: Vec<String> = Vec::new();
     for kind in DISPATCH_KINDS {
@@ -489,61 +478,42 @@ pub(crate) fn role_slot_display(
         .into_iter()
         .filter_map(|name| {
             let resolved = resolve_role(&map, &[name.as_str()], runtime, "gather");
-            render_role(&resolved).map(|text| (name, text))
+            render_role(&cfg_val, &resolved, runtime).map(|text| (name, text))
         })
         .collect()
 }
 
 /// The dispatch door block — both lines, in ONE place.
 ///
-/// The session preamble renders it at session start
-/// (`hooks/session_preamble/budget.rs`) and `hooks/compaction.rs` re-injects
-/// it after a compaction. They used to carry two copies of the same literal,
-/// which is exactly how a post-compaction agent ends up being told something
-/// the preamble no longer says.
-///
-/// What changed with the open role set (D2, and `--role` from store
-/// `8ff6e79e`): the command line names `--role <name>`, and the second line
-/// publishes the host's roles instead of a fixed tier list. The list is safe
-/// to truncate because a wrong guess is not silent — a name nothing
-/// configures refuses BY NAME with a FIX at both doors
-/// (`unconfigured_role_reason` here, `--role`'s refusal in `prepare.rs`).
-///
-/// An open role set means the NAME is the only thing bee can publish about a
-/// role it never invented, and `design` or `test` says nothing about when to
-/// reach for it. A slot object may therefore carry `description`, and the
-/// door prints it beside the model as `name=model ("what it is for")` — the
-/// operator's own sentence, on the one surface every session reads. It is
-/// rendered here and nowhere else: `role_slot_description` reads the raw
-/// config, resolution never sees the field, so a described role and an
-/// undescribed one resolve and dispatch identically.
+/// leader-sees-team D1/D4: prints one line per role — `- <role> → <render_role>` —
+/// for EVERY role, no descriptions, each line ≤ 60 characters (truncating the
+/// transport tail with `…` if needed, never the role or model).
 pub(crate) fn dispatch_door_lines(config: Option<&Map<String, Value>>, runtime: &str) -> Vec<String> {
-    let team_raw = config.and_then(|c| c.get("team"));
-    let roles = role_slot_display(team_raw, runtime);
-    let shown = std::cmp::min(DOOR_ROLES_SHOWN, roles.len());
-    let mut listed = roles[..shown]
-        .iter()
-        .map(|(k, v)| match role_slot_description(team_raw, runtime, k) {
-            Some(desc) => format!("{k}={v} (\"{desc}\")"),
-            None => format!("{k}={v}"),
-        })
-        .collect::<Vec<_>>()
-        .join(" | ");
-    if roles.len() > shown {
-        listed.push_str(&format!(" +{} more", roles.len() - shown));
-    }
-    if listed.is_empty() {
-        listed.push_str("none configured");
-    }
-    vec![
+    let roles = role_slot_display(config, runtime);
+    let mut lines = vec![
         format!(
             "- Every subagent/worker dispatch starts with `.bee/bin/bee dispatch prepare --runtime {runtime} --kind cell|gather|reviewer|advisor [--role <name>] --json` — run the exact tool+payload it returns; never hand-pick subagent_type, model, or a [bee-tier] marker."
         ),
-        format!(
-            "- Roles ({runtime}): {listed} — open set: any name team.{runtime} configures is legal; one nothing configures refuses by name."
-        ),
-    ]
+    ];
+    if roles.is_empty() {
+        lines.push("- none configured".to_string());
+    } else {
+        for (role, rendered) in roles {
+            let line = format!("- {role} → {rendered}");
+            let line = if line.chars().count() > 60 {
+                format!("{}…", truncate_chars_head(&line, 59))
+            } else {
+                line
+            };
+            lines.push(line);
+        }
+    }
+    lines.push(format!(
+        "- open set: any name team.{runtime} configures is legal; one nothing configures refuses by name."
+    ));
+    lines
 }
+
 
 /// Every model a bare `model:` param may name — derived from what the
 /// resolver can publish for this runtime, never from a list kept beside it.
@@ -1211,6 +1181,7 @@ expensive session model.\n{bare_fix}"
 // ─── dispatch economics (g22-2) ─────────────────────────────────────────────
 
 fn derive_dispatch_economics(
+    cfg: &Value,
     models: &Map<String, Value>,
     is_codex_spawn: bool,
     verdict: &Verdict,
@@ -1229,6 +1200,11 @@ fn derive_dispatch_economics(
     let resolved_model = resolved.as_ref().and_then(resolved_model_name);
     let param_model = verdict.model.as_deref();
 
+    let declared = resolved.as_ref().and_then(|r| match r {
+        Resolved::Herding { .. } | Resolved::Cli { .. } => declared_model_for(cfg, r, runtime),
+        _ => None,
+    });
+
     // nativeConfirmed is never passed by the hook => always false.
     let enforcement = if is_codex_spawn {
         "prompt-budget"
@@ -1241,10 +1217,12 @@ fn derive_dispatch_economics(
         (None, "inherited-or-unknown")
     } else if let Some(p) = param_model {
         (Some(p), "pinned")
+    } else if declared.is_some() {
+        (None, "declared")
     } else {
         (None, "unverified")
     };
-    let requested_model = param_model.or(resolved_model);
+    let requested_model = param_model.or(declared.as_deref()).or(resolved_model);
 
     let str_or_null = |v: Option<&str>| v.map_or(Value::Null, |s| Value::String(s.to_string()));
     let mut out = Map::new();
@@ -2859,10 +2837,10 @@ mod tests {
     /// An open role set means the NAME is all bee can say about a role it
     /// never invented. A slot may carry the operator's own sentence, and the
     /// door prints it beside the model. Both halves are asserted on the SAME
-    /// pair of configs: the described slot gains its quoted hint, and every
-    /// role that declared none renders byte-identically to before.
+    /// leader-sees-team D4: descriptions are omitted at the door and move to team show.
+    /// The door prints one role per line, leading with the role name.
     #[test]
-    fn the_door_prints_a_role_description_beside_its_model() {
+    fn the_door_prints_one_line_per_role() {
         let described_team = json!({"claude": {
             "generation": {"model": "sonnet", "description": "build and edit code"},
             "review": "opus",
@@ -2877,29 +2855,26 @@ mod tests {
         let bare = json!({"team": bare_team});
         let with_desc = dispatch_door_lines(described.as_object(), "claude");
         let without = dispatch_door_lines(bare.as_object(), "claude");
+        assert_eq!(with_desc, without);
+        assert_eq!(with_desc[1], "- generation → sonnet (native)");
+        assert_eq!(with_desc[2], "- review → opus (native)");
+        assert_eq!(with_desc[3], "- extraction → haiku (native)");
+        assert_eq!(with_desc[4], "- design → model chosen by the agent (herding: agy-flash)");
         assert_eq!(
-            with_desc[1],
-            "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name team.claude configures is legal; one nothing configures refuses by name."
-        );
-        // The same line without the field is what it always was — additive,
-        // never a re-render of the roles that declared nothing.
-        assert_eq!(
-            without[1],
-            "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=herding (agy-flash) — open set: any name team.claude configures is legal; one nothing configures refuses by name."
+            with_desc[5],
+            "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
         );
         // The prepare-command line never mentions the field at all.
         assert_eq!(with_desc[0], without[0]);
         // ...and resolution is blind to it: described and bare resolve to the
         // SAME published value, which is what makes this display-only.
         assert_eq!(
-            role_slot_display(described.get("team"), "claude"),
-            role_slot_display(bare.get("team"), "claude")
+            role_slot_display(described.as_object(), "claude"),
+            role_slot_display(bare.as_object(), "claude")
         );
     }
 
-    /// Every shape that declares no description renders exactly as it did
-    /// before the field existed — a string slot has nowhere to put one, and
-    /// empty, whitespace, non-string and null are not descriptions.
+    /// Every shape that declares no description renders identically.
     #[test]
     fn a_slot_that_declares_no_description_renders_unchanged() {
         for slot in [
@@ -2911,15 +2886,31 @@ mod tests {
             json!({"model": "sonnet", "description": null}),
         ] {
             let config = json!({"team": {"claude": {"generation": slot.clone()}}});
-            let line = &dispatch_door_lines(config.as_object(), "claude")[1];
+            let lines = dispatch_door_lines(config.as_object(), "claude");
             assert_eq!(
-                line,
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku — open set: any name team.claude configures is legal; one nothing configures refuses by name.",
-                "{slot} must render the historical line"
+                lines[1],
+                "- generation → sonnet (native)",
+                "{slot} must render generation line"
+            );
+            assert_eq!(
+                lines[2],
+                "- review → opus (native)",
+                "{slot} must render review line"
+            );
+            assert_eq!(
+                lines[3],
+                "- extraction → haiku (native)",
+                "{slot} must render extraction line"
+            );
+            assert_eq!(
+                lines[4],
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             );
         }
         // No models key at all: the seeded defaults, with nothing quoted.
-        assert!(!dispatch_door_lines(None, "claude")[1].contains('"'));
+        let default_lines = dispatch_door_lines(None, "claude");
+        assert_eq!(default_lines[1], "- generation → sonnet (native)");
+        assert!(!default_lines.iter().any(|l| l.contains('"')));
     }
 
     /// A description is a one-line hint. Past the budget the door clips and
@@ -2931,14 +2922,13 @@ mod tests {
         let config = json!({"team": {"claude": {"generation": {"model": "sonnet", "description": long}}}});
         let rendered = role_slot_description(config.get("team"), "claude", "generation").unwrap();
         assert_eq!(rendered, format!("{}...", "x".repeat(ROLE_DESCRIPTION_MAX)));
-        assert!(dispatch_door_lines(config.as_object(), "claude")[1]
-            .contains(&format!("generation=sonnet (\"{rendered}\")")));
 
         // Exactly at the budget is NOT clipped: the ellipsis promises there
         // is more, so it must never appear when there is not.
         let exact = "y".repeat(ROLE_DESCRIPTION_MAX);
         let models = json!({"claude": {"generation": {"model": "sonnet", "description": exact}}});
         assert_eq!(role_slot_description(Some(&models), "claude", "generation"), Some(exact));
+
 
         // Surrounding whitespace is trimmed before any of that.
         let models = json!({"claude": {
@@ -3219,4 +3209,129 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn prepare_row_and_guard_row_agree_for_a_herding_slot() {
+        let config = json!({
+            "team": {
+                "claude": {
+                    "code": { "kind": "herding", "agent": "agy-flash" }
+                }
+            },
+            "herding": {
+                "agents": {
+                    "agy-flash": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            }
+        });
+        let f = fixture(&config);
+        let root = f.path();
+        crate::fsutil::ensure_dir(&root.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("cells").join("c-agree.json"),
+            r#"{"id":"c-agree","feature":"f","title":"herding agree","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        )
+        .unwrap();
+
+        let prep_result = crate::verbs::drivers::prepare_dispatch(
+            root, "claude", "cell", Some("c-agree"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let crate::verbs::drivers::Prepared::Value(prep) = prep_result else {
+            panic!("expected Prepared::Value");
+        };
+        let prep_econ = prep.get("economics").unwrap();
+
+        let models = normalize_models(config.get("team"));
+        let verdict = Verdict {
+            deny: false,
+            transport: Some("herding"),
+            reason: None,
+            tier: Some("code".into()),
+            model: None,
+            subagent_type: None,
+            updated_input: None,
+            notes: vec![],
+        };
+        let guard_econ = derive_dispatch_economics(&config, &models, false, &verdict).unwrap();
+
+        assert_eq!(
+            prep_econ.get("requested_model"),
+            guard_econ.get("requested_model"),
+            "prepare and guard requested_model must agree"
+        );
+        assert_eq!(
+            prep_econ.get("effective_model_status"),
+            guard_econ.get("effective_model_status"),
+            "prepare and guard effective_model_status must agree"
+        );
+        assert_eq!(prep_econ.get("requested_model"), Some(&json!("gemini-3.8-flash-high")));
+        assert_eq!(prep_econ.get("effective_model_status"), Some(&json!("declared")));
+    }
+
+    /// leader-sees-team D1/D4: all 18 roles appear in the preamble roster, one per line,
+    /// each line ≤ 60 characters, with role then model then transport.
+    #[test]
+    fn dispatch_door_renders_all_18_roles_under_60_chars() {
+        let fixture = json!({
+            "herding": {
+                "agents": {
+                    "agy-flash": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            },
+            "team": {
+                "claude": {
+                    "code": {"kind": "herding", "agent": "agy-flash", "description": "write the cell's Rust code and its tests"},
+                    "read": {"kind": "herding", "agent": "agy-flash", "description": "multi-file gathers and codebase scans, read-only"},
+                    "test": {"kind": "herding", "agent": "agy-flash", "description": "author or repair tests, red-first"},
+                    "docs": {"kind": "herding", "agent": "agy-flash", "description": "doc edits and parity sweeps"},
+                    "plan": {"model": "opus", "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"},
+                    "extraction": {"kind": "herding", "agent": "agy-flash", "description": "narrow fact lookups from known locations"},
+                    "generation": {"kind": "herding", "agent": "agy-flash", "description": "fall-through tail: default writer role"},
+                    "review": {"model": "opus", "description": "independent read-only check of a claim or diff"},
+                    "advisor": {"model": "fable", "description": "session-class consult for high-risk gates"},
+                    "supervisor": {"model": "haiku", "description": "cold observer tick — structured observation on a cheap model"},
+                    "lane-1": {"model": "fable", "description": "blind-lane seat 1"},
+                    "lane-2": {"model": "opus", "description": "blind-lane seat 2"},
+                    "lane-3": {"kind": "herding", "agent": "agy-flash", "description": "blind-lane seat 3"},
+                    "hat-facts-gaps": {"model": "opus", "description": "hat: what the spec cannot answer"},
+                    "hat-risks": {"model": "fable", "description": "hat: what breaks"},
+                    "hat-value": {"kind": "herding", "agent": "agy-flash", "description": "hat: is this worth its cost"},
+                    "hat-alternatives": {"model": "opus", "description": "hat: is there a cheaper shape"},
+                    "hat-user-impact": {"kind": "herding", "agent": "agy-flash", "description": "hat: what the user sees and feels"}
+                }
+            }
+        });
+        let lines = dispatch_door_lines(fixture.as_object(), "claude");
+        assert!(lines[0].starts_with("- Every subagent/worker dispatch starts with"));
+        let last = lines.last().unwrap();
+        assert!(last.starts_with("- open set:"));
+
+        let roster_lines = &lines[1..lines.len() - 1];
+        assert_eq!(roster_lines.len(), 18, "all 18 roles must appear in the roster");
+
+        let expected_roles = [
+            "code", "read", "test", "docs", "plan", "extraction", "generation",
+            "review", "advisor", "supervisor", "lane-1", "lane-2", "lane-3",
+            "hat-facts-gaps", "hat-risks", "hat-value", "hat-alternatives", "hat-user-impact"
+        ];
+        for expected in expected_roles {
+            assert!(
+                roster_lines.iter().any(|l| l.starts_with(&format!("- {expected} → "))),
+                "missing role {expected} in roster lines: {roster_lines:#?}"
+            );
+        }
+        for line in roster_lines {
+            assert!(
+                line.chars().count() <= 60,
+                "line exceeds 60 chars ({len} chars): {line}",
+                len = line.chars().count()
+            );
+        }
+    }
 }
+

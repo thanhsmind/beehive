@@ -347,6 +347,7 @@ pub(crate) fn derive_economics(
     param_model: Option<&str>,
     resolved: &Resolved,
     native_confirmed: bool,
+    declared: Option<&str>,
 ) -> Map<String, Value> {
     let is_native_confirmed =
         channel == "codex-native" && matches!(resolved, Resolved::Native { .. }) && native_confirmed;
@@ -378,6 +379,8 @@ pub(crate) fn derive_economics(
         "native-requested"
     } else if channel == "codex-native" {
         "inherited-or-unknown"
+    } else if (channel == "cli-exec" || channel == "herding-exec") && declared.is_some() {
+        "declared"
     } else if channel == "cli-exec" || channel == "herding-exec" {
         "unverified"
     } else if let Some(pm) = param_model {
@@ -387,7 +390,9 @@ pub(crate) fn derive_economics(
         "unverified"
     };
 
-    let requested_model = if channel == "cli-exec" || channel == "herding-exec" || channel == "session-model" {
+    let requested_model = if (channel == "cli-exec" || channel == "herding-exec") && declared.is_some() {
+        Value::String(declared.unwrap().to_string())
+    } else if channel == "cli-exec" || channel == "herding-exec" || channel == "session-model" {
         Value::Null
     } else {
         match param_model.map(str::to_string).or(resolved_model) {
@@ -664,7 +669,7 @@ mod tests {
 
     #[test]
     fn derive_economics_herding_exec() {
-        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false);
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
@@ -672,8 +677,34 @@ mod tests {
     }
 
     #[test]
+    fn derive_economics_herding_exec_declared() {
+        let e = derive_economics(
+            "herding-exec",
+            "generation",
+            None,
+            &Resolved::Budget,
+            false,
+            Some("gemini-3.8-flash-high"),
+        );
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"gemini-3.8-flash-high","effective_model":null,"effective_model_status":"declared","channel":"herding-exec","enforcement":"herding-command"}"#
+        );
+    }
+
+    #[test]
+    fn derive_economics_cli_exec_declared() {
+        let cli = Resolved::Cli { command: "tool --model gpt-4o".into() };
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"));
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"gpt-4o","effective_model":null,"effective_model_status":"declared","channel":"cli-exec","enforcement":"cli-command"}"#
+        );
+    }
+
+    #[test]
     fn derive_economics_session_model() {
-        let e = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false);
+        let e = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"ceiling","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"session-model","enforcement":"session-model"}"#

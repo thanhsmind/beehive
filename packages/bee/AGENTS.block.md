@@ -148,9 +148,11 @@ context before planning or executing.
   gather reaches the cheap reader (`--kind gather --role extraction`) — run it
   first, then run exactly the tool and payload it returns (an Agent
   call naming a rendered bee agent, or a Bash `bee herding run` / cli
-  call). Never hand-pick `subagent_type`, a `model` param, or a
-  leading `[bee-tier: …]` marker: those are what prepare RETURNS, and
-  the model-guard hook refuses or rewrites anything else.
+  call). Pick the team member by job — the role's description says what
+  it is good at; whether it runs as a native model, a herding pane or a
+  cli is config, never the leader's choice. Never hand-pick `subagent_type`, a
+  `model` param, or a leading `[bee-tier: …]` marker: those are what prepare
+  RETURNS, and the model-guard hook refuses or rewrites anything else.
 - The internal consult is ONE thing: the plan-step **hat wave**, fixed
   perspectives dispatched `--kind advisor` at the plan step, once per
   feature. Its synthesis is the plan check AND the high-risk gate's

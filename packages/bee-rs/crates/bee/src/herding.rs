@@ -77,7 +77,7 @@ mod wave_ledger;
 // `bee herding wave` (D17) and `bee herding occupancy` — the caller that
 // turns `herding.agent_command` into a running wave, and the CLI bridge to
 // the ledger's read side. See `wave.rs` for both.
-mod wave;
+pub(crate) mod wave;
 
 // `bee herding control-loop` (D8) — the Rust replacement for
 // control-loop.sh. See control_loop.rs.

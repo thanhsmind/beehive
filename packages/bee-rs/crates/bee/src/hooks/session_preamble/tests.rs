@@ -1457,9 +1457,12 @@ use crate::version::BEE_VERSION;
             ),
             "{text}"
         );
+        assert!(text.contains("- generation → model chosen by the agent (herding: agy-flas…"), "{text}");
+        assert!(text.contains("- review → opus (native)"), "{text}");
+        assert!(text.contains("- extraction → haiku (native)"), "{text}");
         assert!(
             text.contains(
-                "- Roles (claude): generation=herding (agy-flash) | review=opus | extraction=haiku — open set: any name team.claude configures is legal; one nothing configures refuses by name."
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
@@ -1476,9 +1479,9 @@ use crate::version::BEE_VERSION;
                 fallback: None,
             }
         );
-        let slots = crate::hooks::model_guard::role_slot_display(Some(&models_obj), "claude");
+        let slots = crate::hooks::model_guard::role_slot_display(models_obj.as_object(), "claude");
         let gen_str = slots.iter().find(|(k, _)| k == "generation").map(|(_, v)| v.as_str());
-        assert_eq!(gen_str, Some("herding (agy-flash)"));
+        assert_eq!(gen_str, Some("model chosen by the agent (herding: agy-flash)"));
     }
 
     #[test]
@@ -1491,17 +1494,24 @@ use crate::version::BEE_VERSION;
         );
         let text = render(tmp.path());
         assert!(
-            text.contains(
-                "- Roles (claude): generation=claude-3-5-sonnet-20241022 | review=claude-3-opus-20240229 | advisor=claude-3-7-sonnet-20250219 | extraction=claude-3-5-haiku-20241022"
-            ),
+            text.contains("- generation → claude-3-5-sonnet-20241022 (native)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- review → claude-3-opus-20240229 (native)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- advisor → claude-3-7-sonnet-20250219 (native)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- extraction → claude-3-5-haiku-20241022 (native)"),
             "{text}"
         );
     }
 
-    /// The preamble is where a role's own purpose actually reaches a reader,
-    /// so the described line is asserted THROUGH `render`, not just through
-    /// the helper — an operator who writes `description` on a slot must see
-    /// that sentence in the block their session opens with.
+    /// leader-sees-team D4: descriptions are omitted from the door and appear in team show.
     #[test]
     fn dispatch_door_renders_a_role_description_when_the_slot_declares_one() {
         let tmp = minimal_repo();
@@ -1511,17 +1521,15 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet","description":"build and edit code"},"review":"opus","design":{"model":"opus","description":"shape the thing before it is built"}}}}"#,
         );
         let text = render(tmp.path());
-        assert!(
-            text.contains(
-                "- Roles (claude): generation=sonnet (\"build and edit code\") | review=opus | extraction=haiku | design=opus (\"shape the thing before it is built\")"
-            ),
-            "{text}"
-        );
+        assert!(text.contains("- generation → sonnet (native)"), "{text}");
+        assert!(text.contains("- review → opus (native)"), "{text}");
+        assert!(text.contains("- extraction → haiku (native)"), "{text}");
+        assert!(text.contains("- design → opus (native)"), "{text}");
+        assert!(!text.contains("build and edit code"), "{text}");
+        assert!(!text.contains("shape the thing before it is built"), "{text}");
     }
 
-    /// The same config with the descriptions removed renders the line bee
-    /// rendered before this field existed — byte for byte. This is the guard
-    /// against the additive change quietly becoming a re-render.
+    /// The same config with the descriptions removed renders identically.
     #[test]
     fn dispatch_door_line_is_unchanged_when_no_slot_declares_a_description() {
         let tmp = minimal_repo();
@@ -1531,9 +1539,13 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet"},"review":"opus","design":{"model":"opus"}}}}"#,
         );
         let text = render(tmp.path());
+        assert!(text.contains("- generation → sonnet (native)"), "{text}");
+        assert!(text.contains("- review → opus (native)"), "{text}");
+        assert!(text.contains("- extraction → haiku (native)"), "{text}");
+        assert!(text.contains("- design → opus (native)"), "{text}");
         assert!(
             text.contains(
-                "- Roles (claude): generation=sonnet | review=opus | extraction=haiku | design=opus — open set: any name team.claude configures is legal; one nothing configures refuses by name."
+                "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
             ),
             "{text}"
         );
@@ -1549,10 +1561,9 @@ use crate::version::BEE_VERSION;
         let tmp = minimal_repo();
         let text = render(tmp.path());
         assert!(text.contains("### Dispatch door"), "{text}");
-        assert!(
-            text.contains("- Roles (claude): generation=sonnet | review=opus | extraction=haiku —"),
-            "{text}"
-        );
+        assert!(text.contains("- generation → sonnet (native)"), "{text}");
+        assert!(text.contains("- review → opus (native)"), "{text}");
+        assert!(text.contains("- extraction → haiku (native)"), "{text}");
         assert!(!text.contains("advisor=none"), "an unconfigured role is dropped:\n{text}");
         assert!(!text.contains("Tier slots"), "the retired tier list is gone:\n{text}");
     }
@@ -1570,18 +1581,11 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":"opus","test":"haiku"}}}"#,
         );
         let text = render(tmp.path());
-        assert!(
-            text.contains(
-                "- Roles (claude): generation=opus | review=opus | extraction=haiku | test=haiku —"
-            ),
-            "{text}"
-        );
+        assert!(text.contains("- generation → opus (native)"), "{text}");
+        assert!(text.contains("- test → haiku (native)"), "{text}");
     }
 
-    /// The block is injected into EVERY session, so its length is a real,
-    /// repeated cost. Past the cap the line counts instead of listing; the
-    /// truncation is safe because a name nothing configures refuses BY NAME
-    /// with a FIX at both doors rather than resolving silently.
+    /// leader-sees-team D4: every configured role is listed; DOOR_ROLES_SHOWN cap is retired.
     #[test]
     fn dispatch_door_counts_roles_past_the_cap_instead_of_listing_them() {
         let tmp = minimal_repo();
@@ -1591,10 +1595,8 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":"opus","test":"haiku","docs":"haiku","design":"opus","migrate":"haiku","triage":"haiku"}}}"#,
         );
         let text = render(tmp.path());
-        // 3 seeded + 6 configured, one of which (generation) overlays a
-        // seeded slot: 8 roles, 6 shown.
-        assert!(text.contains(" +2 more —"), "{text}");
-        assert!(!text.contains("triage="), "the 8th role is counted, not listed:\n{text}");
+        assert!(!text.contains("more —"), "{text}");
+        assert!(text.contains("- triage → haiku (native)"), "the 8th role is listed:\n{text}");
     }
 
     /// model-role-split records `effort` as a known NON-delivery, so the door
@@ -1627,10 +1629,11 @@ use crate::version::BEE_VERSION;
         );
 
         let text = render(tmp.path());
-        assert!(text.contains("- Roles (claude): generation=opus |"), "{text}");
+        assert!(text.contains("- generation → opus (native)"), "{text}");
         assert!(!text.contains("opus:high"), "the door published a dropped effort:\n{text}");
         assert!(!text.contains(":high"), "the door published a dropped effort:\n{text}");
     }
+
 
     /// team-config-rename D2: Dispatch door emits one terse warning line on models-only config, and never when team is present.
     #[test]

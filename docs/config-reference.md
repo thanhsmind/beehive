@@ -132,8 +132,16 @@ Every role slot — a seeded one, `review`, `advisor`, or a name you invented �
   | `opus` | Opus 4.8 | `claude-opus-4-8` |
   | `fable` | Fable 5 | `claude-fable-5` |
 
-  You **cannot pin an exact sub-version** for a Claude Code subagent — the model param is family-alias only, and it tracks the latest of each family as Anthropic ships new ones. (For **Codex**, the `codex` roles take the runtime's real model ids, e.g. `"gpt-5"`, because that runtime addresses models by id.)
 - `bee status` prints the active map — every role the runtime configures, bee's own dispatch roles first and the rest in config order, e.g. `Models (claude): generation=… review=… extraction=… test=…` — plus the `role_mix` and its escalated share, and warns when too many cells run escalated — the cost lever erodes when the strongest model touches most dispatches.
+- **Dispatch economics status vocabulary (`effective_model_status`).** Every dispatch records its economic status in `.bee/logs/dispatch.jsonl`:
+
+  | status | meaning |
+  |---|---|
+  | `pinned` | structural `model` parameter passed to the runtime (Claude Code Agent/Task) |
+  | `declared` | model named in the argv of a herding agent or cli command, read back by bee |
+  | `unverified` | prompt-budget dispatch (marker only) or external command with no model flag |
+  | `inherited-or-unknown` | session model (escalated cell) or runtime without per-agent selection (Codex default) |
+  | `native-requested` | capability probe confirmed the runtime accepted the native model override |
 
 ### Runtimes: Claude Code, Codex, OpenCode, and Pi — and everything else (agy, …)
 

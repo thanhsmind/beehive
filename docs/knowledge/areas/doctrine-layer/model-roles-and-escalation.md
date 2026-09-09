@@ -153,7 +153,10 @@ RAW config and clipping to 60 characters, as `name=model ("desc")`. The
 normalizer drops the field, which is what keeps resolution, the model
 guard, and dispatch prepare blind to it — a display string can never
 steer a dispatch. The validator already tolerated unknown keys; that
-tolerance is now pinned by test.
+tolerance is now pinned by test. Amended by leader-sees-team D4
+(2026-09-09): the dispatch-door roster prints every role one per line
+with no descriptions (≤ 60 characters per line, no six-role cap);
+descriptions appear only in `bee team show`.
 
 **B13 — `bee team show` is the one read door for the role table**
 (models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44; renamed from
@@ -170,7 +173,10 @@ built-in defaults, each row source-marked. `bee status --json` keeps
 descriptions display-only; the default config seeds described roles; and
 the missing-role refusal and the `bee cells add` help both send an
 author to this verb before assigning a role. Resolution, guard, and
-dispatch are untouched by the verb — it reads, never resolves.
+dispatch are untouched by the verb — it reads, never resolves. Amended
+by leader-sees-team D4 (2026-09-09): `team show` resolves for display
+(role, source, description, model, transport) and still writes nothing;
+the roster is one role per line.
 
 **B14 — A rendered agent file carries no model pin; the dispatch payload
 is the one authority** (agent-model-unpin, cells amu-1/amu-2). On the
