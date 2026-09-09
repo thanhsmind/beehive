@@ -70,6 +70,31 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "agents-md-sentence",
+            "status": "PASS",
+            "evidence": "rg route and gate_bypass hit in AGENTS.md"
+          },
+          {
+            "id": "invariants-boundary",
+            "status": "PASS",
+            "evidence": "rg route and bee-herding.review hit in operational-invariants.md"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.773Z"
+      }
+    ]
   }
 }

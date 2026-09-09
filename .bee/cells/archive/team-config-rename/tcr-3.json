@@ -82,6 +82,36 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "prose-gate-zero",
+            "status": "PASS",
+            "evidence": "rg models.<rt> over non-test Rust: 0"
+          },
+          {
+            "id": "preamble-line",
+            "status": "PASS",
+            "evidence": "model_guard.rs:543 says team.{runtime}"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "cargo test --bin bee: 3443 passed 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.780Z"
+      }
+    ]
   }
 }

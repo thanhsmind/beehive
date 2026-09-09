@@ -65,6 +65,31 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "review-marker-check",
+            "status": "PASS",
+            "evidence": "rg bee-herding.review hit in role-merge.md"
+          },
+          {
+            "id": "review-pane-close",
+            "status": "PASS",
+            "evidence": "rg -review hit; red marker line still present"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.770Z"
+      }
+    ]
   }
 }

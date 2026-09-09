@@ -71,6 +71,36 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "alias-parity",
+            "status": "PASS",
+            "evidence": "bee models show stdout and --json byte-identical to bee team show; one stderr line"
+          },
+          {
+            "id": "doctor-three-cases",
+            "status": "PASS",
+            "evidence": "models-only: one note; team-only: zero; both: team-is-used wording"
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "124 passed 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.784Z"
+      }
+    ]
   }
 }

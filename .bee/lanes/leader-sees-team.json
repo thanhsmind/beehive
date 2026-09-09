@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "leader-sees-team",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"leader-sees-team\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 091a5b0; reload the product and test \"leader-sees-team\", then either approve uat (\"bee gate --name uat --approved true --lane leader-sees-team\") or fix it in the worktree and merge again.",
+  "next_action": "Owner tests on main: the session-start roster (every role, one per line), bee team show --runtime claude|pi (role, description, model, transport), and a dispatch prepare on a pi role reporting declared; then approves the uat gate for leader-sees-team or reports what broke.",
   "created_at": "2026-09-09T05:04:15.142Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: leader-sees-team",
-    "asked_at": "2026-09-09T06:48:10.108Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -39,5 +34,15 @@
     "plan_sha256": "absent",
     "advisor": "hat-wave-3-seat (opus x2, agy-flash)",
     "digest_head": "# Hat wave — plan-step synthesis, leader-sees-team\n\nDate: 2026-09-09. Three seats, two models, one draft (`plan.md` revision 1, commit `66a8963e`).\nSeats: `hat-facts-gaps` (opus), `hat-alternatives` (opus), `hat-user-impact` (agy-flash pane).\nNo seat dropped. This wave is the feature's plan check (absorption, decision `b34fdea9`).\n\n## Verdict\n\n**Revision 2 is owed.** The claims table survived (14/14 verbatim, both `ran` rows reproduced),\nbut the shape did not: the helper was placed where the con"
+  },
+  "last_scribing_run": {
+    "feature": "leader-sees-team",
+    "date": "2026-09-09",
+    "at": "2026-09-09T06:48:30.553Z",
+    "areas_synced": [
+      "doctrine-layer",
+      "advisor-protocol"
+    ],
+    "next_action": "Owner tests on main: the session-start roster (every role, one per line), bee team show --runtime claude|pi (role, description, model, transport), and a dispatch prepare on a pi role reporting declared; then approves the uat gate for leader-sees-team or reports what broke."
   }
 }

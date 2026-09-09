@@ -72,6 +72,36 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "carve-out-named",
+            "status": "PASS",
+            "evidence": "rg agents-review-user-invoked hit in route-prompt.md"
+          },
+          {
+            "id": "marker-and-label",
+            "status": "PASS",
+            "evidence": "rg bee-herding.review and -review hit; SLICE 1 ONLY fence removed"
+          },
+          {
+            "id": "verdicts-and-stop",
+            "status": "PASS",
+            "evidence": "rg approved and waiting-on hit"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.766Z"
+      }
+    ]
   }
 }

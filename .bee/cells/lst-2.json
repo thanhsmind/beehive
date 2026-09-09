@@ -67,6 +67,36 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "columns-order",
+            "status": "PASS",
+            "evidence": "live bee team show pi rows: role, source, description, model, transport"
+          },
+          {
+            "id": "json-fields",
+            "status": "PASS",
+            "evidence": "--json row carries model, transport, slot"
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "147 passed 0 failed; DOOR_ROLES_SHOWN retired (grep count 0)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.787Z"
+      }
+    ]
   }
 }

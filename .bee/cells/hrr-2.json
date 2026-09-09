@@ -70,6 +70,36 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "whole-contract",
+            "status": "PASS",
+            "evidence": "route-prompt.md exists; no role-route.md beside it (ls count 0)"
+          },
+          {
+            "id": "pointer-not-copy",
+            "status": "PASS",
+            "evidence": "rg role-merge.md:73-76 hit; no restated '1. `phase` is' line"
+          },
+          {
+            "id": "arming-and-dedup",
+            "status": "PASS",
+            "evidence": "rg 'bee herding interlock' and 'lines 200' both hit"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.760Z"
+      }
+    ]
   }
 }

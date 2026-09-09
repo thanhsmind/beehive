@@ -65,6 +65,31 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "four-roles",
+            "status": "PASS",
+            "evidence": "SKILL.md frontmatter and body say four roles; 'The three roles' absent"
+          },
+          {
+            "id": "route-boundary",
+            "status": "PASS",
+            "evidence": "Role boundary paragraph carries route's never-list (diff 45ecdce1)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.763Z"
+      }
+    ]
   }
 }

@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"team-config-rename\" started at phase \"exploring\" (lane).",
   "next_action": "Owner tests on main: bee team show, bee models show (stderr notice), bee doctor --runtime claude; then approves the uat gate or reports what broke.",
   "created_at": "2026-09-09T03:23:19.960Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**Một việc tiếp theo:** làm fix 3 — bee đọc `--model` trong lệnh nó tự tạo và ghi vào `requested_model`, status `declared`. Sau đó `bee team",
-    "asked_at": "2026-09-09T05:01:00.501Z",
-    "session": "ac83adf7-9f51-4558-a3ad-49533284ee5d"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "refactor",
     "lane": "standard",

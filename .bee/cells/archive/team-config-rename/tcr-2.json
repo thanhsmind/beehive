@@ -58,6 +58,31 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "writer-on-team",
+            "status": "PASS",
+            "evidence": "templates.rs:175 emits \"team\": {; config-sample carries zero \"models\""
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "cargo test onboard::templates: 6 passed 0 failed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.777Z"
+      }
+    ]
   }
 }

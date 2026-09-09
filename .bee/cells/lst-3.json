@@ -91,6 +91,36 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "three-homes",
+            "status": "PASS",
+            "evidence": "rg 'never the leader' once each in AGENTS.block.md, AGENTS.md, gates-and-delegation.md:132; worker-cell.md clause hit"
+          },
+          {
+            "id": "false-line-gone",
+            "status": "PASS",
+            "evidence": "swarming-reference.md no longer says always null; declared in slots-and-tiers.md and config-reference.md"
+          },
+          {
+            "id": "history-untouched",
+            "status": "PASS",
+            "evidence": "git show --stat dd7dca5a: 0 docs/history paths"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-09T07:51:58.791Z"
+      }
+    ]
   }
 }
