@@ -175,7 +175,7 @@ pub fn default_config() -> Value {
         "team": {
             "claude": {
                 "code": { "model": "sonnet", "description": "write the cell's code and its tests" },
-                "read": { "model": "haiku", "description": "multi-file gathers and codebase scans, read-only" },
+                "read": { "model": "haiku", "description": "read-only lookups from known locations; a bare --kind gather also runs here" },
                 "test": { "model": "sonnet", "description": "author or repair tests, red-first" },
                 "docs": { "model": "sonnet", "description": "doc edits and parity sweeps" },
                 "plan": { "model": "opus", "description": "planning-shaped work — shaping, drafting cells, plan checks" },

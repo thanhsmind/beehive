@@ -28,7 +28,7 @@
       "read": {
         "kind": "herding",
         "agent": "agy-flash",
-        "description": "multi-file gathers and codebase scans, read-only"
+        "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
         "kind": "herding",
@@ -120,7 +120,7 @@
       "read": {
         "kind": "herding",
         "agent": "agy-flash",
-        "description": "multi-file gathers and codebase scans, read-only"
+        "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
         "kind": "herding",

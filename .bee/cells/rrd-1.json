@@ -1,0 +1,33 @@
+{
+  "id": "rrd-1",
+  "feature": "read-role-description",
+  "title": "Reword the seeded read-role description so it stops promising a broad hunt",
+  "lane": "tiny",
+  "role": "docs",
+  "action": "In packages/bee-rs/crates/bee/src/onboard/templates.rs, replace team.claude.read's description 'multi-file gathers and codebase scans, read-only' with wording that names the narrow read job and points a broad multi-file scan at a role-less --kind gather. Change nothing else: no alias, no pinned agent, no model.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "goal": "A leader reading bee team show no longer names --role read for a broad hunt and receives bee-extract's narrow contract. Routing, aliases and pinned agents are untouched (gather-reads-the-read-slot D3, store dd4c22d3).",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard and drivers tests green; bee dispatch prepare --runtime claude --kind gather --role read still returns the bee-extract payload.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "leader-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "4a486d78-96ee-4e43-8fd1-5c1bcbca3766",
+    "claimed_at": "2026-09-10T15:21:46.910Z"
+  }
+}

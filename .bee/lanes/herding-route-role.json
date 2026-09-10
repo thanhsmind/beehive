@@ -13,8 +13,13 @@
   "summary": "Feature \"herding-route-role\" started at phase \"exploring\".",
   "next_action": "bee close finished \"herding-route-role\" — feature is closed.",
   "created_at": "2026-09-08T14:53:00.012Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "fix --role read rendering the bee-extract prompt instead of bee-gather?",
+    "asked_at": "2026-09-09T12:08:19.845Z",
+    "session": "4a486d78-96ee-4e43-8fd1-5c1bcbca3766"
+  },
   "advisor_ref": {
     "consulted_at": "2026-09-08T15:15:59.325Z",
     "feature": "herding-route-role",

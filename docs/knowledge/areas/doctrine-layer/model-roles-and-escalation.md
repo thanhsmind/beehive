@@ -255,7 +255,10 @@ a different history (B8 backfilled `tier: extraction` cells to `role: read`)
 and stays `[read, extraction, generation]`; the two lists differ on purpose and
 each says why. The agent comes from the ASKED name and the kind, never from the
 winner: a role-less gather pins `bee-gather` whichever spelling of the read job
-won, while `--kind gather --role extraction` keeps B11's `bee-extract`. The
+won, while `--kind gather --role extraction` — or `--role read`, the same job
+under its other spelling — keeps B11's `bee-extract`. A broad multi-file hunt
+is therefore the ROLE-LESS gather, never `--role read`, and the seeded `read`
+description says so. The
 name that won the walk is the name the dispatch travels under — `[bee-tier:
 <winner>]` and `economics.logical_tier` — on this path and on the cell-role
 path; every other path keeps its asked name, so a review-less host's reviewer
