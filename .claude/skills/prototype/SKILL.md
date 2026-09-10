@@ -12,7 +12,7 @@ disable-model-invocation: true
 
 This skill uses planning by code: speed over polish, code quality does not matter, and there is no formal planning during exploration. The rigor is in picking the right design cheaply. Propose variations the user did not ask for, throw an approach away, and try another.
 
-## Prototyping Steps
+## Prototyping steps
 
 1. **Scope the decision the prototype exists to make.**
    Identify the exact question: which layout, which interaction, which density, or for an empirical fork which behavior, timing, or approach. If there is no open decision, make no prototype; route directly to `bee-planning`.
@@ -32,7 +32,7 @@ This skill uses planning by code: speed over polish, code quality does not matte
 6. **Present alternatives, tradeoffs, and a recommendation.**
    The output is the decision plus the throwaway artifact, not shippable code. The prototype is throwaway and the decision is the deliverable. Hand the chosen direction to `bee-planning` (or to `architect` when the open question is the architecture or component shape rather than behavior) for the real build.
 
-## Reply Contract
+## Reply contract
 
 **Reply:**
 - The variants explored
