@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "read-role-description",
   "mode": "tiny",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"read-role-description\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming for rrd-1.",
+  "next_action": "bee close finished \"read-role-description\" — feature is closed.",
   "created_at": "2026-09-10T15:20:34.810Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
