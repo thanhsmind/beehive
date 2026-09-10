@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pstack-part2-skills\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at dfb9c0a; reload the product and test \"pstack-part2-skills\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-part2-skills\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-09-10T15:30:56.503Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: pstack-part2-skills",
-    "asked_at": "2026-09-10T15:46:28.296Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: test the nine ported pstack skills in main, then approve or send back",
+    "asked_at": "2026-09-10T15:46:50.893Z",
+    "session": "9d0933f3-e76c-498c-a471-1b5f7f684697"
   },
   "route": {
     "class": "feature",
