@@ -1,7 +1,6 @@
 ---
 name: why
-description: "Use for 'why does X work this way', 'why we picked Y', design rationale, regressions, postmortems, or historical decisions. Queries source control and bee project records (decisions, context, knowledge areas, learnings) in parallel, then returns a cited read on decisions and tradeoffs. Use how for runtime behavior."
-disable-model-invocation: true
+description: "Answers 'why does X work this way' and 'why we picked Y' - design rationale, regressions, postmortems, data-backed thresholds. Fires during planning research when the existing shape is a constraint the plan must honour, and before locking a decision that touches code someone already shaped. Reads source control and the bee store (decisions, CONTEXT.md, knowledge areas, learnings) in parallel and returns a cited, confidence-tiered read. Use `how` for runtime behavior instead."
 ---
 
 # Why

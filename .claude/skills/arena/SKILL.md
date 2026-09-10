@@ -1,7 +1,6 @@
 ---
 name: arena
-description: "Spawn N parallel candidates at the same task, pick a base, graft the strongest parts of the losers into it. Use for /arena, 'arena this', 'throw it in the arena', or when one attempt at a non-trivial artifact would lock in the wrong shape."
-disable-model-invocation: true
+description: "Run N parallel attempts at one task, cross-judge them, pick a base, graft the best of the losers into it. Fires only when several structurally different answers are viable and no precedent settles the choice - a design, an API shape, a hard naming or structure call. Not for work with an obvious shape, a pattern already in the repo to follow, or a fix whose answer is known: it spawns parallel model runs and is the wrong tool for cheap work."
 ---
 
 # Arena

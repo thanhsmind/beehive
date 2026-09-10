@@ -1,7 +1,6 @@
 ---
 name: prototype
-description: "Build throwaway code in an isolated scratchpad to resolve design, layout, interaction, or behavioral decisions cheaply. Use for 'prototype this', 'try a few options', 'which layout', or when comparing implementation alternatives before planning."
-disable-model-invocation: true
+description: "Plan by code: build throwaway variants in the scratchpad to settle a design, layout, interaction or behavior question with evidence instead of argument. Fires when an open question is cheaper to answer by building than by discussing - which layout, which interaction, which of two approaches is faster. Not for work whose answer is already known, and not a route to shippable code: the decision is the deliverable and the code is thrown away."
 ---
 
 # Prototype

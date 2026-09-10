@@ -1,7 +1,6 @@
 ---
 name: how
-description: "Use for \"how does X work\", code walkthroughs before changing something, and placement / ownership / layering questions (\"where should this live\", \"which package owns this\", \"is this the right layer\"). Explains subsystem architecture, runtime flow, onboarding mental models. Use why for motivation."
-disable-model-invocation: true
+description: "Answers 'how does X work'. Fires before changing a subsystem nobody in this session has read, and on placement, ownership and layering questions ('where should this live', 'which package owns this', 'is this the right layer'). Explains subsystem architecture, runtime flow and onboarding mental models. Use `why` for motivation instead."
 ---
 
 # How

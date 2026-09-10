@@ -1,7 +1,6 @@
 ---
 name: teach
-description: "Explain a body of work plainly so a person actually understands it. Runs the `how` and `why` skills and weaves what they find into one clear explanation. Use for 'teach me this', 'help me really understand X', 'explain this change or subsystem to me'."
-disable-model-invocation: true
+description: "Explain a body of work plainly so a person actually understands it. Runs the `how` and `why` skills and weaves what they find into one clear explanation. Fires when the user asks to understand rather than to change something - 'teach me', 'explain this to me', 'help me really understand X', 'why did you build it this way' - and when a decision or gate has to be put in plain words before the user can answer it."
 ---
 
 # Teach

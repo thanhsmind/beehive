@@ -1,7 +1,6 @@
 ---
 name: unslop
-description: Cut AI tells from any writing. Must always apply.
-disable-model-invocation: true
+description: "Cut AI tells from writing. Fires on every user-facing reply and on every document, plan, spec, README, PR body or commit message before it is sent or saved. Also use for 'unslop this', 'make this read like a human', 'this sounds like AI'."
 ---
 
 # Unslop
