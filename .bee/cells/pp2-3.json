@@ -1,0 +1,110 @@
+{
+  "id": "pp2-3",
+  "feature": "pstack-part2-skills",
+  "title": "Port the arena and architect skills with bee dispatch rewiring",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D3",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    ".claude/skills/arena/*",
+    ".claude/skills/architect/*",
+    ".claude/skills/architect/references/*"
+  ],
+  "read_first": [
+    "docs/history/pstack-part2-skills/plan.md",
+    "AGENTS.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Port two pstack design skills. The pstack source is a read-only clone at /tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/pstack-src/pstack/skills/ — read arena/ and architect/ there in full first. Write .claude/skills/arena/SKILL.md, and .claude/skills/architect/SKILL.md plus references/runner-prompt.md, references/design-red-flags.md and references/rationale-template.md. Apply the adaptation contract in the plan's Approach section. The load-bearing rewiring, per D3: arena picks its runners and its cross-judge by model name from a Cursor rules file, and architect names four models for its Phase B runners. Both are refused here. Replace runner selection with the ONE bee door — .bee/bin/bee dispatch prepare with --runtime claude, --kind advisor, a one-line --purpose and --json for each candidate runner, and --kind reviewer for the cross-judge — followed by the instruction to run exactly the tool and payload it returns. Say plainly that the door picks the model and the skill never does. Where arena tells the runner to write into /tmp/arena-<slug>/candidate-<n>/, keep an isolated working directory per candidate but use the session scratchpad directory instead of a bare /tmp path. Where arena and architect cite pstack principle skills by name (exhaust-the-design-space, separate-before-serializing-shared-state, redesign-from-first-principles, prove-it-works, laziness-protocol, minimize-reader-load, boundary-discipline, encode-lessons-in-structure, make-operations-idempotent, subtract-before-you-add, foundational-thinking, outcome-oriented-execution, fix-root-causes), those skills are NOT ported. Replace each citation with the matching bee principle skill when one exists — run `ls .claude/skills/ | grep bee-principle` to see the real set and read the description line of any you cite — and otherwise state the idea in one plain clause instead of citing a skill that is not here. Architect's Phase A grounding runs the how skill and, where ownership changes, the why skill; both land in this same feature, so cite them by name. Architect's interrogate reference has no port here — drop it. Keep disable-model-invocation true on both (per D6) and add the provenance line to each SKILL.md body. Write to .claude/skills/ only (per D7).",
+  "verify": "python3 -c \"import sys;[sys.exit('bad frontmatter: '+p) for p in ['.claude/skills/arena/SKILL.md','.claude/skills/architect/SKILL.md'] if 'disable-model-invocation: true' not in open(p).read()]\" && ! rg -n 'cursor-team-kit|pstack/skills/|poteto-agent|generalPurpose|pstack-models|~/\\.cursor|/deslop|grok-4|gpt-5\\.6-sol|claude-fable-5-1-thinking|claude-opus-5-thinking|subagent_type' .claude/skills/arena .claude/skills/architect && python3 -c \"import re,os,sys;bad=[(f,l) for r,_,fs in os.walk('.claude/skills/architect') for f in [os.path.join(r,x) for x in fs if x.endswith('.md')] for l in re.findall(r'\\\\]\\\\(([^)#:]+)', open(f).read()) if not os.path.exists(os.path.normpath(os.path.join(os.path.dirname(f),l)))];sys.exit(str(bad) if bad else 0)\"",
+  "must_haves": {
+    "truths": [
+      "Every candidate runner and judge in arena and architect is dispatched through bee dispatch prepare",
+      "No pstack principle skill is cited by a name that does not exist under .claude/skills/",
+      "Every relative link inside the architect tree resolves to a file that exists"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude/skills/arena/SKILL.md",
+        "substantive": "the six phases frame, fan out, cross-judge, pick, graft, verify, with bee dispatch calls"
+      },
+      {
+        "path": ".claude/skills/architect/SKILL.md",
+        "substantive": "the five phases ground, sketch, agree, implement, scrap, calling how, why and arena by name"
+      },
+      {
+        "path": ".claude/skills/architect/references/runner-prompt.md",
+        "substantive": "the candidate-runner discipline: caller's usage first, data structures first, interface depth"
+      },
+      {
+        "path": ".claude/skills/architect/references/design-red-flags.md",
+        "substantive": "shallow module, information leakage, temporal decomposition, pass-through method"
+      },
+      {
+        "path": ".claude/skills/architect/references/rationale-template.md",
+        "substantive": "the one-page rationale sections including usage, shape, synthesis decision and alternatives"
+      }
+    ],
+    "key_links": [
+      "architect/SKILL.md Phase B names the arena skill",
+      "architect/SKILL.md references its three reference files by relative path"
+    ],
+    "prohibitions": [
+      "No write outside the arena and architect trees under .claude/skills/",
+      "No model name and no hand-picked subagent type",
+      "No citation of a pstack principle skill that was not ported"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pp2-3",
+    "outcome": "Ported arena and architect with advisor/reviewer dispatch and live principle citations",
+    "files_changed": [
+      ".claude/skills/arena/SKILL.md",
+      ".claude/skills/architect/SKILL.md",
+      ".claude/skills/architect/references/runner-prompt.md",
+      ".claude/skills/architect/references/design-red-flags.md",
+      ".claude/skills/architect/references/rationale-template.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-10T15:44:34.319Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "claimed_at": "2026-09-10T15:36:59.971Z",
+    "mistakes": [
+      {
+        "wrong": "the worker's result-1.json carried an invalid escape, so `bee herding run` reported malformed_result and exit 1 while every file it wrote was correct",
+        "better": "the cell's verify string embedded a nested python3 -c with backslashes that the worker echoed into its report; a short verify command with no nested quoting would not have broken the report"
+      }
+    ],
+    "report": {
+      "outcome": "Ported arena and architect with advisor/reviewer dispatch and live principle citations",
+      "commit": "b5fcc447fbeb57c39a15bec6ffd02e8e0cde3afe",
+      "files": [
+        ".claude/skills/arena/SKILL.md",
+        ".claude/skills/architect/SKILL.md",
+        ".claude/skills/architect/references/runner-prompt.md",
+        ".claude/skills/architect/references/design-red-flags.md",
+        ".claude/skills/architect/references/rationale-template.md"
+      ],
+      "tests": "python3 check_port.py over the nine ported skill trees — green:static — printed OK 9 skills: frontmatter parses, links resolve, no pstack token; .claude/skills/** is markdown an agent loads, not Rust, and the declared cargo suite does not reach it (plan claim 7)",
+      "deviations": [],
+      "mistakes": [
+        "the worker's result-1.json carried an invalid escape, so `bee herding run` reported malformed_result and exit 1 while every file it wrote was correct — the cell's verify string embedded a nested python3 -c with backslashes that the worker echoed into its report; a short verify command with no nested quoting would not have broken the report"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

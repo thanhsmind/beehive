@@ -1,0 +1,123 @@
+{
+  "id": "pp2-2",
+  "feature": "pstack-part2-skills",
+  "title": "Port the how, why and teach skills with bee dispatch rewiring",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D3",
+    "D4",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    ".claude/skills/how/*",
+    ".claude/skills/how/references/*",
+    ".claude/skills/why/*",
+    ".claude/skills/why/references/*",
+    ".claude/skills/why/references/sources/*",
+    ".claude/skills/teach/*"
+  ],
+  "read_first": [
+    "docs/history/pstack-part2-skills/plan.md",
+    "AGENTS.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Port three pstack skills that explain code. The pstack source is a read-only clone at /tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/pstack-src/pstack/skills/ — read how/, why/ and teach/ there in full first. Write .claude/skills/how/SKILL.md plus references/explorer-prompt.md and references/explainer-prompt.md; .claude/skills/why/SKILL.md plus references/epistemics.md, references/source-playbook.md, references/sources/code-archaeology.md and a NEW references/sources/bee-store.md; and .claude/skills/teach/SKILL.md. Apply the adaptation contract in the plan's Approach section. The load-bearing rewiring, per D3: pstack tells the orchestrator to spawn subagents with a named subagent_type and a named model. That is refused here by the model-guard hook. Replace every such block with a call to the ONE bee door — .bee/bin/bee dispatch prepare with --runtime claude, the kind, an optional role, a one-line --purpose and --json — followed by the instruction to run exactly the tool and payload it returns. Map how's parallel explorers and why's source investigators to a gather dispatch, and how's explainer and why's synthesizer to an advisor dispatch. Never name a model. Per D4, why's source set changes: keep code-archaeology.md and epistemics.md as they are, delete the six MCP playbooks (linear, notion, slack, datadog, sentry, databricks) and the incident-postmortem one from the port, rewrite source-playbook.md so its table lists only the two sources that exist here, and write bee-store.md as a new playbook for bee's own record — it must document searching the decision log with `bee decisions search --text`, reading docs/history/<feature>/CONTEXT.md for locked decisions, reading docs/knowledge/areas/ for area truth, and reading docs/history/learnings/ for captured learnings, with the same What this source contains / How to search it / What good evidence looks like / Common pitfalls / What to return sections the code-archaeology playbook uses. Rewrite why's investigator roster and its skip rules around the two real sources so no step tells the agent to look for an MCP that is not there. teach keeps its shape and calls how and why by name. Keep disable-model-invocation true on all three (per D6) and add the provenance line to each SKILL.md body. Write to .claude/skills/ only (per D7).",
+  "verify": "python3 -c \"import sys,re;[sys.exit('bad frontmatter: '+p) for p in ['.claude/skills/how/SKILL.md','.claude/skills/why/SKILL.md','.claude/skills/teach/SKILL.md'] if 'disable-model-invocation: true' not in open(p).read()]\" && ! rg -n 'cursor-team-kit|pstack/skills/|poteto-agent|generalPurpose|pstack-models|~/\\.cursor|/deslop|grok-4|gpt-5\\.6-sol|claude-fable-5-1-thinking|claude-opus-5-thinking|subagent_type' .claude/skills/how .claude/skills/why .claude/skills/teach && test ! -e .claude/skills/why/references/sources/slack.md && test -s .claude/skills/why/references/sources/bee-store.md",
+  "must_haves": {
+    "truths": [
+      "Every subagent dispatch in how and why is expressed as a bee dispatch prepare call whose returned payload is run verbatim",
+      "why's source playbook table lists exactly two sources: code archaeology and the bee store",
+      "No file under these three trees names a model"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude/skills/how/SKILL.md",
+        "substantive": "the complexity assessment, the explore/explain split, and the output format, with bee dispatch calls"
+      },
+      {
+        "path": ".claude/skills/why/SKILL.md",
+        "substantive": "the code anchor step, the two-source investigator roster, synthesis and the confidence-separated output format"
+      },
+      {
+        "path": ".claude/skills/why/references/sources/bee-store.md",
+        "substantive": "a full source playbook for bee's decision log, CONTEXT.md, knowledge areas and learnings"
+      },
+      {
+        "path": ".claude/skills/why/references/epistemics.md",
+        "substantive": "the five confidence tiers and the phrasing guide, carried over intact"
+      },
+      {
+        "path": ".claude/skills/teach/SKILL.md",
+        "substantive": "the five teaching steps, calling how and why by name"
+      }
+    ],
+    "key_links": [
+      "how/SKILL.md points at its two reference prompt templates by relative path",
+      "why/SKILL.md points at epistemics.md, source-playbook.md and both source playbooks by relative path",
+      "teach/SKILL.md names the how and why skills"
+    ],
+    "prohibitions": [
+      "No write outside the how, why and teach trees under .claude/skills/",
+      "No MCP source playbook for Linear, Notion, Slack, Datadog, Sentry or Databricks",
+      "No hand-picked subagent type or model anywhere"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pp2-2",
+    "outcome": "Ported how, why and teach; why cut to two sources and gained the bee-store playbook",
+    "files_changed": [
+      ".claude/skills/how/SKILL.md",
+      ".claude/skills/how/references/explorer-prompt.md",
+      ".claude/skills/how/references/explainer-prompt.md",
+      ".claude/skills/why/SKILL.md",
+      ".claude/skills/why/references/epistemics.md",
+      ".claude/skills/why/references/source-playbook.md",
+      ".claude/skills/why/references/sources/code-archaeology.md",
+      ".claude/skills/why/references/sources/bee-store.md",
+      ".claude/skills/teach/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-10T15:44:34.254Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "claimed_at": "2026-09-10T15:36:59.773Z",
+    "mistakes": [
+      {
+        "wrong": "teach/SKILL.md step 2 still told the reader to narrow why to 'git plus a source or two' after why was cut to exactly two sources",
+        "better": "the cell brief should have said outright that every cross-reference to why's source set had to be reconciled, not just why's own file"
+      }
+    ],
+    "report": {
+      "outcome": "Ported how, why and teach; why cut to two sources and gained the bee-store playbook",
+      "commit": "aa01462d5b5be9d009d7c47c3cf390f64785aaf2",
+      "files": [
+        ".claude/skills/how/SKILL.md",
+        ".claude/skills/how/references/explorer-prompt.md",
+        ".claude/skills/how/references/explainer-prompt.md",
+        ".claude/skills/why/SKILL.md",
+        ".claude/skills/why/references/epistemics.md",
+        ".claude/skills/why/references/source-playbook.md",
+        ".claude/skills/why/references/sources/code-archaeology.md",
+        ".claude/skills/why/references/sources/bee-store.md",
+        ".claude/skills/teach/SKILL.md"
+      ],
+      "tests": "python3 check_port.py over the nine ported skill trees — green:static — printed OK 9 skills: frontmatter parses, links resolve, no pstack token; .claude/skills/** is markdown an agent loads, not Rust, and the declared cargo suite does not reach it (plan claim 7)",
+      "deviations": [],
+      "mistakes": [
+        "teach/SKILL.md step 2 still told the reader to narrow why to 'git plus a source or two' after why was cut to exactly two sources — the cell brief should have said outright that every cross-reference to why's source set had to be reconciled, not just why's own file"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

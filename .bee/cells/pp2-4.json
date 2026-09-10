@@ -1,0 +1,83 @@
+{
+  "id": "pp2-4",
+  "feature": "pstack-part2-skills",
+  "title": "Port the recall skill onto Claude Code transcripts and bee state",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D3",
+    "D5",
+    "D6",
+    "D7"
+  ],
+  "files": [
+    ".claude/skills/recall/*"
+  ],
+  "read_first": [
+    "docs/history/pstack-part2-skills/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Port the pstack recall skill. The source is at /tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/pstack-src/pstack/skills/recall/SKILL.md — read it in full first. Write .claude/skills/recall/SKILL.md. Apply the adaptation contract in the plan's Approach section. Two rewirings carry the cell. First, per D5, the transcript layout is different here: pstack reads ~/.cursor/projects/<slug>/agent-transcripts/<uuid>/<uuid>.jsonl, and Claude Code writes one flat file per session at ~/.claude/projects/<slug>/<uuid>.jsonl, where <slug> is the workspace path with the leading slash dropped and every / turned into -. Verify that shape yourself before you write it: run `ls ~/.claude/projects/*/ | head` and quote what you see. Keep the ordering rule — order candidates by real modification time with `ls -t`, never by the uuid name — and keep the grep-then-read-only-matching-regions rule. Second, per D5, bee's own state is the cheapest and freshest part of the record and must be read BEFORE any transcript mining: add a step that runs `bee orient` for phase, blockers and next action, `bee decisions search --text \"<topic>\"` for what was decided, `bee cells list` for open and capped work, and reads docs/history/<feature>/CONTEXT.md when the topic names a feature. Say plainly that a fact already in bee state never needs to be reconstructed from a transcript. Third, per D3, the fan-out over transcript slices dispatches through the ONE bee door — .bee/bin/bee dispatch prepare with --runtime claude, --kind gather, --role extraction, a one-line --purpose and --json — then run exactly the tool and payload it returns; never name a model. Where the source hands the shared-record sweep to the why skill's source investigators, keep that handoff: the why skill lands in this same feature and its two sources are code archaeology and the bee store. Keep the output contract — capsule, threads with status tags, problems, next move — as it is. Keep disable-model-invocation true (per D6) and add the provenance line. Write to .claude/skills/ only (per D7).",
+  "verify": "python3 -c \"import sys;p='.claude/skills/recall/SKILL.md';s=open(p).read();sys.exit('missing frontmatter flag') if 'disable-model-invocation: true' not in s else (sys.exit('cursor path survived') if '.cursor' in s else 0)\" && rg -q 'bee orient' .claude/skills/recall/SKILL.md && rg -q 'dispatch prepare' .claude/skills/recall/SKILL.md && ! rg -n 'cursor-team-kit|pstack/skills/|poteto-agent|generalPurpose|grok-4|claude-fable-5-1-thinking|subagent_type' .claude/skills/recall",
+  "must_haves": {
+    "truths": [
+      "The documented transcript glob matches real files on this machine",
+      "bee state is read before any transcript mining",
+      "The transcript fan-out dispatches through bee dispatch prepare"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude/skills/recall/SKILL.md",
+        "substantive": "the classify, scope, bee-state, fan-out, sweep, verify and brief steps plus the output contract"
+      }
+    ],
+    "key_links": [
+      "recall names the why skill for the shared-record sweep"
+    ],
+    "prohibitions": [
+      "No write outside .claude/skills/recall/",
+      "No Cursor transcript path",
+      "No model name"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pp2-4",
+    "outcome": "Ported recall onto Claude Code transcripts with bee state read first",
+    "files_changed": [
+      ".claude/skills/recall/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-10T15:44:34.383Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "claimed_at": "2026-09-10T15:37:00.136Z",
+    "mistakes": [
+      {
+        "wrong": "recall/SKILL.md's citation line still named an error-tracker issue and a chat permalink, neither of which exists in this repo",
+        "better": "the cell brief named what to add (bee state) but never said to prune the source-specific citation list the old six-MCP world assumed"
+      }
+    ],
+    "report": {
+      "outcome": "Ported recall onto Claude Code transcripts with bee state read first",
+      "commit": "a0a5e540b9b19687e4d2606f58a6907f38cdc1f4",
+      "files": [
+        ".claude/skills/recall/SKILL.md"
+      ],
+      "tests": "python3 check_port.py over the nine ported skill trees — green:static — printed OK 9 skills: frontmatter parses, links resolve, no pstack token; .claude/skills/** is markdown an agent loads, not Rust, and the declared cargo suite does not reach it (plan claim 7)",
+      "deviations": [],
+      "mistakes": [
+        "recall/SKILL.md's citation line still named an error-tracker issue and a chat permalink, neither of which exists in this repo — the cell brief named what to add (bee state) but never said to prune the source-specific citation list the old six-MCP world assumed"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
