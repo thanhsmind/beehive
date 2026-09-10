@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pstack-part2-skills\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at dfb9c0a; reload the product and test \"pstack-part2-skills\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-part2-skills\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-10T15:30:56.503Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pstack-part2-skills",
+    "asked_at": "2026-09-10T15:46:28.296Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -25,12 +30,5 @@
     "rationale": null,
     "updated_at": "2026-09-10T15:30:56.523Z",
     "feature": "pstack-part2-skills"
-  },
-  "merge_ready": {
-    "since": "2026-09-10T15:44:54.107Z",
-    "branch": "wt/pstack-part2-skills",
-    "worktree_id": "beehive--wt--pstack-part2-skills",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
