@@ -224,9 +224,11 @@ fn plan_on_an_empty_repo_lists_the_whole_install() {
     assert!(acts.contains(&"write_onboarding".to_string()));
     assert!(acts.contains(&"sync_skill".to_string()));
     // 4cac0774: a virgin host declares no statusLine, so the whole install now
-    // includes writing the entry and vendoring the script.
-    assert!(acts.contains(&"merge_statusline_settings".to_string()));
-    assert!(acts.contains(&"copy_statusline".to_string()));
+    // includes writing the entry and vendoring the script — unless the host
+    // shell is PowerShell, where onboarding skips the bash status display.
+    let statusline = !super::merge::host_shell_is_powershell(&fx.repo);
+    assert_eq!(acts.contains(&"merge_statusline_settings".to_string()), statusline);
+    assert_eq!(acts.contains(&"copy_statusline".to_string()), statusline);
 
     // The nested expertise pattern file is planned by its POSIX-relative name.
     let expertise = paths_for(&p, "plan", "copy_expertise");
@@ -271,6 +273,7 @@ fn plan_payload_key_order_matches_node() {
 #[test]
 fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     let fx = fixture();
+    let statusline = !super::merge::host_shell_is_powershell(&fx.repo);
     let a = apply(&fx, &[]);
     assert_eq!(a["status"], "applied");
     assert_eq!(a["recheck"], "up_to_date");
@@ -361,19 +364,12 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     // 4cac0774: a fresh host declares no `statusLine`, so onboarding writes the
     // entry, vendors the script, and therefore OWNS the pair — the managed
     // ledger records its hashes from the first apply. Under the old opt-in this
-    // key was absent here.
-    assert_eq!(
-        managed_keys,
-        vec![
-            "agents_block",
-            "gitignore_block",
-            "helpers",
-            "lib",
-            "expertise",
-            "prompts",
-            "statusline"
-        ]
-    );
+    // key was absent here. A PowerShell host skips the pair, so owns nothing.
+    let mut expected = vec!["agents_block", "gitignore_block", "helpers", "lib", "expertise", "prompts"];
+    if statusline {
+        expected.push("statusline");
+    }
+    assert_eq!(managed_keys, expected);
     // The managed hash is of the file's UTF-8 STRING content (hashFile).
     assert_eq!(
         ledger["managed"]["expertise"]["tests/patterns/differential-testing.md"],
@@ -1379,6 +1375,16 @@ fn a_verify_root_that_resolves_onto_a_skill_home_is_refused() {
 // never touches one the host already declares, never rewrites a settings file
 // it cannot parse, and converges in a single apply.
 
+/// Pin the fixture repo to a POSIX host. Onboarding skips the status display
+/// on a PowerShell host (the script is bash), and with no `host_shell` the
+/// running machine decides — so without this pin, a Windows run of this
+/// section tests the skip instead of the display.
+fn posix_fixture() -> Fixture {
+    let fx = fixture();
+    write(&fx.repo.join(".bee").join("config.json"), "{\"host_shell\":\"posix\"}\n");
+    fx
+}
+
 fn written_command(fx: &Fixture) -> String {
     let settings: Value = serde_json::from_str(
         &std::fs::read_to_string(fx.repo.join(".claude").join("settings.json")).unwrap(),
@@ -1419,7 +1425,7 @@ fn write_project_level_entry(fx: &Fixture) {
 
 #[test]
 fn a_project_level_entry_plans_the_copy_and_apply_lands_the_canonical_bytes() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write_project_level_entry(&fx);
 
     let p = plan(&fx, &[]);
@@ -1436,7 +1442,7 @@ fn a_project_level_entry_plans_the_copy_and_apply_lands_the_canonical_bytes() {
 
 #[test]
 fn a_drifted_vendored_script_is_replanned_and_healed() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write_project_level_entry(&fx);
     apply(&fx, &[]);
 
@@ -1452,7 +1458,7 @@ fn a_drifted_vendored_script_is_replanned_and_healed() {
 
 #[test]
 fn a_deleted_vendored_script_with_the_entry_present_is_replanned() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write_project_level_entry(&fx);
     apply(&fx, &[]);
 
@@ -1467,7 +1473,7 @@ fn a_deleted_vendored_script_with_the_entry_present_is_replanned() {
 
 #[test]
 fn the_managed_ledger_carries_the_statusline_hash_only_when_bee_owns_the_entry() {
-    let owned = fixture();
+    let owned = posix_fixture();
     apply(&owned, &[]);
     let ledger: Value = serde_json::from_str(
         &std::fs::read_to_string(owned.repo.join(".bee").join("onboarding.json")).unwrap(),
@@ -1475,7 +1481,7 @@ fn the_managed_ledger_carries_the_statusline_hash_only_when_bee_owns_the_entry()
     .unwrap();
     assert!(ledger["managed"]["statusline"]["statusline-command.sh"].is_string());
 
-    let disowned = fixture();
+    let disowned = posix_fixture();
     apply(&disowned, &["--no-statusline"]);
     let ledger: Value = serde_json::from_str(
         &std::fs::read_to_string(disowned.repo.join(".bee").join("onboarding.json")).unwrap(),
@@ -1488,7 +1494,7 @@ fn the_managed_ledger_carries_the_statusline_hash_only_when_bee_owns_the_entry()
 
 #[test]
 fn an_absent_settings_file_is_created_with_the_canonical_entry_and_the_script() {
-    let fx = fixture();
+    let fx = posix_fixture();
     assert!(!settings_path(&fx).exists());
 
     let acts = actions(&plan(&fx, &[]), "plan");
@@ -1507,7 +1513,7 @@ fn an_absent_settings_file_is_created_with_the_canonical_entry_and_the_script() 
 /// re-vendoring, the managed key dropped, and nothing anywhere says so.
 #[test]
 fn the_entry_bee_writes_reads_back_as_a_project_level_entry() {
-    let fx = fixture();
+    let fx = posix_fixture();
     apply(&fx, &[]);
     assert!(
         hooks_wiring::statusline_opt_in(&fx.repo),
@@ -1519,7 +1525,7 @@ fn the_entry_bee_writes_reads_back_as_a_project_level_entry() {
 
 #[test]
 fn a_settings_file_without_the_key_gains_exactly_one_key_and_keeps_the_rest() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write(
         &settings_path(&fx),
         "{\n  \"model\": \"opus\",\n  \"permissions\": { \"allow\": [\"Bash(ls:*)\"] }\n}\n",
@@ -1543,7 +1549,7 @@ fn a_settings_file_without_the_key_gains_exactly_one_key_and_keeps_the_rest() {
 
 #[test]
 fn apply_then_replan_is_a_no_op_which_is_what_the_installer_recheck_asserts() {
-    let fx = fixture();
+    let fx = posix_fixture();
     apply(&fx, &[]);
     let p = plan(&fx, &[]);
     assert_eq!(p["status"], "up_to_date");
@@ -1554,7 +1560,7 @@ fn apply_then_replan_is_a_no_op_which_is_what_the_installer_recheck_asserts() {
 
 #[test]
 fn an_existing_project_level_entry_is_left_byte_for_byte() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write_project_level_entry(&fx);
     let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
 
@@ -1568,7 +1574,7 @@ fn an_existing_project_level_entry_is_left_byte_for_byte() {
 
 #[test]
 fn an_existing_user_level_entry_is_preference_and_nothing_is_vendored() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write(
         &settings_path(&fx),
         "{\n  \"statusLine\": { \"type\": \"command\", \"command\": \"bash ~/.claude/mine.sh\" }\n}\n",
@@ -1592,7 +1598,7 @@ fn a_non_object_statusline_value_is_preference_too() {
         "{\n  \"statusLine\": null\n}\n",
         "{\n  \"statusLine\": false\n}\n",
     ] {
-        let fx = fixture();
+        let fx = posix_fixture();
         write(&settings_path(&fx), body);
         let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
         apply(&fx, &[]);
@@ -1610,7 +1616,7 @@ fn a_non_object_statusline_value_is_preference_too() {
 /// A refusal here would turn one broken file into a blocked install.
 #[test]
 fn an_unparseable_settings_file_is_left_alone_and_never_blocks_the_run() {
-    let fx = fixture();
+    let fx = posix_fixture();
     let broken = "{ this is not json";
     write(&settings_path(&fx), broken);
 
@@ -1626,7 +1632,7 @@ fn an_unparseable_settings_file_is_left_alone_and_never_blocks_the_run() {
 
 #[test]
 fn a_settings_file_whose_root_is_not_an_object_is_left_alone() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write(&settings_path(&fx), "[]\n");
 
     let acts = actions(&plan(&fx, &[]), "plan");
@@ -1641,7 +1647,7 @@ fn a_settings_file_whose_root_is_not_an_object_is_left_alone() {
 
 #[test]
 fn no_statusline_writes_nothing_vendors_nothing_and_still_converges() {
-    let fx = fixture();
+    let fx = posix_fixture();
     let a = apply(&fx, &["--no-statusline"]);
     assert_ne!(a["status"], "blocked_hooks_merge");
     assert!(!settings_path(&fx).exists());
@@ -1654,7 +1660,7 @@ fn no_statusline_writes_nothing_vendors_nothing_and_still_converges() {
 
 #[test]
 fn no_statusline_on_a_host_that_already_carries_the_entry_touches_neither_file() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write_project_level_entry(&fx);
     let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
 
@@ -1668,7 +1674,10 @@ fn no_statusline_on_a_host_that_already_carries_the_entry_touches_neither_file()
 #[test]
 fn the_project_config_opt_out_behaves_exactly_like_the_flag() {
     let fx = fixture();
-    write(&fx.repo.join(".bee").join("config.json"), "{\n  \"statusline\": false\n}\n");
+    write(
+        &fx.repo.join(".bee").join("config.json"),
+        "{\n  \"host_shell\": \"posix\",\n  \"statusline\": false\n}\n",
+    );
 
     apply(&fx, &[]);
 
@@ -1689,7 +1698,7 @@ fn the_project_config_opt_out_behaves_exactly_like_the_flag() {
 /// promise that `.bak` restores the pre-bee state is quietly broken.
 #[test]
 fn repo_hooks_and_the_statusline_default_share_one_backup_holding_the_original() {
-    let fx = fixture();
+    let fx = posix_fixture();
     let original = "{\n  \"model\": \"opus\"\n}\n";
     write(&settings_path(&fx), original);
 
@@ -1706,7 +1715,7 @@ fn repo_hooks_and_the_statusline_default_share_one_backup_holding_the_original()
 
 #[test]
 fn a_malformed_settings_file_blocks_the_hooks_merge_without_vendoring_anything() {
-    let fx = fixture();
+    let fx = posix_fixture();
     write(&settings_path(&fx), r#"{"model": "opus", "hooks": {"#);
 
     let a = apply(&fx, &["--repo-hooks"]);
