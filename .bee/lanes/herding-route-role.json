@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "question",
-    "subject": "fix --role read rendering the bee-extract prompt instead of bee-gather?",
-    "asked_at": "2026-09-09T12:08:19.845Z",
-    "session": "4a486d78-96ee-4e43-8fd1-5c1bcbca3766"
+    "subject": "Fix the 13 Windows-only test failures?",
+    "asked_at": "2026-09-11T07:28:36.832Z",
+    "session": "f895b642-a3e1-4c5c-bbae-0e2ebbd9b352"
   },
   "advisor_ref": {
     "consulted_at": "2026-09-08T15:15:59.325Z",

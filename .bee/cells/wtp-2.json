@@ -1,0 +1,76 @@
+{
+  "id": "wtp-2",
+  "feature": "windows-test-portability",
+  "title": "Make the prompt-skew and enter-worktree path tests hold on Windows",
+  "lane": "small",
+  "role": "test",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/windows-test-portability/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Tests only; never change product code. (1) verbs/drivers/tests.rs, test prompt_skew_names_the_offending_file_and_its_remedy (~line 4739): on Windows the message prints `.bee\\bin\\prompts\\gather.md`, so `msg.contains(\".bee/bin/prompts/gather.md\")` fails. Compare against `msg.replace('\\\\', \"/\")` for the path check (keep the other assertions as they are). (2) verbs/worktree/tests.rs, test enter_worktree_core_verifies_grant_and_git_link_with_zero_mutation (~line 5987): result[\"worktreeRoot\"] is the git-reported long path (C:\\\\Users\\\\runneradmin\\\\...) while created.worktree_root is the temp-dir 8.3 short path (C:\\\\Users\\\\RUNNER~1\\\\...). Compare `dunce::canonicalize` of both paths (the crate already depends on dunce) instead of the raw strings; check the same test for any other raw-path string compare of the same pair and treat it the same way. Run `cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prompt_skew` and `... enter_worktree_core` — green on Linux. One commit, subject in imperative mood, trailer `cell: wtp-2`.",
+  "verify": "cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prompt_skew && cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee enter_worktree_core",
+  "must_haves": {
+    "truths": [
+      "Both tests pass on Linux and no longer depend on the path separator or on the short/long form of a Windows path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "separator-neutral path check"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "canonical-path compare"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No change to any non-test source file",
+      "No deleted or ignored test"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "wtp-worker-2",
+    "outcome": "prompt-skew path check is separator-neutral (verbs/drivers/tests.rs:4739); enter-worktree compares dunce-canonical paths (verbs/worktree/tests.rs:5987) and the text check reuses the printed worktreeRoot",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T07:39:40.427Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f895b642-a3e1-4c5c-bbae-0e2ebbd9b352",
+    "claimed_at": "2026-09-11T07:32:21.442Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "prompt-skew and enter-worktree path tests no longer depend on the path separator or the 8.3 short form of a Windows path",
+      "commit": "431af68138741853099a0f4f60f2d9013df688d7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee — green:unit — full bee bin suite in CI release mode on Linux, run by the leader after both cells landed; Windows-only behavior is proven by the Windows CI run after merge",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

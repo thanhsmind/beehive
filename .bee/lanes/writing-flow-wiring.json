@@ -15,9 +15,9 @@
   "created_at": "2026-09-11T06:52:13.614Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat for pstack-craft-adoption: test /bee-how, /bee-why and the upgraded skills on main",
-    "asked_at": "2026-09-11T07:10:10.129Z",
+    "kind": "turn-end",
+    "subject": "The first reader is done: it followed a request through to built code. Two readers are still running. One finding needs a check before I rep",
+    "asked_at": "2026-09-11T07:21:58.571Z",
     "session": "9d0933f3-e76c-498c-a471-1b5f7f684697"
   },
   "route": {
