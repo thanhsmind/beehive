@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"writing-flow-wiring\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 0a8418c; capture what settled, then bee close --feature writing-flow-wiring.",
   "created_at": "2026-09-11T06:52:13.614Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": "De-escalated on cited evidence (RED R1-R7, decision f951a31f): two product files, skills/bee-hive/SKILL.md docs row and packages/bee/AGENTS.block.md; one flag, the always-loaded AGENTS contract",
     "updated_at": "2026-09-11T07:00:23.052Z",
     "feature": "writing-flow-wiring"
-  },
-  "merge_ready": {
-    "since": "2026-09-11T07:09:21.913Z",
-    "branch": "wt/writing-flow-wiring",
-    "worktree_id": "beehive--wt--writing-flow-wiring",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
