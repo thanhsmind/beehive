@@ -914,6 +914,8 @@ pub(crate) fn prompt_body_for(
     // `resolve_brief_file` (advisor kind only; `None` everywhere else).
     brief: Option<&str>,
     advisor: Option<&str>,
+    purpose: Option<&str>,
+    lane_feature: Option<&str>,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
@@ -930,17 +932,16 @@ pub(crate) fn prompt_body_for(
         // var declared in a template MUST appear in this slice or every
         // dispatch of that kind dies at the door.
         //
-        // `original_request` is feature-keyed only, and a non-cell kind
-        // carries no cell — so it resolves from the ACTIVE feature or not at
-        // all. A gather/reviewer/advisor dispatch on an idle repo renders no
-        // block even when a non-empty `.bee/intent/default.json` exists
+        // `original_request` is feature-keyed only: resolved from the caller's
+        // bound lane feature, then the active feature from state, then nothing
         // (D5/D6: rendering the wrong request is worse than rendering none).
-        let original_request = original_request_block(root, None);
+        let original_request = original_request_block(root, lane_feature);
         return Ok(render(
             &template,
             &[
                 ("brief", brief.unwrap_or("")),
                 ("expertise", expertise.unwrap_or("")),
+                ("purpose", purpose.unwrap_or("")),
                 ("original_request", &original_request),
             ],
         ));
@@ -1598,6 +1599,14 @@ pub(crate) fn prepare_dispatch_with_brief(
         None
     };
 
+    let lane_feature = if kind != "cell" {
+        crate::verbs::state_group::session_binding(None, root)
+            .ok()
+            .and_then(|(_sid, bound)| bound)
+    } else {
+        None
+    };
+
     let prompt_body = match prompt_body_for(
         root,
         kind,
@@ -1607,6 +1616,8 @@ pub(crate) fn prepare_dispatch_with_brief(
         expertise,
         brief,
         advisor.as_deref(),
+        purpose,
+        lane_feature.as_deref(),
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
