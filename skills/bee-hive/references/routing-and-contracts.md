@@ -255,7 +255,12 @@ mention it once at the close; let the work be the subject of every line, with
 ids and counts trailing as handles or standing beside a claim as evidence, never
 leading and never as achievement statistics. Protocol and record surfaces —
 worker status tokens, cap traces, decision logs, CONTEXT.md — keep their ids,
-because that is where ids live.
+because that is where ids live. Write user-facing prose through `bee-unslop`'s
+rules, and saved documents — plan, spec, CONTEXT.md, capture, PR body, commit
+body — through `bee-technical-writing` as well. Neither ever rewrites a
+progress tick, a red or refusal line, command output, quoted evidence, an id
+or code. When the project's own instructions set tone, length, style or
+language, they win, and the reply stays in the user's language.
 
 Example:
 

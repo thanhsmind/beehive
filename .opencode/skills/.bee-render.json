@@ -24,11 +24,11 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "f1c747735cc28c1f4b341fce7be4f3e58fab459f5402dfd245cac21a7faf1e44"
+      "sha256": "ad71a39ae924a90f0a3e54632eed825cfc2270ba109a855578835235ab6d6bc3"
     },
     {
       "name": "bee-planning",
-      "sha256": "21d2f42866e1518092b20d50f1b86beb25fd86383de21719aef6de82b710ed47"
+      "sha256": "ba370ecff0bd097c20a216b74a5e2816784026970863cd088531870996604cbb"
     },
     {
       "name": "bee-principle-chestertons-fence",
@@ -88,7 +88,7 @@
     },
     {
       "name": "bee-researching",
-      "sha256": "b0441832a4e689dd70f289125a1b5e1eab2398a865f88c86876ad7adacc06d01"
+      "sha256": "8f54e3d01ef5105cab6d609f4c00a036efcc97a6b20676a980f4284b9bae02e1"
     },
     {
       "name": "bee-reviewing",
@@ -101,6 +101,18 @@
     {
       "name": "bee-swarming",
       "sha256": "0d22a86ac541f17486cb96e5d2457cb2cffc7a2abef7a6e66fa72d5b1e418d1b"
+    },
+    {
+      "name": "bee-teach",
+      "sha256": "d873da312d4d345b6b7c4a088435233fb74234ed0334e8bf9249942286895eec"
+    },
+    {
+      "name": "bee-technical-writing",
+      "sha256": "e67f1c24b569a9b82206645fc144ef0911d6f0ae0f3aa2e1b3c8c5e8ad9fe753"
+    },
+    {
+      "name": "bee-unslop",
+      "sha256": "dddea4e4e43d212d20efdf9f0e3b1cc3bb2110fe23cfbb3da5610718e9b527b7"
     },
     {
       "name": "bee-verify-upkeep",

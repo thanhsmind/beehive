@@ -31,6 +31,25 @@ anchored `path:line`. A file list is not a trace.
 Close with anchors a reader can open: `path:line` per step, or the command
 that ran.
 
+### Trace answer shape
+
+Write the account in these sections. Drop a section that does not apply.
+
+- **Overview** — what the thing is, what it does, and why it exists. A
+  reader can stop here and decide whether to read on.
+- **Key concepts** — the types, services, or abstractions a reader needs to
+  follow the path, with brief definitions.
+- **How it works** — the runtime path in prose: what starts it, each step,
+  where the data goes, and the decision points, each step anchored
+  `path:line`. Add a diagram only when it makes the path clearer than prose
+  does.
+- **Where things live** — the files a reader opens first to work here.
+- **Gotchas** — surprising behavior, history, traps, and the UNFOLLOWED
+  steps from step 6.
+
+Name the real parts. Not: "the service delegates to the client". Yes: "the
+`UserService` calls `AuthClient.refresh()`".
+
 ## Provenance sweep
 
 The outcome is the reason a thing is the way it is, carried by evidence and
@@ -61,3 +80,51 @@ Report rules, which are the point of the procedure:
 
 Close with anchors: `path:line`, a commit sha, a decision id, or the command
 that ran.
+
+### Confidence tiers
+
+Put every claim of the account in one tier. The tier sets the phrasing.
+
+1. **Direct** — an author wrote the reason down: a commit body, a PR, a
+   decision, a comment. Write "this exists because X" and cite the source
+   beside it.
+2. **Supported** — several indirect sources point the same way, and none
+   states it. Write "the evidence points to X" and list each source.
+3. **Inferred** — a reasonable reading that no source states. Use a hedged
+   word ("appears", "likely", "is consistent with") and write the chain:
+   given A and B, C is likely because D.
+4. **Speculative** — a plausible guess on thin evidence, where other
+   explanations fit as well. Write "one possibility is X, with no direct
+   evidence", and put it under Competing hypotheses.
+5. **Unknown** — you searched and found nothing. Name each source searched
+   and the terms used; "we could not find out" alone is not a result.
+
+Phrasing rules:
+
+- "because", "the reason is", "was designed to", and "fixes" go only beside
+  a citation. An inference takes a hedged word.
+- The code is never evidence of its own intent: what code does is not why it
+  exists. Move such a claim to Inferred, or drop it.
+- A guess inside the question ("I assume it is for speed?") is one
+  hypothesis to check, never the conclusion to confirm.
+- When two sources disagree, report both with their citations. Never pick
+  the tidier story.
+
+### Provenance answer shape
+
+Write the account in these sections:
+
+- **What we found** — Direct and Supported claims, one per bullet, each with
+  its tier and its source.
+- **What we can reasonably infer** — Inferred claims, each with its chain.
+- **Competing hypotheses** — each reading, with the evidence for and
+  against. Drop this section when one answer is clear.
+- **What we do not know** — each gap: the question, the sources searched,
+  the terms used. An account with no gap is suspect; check it again.
+- **Sources** — the seven category rows, per the report rules above.
+- **Confidence** — one line on the overall confidence.
+
+When the why question comes before a change, end with a constraint set for
+the plan: **Preserve** (what the change must keep), **Change** (what the
+evidence lets move), **Avoid** (what the evidence warns against), and
+**Risk** (what can break).
