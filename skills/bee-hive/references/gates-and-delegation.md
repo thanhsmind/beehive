@@ -151,18 +151,34 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
 
 ### Blind lanes and convergence
 
-Two or three isolated advisor consults design an answer to ONE hard question, critique each other, and converge into one document plus one decision entry. **This section is the single home for the blind-lane PROCEDURE** — when lanes open, the four moves, the rule that binds the checker, and the three named limits. Every other surface (AGENTS.md, `bee blind check`'s own help, the `advisor-protocol` knowledge concept) carries a one-line pointer back here, never a second copy.
+Two or three isolated advisor consults design an answer to ONE hard question, critique each other, and converge into one document plus one decision entry. **This section is the single home for the blind-lane PROCEDURE** — when lanes open, the frame and the four moves, the rule that binds the checker, and the three named limits. Every other surface (AGENTS.md, `bee blind check`'s own help, the `advisor-protocol` knowledge concept) carries a one-line pointer back here, never a second copy.
+
+**The method, in five lines:**
+
+1. Frame — write the rubric before any lane runs.
+2. Fan out — each lane designs blind, from one brief.
+3. Cross-critique — each lane reads its rival and names the gap.
+4. Base and graft — pick one proposal whole, then fold in the best of the rest.
+5. Record — log the decision, the rejected set, and the revisit trigger.
 
 **When lanes open.** The agent opens 2-3 lanes on its OWN judgment when a decision is both high-stakes AND ambiguous, and logs the reason at open time with `bee decisions log` — there is no approve-each-lane wait. The user may order lanes directly at any point. A convergence that produces no chosen answer hands the human the dossier unchanged — `bee state waiting-on set --kind question` when attended, `bee cells block --id <id> --reason <why>` when unattended, which is the one producer of a letter's "Needs your call" item — and never resolves itself by coin flip (slp-blind-lanes D1, D2(e)).
 
 **Lanes are not hats.** Lanes GENERATE designs from one byte-identical brief; hats CRITIQUE one request from fixed disjoint perspectives. Different purpose, so neither replaces the other, and a hat wave is never reported as a lane run (slp-blind-lanes D7).
 
+**Move 0, Frame.** Before move 1, the leader writes a few gradeable criteria, each with an id (`R1`, `R2`, …), as a bold **Rubric** block inside the dossier's `## Question` section, after the brief's fenced block. The rubric never goes inside that fence and never into the brief, so the brief's neutrality lint still holds: a lane that sees the scoring leans toward it. A criterion is gradeable when two readers would score one proposal the same way against it. Write it before the first dispatch; a rubric written after the proposals arrive is fitted to them.
+
 **The four moves** — the shape `bee-reviewing`'s wave already uses, applied to generation instead of critique:
 
 1. **Fan out.** One `bee dispatch prepare --runtime <rt> --kind advisor --role lane-N --brief-file <path>` per lane, in parallel — lane one takes `--role lane-1`, lane two `--role lane-2`, lane three `--role lane-3`, so each lane can be pointed at a DIFFERENT model (lane-model-diversity D1). Each lane gets the SAME brief bytes and the read diet that brief declares; it is denied every sibling proposal, the orchestrator's own leaning, session history, and `--expertise` beside a brief (a second, unlinted reading channel is refused at the door). A lane never runs as `--kind cell` — refused by type, before the file is read (D3).
 2. **Cross-critique.** Round two: fresh advisor dispatches, each handed the rival proposal VERBATIM inside a fence whose info string is the one tag `lane-proposal`. A brief over the 8192-byte cap does not paste the proposal: the round-2 brief names its PATH in the read diet and the lane reads it there.
-3. **Converge.** One dossier at `docs/history/<feature>/blind/<run-id>.md`, holding every proposal verbatim, the critiques with their round-2 dispatch ids, the chosen answer, the rejected set with reasons, and the citations.
-4. **Record.** `bee decisions log --rejected "<what>: <why>" --trigger <id>` — the rejected set is a list on the record, and the revisit condition is a registered `bee triggers` id, never a memory.
+   *Optional cross-judge.* When the leader wants a second reading before it picks, it sends one `--kind advisor --role advisor` dispatch with the rubric and the proposals by path. This is no new seat: `SEAT_ROLES` stays closed. The dossier records, inside `## Chosen`, the judge's pick, the leader's pick, and the reason for any disagreement. The leader still decides.
+3. **Converge.** One dossier at `docs/history/<feature>/blind/<run-id>.md`, holding every proposal verbatim, the critiques with their round-2 dispatch ids, the chosen answer, the rejected set with reasons, and the citations. Convergence has two steps and one rule:
+   - **Base.** Read every proposal whole, never as a pile of parts. Score each one criterion by criterion against the rubric, and pick the top score as the base. Break a tie first on the proposal that extends further without breaking an invariant, then on the smaller public surface.
+   - **Grafts.** Take one or two ideas from each rejected proposal, when it has any worth taking, and fold them into the base by hand. Record them as a bold **Grafts** block inside the dossier's `## Chosen` section, each graft with its source lane's `dispatch_id`.
+   - **The rule.** Lanes that converge ship the consensus, with no graft. Lanes that diverge wildly mean the frame was loose: reframe the rubric and re-run the lanes, never average the proposals. A hat or Gate 2 finding that a lane had already caught is a missed graft: re-open the dossier.
+
+   The rubric and the grafts sit inside existing sections, so the dossier keeps its seven sections and `bee blind check` stays green.
+4. **Record.** `bee decisions log --rejected "<what>: <why>" --trigger <id>` — the rejected set is a list on the record, each reason citing the rubric criterion ids the proposal lost on, and the revisit condition is a registered `bee triggers` id, never a memory.
 
 **The lane seat roles are ordinary `team.<runtime>` roles.** `lane-1`, `lane-2` and `lane-3` sit in the one model table beside `code`, `review` and `advisor` — no separate config file (lane-model-diversity D1). The constant of record is `SEAT_ROLES` in `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`: eight names, three lanes and five hats, closed on purpose. A seat whose slot resolves NOTHING — key absent, `null`, or a shape the resolver reads as nothing — falls through to `advisor` on an advisor-kind dispatch instead of refusing, so lanes run unconfigured exactly as they always did; the `[bee-tier: …]` marker names the RESOLVED role (`advisor` after a fall-through), and the dispatch log keeps the asked-for seat as `requested_role` (D2, D4). A name outside those eight keeps its ordinary refusal, so a typo never quietly borrows the advisor's model. No dispatch-time model flag exists — the model comes only from the table.
 
@@ -267,6 +283,11 @@ open"), and the interview is never simulated (D6, decision `f73d6c49`).
 **Communication.** While the wave runs the user sees ONE plain state line, with
 no hat vocabulary. The output reaches the user as ONE leader voice, and every
 finding is filtered against the request text before anything surfaces (D7).
+The synthesis digest recorded with `bee state advisor-ref record
+--digest-file` carries a Dismissed list: each hat finding the leader dropped,
+one line each, in the shape `bee-reviewing/references/reviewing-reference.md`
+("Dismissal shape") holds. A dropped finding with no stated reason reads as
+one nobody weighed.
 
 #### The pre-Lock spec-critique window (discretionary, kept)
 
