@@ -36,10 +36,14 @@ Lead with findings. Do not rewrite code.
    "Adversarial reading". Name the other side of every branch the diff
    adds — "The Truth Table Test" — and where the change brings a thing
    into being, walk its create, read, update and delete together —
-   "The CRUD Lifecycle check".
+   "The CRUD Lifecycle check". Follow a changed value past symbol
+   search: into wire shapes, stored columns, flags, and readers written
+   in another language that a name search never finds.
 3. Reproduce or trace every suspected defect before filing — "Verify
    before reporting"; what qualifies as a finding at all — "What a
-   finding is".
+   finding is". Name the one fact the change's safety rests on and the
+   rung it reached — "Label uncertainty exactly"; a P1 whose fact stands
+   below rung 4 (ran it) is labelled unproven.
 4. Set severity by consequence, not offense — "Severity calibration";
    torn between two levels, take the lower and name the condition for
    the higher — "Severity is a spent signal".
@@ -58,9 +62,9 @@ Lead with findings. Do not rewrite code.
 
 #### architecture
 
-- **Purpose:** Catch structural damage — boundaries, coupling, API design, maintainability, drift from plan.md structure.
+- **Purpose:** Catch structural damage — boundaries, coupling, API design, maintainability, drift from plan.md structure, and the bolted-on test: known on day one, would it look like this?
 - **Scope:** Set by the invoking layer; drift is judged against the in-scope plan.md, never against memory.
-- **Method:** Reviewer method 1–5, step-2 lens as Purpose.
+- **Method:** Reviewer method 1–5, step-2 lens as Purpose; a branch or mode the change could delete outright, named, files as a P2 standards finding.
 
 #### security
 

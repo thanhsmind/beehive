@@ -154,11 +154,14 @@ generated skill, not a suggestion:
 that change's cap proof:
 
 ```
-bash .bee/verify/verify-app/control-<app> drive --fast <feature>
+bash .bee/verify/verify-app/control-<app> drive --fast <feature> — green:live <feature-id>@<entry-point> — <evidence path>
 ```
 
-and records the result as `green:live` — the real product was driven and its
-result inspected. The FULL drive is the periodic sweep over the whole map, run
+`green:live` says the real product was driven and its result inspected; the
+label names which feature, through which entry point, and where the evidence
+sits. A mutation proof adds a second, read-only view that shows the change
+took. An entry point that was not driven is named as skipped, never covered
+by another. The FULL drive is the periodic sweep over the whole map, run
 on a release or an audit; a per-change loop that ran it would pay for every
 feature to prove one.
 

@@ -255,11 +255,32 @@ than a wrong finding because nothing reveals it.
 ## Label uncertainty exactly
 
 Uncertainty is allowed; unlabeled uncertainty is not. When you cannot
-fully verify → say exactly what you established and what you did not:
+fully verify → say exactly what you established, how far you proved it,
+and where the check stopped.
 
-> "Verified: `parse()` returns `undefined` for empty string (ran it).
-> Unverified: whether any live caller passes empty string — I found no
-> guard, but did not trace all call sites. Confidence: medium."
+**How far is a rung, not a mood.** "Confidence: medium" reports a
+feeling. A rung reports what you did. Name the highest rung the claim
+reached:
+
+1. **said** — stated, nothing checked.
+2. **pointed at the line** — the `path:line` that shows it is cited. A
+   claims-table row with an anchor stands here.
+3. **walked the failure** — the path from input to wrong outcome was
+   traced by hand, step by step.
+4. **ran it** — a command ran and showed the behavior. A claims-table
+   `ran` row stands here.
+5. **reproduced live** — the real product was driven and the wrong
+   outcome seen.
+
+Every finding that shows a rung also names its meaning in words — "rung
+3 (walked the failure)", never a bare "rung 3" — so a reader who never
+saw this ladder still knows what was done. Then say where the check
+stopped: the next rung you did not reach, and why.
+
+> "`parse()` returns `undefined` for empty string — rung 4 (ran it).
+> Whether a live caller passes empty string — rung 2 (pointed at the
+> line): no guard at `src/parse.ts:40`. Stopped: I did not trace every
+> call site."
 
 That report is useful. "This probably breaks on empty string" is not.
 
@@ -356,6 +377,12 @@ judgement call, never a hard violation:
 - **Refused Bequest** — a subclass or implementer that ignores or
   overrides most of what it inherits -> drop the inheritance, use
   composition.
+- **Swelling File** — the diff pushes a file toward a size a reader can
+  no longer hold in their head -> split along the seam the new code
+  opened, in this change.
+- **Dual Path** — an old API or path kept alive beside its replacement,
+  with no external consumer left -> delete the old path in the same
+  change.
 
 ## Asking for a review
 

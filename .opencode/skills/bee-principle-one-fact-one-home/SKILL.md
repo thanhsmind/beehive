@@ -15,6 +15,13 @@ half the index happens to show first — usually not both. When your fact
 contradicts an existing entry, replace the line; never leave both standing for
 a reader to arbitrate.
 
+**Not the same as `bee-principle-single-source-of-truth`.** That one is about
+a fact the code acts on, with copies kept in step by hand. This one is about a
+knowledge entry and the near-duplicate filed beside it.
+
+**Check:** before you file, did you search the base for this area and find no
+entry your fact extends or replaces?
+
 **Why:** a duplicate is not free. Each copy is separately plausible and
 separately maintained, so when the fact changes, someone must find every copy
 or leave a lie behind.

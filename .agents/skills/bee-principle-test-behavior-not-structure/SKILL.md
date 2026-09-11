@@ -20,6 +20,11 @@ those properties are the observable behavior. Assert the property (the output
 order, the eviction victim, the delay sequence), still not the private call
 graph.
 
+**The vacuity check:** the test must fail if the subject returns nothing. Three
+shapes pass anyway: no real assertion (it only runs the code), a constant pin
+(it asserts a literal the subject never computes), and a self-referential
+expected value (it derives the expected value from the code under test).
+
 **Why:** structure-coupled tests punish exactly the improvements they were
 supposed to enable, so the improvement stops happening.
 

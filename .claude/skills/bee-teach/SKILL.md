@@ -1,7 +1,7 @@
 ---
 name: bee-teach
 description: >-
-  Explain a body of work plainly so a person understands it. Use when the user asks to understand rather than change something — 'teach me', 'explain this', 'why did you build it this way', 'I don't get X'. Not for status reports, gate questions the user has not asked to understand, or changing code.
+  Explain a body of work plainly so a person understands it, at their pace. Use when the user asks to understand rather than change something — 'teach me', 'explain this', 'help me understand', 'I don't get X'. Not for the recorded reason, with evidence, behind a rule or design (bee-why), a traced answer to how a part of the repo runs (bee-how), status reports, gate questions the user has not asked to understand, or changing code.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -31,7 +31,7 @@ Teach sits on top of two bee procedures in `bee-researching/references/trace-and
 
 Write every response through the `bee-unslop` skill, in plain spoken language, in the user's language, the way you'd explain it to a colleague. Be tight, not terse. Cut filler and hedging, keep the part that makes it click. State the concrete mechanism, not a metaphor, a framing, or a preview of what is coming. This is the target density: "Virtualization runs in two parts, one for rendering and one for loading from disk. When an item scrolls out past the buffer, both its DOM node and its in-memory data are evicted." Normal sentence case, not all-lowercase. No em dashes. Prefer periods over commas. Keep each sentence to one or two commas. If clauses pile up, split them into separate sentences. Give each concept one name and keep it. Avoid mirror sentences ("A without B, or B without A") and tidy closers ("the rest follows", "it all falls out"). The words in these steps are directions to you, not labels to print. Don't echo the structure as headers or stock phrases.
 
-**Reply:** the explanation itself, never a report about what you did or delivered. Lead with the main point, then the plain account of what it is, how it works, and why. Close on exactly one next action, never a menu.
+**Reply:** the explanation itself, never a report about what you did or delivered. Lead with the main point, then the plain account of what it is, how it works, and why. Close on exactly one next action, never a menu. When a thread is worth chasing, the one next action is a ready `/bee-how <question>` or `/bee-why <question>`.
 
 ## Headless
 

@@ -179,12 +179,12 @@ One commit per cell (rule: agents-one-commit-per-cell):
 
 ```bash
 BEE_AGENT_NAME="<name>" git add <files>
-git commit -m "<Imperative summary matching the cap outcome>" -m "Cell: <cell-id>"
+git commit -m "<Imperative summary matching the cap outcome>" -m "cell: <cell-id>"
 ```
 
 ## Result Field Spec
 
-Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), the test result from the finish run, and the parent's next action. Worker reports are navigation aids, not completion evidence: the leader independently compares approved requirements against actual artifacts and execution evidence before accepting. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) and the test record (`.bee/logs/test-results.json`) — never a second copy of either.
+The Result form — the status token, the fenced JSON block beside it, and the four token reports — has one home: `bee-swarming/references/swarming-reference.md` ("Result Formats"). Worker reports are navigation aids, not completion evidence: the leader independently compares approved requirements against actual artifacts and execution evidence before accepting. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) and the test record (`.bee/logs/test-results.json`) — never a second copy of either.
 
 When dispatched with native worktree isolation, also report the observed working
 directory, symbolic ref (or detached state), and resulting commit. These values
@@ -195,10 +195,7 @@ prove base ancestry and the reserved-path diff subset before the result counts.
 Do not describe a branch name, worktree id, base, or commit as integration
 authority, and do not ask the orchestrator to trust a worker-supplied value.
 
-- `[DONE]` — cell finished (a proof line `<command> — <result> — <scope reason>` recorded on the cap, checked — not re-run — at close/merge), one commit made, reservations released.
-- `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state, plus `options[]` (one self-contained sentence per way forward) and `leaning` (the one you would pick, repeated word for word) whenever the block leaves a decision to make. Both are omitted when there is no choice to offer; `leaning` never names an option that is not in the list.
-- `[HANDOFF]` — `.bee/HANDOFF.json` written (rule: agents-context-handoff-65); include progress, active reservations, and the resume point.
-- `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
+`[HANDOFF]` means `.bee/HANDOFF.json` is written first (rule: agents-context-handoff-65).
 
 Ambiguities you deferred go in an `Outstanding Questions` section of the report.
 

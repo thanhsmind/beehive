@@ -35,6 +35,8 @@ announce what settled, then record it:
 - A rule, behavior, or tuned value settles → `bee decisions log` the
   same turn, plus a one-line stub via `bee capture add`; the full spec
   merge waits for the flush. High-risk work merges now, never queued.
+  The decision's why names its evidence pointer — a commit, a
+  `path:line`, an output path — never prose alone.
   A stub whose `--area` owns a skill must also answer whether that skill
   changed (rule: workflow-state-capture-skill-answer):
   `--skill-answer "changed: <path>"` or `--skill-answer "not: <why>"`,
@@ -119,12 +121,20 @@ runs it.
    worker reports, review findings — write one dated learnings file
    (`references/promotion.md` ("Harvest Discipline", "Learnings File
    Template")); read the touched areas' existing entries first, so the
-   harvest extends the layer instead of restating it. Delegate
-   the reading to read-only subagents; keep synthesis here. Thin
-   evidence means a thin file, never an invented finding.
+   harvest extends the layer instead of restating it. Before the
+   harvest, check that each capped cell's proof pointer resolves; a
+   dead pointer is a friction entry. Dispatch the readers through the
+   dispatch door as gathers, with two named lenses: **learnings**, and
+   **divergent** — proof the agent only self-reported, second-order
+   effects, and context the user pasted that the agent could have
+   fetched. Keep synthesis here. Thin evidence means a thin file, never
+   an invented finding.
 4. Promote a learning only when it clears all three bars:
    multi-feature relevance, meaningful waste prevented, generalizable.
-   Prefer an executable check over prose (which routes only into a
+   A single source clears the waste bar only with a named waste figure;
+   two independent sources raise confidence. When the target already
+   states the lesson and the run still broke it, promote a wording or
+   placement change that makes it fire, never a second copy. Prefer an executable check over prose (which routes only into a
    skill the run actually opened or tunes its description), and when an
    already-promoted pattern recurs, escalate it to a durable owner —
    hook, guard, doctor check, or test — or record the one-line reason

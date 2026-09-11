@@ -1,7 +1,7 @@
 ---
 name: bee-verify-upkeep
 description: >-
-  Periodic audit that keeps a project-local `verify-app` skill and its feature map honest: parallel source readers per feature, one live session driving every feature, at most one PR of proven corrections. Use PERIODICALLY, when a repo already carries a verification skill and its map may have drifted — after a release, after user-facing churn, when a drive recipe stops matching the app, or when the user asks to audit the verify skill. Not for creating one where none exists — that is bee-verifying.
+  Periodic audit that keeps a project-local `verify-app` skill and its feature map honest: parallel source readers per feature, one live session driving every feature, at most one worktree and one cell of proven corrections. Use PERIODICALLY, when a repo already carries a verification skill and its map may have drifted — after a release, after user-facing churn, when a drive recipe stops matching the app, or when the user asks to audit the verify skill. Not for creating one where none exists — that is bee-verifying.
 disable-model-invocation: true
 metadata:
   version: '0.1'
@@ -27,8 +27,9 @@ terminalising every bullet.
 Pick one, and say which:
 
 - **clean** — every feature got source and live coverage; nothing worth shipping.
-  No branch, no PR.
-- **changed** — one PR ships proven doc, harness, or map corrections.
+  No worktree, no cell.
+- **changed** — one worktree and one cell ship proven doc, harness, or map
+  corrections.
 - **blocked** — coverage could not finish or a proven fix could not ship safely.
   Say exactly what blocked it.
 
@@ -52,6 +53,9 @@ one command for both makes a red result ambiguous. Removing it is the user's
 call, not yours.
 
 ## Pass
+
+0. **Skill present.** With no `.bee/verify/verify-app/SKILL.md`, stop and route
+   to `bee-verifying` — there is nothing to keep up yet.
 
 1. **Index hygiene.** Read the feature map README and glob its sibling files. Fix
    missing, extra, duplicate, or dead entries. Lightweight; no generated
@@ -98,12 +102,13 @@ call, not yours.
    the same helpers rule as generation (scripts executable in the source tree,
    invocation documented in the skill body as `bash <path> …`, because the
    rendered copies carry no executable bit). App behavior that's actually broken
-   → product gap; record it for the user, keep it out of this PR.
+   → product gap; record it for the user, keep it out of this change.
 
-6. **Ship or stop.** For changed: one PR of proven corrections, re-read every
-   changed file first, and re-render with `bee onboard --apply` so the runtime
-   copies ship in the same change. For clean or blocked: no PR, report the
-   outcome and the coverage honestly.
+6. **Ship or stop.** For changed: one worktree and one cell of proven
+   corrections, proven by the re-driven features' `green:live` lines. Re-read
+   every changed file first, re-render with `bee onboard --apply` so the runtime
+   copies ship in the same change, and land it with `bee worktree merge`. For
+   clean or blocked: no worktree, report the outcome and the coverage honestly.
 
 Keep concise run notes (features covered, unreachable prerequisites, confirmed
 drift, outcome) in a scratch location; don't commit them.

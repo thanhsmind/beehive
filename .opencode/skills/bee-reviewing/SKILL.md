@@ -58,13 +58,27 @@ verified before filing: `.bee/expertise/review.md`. Severity here:
 Every finding carries an axis label — `standards` (is the code well
 made: quality, architecture, security, tests) or `spec` (does it do
 what the locked decisions promised). Synthesize only after every
-reviewer returns: deduplicate, independent corroboration promotes one
-level, disagreement takes the conservative route, uncertain lands at
-P2 — these severity rules are unchanged and apply within and across
-axes; a P1 blocks regardless of axis. The synthesis report stays ONE
-report, grouped by axis, spec-axis group first — axes are never
-collapsed back into one undifferentiated ranked list. Record each
-finding as it settles: `bee reviews record --kind finding`.
+reviewer returns. A return that breaks the finding schema or cites a
+path that does not resolve gets ONE re-dispatch with the failure named;
+a second failure is listed as an uncovered lens.
+
+Before severity, the lead filter: check each finding against the
+context the reviewers were denied — locked decisions, earlier rejects,
+planned cells, repo convention. A finding no input can reach, a
+preference with no named failure, or one that the missing context
+answers goes to Dismissed with what was checked. A reviewer whose
+findings are all nits is reported as `lens clean`.
+
+Then severity: deduplicate, independent corroboration promotes one
+level — independent only across different models or disjoint lenses —
+disagreement takes the conservative route, uncertain lands at P2 —
+these severity rules are unchanged and apply within and across axes; a
+P1 blocks regardless of axis. The synthesis report stays ONE report,
+grouped by axis, spec-axis group first — axes are never collapsed back
+into one undifferentiated ranked list. Above Dismissed it names each
+reviewer's dispatched tier, and may add one line on which reviewers
+corroborated which finding. Record each finding as it settles:
+`bee reviews record --kind finding`.
 
 The report ends with ONE required line, the last line in the document:
 
@@ -106,6 +120,8 @@ one, and never one padded to look thorough.
 - A judge flag on a cell means the judge may have been moved, not
   passed: diff the flagged files for weakened assertions, skipped
   tests, softened verify commands. A weakened judge is a P1.
+- A bug-fix cell with no red-before proof line — the failing run
+  before the fix, `.bee/expertise/tests.md` ("Red before green") — is a P2.
 - Deliverables: exists + substantive + wired is OK; unwired P2; missing or hollow P1.
 
 ## Acceptance — with the human

@@ -2,7 +2,11 @@
 
 Load when new code has an open shape on `standard` or `high-risk` work:
 several whole shapes are viable and no pattern in the repo fits. Never load
-it for a bug fix, a rename, or a change with a pattern to copy.
+it for a bug fix, a rename, or a change with a pattern to copy. Lanes open
+only after a traced model of the code the shape touches exists, per
+`bee-researching/references/trace-and-provenance.md` ("Trace"), and the
+lanes' brief names that trace in its read diet: a lane that designs against
+a guessed runtime designs for the wrong system.
 
 Adapted from pstack (cursor/plugins, pstack/skills/architect).
 
@@ -13,6 +17,10 @@ plus two or three real call sites in the caller's own code — what it
 imports, what it calls, what comes back. Derive the types from that usage.
 When the two disagree, change the sketch to fit the usage, never the
 reverse: the caller's experience is the spec.
+
+At the plan step, `hat-facts-gaps` reads this usage block against the plan's
+`## Shape`, per `bee-hive/references/gates-and-delegation.md` ("Hat wave").
+A call site the types cannot serve is a Structure BLOCKER.
 
 ## Sketch
 
@@ -65,10 +73,12 @@ The lanes' shared brief carries this runner discipline:
   differences between lanes are the signal convergence picks from.
 
 Each lane returns a design package: the usage, the type sketch, the module
-map, and a rationale in the shape of § Rationale. Screen every proposal
-against § Design red flags before convergence, and revise or reject a
-flagged shape. Compare the rest on interface depth: prefer the shape that
-hides more complexity behind a smaller public surface.
+map, and a rationale in the shape of § Rationale. The leader writes the
+rubric before the lanes run (move 0, Frame, in the section cited above).
+Interface depth and § Design red flags are default rubric criteria, not the
+whole rubric: add the criteria this question turns on. A shape that trips a
+red flag loses on that criterion; prefer the shape that hides more
+complexity behind a smaller public surface.
 
 ## Design red flags
 

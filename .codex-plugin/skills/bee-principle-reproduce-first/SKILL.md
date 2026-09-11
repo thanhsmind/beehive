@@ -14,7 +14,7 @@ The repro is also the finish line. "I changed something and the report stopped
 coming in" is not a verified fix. "The repro failed before the change and
 passes after it" is.
 
-**Not the same as `principle-red-before-green`.** This one is about getting the
+**Not the same as `bee-principle-red-before-green`.** This one is about getting the
 bug to happen at all, by any means — a shell command, a curl, a click path.
 That one is about the shape of the proof once you have it: a test that fails
 for the reported reason before the fix exists. Reproduce first, then red before

@@ -34,6 +34,10 @@ mode: standard | high-risk | spike | small (opt-in)
 
 # Plan: <Feature>
 
+## Summary
+<a few plain lines for the user: what changes, and for whom. No cell ids,
+no bee terms.>
+
 Mode: `<mode>` — <k> risk flags: <list, or "none">
 Why this is the least workflow that protects the work: <one sentence>
 
@@ -54,18 +58,31 @@ one-line pointer to discovery.md when one exists.>
 
 ## Approach
 <Recommended path (cites decision ids) · rejected alternatives (one line
-each) · compact risk map (component / LOW-MEDIUM-HIGH / proof needed). When
-approach.md exists, drop this section and point to it.>
+each) · compact risk map (component / LOW-MEDIUM-HIGH / Lands in: the cell
+id that carries the risk / proof needed). When approach.md exists, drop this
+section and point to it.>
+
+Waves: <the groups that run in parallel, and the reason for each serial edge>
 
 ## Shape
 <one of the bodies below, by mode>
+
+## Cells — current slice (preview)
+<A preview: the persisted cells stay the authority, added only after the
+execution gate.>
+
+| id | title | files | deps | you see | proof |
+|---|---|---|---|---|---|
+| <feat-1> | <imperative title> | <paths; mark new and deleted> | <ids, or —> | <the effect the user or the product shows> | <the proof the cap will carry> |
 
 ## Test matrix
 <standard and below: the triad — happy path, edge cases, error paths — at
 its smallest demonstrating size. high-risk/hard-gate: the 12 dimensions of
 edge-dimensions.md, probes written per applicable dimension. Either way each
 cell's writer judges existing coverage first and authors only what is not
-already pinned (`.bee/expertise/tests.md`).>
+already pinned (`.bee/expertise/tests.md`). Every row ends with
+`Pass when <literal output or state>`. A cell that changes existing
+behavior adds one row that runs the same scenario on main and on head.>
 
 ## Open Questions
 <what is still unknown, one line each — or "(none)". This is where a claim
@@ -75,8 +92,17 @@ lands when it cannot be upgraded past `guessed`.>
 <explicitly not solved; deferred ideas stay deferred>
 ```
 
-No `## Current slice` / `## Cells` sections are added post-approval: the
-plan stays frozen and the current slice lives only in cells.
+`## Summary` and the cells preview are for standard and high-risk plans.
+Tiny and small keep their gate-message shape ("Tiny/small merged gate").
+
+**"You see" is an effect, never a file name.** Write what the user or the
+product shows when the cell lands: "`bee close` names the uncapped cell",
+not "edits close.rs". A cell with no visible effect says what it unblocks.
+
+**The preview is not the cells.** No section is added post-approval: the
+plan stays frozen, and after the execution gate the current slice lives
+only in the persisted cells. Where a persisted cell and its preview row
+differ, the cell wins.
 
 ### The load-bearing claims table
 
@@ -144,9 +170,9 @@ answer it.
 - <alternative> — <why rejected, one line>
 
 ## Risk map
-| Component | Risk | Reason | Proof needed |
-|---|---|---|---|
-| <area> | LOW/MEDIUM/HIGH | <why> | <command, inspection, or spike question> |
+| Component | Risk | Reason | Lands in | Proof needed |
+|---|---|---|---|---|
+| <area> | LOW/MEDIUM/HIGH | <why> | <cell id> | <command, inspection, or spike question> |
 
 ## Files and order
 <bounded list, likely touch order>
@@ -191,12 +217,22 @@ restates them.
 ### perf
 
 1. Capture a baseline with the real command or trace, and record the number.
-2. State the hypothesis — what is slow, and why you believe it.
+2. State the hypothesis — a mechanism the baseline shows. First ask whether
+   the slow path must exist at all: a deleted path beats a faster one.
 3. Change ONE thing.
 4. Re-measure the same way, with the same command.
 5. Keep the win, discard the loss, and record BOTH numbers.
 
+**When the ask is a sustained metric target.** Prove the harness separates
+the target case, then freeze it. Report the median of several runs. Set the
+stop rule before the first attempt: the target reached, plus a minimum
+number of attempts. Log one row per attempt. Revert an attempt that does
+not clear the noise. Never loosen the stop rule.
+
 "It feels faster" is not a result (per D2, decision `1593e365`).
+
+Proof line: the baseline, the after, the delta, the command, and the
+artifact path.
 
 ### bugfix
 
@@ -206,18 +242,35 @@ restates them.
    ("red-before-green is craft, applied by judgment and enforced by review,
    not by flags"). Read it there; it is deliberately not copied here, so a
    cold execution worker never has to open a planning reference.
-3. Find the mechanism, not the symptom.
+3. Find the mechanism, not the symptom — trace the bad value back to where
+   it was made (`bee-principle-crash-site-versus-fault-site`).
 4. Fix the mechanism.
-5. Re-run the same reproduction, on the same interface.
+5. Re-run the same reproduction, on the same interface. An inconclusive run,
+   or a run on a different surface, is not a pass.
+
+**When the cause is not known.** List the candidate causes. Each pass, test
+the split that removes the most candidates, with runtime evidence, not a
+reading of the code (`.bee/expertise/tests.md` ("Instrument before
+guessing")). Revert every edit that a refuted hypothesis motivated. A
+one-line fix whose cause is already known keeps the short path.
+
+Proof line: the reproduction's output, red and then green, verbatim.
 
 ### refactor
 
 1. Record existing behavior FIRST — a characterization test, a snapshot, or an
-   equivalence script.
+   equivalence script. A type check or a lint is not a record.
 2. Prove that record green on the UNCHANGED tree.
 3. Change structure in small steps.
 4. The record stays green at every step.
 5. A behavior change is not a refactor — it is a separate cell.
+6. Subtract first: an early cell deletes dead code and one-caller wrappers.
+7. An API move migrates every caller and deletes the old API in the same
+   slice; then search strings and docs for the old name.
+8. Never edit the record, the harness, or the baseline to make a step green.
+9. Keep the diff only if it lowers what a reader must hold in mind.
+
+Proof line: the record, green before the change and green after it.
 
 ### research
 
@@ -225,13 +278,23 @@ restates them.
 2. Trace the runtime path, not just the file list.
 3. Name every source searched that came up EMPTY.
 4. End with anchors a reader can open — `path:line`, or the command that ran.
+5. A question that chooses between alternatives ends in a recommendation and
+   a tradeoffs table. An answer that leads to a change re-routes to `bugfix`
+   or `feature`.
 
 Both flows have ONE home: `bee-researching/references/trace-and-provenance.md`
 — § "Trace" for step 2, § "Provenance sweep" for step 3.
 
+**When the symptom is live at runtime.** Capture a real profile or trace.
+Reduce it through a gather dispatch (`bee dispatch prepare --kind gather`).
+Confirm the reduction with one instrumented run, and map it to `path:line`.
+Without a before-and-after pair, label the cause a hypothesis.
+
 This is the investigation route (per D3, decision `f1ffa7bd`): the existing
 `research` class, no new route and no new lane. Nothing yet ENFORCES step 1 —
 read-only is craft here, not a guard (backlog `p-69bee217`).
+
+Proof line: the account's anchors, each one opened or run.
 
 ### feature
 
@@ -246,6 +309,8 @@ read-only is craft here, not a guard (backlog `p-69bee217`).
 
 A green unit behind a path nobody can walk is not a result.
 
+Proof line: the user-visible path driven, with its evidence (`green:live`).
+
 ### docs
 
 1. Read what the bundle already holds for the area before writing a line.
@@ -257,6 +322,8 @@ A green unit behind a path nobody can walk is not a result.
 6. Name what is still uncovered.
 
 A second document saying the same thing is not coverage.
+
+Proof line: the parity or pointer check that ran, and its output.
 
 ### release
 
@@ -272,6 +339,8 @@ A second document saying the same thing is not coverage.
 
 A release commit without that `OK` line is not a release.
 
+Proof line: the script's final `OK` line, verbatim.
+
 ### spike
 
 1. Write the question as a YES/NO before you start.
@@ -285,9 +354,13 @@ A release commit without that `OK` line is not a release.
    Observe each variant on the real surface: drive it with the project's own
    verification skill when the project has one, otherwise log or print the
    thing you are deciding. The observation is the proof, not an assertion.
-   The answer that step 4 records names the chosen variant.
+   The answer that step 4 records names the chosen variant. When the design
+   space is open, add one variant the ask did not name.
 
 A spike that becomes the implementation was never a spike.
+
+Proof line: the decision id the answer was logged under, and the
+observation of each variant.
 
 ## Cell quality rules
 
@@ -529,18 +602,18 @@ seats. The unit is once per FEATURE, never per message — the recorded
 advisor-ref is that mark (procedure home, "Idempotence"). Dedupe findings,
 then split into auto-fix (apply, record) and present-for-decision.
 
-**One shot, then at most one blocker pass.** WARNINGs and mechanically
-fixable findings are applied directly to the cells (legal — cells are
-mutable before the gate). Only unresolved BLOCKERs earn a second, final,
+**One shot, then at most one blocker pass.** Before the gate, no cell
+exists yet: WARNINGs and mechanically fixable findings are applied to the
+plan's cells preview table. Only unresolved BLOCKERs earn a second, final,
 blocker-scoped pass; a BLOCKER still open after it escalates to the user
 with both positions. All CRITICAL cell flags are fixed before the gate;
-MINOR ships with a recorded note. On slice 2+ the scope is new/changed
-cells only — the plan is frozen and was checked on slice 1.
+MINOR ships with a recorded note. On slice 2+ the plan is frozen and was
+checked on slice 1: the scope is the new or changed persisted cells only.
 
 **MANDATE 1 — Structure.** The leader folds these criteria into the
 `hat-facts-gaps` seat's prompt body, over `docs/history/<feature>/CONTEXT.md`,
-approach.md, plan.md, and the drafted cells
-(`.bee/bin/bee cells list --feature <feature>`). Assume the work is flawed
+approach.md, and plan.md with its cells preview table — on slice 2+, the
+persisted new cells (`.bee/bin/bee cells list --feature <feature>`). Assume the work is flawed
 until proven so. Verify exactly 5 dimensions:
 
 1. Requirement/decision coverage — every locked decision lands in at least one cell.

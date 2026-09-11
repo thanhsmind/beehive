@@ -13,6 +13,14 @@ step by parallel hand-edits is a data race with human hands in it.
 When you find copies that already disagree, do not sync them. Elect the owner
 and demote the rest to derivations.
 
+**Not the same as `bee-principle-one-fact-one-home`.** This one is about a
+fact the code or the docs act on — a limit, a status list, a rule. That one is
+about an entry in a knowledge base: read the base, then extend the entry
+instead of filing a neighbor.
+
+**Check:** change the value once. If you must also edit a second file, elect
+the owner and derive the other.
+
 **Why:** when the same fact lives in two places, one of them will be wrong,
 and a reader cannot tell which one.
 

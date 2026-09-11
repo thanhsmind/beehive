@@ -102,6 +102,10 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    template below.
    Default: bee's own agent types only. A same-named type from another plugin
    carries a different contract and makes the run depend on what is installed.
+   **Pilot a same-pattern wave.** When a wave holds several cells of one
+   role that follow one pattern, dispatch one first and fan out the rest
+   only after its `[DONE]` passes goal-check (step 7) — a flaw in the
+   shared pattern then costs one rerun, not a wave of them.
 4. **The cell already names the job — read it, override only with a reason,
    escalate only where the work earns it.** `role` is REQUIRED on every cell
    (`bee cells add` refuses without it) and it is the cell's sole model
@@ -178,8 +182,15 @@ steps for its single worker — never wave analysis or multi-cell assignment.
 6. **Tend** the swarm: collect status tokens, update cells and state, verify
    reservations were released. Silence is not failure — inspect cell status
    and `.bee/bin/bee reservations list --active-only` before
-   assuming a worker is stuck. Default: no routine mid-flight pings — interrupt
-   for an explicit user abort or a confirmed deadlock.
+   assuming a worker is stuck. **Stuck** means no side effect — a commit, a
+   reservation renewal, a trace write — past the runtime you expected when
+   you dispatched it. Status probes stay read-only (`bee cells list`,
+   `bee reservations list`, `git log`); no routine mid-flight pings. A stuck
+   worker: stop it, `bee cells unclaim --id <id>`, `bee reservations release
+   --agent <nickname> --cell <id>`, then re-dispatch ("Failure responses",
+   below). **On the user's stop word**, stop every live worker, keep the
+   claims, and write a `pause` handoff ("Handoff JSON", below); the resume
+   triage picks the claims back up.
 7. **Goal-check every `[DONE]` yourself — miss reruns, hit ships.** A
    worker's word is never the evidence; the orchestrator
    measures before the cell counts:
@@ -243,6 +254,24 @@ steps for its single worker — never wave analysis or multi-cell assignment.
    capped cell's recorded proof line instead of running tests themselves
    ("Proof at finish and close, in full", below).
 
+## Failure responses
+
+Each failed result takes one fixed response. The `[BLOCKED]` rescue ladder
+in `bee-swarming/SKILL.md` keeps the blocks a fresh dispatch cannot fix: an
+authority call, a dissent, a plan conflict.
+
+| Signal | Response |
+|---|---|
+| `[BLOCKED]` for missing context | Re-dispatch the same cell fresh, with the missing context added. |
+| `[HANDOFF]` | Dispatch a fresh worker from the handoff record ("Handoff JSON"). |
+| Provider error — quota, auth, empty response, stall, 5xx | Take the next step of the payload's `fallback_chain`. |
+| Red proof or task miss | Re-dispatch on the same role with the failing excerpt (step 7). Never another model — the fallback-chain gate in "Model Roles — Config-Driven, Runtime-Keyed" is that rule. |
+| Silent death — stuck, per step 6 | `bee cells unclaim`, `bee reservations release`, then re-dispatch. |
+
+A second failed re-dispatch of the same cell ends the retries: surface it
+to the user with both diagnoses. Two workers failing on one root cause is
+the systemic stop in `bee-swarming/SKILL.md` ("Hard rules (both roles)").
+
 ## Proof at finish and close, in full
 
 The agent owns test scope end to end — it picks the proof each cap needs,
@@ -283,6 +312,12 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
   staged merge's capped cells — the last local net before CI, which runs
   the full declared command on every push.
 - **Never build on red** (rule: agents-never-build-on-red).
+- **When CI goes red after merge:** name the kind of red before you act.
+  A flake gets one re-run; red again, it is not a flake. A stale base —
+  main moved under the merge — gets a sync with main and a fresh proof. A
+  failure in the diff's own code is a fix-first cell, plus the captured
+  learning on why the proof scope missed it (`AGENTS.md`, "Prove, then say
+  so").
 
 
 ## Runtime Spawn Mechanics (side by side)
@@ -471,7 +506,29 @@ Default: no session history, no other cells, no orchestrator reasoning. A worker
 
 ## Result Formats (expected back from workers)
 
-Native subagents return these token-markdown reports as their final message. Cli executors deliver the **same four outcomes** as `.bee/workers/<cell-id>.result.json` (External Executors, step 2) — one contract, two transports.
+This section is the one home of the Result form; `bee-swarming/SKILL.md`
+and `bee-swarming/references/worker-details.md` point here. A worker's
+final message opens with exactly one status token. Beside it — never in
+place of it — goes one fenced JSON block, the same object
+`bee cells finish --report` validates key-for-key onto the trace:
+
+```json
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>"], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>"], "mistakes": ["<what went wrong> — <what would have been better>"]}
+```
+
+- `tests` — the proof line ("Proof at finish and close, in full"). Its
+  result segment is `green:live` (the real product was driven and its
+  result inspected), `green:unit` (automated tests passed) or
+  `green:static` (a compile, lint or parity check, nothing executed); a
+  bare `green` is refused.
+- `deviations` — one departure line each, or one line reading
+  `followed the plan` (the departure line, below).
+- `mistakes` — one `<what went wrong> — <what would have been better>`
+  entry each; the first part names a concrete file, command or
+  observation. `[]` says the cell hit none; leaving the key out records
+  no answer, and `bee close` refuses the feature naming that cell.
+
+Native subagents also return these token-markdown reports as their final message. Cli executors deliver the **same four outcomes** as `.bee/workers/<cell-id>.result.json` (External Executors, step 2) — one contract, two transports.
 
 ```text
 [DONE] <cell-id>: <title>
@@ -517,22 +574,25 @@ On each result: update the cell if the worker could not (`block` with reason), c
 
 A `[BLOCKED]` whose worker recorded a dissent owes its `.bee/bin/bee cells dissent-verdict --id <cell> --verdict accept|reject|escalate --reason "<why>"` before the related work resumes — the verdict is the orchestrator's, and 4b7aa303 makes it an obligation, not a courtesy; `bee close` and `bee worktree merge` both refuse while one is unanswered.
 
-**The departure line** (decisions D5/D8/D10, `docs/history/human-mailbox/CONTEXT.md`). The `Departure:` line of a `[DONE]` result and the `deviations` entries of the same worker's `--report` carry one thing in THREE required parts — what was done differently, why, and which kind — on the same ` — ` separator the proof line uses (first separator ends `what`, last starts `kind`, so a `why` may carry the separator itself). A report entry may also spell those parts structurally, as `{what, why, kind}`.
-
-The kind comes from a CLOSED set of four, quoted here as the code spells them:
-
-- `hit an unforeseen obstacle`
-- `found a better route`
-- `the plan was wrong about a fact`
-- `something else had to be fixed first`
-
-A fifth kind is a new locked decision, never a worker's choice of words at 3am. A cell that FOLLOWED its plan states that explicitly — a line reading `followed the plan` — rather than leaving the field empty: silence and nothing-happened must not read alike. Each sentence is written in plain language AT THE MOMENT of the event; the pass that composes the human's letter may reorder, group and drop, and may never state a fact no recorded entry carries, so a sentence not written at the stop is a sentence the human never reads.
-
-The requirement is ARMED-ONLY. In a run that files a letter for the human, a cap that states neither a departure nor its absence is refused, a `--deviation` value that is neither statement is refused, and a structured entry that reaches for those parts and misses one — or names a kind outside the four — is refused. Every other run caps byte-identically to before this contract: the same lines are recorded, and nothing is refused. A free-form note stays a free-form note in both — the contract narrowed what a DEPARTURE is, not what may be written down.
+**The departure line.** The `Departure:` line of a `[DONE]` result and the `deviations` entries of the same worker's `--report` carry one departure in three parts. Its rule — the parts, the closed set of four kinds, `followed the plan`, and when a cap is refused — has one home: `bee-swarming/references/worker-details.md` ("The departure line").
 
 ## Handoff JSON
 
-Near 65% context, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, written_at }`. Include the resume commands:
+Near 65% context, write `.bee/HANDOFF.json` (rule: agents-context-handoff-65) — this is the record's schema, the one site that keeps it: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, verified, tree, key_files, gotchas, written_at }`. The four newer fields let the next session trust what it reads:
+
+- `verified` — the proof lines run so far, each `<command> — <result> — <scope reason>`; work with no line here is unproven.
+- `tree` — `clean`, or `dirty:<paths>` naming each uncommitted path.
+- `key_files` — the files the next session reads first.
+- `gotchas` — what surprised you: a trap, a false lead, a command that misleads.
+
+`bee state handoff write` has flags for the older fields only. Until it has flags for these four, write them into `--next-action` as `verified: …; tree: …; key_files: …; gotchas: …`.
+
+Two rules make the pause safe:
+
+- **Stop at a safe boundary.** Finish the atomic edit in hand, or back it out, before you write the handoff — never pause mid-edit.
+- **No `wip:` commit survives a cap.** A worker with dirty edits commits them as `wip: <subject>`, the `cell: <id>` trailer on the last line, then returns `[HANDOFF]`. Whoever finishes the cell amends that commit into the one cell commit before the cap, so the history keeps one commit per cell.
+
+Include the resume commands:
 
 ```text
 .bee/bin/bee status --json
@@ -555,6 +615,20 @@ the next fresh session (a `/clear` or a fresh start) adopts the carried
 claim automatically and opens straight into the next cell, no confirmation
 asked. Never stop to suggest `/clear`, never wait for
 one, and never issue `/clear` yourself.
+
+**Resume triage.** A session that picks up a handoff — a `pause` record
+after the user's word, a `planned-next` at adoption — sorts each
+`cells_in_flight` entry before it dispatches anything. `bee cells show
+--id <id>` and `git log --grep 'cell: <id>'` answer each row:
+
+- capped since the handoff → run the leader completeness check (step 7),
+  as for any `[DONE]`;
+- claimed, with no live worker and no commit → `bee cells unclaim --id
+  <id>`, `bee reservations release --agent <nickname> --cell <id>`, then
+  re-dispatch;
+- a `cell:` or `wip:` commit exists, but the cell is not capped →
+  dispatch a fresh worker to finish it from that commit, amending any
+  `wip:` commit per "Handoff JSON" above.
 
 ## Red Flags
 
