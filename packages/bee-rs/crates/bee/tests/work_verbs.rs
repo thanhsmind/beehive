@@ -29,6 +29,8 @@ fn prompt(repo: &Path, session: &str, text: &str) {
     let out = Command::cargo_bin("bee")
         .unwrap()
         .args(["hook", "activity"])
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
         .current_dir(repo)
         .write_stdin(payload.to_string())
         .output()
@@ -186,6 +188,8 @@ fn the_session_env_var_resolves_the_record_when_no_flag_names_one() {
     let out = Command::cargo_bin("bee")
         .unwrap()
         .args(["work", "show", "--json"])
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
         .env("CLAUDE_CODE_SESSION_ID", "s-env")
         .current_dir(&repo)
         .output()
@@ -202,7 +206,9 @@ fn with_nothing_to_address_the_call_is_refused_rather_than_guessing() {
     let out = Command::cargo_bin("bee")
         .unwrap()
         .args(["work", "show", "--json"])
+        .env_remove("BEE_SESSION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("PI_SESSION_ID")
         .env_remove("BEE_HERDING_WORKER")
         .env_remove("BEE_HERDING_JOB_ID")
         .current_dir(&repo)
@@ -260,3 +266,67 @@ fn a_herded_pane_reads_and_writes_its_job_mailbox_and_never_a_session_file() {
         "a herded pane is not a bee session"
     );
 }
+
+#[test]
+fn pi_session_identity_resolves_work_record_when_no_flag_names_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = scratch_repo(tmp.path(), "pi-session");
+    prompt(&repo, "s-pi", "the pi ask");
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["work", "show", "--json"])
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env("PI_SESSION_ID", "s-pi")
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "expected bee work to recognize PI_SESSION_ID");
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["work"]["title"], "the pi ask");
+}
+
+#[test]
+fn pi_session_identity_work_precedence_bee_beats_claude_beats_pi() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = scratch_repo(tmp.path(), "pi-precedence");
+    prompt(&repo, "s-bee", "bee ask");
+    prompt(&repo, "s-claude", "claude ask");
+    prompt(&repo, "s-pi", "pi ask");
+
+    // Claude beats Pi
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["work", "show", "--json"])
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env("CLAUDE_CODE_SESSION_ID", "s-claude")
+        .env("PI_SESSION_ID", "s-pi")
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["work"]["title"], "claude ask");
+
+    // Bee beats Claude and Pi
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["work", "show", "--json"])
+        .env_remove("BEE_HERDING_WORKER")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env("BEE_SESSION_ID", "s-bee")
+        .env("CLAUDE_CODE_SESSION_ID", "s-claude")
+        .env("PI_SESSION_ID", "s-pi")
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["work"]["title"], "bee ask");
+}
+
+

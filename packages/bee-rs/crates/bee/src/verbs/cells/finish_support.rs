@@ -102,6 +102,11 @@ pub(crate) const PROOF_RESULT_VALUES: [&str; 3] = [
 /// `green`. The vocabulary is checked in [`parse_report_flag`] instead, on
 /// the tuple this returns, write path only. That inaction IS the write/read
 /// split; do not "fix" it by moving the check down here.
+///
+/// D4 (docs/history/pi-harness-workflow-parity/CONTEXT.md): this same parsed
+/// proof tuple feeds both command validation against cell.verify and the four
+/// structured trace proof fields (`verify_command`, `verify_output`,
+/// `verify_passed`, `verification_evidence`) on a successful cap.
 pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
     let first = s.find(PROOF_SEPARATOR)?;
     let (command, rest) = s.split_at(first);

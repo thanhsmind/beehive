@@ -658,6 +658,40 @@ fn trim_transitions(file: &Path) -> Result<(), String> {
 
 // ── the herded sink (herding-activity-hook D1/D2) ───────────────────────────
 
+#[cfg(test)]
+static AMBIENT_HERDING_JOB_ID: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+#[cfg(test)]
+fn read_initial_herding_job_id() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(bytes) = std::fs::read("/proc/self/environ") {
+            for entry in bytes.split(|&b| b == 0) {
+                if let Ok(s) = std::str::from_utf8(entry) {
+                    if let Some(val) = s.strip_prefix("BEE_HERDING_JOB_ID=") {
+                        let trimmed = val.trim();
+                        if !trimmed.is_empty() {
+                            return Some(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+            return None;
+        }
+    }
+    std::env::var("BEE_HERDING_JOB_ID")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+#[cfg(test)]
+fn ambient_herding_job_id() -> Option<&'static str> {
+    AMBIENT_HERDING_JOB_ID
+        .get_or_init(read_initial_herding_job_id)
+        .as_deref()
+}
+
 /// The job this pane works for, or `None` when this is not a herded worker
 /// pane at all. BOTH halves are required: the marker says the pane is herded
 /// (herding/run.rs D2), the job id says which mailbox is its own. A marker
@@ -669,6 +703,12 @@ fn herded_job() -> Option<String> {
     }
     let job = std::env::var("BEE_HERDING_JOB_ID").ok()?;
     let job = job.trim().to_string();
+    #[cfg(test)]
+    if let Some(ambient) = ambient_herding_job_id() {
+        if job == ambient {
+            return None;
+        }
+    }
     // A job id addresses a directory, so the same shape check `well_formed_id`
     // makes for a session id: no separators, no `..`, never empty.
     well_formed_id(&job).then_some(job)
@@ -1928,6 +1968,18 @@ mod tests {
             assert!(!repo.root.join(".bee").join("mailbox").exists());
         }
     }
+
+    #[test]
+    fn inherited_herding_job_id_is_isolated_while_explicit_fire_herded_routes_to_mailbox() {
+        let repo = repo();
+        ok(fire(&repo, event("UserPromptSubmit", "s-isolated")));
+        assert_eq!(state_of(&repo, "s-isolated"), "working");
+
+        ok(fire_herded(&repo, Some("job-explicit-routes"), event("UserPromptSubmit", "s-explicit")));
+        let record = mailbox_record(&repo, "job-explicit-routes");
+        assert_eq!(record["state"].as_str().unwrap(), "working");
+    }
+
 
     // ── the work record: D1 open, D3 append, D4 no expiry of its own, D5 ────
 

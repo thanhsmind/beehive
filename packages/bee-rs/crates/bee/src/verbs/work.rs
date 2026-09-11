@@ -103,7 +103,7 @@ fn resolve_sink(root: &Path, explicit: Option<&str>) -> Result<Sink, String> {
             return Ok(Sink::Mailbox { file, job });
         }
     }
-    match env_id("CLAUDE_CODE_SESSION_ID") {
+    match crate::session_identity::env_session_id().filter(|id| well_formed_id(id)) {
         Some(id) => {
             let file = session_file(&ctrl, &id);
             Ok(Sink::Session { file, ctrl, id })

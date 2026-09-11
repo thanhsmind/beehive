@@ -396,10 +396,7 @@ pub(crate) fn resolve_session_id(flag: Option<&str>, root: &Path) -> Ex<Option<S
 
 /// resolveSessionId({root}) — env chain, then single-live-session adoption.
 pub(crate) fn resolve_session_id_no_flag(root: &Path) -> Ex<Option<String>> {
-    if let Some(v) = env_nonempty("BEE_SESSION_ID") {
-        return Ok(Some(v));
-    }
-    if let Some(v) = env_nonempty("CLAUDE_CODE_SESSION_ID") {
+    if let Some(v) = crate::session_identity::env_session_id() {
         return Ok(Some(v));
     }
     let now = now_ms();

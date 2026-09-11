@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)", "edd92ac9 (slp-followup-gaps D1/D2, 2026-08-29 — an unbound session's acting write record is resolved from its own live claim before the control-root default answers, and the intake refusal aimed at such a session names binding it as the remedy)"]
+  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)", "edd92ac9 (slp-followup-gaps D1/D2, 2026-08-29 — an unbound session's acting write record is resolved from its own live claim before the control-root default answers, and the intake refusal aimed at such a session names binding it as the remedy)", "pi-harness-workflow-parity D1/D2 (docs/history/pi-harness-workflow-parity/CONTEXT.md, 2026-09-11 — deny source writes from the main checkout across every active code phase before execution approval and outside the feature worktree)"]
   sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/archive/hook-teeth/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/archive/traceable-runs/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)", "slp-followup-gaps cell sfg-1 (commit 9809d34e, 2026-08-29 — write_guard/checks.rs claim-derived record plus the shared lane_record_from helper, store.rs session_claimed_features, paths.rs session_bind_remedy_line, write_guard/tests.rs)", "slp-followup-gaps cell sfg-3 (commit 113093a1, 2026-08-29 — write_guard/store.rs claim readers made infallible by signature, checks.rs claim_derived_lane_record, and the ownership guard's claim-derived phase pinned in both directions)", "slp-followup-gaps cell sfg-4 (commit b98f03ab, 2026-08-29 — store.rs heartbeat_stale and control_root_for_state made infallible, the product_root check deleted, checks.rs check_workspace_ownership)", "slp-followup-gaps cell sfg-5 (commit 77fbdfd5, 2026-08-29 — store.rs lease/hold expiry readers, hook_local.rs unreadable_session_refusal and the SharedNested answers, jspath.rs queue_guard_warning_once, the corrected docs/tiny gate comments)", "slp-followup-gaps cell sfg-6 (commits d502e845 and 85ead065, 2026-08-29 — hook_local.rs CompanionMount and unreadable_companion_marker_refusal, and mod.rs's header carrying the rule, the two answer shapes, and the completed delegate list)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
   applied_at: [skills/bee-hive/references/routing-and-contracts.md]
@@ -326,6 +326,20 @@ unreadable sessions directory, and a session file whose JSON does not parse,
 still contribute no record at all — they read as "no other live session" and
 both exemptions stand, exactly as before.
 
+**B40 — Pre-gate main-checkout source writes are denied across all active code
+phases (pi-harness-workflow-parity D2, cell pihp-5, 2026-09-11).** Trigger: any
+feature source write in the main checkout when the active feature holds no
+granted worktree. What changed: previously the no-grant refusal arm in
+`hook_local.rs` evaluated only when `phase == "swarming"`, allowing ungranted
+source writes on main during exploring and planning if the gate was approved or
+bypassed. The refusal now applies across every active code phase (`exploring`,
+`planning`, `swarming`, `reviewing`, `scribing`, `compounding`). Claude-shaped
+(`Edit`, `Write`) and Pi-shaped (`Write`, `MultiEdit`) hook inputs produce the
+identical refusal message directing work to `bee worktree new`. What remains
+preserved: named exemptions for solo `docs` lane, solo `tiny` lane, explicit
+`worktree_first: "off"` config, non-git directories, and corrupt grant
+registries continue to pass.
+
 ## Business Rules
 
 <!-- rule: hook-runtime-docs-lane-allowlist -->
@@ -460,6 +474,13 @@ both exemptions stand, exactly as before.
   sessions store still reads as "no other live session" and leaves both
   exemptions standing (cell sfg-5, 2026-08-29).
 
+- R40 — A code-touching feature holding no granted worktree cannot write source
+  in the main checkout during any active code phase (`exploring`, `planning`,
+  `swarming`, `reviewing`, `scribing`, `compounding`). Both Claude and Pi hook
+  inputs return the identical worktree-first denial. Named solo docs, solo tiny,
+  explicit-off, non-git, and corrupt-grant exemptions remain preserved
+  (pi-harness-workflow-parity D2, cell pihp-5, 2026-09-11).
+
 ## Pointers (implementation)
 
 - Always-writable set (B33/R33): `GATE_ALLOWED_PREFIXES_GATED` and
@@ -510,6 +531,16 @@ both exemptions stand, exactly as before.
   (`write_guard/jspath.rs`). Tests: the `sfg3_*`/`sfg4_*`/`sfg5_*`/`sfg6_*`
   cases in `write_guard/tests.rs`, every one of them red first on "expected a
   native verdict, got Delegate".
+
+- Pre-gate main source denial across active phases (B40/R40):
+  `check_worktree_first` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs` evaluates
+  every active code phase (`exploring`, `planning`, `swarming`, `reviewing`,
+  `scribing`, `compounding`) on the no-grant arm. Tests:
+  `pre_gate_main_write_denied_for_code_features_on_main_during_exploring_and_planning`
+  in `write_guard/tests.rs` and
+  `pre_gate_main_write_pi_extension_blocks_early_source_writes` in
+  `tests/pi_plugin_contracts.rs`.
 
 ## Open Gaps
 

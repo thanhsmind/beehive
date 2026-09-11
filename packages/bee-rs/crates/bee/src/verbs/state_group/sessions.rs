@@ -333,7 +333,7 @@ pub(crate) fn run_session_unbind(flags: Flags, use_json: bool, t0: Instant) -> O
 
 /// The plain flag→env resolver `state session release` targets its own
 /// session with: `--session-id` wins, then `BEE_SESSION_ID`, then
-/// `CLAUDE_CODE_SESSION_ID` — mirrors claims.rs's `resolve_session_flag_env`
+/// `CLAUDE_CODE_SESSION_ID`, then `PI_SESSION_ID` — mirrors claims.rs's `resolve_session_flag_env`
 /// exactly, deliberately WITHOUT `resolve_session_id`'s single-live-session
 /// adoption fallback: a release names its own session, never guesses one
 /// from the sessions directory.
@@ -343,7 +343,7 @@ fn resolve_release_session_id(flag: Option<&str>) -> Option<String> {
             return Some(js_trim(f).to_string());
         }
     }
-    env_nonempty("BEE_SESSION_ID").or_else(|| env_nonempty("CLAUDE_CODE_SESSION_ID"))
+    crate::session_identity::env_session_id()
 }
 
 /// `bee state session release` — marks an OPEN session `status: "closed"`,

@@ -150,6 +150,77 @@ fn release_of_a_missing_session_record_is_a_typed_noop_not_a_refusal() {
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["id"], "ghost");
-    assert_eq!(v["released"], false);
+    assert_eq!(v["reason"], "no_session_record");
     assert!(!repo.join(".bee/sessions/ghost.json").exists());
+}
+
+#[test]
+fn pi_session_identity_release_resolves_from_pi_session_id_env() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = scratch_repo(tmp.path(), "pi-env");
+    write_session(&repo, "sess-env-pi");
+
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["state", "session", "release", "--json"])
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env("PI_SESSION_ID", "sess-env-pi")
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "expected release to recognize PI_SESSION_ID");
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["id"], "sess-env-pi");
+    assert_eq!(v["released"], true);
+}
+
+#[test]
+fn pi_session_identity_release_precedence_claude_beats_pi() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = scratch_repo(tmp.path(), "claude-pi");
+    write_session(&repo, "sess-claude");
+    write_session(&repo, "sess-pi");
+
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["state", "session", "release", "--json"])
+        .env_remove("BEE_SESSION_ID")
+        .env("CLAUDE_CODE_SESSION_ID", "sess-claude")
+        .env("PI_SESSION_ID", "sess-pi")
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["id"], "sess-claude");
+    assert_eq!(v["released"], true);
+
+    let untouched = read_session(&repo, "sess-pi");
+    assert_eq!(untouched.get("status"), None);
+}
+
+#[test]
+fn pi_session_identity_release_precedence_bee_beats_pi() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = scratch_repo(tmp.path(), "bee-pi");
+    write_session(&repo, "sess-bee");
+    write_session(&repo, "sess-pi");
+
+    let out = Command::cargo_bin("bee")
+        .unwrap()
+        .args(["state", "session", "release", "--json"])
+        .env("BEE_SESSION_ID", "sess-bee")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env("PI_SESSION_ID", "sess-pi")
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["id"], "sess-bee");
+    assert_eq!(v["released"], true);
+
+    let untouched = read_session(&repo, "sess-pi");
+    assert_eq!(untouched.get("status"), None);
 }

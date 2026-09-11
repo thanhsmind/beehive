@@ -347,7 +347,10 @@ recovery.
   markers from shell tool results, deferring relocation until `agent_settled`, and
   executing session replacement via `SessionManager.forkFrom` and
   `ctx.switchSession` (contracts proven in
-  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`). Onboarding ships the
+  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`, including end-to-end
+  lifecycle parity test `pi_lifecycle_end_to_end_onboarded_repo_parity` covering session
+  identity, early write denial, gate packet preview, intent anchor and purpose retention,
+  replayable proof, and concurrent herding allocations). Onboarding ships the
   belt from this checkout's own tree via the `copy_pi_extension` step
   (`onboard/apply.rs`, `onboard/plan.rs`).
 <!-- /bee:not-a-deferral -->

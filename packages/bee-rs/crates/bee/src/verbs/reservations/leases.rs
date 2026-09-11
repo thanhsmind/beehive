@@ -625,10 +625,7 @@ pub(crate) fn resolve_session_id(flag: Option<&str>, control_root: &str) -> Ex<O
             return Ok(Some(js_trim(f).to_string()));
         }
     }
-    if let Some(v) = env_nonempty("BEE_SESSION_ID") {
-        return Ok(Some(v));
-    }
-    if let Some(v) = env_nonempty("CLAUDE_CODE_SESSION_ID") {
+    if let Some(v) = crate::session_identity::env_session_id() {
         return Ok(Some(v));
     }
     let records = list_session_records(control_root)?;

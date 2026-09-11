@@ -86,6 +86,7 @@ fn run(cwd: &Path, args: &[&str], env: Option<(&str, String)>) -> (i32, String) 
     cmd.env_remove("BEE_AGENT_NAME");
     cmd.env_remove("BEE_SESSION_ID");
     cmd.env_remove("CLAUDE_CODE_SESSION_ID");
+    cmd.env_remove("PI_SESSION_ID");
     if let Some((k, v)) = env {
         cmd.env(k, v);
     }

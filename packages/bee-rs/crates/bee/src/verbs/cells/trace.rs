@@ -37,6 +37,7 @@ pub(crate) fn default_trace() -> Map<String, Value> {
     m.insert("verify_output".into(), Value::Null);
     m.insert("verify_passed".into(), Value::Null);
     m.insert("claim_session".into(), Value::Null);
+    m.insert("verify_command".into(), Value::Null);
     m
 }
 
@@ -76,6 +77,7 @@ pub(crate) fn release_trace(mut trace: Map<String, Value>) -> Map<String, Value>
         "verify_command",
         "verify_output",
         "verify_passed",
+        "verification_evidence",
         "verified_at",
     ] {
         trace.insert(key.into(), Value::Null);

@@ -2955,6 +2955,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", DISPATCH_CLAIM_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3007,6 +3008,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_OWNED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3059,6 +3061,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_OTHER_OWNER_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3103,6 +3106,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_UNCLAIMED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -7711,6 +7715,7 @@ advance_on — falling to another model there hides the defect (D11)"
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", name, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -8224,8 +8229,8 @@ advance_on — falling to another model there hides the defect (D11)"
         );
     }
 
-    /// The cell's own feature is read first; the active feature is the second
-    /// candidate, not the first.
+    /// The cell's own feature is read first; under D5 explicit feature lookup
+    /// is exclusive, so a missing anchor does not fall through to the active feature.
     #[test]
     fn a_cell_dispatch_reads_its_own_features_anchor_before_the_active_one() {
         let tmp = tempfile::tempdir().unwrap();
@@ -8237,11 +8242,11 @@ advance_on — falling to another model there hides the defect (D11)"
         assert!(body.contains("the cell's own feature asked for this"), "{body}");
         assert!(!body.contains("a different feature asked for that"), "{body}");
 
-        // …and with no anchor under the cell's feature, the active feature is
-        // the documented second candidate.
+        // …and with no anchor under the cell's feature, explicit feature lookup is exclusive (D5)
+        // so it never falls through to the active feature.
         std::fs::remove_file(root.join(".bee").join("intent").join("f.json")).unwrap();
         let body = body_of_kind(&root, "claude", "cell");
-        assert!(body.contains("a different feature asked for that"), "{body}");
+        assert!(!body.contains("a different feature asked for that"), "{body}");
     }
 
     /// A request is DATA. It is substituted in pass 2, which walks the
@@ -8353,6 +8358,181 @@ advance_on — falling to another model there hides the defect (D11)"
             render("A\n{{#if original_request}}\nB\n{{/if}}\nC", &[]).unwrap(),
             "A\nC",
             "an absent var inside an if-block is dropped, not refused"
+        );
+    }
+
+    /// D5 / pihp-2: An explicit feature lookup never falls through to the active feature
+    /// when the requested feature has no anchor.
+    #[test]
+    fn pihp_dispatch_context_cross_feature_anchor_never_falls_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = anchor_host(&tmp);
+        active_feature_is(&root, "active-feature");
+        write_anchor(&root, "active-feature", "active feature request");
+        // No anchor for requested feature "f"
+        assert_eq!(
+            dispatch_original_request(&root, Some("f")),
+            None,
+            "missing requested-feature anchor must not fall through to active feature"
+        );
+        let body = body_of_kind(&root, "claude", "cell");
+        assert!(
+            !body.contains("active feature request"),
+            "cell with feature 'f' must not leak active-feature anchor: {body}"
+        );
+        assert!(
+            !body.contains(PRECOMPACT_HEADER),
+            "no anchor for cell's feature means no precompact block: {body}"
+        );
+    }
+
+    /// D5 / pihp-2: Non-empty purpose appears byte-for-byte in the worker prompt
+    /// for all non-cell dispatch kinds (gather, reviewer, advisor).
+    #[test]
+    fn pihp_dispatch_context_non_cell_purpose_rendered_byte_for_byte() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        const TEST_PURPOSE: &str = "Verify that order IDs match UUIDv4 format exactly — do not change schemas.";
+        for kind in ["gather", "reviewer", "advisor"] {
+            for runtime in DISPATCH_RUNTIMES {
+                let Prepared::Value(v) = prepare_dispatch(
+                    &root, runtime, kind, None, None, false, None, Some(TEST_PURPOSE), false, None,
+                )
+                .unwrap()
+                else {
+                    panic!("expected a {kind} envelope on {runtime}");
+                };
+                let body = dispatched_body(&v);
+                assert!(
+                    body.contains(TEST_PURPOSE),
+                    "{runtime}/{kind}: prompt must contain purpose byte-for-byte: {body}"
+                );
+                assert!(
+                    body.contains(&format!("Purpose:\n{TEST_PURPOSE}")),
+                    "{runtime}/{kind}: prompt must contain conditional purpose block: {body}"
+                );
+            }
+        }
+    }
+
+    /// D5 / pihp-2: An omitted purpose preserves the previous prompt bytes
+    /// and leaves zero residue bytes.
+    #[test]
+    fn pihp_dispatch_context_omitted_purpose_preserves_prompt_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        for kind in ["gather", "reviewer", "advisor"] {
+            for runtime in DISPATCH_RUNTIMES {
+                let Prepared::Value(v_omitted) = prepare_dispatch(
+                    &root, runtime, kind, None, None, false, None, None, false, None,
+                )
+                .unwrap()
+                else {
+                    panic!("expected a {kind} envelope on {runtime}");
+                };
+                let Prepared::Value(v_blank) = prepare_dispatch(
+                    &root, runtime, kind, None, None, false, None, Some(""), false, None,
+                )
+                .unwrap()
+                else {
+                    panic!("expected a {kind} envelope on {runtime}");
+                };
+                let body_omitted = dispatched_body(&v_omitted);
+                let body_blank = dispatched_body(&v_blank);
+                assert_eq!(
+                    body_omitted, body_blank,
+                    "{runtime}/{kind}: omitted and blank purpose must yield identical bytes"
+                );
+                assert!(
+                    !body_omitted.contains("Purpose:"),
+                    "{runtime}/{kind}: omitted purpose must leave no Purpose block"
+                );
+            }
+        }
+        let Prepared::Value(adv) = prepare_dispatch(
+            &root, "pi", "advisor", None, None, false, None, None, false, None,
+        )
+        .unwrap()
+        else {
+            panic!("expected advisor on pi");
+        };
+        let stdin = adv.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
+        assert_eq!(stdin, ADVISOR_BODY_WITHOUT_A_BRIEF);
+    }
+
+    /// D5 / pihp-2: Non-cell prompts resolve the bound lane feature
+    /// and use its intent anchor.
+    #[test]
+    fn pihp_dispatch_context_resolves_bound_lane_feature_for_non_cell_prompts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        let sid = "pihp-session-test";
+        w(
+            &root,
+            &format!(".bee/sessions/{sid}.json"),
+            r#"{"id":"pihp-session-test","lane":"lane-alpha","updated_at":2000000000000}"#,
+        );
+        write_anchor(&root, "lane-alpha", "intent for lane alpha");
+        active_feature_is(&root, "other-active");
+        write_anchor(&root, "other-active", "intent for other active");
+
+        unsafe { std::env::set_var("BEE_SESSION_ID", sid); }
+        for kind in ["gather", "reviewer", "advisor"] {
+            let Prepared::Value(v) = prepare_dispatch(
+                &root, "claude", kind, None, None, false, None, None, false, None,
+            )
+            .unwrap()
+            else {
+                panic!("expected {kind} on claude");
+            };
+            let body = dispatched_body(&v);
+            assert!(
+                body.contains("intent for lane alpha"),
+                "{kind}: prompt must resolve bound lane anchor: {body}"
+            );
+            assert!(
+                !body.contains("intent for other active"),
+                "{kind}: prompt must not fall through to other active feature: {body}"
+            );
+        }
+        unsafe { std::env::remove_var("BEE_SESSION_ID"); }
+    }
+
+    /// D5 / pihp-2: Advisor keeps brief-file content separate from purpose.
+    #[test]
+    fn pihp_dispatch_context_advisor_brief_file_content_kept_separate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, BRIEF_HOST);
+        const ADV_PURPOSE: &str = "Evaluate risk and safety factors";
+        const ADV_BRIEF: &str = "Should we deprecate the old session identity helper?";
+        let Prepared::Value(v) = crate::verbs::drivers::prepare::prepare_dispatch_with_brief(
+            &root,
+            "claude",
+            "advisor",
+            None,
+            None,
+            None,
+            false,
+            None,
+            Some(ADV_PURPOSE),
+            false,
+            None,
+            Some(ADV_BRIEF),
+        )
+        .unwrap()
+        else {
+            panic!("expected advisor on claude");
+        };
+        let body = dispatched_body(&v);
+        assert!(body.contains(ADV_PURPOSE), "purpose must be present: {body}");
+        assert!(body.contains(ADV_BRIEF), "brief must be present: {body}");
+        assert!(
+            body.contains(&format!("Purpose:\n{ADV_PURPOSE}")),
+            "purpose block format: {body}"
+        );
+        assert!(
+            body.contains(&format!("Brief (the question to answer, verbatim — answer this one, ask for nothing more):\n\n{ADV_BRIEF}")),
+            "brief block format: {body}"
         );
     }
 

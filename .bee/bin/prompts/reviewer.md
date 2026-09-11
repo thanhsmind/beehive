@@ -8,6 +8,11 @@ Review: check the given claim/diff against the repo. Read-only; may run read-onl
 Paths:
 {{paths}}
 {{/if}}
+{{#if purpose}}
+
+Purpose:
+{{purpose}}
+{{/if}}
 
 Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.
 {{#if expertise}}

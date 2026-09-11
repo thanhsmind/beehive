@@ -5519,6 +5519,666 @@ fn deferred_exit_ordering_settled_fork_switch_replacement_merge() {
     );
 }
 
+/// D2 / pihp-5: Pi extension enforces the write guard's worktree-first denial
+/// on main during exploring and planning for write and edit tool calls.
+#[cfg(unix)]
+#[test]
+fn pre_gate_main_write_pi_extension_blocks_early_source_writes() {
+    node_or_skip!("pre_gate_main_write_pi_extension_blocks_early_source_writes");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    let status = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(dir.path())
+        .status();
+    if !status.map(|s| s.success()).unwrap_or(false) {
+        return;
+    }
+
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "planning",
+            "mode": "standard",
+            "feature": "demo",
+            "route": { "class": "feature", "lane": "standard", "flags": [], "product_files": 2, "rationale": null },
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    const SESSION_ID: &str = "sess-pi-pregate";
+
+    // 1. Pi `write` tool call to a source file on main during planning is blocked
+    let write_call = tool_call(
+        dir.path(),
+        SESSION_ID,
+        "write",
+        &json!({"path": "src/app.js", "content": "console.log(1);"}),
+    );
+    let run = run_harness(&harness, vec![write_call]);
+    assert_eq!(run.results.len(), 1);
+    let r = &run.results[0];
+    assert!(r.blocked(), "Pi write to source file during planning must be blocked by write-guard: {r:?}");
+    let reason = r.block_reason().unwrap_or_default();
+    assert!(reason.contains("worktree-first"), "reason must be worktree-first denial, got: {reason}");
+    assert!(reason.contains("MAIN checkout"), "reason must cite MAIN checkout, got: {reason}");
+
+    // 2. Pi `edit` tool call to a source file on main during planning is also blocked
+    let edit_call = tool_call(
+        dir.path(),
+        SESSION_ID,
+        "edit",
+        &json!({
+            "path": "src/app.js",
+            "edits": [{"oldText": "a", "newText": "b"}]
+        }),
+    );
+    let run_edit = run_harness(&harness, vec![edit_call]);
+    assert_eq!(run_edit.results.len(), 1);
+    let r_edit = &run_edit.results[0];
+    assert!(r_edit.blocked(), "Pi edit to source file during planning must be blocked by write-guard: {r_edit:?}");
+    let edit_reason = r_edit.block_reason().unwrap_or_default();
+    assert!(edit_reason.contains("worktree-first"), "edit reason must be worktree-first denial, got: {edit_reason}");
+
+    // 3. Exploring phase is also blocked
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "exploring",
+            "mode": "standard",
+            "feature": "demo",
+            "route": { "class": "feature", "lane": "standard", "flags": [], "product_files": 2, "rationale": null },
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    let run_exploring = run_harness(&harness, vec![tool_call(
+        dir.path(),
+        SESSION_ID,
+        "write",
+        &json!({"path": "src/app.js", "content": "console.log(2);"}),
+    )]);
+    assert!(run_exploring.results[0].blocked(), "Pi write during exploring must be blocked");
+
+    // 4. Docs lane exemption still passes through Pi
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "planning",
+            "mode": "standard",
+            "feature": "demo",
+            "route": { "class": "feature", "lane": "docs", "flags": [], "product_files": 2, "rationale": null },
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    let run_docs = run_harness(&harness, vec![tool_call(
+        dir.path(),
+        SESSION_ID,
+        "write",
+        &json!({"path": "src/app.js", "content": "console.log(3);"}),
+    )]);
+    assert!(!run_docs.results[0].blocked(), "Pi write during docs lane must pass");
+}
+
+/// D1, D2, D3, D4, D5, D6, D8 / pihp-7: Drive the complete Pi lifecycle path against a throwaway onboarded repo:
+/// - session identity under PI_SESSION_ID
+/// - early write denial on main checkout during exploring/planning via Pi belt
+/// - gate packet preview parsed from plan.md and enforced on cells add
+/// - correct intent and purpose feature-scoped in dispatch prepare
+/// - replayable proof required at cap and stored in structured trace fields
+/// - collision-safe concurrent dispatch job id allocation
+#[cfg(unix)]
+#[test]
+fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
+    node_or_skip!("pi_lifecycle_end_to_end_onboarded_repo_parity");
+    if git_or_skip("pi_lifecycle_end_to_end_onboarded_repo_parity").is_none() {
+        return;
+    }
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for harness");
+    let harness = write_harness(harness_dir.path());
+
+    let repo_dir = tempfile::tempdir().expect("tempdir for repo");
+    let repo_path = repo_dir.path();
+
+    // 1. Initialize git repo and make an initial commit
+    let git_init = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(repo_path)
+        .status()
+        .expect("git init");
+    assert!(git_init.success(), "git init failed");
+
+    std::fs::write(repo_path.join("README.md"), "# Parity Test Repo\n").expect("write README.md");
+    let git_add = Command::new("git")
+        .args(["add", "README.md"])
+        .current_dir(repo_path)
+        .status()
+        .expect("git add");
+    assert!(git_add.success(), "git add failed");
+
+    let git_commit = Command::new("git")
+        .args(["-c", "user.name=Bee Tester", "-c", "user.email=tester@example.com", "commit", "-m", "initial commit", "-q"])
+        .current_dir(repo_path)
+        .status()
+        .expect("git commit");
+    assert!(git_commit.success(), "git commit failed");
+
+    let bee = bee_bin();
+
+    // Onboard repo with --apply
+    let onboard_out = Command::new(&bee)
+        .args(["onboard", "--repo-root", repo_path.to_str().unwrap(), "--apply", "--json"])
+        .output()
+        .expect("bee onboard --apply");
+    assert!(onboard_out.status.success(), "bee onboard failed: {}", String::from_utf8_lossy(&onboard_out.stderr));
+
+    // Ensure real bee binary is installed at .bee/bin/bee
+    let bin_dir = repo_path.join(".bee").join("bin");
+    std::fs::create_dir_all(&bin_dir).expect("create .bee/bin");
+    let bee_target = bin_dir.join("bee");
+    let _ = std::fs::copy(&bee, &bee_target);
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&bee_target, std::fs::Permissions::from_mode(0o755)).expect("chmod +x");
+
+    // Ensure .pi/extensions/bee-guard.ts is present
+    let pi_ext = repo_path.join(".pi").join("extensions").join("bee-guard.ts");
+    assert!(pi_ext.is_file(), "onboarding must install .pi/extensions/bee-guard.ts");
+
+    // Configure team.pi herding in .bee/config.json
+    let config_path = repo_path.join(".bee").join("config.json");
+    let mut config_val: Value = if config_path.is_file() {
+        serde_json::from_str(&std::fs::read_to_string(&config_path).expect("read config.json"))
+            .unwrap_or_else(|_| json!({}))
+    } else {
+        json!({})
+    };
+    config_val["team"] = json!({
+        "pi": {
+            "generation": {"kind": "herding", "agent": "pi-worker"},
+            "read": {"kind": "herding", "agent": "pi-worker"},
+            "code": {"kind": "herding", "agent": "pi-worker"},
+            "review": {"kind": "herding", "agent": "pi-worker"},
+            "advisor": {"kind": "herding", "agent": "pi-worker"}
+        }
+    });
+    std::fs::write(&config_path, serde_json::to_string_pretty(&config_val).unwrap()).expect("write config.json");
+
+    const PI_SESSION: &str = "sess-pi-parity-e2e";
+
+    // 2. Session identity: Pi extension drives before_agent_start and CLI resolves PI_SESSION_ID
+    let run_start = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "before_agent_start",
+                repo_path,
+                PI_SESSION,
+                json!({"prompt": "implement parity", "systemPrompt": "BASE"}),
+            ),
+        ],
+    );
+    assert!(!run_start.results[0].threw, "before_agent_start threw: {:?}", run_start.results[0].message);
+    let sess_file = repo_path.join(".bee").join("sessions").join(format!("{PI_SESSION}.json"));
+    assert!(sess_file.is_file(), "Pi extension before_agent_start must create session file at {}", sess_file.display());
+    let sess_raw = std::fs::read_to_string(&sess_file).unwrap();
+    let sess_val: Value = serde_json::from_str(&sess_raw).unwrap();
+    assert_eq!(sess_val["activity"]["state"], "working");
+    assert_eq!(sess_val["activity"]["event"], "UserPromptSubmit");
+    assert!(sess_val["work"]["text"].as_str().unwrap_or("").contains("implement parity"));
+
+    let release_out = Command::new(&bee_target)
+        .args(["state", "session", "release", "--json"])
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("session release");
+    assert!(release_out.status.success(), "session release failed");
+    let rel_val: Value = serde_json::from_slice(&release_out.stdout).expect("session release json");
+    assert_eq!(rel_val["id"], PI_SESSION);
+    assert_eq!(rel_val["released"], true);
+
+    // 3. Early write denial: start feature, set route, attempt write on main before gate approval
+    let start_out = Command::new(&bee_target)
+        .args(["state", "start-feature", "--feature", "feat-parity", "--mode", "standard", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("start-feature");
+    assert!(start_out.status.success(), "start-feature failed: {}", String::from_utf8_lossy(&start_out.stderr));
+
+    let route_out = Command::new(&bee_target)
+        .args(["route", "--set", "--class", "feature", "--lane", "standard", "--flags", "", "--files", "1", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("route set");
+    assert!(route_out.status.success(), "route set failed: {}", String::from_utf8_lossy(&route_out.stderr));
+
+    // Drive write through Pi extension: blocked fail-closed with worktree-first denial
+    let write_call = tool_call(
+        repo_path,
+        PI_SESSION,
+        "write",
+        &json!({"path": "src/parity.rs", "content": "pub fn parity() -> bool { true }\n"}),
+    );
+    let run_write = run_harness(&harness, vec![write_call]);
+    assert_eq!(run_write.results.len(), 1);
+    let write_res = &run_write.results[0];
+    assert!(write_res.blocked(), "Pi write during exploring/planning must be blocked: {write_res:?}");
+    let reason = write_res.block_reason().unwrap_or_default();
+    assert!(
+        reason.contains("gate \"execution\" is not approved") || reason.contains("worktree-first"),
+        "reason must cite early write denial, got: {reason}"
+    );
+
+    // 4. Gate packet preview:
+    let plan_dir = repo_path.join("docs").join("history").join("feat-parity");
+    std::fs::create_dir_all(&plan_dir).expect("create plan dir");
+    let plan_content = r#"# Plan: feat-parity
+
+## Summary
+Parity test plan.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|---|---|---|---|
+| 1 | Parity works | read | README.md:1 | # Parity Test Repo |
+
+## Cells, current slice preview
+
+```json
+[
+  {
+    "id": "feat-parity-1",
+    "feature": "feat-parity",
+    "title": "Core parity cell",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": [],
+    "files": ["src/parity.rs"],
+    "read_first": ["README.md"],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Implement core parity logic",
+    "verify": "test -f src/parity.rs",
+    "must_haves": {
+      "truths": ["parity logic holds"],
+      "artifacts": [{"path": "src/parity.rs", "substantive": "defines parity"}],
+      "key_links": [],
+      "prohibitions": []
+    },
+    "behavior_change": true
+  }
+]
+```
+"#;
+    std::fs::write(plan_dir.join("plan.md"), plan_content).expect("write plan.md");
+
+    // Shape/merged approval without preview is REFUSED
+    let unpreviewed_gate = Command::new(&bee_target)
+        .args(["gate", "--merge", "--approved", "true", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("gate merge unpreviewed");
+    assert!(!unpreviewed_gate.status.success(), "gate merge without preview must refuse");
+    let unpreviewed_err = String::from_utf8_lossy(&unpreviewed_gate.stdout);
+    assert!(unpreviewed_err.contains("cell packet preview") || unpreviewed_err.contains("preview"), "must cite missing preview: {unpreviewed_err}");
+
+    // Run preview
+    let preview_out = Command::new(&bee_target)
+        .args(["state", "gate", "preview", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("gate preview");
+    if !preview_out.status.success() || preview_out.stdout.is_empty() {
+        panic!(
+            "gate preview failed: status={:?}, stdout={}, stderr={}",
+            preview_out.status,
+            String::from_utf8_lossy(&preview_out.stdout),
+            String::from_utf8_lossy(&preview_out.stderr)
+        );
+    }
+    let preview_val: Value = serde_json::from_slice(&preview_out.stdout).expect("parse preview JSON");
+    assert_eq!(preview_val["feature"], "feat-parity");
+    assert!(preview_val["plan_sha256"].is_string());
+    assert_eq!(preview_val["cells"].as_array().unwrap().len(), 1);
+
+    // Now merged gate approval succeeds
+    let approved_gate = Command::new(&bee_target)
+        .args(["gate", "--merge", "--approved", "true", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("gate merge approved");
+    assert!(approved_gate.status.success(), "gate merge failed: {}", String::from_utf8_lossy(&approved_gate.stderr));
+
+    // Cells add with differing packet is REFUSED
+    let differing_cell = json!([{
+        "id": "feat-parity-1",
+        "feature": "feat-parity",
+        "title": "Core parity cell",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [],
+        "files": ["src/parity.rs"],
+        "read_first": ["README.md"],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "DIFFERENT ACTION THAT FAILS HASH CHECK",
+        "verify": "test -f src/parity.rs",
+        "must_haves": {
+            "truths": ["parity logic holds"],
+            "artifacts": [{"path": "src/parity.rs", "substantive": "defines parity"}],
+            "key_links": [],
+            "prohibitions": []
+        },
+        "behavior_change": true
+    }]);
+    let mut add_differing = Command::new(&bee_target)
+        .args(["cells", "add", "--stdin", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn cells add");
+    add_differing.stdin.as_mut().unwrap().write_all(differing_cell.to_string().as_bytes()).unwrap();
+    let add_diff_out = add_differing.wait_with_output().unwrap();
+    assert!(!add_diff_out.status.success(), "cells add with modified packet must refuse");
+
+    // Cells add with matching packet succeeds
+    let matching_cell = json!([{
+        "id": "feat-parity-1",
+        "feature": "feat-parity",
+        "title": "Core parity cell",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [],
+        "files": ["src/parity.rs"],
+        "read_first": ["README.md"],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Implement core parity logic",
+        "verify": "test -f src/parity.rs",
+        "must_haves": {
+            "truths": ["parity logic holds"],
+            "artifacts": [{"path": "src/parity.rs", "substantive": "defines parity"}],
+            "key_links": [],
+            "prohibitions": []
+        },
+        "behavior_change": true
+    }]);
+    let mut add_matching = Command::new(&bee_target)
+        .args(["cells", "add", "--stdin", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn cells add");
+    add_matching.stdin.as_mut().unwrap().write_all(matching_cell.to_string().as_bytes()).unwrap();
+    let add_match_out = add_matching.wait_with_output().unwrap();
+    assert!(add_match_out.status.success(), "cells add with matching packet failed: {}", String::from_utf8_lossy(&add_match_out.stderr));
+
+    // 5. Intent and Purpose:
+    let intent_set = Command::new(&bee_target)
+        .args([
+            "intent", "set",
+            "--feature", "feat-parity",
+            "--request", "Drive complete Pi workflow parity",
+            "--acceptance", "All parity tests pass",
+            "--json"
+        ])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("intent set");
+    assert!(intent_set.status.success(), "intent set failed: {}", String::from_utf8_lossy(&intent_set.stderr));
+
+    let intent_absent = Command::new(&bee_target)
+        .args(["intent", "show", "--feature", "other-feature-without-anchor", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("intent show absent");
+    let absent_val: Value = serde_json::from_slice(&intent_absent.stdout).unwrap_or(Value::Null);
+    assert!(absent_val.is_null() || absent_val.get("error").is_some() || absent_val.get("request").is_none(),
+        "unrelated feature intent must not resolve to active feature anchor: {absent_val:?}");
+
+    let prep_out = Command::new(&bee_target)
+        .args(["dispatch", "prepare", "--runtime", "pi", "--kind", "gather", "--purpose", "Inspect Pi plugin execution contract", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("dispatch prepare");
+    assert!(prep_out.status.success(), "dispatch prepare failed: {}", String::from_utf8_lossy(&prep_out.stderr));
+    let prep_val: Value = serde_json::from_slice(&prep_out.stdout).expect("parse dispatch prepare JSON");
+    let payload = prep_val.get("payload").unwrap_or(&prep_val);
+    let prompt_text = ["prompt", "message", "stdin", "task"]
+        .iter()
+        .find_map(|k| payload.get(*k).and_then(Value::as_str))
+        .unwrap_or_default();
+    if prompt_text.is_empty() {
+        panic!("prep_val was: {}", serde_json::to_string_pretty(&prep_val).unwrap());
+    }
+    assert!(prompt_text.contains("Drive complete Pi workflow parity"), "prompt must include intent anchor verbatim: {prompt_text}");
+    assert!(prompt_text.contains("Inspect Pi plugin execution contract"), "prompt must include purpose verbatim: {prompt_text}");
+
+    // 6. Replayable proof:
+    let worker_add = Command::new(&bee_target)
+        .args(["state", "worker", "add", "--nickname", "pi-worker-1", "--cell", "feat-parity-1", "--tier", "generation", "--status", "working", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("worker add");
+    assert!(worker_add.status.success(), "worker add failed");
+
+    let claim_out = Command::new(&bee_target)
+        .args(["cells", "claim", "--id", "feat-parity-1", "--worker", "pi-worker-1", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("cells claim");
+    assert!(claim_out.status.success(), "cells claim failed: {}", String::from_utf8_lossy(&claim_out.stderr));
+
+    // Create substantive artifact on disk
+    let src_dir = repo_path.join("src");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::write(src_dir.join("parity.rs"), "// parity implementation\npub fn parity() -> bool { true }\n").expect("write parity.rs");
+
+    // Commit artifact and retrieve commit sha
+    let git_add_out = Command::new("git")
+        .args(["add", "src/parity.rs"])
+        .current_dir(repo_path)
+        .output()
+        .expect("git add src/parity.rs");
+    assert!(git_add_out.status.success(), "git add src/parity.rs failed");
+
+    let git_commit_out = Command::new("git")
+        .args([
+            "-c", "user.name=Bee Tester",
+            "-c", "user.email=tester@example.com",
+            "commit",
+            "-m", "Implement parity logic\n\ncell: feat-parity-1",
+            "-q",
+        ])
+        .current_dir(repo_path)
+        .output()
+        .expect("git commit");
+    assert!(git_commit_out.status.success(), "git commit parity failed: {}", String::from_utf8_lossy(&git_commit_out.stderr));
+
+    let rev_out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .expect("git rev-parse HEAD");
+    assert!(rev_out.status.success(), "git rev-parse HEAD failed");
+    let commit_sha = String::from_utf8(rev_out.stdout).expect("valid utf8 sha").trim().to_string();
+
+    let mismatched_cap_report = json!({
+        "outcome": "parity verified",
+        "commit": &commit_sha,
+        "files": ["src/parity.rs"],
+        "tests": "manual inspection — green:live — checked",
+        "deviations": []
+    });
+    let mismatched_cap = Command::new(&bee_target)
+        .args([
+            "cells", "cap", "--id", "feat-parity-1", "--files", "src/parity.rs",
+            "--report", &mismatched_cap_report.to_string(),
+            "--json"
+        ])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("mismatched cap");
+    assert!(!mismatched_cap.status.success(), "mismatched proof command must refuse");
+    let cap_err = String::from_utf8_lossy(&mismatched_cap.stdout);
+    assert!(cap_err.contains("does not match approved cell verify command") || cap_err.contains("refused"),
+        "error must cite command mismatch: {cap_err}");
+
+    let matching_cap_report = json!({
+        "outcome": "parity verified",
+        "commit": &commit_sha,
+        "files": ["src/parity.rs"],
+        "tests": "test -f src/parity.rs — green:live — parity file verified on disk",
+        "deviations": []
+    });
+    let matching_cap = Command::new(&bee_target)
+        .args([
+            "cells", "cap", "--id", "feat-parity-1", "--files", "src/parity.rs",
+            "--report", &matching_cap_report.to_string(),
+            "--json"
+        ])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("matching cap");
+    assert!(
+        matching_cap.status.success(),
+        "matching cap failed: status={:?}, stdout={}, stderr={}",
+        matching_cap.status,
+        String::from_utf8_lossy(&matching_cap.stdout),
+        String::from_utf8_lossy(&matching_cap.stderr)
+    );
+
+    let show_out = Command::new(&bee_target)
+        .args(["cells", "show", "--id", "feat-parity-1", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("cells show");
+    assert!(show_out.status.success(), "cells show failed");
+    let show_val: Value = serde_json::from_slice(&show_out.stdout).expect("parse cell JSON");
+    let trace = &show_val["trace"];
+    assert_eq!(trace["verify_command"], "test -f src/parity.rs");
+    assert_eq!(trace["verify_output"], "green:live");
+    assert_eq!(trace["verify_passed"], true);
+    assert_eq!(trace["verification_evidence"], "parity file verified on disk");
+
+    let verify_cmd = trace["verify_command"].as_str().expect("verify_command must be a string");
+    let replay_out = Command::new("sh")
+        .args(["-c", verify_cmd])
+        .current_dir(repo_path)
+        .output()
+        .expect("replay verify command");
+    assert!(replay_out.status.success(), "replayed verify command failed: {}", String::from_utf8_lossy(&replay_out.stderr));
+
+    let cat_file = Command::new("git")
+        .args(["cat-file", "-e", &format!("{commit_sha}^{{commit}}")])
+        .current_dir(repo_path)
+        .output()
+        .expect("git cat-file");
+    assert!(cat_file.status.success(), "commit sha must exist in git history");
+
+    // 7. Concurrent dispatch: collision-safe job id allocations
+    let job_ids = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+
+    // 7a. Multithreaded concurrent runs
+    let thread_count = 3;
+    let mut thread_handles = Vec::new();
+
+    for i in 0..thread_count {
+        let bee_clone = bee_target.clone();
+        let repo_clone = repo_path.to_path_buf();
+        let set = std::sync::Arc::clone(&job_ids);
+        thread_handles.push(std::thread::spawn(move || {
+            let out = Command::new(&bee_clone)
+                .args(["herding", "run", "--task", &format!("concurrent test task thread {i}"), "--json", "--dry-run", "--ceiling", "60"])
+                .current_dir(&repo_clone)
+                .output()
+                .expect("spawn concurrent thread herding run");
+            assert!(out.status.success(), "thread herding run failed: status={:?}, stderr={}", out.status, String::from_utf8_lossy(&out.stderr));
+            let stdout_str = String::from_utf8_lossy(&out.stdout);
+            let stderr_str = String::from_utf8_lossy(&out.stderr);
+            assert!(!stdout_str.contains("agent_name_taken") && !stderr_str.contains("agent_name_taken"), "must not encounter agent_name_taken");
+            let val: Value = serde_json::from_slice(&out.stdout).expect("parse thread herding run JSON");
+            assert_eq!(val["outcome"], "dry_run", "outcome must be dry_run");
+            let id = val["job_id"].as_str().expect("job_id must be present").to_string();
+            let job_file = repo_clone.join(".bee").join("mailbox").join(&id).join("job.json");
+            assert!(job_file.is_file(), "mailbox job file must exist at {}", job_file.display());
+            set.lock().unwrap().insert(id);
+        }));
+    }
+    for h in thread_handles {
+        h.join().unwrap();
+    }
+    assert_eq!(job_ids.lock().unwrap().len(), thread_count, "all concurrent thread job id allocations must be unique");
+
+    // 7b. Concurrent OS child processes
+    let process_count = 3;
+    let mut child_processes = Vec::new();
+    for i in 0..process_count {
+        let child = Command::new(&bee_target)
+            .args(["herding", "run", "--task", &format!("concurrent test task process {i}"), "--json", "--dry-run", "--ceiling", "60"])
+            .current_dir(repo_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn concurrent child herding run");
+        child_processes.push(child);
+    }
+    for child in child_processes {
+        let out = child.wait_with_output().expect("wait for child process");
+        assert!(out.status.success(), "child herding run failed: status={:?}, stderr={}", out.status, String::from_utf8_lossy(&out.stderr));
+        let stdout_str = String::from_utf8_lossy(&out.stdout);
+        let stderr_str = String::from_utf8_lossy(&out.stderr);
+        assert!(!stdout_str.contains("agent_name_taken") && !stderr_str.contains("agent_name_taken"), "must not encounter agent_name_taken");
+        let val: Value = serde_json::from_slice(&out.stdout).expect("parse child herding run JSON");
+        assert_eq!(val["outcome"], "dry_run", "outcome must be dry_run");
+        let id = val["job_id"].as_str().expect("job_id must be present").to_string();
+        let job_file = repo_path.join(".bee").join("mailbox").join(&id).join("job.json");
+        assert!(job_file.is_file(), "mailbox job file must exist at {}", job_file.display());
+        job_ids.lock().unwrap().insert(id);
+    }
+    assert_eq!(job_ids.lock().unwrap().len(), thread_count + process_count, "all concurrent thread and process job id allocations must be unique");
+}
+
 #[cfg(not(unix))]
 #[test]
 fn pi_plugin_fixtures_skip_on_non_unix() {

@@ -73,7 +73,7 @@ use std::time::Instant;
     /// required on every cap path, these fixtures need SOME valid report
     /// even though they are not testing its shape.
     fn default_test_report_json() -> String {
-        r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — fixture","deviations":[]}"#
+        r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":[]}"#
             .to_string()
     }
 
@@ -771,7 +771,8 @@ use std::time::Instant;
                 "verification_evidence",
                 "verify_output",
                 "verify_passed",
-                "claim_session"
+                "claim_session",
+                "verify_command"
             ]
         );
     }
@@ -3404,7 +3405,7 @@ use std::time::Instant;
             "an-x",
             &json!({
                 "id": "an-x", "feature": "demo", "title": "t", "action": "a",
-                "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+                "verify": "echo ok", "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
             }),
         );
         write_advisor_nudge_row(root, "nud-1", Some("demo"));
@@ -3439,7 +3440,7 @@ use std::time::Instant;
             "an-y",
             &json!({
                 "id": "an-y", "feature": "demo", "title": "t", "action": "a",
-                "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+                "verify": "echo ok", "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
             }),
         );
         write_advisor_nudge_row(root2, "nud-9", Some("elsewhere"));
@@ -3539,7 +3540,7 @@ use std::time::Instant;
     fn wf_boundary_cell_body(id: &str) -> Value {
         json!({
             "id": id, "feature": "f", "title": "t", "action": "a",
-            "verify": "npm test", "lane": "tiny", "status": "claimed",
+            "verify": "echo ok", "lane": "tiny", "status": "claimed",
             "deps": [], "files": [], "trace": {},
         })
     }
@@ -4393,6 +4394,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_REOPEN_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         cmd.output().expect("spawn the test binary")
     }
@@ -4880,7 +4882,9 @@ use std::time::Instant;
         for (bee, legacy, want) in cases {
             let mut cmd = std::process::Command::new(&exe);
             cmd.args(["--exact", SESSION_CHAIN_CHILD, "--ignored", "--test-threads", "1"]);
-            cmd.env_remove("BEE_SESSION_ID").env_remove("CLAUDE_CODE_SESSION_ID");
+            cmd.env_remove("BEE_SESSION_ID")
+                .env_remove("CLAUDE_CODE_SESSION_ID")
+                .env_remove("PI_SESSION_ID");
             if let Some(v) = bee {
                 cmd.env("BEE_SESSION_ID", v);
             }
@@ -5407,7 +5411,10 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
-            report: Some(default_test_report_json()),
+            report: Some(
+                r#"{"outcome":"o","commit":"c","files":[],"tests":"none — green:static — fixture","deviations":[]}"#
+                    .to_string(),
+            ),
             sync_ack: None,
         };
         let cell_body = |id: &str| {
@@ -5584,7 +5591,7 @@ use std::time::Instant;
     /// for the JSON array literal under test.
     fn dol_report(deviations: &str) -> String {
         format!(
-            r#"{{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — fixture","deviations":{deviations}}}"#
+            r#"{{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":{deviations}}}"#
         )
     }
 
@@ -5834,7 +5841,7 @@ use std::time::Instant;
     // `<command> — <result> — <scope reason>`, written by the agent that
     // ran it — never the retired `boundary`/`undeclared` enum (decision
     // 13ce1858, test-cadence-boundary D1a).
-    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"cargo test -p bee — green:unit — touched close.rs","deviations":[]}"#;
+    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"echo ok — green:unit — touched close.rs","deviations":[]}"#;
 
     #[test]
     fn valid_report_is_validated_and_stored_on_trace() {
@@ -5851,7 +5858,7 @@ use std::time::Instant;
                 "outcome": "did the thing",
                 "commit": "abc123",
                 "files": ["a.rs"],
-                "tests": "cargo test -p bee — green:unit — touched close.rs",
+                "tests": "echo ok — green:unit — touched close.rs",
                 "deviations": [],
             })
         );
@@ -5866,7 +5873,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
-        write_cell_fixture(root, "wfl-r1u", &cell("wfl-r1u", "claimed", "f", json!([])));
+        let mut c = cell("wfl-r1u", "claimed", "f", json!([]));
+        c["verify"] = json!("none");
+        write_cell_fixture(root, "wfl-r1u", &c);
 
         let report =
             r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"none — green:static — regen parity check only","deviations":[]}"#;
@@ -5886,7 +5895,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
-        write_cell_fixture(root, "wfl-r1s", &cell("wfl-r1s", "claimed", "f", json!([])));
+        let mut c = cell("wfl-r1s", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee");
+        write_cell_fixture(root, "wfl-r1s", &c);
 
         let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — touched close.rs — and finish_support.rs","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r1s", Some(report));
@@ -6051,7 +6062,7 @@ use std::time::Instant;
             let id = format!("pse-v2{n}");
             write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
 
-            let proof = format!("cargo test -p bee — {strength} — touched close.rs");
+            let proof = format!("echo ok — {strength} — touched close.rs");
             let report = json!({
                 "outcome": "o", "commit": "c", "files": [],
                 "tests": proof, "deviations": [],
@@ -7743,6 +7754,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_UPDATE_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         cmd.output().expect("spawn the test binary")
     }
@@ -7872,6 +7884,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", child, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         assert!(
@@ -8019,6 +8032,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", DISPATCH_WAVE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         if !extra.is_empty() {
             cmd.env("WFL4_WAVE_ARGS", extra.join(" "));
@@ -8376,6 +8390,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_ADD_JUDGE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         assert!(
@@ -8820,6 +8835,7 @@ use std::time::Instant;
             "1",
             "--nocapture",
         ]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         let text = format!(
@@ -9122,6 +9138,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let out = std::process::Command::new(&exe)
             .args(["--exact", MERGE_READY_JUDGE_CHILD, "--ignored", "--test-threads", "1"])
+            .env_remove("PI_SESSION_ID")
             .current_dir(&root)
             .output()
             .expect("spawn the test binary");
@@ -9818,3 +9835,279 @@ use std::time::Instant;
             assert!(schema.get("enum").is_none(), "--{flag} must carry no enum: {schema}");
         }
     }
+
+    // ══ pihp-3 — Decision D4: replayable proof at cap ══════════════════════
+    //
+    // A cap's proof command must match the approved cell verification command
+    // (exact trimmed bytes comparison). Descriptive proof text or mismatched
+    // commands are refused before acquiring locks or writing to disk. On
+    // successful cap, trace records four structured fields: verify_command,
+    // verify_output, verify_passed (true), and verification_evidence.
+    // Cap does not spawn test processes, and historical caps remain readable.
+
+    #[test]
+    fn pihp_replayable_proof_descriptive_text_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-desc", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee");
+        write_cell_fixture(root, "pihp-desc", &c);
+        let before = std::fs::read_to_string(cell_file(root, "pihp-desc")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"ran tests manually and all passed — green:unit — manual verification","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-desc", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("capCell: cell \"pihp-desc\" refused — proof command \"ran tests manually and all passed\" does not match approved cell verify command \"cargo test -p bee\"."),
+            "refusal must name the mismatch: {refusal}"
+        );
+        let after = std::fs::read_to_string(cell_file(root, "pihp-desc")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+        let after_norm = read_cell_norm(root, "pihp-desc").ok().unwrap().unwrap();
+        assert_eq!(after_norm["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_mismatched_command_rejected_before_writes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-mismatch", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee pihp_replayable_proof");
+        write_cell_fixture(root, "pihp-mismatch", &c);
+        let before = std::fs::read_to_string(cell_file(root, "pihp-mismatch")).unwrap();
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p other — green:unit — touched other.rs","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-mismatch", Some(report));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("capCell: cell \"pihp-mismatch\" refused — proof command \"cargo test -p other\" does not match approved cell verify command \"cargo test -p bee pihp_replayable_proof\"."),
+            "refusal must name the mismatch: {refusal}"
+        );
+        let after = std::fs::read_to_string(cell_file(root, "pihp-mismatch")).unwrap();
+        assert_eq!(before, after, "a refused cap must write nothing to disk");
+        let after_norm = read_cell_norm(root, "pihp-mismatch").ok().unwrap().unwrap();
+        assert_eq!(after_norm["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_exact_trimmed_bytes_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-trim", "claimed", "f", json!([]));
+        c["verify"] = json!("   cargo test -p bee pihp_replayable_proof   ");
+        write_cell_fixture(root, "pihp-trim", &c);
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee pihp_replayable_proof — green:unit — touched tests.rs","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-trim", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
+        assert_eq!(capped["trace"]["verify_output"], json!("green:unit"));
+        assert_eq!(capped["trace"]["verify_passed"], json!(true));
+        assert_eq!(capped["trace"]["verification_evidence"], json!("touched tests.rs"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_stores_four_structured_proof_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-fields", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee pihp_replayable_proof");
+        write_cell_fixture(root, "pihp-fields", &c);
+
+        let report = r#"{"outcome":"passed tests","commit":"abc1234","files":[],"tests":"cargo test -p bee pihp_replayable_proof — green:live — live verification in sandbox","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-fields", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+
+        assert_eq!(capped["status"], json!("capped"));
+        let trace = &capped["trace"];
+        assert_eq!(trace["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
+        assert_eq!(trace["verify_output"], json!("green:live"));
+        assert_eq!(trace["verify_passed"], json!(true));
+        assert_eq!(trace["verification_evidence"], json!("live verification in sandbox"));
+
+        // Persisted cell on disk must also have all 4 fields non-null
+        let on_disk = read_cell_norm(root, "pihp-fields").ok().unwrap().unwrap();
+        let disk_trace = &on_disk["trace"];
+        assert_eq!(disk_trace["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
+        assert_eq!(disk_trace["verify_output"], json!("green:live"));
+        assert_eq!(disk_trace["verify_passed"], json!(true));
+        assert_eq!(disk_trace["verification_evidence"], json!("live verification in sandbox"));
+    }
+
+    #[test]
+    fn pihp_replayable_proof_historical_caps_remain_readable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // A historical cell with bare green and no structured trace fields
+        let hist_cell = json!({
+            "id": "hist-1",
+            "title": "historical cell",
+            "status": "capped",
+            "lane": "tiny",
+            "feature": "legacy-feat",
+            "deps": [],
+            "verify": "cargo test -p bee",
+            "trace": {
+                "claimed_at": "2026-01-01T00:00:00Z",
+                "capped_at": "2026-01-01T01:00:00Z",
+                "report": {
+                    "outcome": "old outcome",
+                    "commit": "oldcommit",
+                    "files": [],
+                    "tests": "cargo test -p bee — green — historical proof",
+                    "deviations": []
+                }
+            }
+        });
+        write_cell_fixture(root, "hist-1", &hist_cell);
+
+        let check = feature_proof_check(root, "legacy-feat").unwrap();
+        assert!(!check.blocking, "historical bare-green cap must not block");
+        assert_eq!(check.proven_count, 1);
+        assert_eq!(check.bad_ids, Vec::<String>::new());
+    }
+
+    #[test]
+    fn pihp_replayable_proof_cap_does_not_spawn_test_process() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        let mut c = cell("pihp-nospawn", "claimed", "f", json!([]));
+        c["verify"] = json!("exit 99");
+        write_cell_fixture(root, "pihp-nospawn", &c);
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"exit 99 — green:unit — test execution proof","deviations":[]}"#;
+        let flags = cap_flags_report("pihp-nospawn", Some(report));
+        // If cap spawned the verify command, exit 99 would fail. Cap does not spawn tests.
+        let capped = cap_cell_from_flags(root, &flags, false).expect("cap must succeed without executing verify command");
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["verify_command"], json!("exit 99"));
+    }
+
+    #[test]
+    fn pihp_gate_packet_cells_add_refuses_packet_differing_from_approved_preview() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "cargo test"}}));
+
+        // Setup lane with approved preview
+        let preview_cells = vec![json!({
+            "id": "c1",
+            "feature": "feat-gated",
+            "title": "Core Parser",
+            "lane": "standard",
+            "role": "code",
+            "action": "Implement parser",
+            "files": ["src/parser.rs"],
+            "read_first": ["docs/parser.md"],
+            "must_haves": { "truths": ["parses tokens"] },
+            "verify": "cargo test -p bee parse_test",
+            "affects_skills": [],
+            "affects_specs": []
+        })];
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        let lane_content = json!({
+            "feature": "feat-gated",
+            "phase": "swarming",
+            "mode": "standard",
+            "approved_gates": { "shape": true, "execution": true },
+            "gate_preview": {
+                "feature": "feat-gated",
+                "plan_sha256": "abc123",
+                "cells": preview_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-gated.json"), lane_content.to_string()).unwrap();
+
+        // 1. cells add with differing verify command
+        let mut diff_verify = preview_cells[0].clone();
+        diff_verify["verify"] = json!("cargo test -p bee different_test");
+        let err = build_add_cells_report(root, &[diff_verify]).unwrap();
+        assert!(!err.0, "differing verify must fail validation");
+        assert!(err.1[0].problems[0].contains("verify mismatch"), "{:?}", err.1[0].problems);
+
+        // 2. cells add with differing action
+        let mut diff_action = preview_cells[0].clone();
+        diff_action["action"] = json!("Different action entirely");
+        let err = build_add_cells_report(root, &[diff_action]).unwrap();
+        assert!(!err.0, "differing action must fail validation");
+        assert!(err.1[0].problems[0].contains("action mismatch"), "{:?}", err.1[0].problems);
+
+        // 3. cells add with undeclared cell
+        let mut unapproved = preview_cells[0].clone();
+        unapproved["id"] = json!("c2-unapproved");
+        let err = build_add_cells_report(root, &[unapproved]).unwrap();
+        assert!(!err.0, "undeclared cell must fail validation");
+        assert!(err.1[0].problems[0].contains("was not declared in the approved gate preview packet"), "{:?}", err.1[0].problems);
+
+        // 4. Exact matching packet succeeds
+        let ok = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(ok.0, "exact matching packet must pass validation: {:?}", ok.1[0].problems);
+    }
+
+    #[test]
+    fn pihp_gate_packet_cells_add_refuses_stale_packet_after_plan_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "cargo test"}}));
+
+        let preview_cells = vec![json!({
+            "id": "c1",
+            "feature": "feat-gated",
+            "title": "Core Parser",
+            "lane": "standard",
+            "role": "code",
+            "action": "Implement parser",
+            "files": ["src/parser.rs"],
+            "read_first": ["docs/parser.md"],
+            "must_haves": { "truths": ["parses tokens"] },
+            "verify": "cargo test -p bee parse_test",
+            "affects_skills": [],
+            "affects_specs": []
+        })];
+
+        let plan_dir = root.join("docs").join("history").join("feat-gated");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_content = "# Plan: feat-gated\n\nInitial plan content\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_content).unwrap();
+
+        let initial_sha = {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(plan_content.as_bytes());
+            format!("{:x}", hasher.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        let lane_content = json!({
+            "feature": "feat-gated",
+            "phase": "swarming",
+            "mode": "standard",
+            "approved_gates": { "shape": true, "execution": true },
+            "gate_preview": {
+                "feature": "feat-gated",
+                "plan_sha256": initial_sha,
+                "cells": preview_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-gated.json"), lane_content.to_string()).unwrap();
+
+        // 1. Adding matching cell before plan change succeeds
+        let ok = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(ok.0, "matching cell before plan change must succeed: {:?}", ok.1[0].problems);
+
+        // 2. Modify plan.md
+        std::fs::write(plan_dir.join("plan.md"), "# Plan: feat-gated\n\nModified plan content\n").unwrap();
+
+        // 3. Adding cell after plan change refuses because preview is stale
+        let err = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(!err.0, "cells add after plan change must fail validation");
+        assert!(err.1[0].problems[0].contains("approved gate preview is stale"), "{:?}", err.1[0].problems);
+        assert!(err.1[0].problems[0].contains("plan.md changed since preview was approved"), "{:?}", err.1[0].problems);
+    }
+

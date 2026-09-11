@@ -279,8 +279,7 @@ pub(crate) fn dispatch_original_request(root: &Path, feature: Option<&str>) -> O
     };
     if let Some(f) = feature.map(js_trim).filter(|f| !f.is_empty()) {
         push(f);
-    }
-    if let Ok(Some(active)) = active_feature(root) {
+    } else if let Ok(Some(active)) = active_feature(root) {
         push(&active);
     }
     for key in keys {

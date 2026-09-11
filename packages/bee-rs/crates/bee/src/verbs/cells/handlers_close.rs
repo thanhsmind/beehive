@@ -233,6 +233,32 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
     };
 
+    // D4 (docs/history/pi-harness-workflow-parity/CONTEXT.md): compare the
+    // parsed proof command with the approved cell verify command using exact
+    // trimmed bytes. Descriptive proof text cannot replace the approved
+    // verify command. Reject mismatches before any writes.
+    let (proof_command, proof_result, proof_reason) = match report_value
+        .get("tests")
+        .and_then(|v| v.as_str())
+        .and_then(parse_tests_proof)
+    {
+        Some(tuple) => tuple,
+        None => {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\"."
+            )));
+        }
+    };
+    let cell_verify = match existing_map.get("verify") {
+        Some(Value::String(s)) => js_trim(s),
+        _ => "",
+    };
+    if js_trim(&proof_command) != cell_verify {
+        return Err(Fail::Thrown(format!(
+            "capCell: cell \"{id}\" refused — proof command \"{proof_command}\" does not match approved cell verify command \"{cell_verify}\"."
+        )));
+    }
+
     // slp-advisor-nudge an-3 (9e5eda5b): the advisor-nudge response debt, at
     // the CAP. `bee close` and `bee worktree merge` carry the same arm, but
     // this one is the cell-level tooth — the obligation bites when the work
@@ -580,6 +606,13 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         };
         trace.insert("outcome".into(), outcome_value);
         trace.insert("capped_at".into(), Value::String(utc_now()));
+        // D4 (docs/history/pi-harness-workflow-parity/CONTEXT.md): store
+        // replayable proof in four non-null structured trace fields so another
+        // session can re-run the exact verify command.
+        trace.insert("verify_command".into(), Value::String(proof_command.clone()));
+        trace.insert("verify_output".into(), Value::String(proof_result.clone()));
+        trace.insert("verify_passed".into(), Value::Bool(true));
+        trace.insert("verification_evidence".into(), Value::String(proof_reason.clone()));
         // fa-1: diff-vs-test advisory — the ONLY producer for this slot
         // since the E1 impact-registry check retired. Scoped to `cells
         // finish` alone (D6's own "finish only" posture): `cells cap`
@@ -1746,7 +1779,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let body = json!({
             "id": id, "feature": "human-mailbox", "title": "the store that holds a letter",
-            "action": "a", "verify": "cargo test", "lane": "tiny", "status": "claimed",
+            "action": "a", "verify": "cargo test -p bee", "lane": "tiny", "status": "claimed",
             "deps": [], "files": [], "trace": {},
         });
         std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(&body)).unwrap();

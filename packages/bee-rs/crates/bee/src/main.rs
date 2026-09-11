@@ -27,6 +27,7 @@ mod principles;
 mod registry;
 mod roots;
 mod router;
+mod session_identity;
 mod shell;
 mod state;
 mod textutil;

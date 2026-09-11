@@ -53,6 +53,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let (leading, rest) = toks.split_at(split);
     let (verb, consumed): (&str, usize) = match leading {
         ["set", ..] => ("set", 1),
+        ["gate", "preview", ..] => ("gate.preview", 2),
         ["gate", ..] => ("gate", 1),
         ["waiting-on", "set", ..] => ("waiting-on.set", 2),
         ["waiting-on", "clear", ..] => ("waiting-on.clear", 2),
@@ -89,6 +90,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let (flags, use_json) = parse_flags(rest)?;
     match verb {
         "set" => run_set(flags, use_json, t0),
+        "gate.preview" => run_gate_preview(flags, use_json, t0),
         "gate" => run_gate(flags, use_json, t0),
         "waiting-on.set" => run_waiting_on_set(flags, use_json, t0),
         "waiting-on.clear" => run_waiting_on_clear(flags, use_json, t0),
@@ -565,13 +567,16 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
 // ─── state gate ────────────────────────────────────────────────────────────
 
 pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if flags.get("preview").is_some() {
+        return run_gate_preview(flags, use_json, t0);
+    }
     if !keys_known(
         &flags,
-        &["name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason"],
+        &["name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason", "preview"],
     ) {
         return None;
     }
-    for b in ["merge", "no-lane"] {
+    for b in ["merge", "no-lane", "preview"] {
         if !bool_flag_ok(&flags, b) {
             return None;
         }
@@ -893,10 +898,18 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             if let Some(msg) = plan_claims_refusal(root, &peek, lane) {
                 return Ok(Out::Thrown(msg));
             }
+            if let Some(msg) = gate_preview_refusal(root, &peek, lane) {
+                return Ok(Out::Thrown(msg));
+            }
         }
     }
     let locks = acquire_mutation_locks(root, &scope, &workflows)?;
     let mut target = resolve_mutation_target(root, lane_feature.as_deref(), "gate", no_lane)?;
+    if approved && (merge || name == "shape") {
+        if let Some(msg) = gate_preview_refusal(root, target.record(), target.lane()) {
+            return Ok(Out::Thrown(msg));
+        }
+    }
     // D5 (koh-9): the `conflicts` verdicts standing behind this approval,
     // read INSIDE the lock right after the precondition that validated
     // them — surfaced on the output, never a refusal.
@@ -959,6 +972,11 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             gates.insert(name.clone(), json!(approved));
         }
         state.insert("approved_gates".into(), Value::Object(gates));
+        if approved && (merge || name == "shape") {
+            if let Some(prev) = state.get("gate_preview").cloned() {
+                state.insert("approved_cell_packet".into(), prev);
+            }
+        }
     }
     let record = target.record().clone();
     write_through_projection(root, &target, &record, &stamps)?;
@@ -1514,12 +1532,15 @@ mod tests {
     fn high_risk_merged_gate_approval_succeeds_after_a_fresh_advisor_ref_is_recorded() {
         let tmp = tmp_root();
         let root = tmp.path();
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, "docs/history/gate-door-open/plan.md", &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         let advisor_ref = fresh_advisor_ref(root, "gate-door-open");
         w(
             root,
             ".bee/lanes/gate-door-open.json",
             &format!(
-                r#"{{"feature":"gate-door-open","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+                r#"{{"feature":"gate-door-open","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref},"gate_preview":{{"feature":"gate-door-open","plan_sha256":"{sha}"}}}}"#
             ),
         );
         let out = run_gate_body(
@@ -1543,12 +1564,15 @@ mod tests {
     fn high_risk_execution_gate_approval_on_the_default_record_succeeds_after_a_fresh_ref() {
         let tmp = tmp_root();
         let root = tmp.path();
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, "docs/history/demo/plan.md", &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         let advisor_ref = fresh_advisor_ref(root, "demo");
         w(
             root,
             ".bee/state.json",
             &format!(
-                r#"{{"phase":"planning","feature":"demo","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+                r#"{{"phase":"planning","feature":"demo","mode":"high-risk","advisor_ref":{advisor_ref},"gate_preview":{{"feature":"demo","plan_sha256":"{sha}"}}}}"#
             ),
         );
         let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
@@ -1708,7 +1732,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-safe.json",
-            r#"{"feature":"gate-door-safe","phase":"planning","mode":"safe"}"#,
+            r#"{"feature":"gate-door-safe","phase":"planning","mode":"tiny"}"#,
         );
         let out = run_gate_body(
             root,
@@ -1737,10 +1761,15 @@ mod tests {
     /// One lane whose workflow record carries `plan_rev` and, optionally,
     /// the `conflict_review` object `state plan-conflicts derive` writes.
     fn write_conflict_fixture(root: &Path, feature: &str, plan_rev: u64, review: Option<&str>) {
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, &format!("docs/history/{feature}/plan.md"), &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         w(
             root,
             &format!(".bee/lanes/{feature}.json"),
-            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"}}"#),
+            &format!(
+                r#"{{"feature":"{feature}","phase":"planning","mode":"standard","gate_preview":{{"feature":"{feature}","plan_sha256":"{sha}"}}}}"#
+            ),
         );
         let review_field = match review {
             Some(r) => format!(r#","conflict_review":{r}"#),
@@ -1953,7 +1982,7 @@ mod tests {
         w(
             root,
             ".bee/state.json",
-            r#"{"phase":"planning","feature":"koh9-default"}"#,
+            r#"{"phase":"planning","feature":"koh9-default","mode":"tiny"}"#,
         );
         let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
             .unwrap();
@@ -2006,14 +2035,18 @@ mod tests {
     /// conflict precondition applies, so the claims door is the only one that
     /// can speak.
     fn seed_claims_lane(root: &Path, feature: &str, plan_body: Option<&str>) {
+        let preview_field = if let Some(body) = plan_body {
+            w(root, &format!("docs/history/{feature}/plan.md"), body);
+            let sha = compute_plan_sha256(body.as_bytes());
+            format!(r#","gate_preview":{{"feature":"{feature}","plan_sha256":"{sha}"}}"#)
+        } else {
+            String::new()
+        };
         w(
             root,
             &format!(".bee/lanes/{feature}.json"),
-            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"}}"#),
+            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"{preview_field}}}"#),
         );
-        if let Some(body) = plan_body {
-            w(root, &format!("docs/history/{feature}/plan.md"), body);
-        }
     }
 
     #[test]
@@ -2078,7 +2111,11 @@ mod tests {
     fn a_lane_with_no_plan_md_approves_exactly_as_before() {
         let tmp = tmp_root();
         let root = tmp.path();
-        seed_claims_lane(root, "eine-planless", None);
+        w(
+            root,
+            ".bee/lanes/eine-planless.json",
+            r#"{"feature":"eine-planless","phase":"planning","mode":"tiny"}"#,
+        );
         let out =
             run_gate_body(root, &flags(&["--lane", "eine-planless", "--merge", "--approved", "true"]))
                 .unwrap();
@@ -2242,7 +2279,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-legal-name.json",
-            r#"{"feature":"gate-door-legal-name","phase":"planning","mode":"safe","approved_gates":{}}"#,
+            r#"{"feature":"gate-door-legal-name","phase":"planning","mode":"tiny","approved_gates":{}}"#,
         );
         let out = run_gate_body(
             root,
@@ -2267,7 +2304,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-legal-merge.json",
-            r#"{"feature":"gate-door-legal-merge","phase":"planning","mode":"safe"}"#,
+            r#"{"feature":"gate-door-legal-merge","phase":"planning","mode":"tiny"}"#,
         );
         let out = run_gate_body(
             root,
@@ -2540,7 +2577,7 @@ mod tests {
     fn gate_merge_with_actor_auto_writes_the_same_trace_to_shape_and_execution() {
         let tmp = tmp_root();
         let root = tmp.path();
-        write_gate_trace_fixture(root, "gate-trace-merge-auto", None);
+        write_gate_trace_fixture(root, "gate-trace-merge-auto", Some("tiny"));
         let out = run_gate_body(
             root,
             &flags(&[
