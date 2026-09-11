@@ -16,6 +16,11 @@ refused outright, so "done" can never mean "I said so".
   result segment is a CLOSED set — `green:live`, `green:unit`, `green:static`
   (`cells/finish_support.rs:81-89`). A bare `green` is refused on write; the
   read path stays tolerant of caps recorded before that rule.
+- `cell-cap-proof-match` refuses a cap whose proof line command does not match the
+  approved cell verification command (`verify`). Descriptive proof prose is
+  refused before disk writes. On success, trace records four structured fields:
+  `verify_command`, `verify_output`, `verify_passed`, and `verification_evidence`.
+  Historical bare-green caps remain readable.
 - `cell-claim-contract` refuses a claim on contract grounds
   (`cells/handlers_write.rs:1248-1436`): `CONTRACT_UNCITED` when a test-writing
   cell cites no `contract:<name>` decision, `CONTRACT_UNSETTLED` when a cited
@@ -73,6 +78,14 @@ Preconditions:
   `result segment is "green" — a cap records HOW the change was shown to work`,
   naming the three legal values. Drive this: the older form is still written
   from memory, and this is the check that catches it.
+- **A mismatched proof command or descriptive prose is refused.** Attempt to cap with a command differing from `test -f NOTE.md` or with descriptive prose:
+  `control-bee cli -- cells cap --id demo-note-1 --files NOTE.md --report '{"outcome":"note added","commit":"<sha>","files":["NOTE.md"],"tests":"ran verification manually — green:unit — manual check","deviations":[]}' --json`.
+  The `.exit` file holds `1` and the payload reports:
+  `capCell: cell "demo-note-1" refused — proof command "ran verification manually" does not match approved cell verify command "test -f NOTE.md".`
+  `control-bee cli -- cells show --id demo-note-1 --json` confirms the cell remains `claimed`.
+- **A matching proof command populates structured trace fields.** Cap with exact command `test -f NOTE.md`:
+  `control-bee cli -- cells cap --id demo-note-1 --files NOTE.md --report '{"outcome":"note added","commit":"<sha>","files":["NOTE.md"],"tests":"test -f NOTE.md — green:unit — file exists","deviations":[]}' --json`.
+  The payload reports `status: "capped"`. `trace.verify_command` holds `"test -f NOTE.md"`, `trace.verify_output` holds `"green:unit"`, `trace.verify_passed` holds `true`, and `trace.verification_evidence` holds `"file exists"`.
 - **Proof.** Run `control-bee snapshot capped`. The snapshot's
   `cells/demo-note-1.json` shows `status: "capped"` with the green proof line on
   `trace.report.tests`, `git-log.txt` shows the commit the report names, and the
@@ -83,6 +96,9 @@ Preconditions:
 - The `--report` value is a JSON **string** with exactly five keys: `outcome`,
   `commit`, `files`, `tests`, `deviations`. An unknown or missing key is refused
   by name. `mistakes` is an optional sixth.
+- The command segment of the proof line in `--report` must match the cell's approved
+  `verify` command using exact trimmed bytes. Descriptive summaries (e.g.,
+  `"all tests pass"`) are rejected.
 - The proof line has three segments split on the first two ` — ` separators, and
   the separator is an em dash surrounded by spaces, not a hyphen.
 - **`bee cells cap --no-mistakes` cannot be used at all.** Bare, it is refused as
