@@ -51,7 +51,7 @@ current stop. Out-of-band requests, by flow:
 | `bee-researching` | Both | Research a topic, library, or approach — standalone, or from planning discovery. |
 | `bee-grooming` | — | The user asks to clean up, audit, or hunt tech debt. |
 | `bee-herding` | — | The user invokes the cockpit: bootstrap, dispatch, or merge. |
-| docs-only change | — | No pipeline: announce, write, format-check, close with a capture line or "nothing settled" (rule: agents-capture-line-at-close). |
+| docs-only change | — | No pipeline: announce, write through `bee-technical-writing` (document type first, one type per file, split and link where types meet), format-check, close with a capture line or "nothing settled" (rule: agents-capture-line-at-close). |
 
 ## Gates
 

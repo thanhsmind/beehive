@@ -24,7 +24,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "08c322192da09c23855aecffc673cb41baec7a43e8ea3e84bab4193e72158c8f"
+      "sha256": "d234ec31a092fd045558d22ec5ebbd15ed75fc85235976c65e0f393bc96edde8"
     },
     {
       "name": "bee-how",
@@ -112,7 +112,7 @@
     },
     {
       "name": "bee-technical-writing",
-      "sha256": "e67f1c24b569a9b82206645fc144ef0911d6f0ae0f3aa2e1b3c8c5e8ad9fe753"
+      "sha256": "bc6da6f714391480708733b329780fbe6b1804daada41ab7daf4bffaec3f3bd4"
     },
     {
       "name": "bee-unslop",
