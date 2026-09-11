@@ -91,6 +91,10 @@ Standard/high-risk add the hat wave before the gate: the plan-step wave IS
 the plan check now (procedure home:
 `bee-hive/references/gates-and-delegation.md` ("Hat wave"); what planning
 consumes: `references/planning-reference.md` ("Plan check — the hat wave")).
+When new code has an open shape on standard or high-risk work — several
+whole shapes viable and no pattern in the repo to copy — load
+`references/design-sketch.md` before the gate; the sketch lands in the plan,
+and the hat wave still runs as the plan check.
 
 ## Gate
 

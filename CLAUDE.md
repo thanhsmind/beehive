@@ -36,32 +36,6 @@ Optimize for wall-clock speed. Finish tasks quickly.
 - Speed never trades away quality: same rigor, same verification, same "done means done". If parallelizing risks a worse result, slow down.
 - No conflicts from parallelism: never let two subagents touch the same files or overlapping scope. Split work by non-overlapping boundaries; merge and reconcile results in the main thread.
 
-## Craft skills fire on their own
-
-This repo holds nine craft skills in `.claude/skills/`. They come from pstack.
-Do not wait for a slash command. Start each skill when its condition is true.
-
-| bee step | Skill | Start it when |
-|---|---|---|
-| every reply you write | `unslop` | always |
-| every doc, plan, spec, README, PR body, commit body | `technical-writing` | always, before you save the file |
-| a session starts again on older work | `recall` | bee state does not hold that history |
-| planning research | `how` | the work touches code that nobody read in this session |
-| planning research, and before you lock a decision | `why` | the old shape is a constraint that the plan must obey |
-| planning shape, `standard` or `high-risk` lane | `architect` | the shape is open and no pattern in the repo fits |
-| inside `architect`, or for one hard artifact | `arena` | two or more different shapes are possible |
-| planning, `spike` lane | `prototype` | a small build answers the question more cheaply than an argument |
-| you explain the work to the user | `teach` | the user asks to understand, or a gate needs plain words |
-
-Three of these skills are expensive. `arena`, `architect` and `prototype` each
-start parallel model runs. Do not start them for a typo fix, a rename, a bug
-fix, or a change that has a pattern in the repo to copy. Each description
-carries the same guard.
-
-The hat wave does not change. It stays the plan-step consult and the plan
-check. `architect` and `arena` answer a different question: the shape is open.
-The hat wave answers this question: the drafted plan needs a critique.
-
 ## Release
 
 When the user asks for a release, run `scripts/release.sh <VERSION>`.
@@ -94,8 +68,4 @@ If I have to decide something: 2 options max, the context I need to pick fast, a
 Keep paths and commands exact.
 
 Always use ASD-STE100 Simplified Technical English when you talk to me.
-
-Write every reply through the `unslop` skill. Write every document through
-`technical-writing` too. Those two skills hold the full rules. This section
-holds only what I want on top of them.
 @AGENTS.md

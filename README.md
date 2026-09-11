@@ -120,6 +120,14 @@ A hive is a staged, self-regulating system — each bee role maps to a workflow 
 
 Gate-bypass autopilot lives inside `bee-hive` ("Gates"). The maintainer guides for building bee's own skills and running its self-improvement loop moved out of the product into [docs/handbook/writing-skills.md](docs/handbook/writing-skills.md) and [docs/handbook/evolving.md](docs/handbook/evolving.md).
 
+Craft skills sit beside the hive roles. They shape how the agent writes and explains:
+
+| Skill | What it does |
+|---|---|
+| `bee-unslop` | Removes the patterns that make a reply or a document read as machine-generated, and keeps ticks, command output, ids and code verbatim |
+| `bee-technical-writing` | Writes saved documents — plans, specs, READMEs, PR and commit bodies — in a clear technical style that the project's own standard can override |
+| `bee-teach` | Explains what a thing is, how it works and why it is built that way, when the user asks to understand it |
+
 ---
 
 ## The workflow, explained simply
