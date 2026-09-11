@@ -4736,7 +4736,7 @@ use std::time::Instant;
         assert!(path.ends_with(".bee/bin/prompts/gather.md"), "names the file: {path:?}");
 
         let msg = prompt_skew_message("dispatch prepare", "gather", &skew);
-        assert!(msg.contains(".bee/bin/prompts/gather.md"), "{msg}");
+        assert!(msg.replace('\\', "/").contains(".bee/bin/prompts/gather.md"), "{msg}");
         assert!(msg.contains("FIX:"), "carries a remedy: {msg}");
         assert!(
             !msg.contains("unsupported argument shape"),
