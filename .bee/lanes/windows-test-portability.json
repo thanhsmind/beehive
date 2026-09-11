@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"windows-test-portability\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"windows-test-portability\" (lane).",
+  "next_action": "Merged into main at a283641; capture what settled, then bee close --feature windows-test-portability.",
   "created_at": "2026-09-11T07:29:20.617Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": "Test-only fix: 13 Windows-only test failures (statusline PowerShell skip, path separator, 8.3 short path); no product code change",
     "updated_at": "2026-09-11T07:29:29.777Z",
     "feature": "windows-test-portability"
-  },
-  "merge_ready": {
-    "since": "2026-09-11T07:39:40.463Z",
-    "branch": "wt/windows-test-portability",
-    "worktree_id": "beehive--wt--windows-test-portability",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
