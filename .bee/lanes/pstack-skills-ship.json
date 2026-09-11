@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "feature": "pstack-skills-ship",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pstack-skills-ship\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-09-10T23:11:52.087Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "multi-domain",
+      "cross-platform",
+      "covered-contract-change"
+    ],
+    "product_files": 14,
+    "rationale": null,
+    "updated_at": "2026-09-10T23:23:42.575Z",
+    "feature": "pstack-skills-ship"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-10T23:58:38.843Z",
+    "feature": "pstack-skills-ship",
+    "newest_decision_id": "1a8570fa-e42a-495a-b7b6-967c679fed99",
+    "plan_sha256": "absent",
+    "advisor": "plan-step hat wave: hat-facts-gaps and hat-alternatives (opus seat slots), hat-risks, hat-user-impact and hat-value (plan role, opus)",
+    "digest_head": "# Hat-wave synthesis — pstack-skills-ship plan\n\nFive seats reviewed `docs/history/pstack-skills-ship/plan.md`. The seats and their\nroles: hat-facts-gaps (opus), hat-alternatives (opus), and hat-risks,\nhat-user-impact and hat-value (on the plan role). The last three ran there because\nthe agy-flash login stalled and the Fable quota ran out (decisions `dbc5677c` and\n`1c407980`).\n\n## BLOCKERs\n\n- **facts-gaps, claim row 6: the anchor was wrong.** Resolved: the anchor now\n  points to `pointer_integrit"
+  },
+  "merge_ready": {
+    "since": "2026-09-11T00:14:32.998Z",
+    "branch": "wt/pstack-skills-ship",
+    "worktree_id": "beehive--wt--pstack-skills-ship",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
