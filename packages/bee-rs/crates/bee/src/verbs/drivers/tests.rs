@@ -2955,6 +2955,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", DISPATCH_CLAIM_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3007,6 +3008,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_OWNED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3059,6 +3061,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_OTHER_OWNER_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -3103,6 +3106,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", CLAIM_LESS_UNCLAIMED_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(&root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -7711,6 +7715,7 @@ advance_on — falling to another model there hides the defect (D11)"
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = Command::new(&exe);
         cmd.args(["--exact", name, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -8224,8 +8229,8 @@ advance_on — falling to another model there hides the defect (D11)"
         );
     }
 
-    /// The cell's own feature is read first; the active feature is the second
-    /// candidate, not the first.
+    /// The cell's own feature is read first; under D5 explicit feature lookup
+    /// is exclusive, so a missing anchor does not fall through to the active feature.
     #[test]
     fn a_cell_dispatch_reads_its_own_features_anchor_before_the_active_one() {
         let tmp = tempfile::tempdir().unwrap();
@@ -8237,11 +8242,11 @@ advance_on — falling to another model there hides the defect (D11)"
         assert!(body.contains("the cell's own feature asked for this"), "{body}");
         assert!(!body.contains("a different feature asked for that"), "{body}");
 
-        // …and with no anchor under the cell's feature, the active feature is
-        // the documented second candidate.
+        // …and with no anchor under the cell's feature, explicit feature lookup is exclusive (D5)
+        // so it never falls through to the active feature.
         std::fs::remove_file(root.join(".bee").join("intent").join("f.json")).unwrap();
         let body = body_of_kind(&root, "claude", "cell");
-        assert!(body.contains("a different feature asked for that"), "{body}");
+        assert!(!body.contains("a different feature asked for that"), "{body}");
     }
 
     /// A request is DATA. It is substituted in pass 2, which walks the

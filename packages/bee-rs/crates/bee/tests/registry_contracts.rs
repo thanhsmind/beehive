@@ -316,7 +316,7 @@ fn known_flags_parser_would_catch_a_new_handler_flag() {
     // Deletion coverage (D3): the parser must still find every flag `run_gate`
     // accepts today.
     for expected in [
-        "name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason",
+        "name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason", "preview",
     ] {
         assert!(
             parse_known_flags_from_source(SET_GATE_SOURCE)

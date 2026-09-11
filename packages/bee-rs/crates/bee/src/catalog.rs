@@ -768,15 +768,11 @@ mod tests {
         // occupancy/control-loop) and `--json` (nearly every verb) are reused
         // unchanged, no count cost. Net +0: 203 -> 203.
         //
-        // 204 (was 203) — `onboard --no-statusline` (4cac0774). Checked first,
-        // as this ratchet asks: no existing flag name means "skip the status
-        // display". The nearest neighbour is `--no-claude-md`, and that is the
-        // point — this vocabulary already spells "skip a default onboarding
-        // artifact" as `--no-<artifact>`, so `--no-statusline` REUSES the
-        // pattern rather than inventing a spelling for it. `--repo-hooks` is
-        // the opposite polarity (opt IN to a non-default) and could not be
-        // reused without inverting what the flag means.
-        const PINNED_FLAG_COUNT: usize = 204;
+        // 205 (was 204) — `gate` / `state.gate --preview` (pihp-4, pihp-8). Checked
+        // first: no existing flag name means "preview the execution packet
+        // before gate approval". Preview renders the current-slice cells and
+        // plan hash without writing.
+        const PINNED_FLAG_COUNT: usize = 205;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

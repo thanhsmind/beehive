@@ -70,7 +70,12 @@ fn workflows_dir(repo: &Path) -> PathBuf {
 }
 
 fn run(cwd: &Path, args: &[&str]) -> (i32, String) {
-    let out = Command::new(binary()).args(args).current_dir(cwd).output().unwrap();
+    let out = Command::new(binary())
+        .args(args)
+        .env_remove("PI_SESSION_ID")
+        .current_dir(cwd)
+        .output()
+        .unwrap();
     (
         out.status.code().unwrap_or(-1),
         format!(
@@ -82,7 +87,12 @@ fn run(cwd: &Path, args: &[&str]) -> (i32, String) {
 }
 
 fn run_json(cwd: &Path, args: &[&str]) -> (i32, serde_json::Value) {
-    let out = Command::new(binary()).args(args).current_dir(cwd).output().unwrap();
+    let out = Command::new(binary())
+        .args(args)
+        .env_remove("PI_SESSION_ID")
+        .current_dir(cwd)
+        .output()
+        .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let v = serde_json::from_str(stdout.trim())
         .unwrap_or_else(|e| panic!("`bee {}` did not print JSON: {stdout} ({e})", args.join(" ")));
@@ -627,6 +637,7 @@ fn run_with_no_session_env(cwd: &Path, args: &[&str]) -> (i32, String) {
         .current_dir(cwd)
         .env_remove("BEE_SESSION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("PI_SESSION_ID")
         .output()
         .unwrap();
     (

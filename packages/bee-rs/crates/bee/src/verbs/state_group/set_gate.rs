@@ -1532,12 +1532,15 @@ mod tests {
     fn high_risk_merged_gate_approval_succeeds_after_a_fresh_advisor_ref_is_recorded() {
         let tmp = tmp_root();
         let root = tmp.path();
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, "docs/history/gate-door-open/plan.md", &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         let advisor_ref = fresh_advisor_ref(root, "gate-door-open");
         w(
             root,
             ".bee/lanes/gate-door-open.json",
             &format!(
-                r#"{{"feature":"gate-door-open","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+                r#"{{"feature":"gate-door-open","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref},"gate_preview":{{"feature":"gate-door-open","plan_sha256":"{sha}"}}}}"#
             ),
         );
         let out = run_gate_body(
@@ -1561,12 +1564,15 @@ mod tests {
     fn high_risk_execution_gate_approval_on_the_default_record_succeeds_after_a_fresh_ref() {
         let tmp = tmp_root();
         let root = tmp.path();
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, "docs/history/demo/plan.md", &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         let advisor_ref = fresh_advisor_ref(root, "demo");
         w(
             root,
             ".bee/state.json",
             &format!(
-                r#"{{"phase":"planning","feature":"demo","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+                r#"{{"phase":"planning","feature":"demo","mode":"high-risk","advisor_ref":{advisor_ref},"gate_preview":{{"feature":"demo","plan_sha256":"{sha}"}}}}"#
             ),
         );
         let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
@@ -1726,7 +1732,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-safe.json",
-            r#"{"feature":"gate-door-safe","phase":"planning","mode":"safe"}"#,
+            r#"{"feature":"gate-door-safe","phase":"planning","mode":"tiny"}"#,
         );
         let out = run_gate_body(
             root,
@@ -1755,10 +1761,15 @@ mod tests {
     /// One lane whose workflow record carries `plan_rev` and, optionally,
     /// the `conflict_review` object `state plan-conflicts derive` writes.
     fn write_conflict_fixture(root: &Path, feature: &str, plan_rev: u64, review: Option<&str>) {
+        let plan = plan_with("| 1 | valid | ran | cargo test | test output |");
+        w(root, &format!("docs/history/{feature}/plan.md"), &plan);
+        let sha = compute_plan_sha256(plan.as_bytes());
         w(
             root,
             &format!(".bee/lanes/{feature}.json"),
-            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"}}"#),
+            &format!(
+                r#"{{"feature":"{feature}","phase":"planning","mode":"standard","gate_preview":{{"feature":"{feature}","plan_sha256":"{sha}"}}}}"#
+            ),
         );
         let review_field = match review {
             Some(r) => format!(r#","conflict_review":{r}"#),
@@ -1971,7 +1982,7 @@ mod tests {
         w(
             root,
             ".bee/state.json",
-            r#"{"phase":"planning","feature":"koh9-default"}"#,
+            r#"{"phase":"planning","feature":"koh9-default","mode":"tiny"}"#,
         );
         let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
             .unwrap();
@@ -2024,14 +2035,18 @@ mod tests {
     /// conflict precondition applies, so the claims door is the only one that
     /// can speak.
     fn seed_claims_lane(root: &Path, feature: &str, plan_body: Option<&str>) {
+        let preview_field = if let Some(body) = plan_body {
+            w(root, &format!("docs/history/{feature}/plan.md"), body);
+            let sha = compute_plan_sha256(body.as_bytes());
+            format!(r#","gate_preview":{{"feature":"{feature}","plan_sha256":"{sha}"}}"#)
+        } else {
+            String::new()
+        };
         w(
             root,
             &format!(".bee/lanes/{feature}.json"),
-            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"}}"#),
+            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"{preview_field}}}"#),
         );
-        if let Some(body) = plan_body {
-            w(root, &format!("docs/history/{feature}/plan.md"), body);
-        }
     }
 
     #[test]
@@ -2096,7 +2111,11 @@ mod tests {
     fn a_lane_with_no_plan_md_approves_exactly_as_before() {
         let tmp = tmp_root();
         let root = tmp.path();
-        seed_claims_lane(root, "eine-planless", None);
+        w(
+            root,
+            ".bee/lanes/eine-planless.json",
+            r#"{"feature":"eine-planless","phase":"planning","mode":"tiny"}"#,
+        );
         let out =
             run_gate_body(root, &flags(&["--lane", "eine-planless", "--merge", "--approved", "true"]))
                 .unwrap();
@@ -2260,7 +2279,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-legal-name.json",
-            r#"{"feature":"gate-door-legal-name","phase":"planning","mode":"safe","approved_gates":{}}"#,
+            r#"{"feature":"gate-door-legal-name","phase":"planning","mode":"tiny","approved_gates":{}}"#,
         );
         let out = run_gate_body(
             root,
@@ -2285,7 +2304,7 @@ mod tests {
         w(
             root,
             ".bee/lanes/gate-door-legal-merge.json",
-            r#"{"feature":"gate-door-legal-merge","phase":"planning","mode":"safe"}"#,
+            r#"{"feature":"gate-door-legal-merge","phase":"planning","mode":"tiny"}"#,
         );
         let out = run_gate_body(
             root,
@@ -2558,7 +2577,7 @@ mod tests {
     fn gate_merge_with_actor_auto_writes_the_same_trace_to_shape_and_execution() {
         let tmp = tmp_root();
         let root = tmp.path();
-        write_gate_trace_fixture(root, "gate-trace-merge-auto", None);
+        write_gate_trace_fixture(root, "gate-trace-merge-auto", Some("tiny"));
         let out = run_gate_body(
             root,
             &flags(&[

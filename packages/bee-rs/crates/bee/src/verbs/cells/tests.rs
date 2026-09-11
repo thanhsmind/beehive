@@ -771,7 +771,8 @@ use std::time::Instant;
                 "verification_evidence",
                 "verify_output",
                 "verify_passed",
-                "claim_session"
+                "claim_session",
+                "verify_command"
             ]
         );
     }
@@ -3404,7 +3405,7 @@ use std::time::Instant;
             "an-x",
             &json!({
                 "id": "an-x", "feature": "demo", "title": "t", "action": "a",
-                "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+                "verify": "echo ok", "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
             }),
         );
         write_advisor_nudge_row(root, "nud-1", Some("demo"));
@@ -3439,7 +3440,7 @@ use std::time::Instant;
             "an-y",
             &json!({
                 "id": "an-y", "feature": "demo", "title": "t", "action": "a",
-                "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
+                "verify": "echo ok", "lane": "tiny", "status": "claimed", "deps": [], "files": [], "trace": {},
             }),
         );
         write_advisor_nudge_row(root2, "nud-9", Some("elsewhere"));
@@ -4393,6 +4394,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_REOPEN_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         cmd.output().expect("spawn the test binary")
     }
@@ -4880,7 +4882,9 @@ use std::time::Instant;
         for (bee, legacy, want) in cases {
             let mut cmd = std::process::Command::new(&exe);
             cmd.args(["--exact", SESSION_CHAIN_CHILD, "--ignored", "--test-threads", "1"]);
-            cmd.env_remove("BEE_SESSION_ID").env_remove("CLAUDE_CODE_SESSION_ID");
+            cmd.env_remove("BEE_SESSION_ID")
+                .env_remove("CLAUDE_CODE_SESSION_ID")
+                .env_remove("PI_SESSION_ID");
             if let Some(v) = bee {
                 cmd.env("BEE_SESSION_ID", v);
             }
@@ -5587,7 +5591,7 @@ use std::time::Instant;
     /// for the JSON array literal under test.
     fn dol_report(deviations: &str) -> String {
         format!(
-            r#"{{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — fixture","deviations":{deviations}}}"#
+            r#"{{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:unit — fixture","deviations":{deviations}}}"#
         )
     }
 
@@ -5869,7 +5873,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
-        write_cell_fixture(root, "wfl-r1u", &cell("wfl-r1u", "claimed", "f", json!([])));
+        let mut c = cell("wfl-r1u", "claimed", "f", json!([]));
+        c["verify"] = json!("none");
+        write_cell_fixture(root, "wfl-r1u", &c);
 
         let report =
             r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"none — green:static — regen parity check only","deviations":[]}"#;
@@ -5889,7 +5895,9 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
-        write_cell_fixture(root, "wfl-r1s", &cell("wfl-r1s", "claimed", "f", json!([])));
+        let mut c = cell("wfl-r1s", "claimed", "f", json!([]));
+        c["verify"] = json!("cargo test -p bee");
+        write_cell_fixture(root, "wfl-r1s", &c);
 
         let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green:unit — touched close.rs — and finish_support.rs","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r1s", Some(report));
@@ -7746,6 +7754,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_UPDATE_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         cmd.output().expect("spawn the test binary")
     }
@@ -7875,6 +7884,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", child, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         assert!(
@@ -8022,6 +8032,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", DISPATCH_WAVE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         if !extra.is_empty() {
             cmd.env("WFL4_WAVE_ARGS", extra.join(" "));
@@ -8379,6 +8390,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", CELLS_ADD_JUDGE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         assert!(
@@ -8823,6 +8835,7 @@ use std::time::Instant;
             "1",
             "--nocapture",
         ]);
+        cmd.env_remove("PI_SESSION_ID");
         cmd.current_dir(root);
         let out = cmd.output().expect("spawn the test binary");
         let text = format!(
@@ -9125,6 +9138,7 @@ use std::time::Instant;
         let exe = std::env::current_exe().expect("test binary path");
         let out = std::process::Command::new(&exe)
             .args(["--exact", MERGE_READY_JUDGE_CHILD, "--ignored", "--test-threads", "1"])
+            .env_remove("PI_SESSION_ID")
             .current_dir(&root)
             .output()
             .expect("spawn the test binary");

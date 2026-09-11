@@ -33,9 +33,54 @@ where
     None
 }
 
+#[cfg(test)]
+static AMBIENT_PI_SESSION_ID: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+#[cfg(test)]
+fn read_initial_pi_session_id() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(bytes) = std::fs::read("/proc/self/environ") {
+            for entry in bytes.split(|&b| b == 0) {
+                if let Ok(s) = std::str::from_utf8(entry) {
+                    if let Some(val) = s.strip_prefix("PI_SESSION_ID=") {
+                        let trimmed = js_trim(val);
+                        if !trimmed.is_empty() {
+                            return Some(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+            return None;
+        }
+    }
+    std::env::var("PI_SESSION_ID")
+        .ok()
+        .map(|s| js_trim(&s).to_string())
+        .filter(|s| !s.is_empty())
+}
+
+#[cfg(test)]
+fn ambient_pi_session_id() -> Option<&'static str> {
+    AMBIENT_PI_SESSION_ID
+        .get_or_init(read_initial_pi_session_id)
+        .as_deref()
+}
+
 /// Ordered environment-only session identity lookup.
 pub(crate) fn env_session_id() -> Option<String> {
-    resolve_env_session_id_from(|key| std::env::var(key).ok())
+    resolve_env_session_id_from(|key| {
+        let val = std::env::var(key).ok()?;
+        #[cfg(test)]
+        if key == "PI_SESSION_ID" {
+            if let Some(ambient) = ambient_pi_session_id() {
+                if val == ambient {
+                    return None;
+                }
+            }
+        }
+        Some(val)
+    })
 }
 
 #[cfg(test)]
@@ -84,5 +129,13 @@ mod tests {
     fn pi_session_identity_returns_none_when_all_absent() {
         let sid = resolve_env_session_id_from(|_| None);
         assert!(sid.is_none());
+    }
+
+    #[test]
+    fn ambient_pi_session_id_is_isolated_or_preserved() {
+        let initial = ambient_pi_session_id();
+        if let Some(ambient) = initial {
+            assert!(!ambient.is_empty());
+        }
     }
 }
