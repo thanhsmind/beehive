@@ -251,6 +251,10 @@ bee term — if nothing the user needs is lost, those terms did not
 belong there. The full turn shape and rules load with the `bee-hive`
 skill ("Communication contract").
 
+A saved document with no bee template (a README, a guide, a handbook
+page) is written through the `bee-technical-writing` skill: type first,
+one type per file, linked where types meet.
+
 ## Token efficiency
 
 - Never re-read a file you just wrote or edited — you know its contents.

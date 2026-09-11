@@ -9,6 +9,7 @@
 6. [GREEN Phase: Initial Skill](#green-phase-initial-skill)
 7. [REFACTOR Phase: Iterations](#refactor-phase-iterations)
 8. [Final Outcome](#final-outcome)
+9. [Wiring into the flow (writing-flow-wiring)](#wiring-into-the-flow-writing-flow-wiring)
 
 ---
 
@@ -106,3 +107,35 @@ None. REFACTOR found no new rationalization in GREEN.
   - The S1 RED run is contaminated, because the subagent inherited this repo's CLAUDE.md.
   - The GREEN run is a single sample.
   - bee's own doctrine still uses em dashes, and `bee-unslop` bans them in new prose.
+
+---
+
+## Wiring into the flow (writing-flow-wiring)
+
+The question: which bee write points need a line that sends the writer to this skill? Seven RED runs answered it. Each run went through `bee dispatch prepare --kind advisor --role plan` (Opus), read only the current worktree skill files and applied no change.
+
+### RED
+
+| Scenario | Pressure | Result | What shaped it |
+|---|---|---|---|
+| R1 cell action for a cold developer worker | time, authority | PASS | planning-reference.md cell quality rules, MANDATE 2, test scoping |
+| R2 area spec Behavior section | completeness | PASS | area-spec.md present-tense and no-history rules |
+| R3 plan.md Summary | authority, social | PASS | planning-reference.md Summary rule |
+| R4 handbook page, docs lane (`docs/handbook/bee-why.md`) | completeness, authority | **FAIL**: one page mixed explanation, reference tables, a tutorial walkthrough and opinion, and saved a `<!-- TODO -->` placeholder | bee-hive/SKILL.md docs-only row only; no writing rule named |
+| R5 research brief | persuasion, scope | PASS | bee-researching evidence ladder and template |
+| R6 CONTEXT.md decisions | narrative | PASS | bee-shaping Lock and Hard rules; context-template.md |
+| R7 plain turn, README section, no skill loaded | scope | **FAIL (mild)**: one section held explanation, a numbered tutorial and a reference table; nothing split or linked them | AGENTS.md only; no writing rule named |
+
+Verbatim WHY of R4:
+> "The docs-only row of .../skills/bee-hive/SKILL.md:54 set the process (no plan and no cells: announce, write, format-check, then close with a capture line)."
+
+WHY of R7, as the RED record states it (the run kept no longer quote):
+> "AGENTS.md only: `--relation` rule, `--help` pointer, ASD-STE100 section; no writing rule named"
+
+### Finding
+
+Every templated document (cell action, area spec, plan, research brief, CONTEXT.md) held one mode through its own template rules, with no pointer to this skill. The two failures are the documents with no template: a docs-lane page and a README section written in a plain turn. Decision f951a31f wires only those two points: the docs-only row of `skills/bee-hive/SKILL.md` and one sentence in the § Communication of the always-loaded AGENTS block. Both point to this skill; neither copies its text.
+
+### GREEN
+
+Pending, recorded by cell wfw-2.
