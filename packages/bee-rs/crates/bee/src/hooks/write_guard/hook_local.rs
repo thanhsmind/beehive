@@ -716,10 +716,12 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str, other_live_session: bool) -> 
 ///
 /// The granted-worktree arm below is phase-independent — byte-for-byte the
 /// pre-existing refusal (git show 96db1a33^), which predates the "swarming"
-/// phase gate entirely. Only the NEW no-grant arm is phase-gated: it exists
-/// for the live swarming lane alone, so a phase other than "swarming" never
-/// takes it — everywhere else (reviewing, planning, scribing) the
-/// pre-existing granted refusal keeps firing exactly as it always did.
+/// phase gate entirely. The no-grant arm applies in every active code phase
+/// (exploring, planning, swarming, reviewing, scribing, compounding) — D2
+/// (pi-harness-workflow-parity cell pihp-5) — so code-touching feature work
+/// branches at feature start (worktree-first) rather than leaking early edits
+/// into main. A non-active phase (idle, compounding-complete, grooming) or
+/// absent phase never takes it.
 ///
 /// `session_id` is the acting session's own id (main.rs's
 /// `session_id.as_deref()`, the same value `resolve_write_record` already
@@ -861,11 +863,17 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
     if lane == "tiny" && !other_live_session {
         return Ok(None);
     }
+    // D2 (pi-harness-workflow-parity cell pihp-5): the no-grant refusal
+    // applies in every active code phase, not only during "swarming" — a code
+    // feature branches into its worktree from the start (worktree-first).
     let phase = match record.get("phase") {
-        Some(Value::String(p)) => p.clone(),
-        _ => String::new(),
+        Some(Value::String(p)) => p.as_str(),
+        _ => "",
     };
-    if phase != "swarming" {
+    if !matches!(
+        phase,
+        "exploring" | "planning" | "swarming" | "reviewing" | "scribing" | "compounding"
+    ) {
         return Ok(None);
     }
     if worktree_grants_registry_corrupt(&main_root) {

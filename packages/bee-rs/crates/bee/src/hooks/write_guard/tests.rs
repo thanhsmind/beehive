@@ -1377,14 +1377,111 @@ use std::process::ExitCode;
         // lane "docs" never fires.
         let docs = build_worktree_first_no_grant("swarming", Some("docs"));
         assert_eq!(expect_done(edit("src/app.js"), &docs.root).code, 0);
-        // a phase other than "swarming" never fires ("idle" is skipped here:
-        // it trips the unrelated intake gate before reaching this check at
-        // all, which would prove nothing about worktree-first itself).
-        let planning = build_worktree_first_no_grant("planning", Some("standard"));
-        assert_eq!(expect_done(edit("src/app.js"), &planning.root).code, 0);
         // a missing/empty route on the acting record is "no opinion".
         let no_route = build_worktree_first_no_grant("swarming", None);
         assert_eq!(expect_done(edit("src/app.js"), &no_route.root).code, 0);
+    }
+
+    /// pihp-5: A code-touching feature (standard, high-risk) on the main
+    /// checkout holding no granted worktree cannot write source during exploring
+    /// or planning. Both Claude-shaped (Edit, Write) and Pi-shaped (Write, MultiEdit)
+    /// hook inputs return the exact same worktree-first denial. Named exemptions
+    /// (docs, solo tiny, explicit-off, non-git, corrupt-grant, markdown) still pass.
+    #[test]
+    fn pre_gate_main_write_denied_for_code_features_on_main_during_exploring_and_planning() {
+        for phase in ["exploring", "planning"] {
+            for lane in ["standard", "high-risk"] {
+                let wtf = build_worktree_first_no_grant(phase, Some(lane));
+
+                // (a) Claude-shaped Edit
+                let claude_edit = json!({"tool_name": "Edit", "tool_input": {"file_path": "src/app.js"}});
+                let ec = expect_done(claude_edit, &wtf.root);
+                assert_eq!(ec.code, 2, "phase {phase}, lane {lane}: expected code 2");
+                assert!(ec.stderr.contains("worktree-first"), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains("MAIN checkout"), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains("holds no granted worktree"), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains(&format!("\"{lane}\"")), "phase {phase}, lane {lane}: {}", ec.stderr);
+                assert!(ec.stderr.contains("bee worktree new --feature demo"), "phase {phase}, lane {lane}: {}", ec.stderr);
+
+                // (b) Claude-shaped Write
+                let claude_write = json!({"tool_name": "Write", "tool_input": {"file_path": "src/app.js", "content": "console.log(1);"}});
+                let ecw = expect_done(claude_write, &wtf.root);
+                assert_eq!(ecw.code, 2);
+                assert_eq!(ec.stderr, ecw.stderr, "Claude Edit and Write must return identical denial");
+
+                // (c) Pi-shaped Write
+                let pi_write = json!({"tool_name": "Write", "tool_input": {"file_path": "src/app.js", "content": "console.log(2);"}});
+                let epw = expect_done(pi_write, &wtf.root);
+                assert_eq!(epw.code, 2);
+                assert_eq!(ec.stderr, epw.stderr, "Claude and Pi Write must return identical denial");
+
+                // (d) Pi-shaped MultiEdit
+                let pi_multiedit = json!({
+                    "tool_name": "MultiEdit",
+                    "tool_input": {
+                        "file_path": "src/app.js",
+                        "edits": [{"old_string": "a", "new_string": "b"}]
+                    }
+                });
+                let epm = expect_done(pi_multiedit, &wtf.root);
+                assert_eq!(epm.code, 2);
+                assert_eq!(ec.stderr, epm.stderr, "Claude and Pi MultiEdit must return identical denial");
+
+                // (e) Bash redirect command
+                let eb = expect_done(bash("printf x > src/app.js"), &wtf.root);
+                assert_eq!(eb.code, 2);
+                assert!(eb.stderr.contains("worktree-first"));
+            }
+
+            // Named exemptions preserved during exploring and planning:
+            // 1. docs lane solo
+            let docs = build_worktree_first_no_grant(phase, Some("docs"));
+            assert_eq!(expect_done(edit("src/app.js"), &docs.root).code, 0);
+
+            // 2. tiny lane solo
+            let tiny = build_worktree_first_no_grant(phase, Some("tiny"));
+            assert_eq!(expect_done(edit("src/app.js"), &tiny.root).code, 0);
+
+            // 3. explicit off
+            let off = build_worktree_first_no_grant(phase, Some("standard"));
+            std::fs::write(
+                off.root.join(".bee").join("config.json"),
+                "{\"worktree_first\":\"off\"}\n",
+            )
+            .unwrap();
+            assert_eq!(expect_done(edit("src/app.js"), &off.root).code, 0);
+
+            // 4. non-git checkout fails open
+            let nongit = build_worktree_first_no_grant(phase, Some("standard"));
+            std::fs::remove_dir_all(nongit.root.join(".git")).unwrap();
+            assert_eq!(expect_done(edit("src/app.js"), &nongit.root).code, 0);
+
+            // 5. corrupt grant registry fails open
+            let corrupt = build_worktree_first_no_grant(phase, Some("standard"));
+            std::fs::create_dir_all(corrupt.root.join(".bee").join("runtime")).unwrap();
+            std::fs::write(
+                corrupt.root.join(".bee").join("runtime").join("worktree-grants.json"),
+                "not-valid-json",
+            )
+            .unwrap();
+            assert_eq!(expect_done(edit("src/app.js"), &corrupt.root).code, 0);
+
+            // 6. markdown files are exempt solo
+            let md = build_worktree_first_no_grant(phase, Some("standard"));
+            assert_eq!(expect_done(edit("README.md"), &md.root).code, 0);
+
+            // 7. always-writable .bee paths are exempt
+            let bee_state = build_worktree_first_no_grant(phase, Some("standard"));
+            assert_eq!(expect_done(edit(".bee/notes.txt"), &bee_state.root).code, 0);
+        }
+
+        // Active code phases beyond exploring and planning also deny
+        for phase in ["swarming", "reviewing", "scribing", "compounding"] {
+            let wtf = build_worktree_first_no_grant(phase, Some("standard"));
+            let e = expect_done(edit("src/app.js"), &wtf.root);
+            assert_eq!(e.code, 2, "phase {phase}: expected denial");
+            assert!(e.stderr.contains("worktree-first"), "phase {phase}: {}", e.stderr);
+        }
     }
 
     // dmc-3: the no-grant arm's "tiny" carve-out is gated on whether another

@@ -5519,6 +5519,121 @@ fn deferred_exit_ordering_settled_fork_switch_replacement_merge() {
     );
 }
 
+/// D2 / pihp-5: Pi extension enforces the write guard's worktree-first denial
+/// on main during exploring and planning for write and edit tool calls.
+#[cfg(unix)]
+#[test]
+fn pre_gate_main_write_pi_extension_blocks_early_source_writes() {
+    node_or_skip!("pre_gate_main_write_pi_extension_blocks_early_source_writes");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    let status = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(dir.path())
+        .status();
+    if !status.map(|s| s.success()).unwrap_or(false) {
+        return;
+    }
+
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "planning",
+            "mode": "standard",
+            "feature": "demo",
+            "route": { "class": "feature", "lane": "standard", "flags": [], "product_files": 2, "rationale": null },
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    const SESSION_ID: &str = "sess-pi-pregate";
+
+    // 1. Pi `write` tool call to a source file on main during planning is blocked
+    let write_call = tool_call(
+        dir.path(),
+        SESSION_ID,
+        "write",
+        &json!({"path": "src/app.js", "content": "console.log(1);"}),
+    );
+    let run = run_harness(&harness, vec![write_call]);
+    assert_eq!(run.results.len(), 1);
+    let r = &run.results[0];
+    assert!(r.blocked(), "Pi write to source file during planning must be blocked by write-guard: {r:?}");
+    let reason = r.block_reason().unwrap_or_default();
+    assert!(reason.contains("worktree-first"), "reason must be worktree-first denial, got: {reason}");
+    assert!(reason.contains("MAIN checkout"), "reason must cite MAIN checkout, got: {reason}");
+
+    // 2. Pi `edit` tool call to a source file on main during planning is also blocked
+    let edit_call = tool_call(
+        dir.path(),
+        SESSION_ID,
+        "edit",
+        &json!({
+            "path": "src/app.js",
+            "edits": [{"oldText": "a", "newText": "b"}]
+        }),
+    );
+    let run_edit = run_harness(&harness, vec![edit_call]);
+    assert_eq!(run_edit.results.len(), 1);
+    let r_edit = &run_edit.results[0];
+    assert!(r_edit.blocked(), "Pi edit to source file during planning must be blocked by write-guard: {r_edit:?}");
+    let edit_reason = r_edit.block_reason().unwrap_or_default();
+    assert!(edit_reason.contains("worktree-first"), "edit reason must be worktree-first denial, got: {edit_reason}");
+
+    // 3. Exploring phase is also blocked
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "exploring",
+            "mode": "standard",
+            "feature": "demo",
+            "route": { "class": "feature", "lane": "standard", "flags": [], "product_files": 2, "rationale": null },
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    let run_exploring = run_harness(&harness, vec![tool_call(
+        dir.path(),
+        SESSION_ID,
+        "write",
+        &json!({"path": "src/app.js", "content": "console.log(2);"}),
+    )]);
+    assert!(run_exploring.results[0].blocked(), "Pi write during exploring must be blocked");
+
+    // 4. Docs lane exemption still passes through Pi
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "planning",
+            "mode": "standard",
+            "feature": "demo",
+            "route": { "class": "feature", "lane": "docs", "flags": [], "product_files": 2, "rationale": null },
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    let run_docs = run_harness(&harness, vec![tool_call(
+        dir.path(),
+        SESSION_ID,
+        "write",
+        &json!({"path": "src/app.js", "content": "console.log(3);"}),
+    )]);
+    assert!(!run_docs.results[0].blocked(), "Pi write during docs lane must pass");
+}
+
 #[cfg(not(unix))]
 #[test]
 fn pi_plugin_fixtures_skip_on_non_unix() {
