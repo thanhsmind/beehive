@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [worktree-isolation D1-D4 (docs/history/worktree-isolation/CONTEXT.md; logged 58c56bb6/5de1fd36/8cc1bde1/b24a2efc), worktree-concurrency-guard D1(b)/D2/D3/D4/D5 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3), "worktree-concurrency-guard-controlroot-port Port-D4/D5 (docs/history/worktree-concurrency-guard-controlroot-port/CONTEXT.md — coordination-root scoping of the concurrency check, relocation to packages/bee/)"]
-  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1", "worktree-concurrency-guard cells wcg-1/wcg-2 (capped traces and reports, 2026-07-24 — shared-nested-checkout detection primitive and write-guard wiring)", "worktree-concurrency-guard cell wcg-fix-2 (capped trace and report, 2026-07-26 — fail-closed-on-detection-error fix, review finding #2)", "worktree-concurrency-guard-controlroot-port cell port-1 (capped trace and verification_evidence, 2026-07-26 — relocation to packages/bee/, coordination-root scoping of the concurrency check, cross-model semantic judge confirmed)"]
+  decisions: [worktree-isolation D1-D4 (docs/history/worktree-isolation/CONTEXT.md; logged 58c56bb6/5de1fd36/8cc1bde1/b24a2efc), worktree-concurrency-guard D1(b)/D2/D3/D4/D5 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3), "worktree-concurrency-guard-controlroot-port Port-D4/D5 (docs/history/worktree-concurrency-guard-controlroot-port/CONTEXT.md — coordination-root scoping of the concurrency check, relocation to packages/bee/)", "pi-harness-workflow-parity revision 7 worktree-local proof artifacts (decision b8fc782d; docs/history/pi-harness-workflow-parity/plan.md)"]
+  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1", "worktree-concurrency-guard cells wcg-1/wcg-2 (capped traces and reports, 2026-07-24 — shared-nested-checkout detection primitive and write-guard wiring)", "worktree-concurrency-guard cell wcg-fix-2 (capped trace and report, 2026-07-26 — fail-closed-on-detection-error fix, review finding #2)", "worktree-concurrency-guard-controlroot-port cell port-1 (capped trace and verification_evidence, 2026-07-26 — relocation to packages/bee/, coordination-root scoping of the concurrency check, cross-model semantic judge confirmed)", "pi-harness-workflow-parity pihp-8 (commit 1e2d23b5; semantic judge job-1789153513097 — shared Cargo target reproduced stale cross-worktree executable, worktree-local target passed)"]
   authoritative_for: "workflow-state: isolated linked-worktree dispatch, containment, and transactional merge-back"
 ---
 
@@ -104,6 +104,12 @@ checkout at all, nothing about this behavior changes today's write.
   a permanent safety check, not an approval gate (worktree-concurrency-guard
   D5). There is no override flag; the only recovery is opening a fresh,
   properly mounted worktree (worktree-concurrency-guard D3/D4).
+- R37 — A verification command that can run concurrently in two worktrees must
+  keep mutable build artifacts inside the worktree it verifies. A shared Cargo
+  target can serve an executable built from another checkout, so source review
+  and test output can disagree. Pinning `CARGO_TARGET_DIR` strengthens artifact
+  identity; it must not clear the runtime variables whose behavior the test
+  proves (pi-harness-workflow-parity revision 7, decision b8fc782d).
 
 ## Edge Cases Settled
 
@@ -141,6 +147,10 @@ checkout at all, nothing about this behavior changes today's write.
   the write is denied, not silently allowed — a detection failure is treated
   as evidence of risk, never as evidence of safety, since the error is most
   likely to happen during the exact race this refusal exists to stop.
+- A green run from a shared build target does not prove the current worktree.
+  Two worktrees with the same package identity can replace each other's Cargo
+  artifacts. Use a worktree-local target for local proof, and keep all ambient
+  runtime identity variables intact when those identities are the test input.
 - The concurrently-live-session signal behind B21/R36 is scoped to the
   coordination root, not the physical directory being written into. Several
   worktrees may share one coordination root; a live session on a sibling
