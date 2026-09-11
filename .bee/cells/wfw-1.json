@@ -1,0 +1,110 @@
+{
+  "id": "wfw-1",
+  "feature": "writing-flow-wiring",
+  "title": "Send untemplated saved documents through bee-technical-writing",
+  "lane": "small",
+  "role": "docs",
+  "regen_obligation_ack": "wave-barrier",
+  "deps": [],
+  "decisions": [
+    "f951a31f"
+  ],
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/AGENTS.windows.md",
+    "skills/bee-technical-writing/CREATION-LOG.md"
+  ],
+  "read_first": [
+    "skills/bee-hive/SKILL.md",
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-technical-writing/SKILL.md",
+    "skills/bee-technical-writing/CREATION-LOG.md",
+    "skills/bee-writing-skills/references/prompt-style.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/wfw/red-results.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-technical-writing/CREATION-LOG.md"
+  ],
+  "affects_specs": [],
+  "action": "Wire bee-technical-writing into the two write points that RED showed fail (per decision f951a31f): a docs-only change and a plain turn that saves a document with no bee template. Point to the skill; never copy its Diataxis text. Do NOT run bee dev regen (wave-barrier; cell wfw-2 runs it). (1) skills/bee-hive/SKILL.md, the `docs-only change` row of the routing table (rg -n 'docs-only change' skills/bee-hive/SKILL.md): change 'announce, write, format-check' so the write step goes through `bee-technical-writing` — pick the document type first, one type per file, split and link where types meet — and keep the rest of the row, including the capture-line rule and its rule tag. (2) packages/bee/AGENTS.block.md § Communication: add one short sentence after the **Pre-send check** paragraph, OUTSIDE the `<!-- rule: agents-one-next-action -->` block, saying that a saved document with no bee template (a README, a guide, a handbook page) is written through the `bee-technical-writing` skill, type first, one type per file, linked where types meet. If packages/bee/AGENTS.windows.md carries the same § Communication text, add the same sentence there; if it does not, leave it and say so in the cap. (3) skills/bee-technical-writing/CREATION-LOG.md: append a section 'Wiring into the flow (writing-flow-wiring)' with the RED table from red-results.md (R1-R7, results and the verbatim WHY of R4 and R7), the finding, and GREEN marked 'pending, recorded by cell wfw-2'. Run `cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test rule_index_parity` with the literal cargo path; agents_block_render_parity is expected red until wfw-2 regenerates AGENTS.md, so do not run it here.",
+  "verify": "rg -q 'bee-technical-writing' skills/bee-hive/SKILL.md && rg -q 'bee-technical-writing' packages/bee/AGENTS.block.md && rg -q 'Wiring into the flow' skills/bee-technical-writing/CREATION-LOG.md",
+  "must_haves": {
+    "truths": [
+      "A docs-only change writes through bee-technical-writing, type first",
+      "The always-loaded block names bee-technical-writing for untemplated saved documents",
+      "No Diataxis text is copied out of bee-technical-writing"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/SKILL.md",
+        "substantive": "docs-only row names bee-technical-writing"
+      },
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "one sentence in Communication, outside the rule block"
+      }
+    ],
+    "key_links": [
+      "the agents-one-next-action rule block is unchanged"
+    ],
+    "prohibitions": [
+      "No bee dev regen",
+      "No edit to planning, shaping, capturing or researching templates",
+      "No write outside the four listed files"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "leader-wfw-1",
+    "outcome": "docs-only row in bee-hive SKILL.md and one Communication sentence in AGENTS.block.md route untemplated saved documents through bee-technical-writing; CREATION-LOG.md gains the RED wiring section, GREEN pending for wfw-2",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-technical-writing/CREATION-LOG.md"
+    ],
+    "deviations": [
+      "left packages/bee/AGENTS.windows.md unchanged — it has no Communication section (25 lines, no Pre-send check text) — the plan was wrong about a fact",
+      "labelled the R7 WHY as the RED record note, not a verbatim quote — red-results.md kept no verbatim R7 quote, only a table note — the plan was wrong about a fact",
+      "docs/history/writing-flow-wiring/CONTEXT.md does not exist in either checkout; used decision f951a31f as the locked record — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T07:03:18.949Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose and the always-loaded block need the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen this session, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T07:00:23.340Z",
+    "mistakes": [
+      {
+        "wrong": "the first commit call ran after a cd in the same shell command and the write guard refused it",
+        "better": "address the worktree by absolute path from the start"
+      }
+    ],
+    "report": {
+      "outcome": "docs-only row and Communication sentence route untemplated saved documents through bee-technical-writing; creation log records RED",
+      "commit": "2616e53a699988d4a72a6f9fbb1388d8f3eda3ed",
+      "files": [
+        "skills/bee-hive/SKILL.md",
+        "packages/bee/AGENTS.block.md",
+        "skills/bee-technical-writing/CREATION-LOG.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test instruction_laws --test rule_index_parity — green:static — pointer and rule-block parity over the edited skill and AGENTS block; agents_block_render_parity left to wfw-2 regen",
+      "deviations": [
+        "left packages/bee/AGENTS.windows.md unchanged — it has no Communication section (25 lines, no Pre-send check text) — the plan was wrong about a fact",
+        "labelled the R7 WHY as the RED record note, not a verbatim quote — red-results.md kept no verbatim R7 quote, only a table note — the plan was wrong about a fact",
+        "docs/history/writing-flow-wiring/CONTEXT.md does not exist in either checkout; used decision f951a31f as the locked record — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "the first commit call ran after a cd in the same shell command and the write guard refused it — address the worktree by absolute path from the start"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "escalate": true
+}

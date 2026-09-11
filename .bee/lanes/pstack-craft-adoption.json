@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pstack-craft-adoption\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 40acf9a; reload the product and test \"pstack-craft-adoption\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-craft-adoption\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-09-11T05:22:08.989Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pstack-craft-adoption",
-    "asked_at": "2026-09-11T06:08:36.131Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "question",
+    "subject": "writing-flow-wiring scope: narrow fix for untemplated docs (A) or full option 1 (B)",
+    "asked_at": "2026-09-11T06:55:44.411Z",
+    "session": "9d0933f3-e76c-498c-a471-1b5f7f684697"
   },
   "route": {
     "class": "feature",
@@ -28,9 +28,10 @@
       "multi-domain",
       "cross-platform"
     ],
-    "product_files": 26,
-    "rationale": null,
-    "updated_at": "2026-09-11T05:30:21.333Z",
-    "feature": "pstack-craft-adoption"
+    "product_files": 36,
+    "rationale": "Restored after a mis-targeted write: two writing-flow-wiring route calls landed here while the session was still bound to this lane (decision 94714cb7). Values from plan.md line 15; 36 = the non-generated files of cells pca-1..pca-9.",
+    "updated_at": "2026-09-11T06:59:39.709Z",
+    "feature": "pstack-craft-adoption",
+    "demoted_at": "2026-09-11T06:56:57.548Z"
   }
 }
