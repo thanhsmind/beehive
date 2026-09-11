@@ -147,6 +147,13 @@ where plan.md is still editable — and never at a plain
 `--name execution`, which lands after the freeze where no edit could
 answer it.
 
+`bee gate --name shape` and `bee gate --merge` also refuse approval if
+`bee gate --preview` has not been run, or if `plan.md` has been modified
+since the preview was generated (plan hash mismatch). The preview parses
+the cell packet, validates required execution fields (`action`, `verify`,
+`files`, `read_first`, `must_haves`), and records `approved_cell_packet`
+in `.bee/state.json`. Approval stamps this packet.
+
 **Shape bodies by mode:**
 
 - `spike` — the one yes/no question, what proves YES, what NO implies,
@@ -481,6 +488,11 @@ stays the source of truth:
    `judge_obligation_ack` or a raised lane.
 5. **Deps and slice.** `deps` are acyclic; current slice only; the
    feature's execution gate is approved.
+6. **Approved preview binding.** Incoming cells must match the approved
+   preview packet recorded at gate approval. Cell IDs must match, and execution
+   fields (`action`, `verify`, `files`, `read_first`, `must_haves`, `title`,
+   `lane`, `role`) must match identically. Extra or missing cells refuse the
+   batch.
 
 Then pipe the drafted batch through `bee cells add --stdin --dry-run` and
 run the real add only after a clean dry-run — a dirty dry-run's problems

@@ -86,6 +86,8 @@ Preconditions:
 - **A matching proof command populates structured trace fields.** Cap with exact command `test -f NOTE.md`:
   `control-bee cli -- cells cap --id demo-note-1 --files NOTE.md --report '{"outcome":"note added","commit":"<sha>","files":["NOTE.md"],"tests":"test -f NOTE.md — green:unit — file exists","deviations":[]}' --json`.
   The payload reports `status: "capped"`. `trace.verify_command` holds `"test -f NOTE.md"`, `trace.verify_output` holds `"green:unit"`, `trace.verify_passed` holds `true`, and `trace.verification_evidence` holds `"file exists"`.
+  Automated contract verification for this proof match and trace population across the Pi lifecycle is covered in
+  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs` (`pi_lifecycle_end_to_end_onboarded_repo_parity`).
 - **Proof.** Run `control-bee snapshot capped`. The snapshot's
   `cells/demo-note-1.json` shows `status: "capped"` with the green proof line on
   `trace.report.tests`, `git-log.txt` shows the commit the report names, and the

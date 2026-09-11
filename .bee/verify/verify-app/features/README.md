@@ -80,6 +80,11 @@ required state, commands, and observable proof.
 - [Worktree and close](./worktree-and-close.md) covers creating a feature
   worktree, merging it back, and the close doors.
 
+Runtime parity across supported runtimes (Claude, Codex, OpenCode, and Pi) is
+exercised through both CLI driving recipes and automated harness contract suites
+(`cargo test -p bee --test pi_plugin_contracts` for Pi lifecycle, early write denial,
+gate preview, proof line verification, and concurrent herding allocations).
+
 ## Not yet mapped
 
 Real user surfaces with no feature file yet. Add one before claiming coverage of

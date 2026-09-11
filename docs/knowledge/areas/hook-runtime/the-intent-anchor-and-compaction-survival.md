@@ -192,5 +192,6 @@ orientation ended with zero edits to that suite.
   read-only `state compact-check` verb.
 - Proof: `packages/bee/tests/test_intent.mjs` (incl. the
   two-boundary simulation), the intent rows in `hooks/test_hook_contracts.mjs`,
-  and `scripts/tests/test_compaction_advisories.mjs` (the nudge and survival-warning
-  rows against the real hooks).
+  `scripts/tests/test_compaction_advisories.mjs` (the nudge and survival-warning
+  rows against the real hooks), and `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`
+  (`pi_lifecycle_end_to_end_onboarded_repo_parity` proving intent retention and dispatch rendering).

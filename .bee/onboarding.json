@@ -35,9 +35,9 @@
       "thinking.md": "3b38bad95aa29ffd0c84bd470334bcc9018892c85b70d532fab6b40931312617"
     },
     "prompts": {
-      "advisor.md": "423a42cde79306d3e099b21f55f1c20c4311b09d3cfb397a5a5ce958ab68af94",
-      "gather.md": "5f926764b74322c40074aef75b8611ff103c4591cfc1ca77c98ded55a421d056",
-      "reviewer.md": "94f049066d97749f8ff37490dd589c3f269101964da400022c0e3603ff455af1",
+      "advisor.md": "77ca1659b33dc4879ea708202582985d0b95bc9ef7556c37dd7f0c09def825a9",
+      "gather.md": "4430b983d3985a2e298622088857defb305261f122f9bc95490e3edf60aea4b5",
+      "reviewer.md": "e6375deeb0e771829ce599cd3969846ddd8ec9915c5c3682a94a8979911b1e13",
       "worker-cell.md": "8de76182920befc11bc2daab4b0454d61b3e8b6775c951044122aa8ee09cbf57"
     },
     "repo_hooks": {
@@ -75,5 +75,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-09-11T07:11:33.568Z"
+  "updated_at": "2026-09-11T16:14:57.932Z"
 }

@@ -358,3 +358,7 @@ came through.
   failed before the fix, 296 passed after). Evidence:
   `.bee/cells/packages-engine-move-3.json`,
   `docs/history/packages-engine-move/reports/packages-engine-move-3.md`.
+- Intent anchor and purpose verbatim retention (R15): verified in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` and proven across the Pi
+  dispatch lifecycle in `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`
+  (`pi_lifecycle_end_to_end_onboarded_repo_parity`).

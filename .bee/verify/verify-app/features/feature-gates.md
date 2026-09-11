@@ -49,7 +49,11 @@ Preconditions:
 - **Preview cell packets.** Run `control-bee cli -- gate --preview --json`.
   The payload parses the cell packet from `plan.md`, verifies execution fields
   (`action`, `verify`, `files`, `read_first`, `must_haves`), and records
-  `approved_cell_packet` hash in `.bee/state.json`.
+  `approved_cell_packet` hash in `.bee/state.json`. Shape approval strictly
+  refuses if preview is absent or stale, and `cells add` validates cell packet
+  hashes against this preview. Automated Pi lifecycle coverage is exercised in
+  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`
+  (`pi_lifecycle_end_to_end_onboarded_repo_parity`).
 - **Approve the merged gate.** Run
   `control-bee cli -- gate --merge --approved true --json`. The payload's
   `approved_gates` now has `shape: true` and `execution: true`, with `context`
