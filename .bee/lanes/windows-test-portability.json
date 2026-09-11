@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"windows-test-portability\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at a283641; capture what settled, then bee close --feature windows-test-portability.",
+  "next_action": "Continue bee-exploring for \"windows-test-portability\" (lane).",
   "created_at": "2026-09-11T07:29:20.617Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "**Next:** when the Windows run ends, I check it. If it is green, I close the feature. If it is red, I fix the new failures first.",
+    "asked_at": "2026-09-11T07:45:41.189Z",
+    "session": "f895b642-a3e1-4c5c-bbae-0e2ebbd9b352"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",
