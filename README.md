@@ -127,6 +127,8 @@ Craft skills sit beside the hive roles. They shape how the agent writes and expl
 | `bee-unslop` | Removes the patterns that make a reply or a document read as machine-generated, and keeps ticks, command output, ids and code verbatim |
 | `bee-technical-writing` | Writes saved documents — plans, specs, READMEs, PR and commit bodies — in a clear technical style that the project's own standard can override |
 | `bee-teach` | Explains what a thing is, how it works and why it is built that way, when the user asks to understand it |
+| `bee-how` | Answers how a command, hook or flow of this repo runs, as a traced path with `path:line` anchors, when the user types `/bee-how` |
+| `bee-why` | Answers why a rule, value or design of this repo is the way it is, from recorded evidence with a confidence tier, when the user types `/bee-why` |
 
 ---
 
