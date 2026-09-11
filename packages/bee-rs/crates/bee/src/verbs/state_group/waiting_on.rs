@@ -218,7 +218,7 @@ pub(crate) fn clear_lane_waiting_on_pair(root: &Path, feature: &str) -> Result<(
 /// pass through in the first place).
 fn no_session_refusal(verb: &str) -> String {
     format!(
-        "{verb}: refused \u{2014} no session resolves for the mark's owning session (D4's stale-expiry reap reclaims against it). FIX: pass --session-id explicitly, set BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID, or ensure exactly one live session record exists."
+        "{verb}: refused \u{2014} no session resolves for the mark's owning session (D4's stale-expiry reap reclaims against it). FIX: pass --session-id explicitly, set BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID/PI_SESSION_ID, or ensure exactly one live session record exists."
     )
 }
 

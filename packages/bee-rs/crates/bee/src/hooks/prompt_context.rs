@@ -1412,14 +1412,7 @@ fn lock_file_path(root: &Path, name: &str) -> PathBuf {
 }
 
 fn env_session_id() -> Option<String> {
-    for var in ["BEE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
-        if let Ok(v) = std::env::var(var) {
-            if !v.trim().is_empty() {
-                return Some(v.trim().to_string());
-            }
-        }
-    }
-    None
+    crate::session_identity::env_session_id()
 }
 
 fn read_holder(lock_path: &Path) -> Option<Value> {

@@ -263,18 +263,7 @@ pub(crate) fn session_has_active_claim(ctx: &Ctx, control_root: &Path, session_i
 /// recovery.mjs detectCrashCandidates.
 pub(crate) fn detect_crash_candidates(ctx: &mut Ctx, projects_root: &str) -> R<Vec<Value>> {
     // resolveSessionId({flag: null}) — env chain only, no root adoption.
-    let resolved_current = {
-        let mut found: Option<String> = None;
-        for var in ["BEE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
-            if let Ok(v) = std::env::var(var) {
-                if !js_trim(&v).is_empty() {
-                    found = Some(js_trim(&v).to_string());
-                    break;
-                }
-            }
-        }
-        found
-    };
+    let resolved_current = crate::session_identity::env_session_id();
     let control_root = control_root_for(ctx)?;
     let sessions = list_session_records(ctx, &control_root)?;
     if sessions.is_empty() {

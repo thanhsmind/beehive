@@ -627,7 +627,7 @@ pub(crate) fn env_nonempty(name: &str) -> Option<String> {
     }
 }
 
-/// claims.mjs resolveSessionId flag -> BEE_SESSION_ID -> CLAUDE_CODE_SESSION_ID
+/// claims.mjs resolveSessionId flag -> BEE_SESSION_ID -> CLAUDE_CODE_SESSION_ID -> PI_SESSION_ID
 /// (no `root`: the durable single-live-session fallback stays with callers
 /// that pass one).
 pub(crate) fn resolve_session_flag_env(flag: Option<&str>) -> Option<String> {
@@ -636,7 +636,7 @@ pub(crate) fn resolve_session_flag_env(flag: Option<&str>) -> Option<String> {
             return Some(js_trim(f).to_string());
         }
     }
-    env_nonempty("BEE_SESSION_ID").or_else(|| env_nonempty("CLAUDE_CODE_SESSION_ID"))
+    crate::session_identity::env_session_id()
 }
 
 /// resolveSessionId's durable fallback half ({root, audit}) — exactly one

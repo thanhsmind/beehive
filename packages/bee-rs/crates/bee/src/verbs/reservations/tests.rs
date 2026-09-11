@@ -58,7 +58,7 @@ use std::time::Instant;
     /// edition-2024 env mutation is unsafe under threaded tests, so skip
     /// instead of scrubbing when the harness itself exports one.
     fn ambient_session() -> bool {
-        env_nonempty("BEE_SESSION_ID").is_some() || env_nonempty("CLAUDE_CODE_SESSION_ID").is_some()
+        crate::session_identity::env_session_id().is_some()
     }
 
     #[test]
