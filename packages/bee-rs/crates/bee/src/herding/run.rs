@@ -255,6 +255,19 @@ pub(crate) fn parse_expertise(raw: &str) -> Result<Vec<ExpertiseEntry>, String> 
     Ok(entries)
 }
 
+static JOB_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// Allocate a collision-safe default job ID (D8).
+///
+/// Default job IDs are generated from milliseconds, process ID, and a
+/// process-local atomic counter.
+pub(crate) fn allocate_job_id() -> String {
+    let millis = chrono::Utc::now().timestamp_millis();
+    let pid = std::process::id();
+    let counter = JOB_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("job-{millis}-{pid}-{counter}")
+}
+
 fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut task: Option<&str> = None;
     let mut task_file: Option<&str> = None;
@@ -361,7 +374,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let (job_id, is_continue) = match continue_job_id {
         Some(id) => (id.to_string(), true),
         None => (
-            job_id.map(str::to_string).unwrap_or_else(|| format!("job-{}", chrono::Utc::now().timestamp_millis())),
+            job_id.map(str::to_string).unwrap_or_else(allocate_job_id),
             false,
         ),
     };
@@ -8284,6 +8297,182 @@ mod tests {
         assert_eq!(
             block.get("changed_paths").cloned(),
             Some(serde_json::json!(["new.txt"]))
+        );
+    }
+
+    #[test]
+    fn pihp_unique_job_id_concurrent_allocations_in_one_process_are_unique() {
+        use std::collections::HashSet;
+        use std::sync::{Arc, Barrier, Mutex};
+        use std::thread;
+
+        let thread_count = 64;
+        let barrier = Arc::new(Barrier::new(thread_count));
+        let seen = Arc::new(Mutex::new(HashSet::new()));
+        let mut handles = Vec::new();
+
+        for _ in 0..thread_count {
+            let b = Arc::clone(&barrier);
+            let s = Arc::clone(&seen);
+            handles.push(thread::spawn(move || {
+                b.wait();
+                let opts = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
+                s.lock().unwrap().insert(opts.job_id);
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        let allocated = seen.lock().unwrap();
+        assert_eq!(
+            allocated.len(),
+            thread_count,
+            "expected {thread_count} unique job ids, but got {} due to collisions: {:?}",
+            allocated.len(),
+            *allocated
+        );
+    }
+
+    #[test]
+    fn pihp_unique_job_id_includes_pid_and_counter() {
+        let opts = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
+        let pid = std::process::id();
+        let parts: Vec<&str> = opts.job_id.split('-').collect();
+        assert!(
+            parts.len() >= 4,
+            "expected job id format 'job-<millis>-<pid>-<seq>', got: {}",
+            opts.job_id
+        );
+        assert_eq!(parts[0], "job");
+        assert!(parts[1].parse::<i64>().is_ok(), "millis segment should parse as i64");
+        assert_eq!(parts[2], pid.to_string(), "pid segment should match process id");
+        assert!(parts[3].parse::<u64>().is_ok(), "counter segment should parse as u64");
+    }
+
+    #[test]
+    fn pihp_unique_job_id_explicit_and_continue_ids_do_not_change() {
+        let explicit = parse_options(&[
+            "--task", "t",
+            "--main-root", ".",
+            "--job-id", "custom-job-123",
+        ])
+        .unwrap();
+        assert_eq!(explicit.job_id, "custom-job-123");
+        assert!(!explicit.is_continue);
+
+        let continued = parse_options(&[
+            "--task", "t",
+            "--main-root", ".",
+            "--continue", "cont-job-456",
+        ])
+        .unwrap();
+        assert_eq!(continued.job_id, "cont-job-456");
+        assert!(continued.is_continue);
+    }
+
+    #[test]
+    fn pihp_unique_job_id_parse_options_uses_allocator_only_when_no_id_supplied() {
+        let explicit = parse_options(&[
+            "--task", "t",
+            "--main-root", ".",
+            "--job-id", "explicit-job-789",
+        ])
+        .unwrap();
+        assert_eq!(explicit.job_id, "explicit-job-789");
+
+        let continued = parse_options(&[
+            "--task", "t",
+            "--main-root", ".",
+            "--continue", "cont-job-789",
+        ])
+        .unwrap();
+        assert_eq!(continued.job_id, "cont-job-789");
+
+        let default_allocated = parse_options(&[
+            "--task", "t",
+            "--main-root", ".",
+        ])
+        .unwrap();
+        let pid = std::process::id();
+        assert!(
+            default_allocated.job_id.starts_with("job-"),
+            "default job id should start with job-"
+        );
+        assert!(
+            default_allocated.job_id.contains(&format!("-{pid}-")),
+            "default job id should contain process id"
+        );
+    }
+
+    const CHILD_JOB_ID_ENV: &str = "BEE_TEST_PIHP_UNIQUE_JOB_ID_CHILD";
+
+    #[test]
+    fn pihp_unique_job_id_child_process_helper() {
+        if std::env::var(CHILD_JOB_ID_ENV).is_ok() {
+            use std::io::Write;
+            let opts = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
+            println!("JOB_ID:{}", opts.job_id);
+            let _ = std::io::stdout().flush();
+            std::process::exit(0);
+        }
+    }
+
+    #[test]
+    fn pihp_unique_job_id_concurrent_cli_processes_cannot_share_default_id() {
+        let exe = match std::env::current_exe() {
+            Ok(path) => path,
+            Err(_) => return,
+        };
+
+        let process_count = 8;
+        let mut children = Vec::new();
+
+        for _ in 0..process_count {
+            let child = std::process::Command::new(&exe)
+                .args(["herding::run::tests::pihp_unique_job_id_child_process_helper", "--nocapture"])
+                .env(CHILD_JOB_ID_ENV, "1")
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+            if let Ok(child) = child {
+                children.push(child);
+            }
+        }
+
+        assert_eq!(children.len(), process_count, "failed to spawn test child processes");
+
+        let mut job_ids = std::collections::HashSet::new();
+        let mut pids = std::collections::HashSet::new();
+
+        for child in children {
+            let pid = child.id();
+            pids.insert(pid);
+            let output = child.wait_with_output().expect("wait for child process");
+            assert!(output.status.success(), "child process failed");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut found_job_id = None;
+            for line in stdout.lines() {
+                if let Some(rest) = line.strip_prefix("JOB_ID:") {
+                    found_job_id = Some(rest.trim().to_string());
+                    break;
+                }
+            }
+            let job_id = found_job_id.expect("child process should emit JOB_ID:<id>");
+            assert!(
+                job_id.contains(&format!("-{pid}-")),
+                "job id {job_id} must contain child process id {pid}"
+            );
+            job_ids.insert(job_id);
+        }
+
+        assert_eq!(pids.len(), process_count, "all concurrent child processes must have distinct pids");
+        assert_eq!(
+            job_ids.len(),
+            process_count,
+            "all concurrent child processes must produce unique job ids, got: {:?}",
+            job_ids
         );
     }
 }
