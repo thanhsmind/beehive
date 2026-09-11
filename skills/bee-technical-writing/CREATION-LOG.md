@@ -138,4 +138,22 @@ Every templated document (cell action, area spec, plan, research brief, CONTEXT.
 
 ### GREEN
 
-Pending, recorded by cell wfw-2.
+After cell wfw-1 (commit 2616e53a), the leader reran R4 and R7 through `bee dispatch prepare --kind advisor --role plan` (Opus). Each brief gave two files: the routing or always-loaded file first, and this skill second, to read ONLY if the first file sent the agent there.
+
+| Scenario | Result | How the agent reached this skill |
+|---|---|---|
+| G4 handbook page, docs lane | PASS: three linked files, one Diátaxis type each (explanation as the entry page, tutorial, reference); opinion only in the explanation page, labelled; no placeholder saved; the change to the "one page" ask named to the user | `skills/bee-hive/SKILL.md:54`, the docs-only row |
+| G7 plain turn, README section | PASS: the one section kept, split into three pure-type subsections with links; a view only in the explanation part; each tutorial step has its condition first; the reference table ends with the `--help` line that regenerates it | the new § Communication sentence of the AGENTS block |
+
+Verbatim WHY of G4:
+> "`skills/bee-hive/SKILL.md:54` (the docs-only row: \"write through `bee-technical-writing` (document type first, one type per file, split and link where types meet)\") and `skills/bee-technical-writing/SKILL.md:36-55` (one Diátaxis mode per document, and opinion allowed only in explanation, line 53) made me split the ask into three pages: explanation, tutorial, and reference."
+
+Verbatim WHY of G7:
+> "AGENTS.block.md lines 254-256 sent me to `bee-technical-writing`. I followed that skill: three parts, each in one Diátaxis mode (explanation, tutorial, reference), with the condition before each step, a view only in the explanation part, and a `--help` line so the table can be checked."
+
+### Final Outcome
+
+- Both RED failures now pass. In both runs the agent reached this skill through the new line, not by chance.
+- The five templated documents (R1, R2, R3, R5, R6) passed in RED and got no change.
+- Iterations required: 0. No REFACTOR round: no new rationalization appeared.
+- Known residual risk: this skill tells the writer to also apply `bee-unslop`. The GREEN briefs did not allow that load, so that step was not exercised.
