@@ -1178,5 +1178,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-10T15:25:27.837Z"
+  },
+  "writing-flow-wiring": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-11T07:10:01.569Z"
   }
 }
