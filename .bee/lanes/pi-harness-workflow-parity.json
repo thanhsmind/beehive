@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pi-harness-workflow-parity\" started at phase \"exploring\" (lane).",
-  "next_action": "Run final feature validation, merge the worktree, and repair the two remaining Waggledance records.",
+  "next_action": "Merged into main at 37952ae; reload the product and test \"pi-harness-workflow-parity\", then either approve uat (\"bee gate --name uat --approved true --lane pi-harness-workflow-parity\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-11T11:36:38.241Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-harness-workflow-parity",
+    "asked_at": "2026-09-11T19:12:26.635Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -1032,13 +1037,6 @@
         "behavior_change": false
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-11T19:04:58.443Z",
-    "branch": "wt/pi-harness-workflow-parity",
-    "worktree_id": "beehive--wt--pi-harness-workflow-parity",
-    "uat": "pending",
-    "blocked_by": []
   },
   "last_scribing_run": {
     "feature": "pi-harness-workflow-parity",
