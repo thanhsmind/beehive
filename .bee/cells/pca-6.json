@@ -1,0 +1,153 @@
+{
+  "id": "pca-6",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Frame blind lanes with a rubric, converge by base and graft, and show what the hat wave dismissed",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-planning/references/design-sketch.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-planning/references/design-sketch.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L5-digest.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-planning/references/design-sketch.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt the L5 design practices (per D2 and D4), translated, never pasted. Never rename, re-level or delete a cited heading. Do NOT run bee dev regen (wave-barrier). Docs only: `bee blind check` accepts exactly seven dossier sections (packages/bee-rs/crates/bee/src/verbs/blind/mod.rs DOSSIER_SECTIONS) and refuses any other `## ` heading, so this cell adds NO new dossier section and changes no Rust. gates-and-delegation.md § 'Blind lanes and convergence': (1) open the section with a five-line method spine: frame, fan out, cross-critique, base and graft, record. (2) Add a move 0, Frame: before move 1 the leader writes a few gradeable criteria as a bold **Rubric** block inside the dossier's `## Question` section, after the brief's fenced block, never inside the fence and never in the brief, so the neutrality lint still holds; move 3 scores each proposal criterion by criterion; the rejected-set reasons in move 4 cite criterion ids. (3) Split move 3 Converge into Base (read every proposal whole, pick by rubric score, break ties on extensibility without breaking invariants and then on the smaller public surface), Grafts (one or two per rejected proposal, folded by hand, recorded as a bold **Grafts** block inside the dossier's `## Chosen` section, each with the source lane's dispatch_id) and the rule: lanes that converge ship the consensus with no graft; lanes that diverge wildly mean the frame was loose, so reframe and re-run, never average. A hat or Gate 2 finding that a lane had already caught is a missed graft: re-open the dossier. State once that the dossier keeps its seven sections and `bee blind check` stays green. (4) An optional cross-judge after move 2: one `--kind advisor --role advisor` dispatch with the rubric and the proposals by path; the dossier records, inside `## Chosen`, the judge's pick, the leader's pick and the reason for any disagreement; no new seat. § 'Hat wave' Communication: the synthesis digest recorded with `bee state advisor-ref record --digest-file` carries a Dismissed list in the reviewing-reference dismissal shape (point to it, do not copy it). design-sketch.md § Candidates: interface depth and the red flags are default rubric criteria, not the whole rubric; § opening paragraph: lanes open only after a traced model exists (`bee-researching/references/trace-and-provenance.md` (\"Trace\")) and the brief's read diet names that trace; § Caller's usage first: point to hat-facts-gaps, which reads the usage block against the plan's Shape, and a call site the types cannot serve is a Structure BLOCKER. Prefer words over a new numeric limit. Cite qualified pointers without the skills/ prefix.",
+  "verify": "rg -q '\\*\\*Rubric\\*\\*' skills/bee-hive/references/gates-and-delegation.md && rg -q '\\*\\*Grafts\\*\\*' skills/bee-hive/references/gates-and-delegation.md && rg -q 'never average' skills/bee-hive/references/gates-and-delegation.md && rg -q 'Blind lanes and convergence' skills/bee-hive/references/gates-and-delegation.md && ! rg -q '^## (Rubric|Grafts)' skills/bee-hive/references/gates-and-delegation.md",
+  "must_haves": {
+    "truths": [
+      "A rubric exists before any lane fans out",
+      "Converge picks a base and records grafts with their source",
+      "The hat-wave digest carries a Dismissed list"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/gates-and-delegation.md",
+        "substantive": "spine, move 0 Frame, base and graft, optional cross-judge, Dismissed in the hat-wave digest"
+      },
+      {
+        "path": "skills/bee-planning/references/design-sketch.md",
+        "substantive": "rubric defaults, grounding precondition, usage-types check pointer"
+      }
+    ],
+    "key_links": [
+      "design-sketch.md points to Blind lanes and convergence"
+    ],
+    "prohibitions": [
+      "No new SEAT_ROLES seat",
+      "No bee dev regen",
+      "No write outside the two listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-6",
+    "outcome": "Blind lanes gain spine, move 0 Frame (Rubric in ## Question), Base/Grafts/never-average in move 3, optional advisor cross-judge, rejected reasons cite criterion ids; hat-wave digest carries Dismissed list; design-sketch gains Trace precondition, hat-facts-gaps usage check, rubric defaults",
+    "files_changed": [
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-planning/references/design-sketch.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:55:11.900Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:51:37.707Z",
+    "verify_command": null,
+    "verified_at": null,
+    "mistakes": [
+      {
+        "wrong": "first git commit put Co-Authored-By lines after the cell: pca-6 trailer, so the trailer was not the last body line",
+        "better": "write the cell trailer last from the start; amended before cap"
+      }
+    ],
+    "report": {
+      "outcome": "Rubric-first blind lanes, base and graft, Dismissed list in hat-wave digest",
+      "commit": "68c3cd1a",
+      "files": [
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "skills/bee-planning/references/design-sketch.md"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity — green:static — docs-only edit to two skill references; pointer check plus the cell verify rg chain (VERIFY_OK)",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "first git commit put Co-Authored-By lines after the cell: pca-6 trailer, so the trailer was not the last body line — write the cell trailer last from the start; amended before cap"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line-revised",
+            "status": "PASS",
+            "evidence": "revised verify passes: gates-and-delegation.md:168 bold Rubric inside ## Question, :177 bold Grafts inside ## Chosen, :178 never average the proposals; blind/mod.rs:79-87 keeps seven sections"
+          },
+          {
+            "id": "rubric-before-fanout",
+            "status": "PASS",
+            "evidence": ":168 Before move 1 ... Write it before the first dispatch; outside the brief and its fence, so the neutrality lint holds"
+          },
+          {
+            "id": "base-and-graft",
+            "status": "PASS",
+            "evidence": ":176-178 Base by rubric score with tie-breaks, Grafts with source dispatch_id, converge/diverge rule; move 4 cites criterion ids"
+          },
+          {
+            "id": "cross-judge-no-seat",
+            "status": "PASS",
+            "evidence": "one --kind advisor --role advisor dispatch; SEAT_ROLES stays closed; no Rust file changed"
+          },
+          {
+            "id": "dismissed-in-digest",
+            "status": "PASS",
+            "evidence": "Hat wave Communication points to reviewing-reference.md (Dismissal shape), heading at reviewing-reference.md:154"
+          },
+          {
+            "id": "design-sketch",
+            "status": "PASS",
+            "evidence": "design-sketch.md:45 points to Blind lanes and convergence; traced-model precondition, hat-facts-gaps pointer and rubric defaults added; Design red flags heading at :83"
+          },
+          {
+            "id": "scope-no-regen",
+            "status": "PASS",
+            "evidence": "68c3cd1a --stat: the 2 listed files only"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.943Z"
+      }
+    ]
+  },
+  "escalate": true
+}

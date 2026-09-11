@@ -487,6 +487,8 @@
     "knowledge-orphan-links",
     "knowledge-pattern-areas",
     "leader-completeness-check",
-    "pi-worktree-session-relocation"
+    "pi-worktree-session-relocation",
+    "craft-adoption",
+    "pstack-craft-adoption"
   ]
 }

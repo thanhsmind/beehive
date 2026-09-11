@@ -1,0 +1,156 @@
+{
+  "id": "pca-3",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Give plans a Summary, a cells preview with what the user will see, and give class playbooks a method",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-writing-skills/references/prompt-style.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L1-digest.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L2-digest.md"
+  ],
+  "affects_skills": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt L1 and L2 into bee-planning (per D2 and D4), translated, never pasted, keeping bee's one-line step form. Never rename, re-level or delete a cited heading; under '## Class playbooks' add steps inside existing class sections only (class_playbook_parity.rs). Do NOT run bee dev regen (wave-barrier). PLAN TEMPLATE (planning-reference.md § 'Artifact: plan.md', standard and high-risk plans only — tiny and small keep their gate-message shape): (a) `## Summary` right after the H1: a few plain lines on what changes and for whom, written for the user, no cell ids. (b) `## Cells — current slice (preview)` with columns id / title / files (mark new and deleted) / deps / you see / proof; define 'you see' as the effect the user or the product shows, never a file name; mark the table as a preview — persisted cells stay the authority and are added only after the execution gate. (c) One `Waves:` line in Approach naming the parallel groups and each serial edge's reason. (d) Test matrix rows end with `Pass when <literal output or state>`; a cell that changes existing behavior adds one row running the same scenario on main and on head. (e) The risk map gains a `Lands in` column holding a cell id. GATE MESSAGE (SKILL.md § Gate, standard and high-risk): the message shows the Summary and the 'you see' lines, never the full preview table. CONFLICT FIX: SKILL.md hard rule 'No cells, no prep artifacts, before the gate is approved' stays; rewrite the hat-wave text in planning-reference.md that applies findings 'directly to the cells (legal — cells are mutable before the gate)' and reviews 'the drafted cells (bee cells list)' so that before the gate the hat wave reviews and fixes the plan's cells preview table, and on slice 2+ it reviews the persisted new cells. CLASS PLAYBOOKS: bugfix — when the cause is not known, list the candidate causes and each pass test the split that removes the most, with runtime evidence (cite `expertise/tests.md` and bee-principle-crash-site-versus-fault-site); revert every edit a refuted hypothesis motivated; an inconclusive run or a run on a different surface is not a pass; a one-line fix with a known cause keeps the short path. Every class ends with one 'Proof line:' naming the evidence its cap carries (bugfix: red then green output; perf: baseline, after, delta, command, artifact path; refactor: the record green before and after). perf — the hypothesis names a mechanism the baseline shows, and first ask whether the slow path must exist; add a bold 'When the ask is a sustained metric target' block (a harness proven to separate the target case then frozen, the median of several runs, a stop rule of target plus a minimum number of attempts, one row per attempt, revert what does not clear noise, never loosen the stop rule). refactor — a type check or lint is not a record; a subtract-first cell deletes dead code and one-caller wrappers; an API move migrates every caller and deletes the old API in the same slice, then searches strings and docs for the old name; never edit the record, harness or baseline to make a step green; keep the diff only if it lowers reader load. research — a question choosing between alternatives ends in a recommendation with a tradeoffs table; an answer that leads to a change re-routes to bugfix or feature; a live runtime symptom captures a real profile or trace, reduces it through a gather dispatch, confirms with one instrumented run and maps it to path:line, and without a before-and-after pair the cause is labelled a hypothesis. spike step 5 — add one variant the ask did not name when the design space is open. Prefer words over a new numeric limit. Cite qualified pointers without the skills/ prefix.",
+  "verify": "rg -q '^## Summary' skills/bee-planning/references/planning-reference.md && rg -q 'Cells — current slice \\(preview\\)' skills/bee-planning/references/planning-reference.md && rg -q 'Pass when' skills/bee-planning/references/planning-reference.md && rg -q 'Proof line:' skills/bee-planning/references/planning-reference.md && ! rg -q 'cells are mutable before the gate' skills/bee-planning/references/planning-reference.md",
+  "must_haves": {
+    "truths": [
+      "Standard and high-risk plans open with a user-facing Summary and carry a cells preview whose 'you see' is a user-visible effect",
+      "The gate message shows the Summary and the 'you see' lines",
+      "The hat wave reviews the preview table before the gate, so the no-cells-before-gate rule holds",
+      "Each class playbook states a method and one proof line"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "the extended plan template, the fixed hat-wave text, and the class-playbook methods"
+      },
+      {
+        "path": "skills/bee-planning/SKILL.md",
+        "substantive": "the gate-message rule"
+      }
+    ],
+    "key_links": [
+      "class sections keep their ### class-value headings"
+    ],
+    "prohibitions": [
+      "No new ### heading under Class playbooks",
+      "No bee dev regen",
+      "No write outside the two listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-3",
+    "outcome": "Plan template gains Summary, cells preview with 'you see', Waves line, Lands in column and Pass when rows; gate message shows Summary and 'you see' lines; hat wave fixes the preview before the gate; every class playbook gains its method and a Proof line",
+    "files_changed": [
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md"
+    ],
+    "deviations": [
+      "Cited .bee/expertise/tests.md (\"Instrument before guessing\") in place of bare expertise/tests.md — the playbook file already cites the .bee/expertise/ copy everywhere, so one path form stays — found a better route",
+      "Added the Lands in column to the approach.md risk-map template too, not only the plan.md Approach line — approach.md replaces that section when it exists, so both carry the risk map — found a better route",
+      "New bugfix, perf and research method text sits in bold blocks and new refactor steps append as 6 to 9, so no cited step number moves — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:46:46.072Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:41:03.939Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Plan template, gate message, hat-wave conflict fix and class-playbook methods landed in bee-planning",
+      "commit": "641d54f2",
+      "files": [
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-planning/references/planning-reference.md"
+      ],
+      "tests": "cargo test -p bee --test class_playbook_parity --test pointer_integrity --test instruction_laws — green:static — docs change to bee-planning; plus the cell verify rg chain printed VERIFY-OK",
+      "deviations": [
+        "Cited .bee/expertise/tests.md (\"Instrument before guessing\") in place of bare expertise/tests.md — the playbook file already cites the .bee/expertise/ copy everywhere, so one path form stays — found a better route",
+        "Added the Lands in column to the approach.md risk-map template too, not only the plan.md Approach line — approach.md replaces that section when it exists, so both carry the risk map — found a better route",
+        "New bugfix, perf and research method text sits in bold blocks and new refactor steps append as 6 to 9, so no cited step number moves — found a better route"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK"
+          },
+          {
+            "id": "summary-and-preview",
+            "status": "PASS",
+            "evidence": "planning-reference.md:37 ## Summary and :70 ## Cells — current slice (preview) with the you-see column; 'You see is an effect, never a file name'; 'The preview is not the cells'"
+          },
+          {
+            "id": "gate-message",
+            "status": "PASS",
+            "evidence": "641d54f2 skills/bee-planning/SKILL.md Gate: open with the plan's ## Summary, then the you-see line of each preview row, never the full table"
+          },
+          {
+            "id": "hat-wave-conflict-fixed",
+            "status": "PASS",
+            "evidence": "rg 'drafted cells|mutable' empty; hat wave fixes the plan's cells preview table; planning-reference.md:616 names persisted new cells on slice 2+; SKILL.md:165 No cells before the gate rule intact"
+          },
+          {
+            "id": "playbooks-method-proof",
+            "status": "PASS",
+            "evidence": "rg -c 'Proof line:' = 8, one per class; bugfix, perf sustained-target, refactor 6-9, research runtime and spike variant blocks present"
+          },
+          {
+            "id": "no-new-class-heading",
+            "status": "PASS",
+            "evidence": "### headings under Class playbooks (planning-reference.md:217-344) are the same 8 classes; class_playbook_parity ok"
+          },
+          {
+            "id": "cited-pointers",
+            "status": "PASS",
+            "evidence": "Tiny/small merged gate heading at planning-reference.md:533; Instrument before guessing at expertise/tests.md:489; pointer_integrity ok"
+          },
+          {
+            "id": "scope-no-regen",
+            "status": "PASS",
+            "evidence": "641d54f2 --stat: 2 listed files"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.935Z"
+      }
+    ]
+  },
+  "escalate": true
+}

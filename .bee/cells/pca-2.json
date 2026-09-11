@@ -1,0 +1,137 @@
+{
+  "id": "pca-2",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Add the anchor step, worker return shape and self-check to Trace and Provenance sweep",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "skills/bee-researching/references/trace-and-provenance.md",
+    "skills/bee-writing-skills/references/prompt-style.md"
+  ],
+  "affects_skills": [
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt the L4 practices into the one home of both procedures (per D2 and D4), translated into bee's words, never pasted. Never rename, re-level or delete an existing heading; add sub-steps and lines inside the existing sections. Do NOT run bee dev regen (wave-barrier). Changes: (1) Trace step 1 and a new first Provenance step: when the target is vague, write your reading as the first line of the account and go on, never stop to ask. (2) Provenance sweep gains an Anchor step before its rows: write the path:line range, the symbols and a few search terms; run `git blame -L <a>,<b> <path>` for the commits that last touched the lines and take PR numbers from their subjects; every row searches those terms. (3) Trace step 3: brief each worker with the question as a path, its one entry point, and a fixed return shape — ordered steps with path:line and what each calls next, boundaries, surprises, UNFOLLOWED steps with reason, files read. (4) Trace step 5: when two returns disagree on a step, open that anchor and settle it; if the code does not settle it, name the disagreement under Gotchas. (5) Provenance row 2 (git history): read back to the first commit, not the last; skip bot commits; for a copied pattern, find and read where it first appeared. (6) After the seven rows: when the target is defensive (a guard, retry, timeout, sleep or flag), add revert, hotfix, incident and the error string to the git and tracker search terms. (7) When git history or the tracker returns more than a screen of hits, fan that row alone through the dispatch door as a gather with the anchor; keep the other rows inline. (8) Phrasing rules gain two bullets: before calling a claim Supported, ask whether the evidence would look different if the reading were wrong, and if not it is Inferred; evidence about a neighbour feature never answers a question about this one. (9) Provenance answer shape: open with Question and anchor (the question in one sentence, then the path:line range and symbols); What we do not know names who would likely know (the commit author, the decision owner); end with a short self-check before sending (every found claim has its source beside it; tier words match the tier; no claim uses the code as its own reason; the guess in the question was checked; the gap section names a gap or says why there is none). (10) Trace answer shape: when a step is complex say why it is complex, when it is simple give it one line. Prefer words over a new numeric limit.",
+  "verify": "rg -q 'git blame -L' skills/bee-researching/references/trace-and-provenance.md && rg -q 'first commit' skills/bee-researching/references/trace-and-provenance.md && rg -q 'Question and anchor' skills/bee-researching/references/trace-and-provenance.md && rg -q '^## Trace$' skills/bee-researching/references/trace-and-provenance.md && rg -q '^## Provenance sweep$' skills/bee-researching/references/trace-and-provenance.md",
+  "must_haves": {
+    "truths": [
+      "Provenance sweep anchors on a path:line range before its rows",
+      "Trace workers return one fixed shape and disagreements are settled at the anchor",
+      "Every Provenance answer opens with Question and anchor and ends with a self-check"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-researching/references/trace-and-provenance.md",
+        "substantive": "the ten L4 adoptions inside the existing sections"
+      }
+    ],
+    "key_links": [
+      "headings Trace and Provenance sweep unchanged"
+    ],
+    "prohibitions": [
+      "No heading renamed or removed",
+      "No bee dev regen",
+      "No write outside the listed file"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-2",
+    "outcome": "Ten L4 adoptions landed inside Trace and Provenance sweep; headings unchanged",
+    "files_changed": [
+      "skills/bee-researching/references/trace-and-provenance.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:45:14.515Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:41:03.802Z",
+    "mistakes": [
+      {
+        "wrong": "ran git add on the shared index and the concurrent-worker guard refused it",
+        "better": "use a path-scoped git commit -- <path> from the start when siblings share the checkout"
+      }
+    ],
+    "report": {
+      "outcome": "Ten L4 adoptions landed inside the existing Trace and Provenance sweep sections of skills/bee-researching/references/trace-and-provenance.md; no heading renamed, no regen (wave-barrier)",
+      "commit": "45ce5f06",
+      "files": [
+        "skills/bee-researching/references/trace-and-provenance.md"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity --test instruction_laws — green:static — docs-only edit to one skill reference; pointer and instruction-law parity plus the cell verify rg check (VERIFY_OK)",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "ran git add on the shared index and the concurrent-worker guard refused it — use a path-scoped git commit -- <path> from the start when siblings share the checkout"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK"
+          },
+          {
+            "id": "anchor-before-rows",
+            "status": "PASS",
+            "evidence": "45ce5f06 adds the Anchor bullet before the seven rows with path:line range, symbols, search terms and git blame -L <a>,<b> <path>"
+          },
+          {
+            "id": "trace-return-shape-and-disagreement",
+            "status": "PASS",
+            "evidence": "Trace step 3 gets the five-part return shape; step 5 says open that step's anchor and settle it, else name the disagreement under Gotchas"
+          },
+          {
+            "id": "ten-adoptions",
+            "status": "PASS",
+            "evidence": "all ten items present in the diff: vague reading, first-commit history without bot commits, defensive terms, large-row fan-out, two phrasing bullets, Question and anchor, who-would-know, self-check, complex/simple step wording"
+          },
+          {
+            "id": "headings-unchanged",
+            "status": "PASS",
+            "evidence": "diff renames and removes no heading; ^## Trace$ and ^## Provenance sweep$ still match"
+          },
+          {
+            "id": "scope-no-regen",
+            "status": "PASS",
+            "evidence": "45ce5f06 --stat: 1 file changed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.933Z"
+      }
+    ]
+  },
+  "escalate": true
+}

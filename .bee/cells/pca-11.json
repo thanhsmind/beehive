@@ -1,0 +1,129 @@
+{
+  "id": "pca-11",
+  "feature": "pstack-craft-adoption",
+  "title": "Keep the vague-target rule in the procedure only, not in the shortcut doors",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "pca-10"
+  ],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".claude-plugin/*",
+    ".codex-plugin/*",
+    ".bee/expertise/*",
+    "AGENTS.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md",
+    "skills/bee-researching/references/trace-and-provenance.md"
+  ],
+  "affects_skills": [
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Fix the H4 failure found by the leader check (per D1: a shortcut is a door and never restates a procedure step). Cells pca-1 and pca-2 ran in parallel and both wrote the vague-target rule: it now lives in trace-and-provenance.md at Trace step 1 (line 13) and in the Provenance sweep block (line 72), and is copied as a bullet in skills/bee-how/SKILL.md:26 and skills/bee-why/SKILL.md:27. Delete that one bullet from each shortcut's 'Scope the question' section. Change nothing else in the shortcut bodies and do not touch trace-and-provenance.md. Then run `.bee/bin/bee dev regen`, `.bee/bin/bee dev release-manifest --check`, and `cargo test -p bee --test pointer_integrity --test instruction_laws` with a literal cargo path; record their last lines on the cap. Commit the two edits and the regenerated trees in one cell commit. Add one line to each shortcut's CREATION-LOG.md only if a REFACTOR section already exists there; otherwise leave the logs alone.",
+  "verify": "! rg -q 'target is vague' skills/bee-how/SKILL.md skills/bee-why/SKILL.md && rg -q 'target is vague' skills/bee-researching/references/trace-and-provenance.md && ! rg -q 'target is vague' .claude/skills/bee-how/SKILL.md && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "No Trace or sweep step line appears in bee-how or bee-why",
+      "The procedure still owns the vague-target rule"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-how/SKILL.md",
+        "substantive": "vague-target bullet removed"
+      },
+      {
+        "path": "skills/bee-why/SKILL.md",
+        "substantive": "vague-target bullet removed"
+      }
+    ],
+    "key_links": [
+      "bee-how and bee-why still cite bee-researching/references/trace-and-provenance.md"
+    ],
+    "prohibitions": [
+      "No edit to trace-and-provenance.md",
+      "No hand edit of a generated tree",
+      "No release"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader-pca-11",
+    "outcome": "Removed the vague-target bullet from skills/bee-how/SKILL.md and skills/bee-why/SKILL.md 'Scope the question'; trace-and-provenance.md still owns it (lines 13, 72); both shortcuts still cite it; regen trees refreshed; one REFACTOR line in each CREATION-LOG.md",
+    "files_changed": [
+      "skills/bee-how/SKILL.md",
+      "skills/bee-why/SKILL.md",
+      "skills/bee-how/CREATION-LOG.md",
+      "skills/bee-why/CREATION-LOG.md",
+      ".agents/skills",
+      ".claude/skills",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      ".opencode/skills",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Added one REFACTOR line to skills/bee-how/CREATION-LOG.md and skills/bee-why/CREATION-LOG.md, reserved first — the action asked for it because both logs have a REFACTOR section, but the cell files list left those paths out — the plan was wrong about a fact",
+      "sync-ack: CREATION-LOG.md REFACTOR lines were asked for by the cell action; they sit beside the predicted SKILL.md files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T06:02:42.739Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill-body fix plus regen needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen this session, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T06:00:28.112Z",
+    "sync_ack": "CREATION-LOG.md REFACTOR lines were asked for by the cell action; they sit beside the predicted SKILL.md files",
+    "mistakes": [
+      {
+        "wrong": "First cargo test ran from the worktree root with no Cargo.toml there",
+        "better": "pass --manifest-path packages/bee-rs/Cargo.toml from the start"
+      }
+    ],
+    "report": {
+      "outcome": "Vague-target bullet removed from both shortcut doors; procedure keeps it",
+      "commit": "47f706ad",
+      "files": [
+        "skills/bee-how/SKILL.md",
+        "skills/bee-why/SKILL.md",
+        "skills/bee-how/CREATION-LOG.md",
+        "skills/bee-why/CREATION-LOG.md",
+        ".agents/skills",
+        ".claude/skills",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills",
+        ".opencode/skills",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test -p bee --test pointer_integrity --test instruction_laws — green:unit — docs-only skill body edit plus regen; instruction_laws 9 passed, pointer_integrity 10 passed; bee dev release-manifest --check: 376 file(s) match; cell verify passed",
+      "deviations": [
+        "Added one REFACTOR line to skills/bee-how/CREATION-LOG.md and skills/bee-why/CREATION-LOG.md, reserved first — the action asked for it because both logs have a REFACTOR section, but the cell files list left those paths out — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "First cargo test ran from the worktree root with no Cargo.toml there — pass --manifest-path packages/bee-rs/Cargo.toml from the start"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "escalate": true
+}

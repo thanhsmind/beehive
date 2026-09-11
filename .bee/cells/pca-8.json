@@ -1,0 +1,184 @@
+{
+  "id": "pca-8",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pstack-craft-adoption",
+  "title": "Give principles a check you can run, a not-when line, and fix the broken sibling name",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-principle-single-source-of-truth/SKILL.md",
+    "skills/bee-principle-one-fact-one-home/SKILL.md",
+    "skills/bee-principle-smallest-honest-shape/SKILL.md",
+    "skills/bee-principle-split-never-shrink/SKILL.md",
+    "skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md",
+    "skills/bee-principle-chestertons-fence/SKILL.md",
+    "skills/bee-principle-red-before-green/SKILL.md",
+    "skills/bee-principle-verify-before-reporting/SKILL.md",
+    "skills/bee-principle-test-behavior-not-structure/SKILL.md",
+    "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+    "skills/bee-principle-the-deletion-test/SKILL.md",
+    "skills/bee-principle-reproduce-first/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md",
+    "docs/history/research/pstack-craft-study.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "/tmp/claude-1000/-home-thanhsmind-Projects-goglbe-beehive/9d0933f3-e76c-498c-a471-1b5f7f684697/scratchpad/craft/L7-digest.md"
+  ],
+  "affects_skills": [
+    "skills/bee-principle-single-source-of-truth/SKILL.md",
+    "skills/bee-principle-one-fact-one-home/SKILL.md",
+    "skills/bee-principle-smallest-honest-shape/SKILL.md",
+    "skills/bee-principle-split-never-shrink/SKILL.md",
+    "skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md",
+    "skills/bee-principle-chestertons-fence/SKILL.md",
+    "skills/bee-principle-red-before-green/SKILL.md",
+    "skills/bee-principle-verify-before-reporting/SKILL.md",
+    "skills/bee-principle-test-behavior-not-structure/SKILL.md",
+    "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+    "skills/bee-principle-the-deletion-test/SKILL.md",
+    "skills/bee-principle-reproduce-first/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "Adopt the L7 principle-craft practices into the twelve listed skills only (per D2 and D4); new principles are Slice 3 and not part of this cell. Edit SKILL.md bodies only — never the principle index rows (their grammar is parsed and pinned by principle_index_parity.rs) and never the expertise guides (other cells own them). Keep each skill short, with its named example and its Depth line. Do NOT run bee dev regen (wave-barrier). (1) Add one `**Check:**` line, a yes or no question the agent can answer in the moment, before `**Why:**` in: single-source-of-truth ('change the value once; if you must edit a second file, elect the owner'), one-fact-one-home, smallest-honest-shape, split-never-shrink, record-at-the-moment-of-settlement, chestertons-fence. (2) Add one `**Not when:**` line to the broad ones: red-before-green (the failure cannot be automated; then the reproduce-first repro is the red) and verify-before-reporting. (3) red-before-green gains a delegation line: a worker's done-report is a prediction too; read its diff and proof line before you repeat green. (4) test-behavior-not-structure gains a vacuity check: the test must fail if the subject returns nothing, with three named shapes (no real assertion, a constant pin, a self-referential expected value). (5) crash-site-versus-fault-site: once the origin is found, search for the same shape elsewhere and fix every instance in the same cell. (6) the-deletion-test gains a second question: can a new reader answer where X comes from and what can change X? (7) reproduce-first: its 'Not the same as' line names `principle-red-before-green` without the load-bearing prefix; change it to `bee-principle-red-before-green`. Add a 'Not the same as' line between single-source-of-truth and one-fact-one-home (a code fact against a knowledge entry) and between verify-before-reporting and red-before-green.",
+  "verify": "rg -q 'bee-principle-red-before-green' skills/bee-principle-reproduce-first/SKILL.md && rg -q 'Check:' skills/bee-principle-single-source-of-truth/SKILL.md && rg -q 'Check:' skills/bee-principle-chestertons-fence/SKILL.md && rg -q 'Not when:' skills/bee-principle-red-before-green/SKILL.md",
+  "must_haves": {
+    "truths": [
+      "Six principles carry a Check line",
+      "reproduce-first names its sibling by its real skill name",
+      "The principle index rows are untouched"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-principle-reproduce-first/SKILL.md",
+        "substantive": "the corrected sibling name"
+      }
+    ],
+    "key_links": [
+      "principle_index_parity still green"
+    ],
+    "prohibitions": [
+      "No edit to the principle index rows",
+      "No new principle",
+      "No bee dev regen",
+      "No write outside the twelve listed files"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-8",
+    "outcome": "Six principles carry a Check line; two carry Not when; reproduce-first names bee-principle-red-before-green; index rows untouched",
+    "files_changed": [
+      "skills/bee-principle-single-source-of-truth/SKILL.md",
+      "skills/bee-principle-one-fact-one-home/SKILL.md",
+      "skills/bee-principle-smallest-honest-shape/SKILL.md",
+      "skills/bee-principle-split-never-shrink/SKILL.md",
+      "skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md",
+      "skills/bee-principle-chestertons-fence/SKILL.md",
+      "skills/bee-principle-red-before-green/SKILL.md",
+      "skills/bee-principle-verify-before-reporting/SKILL.md",
+      "skills/bee-principle-test-behavior-not-structure/SKILL.md",
+      "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+      "skills/bee-principle-the-deletion-test/SKILL.md",
+      "skills/bee-principle-reproduce-first/SKILL.md"
+    ],
+    "deviations": [
+      "Added the single-source and one-fact Not the same as line in both files, not one — each skill loads alone, so each needs the pointer — found a better route",
+      "Wrote the verify-before-reporting Not when text myself (a question or design concern, not a defect claim) — the cell named the skill but gave no wording — something else"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T05:53:16.509Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:49:45.926Z",
+    "mistakes": [
+      {
+        "wrong": "The first staging call on the twelve paths was refused by the concurrent-worker guard",
+        "better": "a path-scoped commit from the start would have skipped the refusal"
+      },
+      {
+        "wrong": "The first cells finish call named version-control verbs in its report text and the worktree guard refused it",
+        "better": "plain words in the report from the start would have skipped the refusal"
+      }
+    ],
+    "report": {
+      "outcome": "Check lines before Why in single-source-of-truth, one-fact-one-home, smallest-honest-shape, split-never-shrink, record-at-the-moment-of-settlement, chestertons-fence; Not when in red-before-green (the reproduce-first repro is the red) and verify-before-reporting (a question, not a defect claim); red-before-green delegation line; test-behavior-not-structure vacuity check with 3 shapes; crash-site same-shape sweep; the-deletion-test second reader question; reproduce-first sibling renamed to bee-principle-red-before-green; Not the same as lines between single-source and one-fact-one-home (both files) and from verify-before-reporting to red-before-green",
+      "commit": "0ab32674",
+      "files": [
+        "skills/bee-principle-single-source-of-truth/SKILL.md",
+        "skills/bee-principle-one-fact-one-home/SKILL.md",
+        "skills/bee-principle-smallest-honest-shape/SKILL.md",
+        "skills/bee-principle-split-never-shrink/SKILL.md",
+        "skills/bee-principle-record-at-the-moment-of-settlement/SKILL.md",
+        "skills/bee-principle-chestertons-fence/SKILL.md",
+        "skills/bee-principle-red-before-green/SKILL.md",
+        "skills/bee-principle-verify-before-reporting/SKILL.md",
+        "skills/bee-principle-test-behavior-not-structure/SKILL.md",
+        "skills/bee-principle-crash-site-versus-fault-site/SKILL.md",
+        "skills/bee-principle-the-deletion-test/SKILL.md",
+        "skills/bee-principle-reproduce-first/SKILL.md"
+      ],
+      "tests": "cargo test -p bee --test principle_index_parity plus the cell verify rg chain — green:static — docs-only SKILL.md body edits; parity 5 of 5 ok and verify printed VERIFY-OK",
+      "deviations": [
+        "Added the single-source and one-fact Not the same as line in both files, not one — each skill loads alone, so each needs the pointer — found a better route",
+        "Wrote the verify-before-reporting Not when text myself (a question or design concern, not a defect claim) — the cell named the skill but gave no wording — something else"
+      ],
+      "mistakes": [
+        "The first staging call on the twelve paths was refused by the concurrent-worker guard — a path-scoped commit from the start would have skipped the refusal",
+        "The first cells finish call named version-control verbs in its report text and the worktree guard refused it — plain words in the report from the start would have skipped the refusal"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK"
+          },
+          {
+            "id": "six-check-lines",
+            "status": "PASS",
+            "evidence": "0ab32674 adds a Check line before Why in the six named principles"
+          },
+          {
+            "id": "not-when-and-extras",
+            "status": "PASS",
+            "evidence": "Not when in red-before-green and verify-before-reporting; delegation line, vacuity check with 3 shapes, same-shape sweep, deletion-test second question, Not-the-same-as lines for both pairs"
+          },
+          {
+            "id": "sibling-name-fixed",
+            "status": "PASS",
+            "evidence": "reproduce-first/SKILL.md: principle-red-before-green becomes bee-principle-red-before-green"
+          },
+          {
+            "id": "index-rows-untouched",
+            "status": "PASS",
+            "evidence": "0ab32674 --stat: only the 12 listed SKILL.md files; principle_index_parity ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.948Z"
+      }
+    ]
+  },
+  "escalate": true
+}

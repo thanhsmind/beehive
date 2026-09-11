@@ -1,0 +1,180 @@
+{
+  "id": "pca-10",
+  "feature": "pstack-craft-adoption",
+  "title": "Regenerate at wave close, record GREEN for the shortcuts, and prove the suite",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "pca-1",
+    "pca-2",
+    "pca-3",
+    "pca-4",
+    "pca-5",
+    "pca-6",
+    "pca-7",
+    "pca-8",
+    "pca-9"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-how/CREATION-LOG.md",
+    "skills/bee-why/CREATION-LOG.md",
+    ".bee/expertise/*",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    ".claude-plugin/*",
+    ".codex-plugin/*",
+    "AGENTS.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-craft-adoption/plan.md"
+  ],
+  "affects_skills": [
+    "skills/bee-how/SKILL.md",
+    "skills/bee-why/SKILL.md"
+  ],
+  "affects_specs": [],
+  "action": "The wave-close regen cell. (1) Record GREEN and Final Outcome in skills/bee-how/CREATION-LOG.md and skills/bee-why/CREATION-LOG.md from the leader's GREEN results file handed to you in this cell's Expertise block. (2) Run `.bee/bin/bee dev regen`, then `.bee/bin/bee dev release-manifest --check`, then the declared suite (commands.test) with a literal cargo path. All three must be green; record their last lines on the cap. (3) Confirm .bee/expertise/tests.md and .bee/expertise/review.md now match expertise/tests.md and expertise/review.md, and that bee-how and bee-why exist in all five skill homes. Commit the regenerated trees and the two logs in one cell commit, with any regen timestamp file included.",
+  "verify": "test -f .claude/skills/bee-how/SKILL.md && test -f .agents/skills/bee-why/SKILL.md && test -f .opencode/skills/bee-how/SKILL.md && test -f .claude-plugin/skills/bee-why/SKILL.md && test -f .codex-plugin/skills/bee-how/SKILL.md && cmp -s expertise/tests.md .bee/expertise/tests.md && cmp -s expertise/review.md .bee/expertise/review.md && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "bee dev regen, the manifest check and the declared suite are green",
+      "The shortcut skills ship in all five homes",
+      "The installed expertise copies match their sources"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-how/CREATION-LOG.md",
+        "substantive": "GREEN and Final Outcome recorded"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md changes only through regen"
+    ],
+    "prohibitions": [
+      "No hand edit of a generated tree",
+      "No release — it runs only after the uat stop, on the user's word"
+    ]
+  },
+  "trace": {
+    "worker": "leader-pca-10",
+    "outcome": "Recorded GREEN GH1-GH3, REFACTOR (none) and Final Outcome in both shortcut CREATION-LOGs; regen, release-manifest --check and the declared suite green; bee-how and bee-why ship in all five skill homes; .bee/expertise tests.md and review.md match their sources",
+    "files_changed": [
+      "skills/bee-how/CREATION-LOG.md",
+      "skills/bee-why/CREATION-LOG.md",
+      ".bee/expertise/tests.md",
+      ".bee/expertise/review.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude/skills",
+      ".agents/skills",
+      ".opencode/skills",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills"
+    ],
+    "deviations": [
+      "Ran the suite with the literal cargo path instead of the PATH-prefixed commands.test string — the worktree guard refuses a command name computed at runtime — hit an unforeseen obstacle",
+      "Wrote both CREATION-LOG sections with the Edit tool instead of one scripted rewrite — the guard refused the heredoc because its text named a version-control command — hit an unforeseen obstacle",
+      "sync-ack: affects_skills names the two shortcut SKILL.md files the logs describe; this cell writes only their CREATION-LOG.md siblings, and pca-1 owns the SKILL.md bodies"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T06:00:06.550Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d0933f3-e76c-498c-a471-1b5f7f684697",
+    "escalation_reason": "Skill prose needs the session model: the docs role resolves to the agy-flash herding agent, which stalled at an OAuth screen earlier this session and is unverified since, and the Fable quota is spent (decisions 1c407980, 5c6777d0).",
+    "claimed_at": "2026-09-11T05:55:44.832Z",
+    "sync_ack": "affects_skills names the two shortcut SKILL.md files the logs describe; this cell writes only their CREATION-LOG.md siblings, and pca-1 owns the SKILL.md bodies",
+    "mistakes": [
+      {
+        "wrong": "skills/bee-why/CREATION-LOG.md first shortened the anchor step wording from the GREEN results file",
+        "better": "copy the source wording exactly the first time; fixed before commit"
+      }
+    ],
+    "report": {
+      "outcome": "GREEN and Final Outcome recorded in skills/bee-how/CREATION-LOG.md and skills/bee-why/CREATION-LOG.md (sections GREEN Phase, REFACTOR Phase, Final Outcome); bee dev regen all 3 steps green; release_manifest --check 376 files match; cargo suite 3836 passed 0 failed; bee-how and bee-why SKILL.md present in .claude, .agents, .opencode, .claude-plugin, .codex-plugin; cmp shows expertise/tests.md and expertise/review.md equal their .bee/expertise copies; AGENTS.md unchanged by regen",
+      "commit": "77a096ee",
+      "files": [
+        "skills/bee-how/CREATION-LOG.md",
+        "skills/bee-why/CREATION-LOG.md",
+        ".bee/expertise/tests.md",
+        ".bee/expertise/review.md",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude/skills",
+        ".agents/skills",
+        ".opencode/skills",
+        ".claude-plugin/skills",
+        ".codex-plugin/skills"
+      ],
+      "tests": "/home/thanhsmind/.cargo/bin/cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the declared suite, as the cell action asks, after bee dev regen (all 3 steps green) and bee dev release-manifest --check (376 files match); 35 test binaries ok, 3836 passed, 0 failed; the cell verify (five-home test -f, cmp of both expertise copies, onboard --json status up_to_date) passed",
+      "deviations": [
+        "Ran the suite with the literal cargo path instead of the PATH-prefixed commands.test string — the worktree guard refuses a command name computed at runtime — hit an unforeseen obstacle",
+        "Wrote both CREATION-LOG sections with the Edit tool instead of one scripted rewrite — the guard refused the heredoc because its text named a version-control command — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "skills/bee-why/CREATION-LOG.md first shortened the anchor step wording from the GREEN results file — copy the source wording exactly the first time; fixed before commit"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 6028 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verify-line",
+            "status": "PASS",
+            "evidence": "verify line printed OK; release_manifest --check: 376 file(s) match stored manifest; onboard --json items []"
+          },
+          {
+            "id": "five-homes",
+            "status": "PASS",
+            "evidence": "cmp shows bee-how and bee-why SKILL.md and CREATION-LOG.md identical in .claude, .agents, .opencode, .claude-plugin and .codex-plugin to skills/"
+          },
+          {
+            "id": "expertise-match",
+            "status": "PASS",
+            "evidence": "cmp -s exit 0 for tests.md and review.md"
+          },
+          {
+            "id": "suite-green-recorded",
+            "status": "PASS",
+            "evidence": ".bee/cells/pca-10.json:120 records cargo test --release ... green:unit ... 3836 passed, 0 failed; judge re-ran pointer_integrity, principle_index_parity and class_playbook_parity green, not the full suite"
+          },
+          {
+            "id": "green-recorded",
+            "status": "PASS",
+            "evidence": "skills/bee-how/CREATION-LOG.md:151-201 and skills/bee-why/CREATION-LOG.md:159-229 hold GREEN, REFACTOR and Final Outcome"
+          },
+          {
+            "id": "regen-only-no-release",
+            "status": "PASS",
+            "evidence": "77a096ee --stat: outside generated trees only the two logs, onboarding.json and release-manifest.json; AGENTS.md untouched; no tag or release commit; git status clean"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "claude-opus-5",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T06:08:29.953Z"
+      }
+    ]
+  },
+  "escalate": true
+}
