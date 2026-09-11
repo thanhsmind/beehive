@@ -76,6 +76,17 @@ pub(crate) const ADVISOR_PLAN_ABSENT_SENTINEL: &str = "absent";
 
 /// `path.join(root, 'docs', 'history', String(feature ?? ''), 'plan.md')`.
 pub(crate) fn advisor_plan_path(root: &Path, feature: &str) -> PathBuf {
+    if !feature.is_empty() {
+        if let Some((_, worktree_root)) =
+            crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
+        {
+            return PathBuf::from(&worktree_root)
+                .join("docs")
+                .join("history")
+                .join(feature)
+                .join("plan.md");
+        }
+    }
     root.join("docs").join("history").join(feature).join("plan.md")
 }
 

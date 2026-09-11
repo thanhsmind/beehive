@@ -9974,3 +9974,126 @@ use std::time::Instant;
         assert_eq!(capped["status"], json!("capped"));
         assert_eq!(capped["trace"]["verify_command"], json!("exit 99"));
     }
+
+    #[test]
+    fn pihp_gate_packet_cells_add_refuses_packet_differing_from_approved_preview() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "cargo test"}}));
+
+        // Setup lane with approved preview
+        let preview_cells = vec![json!({
+            "id": "c1",
+            "feature": "feat-gated",
+            "title": "Core Parser",
+            "lane": "standard",
+            "role": "code",
+            "action": "Implement parser",
+            "files": ["src/parser.rs"],
+            "read_first": ["docs/parser.md"],
+            "must_haves": { "truths": ["parses tokens"] },
+            "verify": "cargo test -p bee parse_test",
+            "affects_skills": [],
+            "affects_specs": []
+        })];
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        let lane_content = json!({
+            "feature": "feat-gated",
+            "phase": "swarming",
+            "mode": "standard",
+            "approved_gates": { "shape": true, "execution": true },
+            "gate_preview": {
+                "feature": "feat-gated",
+                "plan_sha256": "abc123",
+                "cells": preview_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-gated.json"), lane_content.to_string()).unwrap();
+
+        // 1. cells add with differing verify command
+        let mut diff_verify = preview_cells[0].clone();
+        diff_verify["verify"] = json!("cargo test -p bee different_test");
+        let err = build_add_cells_report(root, &[diff_verify]).unwrap();
+        assert!(!err.0, "differing verify must fail validation");
+        assert!(err.1[0].problems[0].contains("verify mismatch"), "{:?}", err.1[0].problems);
+
+        // 2. cells add with differing action
+        let mut diff_action = preview_cells[0].clone();
+        diff_action["action"] = json!("Different action entirely");
+        let err = build_add_cells_report(root, &[diff_action]).unwrap();
+        assert!(!err.0, "differing action must fail validation");
+        assert!(err.1[0].problems[0].contains("action mismatch"), "{:?}", err.1[0].problems);
+
+        // 3. cells add with undeclared cell
+        let mut unapproved = preview_cells[0].clone();
+        unapproved["id"] = json!("c2-unapproved");
+        let err = build_add_cells_report(root, &[unapproved]).unwrap();
+        assert!(!err.0, "undeclared cell must fail validation");
+        assert!(err.1[0].problems[0].contains("was not declared in the approved gate preview packet"), "{:?}", err.1[0].problems);
+
+        // 4. Exact matching packet succeeds
+        let ok = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(ok.0, "exact matching packet must pass validation: {:?}", ok.1[0].problems);
+    }
+
+    #[test]
+    fn pihp_gate_packet_cells_add_refuses_stale_packet_after_plan_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "cargo test"}}));
+
+        let preview_cells = vec![json!({
+            "id": "c1",
+            "feature": "feat-gated",
+            "title": "Core Parser",
+            "lane": "standard",
+            "role": "code",
+            "action": "Implement parser",
+            "files": ["src/parser.rs"],
+            "read_first": ["docs/parser.md"],
+            "must_haves": { "truths": ["parses tokens"] },
+            "verify": "cargo test -p bee parse_test",
+            "affects_skills": [],
+            "affects_specs": []
+        })];
+
+        let plan_dir = root.join("docs").join("history").join("feat-gated");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_content = "# Plan: feat-gated\n\nInitial plan content\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_content).unwrap();
+
+        let initial_sha = {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(plan_content.as_bytes());
+            format!("{:x}", hasher.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        let lane_content = json!({
+            "feature": "feat-gated",
+            "phase": "swarming",
+            "mode": "standard",
+            "approved_gates": { "shape": true, "execution": true },
+            "gate_preview": {
+                "feature": "feat-gated",
+                "plan_sha256": initial_sha,
+                "cells": preview_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-gated.json"), lane_content.to_string()).unwrap();
+
+        // 1. Adding matching cell before plan change succeeds
+        let ok = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(ok.0, "matching cell before plan change must succeed: {:?}", ok.1[0].problems);
+
+        // 2. Modify plan.md
+        std::fs::write(plan_dir.join("plan.md"), "# Plan: feat-gated\n\nModified plan content\n").unwrap();
+
+        // 3. Adding cell after plan change refuses because preview is stale
+        let err = build_add_cells_report(root, &preview_cells).unwrap();
+        assert!(!err.0, "cells add after plan change must fail validation");
+        assert!(err.1[0].problems[0].contains("approved gate preview is stale"), "{:?}", err.1[0].problems);
+        assert!(err.1[0].problems[0].contains("plan.md changed since preview was approved"), "{:?}", err.1[0].problems);
+    }
+

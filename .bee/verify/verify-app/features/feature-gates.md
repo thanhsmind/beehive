@@ -10,6 +10,7 @@ records who approved, when, and under what bypass level.
 - `feature-start` starts a feature and resets all four gates.
 - `feature-start-guard` refuses a start when the workspace is not clean.
 - `route-set` records the triage (class, lane, flags, product-file count).
+- `gate-preview` parses plan cell packets, validates required fields, records preview hash, and gates shape approval.
 - `gate-merge` approves shape and execution together in one call.
 - `gate-named` approves or unapproves a single named gate.
 - `gate-audit` an auto approval records its bypass level and reason.
@@ -18,6 +19,7 @@ records who approved, when, and under what bypass level.
 
 - Run `bee state start-feature --feature <slug> --mode <mode> --json`.
 - Run `bee route --set --class <c> --lane <l> --flags <f> --files <n> --json`.
+- Run `bee gate --preview --json` to preview and validate cell packets from plan.md.
 - Run `bee gate --merge --approved true --json` to answer the merged gate.
 - Run `bee gate --name <gate> --approved true --json` for one gate.
 
@@ -44,17 +46,22 @@ Preconditions:
   exact `command` to create it.
 - **Read the route back.** Run `control-bee cli -- route --show --json`. It
   returns the same four values.
+- **Preview cell packets.** Run `control-bee cli -- gate --preview --json`.
+  The payload parses the cell packet from `plan.md`, verifies execution fields
+  (`action`, `verify`, `files`, `read_first`, `must_haves`), and records
+  `approved_cell_packet` hash in `.bee/state.json`.
 - **Approve the merged gate.** Run
   `control-bee cli -- gate --merge --approved true --json`. The payload's
   `approved_gates` now has `shape: true` and `execution: true`, with `context`
   and `review` still `false`. There is NO `uat` key: `default_gates()` mints
   exactly four (`state_group/store.rs:42-49`), and `uat` appears only once
   `--name uat` sets it.
-- **An approval can refuse before it writes.** Three preconditions guard it, each
-  zero-mutation (`state_group/set_gate.rs`): a `high-risk` lane refuses an
-  execution or merged approval while `advisor_ref` is missing or stale
-  (`:587-621`); a LANE target refuses while the plan-time conflict review is
-  absent or was derived against a different `plan_rev` (`:623-737`); and a plan
+- **An approval can refuse before it writes.** Four preconditions guard it, each
+  zero-mutation (`state_group/set_gate.rs`): a shape or merged approval refuses
+  if `approved_cell_packet` preview is missing or stale with respect to `plan.md`;
+  a `high-risk` lane refuses an execution or merged approval while `advisor_ref`
+  is missing or stale (`:587-621`); a LANE target refuses while the plan-time conflict
+  review is absent or was derived against a different `plan_rev` (`:623-737`); and a plan
   carrying unresolved load-bearing claims refuses (`:748-775`). Drive at least
   the conflict one — it fires on any lane whose review has never run.
 - **Approve one named gate.** Run

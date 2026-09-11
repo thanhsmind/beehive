@@ -179,6 +179,9 @@ pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, 
             if let Some(reason) = gated_add_refusal(root, feature)? {
                 problems.push(reason);
             }
+            if let Err(reason) = crate::verbs::state_group::check_cell_matches_approved_preview(root, feature, cell) {
+                problems.push(reason);
+            }
         }
         if let Some(Value::String(cid)) = cell.get("id") {
             if !cid.is_empty() {
@@ -190,6 +193,18 @@ pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, 
             }
         }
         rows.push(AddReportRow { id, ok: problems.is_empty(), problems });
+    }
+    if cells.len() > 1 {
+        if let Some(first) = cells.first() {
+            if let Some(Value::String(feature)) = first.get("feature") {
+                if let Err(reason) = crate::verbs::state_group::check_batch_matches_approved_preview(root, feature, cells) {
+                    if let Some(first_row) = rows.first_mut() {
+                        first_row.problems.push(reason);
+                        first_row.ok = false;
+                    }
+                }
+            }
+        }
     }
     let mut normalized: Option<Vec<Value>> = None;
     if rows.iter().all(|r| r.ok) {
@@ -331,6 +346,9 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
         // gated-phase refusal.
         if let Some(Value::String(feature)) = payload.get("feature") {
             if let Some(reason) = gated_add_refusal(&root, feature)? {
+                return Err(Fail::Thrown(reason));
+            }
+            if let Err(reason) = crate::verbs::state_group::check_cell_matches_approved_preview(&root, feature, &payload) {
                 return Err(Fail::Thrown(reason));
             }
         }
