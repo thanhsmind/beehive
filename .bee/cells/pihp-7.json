@@ -1,0 +1,315 @@
+{
+  "id": "pihp-7",
+  "feature": "pi-harness-workflow-parity",
+  "title": "Prove and publish runtime parity",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [
+    "pihp-1",
+    "pihp-4",
+    "pihp-5",
+    "pihp-6"
+  ],
+  "decisions": [
+    "D1",
+    "D7",
+    "d59befe3-73c6-415a-91f1-f43b485a1eeb"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/feature-gates.md",
+    ".bee/verify/verify-app/features/cells-and-proof.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".agents/skills/bee-planning/**",
+    ".claude/skills/bee-planning/**",
+    ".codex/skills/bee-planning/**",
+    ".opencode/skills/bee-planning/**",
+    ".pi/skills/bee-planning/**",
+    ".bee/bin/prompts/**"
+  ],
+  "read_first": [
+    "docs/history/pi-harness-workflow-parity/CONTEXT.md",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/feature-gates.md",
+    ".bee/verify/verify-app/features/cells-and-proof.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md"
+  ],
+  "action": "Drive the Pi plugin against a throwaway onboarded repository. Cover session identity, early write denial, gate packet preview, correct intent and purpose, replayable proof, and concurrent dispatch. Update the existing verification maps and knowledge homes only where behavior changed.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev regen && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The Pi end-to-end path passes each acceptance item that Claude Code already supports",
+      "Generated files and the release manifest are current",
+      "Verification maps name how a user drives each changed feature"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "drives the complete Pi lifecycle path"
+      }
+    ],
+    "key_links": [
+      "verification maps point to executable CLI and Pi contract tests"
+    ],
+    "prohibitions": [
+      "Do not create a second knowledge page for an existing fact",
+      "Do not claim live proof from unit tests alone"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "Linus",
+    "outcome": "Prove and publish runtime parity.",
+    "files_changed": [
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-planning/SKILL.md",
+      ".agents/skills/bee-planning/references/planning-reference.md",
+      ".agents/skills/verify-app/features/README.md",
+      ".agents/skills/verify-app/features/cells-and-proof.md",
+      ".agents/skills/verify-app/features/feature-gates.md",
+      ".bee/bin/prompts/advisor.md",
+      ".bee/bin/prompts/gather.md",
+      ".bee/bin/prompts/reviewer.md",
+      ".bee/onboarding.json",
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/verify/verify-app/features/cells-and-proof.md",
+      ".bee/verify/verify-app/features/feature-gates.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-planning/SKILL.md",
+      ".claude-plugin/skills/bee-planning/references/planning-reference.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-planning/SKILL.md",
+      ".claude/skills/bee-planning/references/planning-reference.md",
+      ".claude/skills/verify-app/features/README.md",
+      ".claude/skills/verify-app/features/cells-and-proof.md",
+      ".claude/skills/verify-app/features/feature-gates.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-planning/SKILL.md",
+      ".codex-plugin/skills/bee-planning/references/planning-reference.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-planning/SKILL.md",
+      ".opencode/skills/bee-planning/references/planning-reference.md",
+      ".opencode/skills/verify-app/features/README.md",
+      ".opencode/skills/verify-app/features/cells-and-proof.md",
+      ".opencode/skills/verify-app/features/feature-gates.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md",
+      "docs/knowledge/areas/workflow-state/dispatch.md",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "regeneration emitted runtime mirrors beyond the explicit wildcard spellings — included all outputs required by the approved current-artifacts truth — hit an unforeseen obstacle",
+      "D7 Waggledance repair remains the approved post-merge action, outside this worktree cell",
+      "sync-ack: updated the three existing knowledge homes and all three existing verification maps; regeneration updated every runtime mirror and the release manifest"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-11T16:16:30.820Z",
+    "behavior_change": true,
+    "verification_evidence": "61 Pi lifecycle tests passed in an onboarded sandbox; stored proof replay and committed SHA checks passed; six concurrent thread and process runs created unique jobs without agent_name_taken; regeneration passed; onboarding was up to date; 376 manifest files matched",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "01a09047-0959-7691-b59a-0a7a5e4db177",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev regen && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-11T16:00:18.894Z",
+    "sync_ack": "updated the three existing knowledge homes and all three existing verification maps; regeneration updated every runtime mirror and the release manifest",
+    "mistakes": [
+      {
+        "wrong": "The final worker returned without the cell cap status.",
+        "better": "Confirm the control-store cap before reporting completion."
+      }
+    ],
+    "report": {
+      "outcome": "Prove and publish runtime parity.",
+      "commit": "c757e94b7e302818c33df1eb8682aeec9f62b958",
+      "files": [
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-planning/SKILL.md",
+        ".agents/skills/bee-planning/references/planning-reference.md",
+        ".agents/skills/verify-app/features/README.md",
+        ".agents/skills/verify-app/features/cells-and-proof.md",
+        ".agents/skills/verify-app/features/feature-gates.md",
+        ".bee/bin/prompts/advisor.md",
+        ".bee/bin/prompts/gather.md",
+        ".bee/bin/prompts/reviewer.md",
+        ".bee/onboarding.json",
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/verify/verify-app/features/cells-and-proof.md",
+        ".bee/verify/verify-app/features/feature-gates.md",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-planning/SKILL.md",
+        ".claude-plugin/skills/bee-planning/references/planning-reference.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-planning/SKILL.md",
+        ".claude/skills/bee-planning/references/planning-reference.md",
+        ".claude/skills/verify-app/features/README.md",
+        ".claude/skills/verify-app/features/cells-and-proof.md",
+        ".claude/skills/verify-app/features/feature-gates.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-planning/SKILL.md",
+        ".codex-plugin/skills/bee-planning/references/planning-reference.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-planning/SKILL.md",
+        ".opencode/skills/bee-planning/references/planning-reference.md",
+        ".opencode/skills/verify-app/features/README.md",
+        ".opencode/skills/verify-app/features/cells-and-proof.md",
+        ".opencode/skills/verify-app/features/feature-gates.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/knowledge/areas/hook-runtime/the-intent-anchor-and-compaction-survival.md",
+        "docs/knowledge/areas/workflow-state/dispatch.md",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev regen && .bee/bin/bee onboard --repo-root . --json && .bee/bin/bee dev release-manifest --check — green:live — 61 Pi lifecycle tests passed in an onboarded sandbox; stored proof replay and committed SHA checks passed; six concurrent thread and process runs created unique jobs without agent_name_taken; regeneration passed; onboarding was up to date; 376 manifest files matched",
+      "deviations": [
+        "regeneration emitted runtime mirrors beyond the explicit wildcard spellings — included all outputs required by the approved current-artifacts truth — hit an unforeseen obstacle",
+        "D7 Waggledance repair remains the approved post-merge action, outside this worktree cell"
+      ],
+      "mistakes": [
+        "The final worker returned without the cell cap status. — Confirm the control-store cap before reporting completion."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "pihp-7/e2e-onboarded",
+            "status": "PASS",
+            "evidence": "The isolated commit-worktree command `CARGO_TARGET_DIR=/tmp/bee-pihp-review-target PATH=... cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts -- --nocapture` printed `test result: ok. 61 passed; 0 failed`; the test creates and commits a throwaway Git repo, runs `bee onboard --apply`, and checks the installed Pi extension at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:5644-5700."
+          },
+          {
+            "id": "pihp-7/session-and-write-gate",
+            "status": "PASS",
+            "evidence": "The end-to-end test drives a Pi session id through `before_agent_start`, verifies the session record, releases it with `PI_SESSION_ID`, then sends a Pi `write` call during feature setup and requires a block at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:5723-5788."
+          },
+          {
+            "id": "pihp-7/gate-intent-and-proof-shape",
+            "status": "PASS",
+            "evidence": "The test proves missing-preview refusal, preview creation, changed-packet refusal, matching-packet acceptance, feature-scoped intent absence, and purpose retention at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:5836-5990; it proves exact proof-command matching and all four structured trace fields at :5992-6054."
+          },
+          {
+            "id": "pihp-7/replayable-proof",
+            "status": "FAIL",
+            "evidence": "The matching cap stores `commit: \"none\"`, uses the nonexistent fixture command `cargo test -p parity_test`, and supplies `parity tests passed` without running that command or inspecting a real commit at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:5992-6054. This does not prove CONTEXT.md D4's requirement that another session can run the stored proof again (CONTEXT.md:35-39)."
+          },
+          {
+            "id": "pihp-7/concurrent-live-dispatch",
+            "status": "FAIL",
+            "evidence": "The approved acceptance requires three concurrent runs to allocate ids and start without `agent_name_taken` (CONTEXT.md:65-75), but the test invokes all ten runs with `--dry-run` and silently ignores non-JSON or failed outputs, asserting only the count of collected ids at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:6056-6082."
+          },
+          {
+            "id": "pihp-7/d7-repair",
+            "status": "FAIL",
+            "evidence": "The approved context requires the Waggledance `idm-1` proof and stale responsive-decision supersession (CONTEXT.md:53-57, 65-77), and the plan requires that post-merge repair (plan.md:260-262). `rg -n -i 'idm-1|dashboard-specific|broad responsive' .bee docs/history docs/knowledge` returned no matches, and no changed commit path contains idm, waggledance, responsive, or dashboard."
+          },
+          {
+            "id": "pihp-7/dependency-review",
+            "status": "FAIL",
+            "evidence": "The current required dependency pihp-4 is capped but retains a semantic-judge NEEDS_REVISION with missing-plan approval, stale packet acceptance after plan changes, and wrong-plan resolution findings at .bee/cells/pihp-4.json:127-145. A pihp-7 cap cannot prove complete parity while its required gate-packet dependency remains unresolved."
+          },
+          {
+            "id": "pihp-7/generated-artifacts",
+            "status": "PASS",
+            "evidence": "The commit's release manifest was checked against its own Git tree: 376 manifest files, 0 missing paths, and 0 SHA-256 mismatches. The manifest includes the Pi extension at docs/history/codex-harness-hardening/release-manifest.json:1650-1654; the source regeneration table defines the required skill targets as Claude, Agents, and OpenCode, with no Pi skill-tree target, at packages/bee-rs/crates/bee/src/onboard/templates.rs:344-361."
+          }
+        ],
+        "failure_signature": "Required D7 repair is absent; dependency pihp-4 still has unresolved gate-packet findings; the Pi e2e fixture records non-replayable proof and tests concurrent dispatch only in dry-run mode.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "openai-codex/gpt-5.6-luna:high",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T16:00:02.722Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pihp-7/approved-shape-and-must-haves",
+            "status": "PASS",
+            "evidence": "The locked outcome, D1-D8 acceptance, constraints, and post-merge D7 placement are recorded in docs/history/pi-harness-workflow-parity/CONTEXT.md:9-82 and plan.md:17-31, 260-262. The current pihp-7 record is capped with the approved action, required truths, artifact, link, and prohibitions at .bee/cells/pihp-7.json:46-68."
+          },
+          {
+            "id": "pihp-7/e2e-contract",
+            "status": "PASS",
+            "evidence": "Read-only replay in the amended commit worktree: `CARGO_TARGET_DIR=/tmp/bee-pihp-review-target PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts -- --nocapture` printed `test result: ok. 61 passed; 0 failed`. The lifecycle test covers onboarding and Pi session/write/gate/intent/proof paths at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:5637-6117."
+          },
+          {
+            "id": "pihp-7/replayable-proof-and-commit",
+            "status": "PASS",
+            "evidence": "The amended fixture creates a real artifact commit, refuses a mismatched proof command, accepts the exact `test -f src/parity.rs` command, checks all four structured trace fields, replays the stored command, and verifies the SHA with `git cat-file -e` at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:5992-6117. The record stores commit c757e94b7e302818c33df1eb8682aeec9f62b958 and `green:live` proof fields at .bee/cells/pihp-7.json:119-123, 132-173; `git cat-file -e` and the 36-path record/commit comparison passed."
+          },
+          {
+            "id": "pihp-7/concurrent-allocator",
+            "status": "PASS",
+            "evidence": "The amended fixture starts three concurrent thread runs and three concurrent child processes. Each requires successful status, parses stdout JSON, requires `outcome: dry_run` and `job_id`, requires `.bee/mailbox/<id>/job.json`, rejects `agent_name_taken`, and asserts six unique ids at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:6119-6179. Dry-run is sufficient for this allocator contract because it exercises Bee job allocation and job-file creation without requiring an external model provider; D8 defines uniqueness in CONTEXT.md:79-82."
+          },
+          {
+            "id": "pihp-7/concurrent-error-and-result-checks",
+            "status": "PASS",
+            "evidence": "Both concurrent paths fail on non-success exit status, parse every returned result with `serde_json::from_slice`, and fail the test on malformed or missing fields; thread panics are propagated by `join().unwrap()` at packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:6130-6151, and process results are checked at :6153-6179."
+          },
+          {
+            "id": "pihp-7/onboarding-and-generated-mirrors",
+            "status": "PASS",
+            "evidence": "`.bee/bin/bee onboard --repo-root . --json` in the amended commit worktree returned `\"status\": \"up_to_date\"` with all Claude, Agents, and OpenCode skill versions at 2.35.0. `.bee/onboarding.json:50-78` records the same sync state. Read-only byte comparisons found no drift for the changed planning skills, verification maps, plugin copies, and `.bee/bin/prompts`; the source table intentionally has no Pi skill target at packages/bee-rs/crates/bee/src/onboard/templates.rs:344-359."
+          },
+          {
+            "id": "pihp-7/manifest-and-knowledge-maps",
+            "status": "PASS",
+            "evidence": "`.bee/bin/bee dev release-manifest --check` printed `376 file(s) match stored manifest, 1 unhashed artifact(s) present`; independent checking of all 376 entries against commit c757e94b7e302818c33df1eb8682aeec9f62b958 found 0 missing and 0 mismatched hashes. The manifest includes the Pi extension at docs/history/codex-harness-hardening/release-manifest.json:1650-1654. The changed knowledge homes and existing verification maps document the Pi path at docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md:318-355, docs/knowledge/areas/workflow-state/dispatch.md:361-364, and .bee/verify/verify-app/features/README.md:83-86."
+          },
+          {
+            "id": "pihp-7/dependency-pihp-4",
+            "status": "PASS",
+            "evidence": "The latest semantic verdict for required pihp-4 is PASS, not the earlier superseded NEEDS_REVISION: .bee/cells/pihp-4.json:181-228 records missing-plan refusal, stale-packet refusal, worktree resolution, binding, proof, commit alignment, and observable tests as PASS; its recorded command reports 9 gate-packet tests passed at :216-228."
+          },
+          {
+            "id": "pihp-7/prohibitions-and-green-live",
+            "status": "PASS",
+            "evidence": "The amended commit adds no knowledge page; its knowledge and verification changes are modifications of existing paths. The integration test uses a real onboarded throwaway repository and real Bee binary, not unit assertions alone, while the capped record has `verify_output: green:live` and `verify_passed: true` at .bee/cells/pihp-7.json:117-123."
+          },
+          {
+            "id": "pihp-7/d7-pre-merge-boundary",
+            "status": "PASS",
+            "evidence": "D7 is explicitly a post-merge repair in docs/history/pi-harness-workflow-parity/CONTEXT.md:53-57 and plan.md:260-262. It is therefore not a pre-merge reason to reject this cell."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "openai-codex/gpt-5.6-luna:high",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-11T16:24:03.687Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-09-11T16:00:02.722Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-09-11T16:16:30.819Z",
+        "reason": "The semantic judge supplied automatic test repairs; the amended commit now replays stored proof and checks concurrent job creation, and a fresh judge follows.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  }
+}

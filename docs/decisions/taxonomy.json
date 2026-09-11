@@ -492,6 +492,9 @@
     "pstack-craft-adoption",
     "writing",
     "diataxis",
-    "writing-flow-wiring"
+    "writing-flow-wiring",
+    "pi-harness",
+    "workflow-gates",
+    "worktree-isolation"
   ]
 }

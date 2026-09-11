@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "windows-test-portability",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,13 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"windows-test-portability\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"windows-test-portability\" (lane).",
+  "next_action": "bee close finished \"windows-test-portability\" — feature is closed.",
   "created_at": "2026-09-11T07:29:20.617Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "**Next:** when the Windows run ends, I check it. If it is green, I close the feature. If it is red, I fix the new failures first.",
-    "asked_at": "2026-09-11T07:45:41.189Z",
+    "subject": "The session restarted, and the Windows watch task stopped before it ended. I check the Windows run directly.",
+    "asked_at": "2026-09-11T08:52:40.097Z",
     "session": "f895b642-a3e1-4c5c-bbae-0e2ebbd9b352"
   },
   "route": {

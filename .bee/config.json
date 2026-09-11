@@ -195,12 +195,87 @@
       }
     },
     "codex": {
-      "extraction": "gpt-5.5",
-      "generation": "gpt-5.5",
+      "code": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "write the cell's Rust code and its tests"
+      },
+      "read": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "read-only lookups from known locations; a bare --kind gather also runs here"
+      },
+      "test": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "author or repair tests, red-first"
+      },
+      "docs": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "doc edits and parity sweeps"
+      },
+      "plan": {
+        "model": "gpt-5.6-sol",
+        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
+      },
+      "extraction": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "narrow fact lookups from known locations"
+      },
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "fall-through tail: default writer role"
+      },
       "review": {
-        "kind": "cli",
-        "command": "codex exec -m gpt-5.5 -s read-only -c model_reasoning_effort=\"high\" -",
-        "promptVia": "stdin"
+        "model": "gpt-5.6-sol",
+        "description": "independent read-only check of a claim or diff"
+      },
+      "advisor": {
+        "model": "gpt-6-astra",
+        "description": "session-class consult for high-risk gates"
+      },
+      "supervisor": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
+      },
+      "lane-1": {
+        "model": "gpt-6-astra",
+        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-2": {
+        "model": "gpt-5.6-sol",
+        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "lane-3": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
+      },
+      "hat-facts-gaps": {
+        "model": "gpt-5.6-sol",
+        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
+      },
+      "hat-risks": {
+        "model": "gpt-6-astra",
+        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
+      },
+      "hat-value": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "hat: is this worth its cost — materiality test"
+      },
+      "hat-alternatives": {
+        "model": "gpt-5.6-sol",
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
+      },
+      "hat-user-impact": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       }
     }
   },
