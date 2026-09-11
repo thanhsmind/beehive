@@ -5984,7 +5984,10 @@ use std::time::Instant;
 
         // Verify result and transition
         assert_eq!(result["id"], json!(created.id));
-        assert_eq!(result["worktreeRoot"], json!(p(&created.worktree_root)));
+        assert_eq!(
+            dunce::canonicalize(result["worktreeRoot"].as_str().unwrap()).unwrap(),
+            dunce::canonicalize(&created.worktree_root).unwrap()
+        );
         assert_eq!(result["feature"], json!("demo-enter"));
 
         let trans = &result["sessionTransition"];
@@ -6002,7 +6005,7 @@ use std::time::Instant;
         assert!(text.contains("Session transition intent emitted"), "{text}");
         assert!(text.contains("stays on main until relocated"), "{text}");
         assert!(text.contains(&created.id));
-        assert!(text.contains(&p(&created.worktree_root)));
+        assert!(text.contains(result["worktreeRoot"].as_str().unwrap()));
 
         // Verify ZERO mutations
         assert_eq!(git_status_porcelain_str(&main), main_status_before);
