@@ -187,6 +187,9 @@ cell pca-1, not by a GREEN run.
 None needed. GREEN showed no new rationalization, so the body stays as
 pca-1 wrote it.
 
+- pca-11: removed the vague-target bullet from "Scope the question". It
+  restated Trace step 1, which H4 forbids; the procedure keeps the rule.
+
 ---
 
 ## Final Outcome

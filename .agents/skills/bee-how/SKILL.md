@@ -23,7 +23,6 @@ Read-only. Write no brief file. The account is the reply.
 
 ## Scope the question
 
-- When the target is vague, write your reading of it as the first line of the reply, then trace that reading. Never stop to ask.
 - When the question is part how and part why, answer the how part. The why part becomes the one next action, as a ready `/bee-why <question>`.
 - A question about an outside library goes to bee-researching.
 

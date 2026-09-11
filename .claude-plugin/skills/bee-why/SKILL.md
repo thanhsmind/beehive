@@ -24,7 +24,6 @@ Read-only. Write no brief file. The account is the reply.
 ## Scope the question
 
 - Pin the target before the sweep: the `path:line` range, the symbols, and the search terms.
-- When the target is vague, write your reading of it as the first line of the reply, then sweep that reading. Never stop to ask.
 - Sweep every row. The user asked for the reasons, so a narrow sweep is not the default here.
 - A guess inside the question is one hypothesis to check, per the sweep's phrasing rules.
 - When the user means to change the code, end with the sweep's constraint set.
