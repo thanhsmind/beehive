@@ -279,6 +279,15 @@ The bad one opens on filler, leads with counts as achievement, speaks bee
 instead of work, and closes on a menu. The good one is the same turn with the
 five rules applied.
 
+**Catch-me-up reply.** When the user asks to be caught up, the reply has five
+parts, in this order: one line naming the scope covered; a short capsule of
+where the work stands; one line per feature or worktree, each with exactly one
+status tag read from bee state and said in the user's words — merged, open
+worktree, in progress (a cell in flight), done but not merged (capped, not
+merged), parked; what was tried and reverted, taken from feature reports and
+superseded decisions; one next action. The status comes from state, never from
+memory of the session.
+
 ### Work language — a vocabulary rule, not a silence rule
 
 Bee is bookkeeping, not the deliverable, so chat speaks the user's work language:

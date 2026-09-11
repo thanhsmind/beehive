@@ -113,8 +113,9 @@ refusal is the net under that walk, never the way you find out: a gate that
 refuses after the human already said yes spends their approval on your
 homework.
 
-Standard/high-risk: present the shape in plain language — what will be built,
-why this size, cost if the shape is wrong — link the plan, then ask verbatim:
+Standard/high-risk: open with the plan's `## Summary`, then the "you see"
+line of each cells-preview row — never the full preview table. Then say why
+this size and the cost if the shape is wrong, link the plan, and ask verbatim:
 "Work shape is ready. Approve before current-work preparation?" and stop. On
 approval, `bee gate --name shape --approved true`; `plan.md` freezes —
 a stamp may follow, a content edit may not.

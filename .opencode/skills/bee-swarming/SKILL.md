@@ -57,10 +57,13 @@ From two cells up, state the one-line concurrency plan before dispatching.
 3. Spawn with exactly that payload — a whole wave goes out in ONE message,
    one tool call per cell. Never paste session history; never hand a
    worker two cells.
-4. Tend: read each worker's Result form (the fenced
-   `{outcome, commit, files, tests, deviations}` block its prompt
-   requires), never its prose. Silence is not failure — inspect
-   `bee cells list` and `bee reservations list` before assuming stuck.
+4. Tend: read each worker's Result form
+   (`references/swarming-reference.md`, "Result Formats"), never its
+   prose. Silence is not failure — inspect `bee cells list` and
+   `bee reservations list` before assuming stuck. What stuck means, the
+   pilot for a same-pattern wave, and the user's stop word:
+   `references/swarming-reference.md` ("Operating Contract in full",
+   steps 3 and 6).
 5. On `[DONE]`: the worker's word is never the evidence. Run the leader
    completeness check before accepting — compare every approved
    requirement (the cell's `must_haves`, the plan's acceptance criteria)
@@ -82,6 +85,10 @@ From two cells up, state the one-line concurrency plan before dispatching.
 missing context; (2) `bee cells escalate --id <id>` and re-dispatch — the
 session model is this session, so that rung hands the blocker to you;
 (3) surface it to the user with the worker's diagnosis. If it invalidates the plan, return to bee-planning.
+
+**Other failures** — a handoff, a provider error, a red, a silent death —
+each take one fixed response, and a second failed re-dispatch goes to the
+user: `references/swarming-reference.md` ("Failure responses").
 
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch IN THE SAME TURN — the slice boundary is
@@ -120,6 +127,9 @@ recorded.
 
 The 65%-context handoff holds mid-wave (rule: agents-context-handoff-65). When a unit finishes and approved work remains, continue
 in-session; finishing a unit is never a reason to stop.
+
+**Reply:** capped cells over total, the proof line per cell, the merge or
+uat state, blockers, and the one next action.
 
 ## Execute (worker)
 
@@ -164,19 +174,20 @@ included: add guidance beside those words, never over them.
    `[BLOCKED]`. An unexpected red or an unfamiliar mechanism
    mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
    surfaces matching patterns and area concepts before you guess.
-4. Commit once: subject describes the change in imperative mood; the last
-   line of the body is the literal trailer `cell: <id>` — a bare id alone
-   fails the cap.
+4. Before the commit, revert any edit the proof did not need. Commit
+   once: subject describes the change in imperative mood; the last line of
+   the body is the literal trailer `cell: <id>` — a bare id alone fails
+   the cap.
 5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>
    --report '<json>'` — cap and release in one verb, `--report` REQUIRED
-   and carrying the same Result form you return (`{outcome, commit,
-   files, tests, deviations}`), which finish validates key-for-key onto
-   the trace. `tests` is a proof line `<command> — <result> — <scope
-   reason>`: pick the proof your change type needs (code → related tests
-   green; docs → parity/pointer checks; behavior → judge verdict;
-   user-facing surface → drive its mapped feature and inspect the result,
-   evidence attached, `green:live`), run it yourself, and record it — a
-   `red` result refuses the cap. `bee close` and `bee worktree merge`
+   and carrying the Result form you return
+   (`references/swarming-reference.md`, "Result Formats"). Its `tests`
+   proof line is yours to pick (code → related tests green; docs →
+   parity/pointer checks; behavior → judge verdict; user-facing surface →
+   drive its mapped feature and inspect the result, evidence attached,
+   `green:live`), run and record — a `red` result refuses the cap. For
+   `green:live` on a `behavior_change` cell, the scope reason names the
+   before-state you saw on main. `bee close` and `bee worktree merge`
    check that recorded proof at the boundary; they run nothing
    themselves. CI runs the full declared command on every push — the
    one deterministic net.
@@ -194,6 +205,7 @@ included: add guidance beside those words, never over them.
 - One cell per worker; the claim guard refuses a worker that claims, browses, or self-selects.
 - Conflicts are fixed in scope or reservations, never by being careful.
 - Never build on a red base — a red becomes its own fix-first cell (rule: agents-never-build-on-red).
+- Two workers failing on one root cause stop the wave: dispatch nothing new, let in-flight work finish, open a fix-first cell, and resume after it caps.
 
 ## Headless
 

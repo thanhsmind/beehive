@@ -17,6 +17,10 @@ disappears cleanly — inline it and remove the module. A `RetryingClient`
 around a flaky call does not: its five callers would each write their own
 backoff loop.
 
+Then ask a second question: can a new reader answer where X comes from and
+what can change X? A layer that makes those two answers harder to find costs
+more than its lines.
+
 **Why:** "is this abstraction worth it" is an argument. "What happens at the
 call sites when it is gone" is an observation, and it settles the argument.
 

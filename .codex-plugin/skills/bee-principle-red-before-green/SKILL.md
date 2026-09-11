@@ -13,6 +13,13 @@ The same honesty covers the report. Write "green", "passing", or "fixed" only
 beside output from a run you just made. "Tests should pass now" is a
 prediction, not a result. If you have not run it, say so.
 
+A worker's done-report is a prediction too. Read its diff and its proof line
+before you repeat "green".
+
+**Not when:** the failure cannot be automated. Then the
+`bee-principle-reproduce-first` repro is the red: run it before the fix, and
+again after.
+
 **Why:** a test written after the fix has never failed, so it proves nothing
 about the bug. It can assert the wrong thing, exercise the wrong path, or pass
 vacuously. The observed red is the evidence that this test detects this bug;

@@ -333,6 +333,16 @@ bug: it may be asserting the wrong thing, exercising the wrong path, or
 passing vacuously. The observed red is the evidence that this test detects
 this bug; the subsequent green is the evidence the fix works.
 
+**Two proof lines on the cap.** A bug-fix cap carries both runs, in order:
+
+    <cmd> — red: <observed failure> — reproduces <bug>
+    <cmd> — green — same test after fix
+
+This holds for any bug fix whose failure can be run. A one-line fix with a
+known cause still records both lines. When no test can reach the bug,
+record the reason before the fix, then pick the closest check that can run;
+its output is the red line.
+
 **Green only beside fresh output.** The same honesty applies to reporting:
 write "green," "passing," or "fixed" only next to actual command output
 from a run you just performed. "Tests should pass now" is a prediction,

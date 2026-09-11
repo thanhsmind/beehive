@@ -14,6 +14,9 @@ cleanup pass at the end reconstructs the decision from memory, and
 reconstruction loses exactly the parts that mattered: the boundary cases, the
 rejected option, the explicit "and we do NOT do X".
 
+**Check:** did a decision settle since your last record? If yes, write it now,
+before the next message.
+
 **Why:** the cost asymmetry always points one way. At the moment of settlement
 the record costs one line, because everything is already loaded in your head.
 Six weeks later the same question costs the whole debate again — often landing

@@ -14,6 +14,9 @@ fix it there. A null-check at the crash site silences the alarm and leaves the
 fault standing: the same bad value keeps flowing, and the next place it lands
 has no guard.
 
+When you find the origin, search for the same shape elsewhere — the same
+misread, the same unchecked return. Fix every instance in the same cell.
+
 **Why:** the stack trace names the detector, not the cause. Treating the two as
 the same thing turns one bug into a series of local patches, each one hiding
 the evidence that would have found the real origin.

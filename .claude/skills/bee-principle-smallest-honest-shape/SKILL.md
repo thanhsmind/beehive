@@ -15,6 +15,9 @@ actually endangers. Skipping a design pass on a rename is honest. Skipping it
 on a schema change is not smaller, it is deferred and more expensive. Default
 to the light end, then escalate on evidence.
 
+**Check:** can you name the surfaces the work touches, and does the shape you
+picked cover what each one can break — no more?
+
 **Why:** heavy ceremony by default trains everyone to route around the
 process, and a process people route around protects nothing.
 

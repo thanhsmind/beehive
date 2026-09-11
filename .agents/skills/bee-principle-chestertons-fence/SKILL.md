@@ -15,6 +15,9 @@ confidence, or the reason is alive and an incident was just declined. If the
 reason is genuinely unrecoverable, remove it as an experiment with a watch on
 what breaks — not as a cleanup.
 
+**Check:** can you say in one sentence why this was put here? If not, do not
+remove it yet.
+
 **Why:** the code that looks pointless is exactly the code whose purpose was
 never written down. Deleting on "I can't see the point" tests your visibility,
 not the fence's value.

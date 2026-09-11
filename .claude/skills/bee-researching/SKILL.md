@@ -71,6 +71,10 @@ State why the chosen rung beats the next-best, and what evidence would
 change the answer. Finish before recommending; ask one targeted question
 only when paths differ materially in behavior, risk, or migration cost.
 
+At the start, state what answer would settle the question. Close it as
+settled, refuted or inconclusive; an inconclusive result travels as an
+open question, never as a yes.
+
 ## Output
 
 - **In-chain** (from planning discovery): findings merge into the
@@ -80,6 +84,8 @@ only when paths differ materially in behavior, risk, or migration cost.
   `references/research-brief-template.md`, lead with the Bottom Line,
   and suggest the next step — bee-shaping if the topic is becoming a
   feature, bee-planning if scope is already clear.
+- A Trace or Provenance question skips the four-step order and answers
+  in the reply; no brief file unless the user asks to keep one.
 - Flag a genuinely new first-principles finding for bee-capturing.
 
 ## Hard rules

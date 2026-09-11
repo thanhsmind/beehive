@@ -14,6 +14,9 @@ tolerance is slice 2, here is its headline" keeps the whole commitment and
 makes the deferral visible and reversible. Propose the seam — you can see
 where it is — but the choice of what waits belongs to the owner.
 
+**Check:** is every agreed part either in this slice or named, with its
+headline, in a later slice the owner has seen?
+
 **Why:** silent shrinkage is the most corrosive planning failure. The owner's
 mental model and the real system drift apart, and neither party knows it
 happened until something depends on the missing half.
