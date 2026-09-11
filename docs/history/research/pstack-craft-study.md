@@ -101,7 +101,7 @@ Eight pstack principles fill real gaps in bee. They are ranked below.
 
 ## Defects in bee that the study found (verified by the leader)
 
-1. bee-planning's hard rule says "No cells, no prep artifacts, before the gate is approved" (Local `skills/bee-planning/SKILL.md:163`). But its hat wave applies findings "directly to the cells (legal — cells are mutable before the gate)" and reviews "the drafted cells (`bee cells list`)" (Local `skills/bee-planning/references/planning-reference.md:533-543`). The CLI refuses `cells add` before the gate ("D3: no cells before the gate").
+1. bee-planning's hard rule says "No cells, no prep artifacts, before the gate is approved" (Local `skills/bee-planning/SKILL.md:164`). But its hat wave applies findings "directly to the cells (legal — cells are mutable before the gate)" and reviews "the drafted cells (`bee cells list`)" (Local `skills/bee-planning/references/planning-reference.md:533-543`). The CLI refuses `cells add` before the gate ("D3: no cells before the gate").
 2. `skills/bee-principle-reproduce-first/SKILL.md:17` names `principle-red-before-green` without the load-bearing `bee-` prefix, so the name does not resolve.
 3. `skills/bee-swarming/references/worker-details.md:182` writes the commit trailer as `-m "Cell: <cell-id>"`. AGENTS.md and the worker contract require the literal `cell: <id>`.
 4. The Result form has three homes (Local `skills/bee-swarming/SKILL.md:170-174`, `swarming-reference.md:548-557`, `worker-details.md:185-203`). The departure rule has two (`swarming-reference.md:592-603`, `worker-details.md:94-109`).
@@ -121,6 +121,12 @@ Eight pstack principles fill real gaps in bee. They are ranked below.
 | 6 | Blind lanes: a move 0 that writes `## Rubric` into the dossier; Converge picks a base, then grafts; `## Grafts` names its source; the rule is diverge → reframe, never average. The hat-wave digest carries a Dismissed list | `skills/bee-hive/references/gates-and-delegation.md`, `skills/bee-planning/references/design-sketch.md` | L5 | S |
 | 7 | Review: the five-rung safety-fact ladder replaces confidence words; a lead filter at synthesis; smell entries for Swelling File, Dual Path and bolted-on test; one bounded retry for broken reviewer output | `.bee/expertise/review.md`, `skills/bee-reviewing/SKILL.md`, `references/reviewing-reference.md` | L5, L6 | S |
 | 8 | Principles: a `**Check:**` line in six skills and `**Not when:**` lines on the broad ones; the vacuity check; the pattern sweep in crash-site; a second question in the deletion test; the "Not the same as" links. Fix defect 2 | `skills/bee-principle-*/SKILL.md` | L7 | M |
+
+| 9 | Trace and Provenance sweep. Add an anchor step, a worker return shape and a disagreement rule, and a self-check. Open each answer with the question and its anchor. On each gap, name who would know. Add the first-commit rule and incident terms. bee-researching gains the settled/refuted/inconclusive close and answers Trace and Provenance questions in the reply | `skills/bee-researching/references/trace-and-provenance.md`, `skills/bee-researching/SKILL.md` | L4 | S |
+| 10 | Capture and verify upkeep. A decision's `why` names its evidence pointer. Check that each proof pointer resolves before the harvest. Harvest through two named lenses (learnings, divergent). A lesson that exists but did not fire gets a wording or placement fix, never a second copy. A Catch-me-up reply shape. Verify upkeep lands through a worktree and a cell, not a PR, and stops when no verify skill exists | `skills/bee-capturing/SKILL.md`, `skills/bee-verify-upkeep/SKILL.md`, `skills/bee-hive/references/routing-and-contracts.md` | L4, L6 | S |
+
+Rows 9 and 10 were in the lane digests but missing from this table's first draft.
+The plan-step hat wave found the gap, and they are added here so the plan's scope matches the study.
 
 ### Slice 2: checks in the Rust binary
 
