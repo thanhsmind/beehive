@@ -37,7 +37,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion",
+        "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec",
         "hooks": [
           {
             "type": "command",
@@ -48,7 +48,7 @@
         ]
       },
       {
-        "matcher": "spawn_agent",
+        "matcher": "spawn_agent|collaborationspawn_agent",
         "hooks": [
           {
             "type": "command",

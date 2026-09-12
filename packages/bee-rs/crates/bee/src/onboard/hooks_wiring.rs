@@ -387,62 +387,35 @@ pub(crate) fn codex_hook_command_windows(file_name: &str) -> String {
     format!("git -c alias.beehook=\"!{body}\" beehook")
 }
 
-fn codex_entry(file_name: &str, status_message: &str) -> Value {
-    json!({
-        "type": "command",
-        "command": codex_hook_command(file_name),
-        "commandWindows": codex_hook_command_windows(file_name),
-        "statusMessage": status_message,
-    })
-}
-
-/// renderCodexHookEntries (l. 2420).
+/// renderCodexHookEntries (l. 2420). Derived from the single source of truth in
+/// crate::devtools so host onboarding and repo projections never drift.
 pub fn render_codex_hook_entries() -> Vec<(&'static str, Value)> {
-    vec![
-        (
-            "SessionStart",
-            json!([{ "matcher": "startup|resume|clear|compact", "hooks": [codex_entry("bee-session-init.mjs", "bee: session bootstrap")] }]),
-        ),
-        (
-            "UserPromptSubmit",
-            json!([{ "hooks": [codex_entry("bee-prompt-context.mjs", "bee: phase reminder")] }]),
-        ),
-        (
-            "PreToolUse",
-            json!([
-                { "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion", "hooks": [codex_entry("bee-write-guard.mjs", "bee: write guard")] },
-                { "matcher": "spawn_agent", "hooks": [codex_entry("bee-model-guard.mjs", "bee: model-tier guard")] }
-            ]),
-        ),
-        (
-            "PostToolUse",
-            json!([
-                { "matcher": "update_plan|TaskCreate|TaskUpdate|TodoWrite", "hooks": [codex_entry("bee-state-sync.mjs", "bee: state sync")] },
-                { "hooks": [codex_entry("bee-tools-logger.mjs", "bee: tools logger")] }
-            ]),
-        ),
-        (
-            "SubagentStart",
-            json!([{ "hooks": [codex_entry("bee-codex-subagent-audit.mjs", "bee: subagent start audit")] }]),
-        ),
-        (
-            "SubagentStop",
-            json!([
-                { "hooks": [codex_entry("bee-state-sync.mjs", "bee: state sync"), codex_entry("bee-chain-nudge.mjs", "bee: chain nudge")] },
-                { "hooks": [codex_entry("bee-codex-subagent-audit.mjs", "bee: subagent stop audit")] }
-            ]),
-        ),
-        (
-            "PreCompact",
-            json!([{ "hooks": [codex_entry("bee-session-close.mjs", "bee: pre-compact flush check")] }]),
-        ),
-        (
-            "Stop",
-            json!([{ "hooks": [codex_entry("bee-state-sync.mjs", "bee: state sync"), codex_entry("bee-session-close.mjs", "bee: session close check")] }]),
-        ),
-        // No SessionEnd arm here: the Codex runtime does not expose a
-        // SessionEnd hook event, so there is nothing to wire it against.
-    ]
+    let Some(text) = crate::devtools::render_projection_text_for("codex") else {
+        return Vec::new();
+    };
+    let Ok(Value::Object(top)) = serde_json::from_str::<Value>(&text) else {
+        return Vec::new();
+    };
+    let Some(Value::Object(mut hooks)) = top.get("hooks").cloned() else {
+        return Vec::new();
+    };
+    const ORDER: &[&'static str] = &[
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "SubagentStart",
+        "SubagentStop",
+        "PreCompact",
+        "Stop",
+    ];
+    let mut out = Vec::new();
+    for &event in ORDER {
+        if let Some(val) = hooks.remove(event) {
+            out.push((event, val));
+        }
+    }
+    out
 }
 
 /// `/hooks\/bee-[a-z-]+\.mjs/` — a bee entry in ANY historical Codex
@@ -969,7 +942,23 @@ mod tests {
                 "Stop"
             ]
         );
-        assert_eq!(v["hooks"]["PreToolUse"][1]["matcher"], "spawn_agent");
+        assert_eq!(
+            v["hooks"]["PreToolUse"][0]["matcher"],
+            "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec"
+        );
+        assert_eq!(v["hooks"]["PreToolUse"][1]["matcher"], "spawn_agent|collaborationspawn_agent");
+        // Shared activity hooks are present on all four decided events:
+        for event in ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"] {
+            let groups = v["hooks"][event].as_array().unwrap();
+            let has_activity = groups.iter().any(|g| {
+                g["hooks"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|h| h["statusMessage"] == "bee: activity")
+            });
+            assert!(has_activity, "{event} must carry bee: activity hook");
+        }
         assert!(v["hooks"]["SessionStart"][0]["hooks"][0]["command"]
             .as_str()
             .unwrap()
@@ -1080,7 +1069,7 @@ mod tests {
         .unwrap();
         let merged = merge_codex_hooks(&hooks).unwrap();
         let v: Value = serde_json::from_str(&merged.text).unwrap();
-        assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 1);
+        assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 2);
         assert!(!merged.text.contains(".mjs"));
         // …and the fresh render is itself idempotent.
         std::fs::write(&hooks, &merged.text).unwrap();

@@ -639,6 +639,105 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
+    #[test]
+    fn apply_patch_command_field_denies_state_and_allows_safe() {
+        let fx = build_fixture("swarming", true);
+        // Live Codex passes the patch text in `tool_input.command`
+        let deny = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "command": "*** Begin Patch\n*** Update File: .bee/state.json\n@@\n-old\n+new\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
+
+        let ok = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "command": "*** Begin Patch\n*** Add File: src/safe.txt\n+hello\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(ok.code, 0, "{}", ok.stderr);
+    }
+
+    #[test]
+    fn apply_patch_patch_field_denies_state_and_allows_safe() {
+        let fx = build_fixture("swarming", true);
+        let deny = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "patch": "*** Begin Patch\n*** Update File: .bee/state.json\n@@\n-old\n+new\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
+
+        let ok = expect_done(
+            json!({
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "patch": "*** Begin Patch\n*** Add File: src/safe.txt\n+hello\n*** End Patch"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(ok.code, 0, "{}", ok.stderr);
+    }
+
+    #[test]
+    fn exec_shell_command_denies_state_and_allows_safe() {
+        let fx = build_fixture("swarming", true);
+        // Exercise the supported `exec` alias with a synthetic payload.
+        let deny = expect_done(
+            json!({
+                "tool_name": "exec",
+                "tool_input": {
+                    "command": "echo corrupt > .bee/state.json"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
+
+        let ok = expect_done(
+            json!({
+                "tool_name": "exec",
+                "tool_input": {
+                    "command": "echo safe > src/safe.txt"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(ok.code, 0, "{}", ok.stderr);
+    }
+
+    #[test]
+    fn exec_shell_cmd_field_denies_state() {
+        let fx = build_fixture("swarming", true);
+        let deny = expect_done(
+            json!({
+                "tool_name": "exec",
+                "tool_input": {
+                    "cmd": "rm -rf .bee/state.json"
+                }
+            }),
+            &fx.root,
+        );
+        assert_eq!(deny.code, 2);
+        assert!(deny.stderr.contains("bee state"));
+    }
+
     // ── reservations via Bash + intent advisory ────────────────────────────
 
     #[test]
