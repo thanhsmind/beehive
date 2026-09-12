@@ -2443,13 +2443,18 @@ use std::time::Instant;
             &tmp,
             r#"{"models":{"codex":{"generation":{"kind":"native","model":"gpt-5"}}}}"#,
         );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"implement feature","status":"claimed","trace":{"worker":"w"}}"#,
+        );
         // No confirmed override, no configured fallback -> typed refusal.
         let Prepared::Value(v) = prepare_dispatch(
             &root,
             "codex",
-            "gather",
-            None,
-            None,
+            "cell",
+            Some("c-1"),
+            Some("w"),
             false,
             Some(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
             None,
@@ -2465,9 +2470,9 @@ use std::time::Instant;
         let Prepared::Value(v) = prepare_dispatch(
             &root,
             "codex",
-            "gather",
-            None,
-            None,
+            "cell",
+            Some("c-1"),
+            Some("w"),
             false,
             Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE),
             None,
@@ -2478,7 +2483,7 @@ use std::time::Instant;
         assert_eq!(v.get("transport"), Some(&json!("native-override")));
         let p = v.get("payload").unwrap();
         assert_eq!(p.get("agent_type"), None);
-        assert_eq!(p.get("task_name"), Some(&json!("gather")));
+        assert_eq!(p.get("task_name"), Some(&json!("c_1_implement_feature")));
         assert_eq!(p.get("model"), Some(&json!("gpt-5")));
         assert_eq!(p.get("fork_turns"), Some(&json!("none")));
     }
@@ -3348,32 +3353,778 @@ use std::time::Instant;
         }
     }
 
+    // Every probe test owns its executable. Never invoke the installed Codex
+    // or change PATH in the test process: other tests run concurrently.
+    fn probe_fixture(root: &Path, features: &str) -> std::path::PathBuf {
+        #[cfg(unix)]
+        let (name, script) = ("probe-stub", format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then\n  echo 'codex-cli 0.154.0'\nelse\n{features}\nfi\n"
+        ));
+        #[cfg(windows)]
+        let (name, script) = ("probe-stub.cmd", format!(
+            "@echo off\r\nif \"%1\"==\"--version\" (\r\necho codex-cli 0.154.0\r\n) else (\r\n{features}\r\n)\r\n"
+        ));
+        let path = root.join(name);
+        std::fs::write(&path, script).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        path
+    }
+
+    fn fixture_classification(root: &Path) -> D<&'static str> {
+        let stub = probe_fixture(root, "echo multi_agent experimental true\necho multi_agent_v2 experimental false");
+        native_transport_classification_with_cmd(root, stub.to_str().unwrap(), std::time::Duration::from_secs(2))
+    }
+
+    #[test]
+    fn installed_opaque_native_message_refuses_cells_but_keeps_readonly_transport() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"generation":"gpt-5.5","read":"gpt-5.5"}}}"#);
+        let stub = probe_fixture(&root, "exit 1");
+        let classification = installed_native_transport_classification(
+            &root, stub.to_str().unwrap(), std::time::Duration::from_secs(1),
+        ).unwrap();
+        assert_eq!(classification, "native_hook_input_opaque");
+        w(&root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"f","title":"t","status":"claimed","trace":{"worker":"w"}}"#);
+        for escalated in [false, true] {
+            w(&root, ".bee/cells/c-1.json", &json!({"id":"c-1","feature":"f","title":"t","status":"claimed","escalate":escalated,"trace":{"worker":"w"}}).to_string());
+            let Prepared::Value(v) = prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false,
+                Some(classification), None, false, None).unwrap() else { panic!() };
+            assert_eq!(v["reason"], "native_hook_input_opaque");
+            assert_eq!(v["slot"], if escalated { "ceiling" } else { "generation" });
+            assert!(v.get("payload").is_none());
+        }
+        w(&root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"f","title":"t","status":"claimed","trace":{"worker":"w"}}"#);
+        let Prepared::Value(v) = prepare_dispatch(&root, "codex", "gather", None, None, false,
+            Some(classification), None, false, None).unwrap() else { panic!() };
+        assert_eq!(v["tool"], "Bash");
+        assert!(v["payload"]["command"].as_str().unwrap().contains("--sandbox read-only"));
+
+        for (slot, command) in [
+            (json!({"kind":"herding","model":"gpt-5.5","description":"code"}), "herding"),
+            (json!({"primary":{"kind":"native","model":"gpt-5.5"},"fallback_policy":"explicit-only","fallback":{"kind":"cli","command":"codex exec -"}}), "codex exec -"),
+        ] {
+            w(&root, ".bee/config.json", &json!({"models":{"codex":{"generation":slot}}}).to_string());
+            let Prepared::Value(v) = prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false,
+                Some(classification), None, false, None).unwrap() else { panic!() };
+            assert_eq!(v["tool"], "Bash", "{v}");
+            assert!(v["payload"]["command"].as_str().unwrap().contains(command), "{v}");
+        }
+    }
+
+    #[test]
+    fn native_probe_freshness_checks_each_record_leg_against_an_isolated_executable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let valid = json!({
+            "schema":"native-transport-probe/1",
+            "repo_identity":crate::verbs::reservations::sha256_hex(&root.to_string_lossy()),
+            "codex_version":"codex-cli 0.154.0",
+            "config_scope":{"multi_agent":true,"multi_agent_v2":false},
+            "config_scope_hash":"249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61",
+            "classification":"native_model_override"
+        });
+        w(&root, ".bee/native-transport-probe.json", &valid.to_string());
+        assert_eq!(fixture_classification(&root).unwrap(), NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
+        for (field, value) in [
+            ("repo_identity", json!("wrong")),
+            ("codex_version", json!("codex-cli 0.153.0")),
+            ("config_scope_hash", json!("wrong")),
+            ("config_scope", json!(null)),
+            ("config_scope", json!([])),
+        ] {
+            let mut changed = valid.clone();
+            changed[field] = value;
+            w(&root, ".bee/native-transport-probe.json", &changed.to_string());
+            assert_eq!(fixture_classification(&root).unwrap(), NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY, "{field}");
+        }
+        w(&root, ".bee/native-transport-probe.json", &valid.to_string());
+        for features in ["echo multi_agent experimental false", "echo other experimental true"] {
+            let stub = probe_fixture(&root, features);
+            assert_eq!(native_transport_classification_with_cmd(&root, stub.to_str().unwrap(),
+                std::time::Duration::from_secs(1)).unwrap(), NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+        }
+    }
+
     #[test]
     fn absent_probe_record_classifies_budget_only_without_a_subprocess() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, "{}");
         assert_eq!(
-            native_transport_classification(&root).unwrap(),
+            fixture_classification(&root).unwrap(),
             NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
         );
         // Corrupt / schema-mismatched records short-circuit the same way.
         w(&root, ".bee/native-transport-probe.json", "{not json");
         assert_eq!(
-            native_transport_classification(&root).unwrap(),
+            fixture_classification(&root).unwrap(),
             NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
         );
         w(&root, ".bee/native-transport-probe.json", r#"{"schema":"other/9"}"#);
         assert_eq!(
-            native_transport_classification(&root).unwrap(),
+            fixture_classification(&root).unwrap(),
             NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
         );
-        // A LIVE record needs codex-cli probes — delegate.
+        // A live record with no classification classifies budget only without delegation.
         w(
             &root,
             ".bee/native-transport-probe.json",
             r#"{"schema":"native-transport-probe/1"}"#,
         );
-        assert!(native_transport_classification(&root).is_err());
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
+        );
+        // A complete record requires matching output from the isolated probe.
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE
+        );
+    }
+
+    #[test]
+    fn codex_prepared_cell_with_configured_model_carries_settings_and_sets_native_requested() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"generation":{"model":"gpt-5.5","effort":"high"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"implement feature","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "codex",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v.get("tool"), Some(&json!("spawn_agent")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("model"), Some(&json!("gpt-5.5")));
+        assert_eq!(payload.get("reasoning_effort"), Some(&json!("high")));
+        assert_eq!(payload.get("fork_turns"), Some(&json!("none")));
+        assert_eq!(payload.get("task_name"), Some(&json!("c_1_implement_feature")));
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("codex-native")));
+        assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
+        assert_eq!(econ.get("requested_model"), Some(&json!("gpt-5.5")));
+        assert_eq!(econ.get("enforcement"), Some(&json!("native-model-param")));
+        assert_eq!(econ.get("effective_model_status"), Some(&json!("native-requested")));
+    }
+
+    #[test]
+    fn codex_prepared_non_cell_gather_uses_read_only_sandbox_cli() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"read":{"model":"gpt-5.5","effort":"medium"}}}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "codex",
+            "gather",
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let payload = v.get("payload").unwrap();
+        let cmd = payload.get("command").unwrap().as_str().unwrap();
+        assert!(cmd.starts_with("codex exec --sandbox read-only --ephemeral"), "cmd: {cmd}");
+        assert!(cmd.contains("--model 'gpt-5.5'"), "cmd: {cmd}");
+        assert!(cmd.contains("-c model_reasoning_effort='medium'"), "cmd: {cmd}");
+        assert!(cmd.ends_with(" -"), "cmd: {cmd}");
+        assert!(payload.get("stdin").is_some());
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("cli-exec")));
+        assert_eq!(econ.get("enforcement"), Some(&json!("cli-command")));
+        assert_eq!(econ.get("effective_model_status"), Some(&json!("declared")));
+        assert_eq!(econ.get("requested_model"), Some(&json!("gpt-5.5")));
+    }
+
+    #[test]
+    fn probe_record_parsing_returns_recorded_classification_without_delegation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"external_cli_only"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY
+        );
+
+        // Mismatched identity falls back to native_budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            r#"{"schema":"native-transport-probe/1","repo_identity":"wrong_ident","classification":"native_model_override"}"#,
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY
+        );
+    }
+
+    #[test]
+    fn codex_confirmed_native_advisor_or_gather_routes_through_readonly_cli_not_spawn_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"advisor":{"kind":"native","model":"gpt-6-astra","effort":"high"}}}}"#,
+        );
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","classification":"native_model_override"}}"#
+            ),
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "codex",
+            "advisor",
+            None,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        // MUST route through readonly CLI Bash tool, NOT spawn_agent!
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let payload = v.get("payload").unwrap();
+        let cmd = payload.get("command").unwrap().as_str().unwrap();
+        assert!(cmd.starts_with("codex exec --sandbox read-only --ephemeral"), "cmd: {cmd}");
+    }
+
+    // This case executes a POSIX shell and uses path bytes Windows forbids.
+    #[cfg(unix)]
+    #[test]
+    fn codex_readonly_cli_safely_quotes_hostile_selectors_and_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        dp1_git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&main, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&main, &["config", "user.name", "t"]);
+        std::fs::write(main.join("README.md"), "# Main\n").unwrap();
+        dp1_git_ok(&main, &["add", "-A"]);
+        dp1_git_ok(&main, &["commit", "-qm", "init"]);
+
+        // Create a granted worktree with a hostile path containing dollar substitution, backticks,
+        // single quotes, double quotes, parentheses and whitespace.
+        let hostile_wt_name = "wt $VAR `touch hostile_wt_bt` 'single' \"double\" (parens)";
+        let hostile_wt = tmp.path().join(hostile_wt_name);
+        dp1_git_ok(&main, &["worktree", "add", "-q", hostile_wt.to_str().unwrap(), "-b", "wt/hostile"]);
+        let wt_git_id = std::fs::read_dir(main.join(".git").join("worktrees"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .to_string();
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        let mut grants_map = serde_json::Map::new();
+        grants_map.insert(wt_git_id, serde_json::Value::Bool(true));
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            serde_json::to_string(&grants_map).unwrap(),
+        )
+        .unwrap();
+        std::fs::create_dir_all(hostile_wt.join(".bee").join("runtime")).unwrap();
+        std::fs::write(hostile_wt.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            hostile_wt.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"hostile-feat\"}\n",
+        )
+        .unwrap();
+
+        // Configure models with hostile model selector containing dollar substitution,
+        // backticks, single quotes, double quotes, and whitespace.
+        let hostile_model = "$(touch hostile_model_executed) 'single' \"double\" `touch hostile_model_bt` $VAR";
+        let hostile_effort = "high";
+        w(
+            &main,
+            ".bee/config.json",
+            &format!(
+                r#"{{"models":{{"codex":{{"read":{{"model":{:?},"effort":{:?}}}}}}}}}"#,
+                hostile_model, hostile_effort
+            ),
+        );
+        w(
+            &main,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"hostile-feat","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+
+        let Prepared::Value(v) = prepare_dispatch(
+            &main,
+            "codex",
+            "gather",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+
+        let payload = v.get("payload").unwrap();
+        let cmd = payload.get("command").unwrap().as_str().unwrap();
+        let stdin_str = payload.get("stdin").unwrap().as_str().unwrap();
+
+        // Create stub codex executable to capture exact argv and stdin
+        let stub_bin_dir = tmp.path().join("stub_bin");
+        std::fs::create_dir_all(&stub_bin_dir).unwrap();
+        let capture_dir = tmp.path().join("stub_capture");
+        std::fs::create_dir_all(&capture_dir).unwrap();
+
+        let stub_codex = stub_bin_dir.join("codex");
+        std::fs::write(
+            &stub_codex,
+            format!(
+                r#"#!/bin/sh
+cat > "{}/stdin.txt"
+for arg in "$@"; do
+    printf "%s\n" "$arg" >> "{}/argv.txt"
+done
+"#,
+                capture_dir.display(),
+                capture_dir.display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub_codex, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let run_dir = tmp.path().join("run_workspace");
+        std::fs::create_dir_all(&run_dir).unwrap();
+
+        // Execute the PREPARED command against the stub codex executable via /bin/sh
+        let mut child = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(&run_dir)
+            .env(
+                "PATH",
+                format!("{}:{}", stub_bin_dir.display(), std::env::var("PATH").unwrap_or_default()),
+            )
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        {
+            use std::io::Write;
+            child.stdin.as_mut().unwrap().write_all(stdin_str.as_bytes()).unwrap();
+        }
+
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "execution of prepared command failed: stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        // Assert exact argv received by the stub codex executable
+        let argv_raw = std::fs::read_to_string(capture_dir.join("argv.txt")).unwrap();
+        let argv: Vec<&str> = argv_raw.lines().collect();
+        assert_eq!(
+            argv,
+            vec![
+                "exec",
+                "--sandbox",
+                "read-only",
+                "--ephemeral",
+                "--cd",
+                hostile_wt.to_str().unwrap(),
+                "--model",
+                hostile_model,
+                "-c",
+                &format!("model_reasoning_effort={hostile_effort}"),
+                "-"
+            ],
+            "exact argv mismatch"
+        );
+
+        // Assert exact stdin received by the stub codex executable
+        let captured_stdin = std::fs::read_to_string(capture_dir.join("stdin.txt")).unwrap();
+        assert_eq!(captured_stdin, stdin_str, "exact stdin mismatch");
+
+        // Assert absence of side effects (no touched files created anywhere)
+        assert!(!run_dir.join("hostile_wt_bt").exists());
+        assert!(!run_dir.join("hostile_model_executed").exists());
+        assert!(!run_dir.join("hostile_model_bt").exists());
+        assert!(!run_dir.join("hostile_effort_bt").exists());
+        assert!(!std::path::Path::new("hostile_wt_bt").exists());
+        assert!(!std::path::Path::new("hostile_model_executed").exists());
+        assert!(!std::path::Path::new("hostile_model_bt").exists());
+        assert!(!std::path::Path::new("hostile_effort_bt").exists());
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("requested_model"), Some(&json!(hostile_model)));
+    }
+
+    #[test]
+    fn native_transport_classification_rejects_incomplete_and_stale_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+
+        // Incomplete record: missing codex_version must classify as budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing codex_version must be rejected"
+        );
+
+        // Incomplete record: missing repo_identity must classify as budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            r#"{"schema":"native-transport-probe/1","codex_version":"codex-cli 0.154.0","classification":"native_model_override"}"#,
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing repo_identity must be rejected"
+        );
+
+        // Incomplete record: missing config_scope_hash must classify as budget_only
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing config_scope_hash must be rejected"
+        );
+    }
+
+    #[test]
+    fn native_transport_classification_rejects_missing_or_wrong_type_config_scope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let empty_hash = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"; // sha256 of "{}"
+
+        // Missing config_scope with hash matching "{}"
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope_hash":"{empty_hash}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "missing config_scope must not hash as an empty valid object"
+        );
+
+        // Wrong-type config_scope (string) with hash matching "{}"
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":"not-an-object","config_scope_hash":"{empty_hash}","classification":"native_model_override"}}"#
+            ),
+        );
+        assert_eq!(
+            fixture_classification(&root).unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "wrong-type (string) config_scope must not hash as an empty valid object"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_transport_classification_failed_features_probe_must_return_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        // Create a stub codex that succeeds on --version but fails on features list
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("codex");
+        std::fs::write(
+            &stub,
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.154.0"
+    exit 0
+fi
+if [ "$1" = "features" ] && [ "$2" = "list" ]; then
+    echo "failed probe" >&2
+    exit 1
+fi
+exit 0
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let result = native_transport_classification_with_cmd(
+            &root, stub.to_str().unwrap(), std::time::Duration::from_secs(2),
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "failed features probe MUST return native_budget_only, not fall through to recorded classification"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_transport_classification_features_probe_timeout_returns_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("codex");
+        std::fs::write(
+            &stub,
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.154.0"
+    exit 0
+fi
+if [ "$1" = "features" ] && [ "$2" = "list" ]; then
+    sleep 3
+    echo "multi_agent true"
+    exit 0
+fi
+exit 0
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let t0 = std::time::Instant::now();
+        let result = native_transport_classification_with_cmd(
+            &root,
+            stub.to_str().unwrap(),
+            std::time::Duration::from_millis(150),
+        );
+        let elapsed = t0.elapsed();
+
+        assert!(
+            elapsed < std::time::Duration::from_secs(2),
+            "timed out probe took too long to terminate: {elapsed:?}"
+        );
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "timed-out features probe MUST return native_budget_only, not fall through to recorded classification"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn native_transport_probe_deadline_survives_detached_pipe_holder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        w(&root, ".bee/native-transport-probe.json", &format!(
+            r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61","classification":"native_model_override"}}"#
+        ));
+        let pid_file = root.join("detached.pid");
+        let stub = probe_fixture(&root, &format!("setsid sleep 3 &\necho $! > '{}'\nwait", pid_file.display()));
+        let start = std::time::Instant::now();
+        let result = native_transport_classification_with_cmd(
+            &root, stub.to_str().unwrap(), std::time::Duration::from_millis(100),
+        ).unwrap();
+        // The fixture deliberately escapes the process group. It owns cleanup
+        // of that process; the production probe does not claim containment.
+        let elapsed = start.elapsed();
+        if let Ok(pid) = std::fs::read_to_string(pid_file) {
+            if let Ok(pid) = pid.trim().parse::<libc::pid_t>() {
+                unsafe { libc::kill(pid, libc::SIGKILL); }
+            }
+        }
+        assert_eq!(result, NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+        assert!(elapsed < std::time::Duration::from_secs(1),
+            "detached stdout holder extended the probe deadline: {elapsed:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_transport_classification_malformed_features_probe_returns_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("codex");
+        std::fs::write(
+            &stub,
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    echo "codex-cli 0.154.0"
+    exit 0
+fi
+if [ "$1" = "features" ] && [ "$2" = "list" ]; then
+    echo "malformed features output without expected columns"
+    exit 0
+fi
+exit 0
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let result = native_transport_classification_with_cmd(
+            &root,
+            stub.to_str().unwrap(),
+            std::time::Duration::from_millis(500),
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "malformed features probe MUST return native_budget_only"
+        );
+    }
+
+    #[test]
+    fn native_transport_classification_unavailable_probe_returns_budget_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        let ident = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+        let hash = "249eafe6efeaa69d397779ea0858ebb7d90094ad4d9278d464f9b37bd88dfd61";
+
+        w(
+            &root,
+            ".bee/native-transport-probe.json",
+            &format!(
+                r#"{{"schema":"native-transport-probe/1","repo_identity":"{ident}","codex_version":"codex-cli 0.154.0","config_scope":{{"multi_agent":true,"multi_agent_v2":false}},"config_scope_hash":"{hash}","classification":"native_model_override"}}"#
+            ),
+        );
+
+        let result = native_transport_classification_with_cmd(
+            &root,
+            "/nonexistent/bin/codex-probe-unavailable",
+            std::time::Duration::from_millis(500),
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
+            "unavailable probe binary MUST return native_budget_only"
+        );
     }
 
     // ── learned context ────────────────────────────────────────────────────
@@ -6948,7 +7699,7 @@ advance_on — falling to another model there hides the defect (D11)"
     /// hab-2: a herding or cli payload prefixes the embedded agent template body
     /// when the kind maps to a known bee agent (bee-build, bee-gather, bee-review).
     fn expected_dispatched_body(runtime: &str, kind: &str, body: &str) -> String {
-        if runtime == "pi" {
+        if runtime == "pi" || (runtime == "codex" && kind != "cell") {
             let pinned_type = match kind {
                 "cell" => "bee-build",
                 "gather" => "bee-gather",

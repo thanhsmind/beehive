@@ -28,6 +28,8 @@ pub(crate) const NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE: &str = "native_model_ov
 
 pub(crate) const NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY: &str = "native_budget_only";
 
+pub(crate) const NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY: &str = "external_cli_only";
+
 /// Every role name a dispatch on this runtime may legally declare.
 ///
 /// DERIVED, never listed (model-role-split D2): the keys `team.<runtime>`
@@ -349,8 +351,9 @@ pub(crate) fn derive_economics(
     native_confirmed: bool,
     declared: Option<&str>,
 ) -> Map<String, Value> {
-    let is_native_confirmed =
-        channel == "codex-native" && matches!(resolved, Resolved::Native { .. }) && native_confirmed;
+    let is_native_confirmed = channel == "codex-native"
+        && ((matches!(resolved, Resolved::Native { .. }) && native_confirmed)
+            || (matches!(resolved, Resolved::Model { .. }) && param_model.is_some()));
     let resolved_model: Option<String> = match resolved {
         Resolved::Model { model, .. } | Resolved::Native { model, .. } => Some(model.clone()),
         _ => None,

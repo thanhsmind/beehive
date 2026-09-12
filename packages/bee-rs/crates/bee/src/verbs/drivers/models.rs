@@ -654,11 +654,15 @@ pub(crate) fn declared_model_for(cfg: &Value, resolved: &Resolved, runtime: &str
             scan_model_tokens(std::iter::once(&kind).chain(args.iter()))
         }
         Resolved::Cli { command } => {
-            let tokens = tokenize_command(command);
-            scan_model_tokens(&tokens)
+            scan_command_model(command)
         }
         _ => None,
     }
+}
+
+pub(crate) fn scan_command_model(cmd: &str) -> Option<String> {
+    let tokens = tokenize_command(cmd);
+    scan_model_tokens(&tokens)
 }
 
 
