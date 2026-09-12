@@ -23,6 +23,16 @@
             "statusMessage": "bee: phase reminder"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\ng=\"$(git -C \"$r\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook activity --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook activity --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
+            "statusMessage": "bee: activity"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -47,6 +57,16 @@
             "statusMessage": "bee: model-tier guard"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\ng=\"$(git -C \"$r\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook activity --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook activity --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
+            "statusMessage": "bee: activity"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -68,6 +88,16 @@
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook tools-logger --source=repo; done\ng=\"$(git -C \"$r\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook tools-logger --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
             "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook tools-logger --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook tools-logger --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: tools logger"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\ng=\"$(git -C \"$r\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook activity --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook activity --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
+            "statusMessage": "bee: activity"
           }
         ]
       }
@@ -138,6 +168,16 @@
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook session-close --source=repo; done\ng=\"$(git -C \"$r\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook session-close --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
             "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook session-close --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook session-close --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: session close check"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\ng=\"$(git -C \"$r\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook activity --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook activity --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook activity --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
+            "statusMessage": "bee: activity"
           }
         ]
       }
