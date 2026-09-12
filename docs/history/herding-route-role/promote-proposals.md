@@ -14,7 +14,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [docs/history/herding-route-role/CONTEXT.md, docs/history/herding-route-role/plan.md]
-  sources: [docs/history/herding-route-role/CONTEXT.md, docs/history/herding-route-role/plan.md, .bee/cells/hrr-1.json, .bee/cells/hrr-2.json, .bee/cells/hrr-3.json, .bee/cells/hrr-5.json, .bee/cells/hrr-6.json, .bee/cells/hrr-7.json, .bee/cells/hrr-8.json]
+  sources: [docs/history/herding-route-role/CONTEXT.md, docs/history/herding-route-role/plan.md, .bee/cells/archive/herding-route-role/hrr-1.json, .bee/cells/archive/herding-route-role/hrr-2.json, .bee/cells/archive/herding-route-role/hrr-3.json, .bee/cells/archive/herding-route-role/hrr-5.json, .bee/cells/archive/herding-route-role/hrr-6.json, .bee/cells/archive/herding-route-role/hrr-7.json, .bee/cells/archive/herding-route-role/hrr-8.json]
 ---
 
 # herding-route-role — Delivery
@@ -68,11 +68,11 @@ Proposed by `bee knowledge promote --work herding-route-role` from 7 capped cell
 areas: from the scribing stamp for "herding-route-role" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-09-09T03:33:44.102Z), the work item declares no bee.areas.
 
 area bee-herding:
-  - [hrr-2] route-prompt.md written as the route role's whole contract, 218 lines, slice 1 scope only — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/hrr-2.json)
-  - [hrr-3] bee-herding SKILL.md now describes four roles; route's paragraph, protocol pointer and never-list added, frontmatter corrected — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/hrr-3.json)
-  - [hrr-6] route-prompt.md now carries the whole slice-2 contract: carve-out, producer resolution, different-agent rule, in-review marker, reviewer pane label, four verdict paths, D4 hand-off, BLOCKED stop — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/hrr-6.json)
-  - [hrr-7] merge role honors the in-review marker and closes the <slug>-review pane — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/hrr-7.json)
-  - [hrr-8] the review carve-out is named where the rule lives: one sentence in AGENTS.md, a full boundary in operational-invariants.md — feature-wide sync per the scribing stamp, 2 file(s) changed (trace .bee/cells/hrr-8.json)
+  - [hrr-2] route-prompt.md written as the route role's whole contract, 218 lines, slice 1 scope only — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/herding-route-role/hrr-2.json)
+  - [hrr-3] bee-herding SKILL.md now describes four roles; route's paragraph, protocol pointer and never-list added, frontmatter corrected — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/herding-route-role/hrr-3.json)
+  - [hrr-6] route-prompt.md now carries the whole slice-2 contract: carve-out, producer resolution, different-agent rule, in-review marker, reviewer pane label, four verdict paths, D4 hand-off, BLOCKED stop — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/herding-route-role/hrr-6.json)
+  - [hrr-7] merge role honors the in-review marker and closes the <slug>-review pane — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/herding-route-role/hrr-7.json)
+  - [hrr-8] the review carve-out is named where the rule lives: one sentence in AGENTS.md, a full boundary in operational-invariants.md — feature-wide sync per the scribing stamp, 2 file(s) changed (trace .bee/cells/archive/herding-route-role/hrr-8.json)
 
 (c) PATTERN CANDIDATES — candidate bee.pattern concepts, bee.polarity pitfall
 
@@ -87,7 +87,7 @@ bee:
   id: herding-route-role-hrr-1-pitfall
   lifecycle: draft
   areas: [bee-herding]
-  sources: [.bee/cells/hrr-1.json]
+  sources: [.bee/cells/archive/herding-route-role/hrr-1.json]
   polarity: pitfall
 ---
 
@@ -97,7 +97,7 @@ bee:
 
 route registered as the control loop's fourth role across all eight closed sites, with an enumerated read-and-announce tool surface
 
-## Recorded evidence (verbatim from .bee/cells/hrr-1.json)
+## Recorded evidence (verbatim from .bee/cells/archive/herding-route-role/hrr-1.json)
 
 - **deviation** — Capped with --sync-ack: siblings in the same parallel wave touched skills/** in the shared worktree.
 - **deviation** — The worker delivered hrr-4 scope (the shipped-route-prompt contract test) inside this cell; hrr-4 is dropped rather than re-done.
@@ -118,7 +118,7 @@ bee:
   id: herding-route-role-hrr-2-pitfall
   lifecycle: draft
   areas: [bee-herding]
-  sources: [.bee/cells/hrr-2.json]
+  sources: [.bee/cells/archive/herding-route-role/hrr-2.json]
   polarity: pitfall
 ---
 
@@ -128,7 +128,7 @@ bee:
 
 route-prompt.md written as the route role's whole contract, 218 lines, slice 1 scope only
 
-## Recorded evidence (verbatim from .bee/cells/hrr-2.json)
+## Recorded evidence (verbatim from .bee/cells/archive/herding-route-role/hrr-2.json)
 
 - **deviation** — Capped with --sync-ack: a sibling cell in the same parallel wave touched skills/bee-herding/SKILL.md in the shared worktree between this commit and this cap.
 - **deviation** — sync-ack: parallel wave: hrr-3 landed skills/bee-herding/SKILL.md in the same shared worktree between this cell's commit and its cap, so the door sees a sibling's touched path. hrr-2's own commit 0efa2de4 carries route-prompt.md alone.
@@ -148,7 +148,7 @@ bee:
   id: herding-route-role-hrr-3-pitfall
   lifecycle: draft
   areas: [bee-herding]
-  sources: [.bee/cells/hrr-3.json]
+  sources: [.bee/cells/archive/herding-route-role/hrr-3.json]
   polarity: pitfall
 ---
 
@@ -158,7 +158,7 @@ bee:
 
 bee-herding SKILL.md now describes four roles; route's paragraph, protocol pointer and never-list added, frontmatter corrected
 
-## Recorded evidence (verbatim from .bee/cells/hrr-3.json)
+## Recorded evidence (verbatim from .bee/cells/archive/herding-route-role/hrr-3.json)
 
 - **deviation** — Capped with --sync-ack: a sibling cell in the same parallel wave touched skills/bee-herding/references/route-prompt.md in the shared worktree.
 - **deviation** — sync-ack: parallel wave: hrr-2 landed skills/bee-herding/references/route-prompt.md in the same shared worktree, so the door sees a sibling's touched path. hrr-3's own commit 45ecdce1 carries SKILL.md alone.
@@ -178,7 +178,7 @@ bee:
   id: herding-route-role-hrr-5-pitfall
   lifecycle: draft
   areas: [bee-herding]
-  sources: [.bee/cells/hrr-5.json]
+  sources: [.bee/cells/archive/herding-route-role/hrr-5.json]
   polarity: pitfall
 ---
 
@@ -188,7 +188,7 @@ bee:
 
 route tool surface widened to slice 2's five needs, verb by verb, with two new forbidden tokens
 
-## Recorded evidence (verbatim from .bee/cells/hrr-5.json)
+## Recorded evidence (verbatim from .bee/cells/archive/herding-route-role/hrr-5.json)
 
 - **deviation** — Capped with --sync-ack: siblings in the same parallel wave touched skills/** in the shared worktree.
 - **deviation** — sync-ack: parallel wave: siblings hrr-6/7/8 landed skills/** and AGENTS.md in the same shared worktree. hrr-5's own commit f3acc88f carries control_loop.rs alone.
@@ -208,7 +208,7 @@ bee:
   id: herding-route-role-hrr-6-pitfall
   lifecycle: draft
   areas: [bee-herding]
-  sources: [.bee/cells/hrr-6.json]
+  sources: [.bee/cells/archive/herding-route-role/hrr-6.json]
   polarity: pitfall
 ---
 
@@ -218,7 +218,7 @@ bee:
 
 route-prompt.md now carries the whole slice-2 contract: carve-out, producer resolution, different-agent rule, in-review marker, reviewer pane label, four verdict paths, D4 hand-off, BLOCKED stop
 
-## Recorded evidence (verbatim from .bee/cells/hrr-6.json)
+## Recorded evidence (verbatim from .bee/cells/archive/herding-route-role/hrr-6.json)
 
 - **deviation** — Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths and AGENTS.md in the shared worktree.
 - **deviation** — sync-ack: parallel wave: siblings landed control_loop.rs, role-merge.md, AGENTS.md and operational-invariants.md in the same shared worktree. hrr-6's own commit 4951bb6d carries route-prompt.md alone.
@@ -238,7 +238,7 @@ bee:
   id: herding-route-role-hrr-7-pitfall
   lifecycle: draft
   areas: [bee-herding]
-  sources: [.bee/cells/hrr-7.json]
+  sources: [.bee/cells/archive/herding-route-role/hrr-7.json]
   polarity: pitfall
 ---
 
@@ -248,7 +248,7 @@ bee:
 
 merge role honors the in-review marker and closes the <slug>-review pane
 
-## Recorded evidence (verbatim from .bee/cells/hrr-7.json)
+## Recorded evidence (verbatim from .bee/cells/archive/herding-route-role/hrr-7.json)
 
 - **deviation** — Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths and AGENTS.md in the shared worktree.
 - **deviation** — sync-ack: parallel wave: siblings landed control_loop.rs, route-prompt.md, AGENTS.md and operational-invariants.md in the same shared worktree. hrr-7's own commit 9d76eed2 carries role-merge.md alone.
@@ -268,7 +268,7 @@ bee:
   id: herding-route-role-hrr-8-pitfall
   lifecycle: draft
   areas: [bee-herding]
-  sources: [.bee/cells/hrr-8.json]
+  sources: [.bee/cells/archive/herding-route-role/hrr-8.json]
   polarity: pitfall
 ---
 
@@ -278,7 +278,7 @@ bee:
 
 the review carve-out is named where the rule lives: one sentence in AGENTS.md, a full boundary in operational-invariants.md
 
-## Recorded evidence (verbatim from .bee/cells/hrr-8.json)
+## Recorded evidence (verbatim from .bee/cells/archive/herding-route-role/hrr-8.json)
 
 - **deviation** — Capped with --sync-ack: siblings in the same parallel wave touched other skills/** paths in the shared worktree.
 - **deviation** — sync-ack: parallel wave: siblings landed control_loop.rs, route-prompt.md and role-merge.md in the same shared worktree. hrr-8's own commit 85436d0b carries AGENTS.md and operational-invariants.md alone.
