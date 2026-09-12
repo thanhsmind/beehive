@@ -1295,6 +1295,33 @@ mod tests {
     }
 
     #[test]
+    fn subagent_stop_and_child_session_events_leave_parent_working() {
+        let repo = repo();
+        ok(fire(&repo, event("UserPromptSubmit", "parent-1")));
+        assert_eq!(state_of(&repo, "parent-1"), "working");
+
+        // SubagentStop for parent itself does not change its state (never handled)
+        ok(fire(&repo, event("SubagentStop", "parent-1")));
+        assert_eq!(
+            state_of(&repo, "parent-1"),
+            "working",
+            "SubagentStop must not change parent state"
+        );
+
+        // SubagentStop for a child session does not affect parent
+        ok(fire(&repo, event("SubagentStop", "child-subagent-99")));
+        assert_eq!(
+            state_of(&repo, "parent-1"),
+            "working",
+            "child completion must not mark parent idle"
+        );
+        assert!(
+            !session_file(&repo.root, "child-subagent-99").exists(),
+            "child SubagentStop does not create session record"
+        );
+    }
+
+    #[test]
     fn a_repeat_of_the_same_state_refreshes_the_record_but_is_not_a_transition() {
         let repo = repo();
         ok(fire(&repo, event("UserPromptSubmit", "s1")));

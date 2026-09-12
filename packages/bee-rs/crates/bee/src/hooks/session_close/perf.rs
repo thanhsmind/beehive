@@ -68,36 +68,148 @@ pub(crate) fn strip_jsonl_suffix(file: &Path) -> PathBuf {
     PathBuf::from(s.strip_suffix(".jsonl").map(String::from).unwrap_or_else(|| s.into_owned()))
 }
 
-pub(crate) fn resolve_transcript_for(root: &Path, session_id: Option<&str>) -> Option<PathBuf> {
-    let projects_root = claude_projects_root();
-    let dir = projects_root.join(encode_project_dir(&root.to_string_lossy()));
-    if let Some(sid) = session_id {
-        let file = dir.join(format!("{sid}.jsonl"));
-        return file.exists().then_some(file);
+pub(crate) fn codex_home() -> PathBuf {
+    if let Some(dir) = env_nonempty("CODEX_HOME") {
+        return PathBuf::from(dir);
     }
-    // Newest-mtime top-level *.jsonl (the live session).
-    let entries = std::fs::read_dir(&dir).ok()?;
-    let mut best: Option<PathBuf> = None;
-    let mut best_mtime = f64::NEG_INFINITY;
-    for entry in entries.flatten() {
-        let is_file = entry.file_type().map(|t| t.is_file()).unwrap_or(false);
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if !is_file || !name.ends_with(".jsonl") {
+    PathBuf::from(node_homedir()).join(".codex")
+}
+
+pub(crate) fn codex_sessions_root() -> PathBuf {
+    codex_home().join("sessions")
+}
+
+pub(crate) fn verify_transcript_session_identity(path: &Path, sid: &str) -> bool {
+    if sid.trim().is_empty() || !path.is_file() {
+        return false;
+    }
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let name_matches = file_name == format!("{sid}.jsonl") || file_name.ends_with(&format!("-{sid}.jsonl"));
+
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    use std::io::BufRead;
+    let reader = std::io::BufReader::new(file);
+    let mut saw_contradicting_sid = false;
+    let mut saw_matching_sid = false;
+
+    for line in reader.lines().take(25).flatten() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
-        let Ok(meta) = std::fs::metadata(entry.path()) else { continue };
-        let mtime = meta
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs_f64() * 1000.0)
-            .unwrap_or(f64::NEG_INFINITY);
-        if mtime > best_mtime {
-            best_mtime = mtime;
-            best = Some(entry.path());
+        let Ok(val) = serde_json::from_str::<Value>(trimmed) else {
+            continue;
+        };
+
+        if val.get("type").and_then(Value::as_str) == Some("session_meta") {
+            if let Some(payload) = val.get("payload") {
+                let id_found = payload
+                    .get("id")
+                    .or_else(|| payload.get("session_id"))
+                    .and_then(Value::as_str);
+                if let Some(found) = id_found {
+                    if found == sid {
+                        saw_matching_sid = true;
+                    } else {
+                        saw_contradicting_sid = true;
+                    }
+                }
+            }
+        }
+
+        let top_sid = val
+            .get("session_id")
+            .or_else(|| val.get("sessionId"))
+            .or_else(|| val.get("payload").and_then(|p| p.get("session_id")))
+            .and_then(Value::as_str);
+        if let Some(found) = top_sid {
+            if found == sid {
+                saw_matching_sid = true;
+            } else {
+                saw_contradicting_sid = true;
+            }
         }
     }
-    best
+
+    if saw_contradicting_sid {
+        return false;
+    }
+    if saw_matching_sid {
+        return true;
+    }
+
+    name_matches
+}
+
+pub(crate) fn find_codex_transcript(sessions_root: &Path, sid: &str) -> Option<PathBuf> {
+    if !sessions_root.is_dir() {
+        return None;
+    }
+    let mut matches: Vec<(PathBuf, f64)> = Vec::new();
+    let mut dirs_to_visit = vec![(sessions_root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = dirs_to_visit.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let Ok(ft) = entry.file_type() else { continue };
+            let path = entry.path();
+            if ft.is_dir() {
+                if depth < 4 {
+                    dirs_to_visit.push((path, depth + 1));
+                }
+            } else if ft.is_file() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if (name == format!("{sid}.jsonl") || name.ends_with(&format!("-{sid}.jsonl")))
+                    && verify_transcript_session_identity(&path, sid)
+                {
+                    let mtime = entry
+                        .metadata()
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0);
+                    matches.push((path, mtime));
+                }
+            }
+        }
+    }
+    matches.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    matches.into_iter().next().map(|(p, _)| p)
+}
+
+pub(crate) fn resolve_transcript_for(root: &Path, session_id: Option<&str>) -> Option<PathBuf> {
+    let sid = session_id?;
+    if sid.trim().is_empty() {
+        return None;
+    }
+
+    // 1. Check session record's stored transcript_path
+    if let Some(session) = read_session_record(root, sid) {
+        if let Some(tp) = session.get("transcript_path").and_then(Value::as_str) {
+            let p = PathBuf::from(tp);
+            if p.is_file() && verify_transcript_session_identity(&p, sid) {
+                return Some(p);
+            }
+        }
+    }
+
+    // 2. Fallback A: Claude projects directory
+    let projects_root = claude_projects_root();
+    let dir = projects_root.join(encode_project_dir(&root.to_string_lossy()));
+    let claude_file = dir.join(format!("{sid}.jsonl"));
+    if claude_file.is_file() && verify_transcript_session_identity(&claude_file, sid) {
+        return Some(claude_file);
+    }
+
+    // 3. Fallback B: Codex sessions directory
+    let codex_root = codex_sessions_root();
+    if let Some(codex_file) = find_codex_transcript(&codex_root, sid) {
+        return Some(codex_file);
+    }
+
+    None
 }
 
 #[derive(Clone, Default)]
@@ -191,40 +303,172 @@ pub(crate) fn aggregate_usage(events: &[Value]) -> UsageAgg {
     let mut by_req: Vec<(String, Rec)> = Vec::new();
     let mut no_req: Vec<Rec> = Vec::new();
     let mut obj_counter = 0usize;
+
+    let mut active_model: Option<String> = None;
+    let mut last_seen_codex_totals: Option<(f64, f64, f64, f64, f64)> = None;
+
     for ev in events {
-        if ev.get("type").and_then(Value::as_str) != Some("assistant") {
-            continue;
-        }
-        let msg = ev.get("message").filter(|m| js_truthy(m)).cloned().unwrap_or(Value::Object(Map::new()));
-        let Some(model_v) = msg.get("model").filter(|m| js_truthy(m)) else { continue };
-        let model = js_to_string(model_v);
-        if model == "<synthetic>" {
-            continue;
-        }
-        let usage = msg.get("usage").filter(|u| js_truthy(u)).cloned().unwrap_or(Value::Object(Map::new()));
-        let rec = Rec {
-            model,
-            input: num_field(&usage, "input_tokens"),
-            output: num_field(&usage, "output_tokens"),
-            cache_write: num_field(&usage, "cache_creation_input_tokens"),
-            cache_read: num_field(&usage, "cache_read_input_tokens"),
-        };
-        let rid = ev.get("requestId").filter(|r| js_truthy(r));
-        if let Some(rid) = rid {
-            // Map key: primitives by value; objects are always distinct keys.
-            let key = primitive_key(rid).unwrap_or_else(|| {
-                obj_counter += 1;
-                format!("o:{obj_counter}")
-            });
-            if let Some(pos) = by_req.iter().position(|(k, _)| *k == key) {
-                if rec.output > by_req[pos].1.output {
-                    by_req[pos].1 = rec;
+        let ev_type = ev.get("type").and_then(Value::as_str).unwrap_or("");
+        match ev_type {
+            "turn_context" => {
+                if let Some(m) = ev.get("payload").and_then(|p| p.get("model")).and_then(Value::as_str) {
+                    if !m.is_empty() {
+                        active_model = Some(m.to_string());
+                    }
                 }
-            } else {
-                by_req.push((key, rec));
             }
-        } else {
-            no_req.push(rec);
+            "session_meta" => {
+                if let Some(m) = ev.get("payload").and_then(|p| p.get("model")).and_then(Value::as_str) {
+                    if !m.is_empty() {
+                        active_model = Some(m.to_string());
+                    }
+                }
+            }
+            "assistant" => {
+                let msg = ev.get("message").filter(|m| js_truthy(m)).cloned().unwrap_or(Value::Object(Map::new()));
+                let Some(model_v) = msg.get("model").filter(|m| js_truthy(m)) else { continue };
+                let model = js_to_string(model_v);
+                if model == "<synthetic>" {
+                    continue;
+                }
+                let usage = msg.get("usage").filter(|u| js_truthy(u)).cloned().unwrap_or(Value::Object(Map::new()));
+                let rec = Rec {
+                    model,
+                    input: num_field(&usage, "input_tokens"),
+                    output: num_field(&usage, "output_tokens"),
+                    cache_write: num_field(&usage, "cache_creation_input_tokens"),
+                    cache_read: num_field(&usage, "cache_read_input_tokens"),
+                };
+                let rid = ev.get("requestId").filter(|r| js_truthy(r));
+                if let Some(rid) = rid {
+                    let key = primitive_key(rid).unwrap_or_else(|| {
+                        obj_counter += 1;
+                        format!("o:{obj_counter}")
+                    });
+                    if let Some(pos) = by_req.iter().position(|(k, _)| *k == key) {
+                        if rec.output > by_req[pos].1.output {
+                            by_req[pos].1 = rec;
+                        }
+                    } else {
+                        by_req.push((key, rec));
+                    }
+                } else {
+                    no_req.push(rec);
+                }
+            }
+            "event_msg" => {
+                let Some(payload) = ev.get("payload").and_then(Value::as_object) else { continue };
+                let p_type = payload.get("type").and_then(Value::as_str).unwrap_or("");
+                if p_type == "thread_settings_applied" {
+                    let m = payload
+                        .get("thread_settings")
+                        .and_then(|ts| ts.get("model"))
+                        .or_else(|| payload.get("model"))
+                        .and_then(Value::as_str);
+                    if let Some(m) = m {
+                        if !m.is_empty() {
+                            active_model = Some(m.to_string());
+                        }
+                    }
+                } else if p_type == "token_count" {
+                    let info = payload.get("info").and_then(Value::as_object);
+                    let tot_opt = info.and_then(|i| i.get("total_token_usage")).and_then(Value::as_object);
+                    let last_opt = info.and_then(|i| i.get("last_token_usage")).and_then(Value::as_object);
+
+                    if let Some(tot_obj) = tot_opt {
+                        let tot_val = Value::Object(tot_obj.clone());
+                        let curr_total_tokens = num_field(&tot_val, "total_tokens");
+                        let curr_input = num_field(&tot_val, "input_tokens");
+                        let curr_cached = num_field(&tot_val, "cached_input_tokens");
+                        let curr_cache_write = num_field(&tot_val, "cache_write_input_tokens");
+                        let curr_output = num_field(&tot_val, "output_tokens");
+
+                        let curr_totals = (curr_input, curr_cached, curr_cache_write, curr_output, curr_total_tokens);
+
+                        // Dedup repeated token_count records:
+                        // In live Codex, identical token_count events are repeated multiple times.
+                        // If total_token_usage has not advanced, skip.
+                        if let Some(prev) = last_seen_codex_totals {
+                            if prev == curr_totals {
+                                continue;
+                            }
+                        }
+
+                        // Derive incremental usage for this request:
+                        // If last_token_usage is present, use it.
+                        // Otherwise derive increment from total_token_usage difference.
+                        let (raw_input, cached, cache_write, output) = if let Some(last_obj) = last_opt {
+                            let last_val = Value::Object(last_obj.clone());
+                            (
+                                num_field(&last_val, "input_tokens"),
+                                num_field(&last_val, "cached_input_tokens"),
+                                num_field(&last_val, "cache_write_input_tokens"),
+                                num_field(&last_val, "output_tokens"),
+                            )
+                        } else {
+                            let (p_in, p_ca, p_cw, p_out, _) = last_seen_codex_totals.unwrap_or_default();
+                            (
+                                (curr_input - p_in).max(0.0),
+                                (curr_cached - p_ca).max(0.0),
+                                (curr_cache_write - p_cw).max(0.0),
+                                (curr_output - p_out).max(0.0),
+                            )
+                        };
+
+                        last_seen_codex_totals = Some(curr_totals);
+
+                        // Normalize Codex input tokens:
+                        // In Codex, raw prompt `input_tokens` INCLUDES `cached_input_tokens` (and `cache_write_input_tokens`).
+                        // Normalize to bee's uncached-input contract so that
+                        // finalize() (new = input + output + cache_write; total = new + cached)
+                        // yields total = input + output from the raw shape without double-counting cached tokens.
+                        let uncached_input = (raw_input - cached - cache_write).max(0.0);
+
+                        let model = payload
+                            .get("model")
+                            .and_then(Value::as_str)
+                            .map(String::from)
+                            .or_else(|| active_model.clone())
+                            .unwrap_or_else(|| "codex".to_string());
+
+                        let rec = Rec {
+                            model,
+                            input: uncached_input,
+                            output,
+                            cache_write,
+                            cache_read: cached,
+                        };
+
+                        no_req.push(rec);
+                    } else if let Some(last_obj) = last_opt {
+                        // Fallback if total_token_usage is absent but last_token_usage is present
+                        let last_val = Value::Object(last_obj.clone());
+                        let raw_input = num_field(&last_val, "input_tokens");
+                        let cached = num_field(&last_val, "cached_input_tokens");
+                        let cache_write = num_field(&last_val, "cache_write_input_tokens");
+                        let output = num_field(&last_val, "output_tokens");
+                        let uncached_input = (raw_input - cached - cache_write).max(0.0);
+
+                        let model = payload
+                            .get("model")
+                            .and_then(Value::as_str)
+                            .map(String::from)
+                            .or_else(|| active_model.clone())
+                            .unwrap_or_else(|| "codex".to_string());
+
+                        let rec = Rec {
+                            model,
+                            input: uncached_input,
+                            output,
+                            cache_write,
+                            cache_read: cached,
+                        };
+
+                        no_req.push(rec);
+                    }
+                }
+            }
+            _ => {}
         }
     }
     let mut models = ModelMap::default();
@@ -246,7 +490,12 @@ pub(crate) fn aggregate_usage(events: &[Value]) -> UsageAgg {
 }
 
 pub(crate) fn event_ms(ev: &Value) -> Option<f64> {
-    ev.get("timestamp").and_then(Value::as_str).and_then(js_date_parse)
+    ev.get("timestamp")
+        .or_else(|| ev.get("created_at"))
+        .or_else(|| ev.get("payload").and_then(|p| p.get("timestamp")))
+        .or_else(|| ev.get("payload").and_then(|p| p.get("created_at")))
+        .and_then(Value::as_str)
+        .and_then(js_date_parse)
 }
 
 pub(crate) fn running_time_ms(events: &[Value]) -> f64 {
@@ -292,22 +541,61 @@ pub(crate) fn detect_parallel(agents: &[AgentSpan], parent_events: &[Value]) -> 
         }
     }
     for ev in parent_events {
-        if ev.get("type").and_then(Value::as_str) != Some("assistant") {
-            continue;
-        }
-        let Some(Value::Array(content)) = ev.get("message").and_then(|m| m.get("content")) else {
-            continue;
-        };
-        let agent_calls = content
-            .iter()
-            .filter(|b| {
-                js_truthy(b)
-                    && b.get("type").and_then(Value::as_str) == Some("tool_use")
-                    && b.get("name").and_then(Value::as_str) == Some("Agent")
-            })
-            .count();
-        if agent_calls >= 2 {
-            return true;
+        let ev_type = ev.get("type").and_then(Value::as_str).unwrap_or("");
+        if ev_type == "assistant" {
+            let Some(Value::Array(content)) = ev.get("message").and_then(|m| m.get("content")) else {
+                continue;
+            };
+            let agent_calls = content
+                .iter()
+                .filter(|b| {
+                    js_truthy(b)
+                        && (b.get("type").and_then(Value::as_str) == Some("tool_use")
+                            || b.get("type").and_then(Value::as_str) == Some("function_call"))
+                        && matches!(b.get("name").and_then(Value::as_str), Some("Agent" | "spawn_agent"))
+                })
+                .count();
+            if agent_calls >= 2 {
+                return true;
+            }
+        } else if ev_type == "response_item" {
+            if let Some(payload) = ev.get("payload") {
+                if let Some(Value::Array(content)) = payload.get("content") {
+                    let agent_calls = content
+                        .iter()
+                        .filter(|b| {
+                            js_truthy(b)
+                                && (b.get("type").and_then(Value::as_str) == Some("tool_use")
+                                    || b.get("type").and_then(Value::as_str) == Some("function_call")
+                                    || b.get("type").and_then(Value::as_str) == Some("custom_tool_call"))
+                                && matches!(
+                                    b.get("name").or_else(|| b.get("tool_name")).and_then(Value::as_str),
+                                    Some("Agent" | "spawn_agent")
+                                )
+                        })
+                        .count();
+                    if agent_calls >= 2 {
+                        return true;
+                    }
+                }
+                if let Some(Value::Array(calls)) = payload.get("tool_calls") {
+                    let agent_calls = calls
+                        .iter()
+                        .filter(|b| {
+                            matches!(
+                                b.get("function")
+                                    .and_then(|f| f.get("name"))
+                                    .or_else(|| b.get("name"))
+                                    .and_then(Value::as_str),
+                                Some("Agent" | "spawn_agent")
+                            )
+                        })
+                        .count();
+                    if agent_calls >= 2 {
+                        return true;
+                    }
+                }
+            }
         }
     }
     false
@@ -386,6 +674,78 @@ pub(crate) fn rollup_transcript(file: &Path) -> Option<Rollup> {
     rollup_from_events(file, &events)
 }
 
+fn is_uuid(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 36 {
+        return false;
+    }
+    for (i, &byte) in b.iter().enumerate() {
+        if i == 8 || i == 13 || i == 18 || i == 23 {
+            if byte != b'-' {
+                return false;
+            }
+        } else if !byte.is_ascii_hexdigit() {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_valid_session_id(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+pub(crate) fn extract_validated_session_id_from_stem(stem: &str) -> Option<String> {
+    let s = stem.trim();
+    if s.is_empty() {
+        return None;
+    }
+    // Check if stem ends with a 36-character UUID (e.g. rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71)
+    if let Some(pos) = s.len().checked_sub(36) {
+        if let Some(suffix) = s.get(pos..) {
+            if is_uuid(suffix) {
+                if pos == 0 || s.as_bytes().get(pos - 1) == Some(&b'-') {
+                    return Some(suffix.to_string());
+                }
+            }
+        }
+    }
+    if let Some(after_rollout) = s.strip_prefix("rollout-") {
+        if let Some((ts, candidate)) = after_rollout.split_at_checked(20) {
+            let b = ts.as_bytes();
+            let is_digit = |idx: usize| b.get(idx).map_or(false, u8::is_ascii_digit);
+            if is_digit(0) && is_digit(1) && is_digit(2) && is_digit(3)
+                && b.get(4) == Some(&b'-')
+                && is_digit(5) && is_digit(6)
+                && b.get(7) == Some(&b'-')
+                && is_digit(8) && is_digit(9)
+                && b.get(10) == Some(&b'T')
+                && is_digit(11) && is_digit(12)
+                && b.get(13) == Some(&b'-')
+                && is_digit(14) && is_digit(15)
+                && b.get(16) == Some(&b'-')
+                && is_digit(17) && is_digit(18)
+                && b.get(19) == Some(&b'-')
+            {
+                let candidate = candidate.trim();
+                if is_valid_session_id(candidate) {
+                    return Some(candidate.to_string());
+                }
+            }
+        }
+        if is_uuid(after_rollout) {
+            return Some(after_rollout.to_string());
+        }
+        return None;
+    }
+
+    if is_valid_session_id(s) {
+        Some(s.to_string())
+    } else {
+        None
+    }
+}
+
 /// auto-wait-mark rework: the rollup half of `rollup_transcript`, split out
 /// so a caller that already holds the parsed events (the Stop hook's own
 /// `perf_refresh`, which then hands the same events to `turn_end_subject`)
@@ -400,11 +760,46 @@ pub(crate) fn rollup_from_events(file: &Path, events: &[Value]) -> Option<Rollup
     let session_dir = strip_jsonl_suffix(file);
     let sub = walk_subagents(&session_dir);
     let stamps: Vec<f64> = events.iter().filter_map(event_ms).collect();
-    let cwd = events
-        .iter()
-        .find_map(|e| e.get("cwd").filter(|c| matches!(c, Value::String(s) if !s.is_empty())).cloned());
+    let cwd = events.iter().find_map(|e| {
+        e.get("cwd")
+            .or_else(|| e.get("payload").and_then(|p| p.get("cwd")))
+            .filter(|c| matches!(c, Value::String(s) if !s.is_empty()))
+            .cloned()
+    });
+
+    let session_id_from_meta = events.iter().find_map(|e| {
+        if e.get("type").and_then(Value::as_str) == Some("session_meta") {
+            e.get("payload")
+                .and_then(|p| p.get("id").or_else(|| p.get("session_id")))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+        } else {
+            None
+        }
+    });
+
+    let session_id_from_events = events.iter().find_map(|e| {
+        e.get("session_id")
+            .or_else(|| e.get("sessionId"))
+            .or_else(|| e.get("payload").and_then(|p| p.get("session_id")))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    });
+
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let session_id = name.strip_suffix(".jsonl").unwrap_or(&name).to_string();
+    let stem = name.strip_suffix(".jsonl").unwrap_or(&name);
+    let session_id = if let Some(sid) = session_id_from_meta {
+        sid
+    } else if let Some(sid) = session_id_from_events {
+        sid
+    } else {
+        extract_validated_session_id_from_stem(stem)?
+    };
+
     Some(Rollup {
         session_id,
         cwd,
