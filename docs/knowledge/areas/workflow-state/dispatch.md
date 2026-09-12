@@ -71,6 +71,12 @@ validates exactly those five keys (unknown key refused, missing keys named)
 into append-only `trace.report`; the flag absent keeps old finish behavior
 unchanged. Tending reads the form, never parses worker prose.
 
+**Codex spawn payloads follow the live tool schema.** Every Codex native
+dispatch uses one payload constructor. It emits `task_name`, `message`, and
+`fork_turns`. A model override can also emit `model` and `reasoning_effort`.
+`task_name` contains only lowercase letters, digits, and underscores. The
+complete display subject stays in `message`, where punctuation is valid.
+
 **The user's verbatim request rides every dispatch
 (slp-contract-original-request, cell scor-1, 2026-08-29).** `dispatch prepare`
 reads the intent anchor and renders its `request` — unchanged, under the

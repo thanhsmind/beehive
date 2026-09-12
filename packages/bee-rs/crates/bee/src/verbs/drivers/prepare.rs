@@ -487,6 +487,51 @@ pub(crate) const DESCRIPTION_TITLE_MAX: usize = 60;
 /// the two ever need to diverge.
 pub(crate) const TASK_NAME_MAX: usize = 60;
 
+fn codex_task_name(subject: &str) -> String {
+    let mut out = String::new();
+    let mut separator = false;
+    for ch in subject.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if separator && !out.is_empty() && out.len() < TASK_NAME_MAX {
+                out.push('_');
+            }
+            separator = false;
+            if out.len() < TASK_NAME_MAX {
+                out.push(ch.to_ascii_lowercase());
+            }
+        } else {
+            separator = true;
+        }
+    }
+    while out.ends_with('_') {
+        out.pop();
+    }
+    if out.is_empty() { "bee_task".into() } else { out }
+}
+
+fn codex_spawn_payload(
+    subject: &str,
+    tier: &str,
+    prompt_body: &str,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Map<String, Value> {
+    let mut payload = Map::new();
+    payload.insert("task_name".into(), Value::String(codex_task_name(subject)));
+    payload.insert(
+        "message".into(),
+        Value::String(format!("[bee-tier: {tier}]\nAssignment: {subject}\n{prompt_body}")),
+    );
+    payload.insert("fork_turns".into(), Value::String("none".into()));
+    if let Some(model) = model {
+        payload.insert("model".into(), Value::String(model.to_string()));
+    }
+    if let Some(effort) = effort {
+        payload.insert("reasoning_effort".into(), Value::String(effort.to_string()));
+    }
+    payload
+}
+
 /// provenance: dispatch-prepare.mjs priorRoundEventLines — the machine-
 /// assembled digest of the cell record's own trace history, chronological
 /// (ISO strings compare lexicographically; timeless events sink to the end in
@@ -1708,15 +1753,7 @@ pub(crate) fn prepare_dispatch_with_brief(
     if is_escalated {
         if runtime == "codex" {
             tool = "spawn_agent".into();
-            payload.insert(
-                "task_name".into(),
-                Value::String(one_line(Some(&Value::String(subject.clone())), TASK_NAME_MAX)),
-            );
-            payload.insert(
-                "message".into(),
-                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
-            );
-            payload.insert("fork_turns".into(), Value::String("none".into()));
+            payload = codex_spawn_payload(&subject, ESCALATION_WORD, &prompt_body, None, None);
             channel = "session-model".into();
         } else {
             tool = "Agent".into();
@@ -1733,27 +1770,17 @@ pub(crate) fn prepare_dispatch_with_brief(
         }
     } else {
         match &resolved {
-            Resolved::Native { model, effort, fallback, agent_type, .. } => {
+            Resolved::Native { model, effort, fallback, .. } => {
                 native_confirmed = classification == Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
                 if native_confirmed {
                     tool = "spawn_agent".into();
-                    payload.insert(
-                        "agent_type".into(),
-                        Value::String(if agent_type.is_empty() {
-                            "worker".to_string()
-                        } else {
-                            agent_type.clone()
-                        }),
+                    payload = codex_spawn_payload(
+                        &subject,
+                        marker_role,
+                        &prompt_body,
+                        Some(model),
+                        effort.as_deref(),
                     );
-                    payload.insert(
-                        "message".into(),
-                        Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
-                    );
-                    payload.insert("model".into(), Value::String(model.clone()));
-                    payload.insert("fork_turns".into(), Value::String("none".into()));
-                    if let Some(effort) = effort {
-                        payload.insert("reasoning_effort".into(), Value::String(effort.clone()));
-                    }
                     channel = "codex-native".into();
                     extra_transport = Some("native-override");
                 } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
@@ -1908,15 +1935,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                 // codex's `task_name` is a plain required string on the
                 // live-probed 0.145.0 schema (see TASK_NAME_MAX); one-lined and
                 // capped so a long subject cannot read like a paragraph.
-                payload.insert(
-                    "task_name".into(),
-                    Value::String(one_line(Some(&Value::String(subject.clone())), TASK_NAME_MAX)),
-                );
-                payload.insert(
-                    "message".into(),
-                    Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
-                );
-                payload.insert("fork_turns".into(), Value::String("none".into()));
+                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, None, None);
                 channel = "codex-native".into();
             }
             _ => {

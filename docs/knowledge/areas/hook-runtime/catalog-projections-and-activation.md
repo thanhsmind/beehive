@@ -70,7 +70,7 @@ definition.
 | runtime's own belt | A runtime's hand-authored equivalent of a projection: one project file translating that runtime's own events into the same helper calls every projection makes, held to the catalog's coverage guarantee by a derived registry check rather than by shared generation. Two runtimes carry one — OpenCode and Pi. |
 | allowed difference | A named, exported exception explaining why one projection — or one runtime's own belt — carries or omits a checkpoint the others do not. Any un-named difference is a defect. |
 | reviewed definition | The exact command definition the owner has inspected and trusted. A new or changed non-managed definition does not run until it is reviewed again. |
-| activity checkpoint set | The Claude-only group of lifecycle checkpoints that record what a session is doing rather than judging it: prompt, before-tool, after-tool and after-tool-failure, permission request, stop, notification, session end — one handler behind all of them. It carries no equivalent on the other runtimes today, so its absence there is a named difference under R1, not drift. What it writes and what readers make of it is `agent-activity-record.md`'s subject (decision b17bfa89). |
+| activity checkpoint set | The lifecycle checkpoints that record what a session is doing rather than judging it. Claude carries prompt, before-tool, after-tool, after-tool-failure, permission request, stop, notification, and session end. Codex carries its supported shared events: prompt, before-tool, after-tool, and stop. One handler serves all events. No runtime records activity on `SubagentStop`. What the handler writes is in `agent-activity-record.md` (decision b17bfa89). |
 
 ## Behaviors & Operations
 

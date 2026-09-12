@@ -1084,7 +1084,7 @@ use std::time::Instant;
     /// visibility D2 required a real label. `task_name` now carries the same
     /// subject as the claude Agent's `description`.
     #[test]
-    fn codex_task_name_carries_the_cell_title_not_the_bare_id() {
+    fn codex_spawn_payload_uses_callable_task_name_and_carries_the_full_subject() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"codex":{"generation":"gpt-5"}}}"#);
         w(
@@ -1100,8 +1100,12 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("spawn_agent")));
         assert_eq!(
             v.get("payload").unwrap().get("task_name"),
-            Some(&json!("c-1: cap the test scrubber"))
+            Some(&json!("c_1_cap_the_test_scrubber"))
         );
+        assert!(v["payload"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Assignment: c-1: cap the test scrubber"));
     }
 
     /// THE ANTI-RECURRENCE DEVICE (dispatch-label-chokepoint plan.md — the
@@ -1180,6 +1184,18 @@ use std::time::Instant;
                     _ => None,
                 };
                 let Some(label) = label else { continue };
+
+                if runtime == "codex" {
+                    assert!(
+                        label.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_'),
+                        "codex/{kind}: task_name {label:?} violates the live schema"
+                    );
+                    assert!(
+                        payload["message"].as_str().unwrap().contains(&format!("Assignment: {marker}")),
+                        "codex/{kind}: message dropped the complete subject {marker:?}"
+                    );
+                    continue;
+                }
 
                 assert!(
                     label.contains(&marker),
@@ -1834,7 +1850,7 @@ use std::time::Instant;
         assert_eq!(v_codex.get("tool"), Some(&json!("spawn_agent")));
         let codex_payload = v_codex.get("payload").unwrap();
         assert_eq!(codex_payload.get("model"), None);
-        assert_eq!(codex_payload.get("task_name"), Some(&json!("c-1: critical ceiling fix")));
+        assert_eq!(codex_payload.get("task_name"), Some(&json!("c_1_critical_ceiling_fix")));
         assert!(codex_payload.get("message").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling]\n"));
         let codex_econ = v_codex.get("economics").unwrap();
         assert_eq!(codex_econ.get("channel"), Some(&json!("session-model")));
@@ -2421,7 +2437,7 @@ use std::time::Instant;
     }
 
     #[test]
-    fn native_unavailable_refuses_rather_than_downgrading() {
+    fn codex_spawn_payload_native_override_uses_the_live_schema() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(
             &tmp,
@@ -2461,7 +2477,8 @@ use std::time::Instant;
         };
         assert_eq!(v.get("transport"), Some(&json!("native-override")));
         let p = v.get("payload").unwrap();
-        assert_eq!(p.get("agent_type"), Some(&json!("worker")));
+        assert_eq!(p.get("agent_type"), None);
+        assert_eq!(p.get("task_name"), Some(&json!("gather")));
         assert_eq!(p.get("model"), Some(&json!("gpt-5")));
         assert_eq!(p.get("fork_turns"), Some(&json!("none")));
     }
@@ -6915,10 +6932,15 @@ advance_on — falling to another model there hides the defect (D11)"
             .find_map(|k| payload.get(*k).and_then(Value::as_str))
             .expect("a payload carries its rendered prompt under prompt/message/stdin");
         match raw.strip_prefix("[bee-tier: ") {
-            Some(rest) => rest
-                .split_once('\n')
-                .map(|(_, body)| body.to_string())
-                .unwrap_or_else(|| raw.to_string()),
+            Some(rest) => rest.split_once('\n').map_or_else(
+                || raw.to_string(),
+                |(_, body)| {
+                    body.strip_prefix("Assignment: ")
+                        .and_then(|with_subject| with_subject.split_once('\n').map(|(_, prompt)| prompt))
+                        .unwrap_or(body)
+                        .to_string()
+                },
+            ),
             None => raw.to_string(),
         }
     }
