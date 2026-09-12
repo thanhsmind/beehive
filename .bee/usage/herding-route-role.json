@@ -1,76 +1,24 @@
 {
   "schema": "bee-usage/v1",
   "feature": "herding-route-role",
-  "closed_at": "2026-09-09T07:55:49.972Z",
-  "sessions": [
-    {
-      "session_id": "ac83adf7-9f51-4558-a3ad-49533284ee5d",
-      "models": {
-        "claude-opus-5": {
-          "input": 576,
-          "output": 219354,
-          "cache_write": 1007789,
-          "cache_read": 98298126,
-          "new": 1227719,
-          "cached": 98298126,
-          "total": 99525845
-        },
-        "claude-fable-5-1": {
-          "input": 4856,
-          "output": 224600,
-          "cache_write": 2492079,
-          "cache_read": 130123187,
-          "new": 2721535,
-          "cached": 130123187,
-          "total": 132844722
-        }
-      },
-      "subagent_models": {
-        "claude-opus-5": {
-          "input": 144,
-          "output": 22828,
-          "cache_write": 479312,
-          "cache_read": 4510916,
-          "new": 502284,
-          "cached": 4510916,
-          "total": 5013200
-        },
-        "claude-fable-5-1": {
-          "input": 290,
-          "output": 3909,
-          "cache_write": 119166,
-          "cache_read": 812421,
-          "new": 123365,
-          "cached": 812421,
-          "total": 935786
-        }
-      },
-      "subagent_count": 7,
-      "started_ms": 1788875388129,
-      "ended_ms": 1788940537323,
-      "totals": {
-        "new": 4574903,
-        "cached": 233744650,
-        "total": 238319553
-      }
-    }
-  ],
+  "closed_at": "2026-09-12T13:50:01.885Z",
+  "sessions": [],
   "skipped": 0,
   "totals": {
     "main": {
-      "new": 3949254,
-      "cached": 228421313,
-      "total": 232370567
+      "new": 0,
+      "cached": 0,
+      "total": 0
     },
     "subagents": {
-      "new": 625649,
-      "cached": 5323337,
-      "total": 5948986
+      "new": 0,
+      "cached": 0,
+      "total": 0
     },
     "total": {
-      "new": 4574903,
-      "cached": 233744650,
-      "total": 238319553
+      "new": 0,
+      "cached": 0,
+      "total": 0
     }
   }
 }

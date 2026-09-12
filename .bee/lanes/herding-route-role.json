@@ -13,13 +13,8 @@
   "summary": "Feature \"herding-route-role\" started at phase \"exploring\".",
   "next_action": "bee close finished \"herding-route-role\" — feature is closed.",
   "created_at": "2026-09-08T14:53:00.012Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "question",
-    "subject": "Fix the 13 Windows-only test failures?",
-    "asked_at": "2026-09-11T07:28:36.832Z",
-    "session": "f895b642-a3e1-4c5c-bbae-0e2ebbd9b352"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "advisor_ref": {
     "consulted_at": "2026-09-08T15:15:59.325Z",
     "feature": "herding-route-role",
