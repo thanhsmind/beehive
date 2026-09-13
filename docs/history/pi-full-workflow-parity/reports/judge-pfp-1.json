@@ -1,0 +1,33 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "pause-dismissal",
+      "status": "PASS",
+      "evidence": "workflow_store/tests.rs::dismiss_mailbox_handoff_refuses_planned_next_and_clears_pause and workflow_verbs.rs::handoff_dismiss_clears_pause_handoff_and_rebuilds_projection pass in the recorded handoff proof."
+    },
+    {
+      "id": "planned-next-safety",
+      "status": "PASS",
+      "evidence": "workflow_verbs.rs proves dismiss and workflow close refuse open planned-next authority without changing the target state; pi_plugin_contracts.rs then drives guarded adoption and verifies fence_epoch 2."
+    },
+    {
+      "id": "close-and-projection",
+      "status": "PASS",
+      "evidence": "workflows.rs routes all three selectors through close_workflow_records; projections.rs excludes status closed; workflow_verbs.rs proves pause cleanup and all-or-none preflight."
+    },
+    {
+      "id": "public-command",
+      "status": "PASS",
+      "evidence": "generated/registry_payload.json declares state.handoff.dismiss; recorded registry_contracts and registry_dispatch proof is green:unit."
+    },
+    {
+      "id": "scope-and-prohibitions",
+      "status": "PASS",
+      "evidence": "git show --stat 84269294 contains only declared pfp-1 paths; .pi/extensions/bee-guard.ts and all OMP or Pi dispatch files are unchanged."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

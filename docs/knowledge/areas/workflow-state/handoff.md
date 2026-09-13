@@ -190,7 +190,9 @@ and proceeds rather than refusing, so missing history is never punished.
   different workflow's; the legacy `HANDOFF.json` is a projection of the
   newest open mailbox record across every workflow, and shows at most one
   workflow's handoff at a time until a later slice retires the file
-  (multisession-native D5, msn-15).
+  (multisession-native D5, msn-15). A proof that writes a pause after
+  planned-next in the same role must adopt planned-next first. Otherwise, the
+  new write clears the record under test and bypasses guarded adoption.
 - R77 — The legacy `.bee/HANDOFF.json`'s production writer set is exactly
   `{rebuildHandoffProjection, writeHandoff C1 fallback, adoptHandoff C1
   fallback}`, enforced by a grep-audit test rather than merely documented; the
