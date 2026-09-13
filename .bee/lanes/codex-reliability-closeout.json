@@ -13,13 +13,8 @@
   "summary": "Four bounded repair cells approved; independent execution starts.",
   "next_action": "bee close finished \"codex-reliability-closeout\" — feature is closed.",
   "created_at": "2026-09-13T06:48:11.405Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Changes, evidence, and remaining limits are recorded in the release notes.",
-    "asked_at": "2026-09-13T13:14:22.350Z",
-    "session": "01a09911-9b86-7a30-8a6f-b22a78347d98"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "high-risk",

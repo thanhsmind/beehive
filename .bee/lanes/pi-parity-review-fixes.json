@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-parity-review-fixes",
+  "mode": "high-risk",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-parity-review-fixes\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"pi-parity-review-fixes\" (lane).",
+  "created_at": "2026-09-13T15:40:47.587Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "Continue after Pi relocates this session to main, then enter pi-parity-review-fixes.",
+    "asked_at": "2026-09-13T15:43:34.339Z",
+    "session": "01a09b51-8c9f-7737-b6f6-7655a5700cc9"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "multi-domain",
+      "covered-contract-change",
+      "audit-security"
+    ],
+    "product_files": 10,
+    "rationale": "Two P1 parity failures affect worker dispatch and planned-next authority; two P2 gaps affect lifecycle reporting and runtime health.",
+    "updated_at": "2026-09-13T15:41:14.470Z",
+    "feature": "pi-parity-review-fixes"
+  }
+}

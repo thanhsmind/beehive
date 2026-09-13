@@ -1,0 +1,112 @@
+{
+  "id": "pi-harness-current-parity-review-20260913",
+  "requested_by": "user",
+  "requested_at": "2026-09-13T15:22:38.509Z",
+  "scope_description": "Current-state audit of Bee harness parity between Pi and Claude Code at 50c90045. Includes the completed Pi support, belt parity, result mailbox, worktree relocation, harness workflow parity, and workflow-tail parity features. Reviews the shipped Pi extension, shared CLI, onboarding, dispatch transport, context and skill loading, lifecycle tests, and named host-capability exclusions. Excludes OMP and unrelated feature changes.",
+  "included": [
+    {
+      "type": "feature",
+      "id": "pi-support",
+      "reason": "Pi extension, onboarding, and dispatch door"
+    },
+    {
+      "type": "feature",
+      "id": "pi-beehive",
+      "reason": "Claude-to-Pi hook lifecycle mapping"
+    },
+    {
+      "type": "feature",
+      "id": "pi-result-mailbox",
+      "reason": "worker result delivery"
+    },
+    {
+      "type": "feature",
+      "id": "pi-worktree-session-relocation",
+      "reason": "worktree session continuity"
+    },
+    {
+      "type": "feature",
+      "id": "pi-harness-workflow-parity",
+      "reason": "shared lifecycle gates and proof"
+    },
+    {
+      "type": "feature",
+      "id": "pi-full-workflow-parity",
+      "reason": "handoff and workflow close tail"
+    }
+  ],
+  "excluded": [],
+  "baseline": "5f25846740f160cc078f718eb9ed899f407e7fa5",
+  "head": "50c90045ccf351b8745eccdf3dbe2334da6cfe31",
+  "reviewer_manifest": {
+    "reviewers": [],
+    "local_audit": true,
+    "uncovered_lenses": [
+      "independent code-quality",
+      "independent architecture",
+      "independent security",
+      "independent test-coverage"
+    ],
+    "reason": "The required reviewer dispatch resolved to an Agent-tool payload, but the active Pi harness exposes no Agent tool. The lead completed a disclosed local audit instead; this record is not an independent multi-agent wave."
+  },
+  "verification_preflight": {
+    "checked_at": "2026-09-13T15:34:18Z",
+    "cells_checked": [
+      "pfp-1",
+      "pfp-2"
+    ],
+    "passed": true,
+    "command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "result": "passed; 3,551 core tests and 61 Pi contract tests passed",
+    "scope_note": "Fresh full-suite proof plus direct source and locked-decision audit across the six frozen Pi features. Independent lenses remain uncovered because dispatch could not execute."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P1",
+      "axis": "spec",
+      "file": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs:650",
+      "title": "Pi receives a Claude dispatch command in its injected session preamble",
+      "detail": "build_session_preamble always renders dispatch_door_lines for runtime claude. The Pi belt injects that same preamble through session-init. A Pi agent therefore bypasses team.pi and receives a native Agent payload that Pi cannot execute; this review reproduced that exact failure when reviewer dispatch returned Agent but no Agent tool existed. The Pi end-to-end test hides the defect by hand-writing --runtime pi and never asserting the injected preamble. This violates pi-support D5/D8 and blocks the required worker path for every non-tiny workflow.",
+      "autofix_class": "gated_auto"
+    },
+    {
+      "id": "F2",
+      "severity": "P2",
+      "axis": "spec",
+      "file": ".pi/extensions/bee-guard.ts:70",
+      "title": "Pi activity exclusions claim that documented lifecycle carriers do not exist",
+      "detail": "The belt names PreToolUse, PermissionRequest, and Notification activity as exclusions because Pi allegedly has no advisory pre-tool or prompt event. Pi 0.84.4 documents tool_execution_start before tool_call and ui_prompt_start/ui_prompt_end around blocking UI prompts. The belt registers neither event, so a Pi session can remain working while it waits for user input. docs/config-reference.md:272-274 repeats the false capability claim, and the parity test validates only that an exclusion comment exists, not that its reason is true.",
+      "autofix_class": "gated_auto"
+    },
+    {
+      "id": "F3",
+      "severity": "P1",
+      "axis": "spec",
+      "file": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:111",
+      "title": "Workflow close can race a planned-next handoff and hide live claim authority",
+      "detail": "close_workflow_records preflights mailbox records without a handoff lock, releases no transaction boundary across pause clearing and workflow closure, and closes later through separate workflow locks. write_mailbox_handoff checks its prerequisites before taking only handoff:<workflow-id> and does not re-check workflow status. A writer can therefore add planned-next after close preflight, or after close while it holds a previously resolved workflow id. Close succeeds, projection rebuild omits the closed workflow, and live planned-next authority becomes inaccessible. This violates D4/D6 and plan.md:194, which requires workflow and handoff locks in documented order.",
+      "autofix_class": "gated_auto"
+    },
+    {
+      "id": "F4",
+      "severity": "P2",
+      "axis": "standards",
+      "file": "packages/bee-rs/crates/bee/src/doctor.rs:49",
+      "title": "The runtime health command does not support Pi",
+      "detail": "Runtime contains only Claude and Codex. Fresh execution of bee doctor --runtime pi --json returns unsupported_argument_shape. Pi onboarding, extension presence, skill discovery, and runtime readiness therefore have no equivalent fail-closed health report, although Claude has one. This is an operational parity gap, not a named host-capability exclusion.",
+      "autofix_class": "gated_auto"
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "blocked",
+    "audit_complete": true,
+    "mode": "report-only",
+    "merge_requested": false,
+    "summary": "Current Pi support is not feature-equivalent to Claude Code: P1 2, P2 2, P3 0. Core tests pass, but the injected dispatch route is unusable on Pi and workflow-close claim safety is not transactional.",
+    "next_action": "Fix F1 and F3, re-run the Pi end-to-end path from the injected preamble, then run an independent delta review."
+  },
+  "created_at": "2026-09-13T15:22:38.509Z",
+  "updated_at": "2026-09-13T15:36:28.318Z"
+}
