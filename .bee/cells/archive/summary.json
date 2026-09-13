@@ -1188,5 +1188,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-09-11T08:52:27.724Z"
+  },
+  "codex-parity-completion": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-13T04:43:22.254Z"
   }
 }

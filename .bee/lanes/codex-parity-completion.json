@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "codex-parity-completion",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
-  "summary": "All4 implementation cells capped and semantic PASS; full suite3920 passed0failed20ignored. Merged main4c49458 plus bookkeeping7e041db5, tested binary installed and hash matched. Runtime knowledge captured. Only UAT door remains; doctor trust attestation hash_changed requires user hook review. Temporary credential cleanup remains separately blocked by physical-worktree guard; copy mode600, test sandboxes removed and evidence retained.",
-  "next_action": "Merged into main at fc104c5; reload the product and test \"codex-parity-completion\", then either approve uat (\"bee gate --name uat --approved true --lane codex-parity-completion\") or fix it in the worktree and merge again.",
+  "summary": "User acceptance recorded as decision 70d8bdab. Feature closed; four cell records archived unchanged. Main test log retained with zero failures. Temporary sign-in copy removal remains blocked by the physical-worktree hook despite filesystem write access. Five capture stubs remain pending.",
+  "next_action": "bee close finished \"codex-parity-completion\" — feature is closed.",
   "created_at": "2026-09-12T14:13:37.038Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: codex-parity-completion",
-    "asked_at": "2026-09-13T04:36:47.728Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
