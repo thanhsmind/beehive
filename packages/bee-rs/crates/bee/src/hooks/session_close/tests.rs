@@ -1632,7 +1632,6 @@ so the next session can resume cleanly, or record a capture stub for what settle
         let agg = aggregate_usage(&events);
         assert_eq!(agg.models.0.len(), 1);
         let (model, acc) = &agg.models.0[0];
-        assert_eq!(model, "o3-mini");
         // Dedup must NOT count identical records 4 times:
         // First request: uncached input = 1000 - 800 = 200, output = 100, cached = 800
         // Second request: uncached input = 1500 - 1200 = 300, output = 150, cached = 1200
@@ -1641,6 +1640,7 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(acc.output, 250.0);
         assert_eq!(acc.cache_read, 2000.0);
         assert_eq!(acc.total, 2750.0);
+        assert_eq!(model, "o3-mini");
     }
 
     #[test]

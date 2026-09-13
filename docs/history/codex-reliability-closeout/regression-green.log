@@ -124,3 +124,19 @@ test hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 3561 filtered out; finished in 0.00s
 
+================================================================================
+Current Feature Tree Verification: Reordered Test Order & Full Module Suite
+================================================================================
+Command:
+PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false \
+cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests
+
+Output:
+test hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result ... ok
+test hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn ... ok
+test hooks::session_close::tests::codex_rollup_does_not_use_response_item_payload_id_as_session_id ... ok
+test hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_meta_missing ... ok
+...
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 3522 filtered out; finished in 0.19s
+
+

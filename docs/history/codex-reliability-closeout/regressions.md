@@ -59,8 +59,61 @@ Full raw output is preserved in `docs/history/codex-reliability-closeout/regress
   - Panic: `assertion left == right failed: left: "7a48da530e71", right: "01a095e4-8306-70d0-bf1f-7a48da530e71"` at `tests.rs:1673:9`.
   - Cause: Session UUID truncation in pre-fix `rollup_from_events`.
 - `claude_turn_end_subject_preserves_assistant_text_across_tool_result`: **PASSED**
-  - Context: In `0690c1eb`, `final_assistant_text_line` only broke on user messages when `in_codex_turn` was true. The regression that broke Claude's backward scan across tool results was introduced during intermediate uncommitted attempts of `cpc-3` (where `type=user` was made an unconditional break before excluding `tool_result`, as documented in `cpc-3-revision-2.md:6`). The test was authored to ensure the subsequent fix preserved Claude behavior, which `0690c1eb` already exhibited.
+  - Historical Status: In `0690c1eb`, `final_assistant_text_line` guarded turn boundary breaks with `if in_codex_turn`, leaving Claude backward scan unaffected by user events. A comprehensive check across saved repository commits (`0690c1eb`, `09f55e5b`, `62408eb1`, and backup branches) reveals no committed source tree exhibiting a failing Claude tool-result behavior. The historical Claude failure cannot be recovered from retained git commits, and there is no evidence to assert it was committed in any intermediate state. The original expectation of four historical failures against `0690c1eb` was an inaccurate planning assumption; retaining three failures and one pass represents the truthful historical record.
 
+### 1b. Direct Proof of Duplicate Token Count Defect (`test-transplant-token-order.patch`)
+
+In the initial transplant against `0690c1eb`, `codex_repeated_token_count_dedup_and_multiple_requests_in_turn` panicked on model identification (`left: "codex", right: "o3-mini"`) prior to asserting token counts.
+
+To directly isolate and prove the reported token duplication defect:
+1. **Reordered Test Transplant**:
+   A separate retained patch (`docs/history/codex-reliability-closeout/test-transplant-token-order.patch`) relocated `assert_eq!(model, "o3-mini");` to immediately follow the token count assertions, preserving every assertion.
+2. **Execution Against Unchanged `0690c1eb` Baseline**:
+   Executed in isolated tree `.bee/tmp/pre-fix-tree`:
+   ```bash
+   PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false \
+   CARGO_TARGET_DIR=".bee/tmp/target-prefix" cargo test --release \
+     --manifest-path .bee/tmp/pre-fix-tree/packages/bee-rs/Cargo.toml -p bee --bin bee -- \
+     hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn
+   ```
+   **Result**: FAILED with direct token accumulation panic:
+   ```
+   thread 'hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn' panicked at crates/bee/src/hooks/session_close/tests.rs:1610:9:
+   assertion `left == right` failed
+     left: 7000.0
+    right: 500.0
+   ```
+   Without deduplication, identical repeated token records were accumulated multiple times (uncached input reached 7000.0 instead of 500.0). Raw failure log is preserved in `docs/history/codex-reliability-closeout/regression-token-order.log` and appended to `regression-red.log`.
+3. **Current Production Source**:
+   On the current feature tree, the reordered test suite passes completely (input: 500.0, output: 250.0, cache_read: 2000.0, total: 2750.0, model: "o3-mini").
+
+### 1c. Explicit Synthetic Mutation Check for Claude Tool-Result Handling
+
+To verify that `claude_turn_end_subject_preserves_assistant_text_across_tool_result` actively detects the defect without relying on unrecoverable historical commits:
+
+> [!NOTE]
+> **Synthetic Verification Disclaimer**:
+> This validation uses an intentional synthetic mutation against current production code in an isolated disposable directory (`.bee/tmp/synthetic-mutation-tree`). It is NOT historical proof and must not be conflated with the retrospective pre-fix baseline runs.
+
+1. **Synthetic Mutation**:
+   Patch `docs/history/codex-reliability-closeout/synthetic-claude-mutation.patch` removes the `!is_tool_result_record(event)` guard in `packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs`, making top-level `type == "user"` an unconditional turn boundary break.
+2. **Execution Against Mutated Tree**:
+   ```bash
+   PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false \
+   CARGO_TARGET_DIR=".bee/tmp/target-synthetic" cargo test --release \
+     --manifest-path .bee/tmp/synthetic-mutation-tree/packages/bee-rs/Cargo.toml -p bee --bin bee -- \
+     hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result
+   ```
+   **Result**: FAILED as expected:
+   ```
+   thread 'hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result' panicked at crates/bee/src/hooks/session_close/tests.rs:1876:9:
+   assertion `left == right` failed
+     left: Some("(turn ended)")
+    right: Some("Keep existing subject")
+   ```
+   Raw output preserved in `docs/history/codex-reliability-closeout/regression-synthetic.log` and appended to `regression-red.log`.
+3. **Restoration / Production Green**:
+   With the guard retained, current production source passes cleanly: `left: Some("Keep existing subject") == right: Some("Keep existing subject")`.
 ### 2. Current Production Source Execution
 
 The same test suite was executed against the current feature tree:

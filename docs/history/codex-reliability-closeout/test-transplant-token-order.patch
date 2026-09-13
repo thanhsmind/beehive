@@ -1,0 +1,262 @@
+--- a/packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs
++++ b/packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs
+@@ -1458,3 +1458,259 @@
+         unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+         unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+     }
++    #[test]
++    fn codex_repeated_token_count_dedup_and_multiple_requests_in_turn() {
++        let events = vec![
++            // Model settings
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "thread_settings_applied",
++                    "thread_settings": { "model": "o3-mini" }
++                }
++            }),
++            // Turn starts
++            json!({
++                "type": "event_msg",
++                "payload": { "type": "task_started", "turn_id": "turn-1" }
++            }),
++            // First LLM request: info has no turn_id/response_id.
++            // Emitted four times identically as observed in live Codex transcripts!
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        },
++                        "total_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        }
++                    }
++                }
++            }),
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        },
++                        "total_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        }
++                    }
++                }
++            }),
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        },
++                        "total_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        }
++                    }
++                }
++            }),
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        },
++                        "total_token_usage": {
++                            "input_tokens": 1000,
++                            "cached_input_tokens": 800,
++                            "output_tokens": 100,
++                            "total_tokens": 1100
++                        }
++                    }
++                }
++            }),
++            // Second LLM request within the same turn: total_token_usage advances
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": {
++                            "input_tokens": 1500,
++                            "cached_input_tokens": 1200,
++                            "output_tokens": 150,
++                            "total_tokens": 1650
++                        },
++                        "total_token_usage": {
++                            "input_tokens": 2500,
++                            "cached_input_tokens": 2000,
++                            "output_tokens": 250,
++                            "total_tokens": 2750
++                        }
++                    }
++                }
++            }),
++            // Duplicate of second request
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": {
++                            "input_tokens": 1500,
++                            "cached_input_tokens": 1200,
++                            "output_tokens": 150,
++                            "total_tokens": 1650
++                        },
++                        "total_token_usage": {
++                            "input_tokens": 2500,
++                            "cached_input_tokens": 2000,
++                            "output_tokens": 250,
++                            "total_tokens": 2750
++                        }
++                    }
++                }
++            }),
++        ];
++
++        let agg = aggregate_usage(&events);
++        assert_eq!(agg.models.0.len(), 1);
++        let (model, acc) = &agg.models.0[0];
++        // Dedup must NOT count identical records 4 times:
++        // First request: uncached input = 1000 - 800 = 200, output = 100, cached = 800
++        // Second request: uncached input = 1500 - 1200 = 300, output = 150, cached = 1200
++        // Total uncached input = 500
++        assert_eq!(acc.input, 500.0);
++        assert_eq!(acc.output, 250.0);
++        assert_eq!(acc.cache_read, 2000.0);
++        assert_eq!(acc.total, 2750.0);
++        assert_eq!(model, "o3-mini");
++    }
++
++    #[test]
++    fn codex_rollup_preserves_full_uuid_when_session_meta_missing() {
++        let file = PathBuf::from("/path/to/rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71.jsonl");
++        let events = vec![
++            json!({
++                "type": "turn_context",
++                "payload": { "model": "o3-mini" }
++            }),
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": { "input_tokens": 10, "output_tokens": 5 },
++                        "total_token_usage": { "input_tokens": 10, "output_tokens": 5 }
++                    }
++                }
++            }),
++        ];
++
++        let rollup = rollup_from_events(&file, &events).expect("rollup must succeed");
++        // Must preserve the FULL 36-character UUID, NOT truncate to "7a48da530e71"!
++        assert_eq!(rollup.session_id, "01a095e4-8306-70d0-bf1f-7a48da530e71");
++    }
++
++    #[test]
++    fn codex_rollup_does_not_use_response_item_payload_id_as_session_id() {
++        let file = PathBuf::from("/path/to/rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71.jsonl");
++        let events = vec![
++            json!({
++                "type": "turn_context",
++                "payload": { "model": "o3-mini" }
++            }),
++            json!({
++                "type": "response_item",
++                "payload": {
++                    "id": "msg_123",
++                    "type": "message",
++                    "role": "assistant",
++                    "content": [{"type": "text", "text": "Hello"}]
++                }
++            }),
++            json!({
++                "type": "event_msg",
++                "payload": {
++                    "type": "token_count",
++                    "info": {
++                        "last_token_usage": { "input_tokens": 10, "output_tokens": 5 },
++                        "total_token_usage": { "input_tokens": 10, "output_tokens": 5 }
++                    }
++                }
++            }),
++        ];
++
++        let rollup = rollup_from_events(&file, &events).expect("rollup must succeed");
++        // Must NOT use "msg_123" from response_item payload.id!
++        assert_eq!(rollup.session_id, "01a095e4-8306-70d0-bf1f-7a48da530e71");
++    }
++
++    #[test]
++    fn claude_turn_end_subject_preserves_assistant_text_across_tool_result() {
++        let events = vec![
++            json!({
++                "type": "assistant",
++                "message": {
++                    "content": [
++                        { "type": "text", "text": "Keep existing subject" }
++                    ]
++                }
++            }),
++            json!({
++                "type": "user",
++                "message": {
++                    "content": [
++                        {
++                            "type": "tool_result",
++                            "tool_use_id": "tool_123",
++                            "content": "some result"
++                        }
++                    ]
++                }
++            }),
++            json!({
++                "type": "assistant",
++                "message": {
++                    "content": [
++                        {
++                            "type": "tool_use",
++                            "id": "tool_456",
++                            "name": "bash",
++                            "input": {}
++                        }
++                    ]
++                }
++            }),
++        ];
++
++        let subject = turn_end_subject(Some(events));
++        assert_eq!(subject, Some("Keep existing subject".to_string()));
++    }
