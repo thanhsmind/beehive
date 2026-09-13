@@ -1198,5 +1198,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-09-13T12:52:56.256Z"
+  },
+  "pi-full-workflow-parity": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-13T14:52:20.848Z"
   }
 }
