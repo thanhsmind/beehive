@@ -159,7 +159,7 @@ A config read has no first side effect, so the usual two-column split collapses:
 - **A corrupt `config.json` is a quiet, repo-wide reset.** Every guard returns to its default (all safe-side: hooks on, intake gate on, bypass off), but `commands.test` also vanishes, so `bee test` reports "No commands.test declared — nothing ran" and exits as if the project had never declared one. The only signal is one stderr warning per invocation.
 - **`worktree_first` is checked against the exact string `"off"`.** `false`, `"false"`, `"OFF"`, and `0` all leave the guard on. The deny text names the exact spelling for that reason.
 - **`ship_visibility` is advice, not machinery.** Nothing in the binary opens a draft PR. The value only reaches a preamble line and a status field.
-- **`bee status --json` is the only derived-config read surface.** There is no `bee config show`, and `bee doctor` never reads config — it checks the runtime installation. To see what a key resolves to, read the file and apply the merge law, or read the matching field on `bee status --json`.
+- **`bee status --json` is the primary derived-config read surface.** There is no `bee config show`. `bee doctor` checks runtime installation health, but inspects `.bee/config.json` for `herding.transport` settings (graded by `herding_transport` on Pi) and advisory hat slot descriptions. To see what a key resolves to, read the file and apply the merge law, or read the matching field on `bee status --json`.
 - **The command tree still advertises `bee config`.** It appears in `bee --help --all` and in the registry payload with full parameter schemas, so an agent reading the help can reasonably try it and get a refusal. The refusal names the remedy, which is the file.
 
 ## Open questions and verification
