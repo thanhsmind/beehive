@@ -59,7 +59,7 @@ Feature outcome: Pi completes the user-visible workflow tail while preserving ma
 | Safe handoff completion | Pause dismissal, close integration, projection defense, public command | The confirmed stale pause survives workflow close and blocks orientation. | Current slice, pfp-1 | Red-then-green state tests plus registry contracts. |
 | Installed Pi parity | Onboarded repository lifecycle tail | In-process tests do not prove the installed Pi and CLI path. | Current slice, pfp-2 | Exact Pi sandbox test reaches dismiss, close, orient, and absent projection. |
 
-Current slice: both epics. No later slice is required.
+Current slice: both epics. This slice contains all required work.
 
 ## Cells — current slice (preview)
 
