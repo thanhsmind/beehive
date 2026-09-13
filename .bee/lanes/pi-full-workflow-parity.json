@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Pi workflow tail implemented, documented, judged, and full-suite verified.",
-  "next_action": "Merge the feature worktree for UAT.",
+  "next_action": "Merged into main at ea068e6; reload the product and test \"pi-full-workflow-parity\", then either approve uat (\"bee gate --name uat --approved true --lane pi-full-workflow-parity\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-13T13:39:30.745Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-full-workflow-parity",
+    "asked_at": "2026-09-13T14:39:02.377Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "high-risk",
@@ -318,14 +323,12 @@
       }
     ]
   },
-  "merge_ready": {
-    "since": "2026-09-13T14:32:15.962Z",
-    "branch": "wt/pi-full-workflow-parity",
-    "worktree_id": "beehive--wt--pi-full-workflow-parity",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt"
-    ]
+  "last_compounding_run": {
+    "feature": "pi-full-workflow-parity",
+    "date": "2026-09-13",
+    "at": "2026-09-13T14:38:09.841Z",
+    "learnings": "docs/knowledge/areas/workflow-state/handoff.md",
+    "next_action": "Merge the verified worktree for UAT."
   },
   "last_scribing_run": {
     "feature": "pi-full-workflow-parity",
@@ -335,12 +338,5 @@
       "workflow-state"
     ],
     "next_action": "Capture the planned-next proof pitfall, then merge for UAT."
-  },
-  "last_compounding_run": {
-    "feature": "pi-full-workflow-parity",
-    "date": "2026-09-13",
-    "at": "2026-09-13T14:38:09.841Z",
-    "learnings": "docs/knowledge/areas/workflow-state/handoff.md",
-    "next_action": "Merge the verified worktree for UAT."
   }
 }
