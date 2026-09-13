@@ -1,0 +1,184 @@
+{
+  "id": "crc-3",
+  "title": "Correct generated Codex onboarding guidance",
+  "role": "code",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "docs/history/codex-reliability-closeout/onboarding.md",
+    "docs/history/codex-reliability-closeout/onboarding-red.log",
+    "docs/history/codex-reliability-closeout/onboarding-green.log"
+  ],
+  "action": "Fix F7 in owning CODEX_AGENTS_NOTE and related obsolete comments. Preserve unconfigured null defaults if intended, but explain configurable Codex roles/transports, read-only CLI fallback, capability-dependent native dispatch and lack of effective-model proof. No new rendered native agent files unless already implemented. Inspect onboard agents rendering and add one behavioral regression on generated onboarding output, using independent expected supported statements and absence of obsolete universal claims. Run it failing before edit and passing after. Reserve evidence logs before output. Regenerate a disposable onboarding through actual CLI and inspect note; leader owns repo-wide dev regen at wave barrier. Do not hand edit .bee JSON. No changes to role selection or guard semantics. Also prove an existing onboarding record with the old note is refreshed through the supported CLI; the leader can drive this after the shared binary rebuild.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard",
+  "feature": "codex-reliability-closeout",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "b0e62deb-c093-462a-9944-d43011cf2e6d"
+  ],
+  "read_first": [
+    "docs/history/codex-reliability-closeout/CONTEXT.md",
+    "docs/history/codex-reliability-closeout/plan.md",
+    "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+    ".bee/verify/verify-app/features/codex-runtime.md",
+    "docs/knowledge/areas/hook-runtime/overview.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "hook-runtime"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "Generated onboarding metadata describes configurable transports rather than universal lack of per-agent model selection.",
+      "A regression test catches the obsolete generated note.",
+      "A fresh CLI onboarding emits the corrected guidance without claiming effective-model verification."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "substantive": "Correct generated Codex onboarding guidance"
+      }
+    ],
+    "key_links": [
+      "Production behavior and evidence agree with D1."
+    ],
+    "prohibitions": [
+      "No guard bypass, real credential reads, or changes to unrelated settings."
+    ]
+  },
+  "trace": {
+    "worker": "crc-3-worker",
+    "outcome": "Correct generated Codex onboarding guidance",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "docs/history/codex-reliability-closeout/onboarding.md",
+      "docs/history/codex-reliability-closeout/onboarding-red.log",
+      "docs/history/codex-reliability-closeout/onboarding-green.log"
+    ],
+    "deviations": [
+      "Corrected verify field to an executable command — original mixed prose with shell and could not match proof parser; decision a8464d1c — the plan was wrong about a fact",
+      "sync-ack: Owner behavior checked; Codex map and hook-runtime knowledge synchronized; bee dev regen completed at integration."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T07:34:13.723Z",
+    "behavior_change": true,
+    "verification_evidence": "onboard tests passed; onboarding-cli.log retains fresh and refresh CLI checks; dev regen refreshed repository metadata",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09911-9b86-7a30-8a6f-b22a78347d98",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard",
+    "claimed_at": "2026-09-13T07:33:28.322Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "source-guidance-matches-dispatch",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/templates.rs:412 describes configurable roles and transports, read-only CLI fallback, native dispatch, and unverified effective models. Dispatch implements read-only Codex CLI routing at packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1930-1959 and capability-dependent spawn_agent routing at lines 1961-1973."
+          },
+          {
+            "id": "obsolete-note-regression",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/agents.rs:578-624 builds generated metadata and rejects both obsolete phrases. docs/history/codex-reliability-closeout/onboarding-red.log:6-22 records the expected pre-fix failure. onboarding-green.log:6-17 records the test passing in the onboard suite."
+          },
+          {
+            "id": "fresh-cli-onboarding-evidence",
+            "status": "FAIL",
+            "evidence": "docs/history/codex-reliability-closeout/onboarding.md:61-72 reports fresh and refresh CLI probes, but no retained CLI output or generated onboarding artifact supports that report. onboarding-green.log contains cargo-test output only.",
+            "failure_signature": "The required actual-CLI proof cannot be reproduced from retained artifacts; only a narrative claim remains."
+          },
+          {
+            "id": "current-onboarding-guidance",
+            "status": "FAIL",
+            "evidence": ".bee/onboarding.json:58-60 still contains `Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design)`. This conflicts with the current renderer at packages/bee-rs/crates/bee/src/onboard/templates.rs:412 and with the dispatch source.",
+            "failure_signature": "Current repository onboarding metadata still emits the exact obsolete guidance that crc-3 claims to remove."
+          },
+          {
+            "id": "artifact-and-prohibitions",
+            "status": "PASS",
+            "evidence": "The substantive renderer artifact is packages/bee-rs/crates/bee/src/onboard/templates.rs:412. Commit 062ff82a changes only onboarding source, its regression test, and retained reports; no role-selection, guard, or credential source changed."
+          }
+        ],
+        "failure_signature": "The required actual-CLI proof cannot be reproduced from retained artifacts; only a narrative claim remains.\nCurrent repository onboarding metadata still emits the exact obsolete guidance that crc-3 claims to remove.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T07:17:49.814Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "renderer-note-corrected",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/templates.rs:148-150 and 412 describe configurable roles and transports, read-only CLI fallback, capability-dependent native dispatch, and no effective-model proof."
+          },
+          {
+            "id": "regression-rejects-obsolete-guidance",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/onboard/agents.rs:572-624 rejects both obsolete claims and requires each supported-dispatch qualification."
+          },
+          {
+            "id": "refresh-cli-output-retained",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/onboarding-cli.log:12-27 records the actual refresh command, exit 0, applied status, and up-to-date recheck; lines 128-130 contain the corrected generated note."
+          },
+          {
+            "id": "fresh-cli-output-retained",
+            "status": "PASS",
+            "evidence": "docs/history/codex-reliability-closeout/onboarding-cli.log:167-180 records the actual fresh-onboard command, exit 0, applied status, and created output; lines 1955-1957 contain the corrected generated note."
+          },
+          {
+            "id": "current-repository-metadata",
+            "status": "PASS",
+            "evidence": ".bee/onboarding.json:50-60 contains the corrected Codex renderer note and no obsolete universal model-selection claim."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T07:31:34.788Z"
+      }
+    ],
+    "verified_at": null,
+    "sync_ack": "Owner behavior checked; Codex map and hook-runtime knowledge synchronized; bee dev regen completed at integration.",
+    "mistakes": [
+      {
+        "wrong": "Initial onboarding report lacked retained CLI output",
+        "better": "archive command output and generated note before acceptance"
+      }
+    ],
+    "report": {
+      "outcome": "Correct generated Codex onboarding guidance",
+      "commit": "062ff82af73b4bf2dcbae5c37f6a7b4118ddd47f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "docs/history/codex-reliability-closeout/onboarding.md",
+        "docs/history/codex-reliability-closeout/onboarding-red.log",
+        "docs/history/codex-reliability-closeout/onboarding-green.log"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard — green:unit — onboard tests passed; onboarding-cli.log retains fresh and refresh CLI checks; dev regen refreshed repository metadata",
+      "deviations": [
+        "Corrected verify field to an executable command — original mixed prose with shell and could not match proof parser; decision a8464d1c — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Initial onboarding report lacked retained CLI output — archive command output and generated note before acceptance"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

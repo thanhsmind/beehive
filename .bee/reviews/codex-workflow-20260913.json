@@ -144,6 +144,16 @@
       "detail": "Onboarding timestamp/hash refreshed but prompt-only role note remains. Correct owning renderer and regenerate through CLI.",
       "autofix_class": "gated_auto",
       "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    },
+    {
+      "id": "F5-correction",
+      "type": "evidence-correction",
+      "resolves": "F5",
+      "severity": "P3",
+      "axis": "standards",
+      "title": "Correct the historical cpc-1 judge summary anchor",
+      "detail": "The installed write deny and allow check in docs/history/codex-parity-completion/reports/cpc-1-judge.json:8 cites verification-summary.md:22 incorrectly. The correct summary location is verification-summary.md:26. Actual retained evidence remains /var/tmp/bee-codex-canary-VVDuwM/evidence/hook-inputs.jsonl and report.json. Historical judge and review scope remain unchanged. This addendum grants no review or user acceptance approval.",
+      "report": "docs/history/codex-reliability-closeout/audit-addendum.md"
     }
   ],
   "uat": [],
@@ -157,5 +167,5 @@
     "next_action": "Prioritize exact real-home side-effect assessment and authorized restoration; findings tracked in backlog."
   },
   "created_at": "2026-09-13T04:53:36.253Z",
-  "updated_at": "2026-09-13T05:03:17.222Z"
+  "updated_at": "2026-09-13T07:06:24.522Z"
 }

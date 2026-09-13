@@ -1,0 +1,548 @@
+{
+  "schema_version": "1.0",
+  "feature": "codex-reliability-closeout",
+  "mode": "high-risk",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Four bounded repair cells approved; independent execution starts.",
+  "next_action": "Merge verified Codex reliability repairs into main and request user acceptance.",
+  "created_at": "2026-09-13T06:48:11.405Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "high-risk",
+    "flags": [
+      "audit-security",
+      "cross-platform",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": "Resolve seven verified Codex workflow findings and improve isolated runtime proof without weakening native guards.",
+    "updated_at": "2026-09-13T06:48:11.531Z",
+    "feature": "codex-reliability-closeout"
+  },
+  "gate_preview": {
+    "feature": "codex-reliability-closeout",
+    "plan_sha256": "55ccf1f66e9479f2ef449592a17cb20ef3689277681834e0293f326c8a526357",
+    "previewed_at": "2026-09-13T07:15:28.096Z",
+    "cells": [
+      {
+        "id": "crc-1",
+        "title": "Isolate Codex canary processes from user settings",
+        "role": "code",
+        "files": [
+          "scripts/codex-parity-canary.sh",
+          "scripts/codex-parity-canary-test.sh",
+          "docs/history/codex-reliability-closeout/isolation.md",
+          "docs/history/codex-reliability-closeout/isolation-red.log",
+          "docs/history/codex-reliability-closeout/isolation-green.log"
+        ],
+        "action": "Fix F1 at the canary entrypoint. Require an explicit direct executable rather than discovering or invoking mise or a PATH wrapper. Isolate HOME, XDG config/data/cache and CODEX_HOME for all nested processes and use a controlled PATH with direct Codex probe configuration. Reject real-home aliases, symlinks into real settings, and unsafe homes before any subprocess can mutate them. Do not copy, read or delete credentials. Add hermetic behavioral shell tests that run fake executables with sentinel host paths and observable side-effect attempts; preserve a real failed pre-fix run and successful fixed run. Keep existing live hook assertions and report skipped capabilities honestly. Reserve logs before their redirection; reports must not expose environment secrets. Follow existing shell conventions and introduce no dependencies.",
+        "verify": "bash scripts/codex-parity-canary-test.sh; bash -n scripts/codex-parity-canary.sh — green with retained red/green logs; integration leader drives installed canary",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md",
+          "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          "docs/knowledge/areas/hook-runtime/overview.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Unsafe homes are refused before launching any mutating probe.",
+            "The canary cannot resolve the user's Codex wrapper through inherited PATH.",
+            "A hostile fake subprocess writes only isolated HOME and XDG paths; host sentinels remain unchanged.",
+            "Existing installed-hook verification still has a runnable entrypoint."
+          ],
+          "artifacts": [
+            {
+              "path": "scripts/codex-parity-canary.sh",
+              "substantive": "Isolate Codex canary processes from user settings"
+            }
+          ],
+          "key_links": [
+            "Production behavior and evidence agree with D1."
+          ],
+          "prohibitions": [
+            "No guard bypass, real credential reads, or changes to unrelated settings."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "crc-2",
+        "title": "Retain retrospective transcript regression evidence",
+        "role": "test",
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+          "docs/history/codex-reliability-closeout/regressions.md",
+          "docs/history/codex-reliability-closeout/regression-red.log",
+          "docs/history/codex-reliability-closeout/regression-green.log",
+          "docs/history/codex-reliability-closeout/test-transplant.patch"
+        ],
+        "action": "Resolve F2 and F4 without rewriting history. Use current tests codex_repeated_token_count_dedup_and_multiple_requests_in_turn, claude_turn_end_subject_preserves_assistant_text_across_tool_result, codex_rollup_does_not_use_response_item_payload_id_as_session_id and codex_rollup_preserves_full_uuid_when_session_meta_missing against pre-fix production source 0690c1eb1ff72302033dfa5be4b11f753abf471f in a disposable isolated source tree under the worktree's .bee/tmp. Preserve only the exact current test functions plus necessary existing helpers if the complete current tests require new APIs; compilation failure is not regression evidence. Record source identities and test transplantation explicitly. Retain actual assertion failures and corresponding current-source successes. Do not change production transcript behavior or weaken tests. Remove extra EOF blank line in current session_close/tests.rs. Reserve all evidence paths before output. Label new evidence retrospective, never original RED sequence. Use TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false and direct Cargo PATH; do not invoke codex wrapper.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests — green; git diff --check c4122d41 HEAD -- packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md",
+          "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          "docs/knowledge/areas/hook-runtime/overview.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Four named transcript regressions fail for their reported behavior against the saved pre-fix production source.",
+            "The same four tests pass on current production source.",
+            "The report distinguishes retrospective proof from original test order.",
+            "Explicit committed source range has no EOF whitespace error."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+              "substantive": "Retain retrospective transcript regression evidence"
+            }
+          ],
+          "key_links": [
+            "Production behavior and evidence agree with D1."
+          ],
+          "prohibitions": [
+            "No guard bypass, real credential reads, or changes to unrelated settings."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "crc-3",
+        "title": "Correct generated Codex onboarding guidance",
+        "role": "code",
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "docs/history/codex-reliability-closeout/onboarding.md",
+          "docs/history/codex-reliability-closeout/onboarding-red.log",
+          "docs/history/codex-reliability-closeout/onboarding-green.log"
+        ],
+        "action": "Fix F7 in owning CODEX_AGENTS_NOTE and related obsolete comments. Preserve unconfigured null defaults if intended, but explain configurable Codex roles/transports, read-only CLI fallback, capability-dependent native dispatch and lack of effective-model proof. No new rendered native agent files unless already implemented. Inspect onboard agents rendering and add one behavioral regression on generated onboarding output, using independent expected supported statements and absence of obsolete universal claims. Run it failing before edit and passing after. Reserve evidence logs before output. Regenerate a disposable onboarding through actual CLI and inspect note; leader owns repo-wide dev regen at wave barrier. Do not hand edit .bee JSON. No changes to role selection or guard semantics. Also prove an existing onboarding record with the old note is refreshed through the supported CLI; the leader can drive this after the shared binary rebuild.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard — green; fresh disposable CLI onboarding emits corrected note",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md",
+          "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          "docs/knowledge/areas/hook-runtime/overview.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Generated onboarding metadata describes configurable transports rather than universal lack of per-agent model selection.",
+            "A regression test catches the obsolete generated note.",
+            "A fresh CLI onboarding emits the corrected guidance without claiming effective-model verification."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+              "substantive": "Correct generated Codex onboarding guidance"
+            }
+          ],
+          "key_links": [
+            "Production behavior and evidence agree with D1."
+          ],
+          "prohibitions": [
+            "No guard bypass, real credential reads, or changes to unrelated settings."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "crc-4",
+        "title": "Accept the documented gate preview flag",
+        "role": "code",
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+          "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+          "docs/history/codex-reliability-closeout/preview.md"
+        ],
+        "action": "Repair the reproduced documented gate --preview and state gate --preview refusal. Shared FLAG_ALONE_BOOLEANS lacks preview; trace before fix. Add behavioral CLI regressions for both spellings with --lane following --preview, preserving state gate preview behavior and preview-only mutation (no gate approval). Use existing integration test home if tests/state_group.rs is not the correct name, reserve it and report the deviation. Reproduce the alias failure first and preserve it in preview.md. Fix the parser without bypassing gate validation; no new flags or documentation-only workaround.",
+        "verify": "Run targeted gate preview CLI regression tests on base and head; corrected aliases return a packet and leave approval gates unchanged; bee dev release-manifest --check at integration",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d",
+          "be57302a-9683-4f89-bc29-44111764389d"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Both documented preview flag spellings accept following lane flags.",
+            "Preview returns the current packet without approving a gate.",
+            "The existing subcommand spelling continues to work."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+              "substantive": "Parser supports preview as a boolean."
+            }
+          ],
+          "key_links": [
+            "CLI aliases reach the existing preview handler."
+          ],
+          "prohibitions": [
+            "No gate bypass or new flag names."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-13T07:03:20.186Z",
+    "feature": "codex-reliability-closeout",
+    "newest_decision_id": "be57302a-9683-4f89-bc29-44111764389d",
+    "plan_sha256": "55ccf1f66e9479f2ef449592a17cb20ef3689277681834e0293f326c8a526357",
+    "advisor": "configured-five-perspective-wave",
+    "digest_head": "# Plan consult synthesis\n\nAll five configured perspectives returned: facts-gaps, risks, value, alternatives, user-impact.\nThree ran read-only Codex CLI; two ran configured herding. Requested models were gpt-5.6-sol, gpt-6-astra and gemini-3.8-flash-high. Effective backend identity was not independently proved.\n\n## Accepted\n- Corrected two stale load-bearing anchors from lines 67/81 to 62/76 before the gate.\n- F1 distinguishes future probe isolation from historical restoration. No before-image me"
+  },
+  "approved_cell_packet": {
+    "feature": "codex-reliability-closeout",
+    "plan_sha256": "55ccf1f66e9479f2ef449592a17cb20ef3689277681834e0293f326c8a526357",
+    "previewed_at": "2026-09-13T07:02:29.565Z",
+    "cells": [
+      {
+        "id": "crc-1",
+        "title": "Isolate Codex canary processes from user settings",
+        "role": "code",
+        "files": [
+          "scripts/codex-parity-canary.sh",
+          "scripts/codex-parity-canary-test.sh",
+          "docs/history/codex-reliability-closeout/isolation.md",
+          "docs/history/codex-reliability-closeout/isolation-red.log",
+          "docs/history/codex-reliability-closeout/isolation-green.log"
+        ],
+        "action": "Fix F1 at the canary entrypoint. Require an explicit direct executable rather than discovering or invoking mise or a PATH wrapper. Isolate HOME, XDG config/data/cache and CODEX_HOME for all nested processes and use a controlled PATH with direct Codex probe configuration. Reject real-home aliases, symlinks into real settings, and unsafe homes before any subprocess can mutate them. Do not copy, read or delete credentials. Add hermetic behavioral shell tests that run fake executables with sentinel host paths and observable side-effect attempts; preserve a real failed pre-fix run and successful fixed run. Keep existing live hook assertions and report skipped capabilities honestly. Reserve logs before their redirection; reports must not expose environment secrets. Follow existing shell conventions and introduce no dependencies.",
+        "verify": "bash scripts/codex-parity-canary-test.sh; bash -n scripts/codex-parity-canary.sh — green with retained red/green logs; integration leader drives installed canary",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md",
+          "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          "docs/knowledge/areas/hook-runtime/overview.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Unsafe homes are refused before launching any mutating probe.",
+            "The canary cannot resolve the user's Codex wrapper through inherited PATH.",
+            "A hostile fake subprocess writes only isolated HOME and XDG paths; host sentinels remain unchanged.",
+            "Existing installed-hook verification still has a runnable entrypoint."
+          ],
+          "artifacts": [
+            {
+              "path": "scripts/codex-parity-canary.sh",
+              "substantive": "Isolate Codex canary processes from user settings"
+            }
+          ],
+          "key_links": [
+            "Production behavior and evidence agree with D1."
+          ],
+          "prohibitions": [
+            "No guard bypass, real credential reads, or changes to unrelated settings."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "crc-2",
+        "title": "Retain retrospective transcript regression evidence",
+        "role": "test",
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+          "docs/history/codex-reliability-closeout/regressions.md",
+          "docs/history/codex-reliability-closeout/regression-red.log",
+          "docs/history/codex-reliability-closeout/regression-green.log",
+          "docs/history/codex-reliability-closeout/test-transplant.patch"
+        ],
+        "action": "Resolve F2 and F4 without rewriting history. Use current tests codex_repeated_token_count_dedup_and_multiple_requests_in_turn, claude_turn_end_subject_preserves_assistant_text_across_tool_result, codex_rollup_does_not_use_response_item_payload_id_as_session_id and codex_rollup_preserves_full_uuid_when_session_meta_missing against pre-fix production source 0690c1eb1ff72302033dfa5be4b11f753abf471f in a disposable isolated source tree under the worktree's .bee/tmp. Preserve only the exact current test functions plus necessary existing helpers if the complete current tests require new APIs; compilation failure is not regression evidence. Record source identities and test transplantation explicitly. Retain actual assertion failures and corresponding current-source successes. Do not change production transcript behavior or weaken tests. Remove extra EOF blank line in current session_close/tests.rs. Reserve all evidence paths before output. Label new evidence retrospective, never original RED sequence. Use TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false and direct Cargo PATH; do not invoke codex wrapper.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests — green; git diff --check c4122d41 HEAD -- packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md",
+          "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          "docs/knowledge/areas/hook-runtime/overview.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Four named transcript regressions fail for their reported behavior against the saved pre-fix production source.",
+            "The same four tests pass on current production source.",
+            "The report distinguishes retrospective proof from original test order.",
+            "Explicit committed source range has no EOF whitespace error."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+              "substantive": "Retain retrospective transcript regression evidence"
+            }
+          ],
+          "key_links": [
+            "Production behavior and evidence agree with D1."
+          ],
+          "prohibitions": [
+            "No guard bypass, real credential reads, or changes to unrelated settings."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "crc-3",
+        "title": "Correct generated Codex onboarding guidance",
+        "role": "code",
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+          "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+          "docs/history/codex-reliability-closeout/onboarding.md",
+          "docs/history/codex-reliability-closeout/onboarding-red.log",
+          "docs/history/codex-reliability-closeout/onboarding-green.log"
+        ],
+        "action": "Fix F7 in owning CODEX_AGENTS_NOTE and related obsolete comments. Preserve unconfigured null defaults if intended, but explain configurable Codex roles/transports, read-only CLI fallback, capability-dependent native dispatch and lack of effective-model proof. No new rendered native agent files unless already implemented. Inspect onboard agents rendering and add one behavioral regression on generated onboarding output, using independent expected supported statements and absence of obsolete universal claims. Run it failing before edit and passing after. Reserve evidence logs before output. Regenerate a disposable onboarding through actual CLI and inspect note; leader owns repo-wide dev regen at wave barrier. Do not hand edit .bee JSON. No changes to role selection or guard semantics. Also prove an existing onboarding record with the old note is refreshed through the supported CLI; the leader can drive this after the shared binary rebuild.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard — green; fresh disposable CLI onboarding emits corrected note",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md",
+          "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+          ".bee/verify/verify-app/features/codex-runtime.md",
+          "docs/knowledge/areas/hook-runtime/overview.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Generated onboarding metadata describes configurable transports rather than universal lack of per-agent model selection.",
+            "A regression test catches the obsolete generated note.",
+            "A fresh CLI onboarding emits the corrected guidance without claiming effective-model verification."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+              "substantive": "Correct generated Codex onboarding guidance"
+            }
+          ],
+          "key_links": [
+            "Production behavior and evidence agree with D1."
+          ],
+          "prohibitions": [
+            "No guard bypass, real credential reads, or changes to unrelated settings."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "crc-4",
+        "title": "Accept the documented gate preview flag",
+        "role": "code",
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+          "packages/bee-rs/crates/bee/tests/gate_preview.rs",
+          "docs/history/codex-reliability-closeout/preview.md"
+        ],
+        "action": "Repair the reproduced documented gate --preview and state gate --preview refusal. Shared FLAG_ALONE_BOOLEANS lacks preview; trace before fix. Add behavioral CLI regressions for both spellings with --lane following --preview, preserving state gate preview behavior and preview-only mutation (no gate approval). Use existing integration test home if tests/state_group.rs is not the correct name, reserve it and report the deviation. Reproduce the alias failure first and preserve it in preview.md. Fix the parser without bypassing gate validation; no new flags or documentation-only workaround.",
+        "verify": "Run targeted gate preview CLI regression tests on base and head; corrected aliases return a packet and leave approval gates unchanged; bee dev release-manifest --check at integration",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "b0e62deb-c093-462a-9944-d43011cf2e6d",
+          "be57302a-9683-4f89-bc29-44111764389d"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "Both documented preview flag spellings accept following lane flags.",
+            "Preview returns the current packet without approving a gate.",
+            "The existing subcommand spelling continues to work."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+              "substantive": "Parser supports preview as a boolean."
+            }
+          ],
+          "key_links": [
+            "CLI aliases reach the existing preview handler."
+          ],
+          "prohibitions": [
+            "No gate bypass or new flag names."
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "gate_revoked_at": {
+    "execution": "2026-09-13T07:03:19.885Z"
+  },
+  "merge_ready": {
+    "since": "2026-09-13T07:34:13.726Z",
+    "branch": "wt/codex-reliability-closeout",
+    "worktree_id": "beehive--wt--codex-reliability-closeout",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt"
+    ]
+  },
+  "last_scribing_run": {
+    "feature": "codex-reliability-closeout",
+    "date": "2026-09-13",
+    "at": "2026-09-13T07:35:36.755Z",
+    "areas_synced": [
+      "hook-runtime",
+      "workflow-state"
+    ],
+    "next_action": "Merge verified Codex reliability repairs into main and request user acceptance."
+  }
+}
