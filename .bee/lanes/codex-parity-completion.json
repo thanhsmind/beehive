@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "All four cells capped. Exact guide recipe live proof passed. Regeneration completed and full suite exited0:3920 passed0failed20ignored. Instruction GREEN passed. One commit per cell consolidated with identical tree and backup retained. Runtime concepts synchronized. Final read-only checklist active, merge and user acceptance pending. Temporary auth copy cleanup remains physically guard-blocked.",
-  "next_action": "Collect final checklist verdicts; record per-cell judge evidence, retain reports and merge from main for UAT. Do not bypass credential cleanup guard.",
+  "next_action": "Merged into main at 4c49458; reload the product and test \"codex-parity-completion\", then either approve uat (\"bee gate --name uat --approved true --lane codex-parity-completion\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-12T14:13:37.038Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: codex-parity-completion",
+    "asked_at": "2026-09-13T04:31:20.396Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -685,13 +690,6 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-13T04:26:38.531Z",
-    "branch": "wt/codex-parity-completion",
-    "worktree_id": "beehive--wt--codex-parity-completion",
-    "uat": "pending",
-    "blocked_by": []
   },
   "last_scribing_run": {
     "feature": "codex-parity-completion",
