@@ -1,0 +1,31 @@
+009-bash-c-set-u-printf-tool-name-Bash-tool-input-command-printf.cmd
+$ bash -c set -u
+printf '{"tool_name":"Bash","tool_input":{"command":"printf CORRUPTION > docs/history/reservation/held.log"},"agent_name":"intruder"}' | BEE_AGENT_NAME=intruder /home/thanhsmind/.cache/cargo-target/release/bee hook write-guard --runtime codex
+verdict=$?
+printf 'overwrite guard exit=%s\n' "$verdict"
+if [ "$verdict" -eq 0 ]; then printf CORRUPTION > docs/history/reservation/held.log; fi
+test "$verdict" -eq 2 || exit 1
+printf '{"tool_name":"Bash","tool_input":{"command":"printf CORRUPTION > docs/history/reservation/new.log"},"agent_name":"intruder"}' | BEE_AGENT_NAME=intruder /home/thanhsmind/.cache/cargo-target/release/bee hook write-guard --runtime codex
+verdict=$?
+printf 'create guard exit=%s\n' "$verdict"
+if [ "$verdict" -eq 0 ]; then printf CORRUPTION > docs/history/reservation/new.log; fi
+test "$verdict" -eq 2 || exit 1
+test "$(cat docs/history/reservation/held.log)" = ORIGINAL || exit 1
+test ! -e docs/history/reservation/new.log || exit 1
+printf '{"tool_name":"Bash","tool_input":{"command":"printf CONTROL > docs/history/reservation/control.log"},"agent_name":"intruder"}' | BEE_AGENT_NAME=intruder /home/thanhsmind/.cache/cargo-target/release/bee hook write-guard --runtime codex
+verdict=$?
+test "$verdict" -eq 0 || exit 1
+printf CONTROL > docs/history/reservation/control.log
+test "$(cat docs/history/reservation/control.log)" = CONTROL || exit 1
+printf 'PASS: denied overwrite kept ORIGINAL; denied creation absent; uncontested control wrote CONTROL\n'
+
+
+009-bash-c-set-u-printf-tool-name-Bash-tool-input-command-printf.err
+bee reservation conflict: "docs/history/reservation/held.log" is reserved by another agent — owner holds "docs/history/reservation/held.log" (cell fixture-owner). Reserve the path first or return [BLOCKED] to the orchestrator.bee reservation conflict: "docs/history/reservation/new.log" is reserved by another agent — owner holds "docs/history/reservation/new.log" (cell fixture-owner). Reserve the path first or return [BLOCKED] to the orchestrator.
+009-bash-c-set-u-printf-tool-name-Bash-tool-input-command-printf.exit
+0
+
+009-bash-c-set-u-printf-tool-name-Bash-tool-input-command-printf.out
+overwrite guard exit=2
+create guard exit=2
+PASS: denied overwrite kept ORIGINAL; denied creation absent; uncontested control wrote CONTROL
