@@ -1,0 +1,40 @@
+$ PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-reliability-closeout/packages/bee-rs/crates/bee)
+    Finished `release` profile [optimized] target(s) in 0.48s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 186 tests
+test onboard::agents::tests::codex_onboarding_note_describes_configurable_transports_without_obsolete_claims ... ok
+test onboard::agents::tests::sync_record_names_present_files_and_the_codex_note ... ok
+test onboard::agents::tests::sync_record_includes_the_opencode_sibling ... ok
+test onboard::templates::tests::default_config_has_all_known_roles_for_both_runtimes ... ok
+test onboard::templates::tests::every_claude_role_has_a_description ... ok
+test onboard::tests::plugin_source_skips_skill_sync_and_codex_runtime_adds_the_hybrid_hooks ... ok
+test onboard::tests::one_generated_skill_renders_into_every_runtime_skill_home ... ok
+test onboard::tests::a_non_object_statusline_value_is_preference_too ... ok
+test onboard::tests::the_entry_bee_writes_reads_back_as_a_project_level_entry ... ok
+test onboard::tests::removing_a_nested_expertise_pattern_from_source_cleans_the_host ... ok
+test onboard::tests::the_project_config_opt_out_behaves_exactly_like_the_flag ... ok
+test onboard::tests::pi_guard_extension_installs_idempotently_and_repairs_drift ... ok
+test onboard::tests::opencode_guard_plugin_installs_idempotently_and_repairs_drift ... ok
+test onboard::tests::repo_hooks_and_the_statusline_default_share_one_backup_holding_the_original ... ok
+test onboard::tests::repo_hooks_wires_both_projections_and_preserves_foreign_entries ... ok
+test onboard::tests::rendering_a_generated_skill_twice_yields_an_identical_tree_and_plan ... ok
+test onboard::tests::the_managed_ledger_carries_the_statusline_hash_only_when_bee_owns_the_entry ... ok
+
+test result: ok. 186 passed; 0 failed; 1 ignored; 0 measured; 3378 filtered out; finished in 0.48s
+
+     Running tests/installer_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/installer_contracts-8f36ce969868cd73)
+
+running 2 tests
+test no_installer_help_text_names_the_deleted_node_onboarder ... ok
+test both_installers_onboard_from_the_source_and_vendor_before_applying ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests/pi_plugin_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/pi_plugin_contracts-539045563093a3ae)
+
+running 1 test
+test pi_lifecycle_end_to_end_onboarded_repo_parity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.40s

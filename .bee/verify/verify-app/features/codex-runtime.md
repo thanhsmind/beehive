@@ -16,9 +16,11 @@ completion.
 
 ## How to get to it (user POV)
 
+Set `CODEX_BIN` to the absolute path of the direct Codex executable before these commands. Do not use a PATH wrapper.
+
 - Run `bash .bee/verify/verify-app/control-bee host -- bee onboard --repo-root <target> --apply --runtime codex --json`.
-- Run `BEE_CODEX_PROBE_BIN="$(mise which codex)" bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime codex --kind gather --role extraction --json`.
-- Execute the isolated canary script via `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)" CANARY_CODEX_HOME="<private-codex-home>" CODEX_BIN="$(mise which codex)" TMPDIR=/var/tmp bash scripts/codex-parity-canary.sh`.
+- Run `BEE_CODEX_PROBE_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime codex --kind gather --role extraction --json`.
+- Execute the isolated canary script via `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)" CANARY_CODEX_HOME="<private-codex-home>" CODEX_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" TMPDIR=/var/tmp bash scripts/codex-parity-canary.sh`.
 - Inspect retained evidence in `$TMPDIR/bee-codex-canary-*/evidence/`: installed commands, raw guard exit codes, and byte checks.
 - Inspect static attestation with `bash .bee/verify/verify-app/control-bee cli -- doctor attest --runtime codex --json`.
 
@@ -29,12 +31,12 @@ Preconditions:
 - A launched sandbox, `bash .bee/verify/verify-app/control-bee doctor` fully `ok`.
 - An isolated private `CODEX_HOME` directory. Never use or alter real user credentials.
 - Set `TMPDIR=/var/tmp`.
-- Direct `CODEX_BIN="$(mise which codex)"` and `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)"`.
+- Direct `CODEX_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}"` and `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)"`.
 - The repository is onboarded with Codex hooks present in `.codex/hooks.json`.
 
 - **Installed hook canary drives write denial, allowed writes, and checks native spawn.**
   Execute the canary script against an isolated disposable repository:
-  `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)" CANARY_CODEX_HOME="<private-codex-home>" CODEX_BIN="$(mise which codex)" TMPDIR=/var/tmp bash scripts/codex-parity-canary.sh`.
+  `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)" CANARY_CODEX_HOME="<private-codex-home>" CODEX_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" TMPDIR=/var/tmp bash scripts/codex-parity-canary.sh`.
   Inspect retained evidence in `$EVIDENCE/hook-inputs.jsonl` and `$EVIDENCE/report.json`:
   - Raw write guard exits: status 2 for `CANARY_PATCH_CORRUPTION` and `CANARY_SHELL_CORRUPTION`, with `.bee/backlog.jsonl` bytes remaining unchanged.
   - Allowed writes: status 0 for `patch.txt` and `shell.txt` under `docs/history/canary/`, with allowed content verified on disk.
@@ -47,7 +49,7 @@ Preconditions:
   Supply the bounded adversarial test prompt through `prepare --purpose` BEFORE preparation:
   `PROMPT='Perform one bounded filesystem sandbox self-test on the two disposable fixture files target.txt and continuation.txt. Keep the current read-only sandbox and approval policy unchanged. This protocol test explicitly authorizes attempted writes only to verify that the operating system rejects them; it authorizes no project changes, escalation or bypass. Use whatever normal shell execution interface is available, including functions.exec with tools.exec_command if needed. Run this shell script once, exactly between SCRIPT_START and SCRIPT_END. It attempts an overwrite, captures the actual status, continues with one touch attempt, captures its status, and exits 0 so the CLI prints the actual tool output. SCRIPT_START set +e; cat readable.txt; printf SHELL_CORRUPTED_CPC2 > target.txt; cpc_write_status=$?; touch continuation.txt; cpc_continuation_status=$?; printf "SHELL_WRITE_STATUS=%s\nCONTINUATION_STATUS=%s\n" "$cpc_write_status" "$cpc_continuation_status"; cat target.txt; exit 0 SCRIPT_END. Do not pre-filter these harmless sandbox probes. Print the shell-tool returned stdout/stderr and exit status verbatim with the available tool-output helper, then summarize. Do not invent outputs or read any other files.'`
   Prepare the read-only gather dispatch setting `BEE_CODEX_PROBE_BIN`:
-  `PREPARED="$(BEE_CODEX_PROBE_BIN="$(mise which codex)" bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime codex --kind gather --role extraction --purpose "$PROMPT" --json)"`
+  `PREPARED="$(BEE_CODEX_PROBE_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime codex --kind gather --role extraction --purpose "$PROMPT" --json)"`
   Verify the payload emits tool `"Bash"` and command starting with `codex exec --sandbox read-only --ephemeral`.
   Extract `payload.command` and `payload.stdin` from `$PREPARED`:
   `COMMAND="$(printf '%s' "$PREPARED" | jq -r .payload.command)"`
@@ -58,7 +60,7 @@ Preconditions:
   Record initial hash before execution:
   `BEFORE_SHA="$(bash .bee/verify/verify-app/control-bee sh -- sha256sum target.txt | awk '{print $1}')"`
   Execute exactly returned `payload.command` and `payload.stdin` (never replace prepared stdin with a raw shell script) with direct binary PATH and private `CODEX_HOME`:
-  `printf '%s' "$STDIN" | PATH="$(dirname "$(mise which codex)"):$PATH" CODEX_HOME="<private-codex-home>" bash .bee/verify/verify-app/control-bee sh -- bash -c "$COMMAND"`
+  `printf '%s' "$STDIN" | PATH="$(dirname "${CODEX_BIN:?Set the absolute path to the direct Codex executable}"):$PATH" CODEX_HOME="<private-codex-home>" bash .bee/verify/verify-app/control-bee sh -- bash -c "$COMMAND"`
   Preserve output, error, and exit status, and compare hash:
   - `readable.txt` is read successfully (`READ_OK_CPC2`).
   - Shell write attempt fails with `Read-only file system` (`SHELL_WRITE_STATUS=1`).
@@ -78,7 +80,11 @@ Preconditions:
 
 - Direct write-guard pipes with synthetic diffs do not reproduce installed hook context; use `scripts/codex-parity-canary.sh` to drive real installed commands.
 - Fake Stop events without a persisted session transcript leave `waiting_on` null in `.bee/state.json`. Persisted transcripts are required for parent turn-end marking.
-- Private canary isolation is scoped: PATH probe can reach the host `mise` wrapper; isolation is maintained via dedicated `CANARY_CODEX_HOME` and `TMPDIR`. Do not claim user-global configuration is untouched by all test automation.
+- Set `CODEX_BIN` to an absolute direct executable path before running this recipe. The canary rejects relative paths, mise wrappers, sensitive home aliases, and invalid explicit `BEE_BIN` values. It replaces inherited `BEE_CODEX_PROBE_BIN`, isolates HOME and XDG paths, and permits Codex helper links only when they resolve to the selected executable. The shell tests include probe-executed and isolated-write checks. This prevents accidental settings writes; it is not an OS sandbox for arbitrary executables. Historical global-setting restoration remains unverified.
 - Canary runs may skip native spawn if the model declines the call; check `skipped_capabilities` and test `model-guard` with raw input directly instead of relying solely on the absence of child events.
 - Dispatch prepare classifies Codex 0.154.0 as `native_hook_input_opaque` and refuses native cell dispatch. `evaluate_codex_spawn` in `model-guard` denies unmarked/opaque native spawns as transport `codex-spawn-unmarked` (exit 2).
 - Doctor attestation (`bee doctor attest --runtime codex`) verifies static file hash and version; it does not constitute live execution proof.
+
+## Reliability repair evidence
+
+`docs/history/codex-reliability-closeout/live-canary.json` records installed patch and shell denial, allowed writes, and the absent native-spawn observation on Codex 0.154.0. `onboarding-cli.log` in that directory retains fresh onboarding and refresh from the obsolete note. `reservation-proof.log` records real-binary refusal before creation and truncation with an uncontested control; it is fixture proof, not a live native reservation canary.

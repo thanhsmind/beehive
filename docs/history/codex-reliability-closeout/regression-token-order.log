@@ -1,0 +1,36 @@
+running 4 tests
+test hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result ... ok
+test hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn ... FAILED
+test hooks::session_close::tests::codex_rollup_does_not_use_response_item_payload_id_as_session_id ... FAILED
+test hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_meta_missing ... FAILED
+
+failures:
+
+---- hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn stdout ----
+
+thread 'hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn' (4034393) panicked at crates/bee/src/hooks/session_close/tests.rs:1610:9:
+assertion `left == right` failed
+  left: 7000.0
+ right: 500.0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- hooks::session_close::tests::codex_rollup_does_not_use_response_item_payload_id_as_session_id stdout ----
+
+thread 'hooks::session_close::tests::codex_rollup_does_not_use_response_item_payload_id_as_session_id' (4034394) panicked at crates/bee/src/hooks/session_close/tests.rs:1673:9:
+assertion `left == right` failed
+  left: "7a48da530e71"
+ right: "01a095e4-8306-70d0-bf1f-7a48da530e71"
+
+---- hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_meta_missing stdout ----
+
+thread 'hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_meta_missing' (4034395) panicked at crates/bee/src/hooks/session_close/tests.rs:1639:9:
+assertion `left == right` failed
+  left: "7a48da530e71"
+ right: "01a095e4-8306-70d0-bf1f-7a48da530e71"
+
+failures:
+    hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn
+    hooks::session_close::tests::codex_rollup_does_not_use_response_item_payload_id_as_session_id
+    hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_meta_missing
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 3529 filtered out; finished in 0.00s

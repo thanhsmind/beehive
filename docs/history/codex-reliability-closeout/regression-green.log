@@ -1,0 +1,142 @@
+warning: duplicated attribute
+    --> crates/bee/src/verbs/status_full/tests.rs:4614:5
+     |
+4614 |     #[test]
+     |     ^^^^^^^
+     |
+     = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::H...
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/verbs/drivers/tests.rs:961:13
+    |
+961 |         let mut cell = |id: &str, title: &str| {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `use_json`
+    --> crates/bee/src/verbs/drivers/tests.rs:6522:21
+     |
+6522 |         let (flags, use_json) = parse_flags(&[
+     |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_json`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `root`
+   --> crates/bee/src/verbs/state_group/advisor_ref.rs:445:20
+    |
+445 |     fn fresh_state(root: &Path, feature: &str) -> Map<String, Value> {
+    |                    ^^^^ help: if this is intentional, prefix it with an underscore: `_root`
+
+warning: unused variable: `win`
+    --> crates/bee/src/verbs/supervisor.rs:4747:13
+     |
+4747 |         let win = away_into(control, "supervisor away", Some("dinner")...
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_win`
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: ...
+    |        ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:1785:9
+     |
+1785 | ...   ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+1785 |         let _ = ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2265:9
+     |
+2265 | ...   ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2265 |         let _ = ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2300:9
+     |
+2300 | ...   ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2300 |         let _ = ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: `bee` (bin "bee" test) generated 13 warnings (run `cargo fix --bin "bee" -p bee --tests` to apply 5 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.03s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 4 tests
+test hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result ... ok
+test hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn ... ok
+test hooks::session_close::tests::codex_rollup_does_not_use_response_item_payload_id_as_session_id ... ok
+test hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_meta_missing ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 3561 filtered out; finished in 0.00s
+
+================================================================================
+Current Feature Tree Verification: Reordered Test Order & Full Module Suite
+================================================================================
+Command:
+PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false \
+cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests
+
+Output:
+test hooks::session_close::tests::claude_turn_end_subject_preserves_assistant_text_across_tool_result ... ok
+test hooks::session_close::tests::codex_repeated_token_count_dedup_and_multiple_requests_in_turn ... ok
+test hooks::session_close::tests::codex_rollup_does_not_use_response_item_payload_id_as_session_id ... ok
+test hooks::session_close::tests::codex_rollup_preserves_full_uuid_when_session_meta_missing ... ok
+...
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 3522 filtered out; finished in 0.19s
+
+

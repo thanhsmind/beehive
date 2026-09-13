@@ -1,0 +1,38 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "unsafe-roots-rejected-before-probe",
+      "status": "PASS",
+      "evidence": "scripts/codex-parity-canary.sh:66-130 rejects real-home, descendant, custom-XDG, system-root, and sensitive symlink paths before the probe at line 198."
+    },
+    {
+      "id": "canonical-executable-and-helper-symlinks",
+      "status": "PASS",
+      "evidence": "scripts/codex-parity-canary.sh:29-64 requires a canonical direct executable and forces BEE_CODEX_PROBE_BIN; lines 118-129 permit executable helper links only when they resolve to CODEX_REAL."
+    },
+    {
+      "id": "positive-isolation-controls",
+      "status": "PASS",
+      "evidence": "scripts/codex-parity-canary-test.sh:533-561 requires proof that the hostile fake ran and wrote through isolated paths, then checks that all host sentinels remain unchanged."
+    },
+    {
+      "id": "isolation-scope-disclosed",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/isolation.md:33-40 explicitly defines the protection as environment hygiene, not OS-level filesystem sandboxing, and states that credentials are not accessed."
+    },
+    {
+      "id": "hermetic-regression-evidence",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/isolation-green.log:11-21 records all seven repaired isolation checks passing. Fresh bash -n checks for both canary scripts also printed syntax-ok; the full test could not rerun because the review filesystem denied mktemp."
+    },
+    {
+      "id": "installed-live-canary",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/live-canary.json:1-50 records Codex CLI 0.154.0, exit 0, installed write-guard deny/allow results, and the disclosed limitation that native spawn input was not observed."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

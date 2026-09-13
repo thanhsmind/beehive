@@ -1,25 +1,201 @@
 #!/usr/bin/env bash
 # Real Codex, installed matcher/commands, retained inputs and observable writes.
 set -euo pipefail
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BEE_BIN="${BEE_BIN:-${CARGO_TARGET_DIR:-$REPO_ROOT/packages/bee-rs/target}/release/bee}"
-test -x "$BEE_BIN" || { echo 'Build the release bee binary first.' >&2; exit 1; }
-CODEX_BIN="${CODEX_BIN:-$(mise which codex)}"
-# Authentication must be supplied separately in an explicitly approved private
-# home. Codex can persist project trust even during an ephemeral invocation.
-: "${CANARY_CODEX_HOME:?Provide an isolated Codex home; do not use the real user home}"
-test "$(realpath "$CANARY_CODEX_HOME")" != "$(realpath "${HOME}/.codex")" || {
-  echo 'Refusing the real Codex home.' >&2; exit 1;
+
+# Capture host environment and custom settings before any overrides
+HOST_REAL_HOME="$(realpath "${HOME:-/nonexistent}" 2>/dev/null || echo "${HOME:-/nonexistent}")"
+HOST_REAL_CODEX="$(realpath "${HOST_REAL_HOME}/.codex" 2>/dev/null || echo "${HOST_REAL_HOME}/.codex")"
+HOST_XDG_CONFIG="$(realpath "${XDG_CONFIG_HOME:-$HOST_REAL_HOME/.config}" 2>/dev/null || echo "${XDG_CONFIG_HOME:-$HOST_REAL_HOME/.config}")"
+HOST_XDG_DATA="$(realpath "${XDG_DATA_HOME:-$HOST_REAL_HOME/.local/share}" 2>/dev/null || echo "${XDG_DATA_HOME:-$HOST_REAL_HOME/.local/share}")"
+HOST_XDG_STATE="$(realpath "${XDG_STATE_HOME:-$HOST_REAL_HOME/.local/state}" 2>/dev/null || echo "${XDG_STATE_HOME:-$HOST_REAL_HOME/.local/state}")"
+HOST_XDG_CACHE="$(realpath "${XDG_CACHE_HOME:-$HOST_REAL_HOME/.cache}" 2>/dev/null || echo "${XDG_CACHE_HOME:-$HOST_REAL_HOME/.cache}")"
+
+# Do not silently fall back from an explicitly supplied invalid BEE_BIN to a different binary
+if [[ -n "${BEE_BIN:-}" ]]; then
+  test -f "$BEE_BIN" && test -x "$BEE_BIN" || {
+    echo "Specified BEE_BIN is not an executable file: $BEE_BIN" >&2
+    exit 1
+  }
+else
+  BEE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/packages/bee-rs/target}/release/bee"
+  if [[ ! -x "$BEE_BIN" && -x "$REPO_ROOT/.bee/bin/bee" ]]; then
+    BEE_BIN="$REPO_ROOT/.bee/bin/bee"
+  fi
+  test -x "$BEE_BIN" || { echo 'Build the release bee binary first.' >&2; exit 1; }
+fi
+
+# Require explicit direct executable; reject discovery, mise invocation, and wrappers.
+test -n "${CODEX_BIN:-}" || {
+  echo 'Provide an explicit direct executable in CODEX_BIN; discovery or PATH wrapper is refused.' >&2
+  exit 1
 }
-export CODEX_HOME="$CANARY_CODEX_HOME"
+
+# Require canonical absolute path; reject bare commands and relative paths.
+[[ "$CODEX_BIN" == /* ]] || {
+  echo 'CODEX_BIN must be an absolute path, not a relative path or bare command resolved via PATH.' >&2
+  exit 1
+}
+
+test -f "$CODEX_BIN" && test -x "$CODEX_BIN" || {
+  echo "CODEX_BIN is not an executable file: $CODEX_BIN" >&2
+  exit 1
+}
+
+CODEX_REAL="$(realpath "$CODEX_BIN")"
+CODEX_BIN="$CODEX_REAL"
+
+# Refuse wrapper scripts that invoke mise or delegate through shims.
+# Avoid read-scanning entire large binary executables by checking header / limiting size.
+if [[ "$(head -c 4 "$CODEX_REAL" 2>/dev/null || true)" != $'\x7fELF' ]]; then
+  if head -c 65536 "$CODEX_REAL" 2>/dev/null | grep -Eq '(mise[[:space:]]+(use|x|exec|run)|\bmise\b|/mise/shims)'; then
+    echo 'Refusing mise wrapper script in CODEX_BIN; provide the direct Codex executable.' >&2
+    exit 1
+  fi
+fi
+
+if [[ "$CODEX_REAL" == *"/mise/shims/"* ]]; then
+  echo 'Refusing mise shim in CODEX_BIN; provide the direct Codex executable.' >&2
+  exit 1
+fi
+
+# Replace or configure BEE_CODEX_PROBE_BIN directly so nested probes cannot invoke wrappers
+export BEE_CODEX_PROBE_BIN="$CODEX_REAL"
+
+# Validate isolated Codex home and reject unsafe homes, descendants, and aliases before probe launch
+: "${CANARY_CODEX_HOME:?Provide an isolated Codex home; do not use the real user home}"
+RESOLVED_CODEX_HOME="$(realpath -m "$CANARY_CODEX_HOME")"
+
+is_sensitive_path() {
+  local target="$1"
+
+  # Reject the real user home itself
+  if [[ "$target" == "$HOST_REAL_HOME" ]]; then
+    return 0
+  fi
+
+  # Reject sensitive configuration and data directories and all their descendants
+  local s
+  local sensitive=(
+    "$HOST_REAL_CODEX"
+    "$HOST_REAL_HOME/.codex"
+    "$HOST_REAL_HOME/.config"
+    "$HOST_REAL_HOME/.local"
+    "$HOST_REAL_HOME/.cache"
+    "$HOST_XDG_CONFIG"
+    "$HOST_XDG_DATA"
+    "$HOST_XDG_STATE"
+    "$HOST_XDG_CACHE"
+  )
+  for s in "${sensitive[@]}"; do
+    [[ -n "$s" && "$s" != "/" ]] || continue
+    if [[ "$target" == "$s" || "$target" == "$s/"* ]]; then
+      return 0
+    fi
+  done
+  if [[ "$target" == "/" || "$target" == "/root" || "$target" == "/root/"* || \
+        "$target" == "/home" || "$target" == "/etc" || "$target" == "/etc/"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+if is_sensitive_path "$RESOLVED_CODEX_HOME"; then
+  echo "Refusing real user home, settings directory, or unsafe path as CANARY_CODEX_HOME: $CANARY_CODEX_HOME" >&2
+  exit 1
+fi
+
+# Reject symlinks pointing into real settings
+if [[ -L "$CANARY_CODEX_HOME" ]]; then
+  TARGET_OF_LINK="$(realpath "$CANARY_CODEX_HOME" 2>/dev/null || true)"
+  if is_sensitive_path "$TARGET_OF_LINK"; then
+    echo "Refusing symlink to real home/settings in CANARY_CODEX_HOME: $CANARY_CODEX_HOME -> $TARGET_OF_LINK" >&2
+    exit 1
+  fi
+fi
+
+if [[ -d "$CANARY_CODEX_HOME" ]]; then
+  while IFS= read -r -d '' link; do
+    link_target="$(realpath "$link" 2>/dev/null || true)"
+    # Allow legitimate Codex executable helper link pointing to the direct CODEX_REAL executable
+    if [[ -n "$CODEX_REAL" && "$link_target" == "$CODEX_REAL" && -x "$link_target" ]]; then
+      continue
+    fi
+    if is_sensitive_path "$link_target"; then
+      echo "Refusing symlink into real user settings inside CANARY_CODEX_HOME: $link -> $link_target" >&2
+      exit 1
+    fi
+  done < <(find "$CANARY_CODEX_HOME" -type l -print0 2>/dev/null)
+fi
+
+# Establish controlled PATH without host wrappers or mise shims
+CODEX_DIR="$(dirname "$CODEX_REAL")"
+SAFE_PATH=""
+add_safe_path() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 0
+  local canonical
+  canonical="$(realpath "$dir" 2>/dev/null || true)"
+  [[ -n "$canonical" ]] || return 0
+  # Exclude mise shims
+  if [[ "$canonical" == *"/mise/shims"* ]]; then
+    return 0
+  fi
+  # If directory contains a codex executable that is not CODEX_REAL, exclude it
+  if [[ -x "$canonical/codex" ]]; then
+    local candidate
+    candidate="$(realpath "$canonical/codex" 2>/dev/null || true)"
+    if [[ "$candidate" != "$CODEX_REAL" ]]; then
+      return 0
+    fi
+  fi
+  # Avoid duplicate entries
+  if [[ ":$SAFE_PATH:" != *":$canonical:"* ]]; then
+    if [[ -z "$SAFE_PATH" ]]; then
+      SAFE_PATH="$canonical"
+    else
+      SAFE_PATH="$SAFE_PATH:$canonical"
+    fi
+  fi
+}
+
+add_safe_path "$CODEX_DIR"
+for tool in node git jq timeout cmp cp mktemp dirname realpath printf env; do
+  tool_path="$(command -v "$tool" 2>/dev/null || true)"
+  if [[ -n "$tool_path" ]]; then
+    add_safe_path "$(dirname "$tool_path")"
+  fi
+done
+for std in /usr/local/bin /usr/bin /bin /usr/local/sbin /usr/sbin /sbin; do
+  add_safe_path "$std"
+done
+IFS=':' read -ra P_DIRS <<< "$PATH"
+for p in "${P_DIRS[@]}"; do
+  [[ -n "$p" ]] && add_safe_path "$p"
+done
+export PATH="$SAFE_PATH"
+
+# Setup hermetic canary directories and isolate HOME, XDG, and CODEX_HOME
 CANARY_ROOT="$(mktemp -d "${TMPDIR:-/var/tmp}/bee-codex-canary-XXXXXX")"
+CANARY_HOME="$CANARY_ROOT/home"
 CANARY_REPO="$CANARY_ROOT/repo"
 EVIDENCE="$CANARY_ROOT/evidence"
-export CANARY_REPO EVIDENCE
+
+mkdir -p "$CANARY_HOME/.config" "$CANARY_HOME/.local/share" "$CANARY_HOME/.local/state" "$CANARY_HOME/.cache"
 mkdir -p "$CANARY_REPO" "$EVIDENCE"
+
+export HOME="$CANARY_HOME"
+export XDG_CONFIG_HOME="$CANARY_HOME/.config"
+export XDG_DATA_HOME="$CANARY_HOME/.local/share"
+export XDG_STATE_HOME="$CANARY_HOME/.local/state"
+export XDG_CACHE_HOME="$CANARY_HOME/.cache"
+export CODEX_HOME="$CANARY_CODEX_HOME"
+export CANARY_REPO EVIDENCE
+
 printf 'Retained canary: %s\n' "$CANARY_ROOT"
 trap 'printf "Canary evidence retained: %s\n" "$EVIDENCE"' EXIT
-"$CODEX_BIN" --version > "$EVIDENCE/version.txt" 2> "$EVIDENCE/version.stderr"
+"$CODEX_REAL" --version > "$EVIDENCE/version.txt" 2> "$EVIDENCE/version.stderr"
 git -C "$CANARY_REPO" init -b main --quiet
 git -C "$CANARY_REPO" config user.name 'Codex Canary'
 git -C "$CANARY_REPO" config user.email 'canary@example.invalid'
@@ -70,7 +246,7 @@ JS
 set +e
 env -u BEE_HERDING_WORKER -u BEE_HERDING_JOB_ID -u BEE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
   -u CODEX_CI -u CODEX_SESSION_ID -u CODEX_THREAD_ID -u CODEX_PERMISSION_PROFILE \
-  timeout 180 "$CODEX_BIN" exec --ignore-user-config --ignore-rules --json \
+  timeout 180 "$CODEX_REAL" exec --ignore-user-config --ignore-rules --json \
   --disable plugins \
   --sandbox workspace-write --dangerously-bypass-hook-trust --cd "$CANARY_REPO" \
   -c "projects={\"$CANARY_REPO\"={trust_level=\"trusted\"}}" \
