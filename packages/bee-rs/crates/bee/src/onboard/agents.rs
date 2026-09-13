@@ -569,6 +569,61 @@ mod tests {
         assert!(rec["codex"]["note"].as_str().unwrap().contains("AO11"));
     }
 
+    /// Regression test for F7: generated onboarding metadata must describe
+    /// configurable Codex roles and transports rather than asserting universal
+    /// lack of per-agent model selection, must document read-only CLI fallback
+    /// and capability-dependent native dispatch, and must disclaim effective-model
+    /// verification.
+    #[test]
+    fn codex_onboarding_note_describes_configurable_transports_without_obsolete_claims() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine_with_agents(dir.path());
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let rec = compute_agents_sync_record(&engine, &repo, &json!("1.2.3"));
+        let note = rec["codex"]["note"]
+            .as_str()
+            .expect("codex note must be a string");
+
+        // Absence of obsolete universal claims:
+        assert!(
+            !note.contains("Codex has no per-agent model selection"),
+            "obsolete claim: note must not state Codex has no per-agent model selection (got: {note})"
+        );
+        assert!(
+            !note.contains("DEFAULT_MODELS.codex is all-null by design"),
+            "obsolete claim: note must not claim DEFAULT_MODELS.codex is all-null by design (got: {note})"
+        );
+
+        // Independent expected supported statements:
+        assert!(
+            note.contains("configurable roles and transports")
+                || (note.contains("configurable") && note.contains("transport")),
+            "note must explain configurable roles and transports (got: {note})"
+        );
+        assert!(
+            note.contains("read-only CLI fallback"),
+            "note must explain read-only CLI fallback (got: {note})"
+        );
+        assert!(
+            note.contains("capability-dependent native dispatch"),
+            "note must explain capability-dependent native dispatch (got: {note})"
+        );
+        assert!(
+            note.contains("without effective-model proof")
+                || (note.contains("effective-model") && note.contains("proof")),
+            "note must disclose lack of effective-model proof (got: {note})"
+        );
+        assert!(
+            note.contains("unconfigured") && note.contains("null"),
+            "note must describe unconfigured null defaults (got: {note})"
+        );
+        assert!(
+            note.contains("No agent files are rendered under .agents/ (AO11)"),
+            "note must preserve absence of rendered agent files under .agents/ (got: {note})"
+        );
+    }
+
     #[test]
     fn opencode_defaults_apply_without_config() {
         let dir = tempfile::tempdir().unwrap();

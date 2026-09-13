@@ -145,8 +145,9 @@ pub fn default_state() -> Value {
 /// from the first run. Each `{model, description}` normalizes to `{model}` at
 /// resolution time — descriptions are display-only.
 ///
-/// Codex stays all-null by design (`CODEX_AGENTS_NOTE`): codex has no
-/// per-agent model selection.
+/// Codex unconfigured roles default to null (`CODEX_AGENTS_NOTE`), but support
+/// configurable roles and transports, read-only CLI fallback, and
+/// capability-dependent native dispatch without effective-model proof.
 ///
 /// # Herding
 ///
@@ -408,7 +409,7 @@ pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
 pub const AGENT_TIER_DEFAULTS_CLAUDE: &[(&str, &str)] =
     &[("extraction", "haiku"), ("generation", "sonnet"), ("review", "opus")];
 
-pub const CODEX_AGENTS_NOTE: &str = "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11).";
+pub const CODEX_AGENTS_NOTE: &str = "Codex defaults unconfigured roles to null (enforced as prompt read-and-output budget), but supports configurable roles and transports (team.codex / models.codex), read-only CLI fallback for non-cell execution, and capability-dependent native dispatch without effective-model proof. No agent files are rendered under .agents/ (AO11).";
 
 /// opencode-support oc-14: OpenCode's own per-tier model defaults, mirroring
 /// AGENT_TIER_DEFAULTS_CLAUDE's role but for the free, zero-config
@@ -532,7 +533,7 @@ mod tests {
             "claude"
         );
 
-        // Codex stays minimal — all null by design (CODEX_AGENTS_NOTE).
+        // Codex stays minimal — unconfigured roles default to null (CODEX_AGENTS_NOTE).
         let codex_table = v["team"]["codex"].as_object().unwrap();
         let codex_names: Vec<&str> = codex_table.keys().map(|k| k.as_str()).collect();
         assert_eq!(codex_names, vec!["code", "read", "extraction", "generation"], "codex");
