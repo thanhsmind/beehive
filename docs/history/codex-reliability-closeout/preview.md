@@ -136,7 +136,37 @@ This ensures `parse_flags` parses `--preview` as `FlagV::Present` without consum
 
 ## Invariants Upheld
 
-- **No Gate Bypass**: `run_gate_preview` mutates only `gate_preview`; approval gates (`gates.shape` and `gates.execution`) remain completely unchanged and unapproved.
+- **No Gate Bypass**: `run_gate_preview` mutates only `gate_preview`; approval gates (`approved_gates.shape` and `approved_gates.execution`) remain completely unchanged and unapproved.
 - **Subcommand Parity**: `state gate preview` continues to work identically.
 - **Both Spellings Accept Following Lane**: Both `bee gate --preview --lane <feature>` and `bee state gate --preview --lane <feature>` successfully parse and execute.
 - **No New Flags or Workarounds**: Resolved at the root parser table (`FLAG_ALONE_BOOLEANS`) without inventing new flags or relying on documentation changes.
+
+## Test Contract Correction (`approved_gates`)
+
+Following review in `docs/history/codex-reliability-closeout/crc-4-revision.md`:
+- Prior tests seeded and asserted synthetic `gates.shape.approved` and `gates.execution.approved` fields rather than real state and lane fields.
+- Real store records carry `approved_gates` (`approved_gates.shape` and `approved_gates.execution`), which are plain booleans.
+- Integration tests in `packages/bee-rs/crates/bee/tests/gate_preview.rs` were updated to assert real `approved_gates` across both:
+  1. Default record paths (`bee gate --preview --no-lane`, `bee state gate --preview --no-lane`)
+  2. Lane record paths (`bee gate --preview --lane <feature>`, `bee state gate --preview --lane <feature>`, `bee state gate preview --lane <feature>`)
+- The suite tests both:
+  1. Unapproved gates (`shape: false, execution: false`), confirming preview does not approve gates.
+  2. Already-true approvals (`shape: true, execution: true`), confirming preview preserves existing approval state rather than clearing or resetting it.
+- State assertions verify both on-disk projections (`.bee/lanes/<feature>.json`, `.bee/state.json`) and the real CLI state reader (`bee status --brief --json`).
+
+### Corrected Integration Test Suite Execution Output
+
+```bash
+$ PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --manifest-path packages/bee-rs/Cargo.toml --test gate_preview
+running 7 tests
+test cli_state_gate_subcommand_continues_to_work ... ok
+test cli_gate_preview_flag_with_following_lane_accepts_and_renders ... ok
+test cli_lane_preview_preserves_existing_true_approvals ... ok
+test cli_state_gate_preview_flag_with_following_lane_accepts_and_renders ... ok
+test cli_gate_preview_json_outputs_packet_and_leaves_approval_unchanged ... ok
+test cli_default_record_preview_preserves_existing_true_approvals ... ok
+test cli_gate_preview_reversed_order_and_default_record_unapproved ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+```
+
