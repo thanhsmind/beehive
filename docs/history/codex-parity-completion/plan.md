@@ -376,7 +376,9 @@ One complete slice. Run cpc-1 and cpc-3 concurrently because files are disjoint.
 | Compliance | Probe capture | No credentials or unrelated transcript content |
 | Business rules | Null and explicit slots | Configuration selects the intended behavior |
 
+<!-- bee:not-a-deferral: This frozen plan describes the within-slice regeneration order, completed by bee dev regen and proved in final-green-suite.log. -->
 Workers inspect existing coverage and author only missing behavioral tests. Each new bug reproduction runs before and after the change. Leader runs the declared full suite and the live installed canary. Onboarding map modified 2026-09-07; hook/dispatch paths are not mapped, so cpc-4 adds their recipe. Release regeneration is deferred to the declared wave barrier, never skipped.
+<!-- /bee:not-a-deferral -->
 
 ## Open Questions
 
