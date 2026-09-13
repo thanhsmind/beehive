@@ -498,6 +498,102 @@ pub(crate) fn adopt_mailbox_handoff(
     out
 }
 
+pub(crate) enum MailboxDismiss {
+    Fail { reason: String },
+    Ok {
+        workflow_id: String,
+        seq: i64,
+        record: Map<String, Value>,
+    },
+}
+
+pub(crate) fn dismiss_mailbox_handoff(
+    root: &Path,
+    workflow_id: &str,
+    target_role: Option<&str>,
+) -> Result<MailboxDismiss, Err2> {
+    let wf_id_s = require_handoff_workflow_id(workflow_id)?;
+    let role = normalize_target_role(target_role);
+    let guard = acquire_named_lock(root, &format!("handoff:{wf_id_s}"))?;
+    let out = (|| -> Result<MailboxDismiss, Err2> {
+        let records = list_handoff_mailbox(root, &wf_id_s)?;
+        let mut candidate: Option<Map<String, Value>> = None;
+        for record in records.iter().rev() {
+            if normalize_target_role_val(record.get("target_role")) != role {
+                continue;
+            }
+            if matches!(record.get("status"), Some(Value::String(s)) if s == "open") {
+                candidate = Some(record.clone());
+                break;
+            }
+        }
+        let Some(candidate) = candidate else {
+            let role_note = role.as_ref().map(|r| format!(" (role \"{r}\")")).unwrap_or_default();
+            return Ok(MailboxDismiss::Fail {
+                reason: format!(
+                    "no open handoff in workflow \"{wf_id_s}\"'s mailbox{role_note} to dismiss."
+                ),
+            });
+        };
+        if !matches!(candidate.get("kind"), Some(Value::String(s)) if s == "pause") {
+            return Ok(MailboxDismiss::Fail {
+                reason: format!(
+                    "handoff kind \"{}\" is not \"pause\" \u{2014} a planned-next handoff is never dismissed, it must be adopted (D1).",
+                    js_disp_opt(candidate.get("kind"))
+                ),
+            });
+        }
+        let seq = record_seq(&candidate);
+        let mut cleared = candidate.clone();
+        cleared.shift_remove("seq");
+        cleared.insert("status".into(), json!("cleared"));
+        cleared.insert("cleared_at".into(), json!(now_iso()));
+        write_json_atomic(
+            &handoff_record_path(root, &wf_id_s, seq)?,
+            &Value::Object(cleared.clone()),
+        )
+        .map_err(|_| Err2::Ex)?;
+        cleared.insert("seq".into(), json!(seq));
+        Ok(MailboxDismiss::Ok {
+            workflow_id: wf_id_s.clone(),
+            seq,
+            record: cleared,
+        })
+    })();
+    drop(guard);
+    out
+}
+
+pub(crate) fn clear_mailbox_pause_handoffs(root: &Path, workflow_id: &str) -> Result<usize, Err2> {
+    let wf_id_s = require_handoff_workflow_id(workflow_id)?;
+    let guard = acquire_named_lock(root, &format!("handoff:{wf_id_s}"))?;
+    let out = (|| -> Result<usize, Err2> {
+        let records = list_handoff_mailbox(root, &wf_id_s)?;
+        let mut count = 0;
+        let now = now_iso();
+        for record in records {
+            let is_open = matches!(record.get("status"), Some(Value::String(s)) if s == "open");
+            let is_pause = matches!(record.get("kind"), Some(Value::String(s)) if s == "pause");
+            if is_open && is_pause {
+                let seq = record_seq(&record);
+                let mut cleared = record.clone();
+                cleared.shift_remove("seq");
+                cleared.insert("status".into(), json!("cleared"));
+                cleared.insert("cleared_at".into(), json!(now.clone()));
+                write_json_atomic(
+                    &handoff_record_path(root, &wf_id_s, seq)?,
+                    &Value::Object(cleared),
+                )
+                .map_err(|_| Err2::Ex)?;
+                count += 1;
+            }
+        }
+        Ok(count)
+    })();
+    drop(guard);
+    out
+}
+
 // ─── gate stamps + workflow listing order (bee.mjs) ────────────────────────
 
 /// bee.mjs findGateStamp — normalizes the single/array/absent shapes to the

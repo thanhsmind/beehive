@@ -80,6 +80,10 @@ same files still carry their citations and were deliberately left alone.
 | state.handoff.show --lane | multisession-native-15 |
 | state.handoff.show --target-role | multisession-native-15 |
 | state.handoff.show --session-id | multisession-native-15 |
+| state.handoff.dismiss (desc) | pi-full-workflow-parity pfp-1; D1 |
+| state.handoff.dismiss --lane | pi-full-workflow-parity pfp-1 |
+| state.handoff.dismiss --target-role | pi-full-workflow-parity pfp-1 |
+| state.handoff.dismiss --session-id | pi-full-workflow-parity pfp-1 |
 | state.advisor-ref.record (desc) | AO3/AO13; hive law 12; i54-closeout D7 |
 | state.advisor-ref.show (desc) | AO13 |
 | state.compact-log (desc) | compaction-hardening D3/D4/D5; D3's helper floor; D5; D4 |
