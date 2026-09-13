@@ -1,0 +1,137 @@
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-parity-completion/packages/bee-rs/crates/bee)
+warning: duplicated attribute
+    --> crates/bee/src/verbs/status_full/tests.rs:4614:5
+     |
+4614 |     #[test]
+     |     ^^^^^^^
+     |
+     = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/verbs/drivers/tests.rs:961:13
+    |
+961 |         let mut cell = |id: &str, title: &str| {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `use_json`
+    --> crates/bee/src/verbs/drivers/tests.rs:6440:21
+     |
+6440 |         let (flags, use_json) = parse_flags(&[
+     |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_json`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `root`
+   --> crates/bee/src/verbs/state_group/advisor_ref.rs:445:20
+    |
+445 |     fn fresh_state(root: &Path, feature: &str) -> Map<String, Value> {
+    |                    ^^^^ help: if this is intentional, prefix it with an underscore: `_root`
+
+warning: unused variable: `win`
+    --> crates/bee/src/verbs/supervisor.rs:4747:13
+     |
+4747 |         let win = away_into(control, "supervisor away", Some("dinner")).unwrap();
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_win`
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:1785:9
+     |
+1785 |         ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+1785 |         let _ = ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2265:9
+     |
+2265 |         ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2265 |         let _ = ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2300:9
+     |
+2300 |         ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2300 |         let _ = ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: `bee` (bin "bee" test) generated 13 warnings (run `cargo fix --bin "bee" -p bee --tests` to apply 5 suggestions)
+    Finished `release` profile [optimized] target(s) in 34.57s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 1 test
+test verbs::drivers::tests::native_transport_probe_deadline_survives_detached_pipe_holder ... FAILED
+
+failures:
+
+---- verbs::drivers::tests::native_transport_probe_deadline_survives_detached_pipe_holder stdout ----
+
+thread 'verbs::drivers::tests::native_transport_probe_deadline_survives_detached_pipe_holder' (3234690) panicked at crates/bee/src/verbs/drivers/tests.rs:3964:9:
+detached stdout holder extended the probe deadline: 3.00433775s
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    verbs::drivers::tests::native_transport_probe_deadline_survives_detached_pipe_holder
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3561 filtered out; finished in 3.01s
+
+error: test failed, to rerun pass `-p bee --bin bee`

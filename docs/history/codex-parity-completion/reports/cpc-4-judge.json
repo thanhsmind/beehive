@@ -1,0 +1,28 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "tested paths and limits documented",
+      "status": "PASS",
+      "evidence": "docs/06-runtime-integration.md:56-71 distinguishes shipped hooks, observed events, opaque native refusal, read-only fallback, and unproved live paths. docs/history/codex-parity-completion/verification-summary.md:29-34 records the tested limits."
+    },
+    {
+      "id": "verification map drives required behavior",
+      "status": "PASS",
+      "evidence": ".bee/verify/verify-app/features/codex-runtime.md:35-75 gives executable checks for deny, allow, model guard, read-only dispatch, turn completion, and child isolation."
+    },
+    {
+      "id": "installed dispatch and sandbox instructions",
+      "status": "PASS",
+      "evidence": "skills/bee-swarming/references/swarming-reference.md:387-395 documents the supported schema, Codex 0.154.0 refusal, external routes, fork_turns strings, and read-only sandbox. CREATION-LOG.md:25-43 retains the failed model-pinning instruction and final three-scenario GREEN result."
+    },
+    {
+      "id": "generated parity and full suite",
+      "status": "PASS",
+      "evidence": "docs/history/codex-parity-completion/verification-summary.md:10-18 records 3,920 passed, zero failed, 20 ignored, three generated hook projections, 376 release files, and git diff --check exit 0; final-green-suite.log:4168-4742 contains the raw successful suite results."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}
