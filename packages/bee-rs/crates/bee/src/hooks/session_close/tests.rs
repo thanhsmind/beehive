@@ -1094,3 +1094,824 @@ so the next session can resume cleanly, or record a capture stub for what settle
             "the failed write must be logged: {crash_log}"
         );
     }
+
+    #[test]
+    fn codex_transcript_resolution_via_stored_path() {
+        let fx = fixture();
+        let root = dunce::canonicalize(fx.path()).unwrap();
+        let transcript_dir = tempfile::tempdir().unwrap();
+        let codex_file = transcript_dir.path().join("rollout-2026-09-12T14-28-28-s-codex-1.jsonl");
+
+        std::fs::write(
+            &codex_file,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"s-codex-1\",\"cwd\":\"/tmp\"}}\n",
+        )
+        .unwrap();
+
+        let sessions_dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+        write_json_file(
+            &sessions_dir.join("s-codex-1.json"),
+            &json!({
+                "id": "s-codex-1",
+                "transcript_path": codex_file.to_string_lossy()
+            }),
+        );
+
+        let resolved = resolve_transcript_for(&root, Some("s-codex-1"));
+        assert_eq!(resolved, Some(codex_file));
+    }
+
+    #[test]
+    fn codex_transcript_resolution_via_fallback_dir() {
+        let _transcript_guard = lock_transcript_env();
+        let fx = fixture();
+        let root = dunce::canonicalize(fx.path()).unwrap();
+
+        let codex_home_dir = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("CODEX_HOME", codex_home_dir.path()) };
+
+        let rollout_dir = codex_home_dir.path().join("sessions").join("2026").join("09").join("12");
+        std::fs::create_dir_all(&rollout_dir).unwrap();
+        let rollout_file = rollout_dir.join("rollout-2026-09-12T14-28-28-s-codex-fallback.jsonl");
+
+        std::fs::write(
+            &rollout_file,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"s-codex-fallback\",\"cwd\":\"/tmp\"}}\n",
+        )
+        .unwrap();
+
+        let resolved = resolve_transcript_for(&root, Some("s-codex-fallback"));
+        unsafe { std::env::remove_var("CODEX_HOME") };
+
+        assert_eq!(resolved, Some(rollout_file));
+    }
+
+    #[test]
+    fn refusal_to_pick_another_sessions_newest_file() {
+        let _transcript_guard = lock_transcript_env();
+        let fx = fixture();
+        let root = dunce::canonicalize(fx.path()).unwrap();
+
+        let claude_config = tempfile::tempdir().unwrap();
+        let codex_home = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", claude_config.path()) };
+        unsafe { std::env::set_var("CODEX_HOME", codex_home.path()) };
+
+        // Create transcript for session-alpha in Claude projects dir
+        write_transcript(
+            claude_config.path(),
+            &root,
+            "session-alpha",
+            &[r#"{"type":"session_meta","payload":{"id":"session-alpha"}}"#],
+        );
+
+        // Create transcript for session-alpha in Codex dir
+        let codex_dir = codex_home.path().join("sessions").join("2026").join("09").join("12");
+        std::fs::create_dir_all(&codex_dir).unwrap();
+        std::fs::write(
+            codex_dir.join("rollout-2026-09-12T15-00-00-session-alpha.jsonl"),
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-alpha\"}}\n",
+        )
+        .unwrap();
+
+        // Querying for session-beta (which has no transcript) must return None, NOT borrow session-alpha
+        let resolved_beta = resolve_transcript_for(&root, Some("session-beta"));
+        assert_eq!(resolved_beta, None, "must refuse to borrow another session's file");
+
+        // Querying with None session_id must return None, NOT pick newest file
+        let resolved_none = resolve_transcript_for(&root, None);
+        assert_eq!(resolved_none, None, "must return None when session_id is None");
+
+        // Stored transcript_path pointing to a file with mismatched identity must be refused
+        let sessions_dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+        let alpha_codex_path = codex_dir.join("rollout-2026-09-12T15-00-00-session-alpha.jsonl");
+        write_json_file(
+            &sessions_dir.join("session-gamma.json"),
+            &json!({
+                "id": "session-gamma",
+                "transcript_path": alpha_codex_path.to_string_lossy()
+            }),
+        );
+        let resolved_gamma = resolve_transcript_for(&root, Some("session-gamma"));
+        assert_eq!(resolved_gamma, None, "mismatched identity in stored transcript_path must be refused");
+
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+        unsafe { std::env::remove_var("CODEX_HOME") };
+    }
+
+    #[test]
+    fn token_usage_aggregation_without_double_counting_cumulative_totals() {
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": {
+                    "model": "o3-mini"
+                }
+            }),
+            // Codex event_msg token_count request 1
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        }
+                    }
+                }
+            }),
+            // Duplicate of request 1
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 60,
+                            "cached_input_tokens": 20,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 160
+                        }
+                    }
+                }
+            }),
+            // Codex event_msg token_count request 2
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 40,
+                            "output_tokens": 20,
+                            "cached_input_tokens": 5,
+                            "cache_write_input_tokens": 0,
+                            "total_tokens": 60
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 140,
+                            "output_tokens": 80,
+                            "cached_input_tokens": 25,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 220
+                        }
+                    }
+                }
+            }),
+            // Codex event_msg token_count request 3
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 10,
+                            "output_tokens": 5,
+                            "cached_input_tokens": 0,
+                            "cache_write_input_tokens": 0,
+                            "total_tokens": 15
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 150,
+                            "output_tokens": 85,
+                            "cached_input_tokens": 25,
+                            "cache_write_input_tokens": 10,
+                            "total_tokens": 235
+                        }
+                    }
+                }
+            }),
+        ];
+
+        let agg = aggregate_usage(&events);
+        assert_eq!(agg.models.0.len(), 1);
+        let (model, acc) = &agg.models.0[0];
+        assert_eq!(model, "o3-mini");
+        // Normalized uncached input:
+        // req 1: 100 - 20 - 10 = 70
+        // req 2: 40 - 5 - 0 = 35
+        // req 3: 10 - 0 - 0 = 10
+        // Total uncached input: 70 + 35 + 10 = 115
+        assert_eq!(acc.input, 115.0);
+        // Incremental output: 60 + 20 + 5 = 85
+        assert_eq!(acc.output, 85.0);
+        // Incremental cached: 20 + 5 + 0 = 25
+        assert_eq!(acc.cache_read, 25.0);
+        // Incremental cache_write: 10 + 0 + 0 = 10
+        assert_eq!(acc.cache_write, 10.0);
+        // Total = 115 + 85 + 10 + 25 = 235
+        assert_eq!(acc.total, 235.0);
+    }
+
+    #[test]
+    fn commentary_only_and_tool_only_turn_end_subject() {
+        // Commentary only
+        let commentary_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "commentary",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "Reviewing tests...\nReady to verify changes."
+                        }
+                    ]
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(commentary_events)),
+            Some("Ready to verify changes.".to_string())
+        );
+
+        // Commentary and final_answer: final_answer takes priority
+        let both_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "commentary",
+                    "content": [{"type": "output_text", "text": "Commentary here"}]
+                }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{"type": "output_text", "text": "Final answer here"}]
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(both_events)),
+            Some("Final answer here".to_string())
+        );
+
+        // Tool-only turn
+        let tool_only_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "arguments": "{}"
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(tool_only_events)),
+            Some("(turn ended)".to_string())
+        );
+
+        // Whitespace-only turn
+        let ws_events = vec![
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{"type": "output_text", "text": "   \n\t  \n"}]
+                }
+            }),
+        ];
+        assert_eq!(
+            turn_end_subject(Some(ws_events)),
+            Some("(turn ended)".to_string())
+        );
+    }
+
+    #[test]
+    fn concurrent_session_isolation() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let claude_config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", claude_config.path()) };
+
+        let fx1 = fixture();
+        let root1 = dunce::canonicalize(fx1.path()).unwrap();
+        write_json_file(&root1.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root1.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+
+        let fx2 = fixture();
+        let root2 = dunce::canonicalize(fx2.path()).unwrap();
+        write_json_file(&root2.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root2.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+
+        // Write distinct transcripts for s-1 and s-2 in their respective project roots
+        write_transcript(
+            claude_config.path(),
+            &root1,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"s1 waiting for user"}]}}"#],
+        );
+        write_transcript(
+            claude_config.path(),
+            &root2,
+            "s-2",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"s2 waiting for approval"}]}}"#],
+        );
+
+        // Verify transcript resolution isolation
+        assert_eq!(
+            resolve_transcript_for(&root1, Some("s-1")),
+            Some(claude_config.path().join("projects").join(encode_project_dir(&root1.to_string_lossy())).join("s-1.jsonl"))
+        );
+        assert_eq!(resolve_transcript_for(&root1, Some("s-2")), None);
+        assert_eq!(
+            resolve_transcript_for(&root2, Some("s-2")),
+            Some(claude_config.path().join("projects").join(encode_project_dir(&root2.to_string_lossy())).join("s-2.jsonl"))
+        );
+        assert_eq!(resolve_transcript_for(&root2, Some("s-1")), None);
+
+        // Stop s-1
+        let body1 = json!({
+            "hook_event_name": "Stop",
+            "cwd": root1.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        assert_eq!(run_inner(&[], &serde_json::to_string(&body1).unwrap()), Ok(()));
+
+        let state1: Value = serde_json::from_str(
+            &std::fs::read_to_string(root1.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state1["waiting_on"]["session"], "s-1");
+        assert_eq!(state1["waiting_on"]["subject"], "s1 waiting for user");
+
+        // Stop s-2
+        let body2 = json!({
+            "hook_event_name": "Stop",
+            "cwd": root2.to_string_lossy(),
+            "session_id": "s-2",
+        });
+        assert_eq!(run_inner(&[], &serde_json::to_string(&body2).unwrap()), Ok(()));
+
+        let state2: Value = serde_json::from_str(
+            &std::fs::read_to_string(root2.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state2["waiting_on"]["session"], "s-2");
+        assert_eq!(state2["waiting_on"]["subject"], "s2 waiting for approval");
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+    }
+
+    #[test]
+    fn codex_repeated_token_count_dedup_and_multiple_requests_in_turn() {
+        let events = vec![
+            // Model settings
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "thread_settings_applied",
+                    "thread_settings": { "model": "o3-mini" }
+                }
+            }),
+            // Turn starts
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_started", "turn_id": "turn-1" }
+            }),
+            // First LLM request: info has no turn_id/response_id.
+            // Emitted four times identically as observed in live Codex transcripts!
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 1000,
+                            "cached_input_tokens": 800,
+                            "output_tokens": 100,
+                            "total_tokens": 1100
+                        }
+                    }
+                }
+            }),
+            // Second LLM request within the same turn: total_token_usage advances
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1500,
+                            "cached_input_tokens": 1200,
+                            "output_tokens": 150,
+                            "total_tokens": 1650
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 2500,
+                            "cached_input_tokens": 2000,
+                            "output_tokens": 250,
+                            "total_tokens": 2750
+                        }
+                    }
+                }
+            }),
+            // Duplicate of second request
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1500,
+                            "cached_input_tokens": 1200,
+                            "output_tokens": 150,
+                            "total_tokens": 1650
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 2500,
+                            "cached_input_tokens": 2000,
+                            "output_tokens": 250,
+                            "total_tokens": 2750
+                        }
+                    }
+                }
+            }),
+        ];
+
+        let agg = aggregate_usage(&events);
+        assert_eq!(agg.models.0.len(), 1);
+        let (model, acc) = &agg.models.0[0];
+        assert_eq!(model, "o3-mini");
+        // Dedup must NOT count identical records 4 times:
+        // First request: uncached input = 1000 - 800 = 200, output = 100, cached = 800
+        // Second request: uncached input = 1500 - 1200 = 300, output = 150, cached = 1200
+        // Total uncached input = 500
+        assert_eq!(acc.input, 500.0);
+        assert_eq!(acc.output, 250.0);
+        assert_eq!(acc.cache_read, 2000.0);
+        assert_eq!(acc.total, 2750.0);
+    }
+
+    #[test]
+    fn codex_input_tokens_includes_cached_normalization() {
+        // Observed live Codex record: input=202967, cached=194560, output=440, total=203407
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "o3-mini" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 202967,
+                            "cached_input_tokens": 194560,
+                            "cache_write_input_tokens": 0,
+                            "output_tokens": 440,
+                            "total_tokens": 203407
+                        },
+                        "total_token_usage": {
+                            "input_tokens": 202967,
+                            "cached_input_tokens": 194560,
+                            "cache_write_input_tokens": 0,
+                            "output_tokens": 440,
+                            "total_tokens": 203407
+                        }
+                    }
+                }
+            }),
+        ];
+        let agg = aggregate_usage(&events);
+        let (_, acc) = &agg.models.0[0];
+        // Normalized uncached input = 202967 - 194560 = 8407
+        assert_eq!(acc.input, 8407.0);
+        assert_eq!(acc.cache_read, 194560.0);
+        assert_eq!(acc.output, 440.0);
+        // Total must equal raw input + output = 203407, NOT double-counting cached tokens!
+        assert_eq!(acc.total, 203407.0);
+    }
+
+    #[test]
+    fn codex_thread_settings_applied_nested_and_no_past_model_assignment() {
+        let events = vec![
+            // Session starts with model A
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "model-a" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 20, "total_tokens": 120 },
+                        "total_token_usage": { "input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 20, "total_tokens": 120 }
+                    }
+                }
+            }),
+            // Model changes mid-session via nested event_msg thread_settings_applied
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "thread_settings_applied",
+                    "thread_settings": { "model": "model-b" }
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 200, "cached_input_tokens": 0, "output_tokens": 40, "total_tokens": 240 },
+                        "total_token_usage": { "input_tokens": 300, "cached_input_tokens": 0, "output_tokens": 60, "total_tokens": 360 }
+                    }
+                }
+            }),
+        ];
+
+        let agg = aggregate_usage(&events);
+        assert_eq!(agg.models.0.len(), 2);
+        // Past record must remain with model-a, NOT assigned to model-b!
+        assert_eq!(agg.models.0[0].0, "model-a");
+        assert_eq!(agg.models.0[0].1.input, 100.0);
+        assert_eq!(agg.models.0[0].1.output, 20.0);
+        assert_eq!(agg.models.0[1].0, "model-b");
+        assert_eq!(agg.models.0[1].1.input, 200.0);
+        assert_eq!(agg.models.0[1].1.output, 40.0);
+    }
+
+    #[test]
+    fn codex_turn_boundary_latest_tool_only_turn_does_not_reuse_old_final() {
+        // Counterexample:
+        // old task_started; old final_answer OLD; old task_complete;
+        // new task_started; new function_call
+        let events = vec![
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_started", "turn_id": "turn-1" }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{ "type": "output_text", "text": "OLD answer" }]
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_complete", "turn_id": "turn-1", "last_agent_message": "OLD answer" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": { "type": "task_started", "turn_id": "turn-2" }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "shell",
+                    "arguments": "{}"
+                }
+            }),
+        ];
+
+        // The latest turn (turn-2) is tool-only; it must NOT return "OLD answer"!
+        let subject = turn_end_subject(Some(events));
+        assert_eq!(subject, Some("(turn ended)".to_string()));
+    }
+
+    #[test]
+    fn codex_rollup_preserves_full_uuid_when_session_meta_missing() {
+        let file = PathBuf::from("/path/to/rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71.jsonl");
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "o3-mini" }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 10, "output_tokens": 5 },
+                        "total_token_usage": { "input_tokens": 10, "output_tokens": 5 }
+                    }
+                }
+            }),
+        ];
+
+        let rollup = rollup_from_events(&file, &events).expect("rollup must succeed");
+        // Must preserve the FULL 36-character UUID, NOT truncate to "7a48da530e71"!
+        assert_eq!(rollup.session_id, "01a095e4-8306-70d0-bf1f-7a48da530e71");
+    }
+
+    #[test]
+    fn codex_rollup_does_not_use_response_item_payload_id_as_session_id() {
+        let file = PathBuf::from("/path/to/rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71.jsonl");
+        let events = vec![
+            json!({
+                "type": "turn_context",
+                "payload": { "model": "o3-mini" }
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "id": "msg_123",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Hello"}]
+                }
+            }),
+            json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": { "input_tokens": 10, "output_tokens": 5 },
+                        "total_token_usage": { "input_tokens": 10, "output_tokens": 5 }
+                    }
+                }
+            }),
+        ];
+
+        let rollup = rollup_from_events(&file, &events).expect("rollup must succeed");
+        // Must NOT use "msg_123" from response_item payload.id!
+        assert_eq!(rollup.session_id, "01a095e4-8306-70d0-bf1f-7a48da530e71");
+    }
+
+    #[test]
+    fn claude_turn_end_subject_preserves_assistant_text_across_tool_result() {
+        let events = vec![
+            json!({
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        { "type": "text", "text": "Keep existing subject" }
+                    ]
+                }
+            }),
+            json!({
+                "type": "user",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tool_123",
+                            "content": "some result"
+                        }
+                    ]
+                }
+            }),
+            json!({
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool_456",
+                            "name": "bash",
+                            "input": {}
+                        }
+                    ]
+                }
+            }),
+        ];
+
+        let subject = turn_end_subject(Some(events));
+        assert_eq!(subject, Some("Keep existing subject".to_string()));
+    }
+
+    #[test]
+    fn extract_validated_session_id_from_stem_safety_and_rejection() {
+        // Safe UTF-8 handling: malformed Unicode slicing must not panic
+        let non_boundary_stem = format!("A日{}", "x".repeat(34));
+        assert_eq!(extract_validated_session_id_from_stem(&non_boundary_stem), None);
+
+        let unicode_rollout = "rollout-2026-🎉-something";
+        assert_eq!(extract_validated_session_id_from_stem(unicode_rollout), None);
+
+        // Reject arbitrary rollout suffix without timestamp or uuid
+        assert_eq!(extract_validated_session_id_from_stem("rollout-arbitrary-suffix"), None);
+        assert_eq!(extract_validated_session_id_from_stem("rollout-invalid-uuid-format"), None);
+
+        // Valid timestamped rollout with custom session slug
+        assert_eq!(
+            extract_validated_session_id_from_stem("rollout-2026-09-12T14-28-28-s-codex-1"),
+            Some("s-codex-1".to_string())
+        );
+
+        // Valid timestamped rollout with UUID
+        assert_eq!(
+            extract_validated_session_id_from_stem("rollout-2026-09-12T14-28-28-01a095e4-8306-70d0-bf1f-7a48da530e71"),
+            Some("01a095e4-8306-70d0-bf1f-7a48da530e71".to_string())
+        );
+
+        // Valid direct UUID rollout
+        assert_eq!(
+            extract_validated_session_id_from_stem("rollout-01a095e4-8306-70d0-bf1f-7a48da530e71"),
+            Some("01a095e4-8306-70d0-bf1f-7a48da530e71".to_string())
+        );
+
+        // Non-rollout standard session id
+        assert_eq!(
+            extract_validated_session_id_from_stem("sess-1"),
+            Some("sess-1".to_string())
+        );
+    }
+
+

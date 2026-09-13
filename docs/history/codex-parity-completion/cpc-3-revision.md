@@ -1,0 +1,15 @@
+# cpc-3 completeness check: revision required
+
+Keep cpc-3 claimed under Stuart. The pane closed on its DONE report; this fresh same-role dispatch continues the same cell, not a second cell. Amend commit 0690c1eb only if it is still HEAD. If a sibling commit is now HEAD, make a path-scoped fixup commit and report it for the leader to fold safely. Never amend a sibling commit or sweep sibling changes.
+
+The leader traced these exact failures in the committed code. Add RED regressions before fixes and return exact test output plus a real binary fixture drive.
+
+1. aggregate_usage sums last_token_usage when token_count lacks response_id/turn_id. The live Codex transcript has exactly that shape, and repeats identical token_count info records (one repeated four times). Therefore no_req.push counts the same usage four times. Read runtime-observations.md. Use the observed total_token_usage cumulative sequence to derive increments/dedup correctly; do not merely ignore totals. Preserve multiple real model requests in one turn; dedup by turn id alone loses usage.
+2. Codex input_tokens includes cached_input_tokens. Observed one last usage: input=202967, cached=194560, output=440,total=203407. Current ModelAcc.finalize adds cached again. Normalize Codex input to the existing uncached-input contract and assert total=input+output from the actual shape, with cache_write semantics explicit.
+3. thread_settings_applied is an event_msg payload.type, NOT a top-level type. Your active-model branches miss the observed native form. Test real nested shape and model changes without assigning past records to a future model.
+4. final_assistant_text_line only enforces a turn boundary AFTER finding assistant text. Exact counterexample: old task_started; old final_answer OLD; old task_complete; new task_started; new function_call. Reverse scan crosses new task_started while in_codex_turn=false then returns OLD. A latest tool-only/empty/truncated turn must not reuse the earlier turn's final.
+5. rollup_from_events rsplit('-').next() truncates a UUID to its last segment when session_meta is missing. Preserve a fully validated session id or refuse; never invent a truncated identity.
+6. activity.rs globally removed existing Claude Notification agent_completed mapping without observed evidence that this notification is exclusively a child event. Preserve the existing Claude mapping unless a supported identity-aware child path is proven. Test actual SubagentStop/child ids leaving parent working instead. Do not manufacture Codex notifications.
+7. Fresh live proof is still missing: use the real bee hook binary on an isolated onboarded fixture through the verification helper; construct session and lane state only through bee CLI. Assert resulting wait subject and session identity. The canary cpc-1 is still running; do not claim that observation done.
+
+Do not add hypothetical token_usage_record or nested tool-call formats unless you can cite observed evidence; avoid growing a second untested parser. Current unit count is not completion evidence. Read the exact runtime shape observation and recheck the approved cell's must_haves.

@@ -146,7 +146,7 @@ const CATALOG: &[Event] = &[
         groups: &[
             group!(
                 BOTH,
-                Some("Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion"),
+                Some("Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec"),
                 [("bee-write-guard.mjs", "bee: write guard")]
             ),
             // Claude dispatches subagents as Agent|Task…
@@ -155,12 +155,11 @@ const CATALOG: &[Event] = &[
                 Some("Agent|Task"),
                 [("bee-model-guard.mjs", "bee: model-tier guard")]
             ),
-            // …Codex exposes the same act as the tool name "spawn_agent"
-            // (codex-cli 0.144.4, capability-matrix row D1). A MATCHER
-            // difference, not a capability gap: same handler, Codex branch.
+            // Codex 0.154.0 also emits the joined namespace/tool name.
+            // Both names enter the same guard through adapter normalization.
             group!(
                 CODEX_ONLY,
-                Some("spawn_agent"),
+                Some("spawn_agent|collaborationspawn_agent"),
                 [("bee-model-guard.mjs", "bee: model-tier guard")]
             ),
             ACTIVITY_SHARED,
@@ -420,7 +419,7 @@ pub fn run(flags: &[&str]) -> Option<ExitCode> {
 // approved` below.
 //
 //   model-tier-guard-claude-only   PreToolUse "Agent|Task"  bee-model-guard
-//   model-tier-guard-codex-spawn   PreToolUse "spawn_agent" bee-model-guard
+//   model-tier-guard-codex-spawn   PreToolUse "spawn_agent|collaborationspawn_agent" bee-model-guard
 //   subagent-start-audit-codex-only  SubagentStart  bee-codex-subagent-audit
 //   subagent-stop-audit-codex-only   SubagentStop   bee-codex-subagent-audit
 //   session-end-claude-only          SessionEnd     bee-session-close
@@ -609,7 +608,7 @@ mod tests {
         let codex = triples(Runtime::Codex);
         let approved: &[(&str, &str, &str)] = &[
             ("PreToolUse", "Agent|Task", "model-guard"),
-            ("PreToolUse", "spawn_agent", "model-guard"),
+            ("PreToolUse", "spawn_agent|collaborationspawn_agent", "model-guard"),
             ("SubagentStart", "*", "codex-subagent-audit"),
             ("SubagentStop", "*", "codex-subagent-audit"),
             ("SessionEnd", "*", "session-close"),
@@ -710,5 +709,12 @@ mod tests {
         let from_catalog = command_for("bee-write-guard.mjs", Target::Repo);
         let from_onboard = crate::onboard::hooks_wiring::codex_hook_command("bee-write-guard.mjs");
         assert_eq!(from_catalog, from_onboard);
+
+        let projection = render_projection(Runtime::Codex, Target::Repo);
+        let mut onboard = Map::new();
+        for (k, v) in crate::onboard::hooks_wiring::render_codex_hook_entries() {
+            onboard.insert(k.to_string(), v);
+        }
+        assert_eq!(projection, json!({ "hooks": Value::Object(onboard) }));
     }
 }

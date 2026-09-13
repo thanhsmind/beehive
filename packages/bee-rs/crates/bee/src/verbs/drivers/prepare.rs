@@ -509,6 +509,10 @@ fn codex_task_name(subject: &str) -> String {
     if out.is_empty() { "bee_task".into() } else { out }
 }
 
+fn shell_quote(token: &str) -> String {
+    format!("'{}'", token.replace('\'', "'\\''"))
+}
+
 fn codex_spawn_payload(
     subject: &str,
     tier: &str,
@@ -1228,7 +1232,7 @@ pub(crate) fn prepare_dispatch_with_brief(
 ) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
-    debug_assert!(DISPATCH_RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
+    debug_assert!(RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
 
     let mut cell: Option<Value> = None;
     let mut ownership_override: Option<Value> = None;
@@ -1326,12 +1330,34 @@ pub(crate) fn prepare_dispatch_with_brief(
     // always the MAIN checkout: a granted worktree's own `dispatch prepare`
     // call already refused through the narrow door in run_dispatch_prepare
     // (Roots::Unsupported(GrantedWorktree)) before reaching this function.
-    let worktree_location: Option<(String, String)> = cell
+    let feature_for_worktree = cell
         .as_ref()
         .and_then(|c| match vget(c, "feature") {
             Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
             _ => None,
         })
+        .or_else(|| {
+            cell_id
+                .and_then(|cid| read_cell(root, cid).ok().flatten())
+                .and_then(|c| match vget(&c, "feature") {
+                    Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                    _ => None,
+                })
+        })
+        .or_else(|| {
+            crate::verbs::state_group::session_binding(None, root)
+                .ok()
+                .and_then(|(_sid, bound)| bound)
+        })
+        .or_else(|| match crate::fsutil::read_json(&root.join(".bee").join("state.json")) {
+            crate::fsutil::ReadJson::Parsed(state) => match state.get("feature") {
+                Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            },
+            _ => None,
+        });
+
+    let worktree_location: Option<(String, String)> = feature_for_worktree
         .and_then(|feature| {
             crate::verbs::status_full::find_granted_worktree_for_feature(root, &feature)
                 .map(|(_id, worktree_root)| (worktree_root, root.to_string_lossy().into_owned()))
@@ -1619,6 +1645,20 @@ pub(crate) fn prepare_dispatch_with_brief(
     let marker_role: &str =
         if is_escalated { ESCALATION_WORD } else { resolved_role.unwrap_or(tier_token) };
 
+    if runtime == "codex" && kind == "cell"
+        && classification == Some("native_hook_input_opaque")
+        && !matches!(&resolved, Resolved::Herding { .. } | Resolved::Cli { .. }
+            | Resolved::Native { fallback: Some(_), .. })
+    {
+        return Ok(Prepared::Value(serde_json::json!({
+            "ok": false,
+            "type": "refused",
+            "reason": "native_hook_input_opaque",
+            "slot": marker_role,
+            "fix": "Codex 0.154.0 hides the native role message from installed hooks. Configure an explicit herding executor for this cell role and prepare again. For an escalated cell, keep escalation and return this refusal to the leader; do not add model overrides or remove the guard."
+        })));
+    }
+
     // pi-support D5 — THE HERDING-ONLY DOOR, at full width. Placed here, after
     // the slot resolved and before a single byte of prompt is rendered:
     // resolution is what the refusal reports, and a refused dispatch has no
@@ -1770,46 +1810,6 @@ pub(crate) fn prepare_dispatch_with_brief(
         }
     } else {
         match &resolved {
-            Resolved::Native { model, effort, fallback, .. } => {
-                native_confirmed = classification == Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
-                if native_confirmed {
-                    tool = "spawn_agent".into();
-                    payload = codex_spawn_payload(
-                        &subject,
-                        marker_role,
-                        &prompt_body,
-                        Some(model),
-                        effort.as_deref(),
-                    );
-                    channel = "codex-native".into();
-                    extra_transport = Some("native-override");
-                } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
-                    // cli-exec: NO label field. This payload is `{command, stdin}`
-                    // only — a recorded limit (dispatch-label-chokepoint plan.md
-                    // "What this does not do"), not an oversight: no field exists
-                    // on an external CLI-executor call to carry a subject.
-                    tool = "Bash".into();
-                    payload.insert("command".into(), Value::String(command.clone()));
-                    payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
-                    channel = "cli-exec".into();
-                    extra_fallback_reason = Some("native_unavailable");
-                } else {
-                    let mut r = Map::new();
-                    r.insert("ok".into(), Value::Bool(false));
-                    r.insert("type".into(), Value::String("refused".into()));
-                    r.insert("reason".into(), Value::String("native_unavailable".into()));
-                    r.insert(
-                        "detail".into(),
-                        Value::String(
-                            classification
-                                .filter(|c| !c.is_empty())
-                                .unwrap_or(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
-                                .to_string(),
-                        ),
-                    );
-                    refusal = Some(Value::Object(r));
-                }
-            }
             Resolved::Cli { command } => {
                 // cli-exec: NO label field — see the identical comment on the
                 // native-fallback Bash arm above; this is the same recorded
@@ -1927,15 +1927,84 @@ pub(crate) fn prepare_dispatch_with_brief(
                 }
                 channel = "herding-exec".into();
             }
+            _ if runtime == "codex" && purpose_is_gather(kind) => {
+                // Native read-only gather/reviewer/advisor jobs need enforced filesystem
+                // restrictions. Current spawn_agent has no sandbox field, so we dispatch
+                // via an explicit read-only CLI sandbox:
+                // codex exec --sandbox read-only --ephemeral ... -
+                tool = "Bash".into();
+                let mut command = "codex exec --sandbox read-only --ephemeral".to_string();
+                if let Some((worktree_root, _control_root)) = &worktree_location {
+                    if !worktree_root.is_empty() {
+                        command.push_str(" --cd ");
+                        command.push_str(&shell_quote(worktree_root));
+                    }
+                }
+                let (cfg_model, cfg_effort) = match &resolved {
+                    Resolved::Model { model, effort } => (Some(model.as_str()), effort.as_deref()),
+                    Resolved::Native { model, effort, .. } => (Some(model.as_str()), effort.as_deref()),
+                    _ => (None, None),
+                };
+                if let Some(model) = cfg_model {
+                    command.push_str(" --model ");
+                    command.push_str(&shell_quote(model));
+                }
+                if let Some(effort) = cfg_effort {
+                    command.push_str(" -c model_reasoning_effort=");
+                    command.push_str(&shell_quote(effort));
+                }
+                command.push_str(" -");
+                payload.insert("command".into(), Value::String(command));
+                payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                channel = "cli-exec".into();
+            }
+            Resolved::Native { model, effort, fallback, .. } => {
+                native_confirmed = classification == Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
+                if native_confirmed {
+                    tool = "spawn_agent".into();
+                    payload = codex_spawn_payload(
+                        &subject,
+                        marker_role,
+                        &prompt_body,
+                        Some(model),
+                        effort.as_deref(),
+                    );
+                    channel = "codex-native".into();
+                    extra_transport = Some("native-override");
+                } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
+                    // cli-exec: NO label field. This payload is `{command, stdin}`
+                    // only — a recorded limit (dispatch-label-chokepoint plan.md
+                    // "What this does not do"), not an oversight: no field exists
+                    // on an external CLI-executor call to carry a subject.
+                    tool = "Bash".into();
+                    payload.insert("command".into(), Value::String(command.clone()));
+                    payload.insert("stdin".into(), Value::String(pane_prompt.clone()));
+                    channel = "cli-exec".into();
+                    extra_fallback_reason = Some("native_unavailable");
+                } else {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("native_unavailable".into()));
+                    r.insert(
+                        "detail".into(),
+                        Value::String(
+                            classification
+                                .filter(|c| !c.is_empty())
+                                .unwrap_or(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
+                                .to_string(),
+                        ),
+                    );
+                    refusal = Some(Value::Object(r));
+                }
+            }
             _ if runtime == "codex" => {
                 tool = "spawn_agent".into();
-                // Carries the SAME subject as the claude Agent branch below,
-                // instead of the bare cell id (or "bee-{kind}") it used to —
-                // this arm is exactly the one the codex gap hid in (plan.md).
-                // codex's `task_name` is a plain required string on the
-                // live-probed 0.145.0 schema (see TASK_NAME_MAX); one-lined and
-                // capped so a long subject cannot read like a paragraph.
-                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, None, None);
+                let (cfg_model, cfg_effort) = match &resolved {
+                    Resolved::Model { model, effort } => (Some(model.as_str()), effort.as_deref()),
+                    _ => (None, None),
+                };
+                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, cfg_model, cfg_effort);
                 channel = "codex-native".into();
             }
             _ => {
@@ -2002,6 +2071,7 @@ pub(crate) fn prepare_dispatch_with_brief(
 
     let param_model = match (&channel[..], &resolved) {
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
+        ("codex-native", Resolved::Model { model, .. }) => Some(model.clone()),
         _ => None,
     };
     let declared = match (&channel[..], &resolved) {
@@ -2010,6 +2080,9 @@ pub(crate) fn prepare_dispatch_with_brief(
         }
         ("cli-exec", Resolved::Cli { .. }) | ("herding-exec", Resolved::Herding { .. }) => {
             declared_model_for(&cfg, &resolved, runtime)
+        }
+        ("cli-exec", _) if runtime == "codex" => {
+            payload.get("command").and_then(Value::as_str).and_then(crate::verbs::drivers::scan_command_model)
         }
         _ => None,
     };
@@ -2136,22 +2209,243 @@ pub(crate) fn prepare_dispatch_with_brief(
 /// delegates.
 pub(crate) const NATIVE_TRANSPORT_PROBE_SCHEMA: &str = "native-transport-probe/1";
 
-pub(crate) fn native_transport_classification(root: &Path) -> D<&'static str> {
+pub(crate) fn native_transport_config_scope_hash(scope: Option<&Value>) -> Option<String> {
+    let Value::Object(obj) = scope? else {
+        return None;
+    };
+    let mut map = std::collections::BTreeMap::new();
+    for (k, v) in obj {
+        map.insert(k.clone(), v.clone());
+    }
+    let s = serde_json::to_string(&map).ok()?;
+    Some(crate::verbs::reservations::sha256_hex(&s))
+}
+
+fn run_probe_command_bounded(
+    cmd: &str,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Option<std::process::Output> {
+    let mut command = std::process::Command::new(cmd);
+    command
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command.spawn().ok()?;
+    let pid = child.id();
+    let mut stdout = child.stdout.take()?;
+    let result = (|| {
+        #[cfg(unix)]
+        {
+            use std::os::fd::AsRawFd;
+            let fd = stdout.as_raw_fd();
+            let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+            if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+                return None;
+            }
+        }
+        let deadline = std::time::Instant::now() + timeout;
+        let mut bytes = Vec::new();
+        loop {
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            read_probe_available(&mut stdout, &mut bytes)?;
+            match child.try_wait().ok()? {
+                Some(status) => {
+                    // Drain bytes written between the previous read and exit.
+                    // Never wait for EOF: a descendant can retain the pipe.
+                    read_probe_available(&mut stdout, &mut bytes)?;
+                    return Some(std::process::Output { status, stdout: bytes, stderr: Vec::new() });
+                }
+                None => std::thread::sleep(std::time::Duration::from_millis(5)),
+            }
+        }
+    })();
+    // Close our pipe without a reader thread. Unix descendants in this group
+    // are terminated too; detached descendants are outside that boundary.
+    drop(stdout);
+    #[cfg(unix)]
+    unsafe {
+        libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    result
+}
+
+fn read_probe_available(stdout: &mut std::process::ChildStdout, bytes: &mut Vec<u8>) -> Option<()> {
+    use std::io::Read;
+    const MAX_OUTPUT: usize = 64 * 1024;
+    let mut buffer = [0u8; 4096];
+    loop {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            use windows_sys::Win32::System::Pipes::PeekNamedPipe;
+            let mut available = 0;
+            let ok = unsafe { PeekNamedPipe(stdout.as_raw_handle(), std::ptr::null_mut(), 0,
+                std::ptr::null_mut(), &mut available, std::ptr::null_mut()) };
+            if ok == 0 {
+                return (std::io::Error::last_os_error().kind() == std::io::ErrorKind::BrokenPipe).then_some(());
+            }
+            if available == 0 {
+                return Some(());
+            }
+        }
+        match stdout.read(&mut buffer) {
+            Ok(0) => return Some(()),
+            Ok(n) => {
+                if bytes.len() + n > MAX_OUTPUT {
+                    return None;
+                }
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Some(()),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return None,
+        }
+    }
+}
+
+pub(crate) fn native_transport_classification_with_cmd(
+    root: &Path,
+    codex_cmd: &str,
+    timeout: std::time::Duration,
+) -> D<&'static str> {
     let file = root.join(".bee").join("native-transport-probe.json");
     // doctorSafeReadJson: unreadable OR unparseable both yield null.
     let record = match std::fs::read(&file) {
         Err(_) => None,
         Ok(bytes) => serde_json::from_str::<Value>(&String::from_utf8_lossy(&bytes)).ok(),
     };
-    match record {
-        None => Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
-        Some(r) if !matches!(vget(&r, "schema"), Some(Value::String(s)) if s == NATIVE_TRANSPORT_PROBE_SCHEMA) => {
-            Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
-        }
-        // A live probe record: doctorRepoIdentity + `codex --version` +
-        // `codex features list` + the config-scope hash all have to run.
-        Some(_) => Err(Delegate),
+    let Some(r) = record else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    if !matches!(vget(&r, "schema"), Some(Value::String(s)) if s == NATIVE_TRANSPORT_PROBE_SCHEMA) {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
     }
+    let Some(expected_id) = r.get("repo_identity").and_then(Value::as_str) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    let actual_id = crate::verbs::reservations::sha256_hex(&root.to_string_lossy());
+    if expected_id != actual_id {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let Some(expected_ver) = r.get("codex_version").and_then(Value::as_str) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    let live_ver = run_probe_command_bounded(codex_cmd, &["--version"], timeout)
+        .and_then(|out| {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                s.lines()
+                    .map(str::trim)
+                    .find(|line| line.starts_with("codex"))
+                    .map(String::from)
+                    .or_else(|| {
+                        let trimmed = s.trim().to_string();
+                        (!trimmed.is_empty()).then_some(trimmed)
+                    })
+            } else {
+                None
+            }
+        });
+    if live_ver.as_deref() != Some(expected_ver) {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let Some(expected_hash) = r.get("config_scope_hash").and_then(Value::as_str) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    let Some(recomputed_hash) = native_transport_config_scope_hash(r.get("config_scope")) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+    if expected_hash != recomputed_hash {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let features_out = match run_probe_command_bounded(codex_cmd, &["features", "list"], timeout) {
+        Some(out) if out.status.success() => out,
+        _ => return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
+    };
+
+    let stdout = String::from_utf8_lossy(&features_out.stdout);
+    let mut features_map = std::collections::HashMap::new();
+    for raw_line in stdout.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 {
+            let name = parts[0];
+            let enabled = match parts.last() {
+                Some(&"true") => Some(true),
+                Some(&"false") => Some(false),
+                _ => None,
+            };
+            if let Some(en) = enabled {
+                features_map.insert(name.to_string(), en);
+            }
+        }
+    }
+
+    if features_map.is_empty() {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    }
+
+    let Some(scope_obj) = r.get("config_scope").and_then(Value::as_object) else {
+        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+    };
+
+    for (k, v) in scope_obj {
+        if let Some(expected_val) = v.as_bool() {
+            match features_map.get(k) {
+                Some(&live_val) => {
+                    if live_val != expected_val {
+                        return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+                    }
+                }
+                None => {
+                    return Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY);
+                }
+            }
+        }
+    }
+
+    if let Some(cls) = r.get("classification").and_then(Value::as_str) {
+        match cls {
+            "native_model_override" => Ok(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE),
+            "external_cli_only" => Ok(crate::verbs::drivers::NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY),
+            _ => Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
+        }
+    } else {
+        Ok(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
+    }
+}
+
+pub(crate) fn native_transport_classification(root: &Path) -> D<&'static str> {
+    let cmd = std::env::var("BEE_CODEX_PROBE_BIN").unwrap_or_else(|_| "codex".to_string());
+    installed_native_transport_classification(root, &cmd, std::time::Duration::from_millis(2000))
+}
+
+pub(crate) fn installed_native_transport_classification(root: &Path, cmd: &str, timeout: std::time::Duration) -> D<&'static str> {
+    // Exact installed-hook observation, not a version-range capability guess:
+    // reports/cpc-1.md records opaque message bytes on Codex 0.154.0.
+    if let Some(out) = run_probe_command_bounded(cmd, &["--version"], timeout) {
+        if out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "codex-cli 0.154.0" {
+            return Ok("native_hook_input_opaque");
+        }
+    }
+    native_transport_classification_with_cmd(root, cmd, timeout)
 }
 
 /// bee.mjs's `claimAndReserveForDispatch` — the claim, then one reserve per
@@ -3596,7 +3890,6 @@ mod role_flag_tests {
     /// subagent inherit the session model, while `--role advisor` and `--kind
     /// advisor` on the SAME host refused. One question, two doors, two
     /// answers — through the reachable configuration bee ships.
-    #[test]
     /// role-edge-hardening D1: a mis-cased "Advisor" config key answers the
     /// SAME at both doors, in both directions. Before the case-fold,
     /// `role_is_declarable` matched the advisor arm exactly and fell through

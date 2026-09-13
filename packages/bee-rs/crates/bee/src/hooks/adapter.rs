@@ -304,6 +304,13 @@ pub fn read_hook_context(hook_name: &str, argv: &[String], raw: &str) -> HookCon
         }
     }
 
+    // Codex 0.154.0 joins the namespace and native spawn name in hook inputs.
+    // Normalize that observed alias only. In particular, leave the opaque
+    // host-wrapped message untouched: the guard must refuse an unknown role.
+    if payload.get("tool_name").and_then(Value::as_str) == Some("collaborationspawn_agent") {
+        payload.insert("tool_name".into(), Value::String("spawn_agent".into()));
+    }
+
     let mut cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     match payload.get("cwd") {
         Some(Value::String(s)) if !s.trim().is_empty() => cwd = PathBuf::from(s),

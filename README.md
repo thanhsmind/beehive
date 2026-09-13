@@ -366,7 +366,7 @@ Models are not one ladder. Some plan well, some test well, some design well, som
 - **`read`** — the work only reads: retrieval, tracing a call path, mining a transcript, an evidence digest.
 - **`extraction` / `generation`** — the historical names every ordered role list ends with, so upgrading moves no host's model. Leave them set.
 - **Any name you invent is legal.** `test`, `docs`, `design`, `migrate` — add the key, and a cell declaring that role gets that model. bee validates a role's *presence and shape*, never its membership in a list; `code`, `read`, `test`, `docs`, `review`, `design` are recommended words, guidance only.
-- `null` = the runtime can't select a per-agent model (Codex today) → the role is enforced as a read budget + output cap in the worker prompt. Set real ids (e.g. `"code": "gpt-5"`) if your runtime supports switching.
+- `null` = no requested model (does not guarantee that an external CLI retains parent settings). When you configure a specific model ID (such as `"code": "gpt-5"`), Codex 0.154.0 dispatch attaches that model for supported dispatches. Unverifiable native cell dispatches with opaque hook messages are refused at preparation time (`native_hook_input_opaque`), directing to configured herding or CLI routes. For non-cell read-only jobs, configured herding and CLI routes stay explicit, while model-shaped or prompt-budget non-cell roles route through an explicit read-only CLI sandbox.
 
 **A role nothing configures still runs.** The dispatch asks for an ordered list headed by the cell's own role and ending in a name every host has configured for years — `[<cell role>, code, generation]`. An unconfigured head yields to the next name and **warns on stderr**, naming what it fell through to; it never fails, and it never silently picks a model the config did not name for it.
 
@@ -643,7 +643,7 @@ Self-arming (silent unless the repo has `.bee/onboarding.json`); per-repo kill s
 | `bee hook chain-nudge` | subagent stop | nudges the orchestrator to collect worker status / synthesize reviews |
 | `bee hook session-close` | session stop | warns about claimed-uncapped cells, missing HANDOFF, or unlogged decisions |
 
-The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-logger` and `bee hook codex-subagent-audit` complete the 9-hook set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `packages/bee/hooks/claude-hooks.json` (7) for Claude Code. Whether an installed Codex CLI actually executes its hooks is unverified, so the *helpers* remain the enforcement floor regardless of hook state, and the AGENTS.md block covers bootstrap either way. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
+The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-logger` and `bee hook codex-subagent-audit` complete the 9-hook set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `packages/bee/hooks/claude-hooks.json` (7) for Claude Code. Hook execution on installed Codex 0.154.0 is live-verified with an isolated `CODEX_HOME` (`scripts/codex-parity-canary.sh`: denied patch and shell writes, allowed history writes, unmarked spawn denied as `codex-spawn-unmarked`). The helper commands stay the shared foundation across all runtimes. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
 
 ### Runtime files — `<repo>/.bee/`
 

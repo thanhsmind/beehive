@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "6bfbefb190154ff2633da0ec5a76d4718db90e2fd1afda585f88cf200816c899",
+      "sha256": "2483a75bb52f498a23f64b226302474700092d9f0397b163fa6fc27bce65c819",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -668,7 +668,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "a5e509295a72acc39ce2684b1264ebc338269ff774970849a72881038bcf51e7",
+      "sha256": "69ce71f737889bb5e39555b15c98e69a9870404a7803504b535b21f02a7606bc",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -892,7 +892,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "e65fb58ac4e2edf77ba41efaeb0adc539185bb6826faf9aa61a8ea4a5416bf9a",
+      "sha256": "2760a21b6577ab39cd3c0340da301a56664492a750d84abbb5bf2cc21540ae3b",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1424,7 +1424,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "1b6528b3de1f95e407d8b2113b739add2a7d100ca38539d677b9a1485477c461",
+      "sha256": "05f9f2316e63a222cce939c2f23b87d3a1bdc8ab8de67f2b92a75d27b520604e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -1805,14 +1805,14 @@
     },
     {
       "path": "packages/bee/hooks/claude-hooks.json",
-      "sha256": "673276fd665a3adccda56f092610c5d6f1bc00daf0eb267cb3c2e3257cc1d988",
+      "sha256": "9ebf1c417a98d168375167cd6322195ea7556b0b9ec379d417ec9dd030ac7ade",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/claude-hooks.json"
     },
     {
       "path": "packages/bee/hooks/hooks.json",
-      "sha256": "f4314e4bea6a173ee47d1e9a53c0a6b3fa0e1c25db7c252e7f66a7d36f777045",
+      "sha256": "8e8d0f28baf529a2ca0694bf2c841af2b2c3225ac8920273b71984e6bc5976c3",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/hooks.json"
@@ -2391,7 +2391,7 @@
     },
     {
       "path": "skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "230e212859085f307500a1a43ba44f88d77e5f016b3f7f323fa3f4c8767cf603",
+      "sha256": "40b1b2631385acbb7b71c5860e836a35437ef82b016ec209ff0999a09e67475d",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/swarming-reference.md"

@@ -1,0 +1,23 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "installed write deny and allow",
+      "status": "PASS",
+      "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/report.json:11-26 records native Bash/apply_patch and denied backlog writes with allowed history writes; docs/history/codex-parity-completion/verification-summary.md:22 records deny exit 2, allow exit 0, and unchanged bytes."
+    },
+    {
+      "id": "manifest and activity parity",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:454-467 checks three generated projections; packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:638-701 checks the decided activity set and shared Claude launcher; final-green-suite.log:4266 records hook_contracts 13 passed."
+    },
+    {
+      "id": "honest live canary report",
+      "status": "PASS",
+      "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/report.json:2-15 reports Codex 0.154.0, observed events, observed tools, and no spawn input; lines 76-77 explicitly report skipped native spawn."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

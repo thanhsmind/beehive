@@ -63,8 +63,9 @@ pub(crate) fn run_native_with_roots(ctx: &HookContext, harness_roots: &HarnessRo
     };
     let is_write_tool = matches!(tool_name.as_str(), "Edit" | "Write" | "MultiEdit");
     let is_apply = matches!(tool_name.as_str(), "apply_patch" | "ApplyPatch");
+    let is_shell = matches!(tool_name.as_str(), "Bash" | "exec");
     let is_read_tool = matches!(tool_name.as_str(), "Read" | "Glob" | "Grep");
-    let write_capable = is_write_tool || tool_name == "Bash" || is_apply;
+    let write_capable = is_write_tool || is_shell || is_apply;
 
     if write_capable && ctx.worktree_resolution == "linked-invalid" {
         emit.stderr.push_str(
@@ -179,8 +180,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     }
                 }
             }
-        } else if tool_name == "Bash" {
-            let command = match tool_input.get("command") {
+        } else if is_shell {
+            let command = match first_truthy(&tool_input, &["command", "cmd"]) {
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
             };
@@ -525,8 +526,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
-        if denial.is_none() && tool_name == "Bash" {
-            let command = match tool_input.get("command") {
+        if denial.is_none() && is_shell {
+            let command = match first_truthy(&tool_input, &["command", "cmd"]) {
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
             };
@@ -545,8 +546,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
-        if denial.is_none() && tool_name == "Bash" {
-            let command = match tool_input.get("command") {
+        if denial.is_none() && is_shell {
+            let command = match first_truthy(&tool_input, &["command", "cmd"]) {
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
             };
@@ -561,8 +562,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
     // unless a bee-CLI-shaped token resolves, and it can only ASSIGN a denial
     // when none exists yet, so short-circuiting on `denial.is_none()` is the
     // intended precedence.
-    if tool_name == "Bash" {
-        let command = match tool_input.get("command") {
+    if is_shell {
+        let command = match first_truthy(&tool_input, &["command", "cmd"]) {
             Some(Value::String(s)) => s.clone(),
             _ => String::new(),
         };

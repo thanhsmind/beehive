@@ -91,19 +91,19 @@ against isolated fixtures, asserting that a denied action changed nothing.
   missing/drifted); `degraded` = mechanical green but trust surfaces the
   runtime cannot expose are structurally unknown (the user is pointed at
   /hooks); `ready` = mechanical green plus, on the second runtime, a VALID
-  static attestation. **`bee doctor` and `bee doctor attest` are NOT BUILT
-  INTO THE CURRENT BINARY** — the R6 Node deletion removed the only
-  implementation and no Rust port replaced it, so no install can reach
-  `ready` on the second runtime today; treat it as degraded. The rest of this
-  section is the design as specified, not a surface you can call.
+  static attestation. Both `bee doctor` and `bee doctor attest` are fully
+  implemented in the Rust binary (`packages/bee-rs/crates/bee/src/doctor.rs`).
   `bee doctor attest --runtime codex` records
   {hooks-file sha256, CLI version, repo identity} into gitignored runtime
-  state; validity = all three match live state (no liveness leg — the runtime
-  exposes no hook-fire event surface, and the reason text says so honestly);
-  any drift names its reason (hash_changed/version_changed/identity_changed/
-  no_attestation) and the verdict falls back to degraded. Trust wording is
-  probe-version-scoped: a CLI version other than the probed one reads
-  `unprobed_version` (re-probe suggested), never a blanket "unsupported".
+  state (`.bee/doctor-attest.json`). Validity requires that all three match
+  live state (no liveness leg — the runtime exposes no hook-fire event surface,
+  and the reason text says so honestly); any drift names its reason
+  (hash_changed/version_changed/identity_changed/no_attestation) and the
+  verdict falls back to degraded. Doctor attestation provides static
+  verification of files and hashes, never live proof of execution. Live proof
+  requires the isolated canary suite. Trust wording is probe-version-scoped:
+  a CLI version other than the probed one reads `unprobed_version` (re-probe
+  suggested), never a blanket "unsupported".
 
 - Doctor resolves hook handlers at HOST topology: each handler filename is
   checked at both `.bee/bin/hooks/` and `hooks/` (dual-location, evidence
@@ -166,6 +166,9 @@ against isolated fixtures, asserting that a denied action changed nothing.
 
 ## Open Gaps
 
-- Fixture and installed-package proofs are green. Live proof that Codex loads
-  the package-delivered projection in a real trusted session remains
-  outstanding because this environment cannot write the user Codex home.
+- Static doctor attestation and isolated canary execution are separate evidence
+  tiers. The canary (`scripts/codex-parity-canary.sh`) proves live hook
+  execution with a dedicated `CANARY_CODEX_HOME` and `TMPDIR`; canary isolation
+  is scoped to that private directory and does not claim user-global configuration
+  is untouched by all test automation, as parent investigations found PATH probes
+  can reach the host `mise` wrapper.

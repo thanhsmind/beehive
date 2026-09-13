@@ -377,7 +377,7 @@ fn waiting_on_err_message(e: crate::verbs::reservations::Err2) -> String {
 /// subject, so that case still resolves to `TURN_END_FALLBACK_SUBJECT`
 /// rather than `None`: the transcript did its job, there was just nothing to
 /// quote.
-fn turn_end_subject(transcript_events: Option<Vec<Value>>) -> Option<String> {
+pub(crate) fn turn_end_subject(transcript_events: Option<Vec<Value>>) -> Option<String> {
     let events = transcript_events?;
     if events.is_empty() {
         return None;
@@ -392,30 +392,166 @@ fn turn_end_subject(transcript_events: Option<Vec<Value>>) -> Option<String> {
 }
 
 /// Scans backward for the last assistant transcript entry that actually
-/// carries a text block — a turn's final assistant entry is often a bare
-/// `tool_use` with no text at all — then returns THAT block's own last
-/// non-empty line. An entry with content but no text block is skipped
-/// entirely (never falls back to an earlier block within it); an entry
-/// whose final text block is present but blank stops the search there too
-/// (empty is a valid finding, not a reason to keep scanning further back).
-fn final_assistant_text_line(events: &[Value]) -> Option<String> {
-    for event in events.iter().rev() {
-        if event.get("type").and_then(Value::as_str) != Some("assistant") {
-            continue;
+/// carries a text block.
+///
+/// Claude: scans backward for the last assistant transcript entry that actually
+/// carries a text block, returning that block's last non-empty line.
+///
+/// Codex: assistant text lives in `response_item` with `payload.type == "message"`
+/// and `payload.role == "assistant"` (or `event_msg` `task_complete` with
+/// `last_agent_message`). Within the latest turn, `final_answer` takes priority
+/// over `commentary`. Tool-only or whitespace turns yield `None` or empty line,
+/// which resolves to `TURN_END_FALLBACK_SUBJECT` ("(turn ended)").
+fn is_tool_result_record(event: &Value) -> bool {
+    let check_blocks = |blocks: &[Value]| {
+        blocks.iter().any(|b| b.get("type").and_then(Value::as_str) == Some("tool_result"))
+    };
+    if let Some(content) = event.get("message").and_then(|m| m.get("content")).and_then(Value::as_array) {
+        if check_blocks(content) {
+            return true;
         }
-        let Some(content) =
-            event.get("message").and_then(|m| m.get("content")).and_then(Value::as_array)
-        else {
-            continue;
-        };
-        let Some(text_block) =
-            content.iter().rev().find(|b| b.get("type").and_then(Value::as_str) == Some("text"))
-        else {
-            continue;
-        };
-        let text = text_block.get("text").and_then(Value::as_str).unwrap_or("");
-        return Some(last_non_empty_line(text).unwrap_or_default());
     }
+    if let Some(content) = event.get("content").and_then(Value::as_array) {
+        if check_blocks(content) {
+            return true;
+        }
+    }
+    if let Some(content) = event.get("payload").and_then(|p| p.get("content")).and_then(Value::as_array) {
+        if check_blocks(content) {
+            return true;
+        }
+    }
+    if event.get("type").and_then(Value::as_str) == Some("tool_result") {
+        return true;
+    }
+    if event.get("payload").and_then(|p| p.get("type")).and_then(Value::as_str) == Some("tool_result") {
+        return true;
+    }
+    if event.get("payload").and_then(|p| p.get("type")).and_then(Value::as_str) == Some("function_call_output") {
+        return true;
+    }
+    false
+}
+
+pub(crate) fn final_assistant_text_line(events: &[Value]) -> Option<String> {
+    let mut codex_final_answer: Option<String> = None;
+    let mut codex_commentary: Option<String> = None;
+    let mut codex_other: Option<String> = None;
+
+    for event in events.iter().rev() {
+        let ev_type = event.get("type").and_then(Value::as_str).unwrap_or("");
+
+        // Turn boundaries in Codex and Claude:
+        if ev_type == "turn_context" {
+            break;
+        }
+        if ev_type == "event_msg" {
+            let p_type = event.get("payload").and_then(|p| p.get("type")).and_then(Value::as_str);
+            if p_type == Some("task_started") {
+                break;
+            }
+        }
+        if !is_tool_result_record(event) {
+            if ev_type == "user" {
+                break;
+            }
+            if let Some(payload) = event.get("payload") {
+                if payload.get("role").and_then(Value::as_str) == Some("user") {
+                    break;
+                }
+            }
+        }
+
+        // Claude assistant message:
+        if ev_type == "assistant" {
+            let Some(content) =
+                event.get("message").and_then(|m| m.get("content")).and_then(Value::as_array)
+            else {
+                continue;
+            };
+            let Some(text_block) =
+                content.iter().rev().find(|b| b.get("type").and_then(Value::as_str) == Some("text"))
+            else {
+                continue;
+            };
+            let text = text_block.get("text").and_then(Value::as_str).unwrap_or("");
+            return Some(last_non_empty_line(text).unwrap_or_default());
+        }
+
+        // Codex response_item assistant message:
+        if ev_type == "response_item" {
+            if let Some(payload) = event.get("payload") {
+                let p_type = payload.get("type").and_then(Value::as_str);
+                let p_role = payload.get("role").and_then(Value::as_str);
+
+                if p_type == Some("message") && p_role == Some("assistant") {
+                    let phase = payload.get("phase").and_then(Value::as_str);
+
+                    let text_opt = if let Some(content) = payload.get("content").and_then(Value::as_array) {
+                        content
+                            .iter()
+                            .rev()
+                            .find(|b| {
+                                let t = b.get("type").and_then(Value::as_str);
+                                t == Some("output_text") || t == Some("text")
+                            })
+                            .and_then(|b| b.get("text").and_then(Value::as_str))
+                    } else if let Some(text_str) = payload.get("content").and_then(Value::as_str) {
+                        Some(text_str)
+                    } else if let Some(text_str) = payload.get("text").and_then(Value::as_str) {
+                        Some(text_str)
+                    } else {
+                        None
+                    };
+
+                    let line = text_opt.and_then(last_non_empty_line).unwrap_or_default();
+
+                    match phase {
+                        Some("final_answer") => {
+                            if codex_final_answer.is_none() {
+                                codex_final_answer = Some(line);
+                            }
+                        }
+                        Some("commentary") => {
+                            if codex_commentary.is_none() {
+                                codex_commentary = Some(line);
+                            }
+                        }
+                        _ => {
+                            if codex_other.is_none() {
+                                codex_other = Some(line);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Codex event_msg task_complete with last_agent_message:
+        if ev_type == "event_msg" {
+            if let Some(payload) = event.get("payload") {
+                if payload.get("type").and_then(Value::as_str) == Some("task_complete") {
+                    if let Some(msg) = payload.get("last_agent_message").and_then(Value::as_str) {
+                        let line = last_non_empty_line(msg).unwrap_or_default();
+                        if codex_final_answer.is_none() {
+                            codex_final_answer = Some(line);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(ans) = codex_final_answer {
+        return Some(ans);
+    }
+    if let Some(com) = codex_commentary {
+        return Some(com);
+    }
+    if let Some(oth) = codex_other {
+        return Some(oth);
+    }
+
     None
 }
 

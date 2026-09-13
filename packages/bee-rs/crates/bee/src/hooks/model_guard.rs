@@ -382,26 +382,19 @@ fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) 
 /// carry, or a slot the config explicitly turned off), which the door drops
 /// rather than printing a name with nothing behind it.
 ///
-/// **`effort` is NOT rendered, and that is the point.** model-role-split
-/// records `effort` as a known NON-delivery (plan S10), so printing it here
-/// was the door stating a fact no dispatch carries — the same silent-lie
-/// shape this feature exists to remove. Three separate facts, because the two
-/// runtimes fail for DIFFERENT reasons:
+/// This display still omits effort; it describes the configured role, not
+/// observed execution settings. Configuration delivery and enforcement are
+/// separate facts:
 ///
-/// * `team.<runtime>.<role>` accepts `{model, effort}` and
-///   `normalize_tier_value` keeps the value, so it does reach
-///   `Resolved::Model`. Config and parsing are not the gap.
-/// * On CLAUDE it dies at the door: every `Resolved::Model` site in
-///   `verbs/drivers/prepare.rs` destructures `{ model, .. }`, and the Agent
-///   tool takes no effort parameter to carry it even if they did not. That
-///   half is a harness limit, not a bee gap.
-/// * On CODEX it dies for a different reason, and this one IS bee's own: only
-///   the `native` transport arm emits `reasoning_effort`. A `Resolved::Model`
-///   on codex falls into the `spawn_agent` arm, which emits neither `model`
-///   nor `reasoning_effort` — on the one runtime that demonstrably accepts
-///   it. The claude harness explanation does NOT cover this half, and anyone
-///   who reads "harness limit" and takes the whole thing as closed is reading
-///   past a live gap.
+/// * `normalize_tier_value` retains configured `{model, effort}` values.
+/// * Claude's Agent interface has no effort parameter.
+/// * Codex payload preparation carries model and effort for both Model and
+///   Native settings when that route is supported. Read-only jobs use the
+///   CLI's model and effort arguments instead.
+/// * A prepared setting is not proof of host enforcement. Codex 0.154.0
+///   hides the native role message from installed hooks, so preparation
+///   refuses that native cell route. Effective-model reporting remains
+///   separate from this role display.
 ///
 /// leader-sees-team D1/D4: render a role as `<model> (native)` for a native slot,
 /// `<declared-model> (herding: <agent>)` for a herding slot with a declared model,
@@ -709,23 +702,21 @@ fn role_for_pinned_type(subagent_type: &str) -> Option<&'static str> {
     crate::verbs::drivers::role_for_agent(subagent_type)
 }
 
+fn is_read_only_role(role: &str) -> bool {
+    matches!(
+        role,
+        "read" | "review" | "reviewer" | "gather" | "advisor" | "extraction"
+    ) || crate::verbs::drivers::SEAT_ROLES.contains(&role)
+}
+
 fn evaluate_codex_spawn(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
     let Some(message) = obj.get("message").and_then(Value::as_str) else { return no_opinion() };
     if message.is_empty() {
         return no_opinion();
     }
-    match marker_of(&Value::String(message.to_string()), models, "codex") {
-        Some(Marker::Role(role)) => allow("codex-spawn-marker", Some(role), None, None),
-        // model-role-split D2: a marker IS present and names a role bee
-        // cannot resolve. Under the deleted CODEX_TIERS list this read as no
-        // marker at all and earned the unmarked refusal below, which never
-        // said the one thing worth saying — that the name itself is the
-        // problem. The spawn is still refused; now it is refused by name.
-        Some(Marker::Unconfigured(name)) => {
-            let reason = unconfigured_role_reason(&name, models, "codex");
-            deny(reason, "codex-spawn-role-unconfigured", Some(name), None, None)
-        }
+    let marker = match marker_of(&Value::String(message.to_string()), models, "codex") {
+        Some(m) => m,
         None => {
             let roles = role_list(models, "codex");
             let reason = format!(
@@ -735,9 +726,171 @@ parity, codex-native-runtime-v2 D4, i54-closeout D1). A marker anywhere but the 
 start of the message does not count, and a marker in any other field is ignored; \
 without one the spawned worker silently inherits the session model.\n\
 FIX: begin the spawn message with the marker, e.g. \
-\"[bee-tier: generation] <task>\" (configured roles: {roles})."
+\"[bee-tier: generation] <task>\" (configured roles: {roles}). \
+If that marker was already present, the host hid the message from this hook. \
+Codex 0.154.0 has this observed limitation: use a configured herding/CLI transport, \
+or return the refusal to the leader for an escalated cell. Do not retry the same opaque native input."
             );
-            deny(reason, "codex-spawn-unmarked", None, None, None)
+            return deny(reason, "codex-spawn-unmarked", None, None, None);
+        }
+    };
+
+    let role = match marker {
+        Marker::Role(r) => r,
+        Marker::Unconfigured(name) => {
+            let reason = unconfigured_role_reason(&name, models, "codex");
+            return deny(reason, "codex-spawn-role-unconfigured", Some(name), None, None);
+        }
+    };
+
+    let model_param = obj
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+    let effort_param = obj
+        .get("reasoning_effort")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+    let fork_turns_val = obj.get("fork_turns");
+    let is_explicit_fork = match fork_turns_val {
+        Some(Value::String(s)) => {
+            let trimmed = s.trim();
+            trimmed == "none" || (trimmed.parse::<u64>().is_ok_and(|n| n > 0))
+        }
+        Some(Value::Number(n)) => n.as_u64().is_some_and(|num| num > 0),
+        _ => false,
+    };
+    let is_full_fork = !is_explicit_fork;
+
+    // Full-history fork inherits parent model/effort and cannot carry overrides
+    if is_full_fork && (model_param.is_some() || effort_param.is_some()) {
+        let reason = format!(
+            "bee-model-guard: a full-history fork (\"fork_turns\": \"all\" or omitted) inherits the parent \
+session's model and reasoning effort, so it cannot carry model or reasoning_effort overrides.\n\
+FIX: remove the overrides to inherit the parent session settings, or set \"fork_turns\" to \"none\" \
+or a numeric turn count to apply explicit settings."
+        );
+        return deny(reason, "codex-spawn-full-fork-override-denied", Some(role), model_param, None);
+    }
+
+    // Escalated role preserves parent model without overrides
+    if role == crate::verbs::drivers::ESCALATION_WORD {
+        if model_param.is_some() || effort_param.is_some() {
+            let reason = format!(
+                "bee-model-guard: an escalated role (\"[bee-tier: {role}]\") preserves the parent \
+model without overrides (codex parity D1).\n\
+FIX: omit model and reasoning_effort from the spawn_agent input to run on the parent model."
+            );
+            return deny(reason, "codex-spawn-escalation-override-denied", Some(role), model_param, None);
+        }
+        return allow("codex-spawn-marker", Some(role), None, None);
+    }
+
+    // Read-only roles cannot be safely enforced via native spawn_agent
+    if is_read_only_role(&role) {
+        let reason = format!(
+            "bee-model-guard: native Codex spawn_agent cannot enforce read-only filesystem restrictions \
+for role \"{role}\" (current spawn schema carries no sandbox field).\n\
+FIX: use prepare to obtain a CLI read-only sandbox dispatch (\"codex exec --sandbox read-only --ephemeral\"), \
+or run via herding/CLI if configured."
+        );
+        return deny(reason, "codex-spawn-read-only-unenforceable", Some(role), model_param, None);
+    }
+
+    let resolved = resolve_tier(models, &role, "codex", GUARD_PURPOSE);
+    match resolved {
+        Resolved::Herding { .. } => {
+            let reason = format!(
+                "bee-model-guard: role \"{role}\" resolves to a herding-executor pane, not a native spawn_agent.\n\
+FIX: dispatch this role via `bee herding run` (or `bee dispatch prepare --runtime codex --role {role}`)."
+            );
+            deny(reason, "codex-spawn-herding-tier-denied", Some(role), model_param, None)
+        }
+        Resolved::Cli { .. } | Resolved::Refused { .. } => {
+            let reason = format!(
+                "bee-model-guard: role \"{role}\" resolves to a cli executor, not a native spawn_agent.\n\
+FIX: execute the configured CLI command directly."
+            );
+            deny(reason, "codex-spawn-cli-tier-denied", Some(role), model_param, None)
+        }
+        Resolved::Budget => {
+            if let Some(param) = &model_param {
+                let reason = format!(
+                    "bee-model-guard: [bee-tier: {role}] resolves to no model name, but the dispatch carries model: \"{param}\". \
+The marker would record one thing in dispatch.jsonl while the subagent actually runs on the param.\n\
+FIX: drop the model param (the marker alone selects the tier), or drop the marker and declare the tier whose configured model equals the param you intended."
+                );
+                deny(reason, "param-on-nameless-tier", Some(role), model_param, None)
+            } else if effort_param.is_some() {
+                let reason = format!(
+                    "bee-model-guard: [bee-tier: {role}] resolves to no model name, but the dispatch carries reasoning_effort.\n\
+FIX: drop the reasoning_effort parameter."
+                );
+                deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None)
+            } else {
+                allow("codex-spawn-marker", Some(role), None, None)
+            }
+        }
+        Resolved::Model { model: ref cfg_model, effort: ref cfg_effort }
+        | Resolved::Native { model: ref cfg_model, effort: ref cfg_effort, .. } => {
+            match &model_param {
+                None => {
+                    let reason = format!(
+                        "bee-model-guard: role \"{role}\" requires configured model \"{cfg_model}\", but spawn_agent carries no model parameter (which would silently inherit a different parent model).\n\
+FIX: specify model: \"{cfg_model}\" in spawn_agent."
+                    );
+                    return deny(reason, "codex-spawn-model-mismatch", Some(role), None, None);
+                }
+                Some(m) if m != cfg_model => {
+                    let reason = format!(
+                        "bee-model-guard: spawn_agent model: \"{m}\" does not match configured model \"{cfg_model}\" for role \"{role}\".\n\
+FIX: set model: \"{cfg_model}\"."
+                    );
+                    return deny(reason, "codex-spawn-model-mismatch", Some(role), model_param, None);
+                }
+                _ => {}
+            }
+
+            match (cfg_effort.as_deref(), effort_param.as_deref()) {
+                (Some(expected), None) => {
+                    let reason = format!(
+                        "bee-model-guard: role \"{role}\" requires configured reasoning effort \"{expected}\", but spawn_agent carries no reasoning_effort parameter.\n\
+FIX: specify reasoning_effort: \"{expected}\" in spawn_agent."
+                    );
+                    return deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None);
+                }
+                (Some(expected), Some(actual)) if actual != expected => {
+                    let reason = format!(
+                        "bee-model-guard: spawn_agent reasoning_effort: \"{actual}\" does not match configured reasoning effort \"{expected}\" for role \"{role}\".\n\
+FIX: set reasoning_effort: \"{expected}\"."
+                    );
+                    return deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None);
+                }
+                (None, Some(actual)) => {
+                    let reason = format!(
+                        "bee-model-guard: role \"{role}\" has no configured reasoning effort, but spawn_agent carries reasoning_effort: \"{actual}\".\n\
+FIX: omit the reasoning_effort parameter."
+                    );
+                    return deny(reason, "codex-spawn-effort-mismatch", Some(role), model_param, None);
+                }
+                _ => {}
+            }
+            allow("codex-spawn-marker", Some(role), model_param, None)
+        }
+        Resolved::Inherit => {
+            if model_param.is_some() || effort_param.is_some() {
+                let reason = format!(
+                    "bee-model-guard: role \"{role}\" inherits the session model without overrides.\n\
+FIX: omit model and reasoning_effort parameters."
+                );
+                deny(reason, "codex-spawn-escalation-override-denied", Some(role), model_param, None)
+            } else {
+                allow("codex-spawn-marker", Some(role), None, None)
+            }
         }
     }
 }
@@ -1205,16 +1358,23 @@ fn derive_dispatch_economics(
         _ => None,
     });
 
-    // nativeConfirmed is never passed by the hook => always false.
     let enforcement = if is_codex_spawn {
-        "prompt-budget"
+        if param_model.is_some() {
+            "native-model-param"
+        } else {
+            "prompt-budget"
+        }
     } else if param_model.is_some() {
         "model-param"
     } else {
         "prompt-budget"
     };
     let (effective_model, effective_status) = if is_codex_spawn {
-        (None, "inherited-or-unknown")
+        if param_model.is_some() {
+            (None, "native-requested")
+        } else {
+            (None, "inherited-or-unknown")
+        }
     } else if let Some(p) = param_model {
         (Some(p), "pinned")
     } else if declared.is_some() {
@@ -2174,8 +2334,14 @@ mod tests {
 
     #[test]
     fn codex_spawn_rules() {
-        let fx = fixture(&repo_config());
-        // anchored marker -> allow, codex economics inherited-or-unknown
+        let budget_cfg = json!({
+            "models": {
+                "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": "fable" },
+                "codex": { "extraction": null, "generation": null }
+            }
+        });
+        let fx = fixture(&budget_cfg);
+        // anchored marker -> allow on budget tier, codex economics inherited-or-unknown
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: generation] gather the callers"}}));
         assert_eq!(code, 0);
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
@@ -2186,7 +2352,7 @@ mod tests {
         assert_eq!(d["enforcement"], "prompt-budget");
         assert_eq!(d["effective_model_status"], "inherited-or-unknown");
         assert_eq!(d["effective_model"], Value::Null);
-        assert_eq!(d["requested_model"], "gpt-5.5");
+        assert_eq!(d["requested_model"], Value::Null);
         // mid-message marker -> deny, Codex-shaped
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "please [bee-tier: generation] do it"}}));
         assert_eq!(code, 2);
@@ -2220,17 +2386,13 @@ mod tests {
         // doc-canonical marked shape + extras tolerated
         for ti in [
             json!({"task_name": "wt-a1", "message": "[bee-tier: generation] gather", "fork_turns": "none"}),
-            json!({"agent_type": "worker", "message": "[bee-tier: review] check", "extra": 1, "task_name": "x"}),
+            json!({"agent_type": "worker", "message": "[bee-tier: generation] check", "extra": 1, "task_name": "x"}),
         ] {
             let (code, _) = run_payload(fx.path(), json!({"tool_name": "spawn_agent", "tool_input": ti}));
             assert_eq!(code, 0);
         }
-        // The advisor tier, on a host that CONFIGURES one. `repo_config`'s
-        // codex table does not, and the row used to run there and pass —
-        // `known_roles` handed every dispatch-door slot out as legal whether
-        // the host configured it or not, so this spawn inherited the session
-        // model in silence. It is a refusal there now, so the acceptance row
-        // states its own precondition.
+        // The advisor tier is a read-only role and current spawn has no sandbox,
+        // plus full-history fork with overrides is rejected:
         let advisor = fixture(&json!({"models": {
             "codex": {"extraction": "gpt-5.5", "generation": "gpt-5.5", "advisor": "gpt-5.5"}
         }}));
@@ -2238,10 +2400,9 @@ mod tests {
             advisor.path(),
             json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: advisor] consult", "model": "totally-different", "reasoning_effort": "extreme", "fork_turns": "full"}}),
         );
-        assert_eq!(code, 0, "{stderr}");
+        assert_eq!(code, 2, "mismatched override / read-only native request must refuse: {stderr}");
         let d = last_jsonl(dispatch_log(advisor.path())).unwrap();
-        assert_eq!(d["transport"], "codex-spawn-marker");
-        assert_eq!(d["tier"], "advisor");
+        assert!(d["transport"] == "codex-spawn-full-fork-override-denied" || d["transport"] == "codex-spawn-read-only-unenforceable" || d["transport"] == "codex-spawn-model-mismatch");
         // Same spawn, same marker, on the host with no codex advisor.
         let (code, stderr) = run_payload(
             fx.path(),
@@ -2251,6 +2412,366 @@ mod tests {
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "codex-spawn-role-unconfigured");
         assert_eq!(d["tier"], "advisor");
+    }
+
+    #[test]
+    fn codex_spawn_mismatched_model_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-4o",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "mismatched model must refuse: {stderr}");
+        assert!(stderr.contains("model: \"gpt-4o\" does not match configured model \"gpt-5.5\""));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-model-mismatch");
+    }
+
+    #[test]
+    fn codex_spawn_mismatched_effort_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": {"model": "gpt-5.5", "effort": "low"}}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "reasoning_effort": "high",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "mismatched effort must refuse: {stderr}");
+        assert!(stderr.contains("reasoning_effort: \"high\" does not match"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-effort-mismatch");
+    }
+
+    #[test]
+    fn codex_spawn_full_fork_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "full"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "full fork with override must refuse: {stderr}");
+        assert!(stderr.contains("full-history fork") && stderr.contains("cannot carry"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-full-fork-override-denied");
+    }
+
+    #[test]
+    fn codex_spawn_escalation_override_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: ceiling] fix",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "escalation with override must refuse: {stderr}");
+        assert!(stderr.contains("preserves the parent model without overrides"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-escalation-override-denied");
+    }
+
+    #[test]
+    fn codex_spawn_herding_and_cli_tiers_denied() {
+        let fx = fixture(&json!({"models": {
+            "codex": {
+                "herded": {"kind": "herding", "agent": "worker-1"},
+                "cli_role": {"kind": "cli", "command": "my-tool"}
+            }
+        }}));
+        let (code_h, stderr_h) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: herded] run",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_h, 2, "herding role cannot escape via spawn: {stderr_h}");
+        assert!(stderr_h.contains("resolves to a herding-executor pane"));
+        let d_h = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d_h["transport"], "codex-spawn-herding-tier-denied");
+
+        let (code_c, stderr_c) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: cli_role] run",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_c, 2, "cli role cannot escape via spawn: {stderr_c}");
+        assert!(stderr_c.contains("resolves to a cli executor"));
+        let d_c = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d_c["transport"], "codex-spawn-cli-tier-denied");
+    }
+
+    #[test]
+    fn codex_spawn_read_only_roles_refused_as_unenforceable() {
+        let fx = fixture(&json!({"models": {
+            "codex": {
+                "read": "gpt-5.5",
+                "review": "gpt-5.5",
+                "advisor": "gpt-5.5"
+            }
+        }}));
+        for role in ["read", "review", "advisor"] {
+            let (code, stderr) = run_payload(
+                fx.path(),
+                json!({
+                    "tool_name": "spawn_agent",
+                    "tool_input": {
+                        "task_name": "task",
+                        "message": format!("[bee-tier: {role}] check facts"),
+                        "fork_turns": "none"
+                    }
+                }),
+            );
+            assert_eq!(code, 2, "read-only role {role} must refuse: {stderr}");
+            assert!(stderr.contains("cannot enforce read-only filesystem restrictions"), "{stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["transport"], "codex-spawn-read-only-unenforceable");
+        }
+    }
+
+    #[test]
+    fn codex_spawn_budget_with_overrides_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": null}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 2, "budget with override must refuse: {stderr}");
+        assert!(stderr.contains("resolves to no model name"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "param-on-nameless-tier");
+    }
+
+    #[test]
+    fn codex_spawn_valid_configured_settings_allowed() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": {"model": "gpt-5.5", "effort": "high"}}
+        }}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "reasoning_effort": "high",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code, 0, "matching settings must allow: {stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-marker");
+        assert_eq!(d["tier"], "generation");
+        assert_eq!(d["requested_model"], "gpt-5.5");
+        assert_eq!(d["enforcement"], "native-model-param");
+        assert_eq!(d["effective_model_status"], "native-requested");
+    }
+
+    #[test]
+    fn codex_spawn_full_fork_override_with_all_and_omitted_refused() {
+        let fx = fixture(&json!({"models": {
+            "codex": {"generation": "gpt-5.5"}
+        }}));
+        // fork_turns: "all" with override must refuse
+        let (code_all, stderr_all) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "all"
+                }
+            }),
+        );
+        assert_eq!(code_all, 2, "fork_turns all with override must refuse: {stderr_all}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-full-fork-override-denied"
+        );
+
+        // omitted fork_turns with override must refuse (defaults to all)
+        let (code_omit, stderr_omit) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5"
+                }
+            }),
+        );
+        assert_eq!(code_omit, 2, "omitted fork_turns with override must refuse: {stderr_omit}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-full-fork-override-denied"
+        );
+
+        // fork_turns: "5" (numeric) with matching override is valid
+        let (code_num, stderr_num) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "5"
+                }
+            }),
+        );
+        assert_eq!(code_num, 0, "numeric fork_turns with matching settings must allow: {stderr_num}");
+
+        // fork_turns: "none" with matching override is valid
+        let (code_none, stderr_none) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_none, 0, "fork_turns none with matching settings must allow: {stderr_none}");
+    }
+
+    #[test]
+    fn codex_spawn_configured_model_requires_explicit_settings() {
+        let fx = fixture(&json!({"models": {
+            "codex": {
+                "generation": {"model": "gpt-5.5", "effort": "high"},
+                "budget_role": null
+            }
+        }}));
+
+        // Absent model on configured role must refuse rather than silently inheriting parent
+        let (code_no_model, stderr_no_model) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_no_model, 2, "absent model on configured role must refuse: {stderr_no_model}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-model-mismatch"
+        );
+
+        // Absent effort when configured must refuse
+        let (code_no_effort, stderr_no_effort) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: generation] build",
+                    "model": "gpt-5.5",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_no_effort, 2, "absent effort when configured must refuse: {stderr_no_effort}");
+        assert_eq!(
+            last_jsonl(dispatch_log(fx.path())).unwrap()["transport"],
+            "codex-spawn-effort-mismatch"
+        );
+
+        // Null/budget role inherits without overrides
+        let (code_budget, stderr_budget) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: budget_role] build",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_budget, 0, "budget role without overrides must allow: {stderr_budget}");
+
+        // Escalation inherits without overrides
+        let (code_esc, stderr_esc) = run_payload(
+            fx.path(),
+            json!({
+                "tool_name": "spawn_agent",
+                "tool_input": {
+                    "task_name": "task",
+                    "message": "[bee-tier: ceiling] build",
+                    "fork_turns": "none"
+                }
+            }),
+        );
+        assert_eq!(code_esc, 0, "escalation without overrides must allow: {stderr_esc}");
     }
 
     // Rows 11/12/15/16 — the fail-open arms the existing malformed-input test
@@ -2490,7 +3011,7 @@ mod tests {
         let message = "[bee-tier: generation] gather\nAssigned cell id: dlc-2\n";
         let (code, stdout, _) = run_full(
             fx.path(),
-            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": message, "task_name": "dlc-2"}}),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": message, "task_name": "dlc-2", "model": "gpt-5.5", "fork_turns": "none"}}),
         );
         assert_eq!(code, 0);
         let out = repair_output(&stdout);
@@ -2503,7 +3024,7 @@ mod tests {
         // when `prompt` (not the read field) carries one.
         let (code, stdout, _) = run_full(
             fx.path(),
-            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: generation] gather", "prompt": "Assigned cell id: dlc-2\n"}}),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: generation] gather", "prompt": "Assigned cell id: dlc-2\n", "model": "gpt-5.5", "fork_turns": "none"}}),
         );
         assert_eq!(code, 0);
         assert_eq!(stdout, "");
@@ -2715,10 +3236,10 @@ mod tests {
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "codex-spawn-role-unconfigured");
         assert_eq!(d["tier"], "tset");
-        // A codex role bee ships no default for is accepted on its own name.
+        // A codex role bee ships no default for is accepted on its own name with configured model.
         let (code, stderr) = run_payload(
             fx.path(),
-            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: design] draw it"}}),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: design] draw it", "model": "gpt-design", "fork_turns": "none"}}),
         );
         assert_eq!(code, 0, "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
@@ -3334,4 +3855,3 @@ mod tests {
         }
     }
 }
-

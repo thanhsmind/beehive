@@ -124,6 +124,14 @@ falls through to the advisory path with a visible log, never a crash.
   ordinary advisory. It never fires on compaction, child-stop, a missing event,
   the exploring/Gate-1 phase, or a `normal`-lane hard-gate change (GitHub #18).
 
+## Edge Cases Settled
+
+- On Codex, a parent session `Stop` event with a persisted transcript updates
+  repository `state.json.waiting_on` to `turn-end` (stored in repository state,
+  not per-session records) and transitions activity state to `idle`. Child subagent
+  completion (`SubagentStop`) is isolated from the parent turn and does not alter the
+  parent session's waiting state or activity journal.
+
 ## Pointers (implementation)
 
 - Shared adapter: `packages/bee/hooks/adapter.mjs` (`encodeAdvisory`; `encodeBlock` — the
