@@ -232,10 +232,14 @@ guess.
   B21 and decision 40c707ba say a turn boundary only. The behavior is the
   intended one (a prompt is a harder stop than a question) and is pinned by
   test; the rule text is not yet amended (backlog, 2026-08-22).
-- Only the first runtime's lifecycle events are observed today. The other
-  runtimes have no equivalent event set wired, so their sessions carry no
-  activity record and read as `no_signal` — correct by this concept's own
-  rule, but it is an absence of coverage rather than an absence of activity.
+- In the shipped Codex production manifest (`.codex/hooks.json`), `hook activity` is
+  wired ONLY on `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop`. `SessionStart`
+  runs `hook session-init`, while `SessionEnd` is not a shipped production activity hook
+  (it is observer-only in canary test harnesses). `SubagentStart` runs audit only;
+  `SubagentStop` runs audit, state sync, and chain nudge (neither runs `hook activity`).
+  The no-activity-on-child rule is unchanged. Parent `Stop` sets `waiting_on` to `turn-end`
+  in `.bee/state.json` (requiring a persisted transcript) and marks activity `idle`; child
+  `SubagentStop` is isolated so child completion does not alter the parent's idle state.
 - Nothing sweeps a `waiting_input` or `blocked` state left behind by a
   session that vanished without a turn boundary. Its heartbeat going stale,
   and then the session being swept, is what retires it.

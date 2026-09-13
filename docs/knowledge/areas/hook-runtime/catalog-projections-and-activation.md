@@ -35,10 +35,10 @@ definition.
   into projections. Claude Code and Codex each consume only their own
   rendered projection; the projections differ only by an explicitly named
   allowed list. The directional differences: both carry a pre-spawn dispatch
-  guard — Claude on its dispatch tools, Codex on its native spawn call,
-  judging only the envelope shape actually observed on the probed runtime
-  version and passing every unobserved shape through open — while Codex
-  alone has child-start and child-stop lifecycle audits
+  guard — Claude on its dispatch tools, Codex on its native spawn call
+  (`spawn_agent` and observed `collaborationspawn_agent`), enforcing configured
+  model and reasoning effort while refusing unverifiable or opaque native
+  dispatch — while Codex alone has child-start and child-stop lifecycle audits
   (codex-native-runtime-v2, cnr2-8).
 - OpenCode's own before-tool checkpoint surface has no abort or deny return
   value at all — the surface can only proceed normally or raise an error —
@@ -69,8 +69,7 @@ definition.
 | projection | The runtime-specific checkpoint list Claude Code or Codex actually loads. One per runtime, checked in, never hand-divergent. |
 | runtime's own belt | A runtime's hand-authored equivalent of a projection: one project file translating that runtime's own events into the same helper calls every projection makes, held to the catalog's coverage guarantee by a derived registry check rather than by shared generation. Two runtimes carry one — OpenCode and Pi. |
 | allowed difference | A named, exported exception explaining why one projection — or one runtime's own belt — carries or omits a checkpoint the others do not. Any un-named difference is a defect. |
-| reviewed definition | The exact command definition the owner has inspected and trusted. A new or changed non-managed definition does not run until it is reviewed again. |
-| activity checkpoint set | The lifecycle checkpoints that record what a session is doing rather than judging it. Claude carries prompt, before-tool, after-tool, after-tool-failure, permission request, stop, notification, and session end. Codex carries its supported shared events: prompt, before-tool, after-tool, and stop. One handler serves all events. No runtime records activity on `SubagentStop`. What the handler writes is in `agent-activity-record.md` (decision b17bfa89). |
+| activity checkpoint set | The lifecycle checkpoints that record what a session is doing rather than judging it. Claude carries prompt, before-tool, after-tool, after-tool-failure, permission request, stop, notification, and session end. Codex carries activity on its supported shipped events: prompt, before-tool, after-tool, and stop (`SessionStart` runs `session-init`, and `SessionEnd` is observer-only in canary test harnesses, not in the shipped manifest). One handler serves all activity events. No runtime records activity on `SubagentStart` or `SubagentStop` (`SubagentStart` runs audit only; `SubagentStop` runs audit, state sync, and chain nudge). What the handler writes is in `agent-activity-record.md` (decision b17bfa89). |
 
 ## Behaviors & Operations
 
@@ -297,6 +296,10 @@ recovery.
   session — but, under OpenCode's current dispatch mechanism, one dispatch
   runs at a time; concurrent dispatch is expected once OpenCode's own
   upstream limitation closes (opencode-support D5, oc-12).
+- Source wiring and actual observed events remain distinct on Codex: while
+  `apply_patch`, `Bash`, and unmarked `spawn_agent` denials (`codex-spawn-unmarked`, exit 2) are live-verified in the
+  canary runner, Windows live execution, PreCompact compaction flushes, and
+  native privacy/reservation blocking remain untested live in canary.
 
 ## Pointers (implementation)
 

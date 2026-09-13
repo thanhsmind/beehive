@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: Hook Runtime — the native spawn checkpoint and transport classification
-description: "Why the second runtime's spawn checkpoint deliberately passes an override field through unjudged until a capability probe has observed it, how that probe's version- and configuration-scoped verdict is recorded and invalidated, and the cross-build regression that proved the version leg load-bearing."
+description: "How the second runtime's spawn checkpoint judges role markers and settings, why dispatch prepare classifies 0.154.0 as native_hook_input_opaque and refuses unverifiable native cell dispatch while model guard denies unmarked spawn as codex-spawn-unmarked (exit 2), how capability probe verdicts are recorded and invalidated, and the cross-build regression that proved the version leg load-bearing."
 timestamp: 2026-07-22
 bee:
   id: hook-runtime-native-spawn-and-transport-classification
@@ -15,47 +15,46 @@ bee:
 
 # Hook Runtime — the native spawn checkpoint and transport classification
 
-The dispatch guard judges what it has observed. This concept is about what it has
-deliberately chosen not to judge yet: a per-agent model, effort or fork-turn
-override riding on a marker-anchored native spawn. Implementing that check
-against a shape no client has ever actually sent would mean denying on an
-assumption, so the check waits on evidence — and the evidence itself is a
-scoped, invalidatable record rather than a remembered verdict.
+The dispatch guard judges what it has observed. It validates role markers, configured
+models, reasoning effort, and fork turns on native spawn requests. When host delivery
+conceals the marker behind an opaque payload, `evaluate_codex_spawn` in `model_guard.rs`
+cannot see the marker and returns transport `codex-spawn-unmarked` with exit 2. In turn,
+`installed_native_transport_classification` in `prepare.rs` measures the client version,
+classifies it as `native_hook_input_opaque`, and `bee dispatch prepare` refuses
+unverifiable native cell dispatch rather than allowing an unverified run.
+Capability classification and probe records govern whether verified
+overrides can run natively or must route through explicit external CLI or herding
+transports.
 
 ## Data Dictionary
 
 | Element | Meaning |
 |---|---|
-| native-transport classification | The three-way verdict a capability probe assigns a second-runtime client from observed evidence: `native_model_override` (a native per-agent model override is confirmed accepted), `native_budget_only` (today's default — no override proven), or `external_cli_only` (the base spawn transport itself is confirmed off). Unknown or absent evidence always reads `native_budget_only` — the native-override transport stays inert until proven (codex-native-transport D3). |
+| native-transport classification | The verdict `installed_native_transport_classification` in `prepare.rs` or a capability probe assigns a second-runtime client from observed evidence: `native_model_override` (a native per-agent model override is confirmed accepted), `native_budget_only` (default — no override proven), `external_cli_only` (the base spawn transport itself is confirmed off), or `native_hook_input_opaque` (the host delivers opaque tool messages concealing role markers, so dispatch prepare refuses native cell dispatch). Unknown or absent evidence reads `native_budget_only` — the native-override transport stays inert until proven (codex-native-transport D3). |
 | native-transport probe record | A separate, gitignored, version- and configuration-scoped record — distinct from doctor-attest, whose legs cannot see a feature-flag change — holding the classification and the evidence it was derived from. Independent validity legs invalidate a stale verdict back to `native_budget_only` and name the reason: no record on disk, a repository-identity mismatch, a version mismatch, a corrupted configuration-scope hash, or a live re-check that disagrees with the recorded configuration scope (codex-native-transport D3, Δ2-amended). |
 
 ## Behaviors & Operations
 
-**B19 — The Codex native spawn checkpoint deliberately does not judge an
-override an anchored spawn carries.** When a marker-anchored native spawn
-also names a per-agent model, effort level, or fork-turn count, the
-checkpoint's decision is unchanged from a spawn without those fields: a valid
-marker still allows, an unmarked message still denies, and the named fields
-themselves are never read or compared against anything. This is a
-deliberate defense-in-depth allow-hole, not an oversight — validating those
-fields against the configured route was locked as a future rule, but no
-observed client input has ever carried them into the checkpoint yet on any
-version checked, so implementing the check now would mean denying against
-assumed rather than observed shape. It stays this way until the capability
-probe (native-transport probe record, above) observes that envelope on a
-client version — only then does the route-check activate. Proven by an
-allow/deny row pair: a marker-anchored spawn with override fields that
-mismatch any plausible configured route is still allowed, unaffected; the
-identical override fields on an unmarked message are still denied,
-unaffected (codex-native-transport D6; decision 350f1e82).
+**B19 — The Codex native spawn checkpoint enforces configured settings and refuses unverifiable overrides (codex-parity D1, cpc-2).**
+The pre-spawn guard validates the role marker, model, reasoning_effort, and
+fork_turns against the configured route. Full-history forks cannot carry
+overrides; escalated roles preserve the parent model; read-only roles cannot use
+native spawn because the callable schema has no filesystem sandbox field. On
+Codex 0.154.0, native input arrives with an opaque message body: `evaluate_codex_spawn`
+in `model_guard.rs` cannot see the required marker and denies unmarked spawn as
+transport `codex-spawn-unmarked` (exit 2). At preparation time,
+`installed_native_transport_classification` in `prepare.rs` classifies the version as
+`native_hook_input_opaque`, and `bee dispatch prepare` refuses unverifiable native
+cell dispatch, directing callers to configured herding/CLI routes.
 
 ## Business Rules
 
-- R18 — The Codex native spawn checkpoint never judges a per-agent model,
-  effort, or fork-turn override by name until the capability probe has
-  observed that field arrive on some client version; until then, a
-  marker-anchored spawn carrying such fields decides exactly as it would
-  without them (B19; codex-native-transport D6, decision 350f1e82).
+- R18 — The Codex native spawn checkpoint governs model, effort, and fork
+  parameters against configured roles. Unverifiable native dispatch is refused
+  at prepare time (`native_hook_input_opaque`), and unmarked native spawn calls
+  are denied by `model-guard` as `codex-spawn-unmarked` (exit 2); read-only jobs
+  require an enforceable execution boundary; full-history forks and escalated roles
+  cannot carry model overrides (B19; codex-parity D1).
 
 ## Edge Cases Settled
 
@@ -65,16 +64,13 @@ unaffected (codex-native-transport D6; decision 350f1e82).
   feature flag plus the metadata-visibility flag — when the client is not yet
   confirmed and the installed binary ships the flag; the row is never
   blocking and never degrading, and bee never flips the flag in the user's
-  real configuration itself (a canary probe may only do so inside its own
-  isolated per-run home) (codex-native-transport D3/D4). The probe's live
-  check leg runs entirely inside that isolated per-run home — never the
-  user's real configuration — and the isolation is independently verified
-  byte-identical before and after each run, not merely asserted; it records
-  whatever it observes, including a refused or absent outcome, into both the
-  scoped machine record and a human-readable evidence report, and a separate
-  offline self-check exercises the same isolation invariant without needing
-  the client installed at all, so automated verification stays green when the
-  client binary is absent (codex-native-transport D3/D4).
+  real configuration itself (canary probe isolation is scoped to `CANARY_CODEX_HOME`
+  and `TMPDIR`; note that PATH probes can reach the host `mise` wrapper, so user-global
+  configuration is not claimed to be untouched by all test automation) (codex-native-transport D3/D4).
+  The probe's live check leg runs entirely inside that isolated per-run home,
+  records whatever it observes into both the scoped machine record and a human-readable
+  evidence report, and a separate offline self-check exercises the same isolation
+  invariant without needing the client installed at all (codex-native-transport D3/D4).
 
 - A capability probe's live check observed a real cross-build regression, not
   a hypothetical one: an override surface confirmed accepted on one client
@@ -86,35 +82,18 @@ unaffected (codex-native-transport D6; decision 350f1e82).
 
 ## Pointers (implementation)
 
-- Native-transport classification: `classifyNativeTransport(evidence)` (pure,
-  `packages/bee/lib/dispatch-guard.mjs`). Probe record reader/
-  writer and the D4 doctor row: `readNativeTransportClassification`,
-  `writeNativeTransportProbe`, `doctorNativeTransportUnlock`
-  (`the bee binary`, mirroring the doctor-attest pattern).
-  Suite: `scripts/tests/test_native_probe.mjs`. Advisor-marker acceptance on the
-  codex branch: `ANCHORED_CODEX_TIER_MARKER_RE` in `dispatch-guard.mjs`.
-  Evidence: `.bee/cells/cnt-2.json`, `.bee/cells/cnt-3.json`,
-  `docs/history/codex-native-transport/`.
-
-- Override-field pass-through gap (B19): documented inline above
-  `evaluateCodexSpawn` in `packages/bee/lib/dispatch-guard.mjs`
-  (mirrored in `.bee/bin/lib/dispatch-guard.mjs`); canary rows
-  `hooks/test_model_guard.mjs` rows 56-57. Evidence: `.bee/cells/cnt-4.json`,
-  `docs/history/codex-native-transport/reports/cnt-4.md`.
-
-- Capability probe live leg + offline self-check: `scripts/canary_codex.mjs`
-  `--probe` / `--probe-selftest`; probe leg protocol recorded in
-  `docs/decisions/ab-tiny-protocol.md`. Evidence: `.bee/cells/cnt-5.json`,
-  `docs/history/codex-native-transport/reports/probe-evidence.md`.
+- Native transport classification and dispatch preparation: `installed_native_transport_classification` and `native_transport_classification_with_cmd` in `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`.
+- Native spawn guard: `evaluate_codex_spawn` (returns `codex-spawn-unmarked` with exit 2 when markers are absent or hidden) in `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`.
+- Doctor attestation: `read_attestation` and `run_attest` in `packages/bee-rs/crates/bee/src/doctor.rs`.
+- Historical Node implementation (historical evidence):
+  `classifyNativeTransport` in `packages/bee/lib/dispatch-guard.mjs`,
+  `scripts/tests/test_native_probe.mjs`, and `scripts/canary_codex.mjs`.
+- Evidence: `.bee/cells/cnt-2.json`, `.bee/cells/cnt-3.json`, `.bee/cells/cnt-4.json`,
+  `.bee/cells/cnt-5.json`, `docs/history/codex-native-transport/`.
 
 ## Open Gaps
 
-- The Codex native spawn checkpoint's override-field route-check (validating
-  a spawn's requested model/effort/fork-count against the configured route,
-  per B19) is written as a design intent only. No client version checked so
-  far has ever carried those fields into the checkpoint's real input, so
-  there is nothing observed to validate against yet; implementing the check
-  before that evidence exists would deny based on assumed rather than
-  observed shape. It activates once the capability probe observes that
-  envelope on some client version (codex-native-transport D6; decision
-  350f1e82).
+- The Codex 0.154.0 hook interface delivers `collaborationspawn_agent` with an
+  opaque message body to `PreToolUse`. Native cell dispatches cannot verify role
+  markers directly through this interface, so enforceable execution relies on the
+  CLI read-only sandbox or configured herding/CLI transports.
