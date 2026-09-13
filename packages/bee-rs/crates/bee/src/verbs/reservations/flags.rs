@@ -34,6 +34,7 @@ pub(crate) const FLAG_ALONE_BOOLEANS: &[&str] = &[
     "no-cleanup", "force-ownership", "local", "all", "untagged", "check",
     "with-companion", "lanes-full", "strict", "queue-submit", "show",
     "isolate", "set", "brief", "all-but-active", "merge", "claim", "skip-uat",
+    "preview",
 ];
 
 #[derive(Clone, PartialEq)]
