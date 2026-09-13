@@ -16,7 +16,7 @@ Every locked decision lands in a cell. Both cells have bounded files, directive 
 
 ## Risks
 
-One blocker was found and fixed before this report. Multi-record close could close early records before finding a later planned-next record. The plan now requires a complete preflight before any close mutation. One unsafe target refuses the whole operation.
+One blocker was found and fixed before this report. Multi-record close could change one target before a planned-next record appeared in another target. The plan now requires a complete preflight before any close mutation. One unsafe target refuses the whole operation.
 
 The remaining high-risk controls are:
 

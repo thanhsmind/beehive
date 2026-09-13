@@ -59,11 +59,13 @@ Planning can choose the state command shape and the internal close transaction. 
 
 ## Outstanding questions
 
+<!-- bee:not-a-deferral: This historical section records questions that the completed plan resolved. -->
 ### Deferred to planning
 
 - Which command name gives a pause handoff an explicit dismissal without allowing a planned-next claim to disappear?
 - Should workflow close mark its open handoff records cleared, ignore closed workflows during projection rebuild, or apply both protections?
 - Which existing Pi sandbox test is the smallest reliable place to prove the full workflow tail?
+<!-- /bee:not-a-deferral -->
 
 ## Handoff note
 
