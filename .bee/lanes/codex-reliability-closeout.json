@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Four bounded repair cells approved; independent execution starts.",
-  "next_action": "Merge verified Codex reliability repairs into main and request user acceptance.",
+  "next_action": "Merge verified Windows test repair locally; request publication for Windows CI and preserve external cleanup blocker.",
   "created_at": "2026-09-13T06:48:11.405Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "Please test the merged Codex reliability repairs on main and confirm acceptance.",
-    "asked_at": "2026-09-13T07:37:26.407Z",
-    "session": "01a09911-9b86-7a30-8a6f-b22a78347d98"
-  },
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "high-risk",
@@ -36,8 +31,8 @@
   },
   "gate_preview": {
     "feature": "codex-reliability-closeout",
-    "plan_sha256": "55ccf1f66e9479f2ef449592a17cb20ef3689277681834e0293f326c8a526357",
-    "previewed_at": "2026-09-13T07:15:28.096Z",
+    "plan_sha256": "2bb4bcf7784048429dcae5adb22f4fc518aa28f65f9f767225a237075600f59f",
+    "previewed_at": "2026-09-13T08:31:13.465Z",
     "cells": [
       {
         "id": "crc-1",
@@ -273,22 +268,68 @@
           "files_changed": [],
           "deviations": [],
           "behavior_change": true
+        }
+      },
+      {
+        "id": "crc-5",
+        "title": "Initialize activity test environment before fixture mutation",
+        "role": "test",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+          "docs/history/codex-reliability-closeout/windows-activity.md"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md"
+        ],
+        "action": "Fix the Windows activity test isolation defect evidenced by GitHub Windows run 34709805168 on 7abaee23: three job-7 herded tests fail because no mailbox record exists. read_initial_herding_job_id uses /proc on Linux but live env fallback elsewhere. fire_herded sets job-7 before ambient OnceLock initializes, then herded_job treats job-7 as ambient and ignores it. Verify this causal path, preserve RED using a portable test-only fallback seam or isolated child process that exercises non-Linux read order on Linux. Initialize ambient state before temporary fixture environment mutation or use a smaller explicit test injection. Preserve real inherited-job suppression and ordinary session isolation. No production behavior changes, no disabling tests or guards. Reserve evidence before writing. Record exact commands and outputs in windows-activity.md. Use direct cargo PATH, TMPDIR=/var/tmp, BEE_CODEX_PROBE_BIN=/bin/false. Never invoke gh/codex/mise PATH wrappers. Do not push or launch cloud jobs. Commit once with cell: crc-5 trailer. Leader handles final judge and cap.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::activity::tests",
+        "deps": [],
+        "decisions": [
+          "d8fc4ab4-83ea-4522-98a8-bd6089633448"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "A portable regression detects first-call ambient capture after fixture mutation.",
+            "Herded activity tests record the intended mailbox on the fallback path.",
+            "Inherited ambient jobs remain excluded from ordinary tests.",
+            "Production activity behavior is unchanged."
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/codex-reliability-closeout/windows-activity.md",
+              "substantive": "Actual regression failure and repaired test output."
+            }
+          ],
+          "key_links": [
+            "Test setup initializes or isolates ambient identity before modifying process state."
+          ],
+          "prohibitions": [
+            "No guard removal, disabled tests, or Windows-success claim from Linux-only evidence."
+          ]
         }
       }
     ]
   },
   "advisor_ref": {
-    "consulted_at": "2026-09-13T07:03:20.186Z",
+    "consulted_at": "2026-09-13T08:31:13.572Z",
     "feature": "codex-reliability-closeout",
-    "newest_decision_id": "be57302a-9683-4f89-bc29-44111764389d",
-    "plan_sha256": "55ccf1f66e9479f2ef449592a17cb20ef3689277681834e0293f326c8a526357",
-    "advisor": "configured-five-perspective-wave",
+    "newest_decision_id": "d8fc4ab4-83ea-4522-98a8-bd6089633448",
+    "plan_sha256": "2bb4bcf7784048429dcae5adb22f4fc518aa28f65f9f767225a237075600f59f",
+    "advisor": "Prior hat-wave constraints retained for bounded Windows correction",
     "digest_head": "# Plan consult synthesis\n\nAll five configured perspectives returned: facts-gaps, risks, value, alternatives, user-impact.\nThree ran read-only Codex CLI; two ran configured herding. Requested models were gpt-5.6-sol, gpt-6-astra and gemini-3.8-flash-high. Effective backend identity was not independently proved.\n\n## Accepted\n- Corrected two stale load-bearing anchors from lines 67/81 to 62/76 before the gate.\n- F1 distinguishes future probe isolation from historical restoration. No before-image me"
   },
   "approved_cell_packet": {
     "feature": "codex-reliability-closeout",
-    "plan_sha256": "55ccf1f66e9479f2ef449592a17cb20ef3689277681834e0293f326c8a526357",
-    "previewed_at": "2026-09-13T07:02:29.565Z",
+    "plan_sha256": "2bb4bcf7784048429dcae5adb22f4fc518aa28f65f9f767225a237075600f59f",
+    "previewed_at": "2026-09-13T08:31:13.465Z",
     "cells": [
       {
         "id": "crc-1",
@@ -525,20 +566,72 @@
           "deviations": [],
           "behavior_change": true
         }
+      },
+      {
+        "id": "crc-5",
+        "title": "Initialize activity test environment before fixture mutation",
+        "role": "test",
+        "feature": "codex-reliability-closeout",
+        "lane": "high-risk",
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+          "docs/history/codex-reliability-closeout/windows-activity.md"
+        ],
+        "read_first": [
+          "docs/history/codex-reliability-closeout/CONTEXT.md",
+          "docs/history/codex-reliability-closeout/plan.md"
+        ],
+        "action": "Fix the Windows activity test isolation defect evidenced by GitHub Windows run 34709805168 on 7abaee23: three job-7 herded tests fail because no mailbox record exists. read_initial_herding_job_id uses /proc on Linux but live env fallback elsewhere. fire_herded sets job-7 before ambient OnceLock initializes, then herded_job treats job-7 as ambient and ignores it. Verify this causal path, preserve RED using a portable test-only fallback seam or isolated child process that exercises non-Linux read order on Linux. Initialize ambient state before temporary fixture environment mutation or use a smaller explicit test injection. Preserve real inherited-job suppression and ordinary session isolation. No production behavior changes, no disabling tests or guards. Reserve evidence before writing. Record exact commands and outputs in windows-activity.md. Use direct cargo PATH, TMPDIR=/var/tmp, BEE_CODEX_PROBE_BIN=/bin/false. Never invoke gh/codex/mise PATH wrappers. Do not push or launch cloud jobs. Commit once with cell: crc-5 trailer. Leader handles final judge and cap.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::activity::tests",
+        "deps": [],
+        "decisions": [
+          "d8fc4ab4-83ea-4522-98a8-bd6089633448"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "hook-runtime"
+        ],
+        "regen_obligation_ack": "wave-barrier",
+        "must_haves": {
+          "truths": [
+            "A portable regression detects first-call ambient capture after fixture mutation.",
+            "Herded activity tests record the intended mailbox on the fallback path.",
+            "Inherited ambient jobs remain excluded from ordinary tests.",
+            "Production activity behavior is unchanged."
+          ],
+          "artifacts": [
+            {
+              "path": "docs/history/codex-reliability-closeout/windows-activity.md",
+              "substantive": "Actual regression failure and repaired test output."
+            }
+          ],
+          "key_links": [
+            "Test setup initializes or isolates ambient identity before modifying process state."
+          ],
+          "prohibitions": [
+            "No guard removal, disabled tests, or Windows-success claim from Linux-only evidence."
+          ]
+        }
       }
     ]
   },
   "gate_revoked_at": {
-    "execution": "2026-09-13T07:03:19.885Z"
+    "execution": "2026-09-13T08:30:19.537Z"
   },
   "last_scribing_run": {
     "feature": "codex-reliability-closeout",
     "date": "2026-09-13",
-    "at": "2026-09-13T07:35:36.755Z",
+    "at": "2026-09-13T08:49:05.629Z",
     "areas_synced": [
-      "hook-runtime",
-      "workflow-state"
+      "hook-runtime"
     ],
-    "next_action": "Merge verified Codex reliability repairs into main and request user acceptance."
+    "next_action": "Merge verified Windows test repair locally; request publication for Windows CI and preserve external cleanup blocker."
+  },
+  "merge_ready": {
+    "since": "2026-09-13T08:48:49.801Z",
+    "branch": "wt/codex-reliability-closeout",
+    "worktree_id": "beehive--wt--codex-reliability-closeout",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

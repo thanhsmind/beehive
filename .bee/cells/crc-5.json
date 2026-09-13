@@ -1,0 +1,155 @@
+{
+  "id": "crc-5",
+  "title": "Initialize activity test environment before fixture mutation",
+  "role": "test",
+  "feature": "codex-reliability-closeout",
+  "lane": "high-risk",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "docs/history/codex-reliability-closeout/windows-activity.md"
+  ],
+  "read_first": [
+    "docs/history/codex-reliability-closeout/CONTEXT.md",
+    "docs/history/codex-reliability-closeout/plan.md"
+  ],
+  "action": "Fix the Windows activity test isolation defect evidenced by GitHub Windows run 34709805168 on 7abaee23: three job-7 herded tests fail because no mailbox record exists. read_initial_herding_job_id uses /proc on Linux but live env fallback elsewhere. fire_herded sets job-7 before ambient OnceLock initializes, then herded_job treats job-7 as ambient and ignores it. Verify this causal path, preserve RED using a portable test-only fallback seam or isolated child process that exercises non-Linux read order on Linux. Initialize ambient state before temporary fixture environment mutation or use a smaller explicit test injection. Preserve real inherited-job suppression and ordinary session isolation. No production behavior changes, no disabling tests or guards. Reserve evidence before writing. Record exact commands and outputs in windows-activity.md. Use direct cargo PATH, TMPDIR=/var/tmp, BEE_CODEX_PROBE_BIN=/bin/false. Never invoke gh/codex/mise PATH wrappers. Do not push or launch cloud jobs. Commit once with cell: crc-5 trailer. Leader handles final judge and cap.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::activity::tests",
+  "deps": [],
+  "decisions": [
+    "d8fc4ab4-83ea-4522-98a8-bd6089633448"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "hook-runtime"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "A portable regression detects first-call ambient capture after fixture mutation.",
+      "Herded activity tests record the intended mailbox on the fallback path.",
+      "Inherited ambient jobs remain excluded from ordinary tests.",
+      "Production activity behavior is unchanged."
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/codex-reliability-closeout/windows-activity.md",
+        "substantive": "Actual regression failure and repaired test output."
+      }
+    ],
+    "key_links": [
+      "Test setup initializes or isolates ambient identity before modifying process state."
+    ],
+    "prohibitions": [
+      "No guard removal, disabled tests, or Windows-success claim from Linux-only evidence."
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "crc-5-worker",
+    "outcome": "Repair Windows activity fixture first-call ordering.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "docs/history/codex-reliability-closeout/windows-activity.md",
+      "docs/history/codex-reliability-closeout/windows-red.log",
+      "docs/history/codex-reliability-closeout/windows-green.log"
+    ],
+    "deviations": [
+      "Leader completed stalled worker cell per decision aafa65ca-6f11-4c0c-a771-e6be102db070; actual Windows CI pending.",
+      "sync-ack: Test-only change; no skill or production contract changes. Existing hook-runtime knowledge owner records fallback regression and platform limitation."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T08:48:49.795Z",
+    "behavior_change": false,
+    "verification_evidence": "55 activity tests passed; full suite 3930 passed, zero failed, 20 ignored.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09911-9b86-7a30-8a6f-b22a78347d98",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::activity::tests",
+    "claimed_at": "2026-09-13T08:31:30.815Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "portable-first-call-fallback",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2012 starts fresh child processes and forces fallback before the first ambient capture. docs/history/codex-reliability-closeout/windows-red.log:159 shows 0 passed and 3 failed before repair; windows-green.log:222 shows 55 passed and 0 failed after repair."
+          },
+          {
+            "id": "inherited-job-control",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2017-2034 runs both inherited=false and inherited=true children, selects the existing inherited-job isolation test, requires 3 and 1 selected tests, and requires successful child status."
+          },
+          {
+            "id": "positive-child-test-counts",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2029-2032 requires stdout to contain running 3 tests or running 1 test. The passing parent regression contributes to windows-green.log:222."
+          },
+          {
+            "id": "no-nested-locks",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:2012-2034 uses isolated child processes and contains no added lock acquisition. docs/history/codex-reliability-closeout/windows-activity.md:13-15 records replacement of shared-cache injection with isolated children."
+          },
+          {
+            "id": "production-unchanged",
+            "status": "FAIL",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:665-668 changes non-test production code. BEE_TEST_FORCE_ENV_FALLBACK is not guarded by cfg(test), so any production process can set it and bypass /proc/self/environ."
+          }
+        ],
+        "failure_signature": "The test-only fallback switch changes production behavior because its branch is compiled and honored outside tests.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T08:47:46.467Z"
+      }
+    ],
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-09-13T08:48:49.795Z",
+        "reason": "False positive: git show 2f5e951b:packages/bee-rs/crates/bee/src/hooks/activity.rs lines 664-665 has #[cfg(test)] on read_initial_herding_job_id. The whole function is excluded from production. Raw finding and correction retained in windows-judge.json and remaining-validation.md.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ],
+    "sync_ack": "Test-only change; no skill or production contract changes. Existing hook-runtime knowledge owner records fallback regression and platform limitation.",
+    "mistakes": [
+      {
+        "wrong": "Judge prompt omitted the flat schema",
+        "better": "Supply exact schema."
+      },
+      {
+        "wrong": "Judge missed enclosing cfg(test)",
+        "better": "Read unchanged attributes."
+      },
+      {
+        "wrong": "cells finish omitted separate --files and --outcome fields",
+        "better": "Supply both separate arguments as well as report."
+      }
+    ],
+    "report": {
+      "outcome": "Repair Windows activity fixture first-call ordering.",
+      "commit": "2f5e951b8ce7cf0fb62abc4182c8875f53f9ac2a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "docs/history/codex-reliability-closeout/windows-activity.md",
+        "docs/history/codex-reliability-closeout/windows-red.log",
+        "docs/history/codex-reliability-closeout/windows-green.log"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::activity::tests — green:unit — 55 activity tests passed; full suite 3930 passed, zero failed, 20 ignored.",
+      "deviations": [
+        "Leader completed stalled worker cell per decision aafa65ca-6f11-4c0c-a771-e6be102db070; actual Windows CI pending."
+      ],
+      "mistakes": [
+        "Judge prompt omitted the flat schema — Supply exact schema.",
+        "Judge missed enclosing cfg(test) — Read unchanged attributes.",
+        "cells finish omitted separate --files and --outcome fields — Supply both separate arguments as well as report."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 618 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
