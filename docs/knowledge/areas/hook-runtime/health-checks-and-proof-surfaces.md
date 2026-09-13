@@ -177,6 +177,17 @@ against isolated fixtures, asserting that a denied action changed nothing.
   Restoration of prior global-setting changes remains unverified. Temporary
   sign-in cleanup remains blocked by the physical-worktree guard.
 - Repair evidence: `docs/history/codex-reliability-closeout/live-canary.json`
-  records installed write denial and allowance on Codex 0.154.0. Native spawn
-  was not observed. `reservation-proof.log` in that directory proves creation
+  records installed write denial and allowance on Codex 0.154.0. The current isolated probe did not observe native spawn. Earlier raw
+  hook records show a native spawn denial and child start/stop events; they
+  do not prove successful role-verified native dispatch. `reservation-proof.log` in that directory proves creation
   and truncation refusal through the real command boundary in a fixture.
+
+- Windows CI run 34709805168 failed three activity mailbox tests because the
+  test fixture changed the job ID before the ambient cache first read it.
+  `HerdedEnv::set` now initializes that cache before changing the environment.
+  A fresh child forces the non-Linux fallback on Linux and checks all three
+  mailbox tests plus an inherited-job control. This change affects tests only.
+  `docs/history/codex-reliability-closeout/windows-activity.md` records the
+  failing reproduction and repair. `followup-suite.log` in that directory
+  records 3,930 passed, zero failed, and 20 ignored across 36 targets. A Windows
+  run of the repaired commit is still required.

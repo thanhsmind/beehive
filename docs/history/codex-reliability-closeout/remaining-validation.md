@@ -31,3 +31,23 @@ The first GitHub lookup in this resumed turn accidentally used the PATH wrapper.
 ## Capture
 
 The Windows failure is now a specific repair, rather than a generic unverified platform statement. Native denial and child lifecycle have retained proof. Successful native role verification, current-commit Windows execution, credential cleanup, and historical setting restoration must not be described as complete without their respective evidence.
+
+## Local repair result
+
+Commit `2f5e951b` repairs the Windows activity fixture ordering defect.
+`windows-red.log` reproduces the three failures through the non-Linux fallback.
+`windows-green.log` records 55 passing activity tests after the repair.
+`followup-suite.log` records 3,930 passed, zero failed, and 20 ignored across
+36 targets. The full Rust test command exited with status zero.
+This Linux proof does not replace Windows CI on the repaired commit.
+
+## Judge correction
+
+The first commit-scoped judge returned PASS but used an invalid wrapper schema.
+The schema retry returned NEEDS_REVISION, claiming the fallback switch affects
+production. Its narrow diff omitted the unchanged `#[cfg(test)]` attribute.
+`git show 2f5e951b:packages/bee-rs/crates/bee/src/hooks/activity.rs` lines
+664–665 show that attribute on `read_initial_herding_job_id`. The whole function
+is excluded from production builds. The leader rejected this finding using
+that exact source evidence; the raw retry verdict is in `windows-judge.json`.
+The other four checks passed. Model independence remains unverified.
