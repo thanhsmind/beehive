@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "codex-reliability-closeout",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Four bounded repair cells approved; independent execution starts.",
-  "next_action": "Merge verified Windows test repair locally; request publication for Windows CI and preserve external cleanup blocker.",
+  "next_action": "bee close finished \"codex-reliability-closeout\" — feature is closed.",
   "created_at": "2026-09-13T06:48:11.405Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
