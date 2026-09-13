@@ -57,7 +57,7 @@
     },
     "codex": {
       "agents": [],
-      "note": "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11)."
+      "note": "Codex defaults unconfigured roles to null (enforced as prompt read-and-output budget), but supports configurable roles and transports (team.codex / models.codex), read-only CLI fallback for non-cell execution, and capability-dependent native dispatch without effective-model proof. No agent files are rendered under .agents/ (AO11)."
     },
     "opencode": {
       "files": [
@@ -75,5 +75,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-09-13T04:25:55.801Z"
+  "updated_at": "2026-09-13T07:28:26.117Z"
 }

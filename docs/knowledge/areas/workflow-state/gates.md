@@ -762,7 +762,13 @@ a malformed record has earned none.
   factoring the shared transaction out is a change to the bump path itself
   (koh-8).
 
+## Plan preview
+
+The plan preview accepts either documented flag spelling or the existing subcommand spelling. A following lane selector remains a separate argument. Preview records the current plan packet and hash. It preserves existing approval values, whether false or true, in both default and lane records.
+
 ## Pointers (implementation)
+
+- Preview flag repair: `packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs` treats `preview` as a boolean. Seven actual CLI tests in `packages/bee-rs/crates/bee/tests/gate_preview.rs` verify aliases and the real `approved_gates` fields. Evidence: `docs/history/codex-reliability-closeout/preview.md` and `crc-4-judge-final.json` in the same directory, decision `be57302a`.
 
 - Record: `.bee/state.json` (CLI-owned). Verbs: `bee state`
   (`start-feature` — new; set/gate/worker/scribing-run — existing);

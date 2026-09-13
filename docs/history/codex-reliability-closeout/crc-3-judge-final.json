@@ -1,0 +1,33 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "renderer-note-corrected",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/onboard/templates.rs:148-150 and 412 describe configurable roles and transports, read-only CLI fallback, capability-dependent native dispatch, and no effective-model proof."
+    },
+    {
+      "id": "regression-rejects-obsolete-guidance",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/onboard/agents.rs:572-624 rejects both obsolete claims and requires each supported-dispatch qualification."
+    },
+    {
+      "id": "refresh-cli-output-retained",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/onboarding-cli.log:12-27 records the actual refresh command, exit 0, applied status, and up-to-date recheck; lines 128-130 contain the corrected generated note."
+    },
+    {
+      "id": "fresh-cli-output-retained",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/onboarding-cli.log:167-180 records the actual fresh-onboard command, exit 0, applied status, and created output; lines 1955-1957 contain the corrected generated note."
+    },
+    {
+      "id": "current-repository-metadata",
+      "status": "PASS",
+      "evidence": ".bee/onboarding.json:50-60 contains the corrected Codex renderer note and no obsolete universal model-selection claim."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

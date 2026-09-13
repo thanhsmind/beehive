@@ -1,0 +1,33 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "truthful-historical-baseline",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/regressions.md:51-62 records three Codex failures and one Claude pass for saved commit 0690c1eb, consistent with amendment 255ec53b."
+    },
+    {
+      "id": "direct-duplicate-token-failure",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/regression-token-order.log:1-14 directly records the duplicate-token assertion failure: left 7000.0, right 500.0."
+    },
+    {
+      "id": "synthetic-claude-evidence-labeled",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/regressions.md:90-116 explicitly labels the Claude mutation as synthetic and not historical; regression-synthetic.log:1-17 records its expected failure."
+    },
+    {
+      "id": "current-regressions-green",
+      "status": "PASS",
+      "evidence": "docs/history/codex-reliability-closeout/regression-green.log:119-125 records all four current regression tests passing; lines 127-140 record the full 43-test module passing."
+    },
+    {
+      "id": "production-diff-limited",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:1632-1643 only reorders the model assertion after token assertions, while lines 1913-1915 remove trailing EOF blanks; git diff --check produced no output."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

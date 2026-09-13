@@ -1,0 +1,48 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "scope",
+      "status": "PASS",
+      "evidence": "HEAD is ccd6560a; paths read: packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs:31, packages/bee-rs/crates/bee/tests/gate_preview.rs:1, packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:234, docs/history/codex-reliability-closeout/preview.md:1"
+    },
+    {
+      "id": "flag-spellings",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:147 and packages/bee-rs/crates/bee/tests/gate_preview.rs:183 cover both documented spellings with following --lane"
+    },
+    {
+      "id": "subcommand-compatibility",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:215 covers state gate preview with following --lane"
+    },
+    {
+      "id": "real-approval-fields",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:50 and packages/bee-rs/crates/bee/tests/gate_preview.rs:71 seed actual approved_gates booleans"
+    },
+    {
+      "id": "false-preservation",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:273 and packages/bee-rs/crates/bee/tests/gate_preview.rs:376 assert false remains false in lane and default records"
+    },
+    {
+      "id": "true-preservation",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/tests/gate_preview.rs:284 and packages/bee-rs/crates/bee/tests/gate_preview.rs:431 assert true remains true in lane and default records"
+    },
+    {
+      "id": "parser-scope",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs:37 adds only preview to the boolean flag table"
+    },
+    {
+      "id": "handler-preservation",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:298 inserts only gate_preview before writing the cloned record at line 309"
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

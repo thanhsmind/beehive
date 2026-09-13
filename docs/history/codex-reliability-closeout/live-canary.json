@@ -1,0 +1,51 @@
+{
+  "command": "BEE_BIN=/home/thanhsmind/.cache/cargo-target/release/bee CODEX_BIN=/home/thanhsmind/.local/share/mise/installs/codex/latest/bin/codex CANARY_CODEX_HOME=/var/tmp/bee-codex-auth-1qn4fO TMPDIR=/var/tmp bash scripts/codex-parity-canary.sh",
+  "exit": 0,
+  "evidence": "/var/tmp/bee-codex-canary-3oMgzM/evidence",
+  "version": "codex-cli 0.154.0",
+  "observed_tools": [
+    "Bash",
+    "apply_patch"
+  ],
+  "write_guard_results": [
+    {
+      "line": 8,
+      "tool": "Bash",
+      "status": 0
+    },
+    {
+      "line": 13,
+      "tool": "apply_patch",
+      "status": 2
+    },
+    {
+      "line": 16,
+      "tool": "Bash",
+      "status": 2
+    },
+    {
+      "line": 20,
+      "tool": "apply_patch",
+      "status": 0
+    },
+    {
+      "line": 26,
+      "tool": "Bash",
+      "status": 0
+    },
+    {
+      "line": 31,
+      "tool": "Bash",
+      "status": 0
+    },
+    {
+      "line": 38,
+      "tool": "Bash",
+      "status": 0
+    }
+  ],
+  "skipped_capabilities": [
+    "Native spawn input was not observed."
+  ],
+  "scope": "Installed write deny and allow plus byte preservation; native spawn not observed. Full raw evidence remains at the named external directory."
+}

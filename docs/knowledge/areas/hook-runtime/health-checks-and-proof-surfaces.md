@@ -166,9 +166,17 @@ against isolated fixtures, asserting that a denied action changed nothing.
 
 ## Open Gaps
 
-- Static doctor attestation and isolated canary execution are separate evidence
-  tiers. The canary (`scripts/codex-parity-canary.sh`) proves live hook
-  execution with a dedicated `CANARY_CODEX_HOME` and `TMPDIR`; canary isolation
-  is scoped to that private directory and does not claim user-global configuration
-  is untouched by all test automation, as parent investigations found PATH probes
-  can reach the host `mise` wrapper.
+- Static attestation and live execution remain separate evidence levels. The
+  installed probe requires an explicit direct executable and a private runtime
+  home. It isolates process home and user-data locations, replaces inherited
+  probe selection, and rejects sensitive aliases before execution. Executable
+  helper links to the selected binary remain valid. Positive controls prove
+  that fixture processes ran and wrote into the isolated locations.
+- Process environment isolation prevents accidental user-setting changes. It
+  does not restrict arbitrary executable code at the operating-system level.
+  Restoration of prior global-setting changes remains unverified. Temporary
+  sign-in cleanup remains blocked by the physical-worktree guard.
+- Repair evidence: `docs/history/codex-reliability-closeout/live-canary.json`
+  records installed write denial and allowance on Codex 0.154.0. Native spawn
+  was not observed. `reservation-proof.log` in that directory proves creation
+  and truncation refusal through the real command boundary in a fixture.
