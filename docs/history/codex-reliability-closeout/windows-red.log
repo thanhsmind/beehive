@@ -1,0 +1,171 @@
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-reliability-closeout/packages/bee-rs/crates/bee)
+warning: duplicated attribute
+    --> crates/bee/src/verbs/status_full/tests.rs:4614:5
+     |
+4614 |     #[test]
+     |     ^^^^^^^
+     |
+     = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/verbs/drivers/tests.rs:961:13
+    |
+961 |         let mut cell = |id: &str, title: &str| {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `use_json`
+    --> crates/bee/src/verbs/drivers/tests.rs:6522:21
+     |
+6522 |         let (flags, use_json) = parse_flags(&[
+     |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_json`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `root`
+   --> crates/bee/src/verbs/state_group/advisor_ref.rs:445:20
+    |
+445 |     fn fresh_state(root: &Path, feature: &str) -> Map<String, Value> {
+    |                    ^^^^ help: if this is intentional, prefix it with an underscore: `_root`
+
+warning: unused variable: `win`
+    --> crates/bee/src/verbs/supervisor.rs:4747:13
+     |
+4747 |         let win = away_into(control, "supervisor away", Some("dinner")).unwrap();
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_win`
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:1785:9
+     |
+1785 |         ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+1785 |         let _ = ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2265:9
+     |
+2265 |         ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2265 |         let _ = ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2300:9
+     |
+2300 |         ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2300 |         let _ = ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: `bee` (bin "bee" test) generated 13 warnings (run `cargo fix --bin "bee" -p bee --tests` to apply 5 suggestions)
+    Finished `release` profile [optimized] target(s) in 34.03s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 1 test
+test hooks::activity::tests::non_linux_ambient_capture_preserves_herded_and_inherited_routing ... FAILED
+
+failures:
+
+---- hooks::activity::tests::non_linux_ambient_capture_preserves_herded_and_inherited_routing stdout ----
+
+thread 'hooks::activity::tests::non_linux_ambient_capture_preserves_herded_and_inherited_routing' (92904) panicked at crates/bee/src/hooks/activity.rs:2034:13:
+fallback child failed (inherited=false):
+
+running 3 tests
+test hooks::activity::tests::a_herded_pane_records_round_zero_before_the_first_brief ... FAILED
+test hooks::activity::tests::the_state_machine_runs_unchanged_over_the_herded_sink ... FAILED
+test hooks::activity::tests::a_herded_pane_writes_the_job_mailbox_record_and_no_session_record ... FAILED
+
+failures:
+
+---- hooks::activity::tests::a_herded_pane_records_round_zero_before_the_first_brief stdout ----
+
+thread 'hooks::activity::tests::a_herded_pane_records_round_zero_before_the_first_brief' (92906) panicked at crates/bee/src/hooks/activity.rs:1160:18:
+no readable mailbox activity record for job-7
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- hooks::activity::tests::the_state_machine_runs_unchanged_over_the_herded_sink stdout ----
+
+thread 'hooks::activity::tests::the_state_machine_runs_unchanged_over_the_herded_sink' (92908) panicked at crates/bee/src/hooks/activity.rs:1160:18:
+no readable mailbox activity record for job-7
+
+---- hooks::activity::tests::a_herded_pane_writes_the_job_mailbox_record_and_no_session_record stdout ----
+
+thread 'hooks::activity::tests::a_herded_pane_writes_the_job_mailbox_record_and_no_session_record' (92907) panicked at crates/bee/src/hooks/activity.rs:1160:18:
+no readable mailbox activity record for job-7
+
+
+failures:
+    hooks::activity::tests::a_herded_pane_records_round_zero_before_the_first_brief
+    hooks::activity::tests::a_herded_pane_writes_the_job_mailbox_record_and_no_session_record
+    hooks::activity::tests::the_state_machine_runs_unchanged_over_the_herded_sink
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 3563 filtered out; finished in 0.00s
+
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hooks::activity::tests::non_linux_ambient_capture_preserves_herded_and_inherited_routing
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3565 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p bee --bin bee`

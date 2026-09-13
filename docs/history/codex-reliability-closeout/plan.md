@@ -63,7 +63,7 @@ Waves: crc-1, crc-2, crc-3 in parallel. crc-4 follows when a worker slot opens. 
       "docs/history/codex-reliability-closeout/isolation-green.log"
     ],
     "action": "Fix F1 at the canary entrypoint. Require an explicit direct executable rather than discovering or invoking mise or a PATH wrapper. Isolate HOME, XDG config/data/cache and CODEX_HOME for all nested processes and use a controlled PATH with direct Codex probe configuration. Reject real-home aliases, symlinks into real settings, and unsafe homes before any subprocess can mutate them. Do not copy, read or delete credentials. Add hermetic behavioral shell tests that run fake executables with sentinel host paths and observable side-effect attempts; preserve a real failed pre-fix run and successful fixed run. Keep existing live hook assertions and report skipped capabilities honestly. Reserve logs before their redirection; reports must not expose environment secrets. Follow existing shell conventions and introduce no dependencies.",
-    "verify": "bash scripts/codex-parity-canary-test.sh; bash -n scripts/codex-parity-canary.sh — green with retained red/green logs; integration leader drives installed canary",
+    "verify": "bash scripts/codex-parity-canary-test.sh; bash -n scripts/codex-parity-canary.sh \u2014 green with retained red/green logs; integration leader drives installed canary",
     "feature": "codex-reliability-closeout",
     "lane": "high-risk",
     "status": "open",
@@ -123,7 +123,7 @@ Waves: crc-1, crc-2, crc-3 in parallel. crc-4 follows when a worker slot opens. 
       "docs/history/codex-reliability-closeout/test-transplant.patch"
     ],
     "action": "Resolve F2 and F4 without rewriting history. Use current tests codex_repeated_token_count_dedup_and_multiple_requests_in_turn, claude_turn_end_subject_preserves_assistant_text_across_tool_result, codex_rollup_does_not_use_response_item_payload_id_as_session_id and codex_rollup_preserves_full_uuid_when_session_meta_missing against pre-fix production source 0690c1eb1ff72302033dfa5be4b11f753abf471f in a disposable isolated source tree under the worktree's .bee/tmp. Preserve only the exact current test functions plus necessary existing helpers if the complete current tests require new APIs; compilation failure is not regression evidence. Record source identities and test transplantation explicitly. Retain actual assertion failures and corresponding current-source successes. Do not change production transcript behavior or weaken tests. Remove extra EOF blank line in current session_close/tests.rs. Reserve all evidence paths before output. Label new evidence retrospective, never original RED sequence. Use TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false and direct Cargo PATH; do not invoke codex wrapper.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests — green; git diff --check c4122d41 HEAD -- packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::session_close::tests \u2014 green; git diff --check c4122d41 HEAD -- packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
     "feature": "codex-reliability-closeout",
     "lane": "high-risk",
     "status": "open",
@@ -183,7 +183,7 @@ Waves: crc-1, crc-2, crc-3 in parallel. crc-4 follows when a worker slot opens. 
       "docs/history/codex-reliability-closeout/onboarding-green.log"
     ],
     "action": "Fix F7 in owning CODEX_AGENTS_NOTE and related obsolete comments. Preserve unconfigured null defaults if intended, but explain configurable Codex roles/transports, read-only CLI fallback, capability-dependent native dispatch and lack of effective-model proof. No new rendered native agent files unless already implemented. Inspect onboard agents rendering and add one behavioral regression on generated onboarding output, using independent expected supported statements and absence of obsolete universal claims. Run it failing before edit and passing after. Reserve evidence logs before output. Regenerate a disposable onboarding through actual CLI and inspect note; leader owns repo-wide dev regen at wave barrier. Do not hand edit .bee JSON. No changes to role selection or guard semantics. Also prove an existing onboarding record with the old note is refreshed through the supported CLI; the leader can drive this after the shared binary rebuild.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard — green; fresh disposable CLI onboarding emits corrected note",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee onboard \u2014 green; fresh disposable CLI onboarding emits corrected note",
     "feature": "codex-reliability-closeout",
     "lane": "high-risk",
     "status": "open",
@@ -286,6 +286,52 @@ Waves: crc-1, crc-2, crc-3 in parallel. crc-4 follows when a worker slot opens. 
       "deviations": [],
       "behavior_change": true
     }
+  },
+  {
+    "id": "crc-5",
+    "title": "Initialize activity test environment before fixture mutation",
+    "role": "test",
+    "feature": "codex-reliability-closeout",
+    "lane": "high-risk",
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "docs/history/codex-reliability-closeout/windows-activity.md"
+    ],
+    "read_first": [
+      "docs/history/codex-reliability-closeout/CONTEXT.md",
+      "docs/history/codex-reliability-closeout/plan.md"
+    ],
+    "action": "Fix the Windows activity test isolation defect evidenced by GitHub Windows run 34709805168 on 7abaee23: three job-7 herded tests fail because no mailbox record exists. read_initial_herding_job_id uses /proc on Linux but live env fallback elsewhere. fire_herded sets job-7 before ambient OnceLock initializes, then herded_job treats job-7 as ambient and ignores it. Verify this causal path, preserve RED using a portable test-only fallback seam or isolated child process that exercises non-Linux read order on Linux. Initialize ambient state before temporary fixture environment mutation or use a smaller explicit test injection. Preserve real inherited-job suppression and ordinary session isolation. No production behavior changes, no disabling tests or guards. Reserve evidence before writing. Record exact commands and outputs in windows-activity.md. Use direct cargo PATH, TMPDIR=/var/tmp, BEE_CODEX_PROBE_BIN=/bin/false. Never invoke gh/codex/mise PATH wrappers. Do not push or launch cloud jobs. Commit once with cell: crc-5 trailer. Leader handles final judge and cap.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" TMPDIR=/var/tmp BEE_CODEX_PROBE_BIN=/bin/false cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::activity::tests",
+    "deps": [],
+    "decisions": [
+      "d8fc4ab4-83ea-4522-98a8-bd6089633448"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "hook-runtime"
+    ],
+    "regen_obligation_ack": "wave-barrier",
+    "must_haves": {
+      "truths": [
+        "A portable regression detects first-call ambient capture after fixture mutation.",
+        "Herded activity tests record the intended mailbox on the fallback path.",
+        "Inherited ambient jobs remain excluded from ordinary tests.",
+        "Production activity behavior is unchanged."
+      ],
+      "artifacts": [
+        {
+          "path": "docs/history/codex-reliability-closeout/windows-activity.md",
+          "substantive": "Actual regression failure and repaired test output."
+        }
+      ],
+      "key_links": [
+        "Test setup initializes or isolates ambient identity before modifying process state."
+      ],
+      "prohibitions": [
+        "No guard removal, disabled tests, or Windows-success claim from Linux-only evidence."
+      ]
+    }
   }
 ]
 ```
@@ -327,3 +373,7 @@ This Linux host cannot establish Windows live support or recover opaque native s
 
 ## Out of scope
 No widening of native model guards. No new model claim. No unrelated machine configuration changes.
+
+## Windows follow-up
+
+Decision d8fc4ab4 adds one fix-first test-isolation cell. GitHub Windows run 34709805168 proves three mailbox failures on 7abaee23. Source reading identifies first-call ambient capture after fixture mutation on the non-Linux fallback path. The worker must reproduce that order through a portable test seam before repair. Existing guard and production behavior remain unchanged. Windows execution on the repaired commit still requires publishing a branch to the configured runner. The original hat-wave constraints remain applicable: preserve evidence, avoid global side effects, and do not claim unobserved capabilities. No second hat wave is required for this bounded correction.
