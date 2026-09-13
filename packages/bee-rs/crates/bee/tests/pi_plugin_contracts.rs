@@ -5634,13 +5634,15 @@ fn pre_gate_main_write_pi_extension_blocks_early_source_writes() {
     assert!(!run_docs.results[0].blocked(), "Pi write during docs lane must pass");
 }
 
-/// D1, D2, D3, D4, D5, D6, D8 / pihp-7: Drive the complete Pi lifecycle path against a throwaway onboarded repo:
+/// D1, D2, D3, D4, D5, D6, D8 / pihp-7 / pfp-2: Drive the complete Pi lifecycle path against a throwaway onboarded repo:
 /// - session identity under PI_SESSION_ID
 /// - early write denial on main checkout during exploring/planning via Pi belt
 /// - gate packet preview parsed from plan.md and enforced on cells add
 /// - correct intent and purpose feature-scoped in dispatch prepare
 /// - replayable proof required at cap and stored in structured trace fields
 /// - collision-safe concurrent dispatch job id allocation
+/// - pause handoff projection, dismissal, and workflow close leaving no active projection or orient blocker
+/// - planned-next dismissal refusal preserving owned claim and mailbox state
 #[cfg(unix)]
 #[test]
 fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
@@ -6177,6 +6179,224 @@ Parity test plan.
         job_ids.lock().unwrap().insert(id);
     }
     assert_eq!(job_ids.lock().unwrap().len(), thread_count + process_count, "all concurrent thread and process job id allocations must be unique");
+
+    // 8. Workflow tail parity: planned-next dismissal refusal, pause handoff dismissal, workflow close, and orient clean state
+
+    // 8a. Planned-next dismissal refusal with an owned claim
+    let claims_dir = repo_path.join(".bee").join("claims");
+    std::fs::create_dir_all(&claims_dir).expect("create claims dir");
+    let next_claim_path = claims_dir.join("feat-parity-next.json");
+    let initial_claim_val = json!({
+        "cell": "feat-parity-next",
+        "session": PI_SESSION,
+        "claimed_at": "2026-09-13T00:00:00Z",
+        "acquired_at": "2026-09-13T00:00:00Z",
+        "ttl_seconds": 3600,
+        "fence_epoch": 1
+    });
+    let initial_claim_str = format!("{}\n", serde_json::to_string_pretty(&initial_claim_val).unwrap());
+    std::fs::write(&next_claim_path, &initial_claim_str).expect("write next cell claim");
+
+    let pn_write = Command::new(&bee_target)
+        .args([
+            "state", "handoff", "write",
+            "--kind", "planned-next",
+            "--lane", "feat-parity",
+            "--writer-session", PI_SESSION,
+            "--previous-cell", "feat-parity-1",
+            "--next-cell", "feat-parity-next",
+            "--json",
+        ])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("state handoff write planned-next");
+    assert!(
+        pn_write.status.success(),
+        "planned-next handoff write failed: status={:?}, stdout={}, stderr={}",
+        pn_write.status,
+        String::from_utf8_lossy(&pn_write.stdout),
+        String::from_utf8_lossy(&pn_write.stderr)
+    );
+    let pn_write_val: Value = serde_json::from_slice(&pn_write.stdout).expect("parse planned-next write json");
+    let wf_id_str = pn_write_val["workflow_id"].as_str().expect("workflow_id in planned-next handoff");
+    let pn_mb_path = repo_path
+        .join(".bee")
+        .join("runtime")
+        .join("handoffs")
+        .join(wf_id_str)
+        .join("0001.json");
+    assert!(pn_mb_path.is_file(), "planned-next mailbox record must exist on disk");
+    let mb_before_str = std::fs::read_to_string(&pn_mb_path).expect("read mailbox record before dismiss");
+    let claim_before_str = std::fs::read_to_string(&next_claim_path).expect("read claim before dismiss");
+
+    // Attempting to dismiss planned-next handoff MUST be refused
+    let pn_dismiss = Command::new(&bee_target)
+        .args(["state", "handoff", "dismiss", "--lane", "feat-parity", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("state handoff dismiss planned-next");
+    assert!(!pn_dismiss.status.success(), "planned-next dismiss must refuse");
+    let pn_dismiss_err = String::from_utf8_lossy(&pn_dismiss.stdout);
+    assert!(
+        pn_dismiss_err.contains("never dismissed") || pn_dismiss_err.contains("cannot be dismissed") || pn_dismiss_err.contains("planned-next"),
+        "error must cite refusal to dismiss planned-next: {pn_dismiss_err}"
+    );
+
+    // Claim and mailbox record must remain unchanged
+    let claim_after_str = std::fs::read_to_string(&next_claim_path).expect("read claim after dismiss");
+    assert_eq!(claim_before_str, claim_after_str, "claim file must remain unchanged after refused dismiss");
+    let mb_after_str = std::fs::read_to_string(&pn_mb_path).expect("read mailbox record after dismiss");
+    assert_eq!(mb_before_str, mb_after_str, "mailbox record must remain unchanged after refused dismiss");
+    let mb_after_val: Value = serde_json::from_str(&mb_after_str).expect("parse mailbox record json");
+    assert_eq!(mb_after_val["status"], "open", "mailbox record status must remain open");
+
+    // Close workflow while planned-next authority is open MUST be refused
+    let premature_close = Command::new(&bee_target)
+        .args(["state", "workflows", "close", "--id", wf_id_str, "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("state workflows close with open planned-next");
+    assert!(!premature_close.status.success(), "workflows close must refuse when open planned-next handoff exists");
+    let premature_close_err = format!("{}{}", String::from_utf8_lossy(&premature_close.stdout), String::from_utf8_lossy(&premature_close.stderr));
+    assert!(
+        premature_close_err.contains("open planned-next handoff authority") || premature_close_err.contains("cannot be discarded by close"),
+        "error must cite open planned-next handoff authority: {premature_close_err}"
+    );
+
+    // Adopt planned-next handoff through installed CLI
+    let adopt_session = "pi-session-next";
+    let adopt_out = Command::new(&bee_target)
+        .args([
+            "state", "handoff", "adopt",
+            "--lane", "feat-parity",
+            "--session-id", adopt_session,
+            "--json",
+        ])
+        .env("PI_SESSION_ID", adopt_session)
+        .current_dir(repo_path)
+        .output()
+        .expect("state handoff adopt");
+    assert!(
+        adopt_out.status.success(),
+        "state handoff adopt failed: status={:?}, stdout={}, stderr={}",
+        adopt_out.status,
+        String::from_utf8_lossy(&adopt_out.stdout),
+        String::from_utf8_lossy(&adopt_out.stderr)
+    );
+    let adopt_val: Value = serde_json::from_slice(&adopt_out.stdout).expect("parse state handoff adopt json");
+    assert_eq!(adopt_val["ok"], true);
+    assert_eq!(adopt_val["next_cell"], "feat-parity-next");
+    assert_eq!(adopt_val["workflow_id"], wf_id_str);
+    assert_eq!(adopt_val["previous_owner"], PI_SESSION);
+    assert_eq!(adopt_val["seq"], 1);
+
+    // Claim must be updated with bumped fence epoch and adopted session
+    let claim_adopted_str = std::fs::read_to_string(&next_claim_path).expect("read claim after adopt");
+    let claim_adopted_val: Value = serde_json::from_str(&claim_adopted_str).expect("parse claim after adopt");
+    assert_eq!(claim_adopted_val["session"], adopt_session, "claim session must be updated to adopting session");
+    assert_eq!(claim_adopted_val["fence_epoch"].as_u64().unwrap_or(0), 2, "claim fence_epoch must bump from 1 to 2");
+    assert_eq!(claim_adopted_val["adopted_from"], PI_SESSION, "claim adopted_from must record previous owner");
+
+    // Mailbox record must be marked cleared with updated claim epoch and adopting session
+    let mb_adopted_str = std::fs::read_to_string(&pn_mb_path).expect("read mailbox record after adopt");
+    let mb_adopted_val: Value = serde_json::from_str(&mb_adopted_str).expect("parse mailbox record after adopt");
+    assert_eq!(mb_adopted_val["status"], "cleared", "planned-next mailbox record must be cleared after adopt");
+    assert_eq!(mb_adopted_val["adopted_by"], adopt_session);
+    assert_eq!(mb_adopted_val["claim_epoch"].as_u64().unwrap_or(0), 2);
+
+    // 8b. Write pause handoff and prove it is projected to .bee/HANDOFF.json
+    let pause_write = Command::new(&bee_target)
+        .args(["state", "handoff", "write", "--kind", "pause", "--lane", "feat-parity", "--cell", "feat-parity-1", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("state handoff write pause");
+    assert!(
+        pause_write.status.success(),
+        "pause handoff write failed: status={:?}, stdout={}, stderr={}",
+        pause_write.status,
+        String::from_utf8_lossy(&pause_write.stdout),
+        String::from_utf8_lossy(&pause_write.stderr)
+    );
+
+    let proj_file = repo_path.join(".bee").join("HANDOFF.json");
+    assert!(proj_file.is_file(), ".bee/HANDOFF.json must exist after pause handoff write");
+    let proj_val: Value = serde_json::from_str(&std::fs::read_to_string(&proj_file).expect("read HANDOFF.json")).expect("parse HANDOFF.json");
+    assert_eq!(proj_val["kind"], "pause", "projected handoff kind must be pause");
+    assert_eq!(proj_val["cell"], "feat-parity-1", "projected handoff cell must match");
+
+    // 8c. Dismiss pause handoff through CLI
+    let pause_dismiss = Command::new(&bee_target)
+        .args(["state", "handoff", "dismiss", "--lane", "feat-parity", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("state handoff dismiss pause");
+    assert!(
+        pause_dismiss.status.success(),
+        "pause handoff dismiss failed: status={:?}, stdout={}, stderr={}",
+        pause_dismiss.status,
+        String::from_utf8_lossy(&pause_dismiss.stdout),
+        String::from_utf8_lossy(&pause_dismiss.stderr)
+    );
+    let pause_dismiss_val: Value = serde_json::from_slice(&pause_dismiss.stdout).expect("parse pause dismiss json");
+    assert_eq!(pause_dismiss_val["ok"], true);
+    assert!(!proj_file.is_file(), ".bee/HANDOFF.json must be removed after pause handoff dismissal");
+
+    // Mailbox audit record must remain on disk with status cleared
+    let pause_mb_seq = pause_dismiss_val["seq"].as_u64().unwrap_or(2);
+    let pause_mb_path = repo_path
+        .join(".bee")
+        .join("runtime")
+        .join("handoffs")
+        .join(wf_id_str)
+        .join(format!("{pause_mb_seq:04}.json"));
+    assert!(pause_mb_path.is_file(), "pause mailbox audit file must remain on disk at {}", pause_mb_path.display());
+    let pause_mb_val: Value = serde_json::from_str(&std::fs::read_to_string(&pause_mb_path).expect("read pause mailbox record")).expect("parse pause mailbox json");
+    assert_eq!(pause_mb_val["status"], "cleared");
+
+    // 8d. Close workflow through CLI
+    let close_out = Command::new(&bee_target)
+        .args(["state", "workflows", "close", "--id", wf_id_str, "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("state workflows close");
+    assert!(
+        close_out.status.success(),
+        "state workflows close failed: status={:?}, stdout={}, stderr={}",
+        close_out.status,
+        String::from_utf8_lossy(&close_out.stdout),
+        String::from_utf8_lossy(&close_out.stderr)
+    );
+
+    // 8e. Run bee orient --json and assert no handoff blocker and .bee/HANDOFF.json is absent
+    let orient_out = Command::new(&bee_target)
+        .args(["orient", "--json"])
+        .env("PI_SESSION_ID", PI_SESSION)
+        .current_dir(repo_path)
+        .output()
+        .expect("bee orient --json");
+    assert!(
+        orient_out.status.success(),
+        "bee orient failed: status={:?}, stdout={}, stderr={}",
+        orient_out.status,
+        String::from_utf8_lossy(&orient_out.stdout),
+        String::from_utf8_lossy(&orient_out.stderr)
+    );
+    let orient_val: Value = serde_json::from_slice(&orient_out.stdout).expect("parse orient json");
+    if let Some(blockers) = orient_val.get("work").and_then(|w| w.get("blockers")).and_then(Value::as_array) {
+        for b in blockers {
+            let b_str = b.as_str().unwrap_or_default();
+            assert!(!b_str.contains("handoff"), "orient must report no handoff blocker, got: {b_str}");
+        }
+    }
+    let orient_raw = String::from_utf8_lossy(&orient_out.stdout);
+    assert!(!orient_raw.contains("pending handoff"), "orient output must not contain pending handoff: {orient_raw}");
+    assert!(!proj_file.is_file(), ".bee/HANDOFF.json must remain absent after workflow close and orient");
 }
 
 #[cfg(not(unix))]

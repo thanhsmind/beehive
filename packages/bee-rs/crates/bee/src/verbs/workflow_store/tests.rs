@@ -26,7 +26,10 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
     use super::*;
 
     fn tmp_root() -> tempfile::TempDir {
-        tempfile::tempdir().unwrap()
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee/onboarding.json"), r#"{"version":1,"completed":true}"#).unwrap();
+        tmp
     }
 
     fn ok<T, E>(r: Result<T, E>) -> T {
@@ -1619,6 +1622,108 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         ok(rebuild_handoff_projection(tmp.path()));
         assert!(handoff_path(tmp.path()).exists(), "C1: legacy file untouched");
     }
+
+    #[test]
+    fn mailbox_dismiss_clears_open_pause_record_preserves_file_and_rebuilds_projection() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        let mut input = Map::new();
+        input.insert("kind".into(), json!("pause"));
+        input.insert("cell".into(), json!("wip-1"));
+        let rec = ok(write_mailbox_handoff(tmp.path(), "wf-1", &input, None));
+        assert_eq!(rec.get("status"), Some(&json!("open")));
+        ok(rebuild_handoff_projection(tmp.path()));
+        assert!(handoff_path(tmp.path()).exists());
+
+        match ok(dismiss_mailbox_handoff(tmp.path(), "wf-1", None)) {
+            MailboxDismiss::Ok { workflow_id, seq, record } => {
+                assert_eq!(workflow_id, "wf-1");
+                assert_eq!(seq, 1);
+                assert_eq!(record.get("status"), Some(&json!("cleared")));
+                assert!(record.get("cleared_at").is_some());
+            }
+            MailboxDismiss::Fail { reason } => panic!("expected Ok, got Fail: {reason}"),
+        }
+
+        // The file still exists on disk and is marked cleared.
+        let rec_path = ok(handoff_record_path(tmp.path(), "wf-1", 1));
+        assert!(rec_path.exists(), "mailbox file must never be deleted");
+        let on_disk = read_back(&rec_path);
+        assert_eq!(on_disk.get("status"), Some(&json!("cleared")));
+        assert!(on_disk.get("cleared_at").is_some());
+
+        // Rebuild projection leaves no legacy file.
+        ok(rebuild_handoff_projection(tmp.path()));
+        assert!(!handoff_path(tmp.path()).exists(), "cleared pause must not project");
+
+        // A second dismiss finds nothing open to dismiss.
+        match ok(dismiss_mailbox_handoff(tmp.path(), "wf-1", None)) {
+            MailboxDismiss::Fail { reason } => {
+                assert_eq!(reason, "no open handoff in workflow \"wf-1\"'s mailbox to dismiss.")
+            }
+            _ => panic!("expected Fail"),
+        }
+    }
+
+    #[test]
+    fn mailbox_dismiss_refuses_a_planned_next_record_and_leaves_it_untouched() {
+        let tmp = tmp_root();
+        capped_cell_and_claim(tmp.path(), "next", "sess-w");
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        ok(write_mailbox_handoff(tmp.path(), "wf-1", &planned_next_input(), None));
+
+        match ok(dismiss_mailbox_handoff(tmp.path(), "wf-1", None)) {
+            MailboxDismiss::Fail { reason } => {
+                assert!(reason.starts_with("handoff kind \"planned-next\" is not \"pause\""), "{reason}");
+            }
+            MailboxDismiss::Ok { .. } => panic!("planned-next must never be dismissed"),
+        }
+
+        // Handoff is still open on disk and claim is untouched.
+        let all = ok(list_handoff_mailbox(tmp.path(), "wf-1"));
+        assert_eq!(all[0].get("status"), Some(&json!("open")));
+        assert_eq!(all[0].get("kind"), Some(&json!("planned-next")));
+        let claim: Value = serde_json::from_str(
+            &std::fs::read_to_string(tmp.path().join(".bee").join("claims").join("next.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(claim["session"], json!("sess-w"), "the claim never moved");
+    }
+
+    #[test]
+    fn rebuild_handoff_projection_ignores_closed_workflows() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-closed", json!({"id":"wf-closed","feature":"f-closed","status":"closed"}));
+        let mut input = Map::new();
+        input.insert("kind".into(), json!("pause"));
+        input.insert("cell".into(), json!("old-cell"));
+        ok(write_mailbox_handoff(tmp.path(), "wf-closed", &input, None));
+
+        write_workflow(tmp.path(), "wf-active", json!({"id":"wf-active","feature":"f-active","status":"active"}));
+        ok(rebuild_handoff_projection(tmp.path()));
+        assert!(!handoff_path(tmp.path()).exists(), "closed workflow handoff must never project");
+    }
+
+    #[test]
+    fn clear_mailbox_pause_handoffs_clears_only_pause_records_and_preserves_history() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        let mut input = Map::new();
+        input.insert("kind".into(), json!("pause"));
+        input.insert("cell".into(), json!("cell-1"));
+        ok(write_mailbox_handoff(tmp.path(), "wf-1", &input, None));
+
+        let cleared_count = ok(clear_mailbox_pause_handoffs(tmp.path(), "wf-1"));
+        assert_eq!(cleared_count, 1);
+
+        let records = ok(list_handoff_mailbox(tmp.path(), "wf-1"));
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].get("status"), Some(&json!("cleared")));
+        assert!(records[0].get("cleared_at").is_some());
+        let rec_path = ok(handoff_record_path(tmp.path(), "wf-1", 1));
+        assert!(rec_path.exists(), "file must stay on disk");
+    }
+
 
     #[test]
     fn workflows_list_sort_is_newest_created_first() {

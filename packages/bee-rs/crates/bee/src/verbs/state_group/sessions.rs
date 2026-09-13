@@ -25,7 +25,7 @@ use crate::verbs::workflow_store::{
     rebuild_lane_projection_reporting, rebuild_state_projection,
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
-    write_mailbox_handoff, MailboxAdopt,
+    write_mailbox_handoff, MailboxAdopt, dismiss_mailbox_handoff, MailboxDismiss,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -711,6 +711,75 @@ pub(crate) fn run_handoff_show(flags: Flags, use_json: bool, t0: Instant) -> Opt
             field("mode"),
         );
         Ok(Out::Emit(Value::Object(m), text, 0))
+    })();
+    finish(&ctx, out)
+}
+
+pub(crate) fn run_handoff_dismiss(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["lane", "target-role", "session-id"]) {
+        return None;
+    }
+    let ctx = match go("state handoff dismiss", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let lane = match optional_lane_flag(&flags, "state handoff dismiss") {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        let target_role = flag_string(&flags, "target-role");
+        let workflow_id = match resolve_handoff_workflow_id(
+            &ctx.root,
+            lane.as_deref(),
+            flag_value(&flags, "session-id").as_deref(),
+        ) {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        if let Some(wid) = workflow_id {
+            let dismissed = match dismiss_mailbox_handoff(
+                &ctx.root,
+                &wid,
+                target_role.as_deref(),
+            ) {
+                Ok(v) => v,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
+            return match dismissed {
+                MailboxDismiss::Fail { reason } => {
+                    Ok(Out::Thrown(format!("state handoff dismiss: {reason}")))
+                }
+                MailboxDismiss::Ok { workflow_id, seq, record: _ } => {
+                    rebuild_handoff_projection(&ctx.root)?;
+                    let mut result = Map::new();
+                    result.insert("ok".into(), json!(true));
+                    result.insert("workflow_id".into(), json!(workflow_id));
+                    result.insert("seq".into(), json!(seq));
+                    let text = format!(
+                        "Dismissed \"pause\" handoff in workflow \"{wid}\" mailbox (seq {seq}); handoff cleared."
+                    );
+                    Ok(Out::Emit(Value::Object(result), text, 0))
+                }
+            };
+        }
+        // Legacy single-file path (C1).
+        match dismiss_handoff(&ctx.root) {
+            Err(Err2::Msg(m)) => Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => Err(Err2::Ex),
+            Ok(HandoffDismiss::Fail { reason }) => {
+                Ok(Out::Thrown(format!("state handoff dismiss: {reason}")))
+            }
+            Ok(HandoffDismiss::Ok { record: _ }) => {
+                let mut result = Map::new();
+                result.insert("ok".into(), json!(true));
+                let text = "Dismissed \"pause\" handoff; handoff cleared.".to_string();
+                Ok(Out::Emit(Value::Object(result), text, 0))
+            }
+        }
     })();
     finish(&ctx, out)
 }

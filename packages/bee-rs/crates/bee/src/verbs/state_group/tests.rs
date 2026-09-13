@@ -1200,6 +1200,62 @@ use std::time::Instant;
     }
 
     #[test]
+    fn dismiss_handoff_refuses_planned_next_and_clears_pause() {
+        let tmp = tmp_root();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+
+        // 1. Missing handoff -> Fail
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Fail { reason } => {
+                assert_eq!(reason, "no .bee/HANDOFF.json to dismiss.");
+            }
+            _ => panic!("expected Fail on missing handoff"),
+        }
+
+        // 2. planned-next -> Fail and file preserved
+        std::fs::write(
+            handoff_path(tmp.path()),
+            r#"{"kind":"planned-next","cell":"pfp-1"}"#,
+        )
+        .unwrap();
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Fail { reason } => {
+                assert!(reason.contains("is never dismissed"));
+            }
+            _ => panic!("expected Fail on planned-next"),
+        }
+        assert!(handoff_path(tmp.path()).exists(), "planned-next handoff preserved");
+
+        // 3. pause -> Ok and file removed
+        std::fs::write(
+            handoff_path(tmp.path()),
+            r#"{"kind":"pause","cell":"pfp-1"}"#,
+        )
+        .unwrap();
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Ok { record } => {
+                assert_eq!(record.get("kind"), Some(&json!("pause")));
+            }
+            _ => panic!("expected Ok on pause"),
+        }
+        assert!(!handoff_path(tmp.path()).exists(), "pause handoff cleared");
+
+        // 4. default (no kind field) -> Ok and file removed
+        std::fs::write(
+            handoff_path(tmp.path()),
+            r#"{"cell":"pfp-1"}"#,
+        )
+        .unwrap();
+        match ok(dismiss_handoff(tmp.path())) {
+            HandoffDismiss::Ok { record } => {
+                assert_eq!(record.get("cell"), Some(&json!("pfp-1")));
+            }
+            _ => panic!("expected Ok on untyped handoff"),
+        }
+        assert!(!handoff_path(tmp.path()).exists(), "untyped handoff cleared");
+    }
+
+    #[test]
     fn adopt_gate_held_is_a_typed_refusal() {
         let tmp = tmp_root();
         let claims = claims_dir(tmp.path());

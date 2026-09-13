@@ -721,3 +721,34 @@ pub(crate) fn adopt_handoff(root: &Path, session_id: &str) -> Result<HandoffAdop
         }
     }
 }
+
+pub(crate) enum HandoffDismiss {
+    Fail { reason: String },
+    Ok { record: Map<String, Value> },
+}
+
+/// dismissHandoff (state.mjs) — C1 legacy single-file path: removes .bee/HANDOFF.json
+/// for pause handoffs; refuses planned-next.
+pub(crate) fn dismiss_handoff(root: &Path) -> Result<HandoffDismiss, Err2> {
+    let handoff = read_handoff(root)?;
+    let handoff = match handoff {
+        None => {
+            return Ok(HandoffDismiss::Fail { reason: "no .bee/HANDOFF.json to dismiss.".to_string() })
+        }
+        Some(v) if !truthy(&v) => {
+            return Ok(HandoffDismiss::Fail { reason: "no .bee/HANDOFF.json to dismiss.".to_string() })
+        }
+        Some(Value::Object(m)) => m,
+        Some(_) => return Err(Err2::Ex),
+    };
+    if !matches!(handoff.get("kind"), Some(Value::String(s)) if s == "pause") {
+        return Ok(HandoffDismiss::Fail {
+            reason: format!(
+                "handoff kind \"{}\" is not \"pause\" \u{2014} a planned-next handoff is never dismissed, it must be adopted (D1).",
+                handoff.get("kind").map(js_disp).unwrap_or_default()
+            ),
+        });
+    }
+    let _ = std::fs::remove_file(handoff_path(root)); // rmSync force:true
+    Ok(HandoffDismiss::Ok { record: handoff })
+}

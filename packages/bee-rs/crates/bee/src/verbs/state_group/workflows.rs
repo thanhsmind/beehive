@@ -25,7 +25,8 @@ use crate::verbs::workflow_store::{
     rebuild_lane_projection_reporting, rebuild_state_projection,
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
-    write_mailbox_handoff, MailboxAdopt,
+    write_mailbox_handoff, MailboxAdopt, clear_mailbox_pause_handoffs, list_handoff_mailbox,
+    require_handoff_workflow_id,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -103,6 +104,48 @@ pub(crate) fn closed_row(record: &Map<String, Value>) -> Value {
     Value::Object(row)
 }
 
+pub(crate) fn close_workflow_records(
+    root: &Path,
+    target_ids: &[String],
+) -> Result<Vec<Map<String, Value>>, Err2> {
+    // 1. Preflight all targets for open planned-next authority
+    for id in target_ids {
+        let wf_id_s = require_handoff_workflow_id(id)?;
+        let records = list_handoff_mailbox(root, &wf_id_s)?;
+        for record in records {
+            let is_open = matches!(record.get("status"), Some(Value::String(s)) if s == "open");
+            let is_planned_next = matches!(record.get("kind"), Some(Value::String(s)) if s == "planned-next");
+            if is_open && is_planned_next {
+                let next_cell = record
+                    .get("next_cell")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                return Err(Err2::Msg(format!(
+                    "workflows close: refused \u{2014} workflow \"{id}\" has open planned-next handoff authority (cell \"{next_cell}\"). A planned-next handoff cannot be discarded by close; adopt its carried claim first (bee state handoff adopt), or unclaim the cell."
+                )));
+            }
+        }
+    }
+
+    // 2. Clear open pause records in each target
+    for id in target_ids {
+        clear_mailbox_pause_handoffs(root, id)?;
+    }
+
+    // 3. Mark each workflow closed
+    let mut closed = Vec::new();
+    for id in target_ids {
+        let mut patch = Map::new();
+        patch.insert("status".into(), json!("closed"));
+        closed.push(update_workflow(root, id, patch)?);
+    }
+
+    // 4. Rebuild handoff projection
+    rebuild_handoff_projection(root)?;
+
+    Ok(closed)
+}
+
 pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["feature", "id", "all-but-active"]) {
         return None;
@@ -144,16 +187,19 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
                     "workflows close --id: no live workflow record found with id \"{id}\"."
                 )));
             }
-            let mut patch = Map::new();
-            patch.insert("status".into(), json!("closed"));
-            let closed = update_workflow(&ctx.root, &id, patch)?;
+            let closed = match close_workflow_records(&ctx.root, &[id]) {
+                Ok(c) => c,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
+            let closed_first = &closed[0];
             let text = format!(
                 "Closed 1 workflow record: {} (feature \"{}\").",
-                js_disp_opt(closed.get("id")),
-                js_disp_opt(closed.get("feature"))
+                js_disp_opt(closed_first.get("id")),
+                js_disp_opt(closed_first.get("feature"))
             );
             let mut result = Map::new();
-            result.insert("closed".into(), Value::Array(vec![closed_row(&closed)]));
+            result.insert("closed".into(), Value::Array(vec![closed_row(closed_first)]));
             return Ok(Out::Emit(Value::Object(result), text, 0));
         }
 
@@ -185,12 +231,11 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
                     "workflows close --feature: no live workflow record found for feature \"{feature}\"."
                 )));
             }
-            let mut closed: Vec<Map<String, Value>> = Vec::new();
-            for id in matches {
-                let mut patch = Map::new();
-                patch.insert("status".into(), json!("closed"));
-                closed.push(update_workflow(&ctx.root, &id, patch)?);
-            }
+            let closed = match close_workflow_records(&ctx.root, &matches) {
+                Ok(c) => c,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
             let ids: Vec<String> = closed.iter().map(|r| js_disp_opt(r.get("id"))).collect();
             let text = format!(
                 "Closed {} workflow record(s) for feature \"{feature}\": {}.",
@@ -220,7 +265,7 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
             .filter(|s| !s.is_empty())
             .map(str::to_string);
         let records = list_workflows(&ctx.root)?;
-        let mut closed: Vec<Value> = Vec::new();
+        let mut target_ids: Vec<String> = Vec::new();
         for record in &records {
             if record.get("status").unwrap_or(&Value::Null) == &json!("closed") {
                 continue;
@@ -230,20 +275,21 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
                     continue;
                 }
             }
-            let id = wf_id(record);
-            let mut patch = Map::new();
-            patch.insert("status".into(), json!("closed"));
-            update_workflow(&ctx.root, &id, patch)?;
-            closed.push(closed_row(record));
+            target_ids.push(wf_id(record));
         }
-        if closed.is_empty() {
+        if target_ids.is_empty() {
             return Ok(Out::Thrown(
                 "workflows close --all-but-active: nothing to close \u{2014} no live workflow record other than the active feature.".to_string(),
             ));
         }
+        let closed = match close_workflow_records(&ctx.root, &target_ids) {
+            Ok(c) => c,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
         let ids: Vec<String> = closed
             .iter()
-            .map(|r| js_disp_opt(jget(r, "id")))
+            .map(|r| js_disp_opt(r.get("id")))
             .collect();
         let text = format!(
             "Closed {} workflow record(s), kept active feature \"{}\": {}.",
@@ -252,7 +298,7 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
             ids.join(", ")
         );
         let mut result = Map::new();
-        result.insert("closed".into(), Value::Array(closed));
+        result.insert("closed".into(), Value::Array(closed.iter().map(closed_row).collect()));
         Ok(Out::Emit(Value::Object(result), text, 0))
     })();
     finish(&ctx, out)
