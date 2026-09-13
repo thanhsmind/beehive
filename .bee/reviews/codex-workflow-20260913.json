@@ -1,0 +1,161 @@
+{
+  "id": "codex-workflow-20260913",
+  "requested_by": "user",
+  "requested_at": "2026-09-13T04:53:36.253Z",
+  "scope_description": "Audit whether the bee workflow was applied completely to codex-parity-completion, including shape and execution gates, worktree and worker discipline, proof, capture, acceptance and closure. Review frozen committed artifacts through 0d353078. This is workflow compliance, not a repository-wide product-code audit.",
+  "included": [
+    {
+      "type": "cell",
+      "id": "cpc-1"
+    },
+    {
+      "type": "cell",
+      "id": "cpc-2"
+    },
+    {
+      "type": "cell",
+      "id": "cpc-3"
+    },
+    {
+      "type": "cell",
+      "id": "cpc-4"
+    }
+  ],
+  "excluded": [],
+  "baseline": "642631a59d84639922a70848c52f723d9c9e4f53",
+  "head": "0d35307804be0fd2d34adb5be379816c68802478",
+  "reviewer_manifest": {
+    "reviewers": [
+      {
+        "role": "code-quality",
+        "dispatch_id": "9b1ba8f3-35ca-4cd7-a581-89180e6a3ba9",
+        "requested_model": "gpt-5.6-sol",
+        "transport": "cli-exec",
+        "sandbox": "read-only",
+        "effective_model_status": "declared",
+        "scope": "codex-parity-completion workflow compliance at 0d353078"
+      },
+      {
+        "role": "architecture",
+        "dispatch_id": "f16de9db-b773-4f5b-8284-e15719160ebe",
+        "requested_model": "gpt-5.6-sol",
+        "transport": "cli-exec",
+        "sandbox": "read-only",
+        "effective_model_status": "declared",
+        "scope": "codex-parity-completion workflow compliance at 0d353078"
+      },
+      {
+        "role": "security",
+        "dispatch_id": "ba7a99c9-7a95-4f2a-a5de-1b0fbafd9766",
+        "requested_model": "gpt-5.6-sol",
+        "transport": "cli-exec",
+        "sandbox": "read-only",
+        "effective_model_status": "declared",
+        "scope": "codex-parity-completion workflow compliance at 0d353078"
+      },
+      {
+        "role": "test-coverage",
+        "dispatch_id": "961c2337-f6e8-4428-8a3b-361e90e0fc98",
+        "requested_model": "gpt-5.6-sol",
+        "transport": "cli-exec",
+        "sandbox": "read-only",
+        "effective_model_status": "declared",
+        "scope": "codex-parity-completion workflow compliance at 0d353078"
+      }
+    ]
+  },
+  "verification_preflight": {
+    "checked_at": "2026-09-13T04:53:36.253Z",
+    "cells_checked": [
+      "cpc-1",
+      "cpc-2",
+      "cpc-3",
+      "cpc-4"
+    ],
+    "passed": true
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P2",
+      "axis": "spec",
+      "file": ".bee/decisions.jsonl:2862",
+      "title": "Codex live probes crossed the real-home configuration boundary",
+      "detail": "Recorded trust and mise changes violate CONTEXT.md:11. Establish exact affected entries and authorized restoration. No exposure or restoration inferred.",
+      "autofix_class": "manual",
+      "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    },
+    {
+      "id": "F2",
+      "severity": "P2",
+      "axis": "standards",
+      "file": ".bee/cells/archive/codex-parity-completion/cpc-3.json:86",
+      "title": "Codex transcript repair lacks retained red-before-green proof",
+      "detail": "cpc-3-revision-2.md:3 requires failing tests before repair, but retained logs and cap only establish green. Recover original evidence or record retrospective regression validation honestly.",
+      "autofix_class": "gated_auto",
+      "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    },
+    {
+      "id": "F3",
+      "severity": "P2",
+      "axis": "standards",
+      "file": "docs/history/codex-parity-completion/verification-summary.md:46",
+      "title": "Temporary Codex sign-in cleanup remains unresolved after closure",
+      "detail": "Approved temporary copy remains mode0600; physical-worktree guard blocks deletion. Assign cleanup owner and a permitted path; preserve evidence; no credential read required.",
+      "autofix_class": "manual",
+      "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "axis": "standards",
+      "file": ".bee/cells/archive/codex-parity-completion/cpc-4.json:92",
+      "title": "Codex closure whitespace proof did not cover committed source range",
+      "detail": "Explicit reviewed range check exits2 at session_close/tests.rs:1916. Check actual range and retain raw-log exclusions; this is not failed live proof.",
+      "autofix_class": "gated_auto",
+      "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    },
+    {
+      "id": "F5",
+      "severity": "P3",
+      "axis": "standards",
+      "file": "docs/history/codex-parity-completion/reports/cpc-1-judge.json:8",
+      "title": "Codex judge summary pointer targets unrelated evidence",
+      "detail": "verification-summary.md:22 is whitespace check, not deny/allow proof at line26. Append correction preserving historical judgment.",
+      "autofix_class": "gated_auto",
+      "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    },
+    {
+      "id": "F6",
+      "severity": "P3",
+      "axis": "standards",
+      "file": ".bee/cells/archive/codex-parity-completion/cpc-2.json:146",
+      "title": "Codex evidence log was created before its reservation",
+      "detail": "Cell mistake records log capture before reservation. Reserve output paths before writing; no actual conflict established.",
+      "autofix_class": "gated_auto",
+      "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    },
+    {
+      "id": "F7",
+      "severity": "P3",
+      "axis": "standards",
+      "file": ".bee/onboarding.json:60",
+      "title": "Refreshed onboarding metadata retains obsolete Codex role contract",
+      "detail": "Onboarding timestamp/hash refreshed but prompt-only role note remains. Correct owning renderer and regenerate through CLI.",
+      "autofix_class": "gated_auto",
+      "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md"
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "audit_complete": true,
+    "mode": "report-only",
+    "merge_requested": false,
+    "summary": "Workflow applied substantially but not fully: P1 0, P2 3, P3 4. No source repair or merge approval in this audit.",
+    "report": "docs/history/codex-parity-completion/reports/workflow-review-20260913.md",
+    "next_action": "Prioritize exact real-home side-effect assessment and authorized restoration; findings tracked in backlog."
+  },
+  "created_at": "2026-09-13T04:53:36.253Z",
+  "updated_at": "2026-09-13T05:03:17.222Z"
+}
