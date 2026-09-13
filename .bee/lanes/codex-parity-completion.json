@@ -10,15 +10,15 @@
     "review": false,
     "uat": false
   },
-  "summary": "All four cells capped. Exact guide recipe live proof passed. Regeneration completed and full suite exited0:3920 passed0failed20ignored. Instruction GREEN passed. One commit per cell consolidated with identical tree and backup retained. Runtime concepts synchronized. Final read-only checklist active, merge and user acceptance pending. Temporary auth copy cleanup remains physically guard-blocked.",
-  "next_action": "Merged into main at 4c49458; reload the product and test \"codex-parity-completion\", then either approve uat (\"bee gate --name uat --approved true --lane codex-parity-completion\") or fix it in the worktree and merge again.",
+  "summary": "All4 implementation cells capped and semantic PASS; full suite3920 passed0failed20ignored. Merged main4c49458 plus bookkeeping7e041db5, tested binary installed and hash matched. Runtime knowledge captured. Only UAT door remains; doctor trust attestation hash_changed requires user hook review. Temporary credential cleanup remains separately blocked by physical-worktree guard; copy mode600, test sandboxes removed and evidence retained.",
+  "next_action": "User opens main in Codex, reviews changed hooks in /hooks, tests normal workflow and confirms acceptance. Agent then records UAT and closes feature. Temporary /var/tmp/bee-codex-auth-1qn4fO/auth.json needs a permitted cleanup path; do not bypass guard.",
   "created_at": "2026-09-12T14:13:37.038Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: codex-parity-completion",
-    "asked_at": "2026-09-13T04:31:20.396Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: codex-parity-completion on main; review changed Codex hooks and test workflow",
+    "asked_at": "2026-09-13T04:32:33.426Z",
+    "session": "01a095e4-8306-70d0-bf1f-7a48da530e71"
   },
   "route": {
     "class": "feature",
@@ -37,8 +37,8 @@
   },
   "gate_preview": {
     "feature": "codex-parity-completion",
-    "plan_sha256": "e889664d09e1759b825fc26d699acef12d3d5753f7d2fd5667a92c5e20ead14a",
-    "previewed_at": "2026-09-12T14:26:45.919Z",
+    "plan_sha256": "a36737d2e844127037a5f54b27d8fec7197fd1aa7351fa6972751b0de95e91b6",
+    "previewed_at": "2026-09-13T04:36:33.348Z",
     "cells": [
       {
         "id": "cpc-1",
@@ -360,17 +360,17 @@
     ]
   },
   "advisor_ref": {
-    "consulted_at": "2026-09-12T14:27:50.431Z",
+    "consulted_at": "2026-09-13T04:34:49.427Z",
     "feature": "codex-parity-completion",
-    "newest_decision_id": "e0dcdfd9-5d91-4903-a15d-1b0f6946b20b",
-    "plan_sha256": "e889664d09e1759b825fc26d699acef12d3d5753f7d2fd5667a92c5e20ead14a",
-    "advisor": "five configured hats; native inherited plus agy-flash",
+    "newest_decision_id": "c47eceea-11d6-40e4-af4d-88dacc137fb7",
+    "plan_sha256": "a36737d2e844127037a5f54b27d8fec7197fd1aa7351fa6972751b0de95e91b6",
+    "advisor": "existing five-hat plan consult; documentation-only annotation, no material plan change",
     "digest_head": "# Codex parity plan consult\n\nFive configured perspectives read this scope. Facts, alternatives and risks used native inherited sessions; value and user impact used configured agy-flash workers. Native model diversity was not observed.\n\n## Accepted\n\n- Test the installed manifest selection path. Handler-only tests cannot prove hooks receive native tools.\n- Capture actual Codex hook names before choosing aliases. Preserve Claude behavior and Windows command rendering.\n- Use one resolved dispatch po"
   },
   "approved_cell_packet": {
     "feature": "codex-parity-completion",
-    "plan_sha256": "e889664d09e1759b825fc26d699acef12d3d5753f7d2fd5667a92c5e20ead14a",
-    "previewed_at": "2026-09-12T14:26:45.919Z",
+    "plan_sha256": "a36737d2e844127037a5f54b27d8fec7197fd1aa7351fa6972751b0de95e91b6",
+    "previewed_at": "2026-09-13T04:36:33.348Z",
     "cells": [
       {
         "id": "cpc-1",
