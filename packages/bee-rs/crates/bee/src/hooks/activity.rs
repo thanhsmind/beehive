@@ -665,7 +665,8 @@ static AMBIENT_HERDING_JOB_ID: std::sync::OnceLock<Option<String>> = std::sync::
 fn read_initial_herding_job_id() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
-        if let Ok(bytes) = std::fs::read("/proc/self/environ") {
+        if let Some(bytes) = (std::env::var_os("BEE_TEST_FORCE_ENV_FALLBACK").is_none())
+            .then(|| std::fs::read("/proc/self/environ").ok()).flatten() {
             for entry in bytes.split(|&b| b == 0) {
                 if let Ok(s) = std::str::from_utf8(entry) {
                     if let Some(val) = s.strip_prefix("BEE_HERDING_JOB_ID=") {
@@ -1123,6 +1124,9 @@ mod tests {
 
     impl HerdedEnv {
         fn set(job: Option<&str>) -> HerdedEnv {
+            // Windows has no original /proc environment. Capture the ambient
+            // identity while the shared lock is held, before fixture mutation.
+            let _ = ambient_herding_job_id();
             let prior = HerdedEnv {
                 marker: std::env::var_os("BEE_HERDING_WORKER"),
                 job: std::env::var_os("BEE_HERDING_JOB_ID"),
@@ -2007,6 +2011,37 @@ mod tests {
         assert_eq!(record["state"].as_str().unwrap(), "working");
     }
 
+
+    #[test]
+    fn non_linux_ambient_capture_preserves_herded_and_inherited_routing() {
+        // Each child starts with a fresh ambient cache. The first run exercises
+        // the three Windows failures without Linux's original-environment read.
+        let executable = std::env::current_exe().unwrap();
+        for inherited in [false, true] {
+            let mut command = std::process::Command::new(&executable);
+            command.env("BEE_TEST_FORCE_ENV_FALLBACK", "1")
+                .env_remove("BEE_HERDING_WORKER")
+                .env_remove("BEE_HERDING_JOB_ID");
+            if inherited {
+                command.env("BEE_HERDING_WORKER", "1")
+                    .env("BEE_HERDING_JOB_ID", "job-parent-inherited")
+                    .arg("hooks::activity::tests::inherited_herding_job_id_is_isolated_while_explicit_fire_herded_routes_to_mailbox");
+            } else {
+                command.args([
+                    "hooks::activity::tests::a_herded_pane_records_round_zero_before_the_first_brief",
+                    "hooks::activity::tests::a_herded_pane_writes_the_job_mailbox_record_and_no_session_record",
+                    "hooks::activity::tests::the_state_machine_runs_unchanged_over_the_herded_sink",
+                ]);
+            }
+            let output = command.output().unwrap();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let expected_count = if inherited { 1 } else { 3 };
+            assert!(stdout.contains(&format!("running {expected_count} test")),
+                "fallback child selected no expected tests: {stdout}");
+            assert!(output.status.success(), "fallback child failed (inherited={inherited}):\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        }
+    }
 
     // ── the work record: D1 open, D3 append, D4 no expiry of its own, D5 ────
 

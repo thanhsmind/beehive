@@ -1,0 +1,391 @@
+   Compiling bee v0.1.0 (/home/thanhsmind/Projects/goglbe/beehive--wt--codex-reliability-closeout/packages/bee-rs/crates/bee)
+warning: duplicated attribute
+    --> crates/bee/src/verbs/status_full/tests.rs:4614:5
+     |
+4614 |     #[test]
+     |     ^^^^^^^
+     |
+     = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/onboard/apply.rs:325:9
+    |
+325 |     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `ack_present` is never used
+   --> crates/bee/src/herding/mailbox.rs:546:15
+    |
+546 | pub(crate) fn ack_present(entries: &[String], round: u32) -> bool {
+    |               ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `ROLE_DESCRIPTION_MAX` is never used
+   --> crates/bee/src/hooks/model_guard.rs:344:7
+    |
+344 | const ROLE_DESCRIPTION_MAX: usize = 60;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `role_slot_description` is never used
+   --> crates/bee/src/hooks/model_guard.rs:360:4
+    |
+360 | fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `NoEmbedded` is never constructed
+  --> crates/bee/src/verbs/drivers/prompt.rs:96:5
+   |
+94 | pub(crate) enum PromptSkew {
+   |                 ---------- variant in this enum
+95 |     /// No compiled-in template answers to this name.
+96 |     NoEmbedded,
+   |     ^^^^^^^^^^
+   |
+   = note: `PromptSkew` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `posix_shell` is never used
+   --> crates/bee/src/verbs/drivers/close.rs:137:15
+    |
+137 | pub(crate) fn posix_shell() -> Option<&'static str> {
+    |               ^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/reservations/leases.rs:610:15
+    |
+610 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `env_nonempty` is never used
+   --> crates/bee/src/verbs/state_group/store.rs:379:15
+    |
+379 | pub(crate) fn env_nonempty(name: &str) -> Option<String> {
+    |               ^^^^^^^^^^^^
+
+warning: function `derive_candidates` is never used
+   --> crates/bee/src/verbs/state_group/plan_conflicts.rs:309:15
+    |
+309 | pub(crate) fn derive_candidates(root: &Path, feature: &str) -> Result<Vec<Value>, Err2> {
+    |               ^^^^^^^^^^^^^^^^^
+
+warning: function `interventions_store_path` is never used
+    --> crates/bee/src/verbs/supervisor.rs:1294:15
+     |
+1294 | pub(crate) fn interventions_store_path(root: &Path) -> PathBuf {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates/bee/src/verbs/drivers/tests.rs:961:13
+    |
+961 |         let mut cell = |id: &str, title: &str| {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `use_json`
+    --> crates/bee/src/verbs/drivers/tests.rs:6522:21
+     |
+6522 |         let (flags, use_json) = parse_flags(&[
+     |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_json`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `root`
+   --> crates/bee/src/verbs/state_group/advisor_ref.rs:445:20
+    |
+445 |     fn fresh_state(root: &Path, feature: &str) -> Map<String, Value> {
+    |                    ^^^^ help: if this is intentional, prefix it with an underscore: `_root`
+
+warning: `bee` (bin "bee") generated 11 warnings (run `cargo fix --bin "bee" -p bee` to apply 1 suggestion)
+warning: unused variable: `win`
+    --> crates/bee/src/verbs/supervisor.rs:4747:13
+     |
+4747 |         let win = away_into(control, "supervisor away", Some("dinner")).unwrap();
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_win`
+
+warning: function `render_agent_template` is never used
+   --> crates/bee/src/onboard/agents.rs:144:8
+    |
+144 | pub fn render_agent_template(engine: &Engine, agent_name: &str, model: &str) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:1785:9
+     |
+1785 |         ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+1785 |         let _ = ok(start_default(root, root, "feat-perf", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2265:9
+     |
+2265 |         ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2265 |         let _ = ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> crates/bee/src/verbs/state_group/tests.rs:2300:9
+     |
+2300 |         ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2300 |         let _ = ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
+     |         +++++++
+
+warning: `bee` (bin "bee" test) generated 13 warnings (4 duplicates) (run `cargo fix --bin "bee" -p bee --tests` to apply 4 suggestions)
+    Finished `release` profile [optimized] target(s) in 39.36s
+     Running unittests src/main.rs (/home/thanhsmind/.cache/cargo-target/release/deps/bee-c971e971395acb0c)
+
+running 55 tests
+test hooks::activity::tests::a_block_sets_a_gate_mark_naming_the_tool ... ok
+test hooks::activity::tests::a_claim_without_a_ttl_still_counts_as_held ... ok
+test hooks::activity::tests::a_herded_pane_records_round_zero_before_the_first_brief ... ok
+test hooks::activity::tests::a_follow_up_prompt_appends_and_the_first_prompt_stays_the_title ... ok
+test hooks::activity::tests::a_prompt_arriving_while_the_prior_state_is_blocked_is_still_recorded ... ok
+test hooks::activity::tests::a_permission_request_blocks_and_records_the_tool_it_blocked_on ... ok
+test hooks::activity::tests::a_missing_session_record_is_created_minimally ... ok
+test hooks::activity::tests::a_permission_prompt_overrides_waiting_input ... ok
+test hooks::activity::tests::activity_pane_counts_an_empty_or_blank_value_as_unset ... ok
+test hooks::activity::tests::activity_pane_is_absent_when_neither_transport_names_a_pane ... ok
+test hooks::activity::tests::activity_pane_prefers_herdr_when_both_transports_name_a_pane ... ok
+test hooks::activity::tests::activity_pane_reads_tmux_when_only_tmux_names_a_pane ... ok
+test hooks::activity::tests::a_post_tool_use_with_a_different_tool_use_id_leaves_the_block_standing ... ok
+test hooks::activity::tests::a_lane_bound_session_stamps_its_lane_as_the_feature ... ok
+test hooks::activity::tests::a_prompt_opens_the_work_record_in_the_users_own_words ... ok
+test hooks::activity::tests::a_session_id_with_path_separators_is_refused_and_logged ... ok
+test hooks::activity::tests::a_repeat_of_the_same_state_refreshes_the_record_but_is_not_a_transition ... ok
+test hooks::activity::tests::a_title_longer_than_the_cap_is_cut_and_marked ... ok
+test hooks::activity::tests::a_herded_pane_writes_the_job_mailbox_record_and_no_session_record ... ok
+test hooks::activity::tests::a_turn_boundary_always_clears_a_block ... ok
+test hooks::activity::tests::a_work_record_needs_no_expiry_of_its_own_because_it_hangs_off_the_session ... ok
+test hooks::activity::tests::an_active_claim_held_by_this_session_stamps_its_cell ... ok
+test hooks::activity::tests::a_missing_claims_dir_or_an_unreadable_claim_never_blocks_the_state_write ... ok
+test hooks::activity::tests::an_event_that_says_nothing_about_the_work_leaves_the_record_standing ... ok
+test hooks::activity::tests::an_existing_record_keeps_its_own_fields ... ok
+test hooks::activity::tests::an_expired_or_foreign_claim_stamps_no_cell ... ok
+test hooks::activity::tests::an_injection_shaped_prompt_is_ordinary_work_and_survives_intact ... ok
+test hooks::activity::tests::an_unbound_session_falls_back_to_the_default_states_feature ... ok
+test hooks::activity::tests::a_user_prompt_records_working_and_one_transition ... ok
+test hooks::activity::tests::a_herded_pane_records_the_work_into_its_mailbox_and_never_a_session_file ... ok
+test hooks::activity::tests::the_event_table_maps_every_decided_event_and_nothing_else ... ok
+test hooks::activity::tests::empty_garbage_and_huge_stdin_exit_zero_and_leave_a_log_line ... ok
+test hooks::activity::tests::a_job_id_that_is_not_a_plain_id_falls_back_to_the_sessions_sink ... ok
+test hooks::activity::tests::the_log_is_capped_to_its_last_half ... ok
+test hooks::activity::tests::no_lane_and_no_state_file_stamps_no_feature_at_all ... ok
+test hooks::activity::tests::a_prompt_after_the_agent_closed_the_record_opens_a_fresh_one ... ok
+test hooks::activity::tests::an_agent_set_mark_is_never_overwritten_or_cleared_by_the_hook ... ok
+test hooks::activity::tests::a_path_under_the_repo_root_is_stored_relative_and_any_other_becomes_a_placeholder ... ok
+test hooks::activity::tests::an_event_with_no_prompt_field_writes_no_work_record ... ok
+test hooks::activity::tests::subagent_stop_is_never_handled ... ok
+test hooks::activity::tests::non_linux_ambient_capture_preserves_herded_and_inherited_routing ... ok
+test hooks::activity::tests::the_fifty_first_transition_trims_the_file_to_the_last_fifty ... ok
+test hooks::activity::tests::waiting_input_sets_a_question_mark_and_a_turn_boundary_clears_it ... ok
+test hooks::activity::tests::without_a_recorded_tool_use_id_the_tool_name_clears_the_block ... ok
+test hooks::activity::tests::inherited_herding_job_id_is_isolated_while_explicit_fire_herded_routes_to_mailbox ... ok
+test hooks::activity::tests::the_marker_without_a_job_id_keeps_todays_sessions_sink ... ok
+test hooks::activity::tests::the_matching_post_tool_use_clears_the_block ... ok
+test hooks::activity::tests::the_stored_text_never_grows_past_its_cap_and_keeps_the_newest_words ... ok
+test hooks::activity::tests::picking_up_a_cell_without_changing_state_refreshes_but_is_not_a_transition ... ok
+test hooks::activity::tests::session_end_marks_exited_but_clear_and_resume_do_not ... ok
+test hooks::activity::tests::the_state_machine_runs_unchanged_over_the_herded_sink ... ok
+test hooks::activity::tests::subagent_stop_and_child_session_events_leave_parent_working ... ok
+test hooks::activity::tests::waiting_input_survives_tool_traffic_and_ends_only_at_a_turn_boundary ... ok
+test hooks::activity::tests::only_the_first_line_becomes_the_title ... ok
+test hooks::activity::tests::every_secret_shape_redacts_the_whole_prompt ... ok
+
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 3511 filtered out; finished in 0.07s
+
+     Running tests/agents_block_render_parity.rs (/home/thanhsmind/.cache/cargo-target/release/deps/agents_block_render_parity-8a2671adedc77cb9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/cells_archive_sweep.rs (/home/thanhsmind/.cache/cargo-target/release/deps/cells_archive_sweep-5f04d71a7977c47e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/class_playbook_parity.rs (/home/thanhsmind/.cache/cargo-target/release/deps/class_playbook_parity-984d4b8b18f1ad0d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/concurrency.rs (/home/thanhsmind/.cache/cargo-target/release/deps/concurrency-e8cbe70ae555d78f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+
+     Running tests/discovery_verbs.rs (/home/thanhsmind/.cache/cargo-target/release/deps/discovery_verbs-f038de91d46fef27)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/front_door.rs (/home/thanhsmind/.cache/cargo-target/release/deps/front_door-c4fbc578bcb0edad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/gate_preview.rs (/home/thanhsmind/.cache/cargo-target/release/deps/gate_preview-65fe0a6c80c19dd9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/hook_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/hook_contracts-bcaa29b197869e50)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests/installer_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/installer_contracts-8f36ce969868cd73)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/installer_invocations.rs (/home/thanhsmind/.cache/cargo-target/release/deps/installer_invocations-e4bda4ea36de0ef4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/instruction_laws.rs (/home/thanhsmind/.cache/cargo-target/release/deps/instruction_laws-962b35f991796858)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/opencode_plugin_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/opencode_plugin_contracts-93427c766d4457e3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/pi_plugin_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/pi_plugin_contracts-539045563093a3ae)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 61 filtered out; finished in 0.00s
+
+     Running tests/pointer_integrity.rs (/home/thanhsmind/.cache/cargo-target/release/deps/pointer_integrity-55c7ad378198e1c1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/principle_index_parity.rs (/home/thanhsmind/.cache/cargo-target/release/deps/principle_index_parity-1d08cb4c31075731)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/proof_gate.rs (/home/thanhsmind/.cache/cargo-target/release/deps/proof_gate-9b0e8fe2b06e2931)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/registry_contracts.rs (/home/thanhsmind/.cache/cargo-target/release/deps/registry_contracts-b40723d26e609746)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/registry_dispatch.rs (/home/thanhsmind/.cache/cargo-target/release/deps/registry_dispatch-94aff0aeeac74dcd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/revision_deadlock_visibility.rs (/home/thanhsmind/.cache/cargo-target/release/deps/revision_deadlock_visibility-34f13d8cce78373e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/route_class_parity.rs (/home/thanhsmind/.cache/cargo-target/release/deps/route_class_parity-2e19848c69ff898f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/route_lane_targeting.rs (/home/thanhsmind/.cache/cargo-target/release/deps/route_lane_targeting-803b764aa9374c4a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/rule_index_parity.rs (/home/thanhsmind/.cache/cargo-target/release/deps/rule_index_parity-695deeab0436fa21)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/session_release.rs (/home/thanhsmind/.cache/cargo-target/release/deps/session_release-4b5ea28d5c825de5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests/specs_fence.rs (/home/thanhsmind/.cache/cargo-target/release/deps/specs_fence-15b0b2a5a847a559)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/statusline_contract.rs (/home/thanhsmind/.cache/cargo-target/release/deps/statusline_contract-b6a71cc5ee93e14d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/verification_contract_parity.rs (/home/thanhsmind/.cache/cargo-target/release/deps/verification_contract_parity-9c477e731c274f48)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/work_verbs.rs (/home/thanhsmind/.cache/cargo-target/release/deps/work_verbs-034d7e6b36f46887)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/workflow_verbs.rs (/home/thanhsmind/.cache/cargo-target/release/deps/workflow_verbs-d172d65f185c6dd6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
+
