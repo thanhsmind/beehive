@@ -1,0 +1,214 @@
+{
+  "id": "cpc-1",
+  "feature": "codex-parity-completion",
+  "title": "Protect native Codex tools through installed hooks",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "ee16df03-e88d-4f5e-9f64-400114d9d234"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee-rs/crates/bee/src/hooks/adapter.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+    "packages/bee/hooks/hooks.json",
+    "packages/bee/hooks/claude-hooks.json",
+    ".codex/hooks.json",
+    "scripts/codex-parity-canary.sh"
+  ],
+  "read_first": [
+    "docs/history/codex-parity-completion/CONTEXT.md",
+    "docs/history/codex-parity-completion/plan.md",
+    "docs/knowledge/areas/hook-runtime/overview.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    ".bee/verify/verify-app/features/onboard.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "action": "Per D1, first build a bounded reproducible real-Codex canary in an isolated onboarded repo, capture native tool names and hook inputs without secrets, and reproduce denied/allowed patch and shell behavior before changing guards. Use codex 0.154.0 already installed; never change real user config or hook trust. A per-invocation hook-trust override is allowed only for vetted hooks inside the disposable canary. Fix actual input normalization and matcher gaps; retain gate, privacy, reservation and multi-target/rename checks. Consolidate Codex source/host hook rendering so a newly onboarded host gets shared activity hooks too. Preserve explicit runtime differences and Windows commands. Add regression tests through the installed manifest selection path, not just direct handler calls. Capture actual observed lifecycle events and spawn fields in the canary report for cpc-2/cpc-3. Regenerate owned hook manifests with the newly built binary. Commit only assigned files once. The leader owns state writes and cap for herded execution.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hook_manifests && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks_wiring",
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "An installed Codex hook denies forbidden patch and shell writes without changing bytes, and allows an approved write.",
+      "Source and onboarded Codex manifests carry the same guard and shared activity behavior.",
+      "The live canary reports actual observed names, versions and skipped capabilities without reading secrets."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/adapter.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+        "substantive": "Production behavior and regression tests for the assigned outcome."
+      }
+    ],
+    "key_links": [
+      "Installed bee commands reach the updated production behavior."
+    ],
+    "prohibitions": [
+      "Do not weaken Claude guards, alter real credentials, or claim unobserved platform support."
+    ]
+  },
+  "trace": {
+    "worker": "Kevin",
+    "outcome": "Installed Codex hooks protect observed native tools and retain real runtime evidence.",
+    "files_changed": [
+      ".codex/hooks.json",
+      "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/adapter.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+      "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+      "packages/bee/hooks/claude-hooks.json",
+      "packages/bee/hooks/hooks.json",
+      "scripts/codex-parity-canary.sh"
+    ],
+    "deviations": [
+      "Use private authentication and deny opaque native dispatch — live input exposed inaccessible role metadata — hit an unforeseen obstacle",
+      "Consolidate recovery commits at wave close — sibling commits intervene — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T03:11:11.378Z",
+    "behavior_change": true,
+    "verification_evidence": "13/7/23 passed with TMPDIR=/var/tmp in docs/history/codex-parity-completion/cpc-1-checks.log; additional real installed canary exited 0 at /var/tmp/bee-codex-canary-ZPuEAI/evidence: patch/shell deny and allow, unchanged protected bytes, source/installed manifests equal, opaque native dispatch denied. Before-fix Cm0jce native spawn bypassed selection; installed regression failed before repair.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hook_manifests && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks_wiring",
+    "claimed_at": "2026-09-13T02:52:19.005Z",
+    "verified_at": null,
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-12T15:26:49.421Z",
+        "claim_session": "01a095e4-8306-70d0-bf1f-7a48da530e71",
+        "claimed_at": "2026-09-12T14:41:25.322Z",
+        "acquired_at": "2026-09-12T14:41:25.322Z",
+        "worker": "Kevin",
+        "verdict": "blocked",
+        "failure_signature": "ec31dcdf2825",
+        "note": "Second redispatch exhausted: first returned invalid native canary proof; second hit 1800-second ceiling without valid installed-hook evidence. Need user direction under bee-swarming retry limit."
+      }
+    ],
+    "blocked_reason": null,
+    "escalation_reason": "User explicitly approved session-model recovery after two failed installed-hook proof attempts.",
+    "dropped_reason": null,
+    "reopened_at": "2026-09-13T02:16:43.910Z",
+    "reopened_reason": "User approved escalation in decision 34ba05af-871c-48db-9195-10e0a98f37c5 and resumed from the feature worktree with shared-store access. Run after cpc-2 restores the red test base.",
+    "mistakes": [
+      {
+        "wrong": "First canary targeted unprotected decisions.jsonl",
+        "better": "inspect direct_edit_verb first."
+      },
+      {
+        "wrong": "Codex PATH wrapper modified mise config",
+        "better": "resolve actual executable first."
+      },
+      {
+        "wrong": "Dotted trust override contained literal quotes",
+        "better": "use complete project map and isolated home."
+      },
+      {
+        "wrong": "Script replacement dropped executable mode",
+        "better": "verify mode before commit."
+      },
+      {
+        "wrong": "Session JSON did not contain waiting_on",
+        "better": "inspect state or workflow record."
+      }
+    ],
+    "report": {
+      "outcome": "Installed Codex hooks protect observed native tools and retain real runtime evidence.",
+      "commit": "f89651c5",
+      "files": [
+        ".codex/hooks.json",
+        "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/adapter.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+        "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+        "packages/bee/hooks/claude-hooks.json",
+        "packages/bee/hooks/hooks.json",
+        "scripts/codex-parity-canary.sh"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hook_manifests && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks_wiring — green:unit — 13/7/23 passed with TMPDIR=/var/tmp in docs/history/codex-parity-completion/cpc-1-checks.log; additional real installed canary exited 0 at /var/tmp/bee-codex-canary-ZPuEAI/evidence: patch/shell deny and allow, unchanged protected bytes, source/installed manifests equal, opaque native dispatch denied. Before-fix Cm0jce native spawn bypassed selection; installed regression failed before repair.",
+      "deviations": [
+        "Use private authentication and deny opaque native dispatch — live input exposed inaccessible role metadata — hit an unforeseen obstacle",
+        "Consolidate recovery commits at wave close — sibling commits intervene — found a better route"
+      ],
+      "mistakes": [
+        "First canary targeted unprotected decisions.jsonl — inspect direct_edit_verb first.",
+        "Codex PATH wrapper modified mise config — resolve actual executable first.",
+        "Dotted trust override contained literal quotes — use complete project map and isolated home.",
+        "Script replacement dropped executable mode — verify mode before commit.",
+        "Session JSON did not contain waiting_on — inspect state or workflow record."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "installed write deny and allow",
+            "status": "PASS",
+            "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/report.json:11-26 records native Bash/apply_patch and denied backlog writes with allowed history writes; docs/history/codex-parity-completion/verification-summary.md:22 records deny exit 2, allow exit 0, and unchanged bytes."
+          },
+          {
+            "id": "manifest and activity parity",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:454-467 checks three generated projections; packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs:638-701 checks the decided activity set and shared Claude launcher; final-green-suite.log:4266 records hook_contracts 13 passed."
+          },
+          {
+            "id": "honest live canary report",
+            "status": "PASS",
+            "evidence": "/var/tmp/bee-codex-canary-VVDuwM/evidence/report.json:2-15 reports Codex 0.154.0, observed events, observed tools, and no spawn input; lines 76-77 explicitly report skipped native spawn."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T04:31:09.070Z"
+      }
+    ]
+  },
+  "escalate": true
+}
