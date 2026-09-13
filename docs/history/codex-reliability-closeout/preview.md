@@ -169,4 +169,3 @@ test cli_gate_preview_reversed_order_and_default_record_unapproved ... ok
 
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
 ```
-
