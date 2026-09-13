@@ -1422,6 +1422,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     #[test]
     fn mailbox_write_assigns_seq_clears_the_prior_open_record_and_scopes_by_role() {
         let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
         capped_cell_and_claim(tmp.path(), "next", "sess-w");
         let input = planned_next_input();
         let r1 = ok(write_mailbox_handoff(tmp.path(), "wf-1", &input, None));
@@ -1462,6 +1463,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     #[test]
     fn mailbox_write_refuses_uncapped_previous_and_unowned_claim() {
         let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
         let input = planned_next_input();
         match write_mailbox_handoff(tmp.path(), "wf-1", &input, None) {
             Err(Err2::Msg(m)) => {
@@ -1483,6 +1485,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     #[test]
     fn mailbox_adopt_moves_the_claim_bumps_the_fence_and_clears() {
         let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
         capped_cell_and_claim(tmp.path(), "next", "sess-w");
         ok(write_mailbox_handoff(tmp.path(), "wf-1", &planned_next_input(), None));
         match ok(adopt_mailbox_handoff(tmp.path(), "wf-1", "sess-new", None)) {
@@ -1512,6 +1515,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     #[test]
     fn mailbox_adopt_refuses_a_pause_record() {
         let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
         let mut input = Map::new();
         input.insert("kind".into(), json!("pause"));
         input.insert("cell".into(), json!("wip"));
@@ -1563,6 +1567,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     #[test]
     fn mailbox_adopt_refuses_a_resumed_or_compacted_session_and_leaves_the_handoff_open() {
         let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
         capped_cell_and_claim(tmp.path(), "next", "sess-w");
         ok(write_mailbox_handoff(tmp.path(), "wf-1", &planned_next_input(), None));
         write_session_source(tmp.path(), "sess-new", "compact");
@@ -1585,6 +1590,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     #[test]
     fn mailbox_adopt_proceeds_for_a_fresh_session_boundary() {
         let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1","status":"active"}));
         capped_cell_and_claim(tmp.path(), "next", "sess-w");
         ok(write_mailbox_handoff(tmp.path(), "wf-1", &planned_next_input(), None));
         write_session_source(tmp.path(), "sess-new", "startup");
@@ -1693,11 +1699,15 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     #[test]
     fn rebuild_handoff_projection_ignores_closed_workflows() {
         let tmp = tmp_root();
-        write_workflow(tmp.path(), "wf-closed", json!({"id":"wf-closed","feature":"f-closed","status":"closed"}));
+        write_workflow(tmp.path(), "wf-closed", json!({"id":"wf-closed","feature":"f-closed","status":"active"}));
         let mut input = Map::new();
         input.insert("kind".into(), json!("pause"));
         input.insert("cell".into(), json!("old-cell"));
         ok(write_mailbox_handoff(tmp.path(), "wf-closed", &input, None));
+
+        let mut patch = Map::new();
+        patch.insert("status".into(), json!("closed"));
+        ok(update_workflow_assuming_lock(tmp.path(), "wf-closed", patch));
 
         write_workflow(tmp.path(), "wf-active", json!({"id":"wf-active","feature":"f-active","status":"active"}));
         ok(rebuild_handoff_projection(tmp.path()));
@@ -1722,6 +1732,130 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert!(records[0].get("cleared_at").is_some());
         let rec_path = ok(handoff_record_path(tmp.path(), "wf-1", 1));
         assert!(rec_path.exists(), "file must stay on disk");
+    }
+
+    #[test]
+    fn mailbox_write_serializes_behind_workflow_lock_and_refuses_closed_workflow() {
+        let tmp = tmp_root();
+        let wid = "wf-serialize";
+        write_workflow(
+            tmp.path(),
+            wid,
+            json!({"id": wid, "feature": "feat-s", "status": "active"}),
+        );
+        let mut input = Map::new();
+        input.insert("kind".into(), json!("pause"));
+        input.insert("cell".into(), json!("c1"));
+
+        // Acquire workflow:<id> on the main thread.
+        let wf_guard = ok(acquire_workflow_lock(tmp.path(), wid));
+
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let root = tmp.path().to_path_buf();
+        let input_clone = input.clone();
+        let handle = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            write_mailbox_handoff(&root, wid, &input_clone, None)
+        });
+
+        // Wait until writer thread has started.
+        started_rx.recv().unwrap();
+
+        // While wf_guard is held, the writer must wait.
+        // We close the workflow through update_workflow_assuming_lock.
+        let mut patch = Map::new();
+        patch.insert("status".into(), json!("closed"));
+        ok(update_workflow_assuming_lock(tmp.path(), wid, patch));
+
+        // Mailbox must still be empty before the writer proceeds.
+        assert!(
+            ok(list_handoff_mailbox(tmp.path(), wid)).is_empty(),
+            "mailbox must remain empty while workflow lock is held"
+        );
+
+        // Release the workflow lock.
+        drop(wf_guard);
+
+        // Writer finishes and must refuse with a message naming the id and stating no handoff was written.
+        let res = handle.join().expect("writer thread joined");
+        match res {
+            Err(Err2::Msg(m)) => {
+                assert!(m.contains(wid), "message must name workflow id: {m}");
+                assert!(
+                    m.to_lowercase().contains("no handoff was written"),
+                    "message must say no handoff was written: {m}"
+                );
+            }
+            Ok(rec) => panic!("writer should have refused after close, but succeeded with: {rec:?}"),
+            Err(Err2::Ex) => panic!("unexpected exotic error"),
+        }
+
+        // Mailbox history must be unchanged (empty).
+        assert!(
+            ok(list_handoff_mailbox(tmp.path(), wid)).is_empty(),
+            "mailbox history must be unchanged"
+        );
+
+        // Projection must be unchanged (does not exist).
+        assert!(!handoff_path(tmp.path()).exists(), "projection must be unchanged");
+    }
+
+    #[test]
+    fn mailbox_write_refuses_missing_unreadable_and_closed_workflow_records() {
+        let tmp = tmp_root();
+        let mut input = Map::new();
+        input.insert("kind".into(), json!("pause"));
+        input.insert("cell".into(), json!("c1"));
+
+        // 1. Missing workflow
+        match write_mailbox_handoff(tmp.path(), "wf-missing", &input, None) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.contains("wf-missing"), "message must name workflow id: {m}");
+                assert!(
+                    m.to_lowercase().contains("no handoff was written"),
+                    "message must state no handoff was written: {m}"
+                );
+            }
+            Ok(_) => panic!("expected missing workflow refusal"),
+            Err(Err2::Ex) => panic!("unexpected exotic error"),
+        }
+        assert!(ok(list_handoff_mailbox(tmp.path(), "wf-missing")).is_empty());
+
+        // 2. Unreadable / corrupt workflow record
+        let corrupt_dir = workflows_dir(tmp.path()).join("wf-corrupt");
+        std::fs::create_dir_all(&corrupt_dir).unwrap();
+        std::fs::write(corrupt_dir.join("state.json"), "NOT VALID JSON").unwrap();
+        match write_mailbox_handoff(tmp.path(), "wf-corrupt", &input, None) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.contains("wf-corrupt"), "message must name workflow id: {m}");
+                assert!(
+                    m.to_lowercase().contains("no handoff was written"),
+                    "message must state no handoff was written: {m}"
+                );
+            }
+            Ok(_) => panic!("expected unreadable workflow refusal"),
+            Err(Err2::Ex) => panic!("unexpected exotic error"),
+        }
+        assert!(ok(list_handoff_mailbox(tmp.path(), "wf-corrupt")).is_empty());
+
+        // 3. Closed workflow
+        write_workflow(
+            tmp.path(),
+            "wf-closed",
+            json!({"id": "wf-closed", "feature": "f-closed", "status": "closed"}),
+        );
+        match write_mailbox_handoff(tmp.path(), "wf-closed", &input, None) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.contains("wf-closed"), "message must name workflow id: {m}");
+                assert!(
+                    m.to_lowercase().contains("no handoff was written"),
+                    "message must state no handoff was written: {m}"
+                );
+            }
+            Ok(_) => panic!("expected closed workflow refusal"),
+            Err(Err2::Ex) => panic!("unexpected exotic error"),
+        }
+        assert!(ok(list_handoff_mailbox(tmp.path(), "wf-closed")).is_empty());
     }
 
 

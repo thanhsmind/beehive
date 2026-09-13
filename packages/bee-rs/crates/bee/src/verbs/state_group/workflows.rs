@@ -25,7 +25,8 @@ use crate::verbs::workflow_store::{
     rebuild_lane_projection_reporting, rebuild_state_projection,
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
-    write_mailbox_handoff, MailboxAdopt, clear_mailbox_pause_handoffs, list_handoff_mailbox,
+    write_mailbox_handoff, MailboxAdopt, clear_mailbox_pause_handoffs,
+    clear_mailbox_pause_handoffs_assuming_lock, list_handoff_mailbox,
     require_handoff_workflow_id,
 };
 use serde_json::{json, Map, Value};
@@ -108,10 +109,29 @@ pub(crate) fn close_workflow_records(
     root: &Path,
     target_ids: &[String],
 ) -> Result<Vec<Map<String, Value>>, Err2> {
-    // 1. Preflight all targets for open planned-next authority
+    if target_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Sort and deduplicate multi-close targets
+    let mut unique_ids: Vec<String> = Vec::new();
     for id in target_ids {
         let wf_id_s = require_handoff_workflow_id(id)?;
-        let records = list_handoff_mailbox(root, &wf_id_s)?;
+        unique_ids.push(wf_id_s);
+    }
+    unique_ids.sort();
+    unique_ids.dedup();
+
+    // Acquire workflow:<id> then handoff:<id> for each target in stable order
+    let mut guards: Vec<LockGuard> = Vec::new();
+    for id in &unique_ids {
+        guards.push(acquire_workflow_lock(root, id)?);
+        guards.push(acquire_named_lock(root, &format!("handoff:{id}"))?);
+    }
+
+    // 1. Preflight all targets for open planned-next authority
+    for id in &unique_ids {
+        let records = list_handoff_mailbox(root, id)?;
         for record in records {
             let is_open = matches!(record.get("status"), Some(Value::String(s)) if s == "open");
             let is_planned_next = matches!(record.get("kind"), Some(Value::String(s)) if s == "planned-next");
@@ -127,18 +147,21 @@ pub(crate) fn close_workflow_records(
         }
     }
 
-    // 2. Clear open pause records in each target
-    for id in target_ids {
-        clear_mailbox_pause_handoffs(root, id)?;
+    // 2. Clear open pause records in each target using assuming-lock helper
+    for id in &unique_ids {
+        clear_mailbox_pause_handoffs_assuming_lock(root, id)?;
     }
 
-    // 3. Mark each workflow closed
+    // 3. Mark each workflow closed using assuming-lock helper
     let mut closed = Vec::new();
-    for id in target_ids {
+    for id in &unique_ids {
         let mut patch = Map::new();
         patch.insert("status".into(), json!("closed"));
-        closed.push(update_workflow(root, id, patch)?);
+        closed.push(update_workflow_assuming_lock(root, id, patch)?);
     }
+
+    // Release all transaction locks before rebuilding projections
+    drop(guards);
 
     // 4. Rebuild handoff projection
     rebuild_handoff_projection(root)?;

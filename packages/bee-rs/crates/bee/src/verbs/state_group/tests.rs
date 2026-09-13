@@ -1608,6 +1608,15 @@ use std::time::Instant;
                    "created_at":"2026-01-01T00:00:00.000Z"}),
         );
         assert!(resolve_handoff_workflow_id(tmp.path(), Some("ghost"), None).is_err());
+        // With an unbound session, the default record resolves to a closed workflow
+        // if no live workflow exists, so write_mailbox_handoff can serialize under
+        // locks and fail closed.
+        write_session(tmp.path(), "sess-1", None);
+        write_state_file(tmp.path(), r#"{"phase":"idle","feature":"ghost"}"#);
+        assert_eq!(
+            ok(resolve_handoff_workflow_id(tmp.path(), None, None)).as_deref(),
+            Some("wf-2")
+        );
     }
 
     #[test]

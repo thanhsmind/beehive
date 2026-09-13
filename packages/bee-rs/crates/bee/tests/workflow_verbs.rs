@@ -830,3 +830,92 @@ fn workflows_close_clears_pause_handoff_and_excludes_closed_workflow_from_projec
     // Projection must be removed (no open handoffs in any active workflow)
     assert!(!proj_file.is_file(), "projection must not project closed workflow handoff");
 }
+
+#[test]
+fn workflows_close_versus_handoff_write_linearizes_cleanly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    run(&repo, &["state", "start-feature", "--feature", "wf-race"]);
+    let records = list_by_feature(&repo);
+    let wf_id = records[0]["id"].as_str().unwrap().to_string();
+
+    // Prepare cell requirements for planned-next write
+    write_cell(&repo, "c-prev", "wf-race", "capped");
+    std::fs::create_dir_all(repo.join(".bee/claims")).unwrap();
+    std::fs::write(
+        repo.join(".bee/claims/c-next.json"),
+        r#"{"cell":"c-next","session":"sess-w","fence_epoch":1}"#,
+    )
+    .unwrap();
+
+    let repo1 = repo.clone();
+    let wf_id1 = wf_id.clone();
+    let t_close = std::thread::spawn(move || {
+        run(&repo1, &["state", "workflows", "close", "--id", &wf_id1])
+    });
+
+    let repo2 = repo.clone();
+    let t_write = std::thread::spawn(move || {
+        run(
+            &repo2,
+            &[
+                "state",
+                "handoff",
+                "write",
+                "--kind",
+                "planned-next",
+                "--previous-cell",
+                "c-prev",
+                "--next-cell",
+                "c-next",
+                "--writer-session",
+                "sess-w",
+            ],
+        )
+    });
+
+    let (code_close, out_close) = t_close.join().unwrap();
+    let (code_write, out_write) = t_write.join().unwrap();
+
+    let records_after = list_by_feature(&repo);
+    let wf_status = records_after[0]["status"].as_str().unwrap();
+
+    let mb_dir = repo.join(format!(".bee/runtime/handoffs/{wf_id}"));
+    let mb_rec = mb_dir.join("0001.json");
+
+    if code_write == 0 {
+        // Outcome 1: Writer won.
+        // Handoff must be open and visible. Close must have refused.
+        assert_ne!(
+            code_close, 0,
+            "if write won, close must have refused. close output: {out_close}"
+        );
+        assert!(
+            out_close.contains("open planned-next handoff"),
+            "close refusal must state open planned-next authority: {out_close}"
+        );
+        assert_eq!(wf_status, "active", "workflow must remain active if handoff won");
+        assert!(mb_rec.is_file(), "mailbox record must exist");
+        let mb_json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&mb_rec).unwrap()).unwrap();
+        assert_eq!(mb_json["status"], "open");
+        assert_eq!(mb_json["kind"], "planned-next");
+    } else {
+        // Outcome 2: Close won.
+        // Close succeeded, writer refused, workflow is closed, no handoff was written.
+        assert_eq!(
+            code_close, 0,
+            "if write lost, close must have succeeded. close output: {out_close}"
+        );
+        assert!(
+            out_write.contains("closed") || out_write.contains("no handoff was written"),
+            "writer refusal must name closed state or no handoff was written: {out_write}"
+        );
+        assert_eq!(wf_status, "closed", "workflow must be closed if close won");
+        assert!(
+            !mb_rec.exists(),
+            "no handoff record may be written when close won"
+        );
+    }
+}
