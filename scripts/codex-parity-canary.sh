@@ -4,11 +4,27 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-BEE_BIN="${BEE_BIN:-${CARGO_TARGET_DIR:-$REPO_ROOT/packages/bee-rs/target}/release/bee}"
-if [[ ! -x "$BEE_BIN" && -x "$REPO_ROOT/.bee/bin/bee" ]]; then
-  BEE_BIN="$REPO_ROOT/.bee/bin/bee"
+# Capture host environment and custom settings before any overrides
+HOST_REAL_HOME="$(realpath "${HOME:-/nonexistent}" 2>/dev/null || echo "${HOME:-/nonexistent}")"
+HOST_REAL_CODEX="$(realpath "${HOST_REAL_HOME}/.codex" 2>/dev/null || echo "${HOST_REAL_HOME}/.codex")"
+HOST_XDG_CONFIG="$(realpath "${XDG_CONFIG_HOME:-$HOST_REAL_HOME/.config}" 2>/dev/null || echo "${XDG_CONFIG_HOME:-$HOST_REAL_HOME/.config}")"
+HOST_XDG_DATA="$(realpath "${XDG_DATA_HOME:-$HOST_REAL_HOME/.local/share}" 2>/dev/null || echo "${XDG_DATA_HOME:-$HOST_REAL_HOME/.local/share}")"
+HOST_XDG_STATE="$(realpath "${XDG_STATE_HOME:-$HOST_REAL_HOME/.local/state}" 2>/dev/null || echo "${XDG_STATE_HOME:-$HOST_REAL_HOME/.local/state}")"
+HOST_XDG_CACHE="$(realpath "${XDG_CACHE_HOME:-$HOST_REAL_HOME/.cache}" 2>/dev/null || echo "${XDG_CACHE_HOME:-$HOST_REAL_HOME/.cache}")"
+
+# Do not silently fall back from an explicitly supplied invalid BEE_BIN to a different binary
+if [[ -n "${BEE_BIN:-}" ]]; then
+  test -f "$BEE_BIN" && test -x "$BEE_BIN" || {
+    echo "Specified BEE_BIN is not an executable file: $BEE_BIN" >&2
+    exit 1
+  }
+else
+  BEE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/packages/bee-rs/target}/release/bee"
+  if [[ ! -x "$BEE_BIN" && -x "$REPO_ROOT/.bee/bin/bee" ]]; then
+    BEE_BIN="$REPO_ROOT/.bee/bin/bee"
+  fi
+  test -x "$BEE_BIN" || { echo 'Build the release bee binary first.' >&2; exit 1; }
 fi
-test -x "$BEE_BIN" || { echo 'Build the release bee binary first.' >&2; exit 1; }
 
 # Require explicit direct executable; reject discovery, mise invocation, and wrappers.
 test -n "${CODEX_BIN:-}" || {
@@ -16,8 +32,9 @@ test -n "${CODEX_BIN:-}" || {
   exit 1
 }
 
-[[ "$CODEX_BIN" == */* ]] || {
-  echo 'CODEX_BIN must be an explicit direct path, not a bare command resolved via PATH.' >&2
+# Require canonical absolute path; reject bare commands and relative paths.
+[[ "$CODEX_BIN" == /* ]] || {
+  echo 'CODEX_BIN must be an absolute path, not a relative path or bare command resolved via PATH.' >&2
   exit 1
 }
 
@@ -26,56 +43,73 @@ test -f "$CODEX_BIN" && test -x "$CODEX_BIN" || {
   exit 1
 }
 
-# Refuse wrapper scripts that invoke mise or delegate through shims
-if grep -Eq '(mise[[:space:]]+(use|x|exec|run)|\bmise\b|/mise/shims)' "$CODEX_BIN" 2>/dev/null; then
-  echo 'Refusing mise wrapper script in CODEX_BIN; provide the direct Codex executable.' >&2
-  exit 1
+CODEX_REAL="$(realpath "$CODEX_BIN")"
+CODEX_BIN="$CODEX_REAL"
+
+# Refuse wrapper scripts that invoke mise or delegate through shims.
+# Avoid read-scanning entire large binary executables by checking header / limiting size.
+if [[ "$(head -c 4 "$CODEX_REAL" 2>/dev/null || true)" != $'\x7fELF' ]]; then
+  if head -c 65536 "$CODEX_REAL" 2>/dev/null | grep -Eq '(mise[[:space:]]+(use|x|exec|run)|\bmise\b|/mise/shims)'; then
+    echo 'Refusing mise wrapper script in CODEX_BIN; provide the direct Codex executable.' >&2
+    exit 1
+  fi
 fi
 
-CODEX_REAL="$(realpath "$CODEX_BIN")"
 if [[ "$CODEX_REAL" == *"/mise/shims/"* ]]; then
   echo 'Refusing mise shim in CODEX_BIN; provide the direct Codex executable.' >&2
   exit 1
 fi
 
-# Validate isolated Codex home and reject unsafe homes / aliases before probe launch
+# Replace or configure BEE_CODEX_PROBE_BIN directly so nested probes cannot invoke wrappers
+export BEE_CODEX_PROBE_BIN="$CODEX_REAL"
+
+# Validate isolated Codex home and reject unsafe homes, descendants, and aliases before probe launch
 : "${CANARY_CODEX_HOME:?Provide an isolated Codex home; do not use the real user home}"
-HOST_REAL_HOME="$(realpath "${HOME:-/nonexistent}")"
 RESOLVED_CODEX_HOME="$(realpath -m "$CANARY_CODEX_HOME")"
 
-if [[ "$RESOLVED_CODEX_HOME" == "$HOST_REAL_HOME" ]]; then
-  echo 'Refusing the real user home as CANARY_CODEX_HOME.' >&2
-  exit 1
-fi
+is_sensitive_path() {
+  local target="$1"
 
-if [[ "$RESOLVED_CODEX_HOME" == "$HOST_REAL_HOME/.codex" ]]; then
-  echo 'Refusing the real Codex home as CANARY_CODEX_HOME.' >&2
-  exit 1
-fi
+  # Reject the real user home itself
+  if [[ "$target" == "$HOST_REAL_HOME" ]]; then
+    return 0
+  fi
 
-if [[ "$RESOLVED_CODEX_HOME" == "$HOST_REAL_HOME/.config"* || \
-      "$RESOLVED_CODEX_HOME" == "$HOST_REAL_HOME/.local"* || \
-      "$RESOLVED_CODEX_HOME" == "$HOST_REAL_HOME/.cache"* ]]; then
-  echo 'Refusing real user settings directory as CANARY_CODEX_HOME.' >&2
-  exit 1
-fi
+  # Reject sensitive configuration and data directories and all their descendants
+  local s
+  local sensitive=(
+    "$HOST_REAL_CODEX"
+    "$HOST_REAL_HOME/.codex"
+    "$HOST_REAL_HOME/.config"
+    "$HOST_REAL_HOME/.local"
+    "$HOST_REAL_HOME/.cache"
+    "$HOST_XDG_CONFIG"
+    "$HOST_XDG_DATA"
+    "$HOST_XDG_STATE"
+    "$HOST_XDG_CACHE"
+  )
+  for s in "${sensitive[@]}"; do
+    [[ -n "$s" && "$s" != "/" ]] || continue
+    if [[ "$target" == "$s" || "$target" == "$s/"* ]]; then
+      return 0
+    fi
+  done
+  if [[ "$target" == "/" || "$target" == "/root" || "$target" == "/root/"* || \
+        "$target" == "/home" || "$target" == "/etc" || "$target" == "/etc/"* ]]; then
+    return 0
+  fi
+  return 1
+}
 
-if [[ "$RESOLVED_CODEX_HOME" == "/" || \
-      "$RESOLVED_CODEX_HOME" == "/root" || \
-      "$RESOLVED_CODEX_HOME" == "/home" || \
-      "$RESOLVED_CODEX_HOME" == "/etc"* ]]; then
-  echo 'Refusing unsafe system root or configuration directory as CANARY_CODEX_HOME.' >&2
+if is_sensitive_path "$RESOLVED_CODEX_HOME"; then
+  echo "Refusing real user home, settings directory, or unsafe path as CANARY_CODEX_HOME: $CANARY_CODEX_HOME" >&2
   exit 1
 fi
 
 # Reject symlinks pointing into real settings
 if [[ -L "$CANARY_CODEX_HOME" ]]; then
   TARGET_OF_LINK="$(realpath "$CANARY_CODEX_HOME" 2>/dev/null || true)"
-  if [[ "$TARGET_OF_LINK" == "$HOST_REAL_HOME" || \
-        "$TARGET_OF_LINK" == "$HOST_REAL_HOME/.codex"* || \
-        "$TARGET_OF_LINK" == "$HOST_REAL_HOME/.config"* || \
-        "$TARGET_OF_LINK" == "$HOST_REAL_HOME/.local"* || \
-        "$TARGET_OF_LINK" == "$HOST_REAL_HOME/.cache"* ]]; then
+  if is_sensitive_path "$TARGET_OF_LINK"; then
     echo "Refusing symlink to real home/settings in CANARY_CODEX_HOME: $CANARY_CODEX_HOME -> $TARGET_OF_LINK" >&2
     exit 1
   fi
@@ -84,13 +118,11 @@ fi
 if [[ -d "$CANARY_CODEX_HOME" ]]; then
   while IFS= read -r -d '' link; do
     link_target="$(realpath "$link" 2>/dev/null || true)"
-    if [[ "$link_target" == "$HOST_REAL_HOME" || \
-          "$link_target" == "$HOST_REAL_HOME/.codex"* || \
-          "$link_target" == "$HOST_REAL_HOME/.config"* || \
-          "$link_target" == "$HOST_REAL_HOME/.local"* || \
-          "$link_target" == "$HOST_REAL_HOME/.cache"* || \
-          "$link_target" == "/root"* || \
-          "$link_target" == "/etc"* ]]; then
+    # Allow legitimate Codex executable helper link pointing to the direct CODEX_REAL executable
+    if [[ -n "$CODEX_REAL" && "$link_target" == "$CODEX_REAL" && -x "$link_target" ]]; then
+      continue
+    fi
+    if is_sensitive_path "$link_target"; then
       echo "Refusing symlink into real user settings inside CANARY_CODEX_HOME: $link -> $link_target" >&2
       exit 1
     fi
@@ -163,7 +195,7 @@ export CANARY_REPO EVIDENCE
 
 printf 'Retained canary: %s\n' "$CANARY_ROOT"
 trap 'printf "Canary evidence retained: %s\n" "$EVIDENCE"' EXIT
-"$CODEX_BIN" --version > "$EVIDENCE/version.txt" 2> "$EVIDENCE/version.stderr"
+"$CODEX_REAL" --version > "$EVIDENCE/version.txt" 2> "$EVIDENCE/version.stderr"
 git -C "$CANARY_REPO" init -b main --quiet
 git -C "$CANARY_REPO" config user.name 'Codex Canary'
 git -C "$CANARY_REPO" config user.email 'canary@example.invalid'
@@ -214,7 +246,7 @@ JS
 set +e
 env -u BEE_HERDING_WORKER -u BEE_HERDING_JOB_ID -u BEE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
   -u CODEX_CI -u CODEX_SESSION_ID -u CODEX_THREAD_ID -u CODEX_PERMISSION_PROFILE \
-  timeout 180 "$CODEX_BIN" exec --ignore-user-config --ignore-rules --json \
+  timeout 180 "$CODEX_REAL" exec --ignore-user-config --ignore-rules --json \
   --disable plugins \
   --sandbox workspace-write --dangerously-bypass-hook-trust --cd "$CANARY_REPO" \
   -c "projects={\"$CANARY_REPO\"={trust_level=\"trusted\"}}" \

@@ -7,3 +7,15 @@ PASS: Hostile fake subprocess writes only isolated HOME and XDG paths
 PASS: Syntax check bash -n scripts/codex-parity-canary.sh
 --------------------------------------------------
 ALL TESTS PASSED.
+
+--- Revision regression post-fix passes ---
+Running hermetic canary isolation tests...
+PASS: Missing CODEX_BIN is refused without mise discovery
+PASS: Wrapper script, bare command, and relative path in CODEX_BIN are refused
+PASS: Explicitly supplied invalid BEE_BIN is refused without fallback
+PASS: Canary cannot resolve user's Codex wrapper through inherited PATH or probe bin
+PASS: Unsafe homes and symlinks into real settings are rejected before probe launch
+PASS: Hostile fake subprocess writes only isolated HOME and XDG paths
+PASS: Syntax check bash -n scripts/codex-parity-canary.sh
+--------------------------------------------------
+ALL TESTS PASSED.
