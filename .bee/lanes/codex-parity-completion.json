@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "All4 implementation cells capped and semantic PASS; full suite3920 passed0failed20ignored. Merged main4c49458 plus bookkeeping7e041db5, tested binary installed and hash matched. Runtime knowledge captured. Only UAT door remains; doctor trust attestation hash_changed requires user hook review. Temporary credential cleanup remains separately blocked by physical-worktree guard; copy mode600, test sandboxes removed and evidence retained.",
-  "next_action": "User opens main in Codex, reviews changed hooks in /hooks, tests normal workflow and confirms acceptance. Agent then records UAT and closes feature. Temporary /var/tmp/bee-codex-auth-1qn4fO/auth.json needs a permitted cleanup path; do not bypass guard.",
+  "next_action": "Merged into main at fc104c5; reload the product and test \"codex-parity-completion\", then either approve uat (\"bee gate --name uat --approved true --lane codex-parity-completion\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-12T14:13:37.038Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: codex-parity-completion on main; review changed Codex hooks and test workflow",
-    "asked_at": "2026-09-13T04:32:33.426Z",
-    "session": "01a095e4-8306-70d0-bf1f-7a48da530e71"
+    "subject": "uat: codex-parity-completion",
+    "asked_at": "2026-09-13T04:36:47.728Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
