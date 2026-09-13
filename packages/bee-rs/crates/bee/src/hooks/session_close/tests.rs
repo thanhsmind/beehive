@@ -1913,5 +1913,3 @@ so the next session can resume cleanly, or record a capture stub for what settle
             Some("sess-1".to_string())
         );
     }
-
-
