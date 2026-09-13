@@ -1,0 +1,9 @@
+Running hermetic canary isolation tests...
+PASS: Missing CODEX_BIN is refused without mise discovery
+PASS: Wrapper script and bare PATH command in CODEX_BIN are refused
+PASS: Canary cannot resolve user's Codex wrapper through inherited PATH
+PASS: Unsafe homes and symlinks into real settings are rejected before probe launch
+PASS: Hostile fake subprocess writes only isolated HOME and XDG paths
+PASS: Syntax check bash -n scripts/codex-parity-canary.sh
+--------------------------------------------------
+ALL TESTS PASSED.

@@ -1,0 +1,9 @@
+Running hermetic canary isolation tests...
+FAIL: Missing CODEX_BIN is refused without mise discovery — Canary invoked mise when CODEX_BIN was unset.
+FAIL: Wrapper script and bare PATH command in CODEX_BIN are refused — Mise wrapper script was executed by canary instead of refused.
+FAIL: Canary cannot resolve user's Codex wrapper through inherited PATH — Canary subprocess resolved host wrapper on inherited PATH: /var/tmp/canary-isolation-test-kvKHvB/host_wrapper_dir/codex.
+FAIL: Unsafe homes and symlinks into real settings are rejected before probe launch — Probe executed before refusing real home.
+FAIL: Hostile fake subprocess writes only isolated HOME and XDG paths — Host HOME sentinel was corrupted by hostile subprocess.
+PASS: Syntax check bash -n scripts/codex-parity-canary.sh
+--------------------------------------------------
+TEST FAILURES: 5
