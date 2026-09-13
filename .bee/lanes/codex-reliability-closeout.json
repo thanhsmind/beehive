@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Four bounded repair cells approved; independent execution starts.",
   "next_action": "Merge verified Windows test repair locally; request publication for Windows CI and preserve external cleanup blocker.",
   "created_at": "2026-09-13T06:48:11.405Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "question",
-    "subject": "Approve publishing wt/codex-reliability-closeout (4850879f) and running its Windows CI; local repair merged and verified. External credential removal remains denied; native role verification remains unavailable on Codex 0.154.0.",
-    "asked_at": "2026-09-13T08:50:27.834Z",
-    "session": "01a09911-9b86-7a30-8a6f-b22a78347d98"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "high-risk",

@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "codex-reliability-closeout",
+  "closed_at": "2026-09-13T12:52:56.349Z",
+  "sessions": [
+    {
+      "session_id": "01a09911-9b86-7a30-8a6f-b22a78347d98",
+      "models": {
+        "gpt-6-astra": {
+          "input": 908742,
+          "output": 104552,
+          "cache_write": 0,
+          "cache_read": 34886272,
+          "new": 1013294,
+          "cached": 34886272,
+          "total": 35899566
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1789274479430,
+      "ended_ms": 1789303974614,
+      "totals": {
+        "new": 1013294,
+        "cached": 34886272,
+        "total": 35899566
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 1013294,
+      "cached": 34886272,
+      "total": 35899566
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 1013294,
+      "cached": 34886272,
+      "total": 35899566
+    }
+  }
+}
