@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Pi workflow parity is accepted and ready to close.",
-  "next_action": "Close the workflow.",
+  "next_action": "Merged into main at aabdcae; capture what settled, then bee close --feature pi-full-workflow-parity.",
   "created_at": "2026-09-13T13:39:30.745Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pi-full-workflow-parity",
-    "asked_at": "2026-09-13T14:39:23.537Z",
-    "session": "01a09b02-031a-7737-b6f6-76479c0be569"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "high-risk",
