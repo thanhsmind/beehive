@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Four bounded repair cells approved; independent execution starts.",
-  "next_action": "Merge verified Codex reliability repairs into main and request user acceptance.",
+  "next_action": "Merged into main at dc603e0; reload the product and test \"codex-reliability-closeout\", then either approve uat (\"bee gate --name uat --approved true --lane codex-reliability-closeout\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-13T06:48:11.405Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: codex-reliability-closeout",
+    "asked_at": "2026-09-13T07:36:20.311Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "high-risk",
@@ -525,15 +530,6 @@
   },
   "gate_revoked_at": {
     "execution": "2026-09-13T07:03:19.885Z"
-  },
-  "merge_ready": {
-    "since": "2026-09-13T07:34:13.726Z",
-    "branch": "wt/codex-reliability-closeout",
-    "worktree_id": "beehive--wt--codex-reliability-closeout",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt"
-    ]
   },
   "last_scribing_run": {
     "feature": "codex-reliability-closeout",
