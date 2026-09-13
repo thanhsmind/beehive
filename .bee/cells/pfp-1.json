@@ -1,0 +1,184 @@
+{
+  "id": "pfp-1",
+  "feature": "pi-full-workflow-parity",
+  "title": "Add safe pause dismissal and close cleanup",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "0510d81d-24e9-46f7-bf53-701cfaccf978"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/decisions/cli-provenance.md",
+    "docs/knowledge/areas/workflow-state/handoff.md",
+    "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+  ],
+  "read_first": [
+    "docs/history/pi-full-workflow-parity/CONTEXT.md",
+    "docs/history/pi-full-workflow-parity/plan.md",
+    "docs/knowledge/areas/workflow-state/handoff.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/workflow-state/handoff.md",
+    "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+  ],
+  "action": "Apply red-before-green. Add a public `bee state handoff dismiss` command that marks only the selected open pause record cleared, keeps its mailbox file, rebuilds the compatibility projection, and supports the C1 legacy path. Refuse a planned-next record without changing its claim or mailbox bytes. Route the new command through the state dispatcher and hand-maintained registry. Refactor all workflow close selectors through one guarded helper. Before any multi-record close mutation, preflight every target and refuse the whole operation if one has open planned-next authority. Then clear open pause records, close the records, and rebuild the projection. Make projection rebuild ignore closed workflows as crash-recovery defense. Update the existing knowledge owners and CLI provenance. Preserve D1-D6 and acceptance 0510d81d.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "A pause handoff dismissal marks the mailbox record cleared and removes the active legacy projection.",
+      "A planned-next dismissal refuses and preserves both the handoff and its claim.",
+      "Every workflow close selector leaves no active pause projection and cannot silently discard planned-next authority; a multi-record refusal changes no target workflow.",
+      "Projection rebuild never selects a closed workflow.",
+      "The public command appears in help and dispatches through the native Rust path."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+        "substantive": "pause-only mailbox dismissal primitive with history preservation"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "substantive": "public handoff dismiss handler and C1 path"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "substantive": "shared close transition that coordinates handoff cleanup"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "complete hand-maintained command declaration and runnable example"
+      }
+    ],
+    "key_links": [
+      "set_gate.rs dispatches state handoff dismiss to sessions.rs",
+      "workflow close uses the mailbox cleanup primitive before reporting success",
+      "all mailbox mutations rebuild the single compatibility projection",
+      "knowledge pages describe the same state transitions the tests assert"
+    ],
+    "prohibitions": [
+      "Do not delete mailbox history.",
+      "Do not clear or adopt a planned-next handoff through dismiss.",
+      "Do not change Pi dispatch from herding-only.",
+      "Do not add OMP support.",
+      "Do not weaken Pi blocking or advisory failure policy."
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pfp-1",
+    "outcome": "Add safe pause dismissal and close cleanup with projection synchronization",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/decisions/cli-provenance.md",
+      "docs/knowledge/areas/workflow-state/handoff.md",
+      "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: cell pfp-1 declared affects_skills empty and updates internal workflow-state commands without changing skill interfaces"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-13T14:21:25.197Z",
+    "behavior_change": true,
+    "verification_evidence": "handoff, close cleanup, and registry tests for pfp-1",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09b02-031a-7737-b6f6-76479c0be569",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+    "claimed_at": "2026-09-13T13:59:22.929Z",
+    "sync_ack": "cell pfp-1 declared affects_skills empty and updates internal workflow-state commands without changing skill interfaces",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Add safe pause dismissal and close cleanup with projection synchronization",
+      "commit": "842692940224c305fdb25d181511817c8806e1e2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/decisions/cli-provenance.md",
+        "docs/knowledge/areas/workflow-state/handoff.md",
+        "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch — green:unit — handoff, close cleanup, and registry tests for pfp-1",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pause-dismissal",
+            "status": "PASS",
+            "evidence": "workflow_store/tests.rs::dismiss_mailbox_handoff_refuses_planned_next_and_clears_pause and workflow_verbs.rs::handoff_dismiss_clears_pause_handoff_and_rebuilds_projection pass in the recorded handoff proof."
+          },
+          {
+            "id": "planned-next-safety",
+            "status": "PASS",
+            "evidence": "workflow_verbs.rs proves dismiss and workflow close refuse open planned-next authority without changing the target state; pi_plugin_contracts.rs then drives guarded adoption and verifies fence_epoch 2."
+          },
+          {
+            "id": "close-and-projection",
+            "status": "PASS",
+            "evidence": "workflows.rs routes all three selectors through close_workflow_records; projections.rs excludes status closed; workflow_verbs.rs proves pause cleanup and all-or-none preflight."
+          },
+          {
+            "id": "public-command",
+            "status": "PASS",
+            "evidence": "generated/registry_payload.json declares state.handoff.dismiss; recorded registry_contracts and registry_dispatch proof is green:unit."
+          },
+          {
+            "id": "scope-and-prohibitions",
+            "status": "PASS",
+            "evidence": "git show --stat 84269294 contains only declared pfp-1 paths; .pi/extensions/bee-guard.ts and all OMP or Pi dispatch files are unchanged."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-13T14:35:48.473Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,346 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-full-workflow-parity",
+  "mode": "high-risk",
+  "phase": "compounding-complete",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Pi workflow tail implemented, documented, judged, and full-suite verified.",
+  "next_action": "Merge the feature worktree for UAT.",
+  "created_at": "2026-09-13T13:39:30.745Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "high-risk",
+    "flags": [
+      "audit-security",
+      "public-contracts",
+      "cross-platform",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": "Close the confirmed pause-handoff lifecycle blocker and prove every Pi lifecycle path matches Claude behavior or has an explicit capability exclusion.",
+    "updated_at": "2026-09-13T13:39:57.689Z",
+    "feature": "pi-full-workflow-parity"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-13T13:58:16.500Z",
+    "feature": "pi-full-workflow-parity",
+    "newest_decision_id": "b28dbae6-e29a-4e2a-bc44-07d7ed7ee440",
+    "plan_sha256": "b13af9452f7dbadd67fb9b2792b8bcdf271a07cc6d85c20cf740ab62d8e6eb6c",
+    "advisor": "hat-wave: two herding advisors plus three direct leader checks; Agent tool unavailable in this Pi harness",
+    "digest_head": "# Advisor consult: Pi full workflow parity\n\n## Scope\n\nFive high-risk perspectives checked `CONTEXT.md`, `approach.md`, and `plan.md` before Gate 2.\n\nThe runtime executed `hat-value` and `hat-user-impact` through herding. It prepared `hat-facts-gaps`, `hat-risks`, and `hat-alternatives`, but this Pi tool set has no Agent tool. The leader ran those three checks directly. This is a named environment deviation, not a reduced review scope.\n\n## Structure\n\nBLOCKERS: none.\n\nWARNINGS: `pfp-1` owns many f"
+  },
+  "gate_preview": {
+    "feature": "pi-full-workflow-parity",
+    "plan_sha256": "b13af9452f7dbadd67fb9b2792b8bcdf271a07cc6d85c20cf740ab62d8e6eb6c",
+    "previewed_at": "2026-09-13T13:58:16.526Z",
+    "cells": [
+      {
+        "id": "pfp-1",
+        "feature": "pi-full-workflow-parity",
+        "title": "Add safe pause dismissal and close cleanup",
+        "lane": "high-risk",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "0510d81d-24e9-46f7-bf53-701cfaccf978"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/decisions/cli-provenance.md",
+          "docs/knowledge/areas/workflow-state/handoff.md",
+          "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+        ],
+        "read_first": [
+          "docs/history/pi-full-workflow-parity/CONTEXT.md",
+          "docs/history/pi-full-workflow-parity/plan.md",
+          "docs/knowledge/areas/workflow-state/handoff.md",
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/handoff.md",
+          "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+        ],
+        "action": "Apply red-before-green. Add a public `bee state handoff dismiss` command that marks only the selected open pause record cleared, keeps its mailbox file, rebuilds the compatibility projection, and supports the C1 legacy path. Refuse a planned-next record without changing its claim or mailbox bytes. Route the new command through the state dispatcher and hand-maintained registry. Refactor all workflow close selectors through one guarded helper. Before any multi-record close mutation, preflight every target and refuse the whole operation if one has open planned-next authority. Then clear open pause records, close the records, and rebuild the projection. Make projection rebuild ignore closed workflows as crash-recovery defense. Update the existing knowledge owners and CLI provenance. Preserve D1-D6 and acceptance 0510d81d.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "truths": [
+            "A pause handoff dismissal marks the mailbox record cleared and removes the active legacy projection.",
+            "A planned-next dismissal refuses and preserves both the handoff and its claim.",
+            "Every workflow close selector leaves no active pause projection and cannot silently discard planned-next authority; a multi-record refusal changes no target workflow.",
+            "Projection rebuild never selects a closed workflow.",
+            "The public command appears in help and dispatches through the native Rust path."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+              "substantive": "pause-only mailbox dismissal primitive with history preservation"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+              "substantive": "public handoff dismiss handler and C1 path"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+              "substantive": "shared close transition that coordinates handoff cleanup"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "complete hand-maintained command declaration and runnable example"
+            }
+          ],
+          "key_links": [
+            "set_gate.rs dispatches state handoff dismiss to sessions.rs",
+            "workflow close uses the mailbox cleanup primitive before reporting success",
+            "all mailbox mutations rebuild the single compatibility projection",
+            "knowledge pages describe the same state transitions the tests assert"
+          ],
+          "prohibitions": [
+            "Do not delete mailbox history.",
+            "Do not clear or adopt a planned-next handoff through dismiss.",
+            "Do not change Pi dispatch from herding-only.",
+            "Do not add OMP support.",
+            "Do not weaken Pi blocking or advisory failure policy."
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "pfp-2",
+        "feature": "pi-full-workflow-parity",
+        "title": "Prove the complete Pi workflow tail",
+        "lane": "high-risk",
+        "role": "test",
+        "deps": [
+          "pfp-1"
+        ],
+        "decisions": [
+          "0510d81d-24e9-46f7-bf53-701cfaccf978"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-full-workflow-parity/CONTEXT.md",
+          "docs/history/pi-full-workflow-parity/plan.md",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          ".pi/extensions/bee-guard.ts"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Extend `pi_lifecycle_end_to_end_onboarded_repo_parity` after its current cap and dispatch checks. Through the installed `bee_target`, write a pause handoff, prove it is projected, dismiss it, close the workflow, run `bee orient --json`, and assert no handoff blocker or `.bee/HANDOFF.json` remains. Also drive a planned-next dismissal refusal with an owned claim and assert the claim and mailbox record remain unchanged. Keep the configured Pi transport herding-only and preserve all existing belt failure-policy checks. Apply test-behavior-not-structure and acceptance 0510d81d.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts pi_lifecycle_end_to_end_onboarded_repo_parity -- --exact --nocapture",
+        "must_haves": {
+          "truths": [
+            "The onboarded Pi sandbox completes pause dismissal and workflow close through the installed CLI.",
+            "Orient reports no stale handoff blocker after close.",
+            "The compatibility HANDOFF.json file is absent after the workflow tail.",
+            "The sandbox proves planned-next dismissal refusal without claim loss."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "end-to-end Pi workflow-tail assertions in the existing sandbox test"
+            }
+          ],
+          "key_links": [
+            "The Pi sandbox invokes the same installed binary created by onboarding.",
+            "The final assertions inspect both orient output and the compatibility file."
+          ],
+          "prohibitions": [
+            "Do not replace the end-to-end path with direct state-file writes for the operation under test.",
+            "Do not add a native Pi worker transport or OMP target.",
+            "Do not relax any existing Pi extension assertion."
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "pi-full-workflow-parity",
+    "plan_sha256": "b13af9452f7dbadd67fb9b2792b8bcdf271a07cc6d85c20cf740ab62d8e6eb6c",
+    "previewed_at": "2026-09-13T13:58:16.526Z",
+    "cells": [
+      {
+        "id": "pfp-1",
+        "feature": "pi-full-workflow-parity",
+        "title": "Add safe pause dismissal and close cleanup",
+        "lane": "high-risk",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "0510d81d-24e9-46f7-bf53-701cfaccf978"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/tests/workflow_verbs.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "docs/decisions/cli-provenance.md",
+          "docs/knowledge/areas/workflow-state/handoff.md",
+          "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+        ],
+        "read_first": [
+          "docs/history/pi-full-workflow-parity/CONTEXT.md",
+          "docs/history/pi-full-workflow-parity/plan.md",
+          "docs/knowledge/areas/workflow-state/handoff.md",
+          "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/workflow-state/handoff.md",
+          "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md"
+        ],
+        "action": "Apply red-before-green. Add a public `bee state handoff dismiss` command that marks only the selected open pause record cleared, keeps its mailbox file, rebuilds the compatibility projection, and supports the C1 legacy path. Refuse a planned-next record without changing its claim or mailbox bytes. Route the new command through the state dispatcher and hand-maintained registry. Refactor all workflow close selectors through one guarded helper. Before any multi-record close mutation, preflight every target and refuse the whole operation if one has open planned-next authority. Then clear open pause records, close the records, and rebuild the projection. Make projection rebuild ignore closed workflows as crash-recovery defense. Update the existing knowledge owners and CLI provenance. Preserve D1-D6 and acceptance 0510d81d.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml handoff && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "truths": [
+            "A pause handoff dismissal marks the mailbox record cleared and removes the active legacy projection.",
+            "A planned-next dismissal refuses and preserves both the handoff and its claim.",
+            "Every workflow close selector leaves no active pause projection and cannot silently discard planned-next authority; a multi-record refusal changes no target workflow.",
+            "Projection rebuild never selects a closed workflow.",
+            "The public command appears in help and dispatches through the native Rust path."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+              "substantive": "pause-only mailbox dismissal primitive with history preservation"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+              "substantive": "public handoff dismiss handler and C1 path"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+              "substantive": "shared close transition that coordinates handoff cleanup"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "complete hand-maintained command declaration and runnable example"
+            }
+          ],
+          "key_links": [
+            "set_gate.rs dispatches state handoff dismiss to sessions.rs",
+            "workflow close uses the mailbox cleanup primitive before reporting success",
+            "all mailbox mutations rebuild the single compatibility projection",
+            "knowledge pages describe the same state transitions the tests assert"
+          ],
+          "prohibitions": [
+            "Do not delete mailbox history.",
+            "Do not clear or adopt a planned-next handoff through dismiss.",
+            "Do not change Pi dispatch from herding-only.",
+            "Do not add OMP support.",
+            "Do not weaken Pi blocking or advisory failure policy."
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "pfp-2",
+        "feature": "pi-full-workflow-parity",
+        "title": "Prove the complete Pi workflow tail",
+        "lane": "high-risk",
+        "role": "test",
+        "deps": [
+          "pfp-1"
+        ],
+        "decisions": [
+          "0510d81d-24e9-46f7-bf53-701cfaccf978"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-full-workflow-parity/CONTEXT.md",
+          "docs/history/pi-full-workflow-parity/plan.md",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          ".pi/extensions/bee-guard.ts"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Extend `pi_lifecycle_end_to_end_onboarded_repo_parity` after its current cap and dispatch checks. Through the installed `bee_target`, write a pause handoff, prove it is projected, dismiss it, close the workflow, run `bee orient --json`, and assert no handoff blocker or `.bee/HANDOFF.json` remains. Also drive a planned-next dismissal refusal with an owned claim and assert the claim and mailbox record remain unchanged. Keep the configured Pi transport herding-only and preserve all existing belt failure-policy checks. Apply test-behavior-not-structure and acceptance 0510d81d.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts pi_lifecycle_end_to_end_onboarded_repo_parity -- --exact --nocapture",
+        "must_haves": {
+          "truths": [
+            "The onboarded Pi sandbox completes pause dismissal and workflow close through the installed CLI.",
+            "Orient reports no stale handoff blocker after close.",
+            "The compatibility HANDOFF.json file is absent after the workflow tail.",
+            "The sandbox proves planned-next dismissal refusal without claim loss."
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "end-to-end Pi workflow-tail assertions in the existing sandbox test"
+            }
+          ],
+          "key_links": [
+            "The Pi sandbox invokes the same installed binary created by onboarding.",
+            "The final assertions inspect both orient output and the compatibility file."
+          ],
+          "prohibitions": [
+            "Do not replace the end-to-end path with direct state-file writes for the operation under test.",
+            "Do not add a native Pi worker transport or OMP target.",
+            "Do not relax any existing Pi extension assertion."
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-09-13T14:32:15.962Z",
+    "branch": "wt/pi-full-workflow-parity",
+    "worktree_id": "beehive--wt--pi-full-workflow-parity",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt"
+    ]
+  },
+  "last_scribing_run": {
+    "feature": "pi-full-workflow-parity",
+    "date": "2026-09-13",
+    "at": "2026-09-13T14:37:13.827Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Capture the planned-next proof pitfall, then merge for UAT."
+  },
+  "last_compounding_run": {
+    "feature": "pi-full-workflow-parity",
+    "date": "2026-09-13",
+    "at": "2026-09-13T14:38:09.841Z",
+    "learnings": "docs/knowledge/areas/workflow-state/handoff.md",
+    "next_action": "Merge the verified worktree for UAT."
+  }
+}
