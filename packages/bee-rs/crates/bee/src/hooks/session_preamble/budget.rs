@@ -470,11 +470,26 @@ fn open_maps_lines(root: &Path) -> Vec<String> {
 /// inject.mjs `buildSessionPreamble(root, { sessionId, handoffOutcome })`.
 /// Pure: reads state, never writes. Fail-open everywhere — orientation is
 /// never a place to fail a session.
+#[allow(dead_code)]
 pub fn build_session_preamble(
     root: &Path,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
 ) -> String {
+    build_session_preamble_with_runtime(root, session_id, handoff_outcome, "claude")
+}
+
+pub fn build_session_preamble_with_runtime(
+    root: &Path,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+) -> String {
+    let runtime = if crate::verbs::drivers::DISPATCH_RUNTIMES.contains(&runtime) {
+        runtime
+    } else {
+        "claude"
+    };
     let state = read_state(root);
     let onboarding = read_onboarding(root);
     let handoff = read_handoff(root);
@@ -647,7 +662,7 @@ pub fn build_session_preamble(
     // something the preamble no longer says.
     lines.push(String::new());
     lines.push("### Dispatch door".to_string());
-    lines.extend(crate::hooks::model_guard::dispatch_door_lines(Some(&config), "claude"));
+    lines.extend(crate::hooks::model_guard::dispatch_door_lines(Some(&config), runtime));
     let raw_config = read_json_object(&root.join(".bee").join("config.json")).unwrap_or_default();
     if !raw_config.contains_key("team") {
         let mut raw_copy = raw_config;

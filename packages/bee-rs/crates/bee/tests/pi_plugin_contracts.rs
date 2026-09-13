@@ -2174,6 +2174,228 @@ fn the_session_preamble_is_injected_once_and_a_reload_never_re_runs_session_init
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
+    node_or_skip!("injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for harness");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir for test repo");
+    write_real_bee(dir.path());
+
+    let config = json!({
+        "team": {
+            "pi": {
+                "extraction": {
+                    "kind": "herding",
+                    "agent": "pi-worker-1"
+                }
+            },
+            "claude": {
+                "extraction": {
+                    "model": "haiku"
+                }
+            },
+            "codex": {
+                "extraction": {
+                    "kind": "native",
+                    "model": "gpt-5.6-sol"
+                }
+            }
+        },
+        "herding": {
+            "agents": {
+                "pi-worker-1": ["pi", "--model", "dummy"]
+            }
+        }
+    });
+    std::fs::write(
+        dir.path().join(".bee").join("config.json"),
+        serde_json::to_string_pretty(&config).unwrap(),
+    )
+    .expect("write config.json");
+
+    // 1. Normal injected preamble through real Pi extension harness
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("session_start", dir.path(), "sess-pi-inj", json!({"reason": "new"})),
+            advisory_call(
+                "before_agent_start",
+                dir.path(),
+                "sess-pi-inj",
+                json!({"prompt": "first turn", "systemPrompt": "BASE"}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "session_start threw: {:?}", run.results[0]);
+    assert!(!run.results[1].threw, "before_agent_start threw: {:?}", run.results[1]);
+
+    let normal_system_prompt = run.results[1]
+        .result
+        .as_ref()
+        .and_then(|r| r.get("systemPrompt"))
+        .and_then(Value::as_str)
+        .expect("normal systemPrompt must be present");
+
+    let run_session_init = |payload: Value| -> String {
+        let mut child = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+            .args(["hook", "session-init"])
+            .env_remove("BEE_HERDING_WORKER")
+            .env_remove("BEE_HERDING_JOB_ID")
+            .current_dir(dir.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn session-init");
+        {
+            let mut stdin = child.stdin.take().expect("stdin");
+            stdin.write_all(payload.to_string().as_bytes()).expect("write stdin");
+        }
+        let out = child.wait_with_output().expect("wait_with_output");
+        assert!(
+            out.status.success(),
+            "session-init failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    // 2. Compact injected text through session-init with source=compact
+    let compact_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "source": "compact",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-pi-compact",
+        "runtime": "pi"
+    }));
+
+    let extract_args = |label: &str, text: &str, expected_runtime: &str| -> Vec<String> {
+        let line = text
+            .lines()
+            .find(|l| l.contains("Every subagent/worker dispatch starts with `"))
+            .unwrap_or_else(|| panic!("{label}: dispatch guidance line not found in injected text:\n{text}"));
+        let cmd = line
+            .split('`')
+            .nth(1)
+            .unwrap_or_else(|| panic!("{label}: no command found in backticks on line: {line}"));
+        assert!(
+            cmd.contains(&format!("--runtime {expected_runtime}")),
+            "{label}: extracted command must contain '--runtime {expected_runtime}', got: {cmd}"
+        );
+        let runnable = cmd
+            .replace("cell|gather|reviewer|advisor", "gather")
+            .replace("[--role <name>]", "--role extraction");
+        runnable
+            .split_whitespace()
+            .skip(1)
+            .map(String::from)
+            .collect()
+    };
+
+    // Verify both normal and compact Pi injection publish --runtime pi and execute team.pi herding
+    for (label, injected_text) in [("normal", normal_system_prompt), ("compact", compact_text.as_str())] {
+        let args = extract_args(label, injected_text, "pi");
+        let out = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+            .args(&args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap_or_else(|e| panic!("{label}: failed to execute dispatch prepare: {e}"));
+        assert!(
+            out.status.success(),
+            "{label}: dispatch prepare with args {:?} failed (exit code {:?}): stdout={}, stderr={}",
+            args,
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let val: Value = serde_json::from_slice(&out.stdout).expect("parse dispatch prepare JSON");
+        assert_eq!(val["tool"], "Bash", "{label}: expected tool 'Bash' (herding only, no Agent tool)");
+        let cmd = val["payload"]["command"].as_str().expect("payload.command");
+        assert!(cmd.contains("herding run"), "{label}: payload command must be herding run: {cmd}");
+        assert!(cmd.contains("pi-worker-1"), "{label}: payload command must resolve team.pi agent pi-worker-1: {cmd}");
+        assert_eq!(val["economics"]["channel"], "herding-exec", "{label}: expected herding-exec channel");
+    }
+
+    // Default runtime (absent runtime field) must fall back to Claude
+    let default_claude_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-default-claude"
+    }));
+    let args_default = extract_args("default-claude", &default_claude_text, "claude");
+    let out_default = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        .args(&args_default)
+        .current_dir(dir.path())
+        .output()
+        .expect("dispatch prepare default");
+    assert!(out_default.status.success());
+    let val_default: Value = serde_json::from_slice(&out_default.stdout).expect("parse JSON");
+    assert_eq!(val_default["tool"], "Agent", "default dispatch prepare must select Claude Agent tool");
+    assert_eq!(val_default["payload"]["model"], "haiku", "default dispatch prepare must resolve team.claude model");
+
+    // Explicit Claude must remain Claude
+    let explicit_claude_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-explicit-claude",
+        "runtime": "claude"
+    }));
+    let args_claude = extract_args("explicit-claude", &explicit_claude_text, "claude");
+    let out_claude = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        .args(&args_claude)
+        .current_dir(dir.path())
+        .output()
+        .expect("dispatch prepare claude");
+    assert!(out_claude.status.success());
+    let val_claude: Value = serde_json::from_slice(&out_claude.stdout).expect("parse JSON");
+    assert_eq!(val_claude["tool"], "Agent", "explicit claude dispatch prepare must select Claude Agent tool");
+    assert_eq!(val_claude["payload"]["model"], "haiku", "explicit claude dispatch prepare must resolve team.claude model");
+
+    // Explicit Codex must remain Codex
+    let explicit_codex_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-explicit-codex",
+        "runtime": "codex"
+    }));
+    let args_codex = extract_args("explicit-codex", &explicit_codex_text, "codex");
+    let out_codex = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        .args(&args_codex)
+        .current_dir(dir.path())
+        .output()
+        .expect("dispatch prepare codex");
+    assert!(out_codex.status.success());
+    let val_codex: Value = serde_json::from_slice(&out_codex.stdout).expect("parse JSON");
+    let codex_cmd = val_codex["payload"]["command"].as_str().expect("payload.command");
+    assert!(
+        codex_cmd.contains("codex exec") && codex_cmd.contains("gpt-5.6-sol"),
+        "explicit codex dispatch prepare must resolve team.codex model: {codex_cmd}"
+    );
+
+    // Malformed, unknown, non-string, or null runtime input must fall back to Claude
+    for malformed_val in [json!("unknown-runtime"), json!(12345), json!(null)] {
+        let malformed_text = run_session_init(json!({
+            "hook_event_name": "SessionStart",
+            "cwd": dir.path().to_string_lossy(),
+            "session_id": "sess-malformed",
+            "runtime": malformed_val
+        }));
+        let args_malformed = extract_args("malformed", &malformed_text, "claude");
+        let out_malformed = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+            .args(&args_malformed)
+            .current_dir(dir.path())
+            .output()
+            .expect("dispatch prepare malformed fallback");
+        assert!(out_malformed.status.success());
+        let val_malformed: Value = serde_json::from_slice(&out_malformed.stdout).expect("parse JSON");
+        assert_eq!(val_malformed["tool"], "Agent", "malformed fallback must select Claude Agent tool");
+        assert_eq!(val_malformed["payload"]["model"], "haiku", "malformed fallback must resolve team.claude model");
+    }
+}
+
 /// Every ADVISORY event the belt wires (D2's event map), including
 /// deliberately shapeless payloads: a `tool_result` with no toolName and no
 /// input, and a `session_start` with no reason at all.

@@ -1634,6 +1634,7 @@ export default function (pi: ExtensionAPI) {
         session_id: sessionIdOf(ctx),
         source: sessionSource(reason),
         cwd: directory,
+        runtime: "pi",
       })
       sessionInitRun = true
       if (text) cachedPreamble = text

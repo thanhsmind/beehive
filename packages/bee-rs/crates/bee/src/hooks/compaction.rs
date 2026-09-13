@@ -1364,11 +1364,26 @@ fn reservation_tally(
 /// IT NEVER RENDERS THE ANCHOR (D19) — the hook prefixes it.
 /// `handoff_outcome` is MANDATORY at the call site (D27): without it a
 /// compacted session silently loses the line saying WHY it must wait.
+#[allow(dead_code)]
 pub fn build_compact_capsule(
     root: &Path,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
 ) -> String {
+    build_compact_capsule_with_runtime(root, session_id, handoff_outcome, "claude")
+}
+
+pub fn build_compact_capsule_with_runtime(
+    root: &Path,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+) -> String {
+    let runtime = if crate::verbs::drivers::DISPATCH_RUNTIMES.contains(&runtime) {
+        runtime
+    } else {
+        "claude"
+    };
     let session = norm_str(session_id);
     let session = session.as_deref();
     let mut sections: Vec<Vec<String>> = Vec::new();
@@ -1524,7 +1539,7 @@ pub fn build_compact_capsule(
     // literal here is precisely how a compacted session gets told a role list
     // or a command spelling the preamble has already stopped saying.
     sections
-        .push(crate::hooks::model_guard::dispatch_door_lines(Some(&config), "claude"));
+        .push(crate::hooks::model_guard::dispatch_door_lines(Some(&config), runtime));
 
     // ── item 11: the survival count and, when it applies, the D9 advisory.
     // Silent on a repo with no records at all (D15).

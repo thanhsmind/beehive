@@ -46,10 +46,12 @@
 
 use crate::hooks::adapter::{log_crash, now_iso, read_hook_context, HookContext};
 use crate::hooks::compaction::{
-    append_compaction_record, build_compact_capsule, read_config_failopen, read_intent,
-    read_session_record, resume_block, well_formed_id,
+    append_compaction_record, build_compact_capsule_with_runtime,
+    read_config_failopen, read_intent, read_session_record, resume_block, well_formed_id,
 };
-use crate::hooks::session_preamble::{build_session_preamble, read_handoff, HandoffOutcome};
+use crate::hooks::session_preamble::{
+    build_session_preamble_with_runtime, read_handoff, HandoffOutcome,
+};
 use crate::hooks::Outcome;
 use crate::roots::{resolve_roots_core, Resolution};
 use crate::verbs::state_group::{adopt_claim, AdoptOutcome};
@@ -72,6 +74,20 @@ const CAPSULE_SOURCE: &str = "compact";
 /// ADOPT_SOURCES — the anchor is a prefix, never a router.
 const ANCHOR_LEAD_SOURCES: [&str; 2] = ["compact", "resume"];
 
+/// Allowlist of dispatch runtimes accepted by session-init.
+/// Missing, null, non-string, and unknown values fall back to "claude".
+pub(crate) fn normalize_dispatch_runtime(value: Option<&Value>) -> &'static str {
+    if let Some(Value::String(s)) = value {
+        let trimmed = s.trim();
+        for &rt in &crate::verbs::drivers::DISPATCH_RUNTIMES {
+            if trimmed == rt {
+                return rt;
+            }
+        }
+    }
+    "claude"
+}
+
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let ctx = read_hook_context(HOOK_NAME, argv, stdin);
     let Some(root) = ctx.root.clone() else {
@@ -86,6 +102,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
 
     let session_id = trimmed(ctx.payload.get("session_id"));
     let event_source = trimmed(ctx.payload.get("source")).unwrap_or_default();
+    let runtime = normalize_dispatch_runtime(ctx.payload.get("runtime"));
 
     if let Some(sid) = &session_id {
         register_acting_session(&ctx, &root, sid, &event_source);
@@ -96,11 +113,12 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         None => None,
     };
 
-    let output = compose_output(
+    let output = compose_output_with_runtime(
         &root,
         &event_source,
         session_id.as_deref(),
         handoff_outcome.as_ref(),
+        runtime,
     );
     if !output.trim().is_empty() {
         use std::io::Write;
@@ -133,13 +151,24 @@ fn hook_enabled_failopen(root: &Path) -> bool {
 /// intent-anchor ia-1 (D4/D5): PREFIX ONLY. The anchor is prepended ahead of
 /// the body on a compact/resume start, and with no anchor the emitted string
 /// is the body itself.
+#[allow(dead_code)]
 pub(crate) fn compose_output(
     root: &Path,
     event_source: &str,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
 ) -> String {
-    let body = session_body(root, event_source, session_id, handoff_outcome);
+    compose_output_with_runtime(root, event_source, session_id, handoff_outcome, "claude")
+}
+
+pub(crate) fn compose_output_with_runtime(
+    root: &Path,
+    event_source: &str,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+) -> String {
+    let body = session_body_with_runtime(root, event_source, session_id, handoff_outcome, runtime);
     let anchor = intent_lead_block(root, event_source, session_id);
     if anchor.is_empty() {
         body
@@ -180,20 +209,31 @@ pub(crate) fn intent_lead_block(
 /// before compaction.mjs shipped. There is no dynamic import left to fail:
 /// both calls below are fail-open inside hooks/compaction.rs itself, so the
 /// catch has no reachable trigger and is not reproduced.
+#[allow(dead_code)]
 fn session_body(
     root: &Path,
     event_source: &str,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
 ) -> String {
+    session_body_with_runtime(root, event_source, session_id, handoff_outcome, "claude")
+}
+
+fn session_body_with_runtime(
+    root: &Path,
+    event_source: &str,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+) -> String {
     if event_source == CAPSULE_SOURCE {
         // D5: SessionStart(compact) IS the `resume` event — the other half of
         // the PreCompact record, and the one that proves the session came
         // back. The append is fail-open; it never affects what renders below.
         append_compaction_record(root, "resume", session_id);
-        return build_compact_capsule(root, session_id, handoff_outcome);
+        return build_compact_capsule_with_runtime(root, session_id, handoff_outcome, runtime);
     }
-    build_session_preamble(root, session_id, handoff_outcome)
+    build_session_preamble_with_runtime(root, session_id, handoff_outcome, runtime)
 }
 
 // ───────────────────────── handoff adoption ────────────────────────────────
@@ -926,5 +966,51 @@ mod tests {
         assert_eq!(context.workspace_id.as_deref(), Some("main"));
         assert!(context.worktree_id.is_none());
         assert_eq!(control_root_for(tmp.path()), context.control_root.unwrap());
+    }
+
+    #[test]
+    fn normalize_dispatch_runtime_allows_known_and_falls_back_to_claude() {
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("pi"))), "pi");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("codex"))), "codex");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("claude"))), "claude");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("  pi  "))), "pi");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!("unknown"))), "claude");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!(123))), "claude");
+        assert_eq!(normalize_dispatch_runtime(Some(&json!(null))), "claude");
+        assert_eq!(normalize_dispatch_runtime(None), "claude");
+    }
+
+    #[test]
+    fn compose_output_with_runtime_propagates_selected_runtime() {
+        let tmp = tempfile::tempdir().unwrap();
+        vendored_repo(tmp.path());
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            json!({
+                "team": {
+                    "pi": {"generation": {"kind": "herding", "agent": "pi-agent"}},
+                    "codex": {"generation": {"model": "gpt-5.6"}},
+                    "claude": {"generation": {"model": "sonnet"}}
+                }
+            }).to_string(),
+        ).unwrap();
+
+        // Normal preamble with runtime pi
+        let out_pi = compose_output_with_runtime(tmp.path(), "startup", Some("s1"), None, "pi");
+        assert!(out_pi.contains("--runtime pi"), "{out_pi}");
+        assert!(out_pi.contains("team.pi"), "{out_pi}");
+
+        // Compact capsule with runtime pi
+        let out_pi_compact = compose_output_with_runtime(tmp.path(), "compact", Some("s1"), None, "pi");
+        assert!(out_pi_compact.contains("--runtime pi"), "{out_pi_compact}");
+        assert!(out_pi_compact.contains("team.pi"), "{out_pi_compact}");
+
+        // Normal preamble with runtime codex
+        let out_codex = compose_output_with_runtime(tmp.path(), "startup", Some("s1"), None, "codex");
+        assert!(out_codex.contains("--runtime codex"), "{out_codex}");
+
+        // Fallback with unknown runtime
+        let out_unknown = compose_output_with_runtime(tmp.path(), "startup", Some("s1"), None, "unknown");
+        assert!(out_unknown.contains("--runtime claude"), "{out_unknown}");
     }
 }
