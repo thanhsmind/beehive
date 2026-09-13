@@ -27,7 +27,7 @@ The hook check found three matching projections. The release check found 376 mat
 - Earlier native guard evidence: `/var/tmp/bee-codex-canary-ZPuEAI/evidence`. The actual installed model guard denied `collaborationspawn_agent` with exit 2.
 - Earlier child isolation evidence: `/var/tmp/bee-codex-canary-Cm0jce`. Child lifecycle events did not end the parent turn. This run preceded the native alias repair.
 - Final guide execution: `/var/tmp/bee-verify/evidence/20260913-112318-3463334`, records 001 through 005. Prepared dispatch `a3600d96-c439-433d-90dc-4186da0994fd` ran the emitted command and stdin through the corrected `bash -c` helper. Both raw filesystem denials returned 1. The enclosing script returned 0. The target hash was unchanged and no continuation file existed.
-- Earlier read-only patch proof: `cpc-2-recovery-green.log`. The later shell proof does not substitute for this separate patch probe.
+- Earlier read-only patch proof: `cpc-2-recovery-green.log`. The separate shell proof does not substitute for this patch probe.
 - Instruction test: main mailbox `job-1789272594951-3409518-1/report-1.md`. All three original scenarios passed. `CREATION-LOG.md` retains the original failures and the failed first rerun.
 
 ## Limits
