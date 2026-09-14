@@ -40,6 +40,11 @@
         "agent": "agy-flash",
         "description": "doc edits and parity sweeps"
       },
+      "deploy": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "publish an approved release from main, wait for CI, and verify release assets"
+      },
       "plan": {
         "kind": "herding",
         "agent": "pi-gpt-5.6-luna",
