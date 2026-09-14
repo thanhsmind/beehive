@@ -497,6 +497,10 @@
     "workflow-gates",
     "worktree-isolation",
     "gate-2",
-    "pi-runtime"
+    "pi-runtime",
+    "role-routing",
+    "semantic-role-routing",
+    "session-routing",
+    "bug"
   ]
 }

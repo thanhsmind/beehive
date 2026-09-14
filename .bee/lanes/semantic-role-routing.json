@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "semantic-role-routing",
+  "mode": "feature",
+  "phase": "planning",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"semantic-role-routing\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"semantic-role-routing\" (lane).",
+  "created_at": "2026-09-14T04:37:30.158Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "One-time recovery: open Pi in semantic-role-routing so the linked-to-linked automatic relocation fix can be implemented",
+    "asked_at": "2026-09-14T06:57:23.864Z",
+    "session": "01a09b73-3f97-7737-b6f6-765cf6382c55"
+  }
+}
