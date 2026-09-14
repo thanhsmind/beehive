@@ -504,6 +504,9 @@
     "bug",
     "plan-correction",
     "role-enforcement",
-    "pi-worktree"
+    "pi-worktree",
+    "gate-1",
+    "role-reroute",
+    "scope-correction"
   ]
 }

@@ -2,172 +2,568 @@
   "schema_version": "1.0",
   "feature": "semantic-role-routing",
   "mode": "feature",
-  "phase": "idle",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": false,
+    "shape": true,
     "execution": true,
     "review": false,
     "uat": false
   },
-  "summary": "Feature \"semantic-role-routing\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 1f97d62; capture what settled, then bee close --feature semantic-role-routing.",
+  "summary": "Feature \"semantic-role-routing\" started at phase \"planning\" (lane).",
+  "next_action": "Execute approved cells slr-3 and slr-7 in parallel",
   "created_at": "2026-09-14T04:37:30.158Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "Authorize one final slr-6 worker retry to repair incomplete deploy-permit checks",
+    "asked_at": "2026-09-14T09:26:59.370Z",
+    "session": "01a09ebc-3389-747b-a74c-ed61ea9ddf04"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-14T07:48:16.352Z",
+    "feature": "semantic-role-routing",
+    "newest_decision_id": "bf6556b0-7202-41da-86cf-b54a726b1714",
+    "plan_sha256": "a9ae4a96f88012af821cf8a9144bedb95e42a70952e8e64511361c2b0b837b7a",
+    "advisor": "hat-wave:hat-facts-gaps,hat-risks,hat-value,hat-alternatives,hat-user-impact",
+    "digest_head": "# Advisor Digest: Semantic Role Routing\n\n**Plan revision:** 1\n**Brief SHA-256:** `f59f94d0f634d26e13f6c5cf4272b3cd0fd2639dec1edf8726930f210f92a2f8`\n**Final verdict:** ready after corrections\n\n## Hat Results\n\n| Hat | Initial verdict | Report |\n|-----|-----------------|--------|\n| Facts and gaps | not-ready | `.bee/mailbox/job-1789371126038-163790-1/report-1.md` |\n| Risks | not-ready | `.bee/mailbox/job-1789371126039-163796-1/report-1.md` |\n| Value | not-ready | `.bee/mailbox/job-1789371126039-163"
+  },
   "gate_preview": {
     "feature": "semantic-role-routing",
-    "plan_sha256": "48e268a9064c8c6d26bfcc8dc43b4eac7e58dcd667f86432f31e0d9e9c8e83f6",
-    "previewed_at": "2026-09-14T07:01:54.245Z",
+    "plan_sha256": "a9ae4a96f88012af821cf8a9144bedb95e42a70952e8e64511361c2b0b837b7a",
+    "previewed_at": "2026-09-14T07:48:16.295Z",
     "cells": [
       {
-        "id": "slr-1",
+        "id": "slr-3",
         "feature": "semantic-role-routing",
-        "role": "docs",
-        "lane": "small",
-        "title": "Add role assignment as a planning step and dispatch-follows-plan rule",
-        "action": "Update planning documentation and dispatch discipline to implement D1 (fc2bb09a): (1) Add role assignment to bee-planning/SKILL.md Shape step — after locked decisions are cited, planner reads team role descriptions via bee team show, assigns each stage/job to the semantically fitting role, and records the assignment in plan.md or the scoping synthesis. (2) Add Role assignments section to planning-reference.md plan.md template. (3) Add dispatch-follows-plan rule to AGENTS.md — dispatches must follow the cell's recorded role; a re-route requires a logged decision with tag role-reroute. (4) Update swarming-reference.md to cite cell role as the plan-approved assignment.",
-        "verify": "grep -q 'role assignment' .agents/skills/bee-planning/SKILL.md && grep -q 're-route' AGENTS.md",
-        "read_first": [],
+        "role": "code",
+        "lane": "standard",
+        "title": "Store and display approved workflow role assignments",
+        "action": "Add red-first tests, then implement the Role-plan packet contract: exact v2 discriminator and section, exact JSON fields, runtime and roster digest validation, complete configured-role coverage, unique stages, classification rules, stored role_plan output, rendered visibility, duplicate and malformed refusals, and a byte-identical legacy path.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_packets",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+        ],
         "files": [
-          ".agents/skills/bee-planning/SKILL.md",
-          ".agents/skills/bee-planning/references/planning-reference.md",
-          "AGENTS.md",
-          ".agents/skills/bee-swarming/references/swarming-reference.md"
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+          ".agents/skills/bee-planning/references/planning-reference.md"
         ],
         "deps": [],
         "decisions": [
-          "fc2bb09a"
+          "fc2bb09a",
+          "68bc3484"
         ],
         "must_haves": {
           "truths": [
-            "Planning SKILL.md names role assignment as a required step after locked decisions are cited.",
-            "planning-reference.md plan.md template includes a Role assignments section.",
-            "AGENTS.md carries a rule that dispatches follow the approved plan role assignment; a re-route needs a logged decision (tag role-reroute).",
-            "swarming-reference.md cites the cell role as the plan-approved assignment."
+            "Gate preview JSON and text show every role stage and roster identity.",
+            "The approved packet stores the exact validated role_plan object.",
+            "bee-plan/v2 refuses missing, duplicate, malformed, incomplete, unknown-field, unconfigured-role, and stale-roster blocks.",
+            "Legacy plans without a role block keep byte-identical behavior."
           ]
         },
         "affects_skills": [
-          "skills/bee-planning/SKILL.md",
-          "skills/bee-swarming/references/swarming-reference.md"
+          "skills/bee-planning/references/planning-reference.md"
         ],
         "affects_specs": [
           "docs/specs/doctrine-layer.md"
         ],
-        "acceptance": "bee-planning names role assignment as planning step; AGENTS.md has dispatch-follows-plan rule; swarming-reference cites cell role as plan assignment; re-route format defined."
+        "acceptance": "Role assignments are visible, immutable with the plan hash, validated for v2, and optional for legacy plans."
       },
       {
-        "id": "slr-2",
+        "id": "slr-4",
         "feature": "semantic-role-routing",
-        "role": "docs",
-        "lane": "small",
-        "title": "Sync doctrine-layer knowledge with B18: plan-time role assignment and re-route records",
-        "action": "Capture the settled behavior: add B18 to model-roles-and-escalation.md — plan-time role assignment is a planning output (citing D1 fc2bb09a), dispatches follow the plan, re-route records go in the decision log with tag role-reroute.",
-        "verify": "grep -q 'B18' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
-        "read_first": [],
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Enforce approved roles at dispatch preparation",
+        "action": "Add red-first tests, then implement the Runtime and dispatch wire contract. Add feature and stage inputs, session-lane lookup, runtime and roster checks, exact typed refusals, cell-role equality, non-cell stage enforcement, anchored native identity markers, and audit fields. Keep legacy payloads byte-identical and run the existing deterministic resolver only after enforcement.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+        ],
         "files": [
-          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
         ],
         "deps": [
-          "slr-1"
+          "slr-3"
         ],
         "decisions": [
-          "fc2bb09a"
+          "fc2bb09a",
+          "68bc3484"
         ],
         "must_haves": {
           "truths": [
-            "model-roles-and-escalation.md has B18 covering plan-time role assignment.",
-            "B18 cites D1 (fc2bb09a)."
+            "An explicit cell role mismatch is refused before payload creation or logging.",
+            "An approved v2 non-cell dispatch without a stage is refused.",
+            "Required and conditional stage dispatches use the approved runtime role.",
+            "Runtime, roster, stage, plan hash, and planned role are visible in dispatch audit output.",
+            "No keyword mapping or second role resolver is added."
           ]
         },
         "affects_skills": [],
         "affects_specs": [
           "docs/specs/doctrine-layer.md"
         ],
-        "acceptance": "model-roles-and-escalation.md carries B18 with plan-time role assignment, re-route discipline, and cites D1."
+        "acceptance": "All dispatch prepare paths follow the approved cell or stage role and retain the existing resolver."
+      },
+      {
+        "id": "slr-5",
+        "feature": "semantic-role-routing",
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Add controlled cell role re-routing and native guard checks",
+        "action": "Add red-first tests, then implement the Re-route serialization contract under the cell claim lock. Validate status, no claim, configured role, decision feature and tag, unchanged role, plan hash, and history chain. Update native Claude and Codex guards to validate anchored feature, stage, cell identity, and current effective role without resolving an agent twice.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml reroute && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+        ],
+        "deps": [
+          "slr-3"
+        ],
+        "decisions": [
+          "fc2bb09a",
+          "68bc3484"
+        ],
+        "must_haves": {
+          "truths": [
+            "Only open or blocked unclaimed cells can reroute under the claim lock.",
+            "The cited decision must match the feature and carry role-reroute.",
+            "Every accepted reroute records old role, new configured role, decision, time, and plan hash.",
+            "The immutable approved packet remains the original assignment and only a valid history chain changes the effective role.",
+            "Native direct dispatch cannot bypass cell or stage assignments."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Cell role changes are explicit, structured, audited, and enforced by native guards."
+      },
+      {
+        "id": "slr-6",
+        "feature": "semantic-role-routing",
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Require deploy-role authorization for release execution",
+        "action": "Add red-first tests, then implement the Release authorization protocol. Add release-version input, bind the dispatch log to session, feature, plan hash, runtime, deployment stage, deploy role, version, main commit, and time, export only the dispatch ID and version, add atomic two-hour one-use authorization, and make scripts/release.sh consume it before every mutation or resume path.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml deploy && bash -n scripts/release.sh",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "scripts/release.sh",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "scripts/release.sh"
+        ],
+        "deps": [
+          "slr-4"
+        ],
+        "decisions": [
+          "c0a4d406",
+          "68bc3484"
+        ],
+        "must_haves": {
+          "truths": [
+            "A direct release script call refuses before mutation.",
+            "Only an unconsumed deployment dispatch under deploy authorizes its exact version, plan, and main commit.",
+            "Stale, replayed, forged, wrong-feature, wrong-plan, wrong-stage, wrong-role, wrong-version, and wrong-commit permits refuse.",
+            "Existing release safety checks remain unchanged after authorization."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Approved releases cannot bypass the deploy role, while scripts/release.sh remains the implementation."
+      },
+      {
+        "id": "slr-7",
+        "feature": "semantic-role-routing",
+        "role": "code",
+        "lane": "standard",
+        "title": "Support verified Pi switching between linked worktrees",
+        "action": "Reproduce the linked-to-linked failure in tests, then split enter_worktree_core into canonical control_root and source_root inputs. Allow ordinary and linked-valid entry, use main for grant and Git-link authority, emit the active root as sourceCwd, reject same-worktree entry before marker emission, and prove that the unchanged Pi validator accepts the new marker while forged paths still fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml enter_worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml pi_plugin_contracts",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "docs/history/pi-worktree-session-relocation/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+          ".pi/extensions/bee-guard.ts"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "deps": [],
+        "decisions": [
+          "bf919268"
+        ],
+        "must_haves": {
+          "truths": [
+            "Linked worktree A can emit a valid enter transition to linked worktree B.",
+            "The transition source is A and still equals Pi ctx.cwd.",
+            "Same-worktree, absent-grant, bad-link, wrong-session, and forged-source cases refuse.",
+            "Main-to-worktree and worktree-to-main behavior stay unchanged."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/worktree-first.md"
+        ],
+        "acceptance": "Pi changes session automatically from one granted linked worktree to another without weakening authenticity."
+      },
+      {
+        "id": "slr-8",
+        "feature": "semantic-role-routing",
+        "role": "test",
+        "lane": "high-risk",
+        "title": "Prove semantic routing, deployment refusal, and Pi relocation live",
+        "action": "Regenerate command and help artifacts, update knowledge and verification maps, then drive a fresh installed sandbox. Prove v1 compatibility, v2 role visibility, runtime and stage refusals, a normal cell role, conditional review without auto-start, accepted and refused reroutes, stale and replayed deploy permits, direct release refusal, authorized deploy preflight without publication, and linked-worktree A to B Pi relocation. Preserve evidence and record green:live.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+          "docs/config-reference.md",
+          "docs/product-description/cross-cutting/configuration.md",
+          "docs/product-description/verification/areas.md"
+        ],
+        "deps": [
+          "slr-4",
+          "slr-5",
+          "slr-6",
+          "slr-7"
+        ],
+        "decisions": [
+          "fc2bb09a",
+          "68bc3484",
+          "bf919268",
+          "c0a4d406"
+        ],
+        "must_haves": {
+          "truths": [
+            "The complete related Rust and contract suite passes.",
+            "Fresh installed behavior proves role visibility and refusals.",
+            "Conditional review remains dormant until user invocation.",
+            "A real Pi session relocates from linked worktree A to B.",
+            "Release preflight refuses direct execution and accepts deploy authorization without publishing an unapproved version."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md",
+          "docs/specs/worktree-first.md"
+        ],
+        "acceptance": "All new enforcement and relocation paths have retained green:live evidence from a disposable repository."
       }
     ]
   },
   "approved_cell_packet": {
     "feature": "semantic-role-routing",
-    "plan_sha256": "48e268a9064c8c6d26bfcc8dc43b4eac7e58dcd667f86432f31e0d9e9c8e83f6",
-    "previewed_at": "2026-09-14T07:01:54.245Z",
+    "plan_sha256": "a9ae4a96f88012af821cf8a9144bedb95e42a70952e8e64511361c2b0b837b7a",
+    "previewed_at": "2026-09-14T07:48:16.295Z",
     "cells": [
       {
-        "id": "slr-1",
+        "id": "slr-3",
         "feature": "semantic-role-routing",
-        "role": "docs",
-        "lane": "small",
-        "title": "Add role assignment as a planning step and dispatch-follows-plan rule",
-        "action": "Update planning documentation and dispatch discipline to implement D1 (fc2bb09a): (1) Add role assignment to bee-planning/SKILL.md Shape step — after locked decisions are cited, planner reads team role descriptions via bee team show, assigns each stage/job to the semantically fitting role, and records the assignment in plan.md or the scoping synthesis. (2) Add Role assignments section to planning-reference.md plan.md template. (3) Add dispatch-follows-plan rule to AGENTS.md — dispatches must follow the cell's recorded role; a re-route requires a logged decision with tag role-reroute. (4) Update swarming-reference.md to cite cell role as the plan-approved assignment.",
-        "verify": "grep -q 'role assignment' .agents/skills/bee-planning/SKILL.md && grep -q 're-route' AGENTS.md",
-        "read_first": [],
+        "role": "code",
+        "lane": "standard",
+        "title": "Store and display approved workflow role assignments",
+        "action": "Add red-first tests, then implement the Role-plan packet contract: exact v2 discriminator and section, exact JSON fields, runtime and roster digest validation, complete configured-role coverage, unique stages, classification rules, stored role_plan output, rendered visibility, duplicate and malformed refusals, and a byte-identical legacy path.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plan_packets",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+        ],
         "files": [
-          ".agents/skills/bee-planning/SKILL.md",
-          ".agents/skills/bee-planning/references/planning-reference.md",
-          "AGENTS.md",
-          ".agents/skills/bee-swarming/references/swarming-reference.md"
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+          ".agents/skills/bee-planning/references/planning-reference.md"
         ],
         "deps": [],
         "decisions": [
-          "fc2bb09a"
+          "fc2bb09a",
+          "68bc3484"
         ],
         "must_haves": {
           "truths": [
-            "Planning SKILL.md names role assignment as a required step after locked decisions are cited.",
-            "planning-reference.md plan.md template includes a Role assignments section.",
-            "AGENTS.md carries a rule that dispatches follow the approved plan role assignment; a re-route needs a logged decision (tag role-reroute).",
-            "swarming-reference.md cites the cell role as the plan-approved assignment."
+            "Gate preview JSON and text show every role stage and roster identity.",
+            "The approved packet stores the exact validated role_plan object.",
+            "bee-plan/v2 refuses missing, duplicate, malformed, incomplete, unknown-field, unconfigured-role, and stale-roster blocks.",
+            "Legacy plans without a role block keep byte-identical behavior."
           ]
         },
         "affects_skills": [
-          "skills/bee-planning/SKILL.md",
-          "skills/bee-swarming/references/swarming-reference.md"
+          "skills/bee-planning/references/planning-reference.md"
         ],
         "affects_specs": [
           "docs/specs/doctrine-layer.md"
         ],
-        "acceptance": "bee-planning names role assignment as planning step; AGENTS.md has dispatch-follows-plan rule; swarming-reference cites cell role as plan assignment; re-route format defined."
+        "acceptance": "Role assignments are visible, immutable with the plan hash, validated for v2, and optional for legacy plans."
       },
       {
-        "id": "slr-2",
+        "id": "slr-4",
         "feature": "semantic-role-routing",
-        "role": "docs",
-        "lane": "small",
-        "title": "Sync doctrine-layer knowledge with B18: plan-time role assignment and re-route records",
-        "action": "Capture the settled behavior: add B18 to model-roles-and-escalation.md — plan-time role assignment is a planning output (citing D1 fc2bb09a), dispatches follow the plan, re-route records go in the decision log with tag role-reroute.",
-        "verify": "grep -q 'B18' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
-        "read_first": [],
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Enforce approved roles at dispatch preparation",
+        "action": "Add red-first tests, then implement the Runtime and dispatch wire contract. Add feature and stage inputs, session-lane lookup, runtime and roster checks, exact typed refusals, cell-role equality, non-cell stage enforcement, anchored native identity markers, and audit fields. Keep legacy payloads byte-identical and run the existing deterministic resolver only after enforcement.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+        ],
         "files": [
-          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
         ],
         "deps": [
-          "slr-1"
+          "slr-3"
         ],
         "decisions": [
-          "fc2bb09a"
+          "fc2bb09a",
+          "68bc3484"
         ],
         "must_haves": {
           "truths": [
-            "model-roles-and-escalation.md has B18 covering plan-time role assignment.",
-            "B18 cites D1 (fc2bb09a)."
+            "An explicit cell role mismatch is refused before payload creation or logging.",
+            "An approved v2 non-cell dispatch without a stage is refused.",
+            "Required and conditional stage dispatches use the approved runtime role.",
+            "Runtime, roster, stage, plan hash, and planned role are visible in dispatch audit output.",
+            "No keyword mapping or second role resolver is added."
           ]
         },
         "affects_skills": [],
         "affects_specs": [
           "docs/specs/doctrine-layer.md"
         ],
-        "acceptance": "model-roles-and-escalation.md carries B18 with plan-time role assignment, re-route discipline, and cites D1."
+        "acceptance": "All dispatch prepare paths follow the approved cell or stage role and retain the existing resolver."
+      },
+      {
+        "id": "slr-5",
+        "feature": "semantic-role-routing",
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Add controlled cell role re-routing and native guard checks",
+        "action": "Add red-first tests, then implement the Re-route serialization contract under the cell claim lock. Validate status, no claim, configured role, decision feature and tag, unchanged role, plan hash, and history chain. Update native Claude and Codex guards to validate anchored feature, stage, cell identity, and current effective role without resolving an agent twice.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml reroute && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+        ],
+        "deps": [
+          "slr-3"
+        ],
+        "decisions": [
+          "fc2bb09a",
+          "68bc3484"
+        ],
+        "must_haves": {
+          "truths": [
+            "Only open or blocked unclaimed cells can reroute under the claim lock.",
+            "The cited decision must match the feature and carry role-reroute.",
+            "Every accepted reroute records old role, new configured role, decision, time, and plan hash.",
+            "The immutable approved packet remains the original assignment and only a valid history chain changes the effective role.",
+            "Native direct dispatch cannot bypass cell or stage assignments."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Cell role changes are explicit, structured, audited, and enforced by native guards."
+      },
+      {
+        "id": "slr-6",
+        "feature": "semantic-role-routing",
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Require deploy-role authorization for release execution",
+        "action": "Add red-first tests, then implement the Release authorization protocol. Add release-version input, bind the dispatch log to session, feature, plan hash, runtime, deployment stage, deploy role, version, main commit, and time, export only the dispatch ID and version, add atomic two-hour one-use authorization, and make scripts/release.sh consume it before every mutation or resume path.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml deploy && bash -n scripts/release.sh",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "scripts/release.sh",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "scripts/release.sh"
+        ],
+        "deps": [
+          "slr-4"
+        ],
+        "decisions": [
+          "c0a4d406",
+          "68bc3484"
+        ],
+        "must_haves": {
+          "truths": [
+            "A direct release script call refuses before mutation.",
+            "Only an unconsumed deployment dispatch under deploy authorizes its exact version, plan, and main commit.",
+            "Stale, replayed, forged, wrong-feature, wrong-plan, wrong-stage, wrong-role, wrong-version, and wrong-commit permits refuse.",
+            "Existing release safety checks remain unchanged after authorization."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Approved releases cannot bypass the deploy role, while scripts/release.sh remains the implementation."
+      },
+      {
+        "id": "slr-7",
+        "feature": "semantic-role-routing",
+        "role": "code",
+        "lane": "standard",
+        "title": "Support verified Pi switching between linked worktrees",
+        "action": "Reproduce the linked-to-linked failure in tests, then split enter_worktree_core into canonical control_root and source_root inputs. Allow ordinary and linked-valid entry, use main for grant and Git-link authority, emit the active root as sourceCwd, reject same-worktree entry before marker emission, and prove that the unchanged Pi validator accepts the new marker while forged paths still fail.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml enter_worktree && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml pi_plugin_contracts",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          "docs/history/pi-worktree-session-relocation/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+          ".pi/extensions/bee-guard.ts"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "deps": [],
+        "decisions": [
+          "bf919268"
+        ],
+        "must_haves": {
+          "truths": [
+            "Linked worktree A can emit a valid enter transition to linked worktree B.",
+            "The transition source is A and still equals Pi ctx.cwd.",
+            "Same-worktree, absent-grant, bad-link, wrong-session, and forged-source cases refuse.",
+            "Main-to-worktree and worktree-to-main behavior stay unchanged."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/worktree-first.md"
+        ],
+        "acceptance": "Pi changes session automatically from one granted linked worktree to another without weakening authenticity."
+      },
+      {
+        "id": "slr-8",
+        "feature": "semantic-role-routing",
+        "role": "test",
+        "lane": "high-risk",
+        "title": "Prove semantic routing, deployment refusal, and Pi relocation live",
+        "action": "Regenerate command and help artifacts, update knowledge and verification maps, then drive a fresh installed sandbox. Prove v1 compatibility, v2 role visibility, runtime and stage refusals, a normal cell role, conditional review without auto-start, accepted and refused reroutes, stale and replayed deploy permits, direct release refusal, authorized deploy preflight without publication, and linked-worktree A to B Pi relocation. Preserve evidence and record green:live.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+        "read_first": [
+          "docs/history/semantic-role-routing/CONTEXT.md",
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/knowledge/areas/worktree-parallelism/entering-creating-and-registering.md",
+          "docs/config-reference.md",
+          "docs/product-description/cross-cutting/configuration.md",
+          "docs/product-description/verification/areas.md"
+        ],
+        "deps": [
+          "slr-4",
+          "slr-5",
+          "slr-6",
+          "slr-7"
+        ],
+        "decisions": [
+          "fc2bb09a",
+          "68bc3484",
+          "bf919268",
+          "c0a4d406"
+        ],
+        "must_haves": {
+          "truths": [
+            "The complete related Rust and contract suite passes.",
+            "Fresh installed behavior proves role visibility and refusals.",
+            "Conditional review remains dormant until user invocation.",
+            "A real Pi session relocates from linked worktree A to B.",
+            "Release preflight refuses direct execution and accepts deploy authorization without publishing an unapproved version."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md",
+          "docs/specs/worktree-first.md"
+        ],
+        "acceptance": "All new enforcement and relocation paths have retained green:live evidence from a disposable repository."
       }
     ]
   },
+  "gate_revoked_at": {
+    "execution": "2026-09-14T07:47:59.901Z"
+  },
   "route": {
-    "class": "docs",
-    "lane": "small",
-    "flags": [],
-    "product_files": 4,
-    "rationale": null,
-    "updated_at": "2026-09-14T07:18:31.413Z",
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "multi-domain",
+      "covered-contract-change",
+      "audit-security"
+    ],
+    "product_files": 14,
+    "rationale": "Store and enforce approved semantic role assignments, authorize deploy execution, and preserve strict Pi worktree relocation.",
+    "updated_at": "2026-09-14T07:49:19.067Z",
     "feature": "semantic-role-routing"
+  },
+  "merge_ready": {
+    "since": "2026-09-14T10:46:48.957Z",
+    "branch": "wt/semantic-role-routing",
+    "worktree_id": "beehive--wt--semantic-role-routing",
+    "uat": "pending",
+    "blocked_by": [
+      "impact",
+      "routing",
+      "doc-deferral"
+    ]
   }
 }

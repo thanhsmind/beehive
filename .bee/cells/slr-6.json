@@ -1,0 +1,101 @@
+{
+  "id": "slr-6",
+  "feature": "semantic-role-routing",
+  "role": "code",
+  "lane": "high-risk",
+  "title": "Require deploy-role authorization for release execution",
+  "action": "Repair the incomplete first-round commit. First add behavior tests that fail for missing or mismatched issuer session, runtime mismatch, unknown or wrong feature, missing or wrong approved plan, wrong stage, wrong role, wrong version, wrong commit, stale or malformed expiry, replay, and authorization-marker storage failure. Then enforce the approved Release authorization protocol: bind and validate session, feature, runtime, plan, deployment stage, deploy role, exact version, main commit, and two-hour lifetime; create a durable one-use marker only after every check passes; keep all prior release safety checks unchanged. Amend the existing slr-6 commit instead of adding a commit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml deploy && bash -n scripts/release.sh",
+  "read_first": [
+    "docs/history/semantic-role-routing/CONTEXT.md",
+    "scripts/release.sh",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "scripts/release.sh"
+  ],
+  "deps": [
+    "slr-4"
+  ],
+  "decisions": [
+    "fc2bb09a",
+    "68bc3484",
+    "c0a4d406",
+    "f5b5ee99"
+  ],
+  "must_haves": {
+    "truths": [
+      "A direct release script call refuses before mutation.",
+      "Only an unconsumed deployment dispatch under deploy authorizes its exact issuer session, feature, runtime, version, approved plan, and main commit.",
+      "Stale, malformed-expiry, replayed, forged, wrong-session, wrong-feature, wrong-runtime, wrong-plan, wrong-stage, wrong-role, wrong-version, wrong-commit, and marker-storage failures refuse.",
+      "Tests directly exercise every named refusal before cap.",
+      "Existing release safety checks remain unchanged after authorization."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "Approved releases cannot bypass the deploy role, while scripts/release.sh remains the implementation.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-slr-6",
+    "outcome": "Release execution now requires a fresh one-use deploy authorization bound to UUID, issuer session, feature, runtime, approved plan, version, main commit, and a bounded two-hour lifetime",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "scripts/release.sh"
+    ],
+    "deviations": [
+      "Decision f5b5ee99 added the actual native router path drivers/close.rs after the first round found the plan fact wrong",
+      "The authorized final correction added red-first forged lifetime, unsafe UUID-path, and absent caller-session cases, then amended the same cell commit",
+      "sync-ack: Decision 7c5c7e0d assigns bee-swarming source, generated mirror, and full regen to integration cell slr-8 before close"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T10:03:36.490Z",
+    "behavior_change": false,
+    "verification_evidence": "4 deploy tests passed and release script syntax passed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09ebc-3389-747b-a74c-ed61ea9ddf04",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml deploy && bash -n scripts/release.sh",
+    "claimed_at": "2026-09-14T09:49:09.701Z",
+    "verified_at": null,
+    "sync_ack": "Decision 7c5c7e0d assigns bee-swarming source, generated mirror, and full regen to integration cell slr-8 before close",
+    "mistakes": [
+      {
+        "wrong": "The first worker round covered only four deploy tests",
+        "better": "compare every named refusal to a behavior test before accepting proof"
+      },
+      {
+        "wrong": "The first manual test used --exact without a module-qualified name and ran zero tests",
+        "better": "use the Rust filter without --exact"
+      }
+    ],
+    "report": {
+      "outcome": "Release execution now requires a fresh one-use deploy authorization bound to UUID, issuer session, feature, runtime, approved plan, version, main commit, and a bounded two-hour lifetime",
+      "commit": "4b497ef0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "scripts/release.sh"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml deploy && bash -n scripts/release.sh — green:unit — 4 deploy tests passed and release script syntax passed",
+      "deviations": [
+        "Decision f5b5ee99 added the actual native router path drivers/close.rs after the first round found the plan fact wrong",
+        "The authorized final correction added red-first forged lifetime, unsafe UUID-path, and absent caller-session cases, then amended the same cell commit"
+      ],
+      "mistakes": [
+        "The first worker round covered only four deploy tests — compare every named refusal to a behavior test before accepting proof",
+        "The first manual test used --exact without a module-qualified name and ran zero tests — use the Rust filter without --exact"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

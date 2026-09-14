@@ -1,0 +1,83 @@
+{
+  "id": "slr-4",
+  "feature": "semantic-role-routing",
+  "role": "code",
+  "lane": "high-risk",
+  "title": "Enforce approved roles at dispatch preparation",
+  "action": "Add red-first tests, then implement the Runtime and dispatch wire contract. Add feature and stage inputs, session-lane lookup, runtime and roster checks, exact typed refusals, cell-role equality, non-cell stage enforcement, anchored native identity markers, and audit fields. Keep legacy payloads byte-identical and run the existing deterministic resolver only after enforcement.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+  "read_first": [
+    "docs/history/semantic-role-routing/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "deps": [
+    "slr-3"
+  ],
+  "decisions": [
+    "fc2bb09a",
+    "68bc3484"
+  ],
+  "must_haves": {
+    "truths": [
+      "An explicit cell role mismatch is refused before payload creation or logging.",
+      "An approved v2 non-cell dispatch without a stage is refused.",
+      "Required and conditional stage dispatches use the approved runtime role.",
+      "Runtime, roster, stage, plan hash, and planned role are visible in dispatch audit output.",
+      "No keyword mapping or second role resolver is added."
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/specs/doctrine-layer.md"
+  ],
+  "acceptance": "All dispatch prepare paths follow the approved cell or stage role and retain the existing resolver.",
+  "status": "capped",
+  "trace": {
+    "worker": "w-slr-4",
+    "outcome": "Dispatch preparation now enforces approved runtime, stage, cell role, roster, and plan identities before deterministic resolution",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "Re-delivered slr-4 through a fresh pane — the first acknowledged pane became idle after read-only analysis — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T08:56:38.370Z",
+    "behavior_change": false,
+    "verification_evidence": "287 driver tests passed and 8 remained intentionally ignored",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09ebc-3389-747b-a74c-ed61ea9ddf04",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+    "claimed_at": "2026-09-14T08:09:52.853Z",
+    "mistakes": [
+      {
+        "wrong": "The slr-4 worker returned done without cells finish",
+        "better": "it should have capped and released its reservations before reporting done"
+      }
+    ],
+    "report": {
+      "outcome": "Dispatch preparation now enforces approved runtime, stage, cell role, roster, and plan identities before deterministic resolution",
+      "commit": "6d3631c152aca884d45536db3c84252bc71094c3",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests — green:unit — 287 driver tests passed and 8 remained intentionally ignored",
+      "deviations": [
+        "Re-delivered slr-4 through a fresh pane — the first acknowledged pane became idle after read-only analysis — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "The slr-4 worker returned done without cells finish — it should have capped and released its reservations before reporting done"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
