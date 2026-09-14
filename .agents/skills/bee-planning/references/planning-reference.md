@@ -27,7 +27,7 @@ write is the approval stamp in the frontmatter. No in-place enrichment.
 
 ```markdown
 ---
-artifact_contract: bee-plan/v1
+artifact_contract: bee-plan/v2
 mode: standard | high-risk | spike | small (opt-in)
 # approved_gate2: <unset until approval; then a date stamp — the only permitted post-approval write>
 ---
@@ -65,14 +65,24 @@ section and point to it.>
 Waves: <the groups that run in parallel, and the reason for each serial edge>
  
 ## Role assignments
-<maps each stage, job, or cell to a team role from `bee team show`. Required
-before execution. Dispatches must follow these approved assignments; any
-change or newly discovered stage requires a logged decision with tag
-`role-reroute`.>
+<Required for bee-plan/v2. Classifies each workflow stage and assigns each to a
+configured team role from `bee team show`. Dispatches must follow these approved
+assignments; any change requires a logged decision with tag `role-reroute`.
+The fenced JSON block must declare schema_version "1.0", runtime, roster_sha256
+(SHA-256 of sorted canonical {role,description} rows from bee team show --runtime <runtime> --json),
+and stages covering every configured role in the roster. Plans without the v2
+discriminator and without this section follow the legacy path.>
 
-| Stage / Job | Assigned Role | Rationale |
-|---|---|---|
-| <stage, job, or cell id> | <role from `bee team show`> | <why this role fits semantically> |
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "<runtime>",
+  "roster_sha256": "<roster_sha256>",
+  "stages": [
+    {"stage": "<stage-name>", "classification": "required|conditional|not-applicable", "role": "<role>", "condition": "<required when conditional>", "reason": "<rationale>"}
+  ]
+}
+```
 
 ## Shape
 <one of the bodies below, by mode>
